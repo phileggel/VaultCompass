@@ -33,7 +33,14 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching non-source directories
-      ignored: ["**/src-tauri/**", "**/docs/**", "**/.claude/**", "**/.githooks/**", "**/.github/**", "**/scripts/**"],
+      ignored: [
+        "**/src-tauri/**",
+        "**/docs/**",
+        "**/.claude/**",
+        "**/.githooks/**",
+        "**/.github/**",
+        "**/scripts/**",
+      ],
     },
   },
 }));

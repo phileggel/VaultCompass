@@ -105,6 +105,7 @@ Page avec tableau pleine largeur, trié par défaut par Nom ascendant. FAB flott
 ## Waivers de test
 
 **R5, R8, R9 — rendu conditionnel de `CategoryTable` non testé** : Ces règles impliquent uniquement du rendu conditionnel React (badge/disabled/hidden, ouverture de dialog, affichage d'erreur). La logique métier sous-jacente est couverte par les tests existants :
+
 - R5 : `isSystemCategory()` est une fonction pure testée indirectement via les tests de service backend (R2) ;
 - R8 : l'opération de suppression atomique est couverte par `delete_category_reassigns_assets_to_default` (service.rs) ;
 - R9 : les chemins d'erreur Add/Edit sont couverts par `useAddCategory.test.ts` et `useEditCategoryModal.test.ts`.

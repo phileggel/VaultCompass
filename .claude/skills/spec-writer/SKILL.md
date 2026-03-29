@@ -16,6 +16,7 @@ Works even if the feature is fuzzy — the interview phase exists precisely to c
 ### 1. Load domain context
 
 Before asking anything, read:
+
 - `ARCHITECTURE.md` — bounded contexts, data flow, naming conventions
   - If `ARCHITECTURE.md` does not exist, note it in the Open Questions section and proceed
 - List all files in `docs/` with Glob to understand what already exists
@@ -47,6 +48,7 @@ After round 3 (or earlier if all blocking uncertainties are resolved), draft the
 ### 3. Infer from the codebase
 
 Search the codebase to fill in gaps before writing:
+
 - Grep for related entities in `src-tauri/src/context/`
 - Grep for related frontend components in `src/features/`
 - Check `src-tauri/src/core/specta_builder.rs` for existing commands in the domain
@@ -78,10 +80,10 @@ et les entités principales impliquées.}
 
 {Une phrase décrivant ce que représente cette entité dans le domaine métier.}
 
-| Champ | Signification métier |
-| ----- | -------------------- |
-| `field_name` | {Ce que représente ce champ pour l'utilisateur, sans détail technique.} |
-| `other_field` | {Idem.} |
+| Champ         | Signification métier                                                    |
+| ------------- | ----------------------------------------------------------------------- |
+| `field_name`  | {Ce que représente ce champ pour l'utilisateur, sans détail technique.} |
+| `other_field` | {Idem.}                                                                 |
 
 > Noms d'entités et de champs en anglais, convention Rust (`snake_case` pour les champs,
 > `PascalCase` pour les entités). Aucun détail d'implémentation : décrire le sens métier,
@@ -113,18 +115,22 @@ et les entités principales impliquées.}
 ## Maquette UX
 
 ### Point d'entrée
+
 {Comment l'utilisateur accède à la feature : entrée drawer, bouton FAB, action contextuelle...}
 
 ### Composant principal
+
 {Type : modal / page / panel / dialog. Sous-composants notables.}
 
 ### États
+
 - **Vide** : {ce que l'utilisateur voit sans données}
 - **Chargement** : {état de chargement}
 - **Erreur** : {messages d'erreur, validation}
 - **Succès** : {feedback de succès}
 
 ### Flux utilisateur
+
 1. {Étape 1}
 2. {Étape 2}
 3. ...
@@ -132,10 +138,12 @@ et les entités principales impliquées.}
 ---
 
 ## Questions ouvertes
+
 - [ ] {Point à clarifier avant ou pendant l'implémentation}
 ```
 
 **Rules for writing:**
+
 - Each Rn rule must be atomic (one behavior per rule) and testable
 - Scope `(frontend + backend)`, `(frontend)`, or `(backend)` is mandatory on every rule
 - Open Questions must list every assumption you made — do not silently decide
@@ -179,6 +187,7 @@ Only proceed to step 6 once this condition is met.
 Before presenting to the user, run the following checklist mentally against the spec. For each failing point, fix the spec directly (add/split/reword rules) without asking the user — unless a fix would require a new business decision, in which case add a `[ ]` and loop back to step 5.
 
 **Completeness — does the spec cover:**
+
 - All applicable CRUD operations (create / read / update / delete) for each entity
 - Validation rules for every field defined in the field table
 - Loading state (frontend)
@@ -187,6 +196,7 @@ Before presenting to the user, run the following checklist mentally against the 
 - Success feedback after mutating operations
 
 **Coherence — are the rules internally consistent:**
+
 - No two Rn rules contradict each other
 - Every entity, field, or state referenced in a rule is defined somewhere (field table, context section, or ARCHITECTURE.md)
 - Backend rules and frontend rules are aligned — a backend guard has a corresponding frontend error display, and vice versa
@@ -204,6 +214,7 @@ Use **AskUserQuestion**:
 > "Voulez-vous générer un mockup visuel via Stitch ?"
 
 **If yes:**
+
 1. Call `mcp__stitch__generate_screen_from_text` with:
    - `project_id`: `7705025027636758446`
    - `device`: `DESKTOP`
@@ -220,6 +231,7 @@ Use **AskUserQuestion**:
 ### 8. Present and validate
 
 Show the user:
+
 - Path of the spec: `docs/{feature-name}.md`
 - List of Rn rules extracted (one line each)
 

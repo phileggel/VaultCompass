@@ -71,4 +71,3 @@ Créer la page Settings (feature `settings/`) et passer `onSettingsClick` depuis
 
 Les labels de `NAV_ITEMS` ("Assets", "Accounts", etc.), le nom de l'app ("Vault M3"), et les tooltips du menu hamburger ("Collapse menu" / "Expand menu") sont des chaînes anglaises codées en dur dans `Sidebar.tsx`.
 À traiter dans le sprint i18n général — nécessite de séparer les clés de routage (`navKey`) des labels traduits pour éviter de casser la navigation.
-

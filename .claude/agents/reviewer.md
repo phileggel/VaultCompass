@@ -21,6 +21,7 @@ You are a senior code reviewer for a Tauri 2 / React 19 / Rust project.
 ## Dead Code Rule (applies to all files)
 
 Dead code MUST be removed — flag as 🟡 Warning:
+
 - Unused imports (`use`, `import`)
 - Unused variables, functions, types, or constants
 - Commented-out code blocks left in the file
@@ -34,6 +35,7 @@ Exception: items explicitly annotated `#[allow(dead_code)]` with a justification
 ## Language Rule (applies to all files)
 
 All code MUST be written in English:
+
 - Variable names, function names, type names, constants — English only
 - Code comments — English only
 - Log messages (`tracing::info!`, `logger.info`, etc.) — English only

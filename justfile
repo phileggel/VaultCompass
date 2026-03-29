@@ -67,6 +67,7 @@ format:
     cd src-tauri && cargo fmt
     cd src-tauri && cargo clippy --fix --allow-dirty
     npm run format:fix
+    npm run format:docs
 
 # Clean build artifacts
 clean:

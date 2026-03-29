@@ -35,23 +35,23 @@ All Tauri commands are registered here via `tauri_specta::collect_commands![]`. 
 
 ### Core Modules (`core/`)
 
-| Module | Role |
-|--------|------|
-| `core/db.rs` | SQLite connection pool + migrations |
-| `core/logger.rs` | `FRONTEND`/`BACKEND` constants + `log_frontend` Tauri command |
-| `core/specta_types.rs` | Specta/TypeScript serialization documentation |
-| `core/specta_builder.rs` | Tauri command registry — all commands registered here |
-| `core/event_bus/` | `SideEffectEventBus` + `Event` enum |
+| Module                   | Role                                                          |
+| ------------------------ | ------------------------------------------------------------- |
+| `core/db.rs`             | SQLite connection pool + migrations                           |
+| `core/logger.rs`         | `FRONTEND`/`BACKEND` constants + `log_frontend` Tauri command |
+| `core/specta_types.rs`   | Specta/TypeScript serialization documentation                 |
+| `core/specta_builder.rs` | Tauri command registry — all commands registered here         |
+| `core/event_bus/`        | `SideEffectEventBus` + `Event` enum                           |
 
 ### Event Bus (`core/event_bus/`)
 
 Published on every state change. Frontend listens via a single `events.event.listen()` subscription in the global store.
 
-| Event | Published by |
-|-------|-------------|
-| `AssetUpdated` | `context/asset/` |
-| `CategoryUpdated` | `context/asset/` |
-| `AccountUpdated` | `context/account/` |
+| Event             | Published by       |
+| ----------------- | ------------------ |
+| `AssetUpdated`    | `context/asset/`   |
+| `CategoryUpdated` | `context/asset/`   |
+| `AccountUpdated`  | `context/account/` |
 
 ---
 
@@ -60,6 +60,7 @@ Published on every state change. Frontend listens via a single `events.event.lis
 No cross-context imports. Public API via `mod.rs` only.
 
 Directory structure per context:
+
 ```
 context/{domain}/
 ├── domain/       # Entities + repository traits
@@ -72,27 +73,33 @@ context/{domain}/
 ### Asset (`context/asset/`)
 
 **Entity: `Asset`**
+
 - `id`, `name`, `class: AssetClass`, `category: AssetCategory`, `currency` (ISO 4217), `risk_level` (1–5), `reference` (ticker/ISIN or auto-generated `INT-{class}-{short_id}`)
 - Factory methods: `new()` (generates ID + validates), `update_from()` (uses provided ID + validates), `from_storage()` (no validation)
 - `AssetClass` enum: `RealEstate`, `Cash`, `Stocks`, `Bonds`, `ETF`, `MutualFunds`, `DigitalAsset`
 
 **Entity: `AssetCategory`**
+
 - `id`, `name`
 - `SYSTEM_CATEGORY_ID = "default-uncategorized"` — fixed ID of the system fallback category
 - Factory methods: `new()`, `update_from()`, `from_storage()`
 
 **Entity: `AssetPrice`**
+
 - Price/valuation data for an asset at a point in time
 
 **Repository traits: `AssetRepository`, `AssetCategoryRepository`, `PriceRepository`**
+
 - `get_all`, `get_by_id`, `create`, `update`, `delete`
 - `AssetCategoryRepository` extras: `find_by_name` (case-insensitive), `reassign_assets_and_delete` (atomic transaction)
 
 **Service: `AssetService`**
+
 - CRUD for assets, categories, and prices
 - Publishes `AssetUpdated` and `CategoryUpdated` events
 
 **Tauri commands (`api.rs`)**
+
 - `get_assets() -> Vec<Asset>`
 - `add_asset(name, class, categoryId, currency, riskLevel, reference?) -> Asset`
 - `update_asset(...) -> Asset`
@@ -108,21 +115,26 @@ context/{domain}/
 ### Account (`context/account/`)
 
 **Entity: `Account`**
+
 - `id`, `name`, `update_frequency: UpdateFrequency`
 - `UpdateFrequency` enum: `Automatic`, `ManualDay`, `ManualWeek`, `ManualMonth`, `ManualYear`
 - Factory methods: `new()` (generates ID + validates), `from_storage()` (no validation)
 
 **Entity: `AssetAccount`**
+
 - Junction entity linking an account to an asset (holdings)
 
 **Repository traits: `AccountRepository`, `AssetAccountRepository`**
+
 - `get_all`, `get_by_id`, `create`, `update`, `delete`
 
 **Service: `AccountService`**
+
 - CRUD for accounts and account holdings (asset–account links)
 - Publishes `AccountUpdated` events
 
 **Tauri commands (`api.rs`)**
+
 - `get_accounts() -> Vec<Account>`
 - `add_account(name, updateFrequency) -> Account`
 - `update_account(account) -> Account`
@@ -148,11 +160,11 @@ context/{domain}/
 
 **`useAppStore`** (Zustand) — shared data across features:
 
-| Field | Type | Reloaded on event |
-|-------|------|-------------------|
-| `assets` | `Asset[]` | `AssetUpdated` |
+| Field        | Type              | Reloaded on event |
+| ------------ | ----------------- | ----------------- |
+| `assets`     | `Asset[]`         | `AssetUpdated`    |
 | `categories` | `AssetCategory[]` | `CategoryUpdated` |
-| `accounts` | `Account[]` | `AccountUpdated` |
+| `accounts`   | `Account[]`       | `AccountUpdated`  |
 
 Loading states: `isLoadingAssets`, `isLoadingCategories`, `isLoadingAccounts`, `isInitialized`
 
@@ -160,23 +172,23 @@ Loading states: `isLoadingAssets`, `isLoadingCategories`, `isLoadingAccounts`, `
 
 ### Infrastructure
 
-| Path | Role |
-|------|------|
-| `bindings.ts` | Auto-generated Tauri bindings — **DO NOT EDIT** |
-| `lib/store.ts` | Global Zustand store |
-| `lib/logger.ts` | Frontend logger — thin wrapper over `log_frontend` Tauri command |
-| `lib/useFuzzySearch.ts` | Generic Fuse.js fuzzy-search hook used by `ComboboxField` |
-| `i18n/config.ts` | react-i18next setup — fr default, en fallback, `common` namespace |
-| `i18n/locales/{fr,en}/common.json` | Translation files — `category.*`, `action.*`, `field.*` key groups |
-| `ui/global.css` | Clinical Atelier design system — indigo M3 palette, dark mode (`.dark`), Inter+Manrope fonts, elevation shadows (`shadow-elevation-*`), header gradient tokens, animation utilities |
-| `ui/components/index.ts` | UI barrel — re-exports all shared components |
-| `ui/components/button/` | `Button` (6 variants, 3 sizes) + `IconButton` (5 variants, round/square) |
-| `ui/components/fab/` | `FAB` — Floating Action Button |
-| `ui/components/field/` | `TextField`, `SelectField`, `CompactSelectField`, `SearchField`, `AmountField`, `DateField`, `ComboboxField` |
-| `ui/components/modal/` | `Dialog`, `ConfirmationDialog`, `FormModal`, `ListModal`, `TabModal`, `SelectionModal`, `ModalContainer` |
-| `ui/components/layout/` | `ManagerLayout`, `ManagerHeader` |
-| `ui/components/card/` | `StatCard` |
-| `ui/components/SortIcon.tsx` | Generic sort direction indicator |
+| Path                               | Role                                                                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bindings.ts`                      | Auto-generated Tauri bindings — **DO NOT EDIT**                                                                                                                                     |
+| `lib/store.ts`                     | Global Zustand store                                                                                                                                                                |
+| `lib/logger.ts`                    | Frontend logger — thin wrapper over `log_frontend` Tauri command                                                                                                                    |
+| `lib/useFuzzySearch.ts`            | Generic Fuse.js fuzzy-search hook used by `ComboboxField`                                                                                                                           |
+| `i18n/config.ts`                   | react-i18next setup — fr default, en fallback, `common` namespace                                                                                                                   |
+| `i18n/locales/{fr,en}/common.json` | Translation files — `category.*`, `action.*`, `field.*` key groups                                                                                                                  |
+| `ui/global.css`                    | Clinical Atelier design system — indigo M3 palette, dark mode (`.dark`), Inter+Manrope fonts, elevation shadows (`shadow-elevation-*`), header gradient tokens, animation utilities |
+| `ui/components/index.ts`           | UI barrel — re-exports all shared components                                                                                                                                        |
+| `ui/components/button/`            | `Button` (6 variants, 3 sizes) + `IconButton` (5 variants, round/square)                                                                                                            |
+| `ui/components/fab/`               | `FAB` — Floating Action Button                                                                                                                                                      |
+| `ui/components/field/`             | `TextField`, `SelectField`, `CompactSelectField`, `SearchField`, `AmountField`, `DateField`, `ComboboxField`                                                                        |
+| `ui/components/modal/`             | `Dialog`, `ConfirmationDialog`, `FormModal`, `ListModal`, `TabModal`, `SelectionModal`, `ModalContainer`                                                                            |
+| `ui/components/layout/`            | `ManagerLayout`, `ManagerHeader`                                                                                                                                                    |
+| `ui/components/card/`              | `StatCard`                                                                                                                                                                          |
+| `ui/components/SortIcon.tsx`       | Generic sort direction indicator                                                                                                                                                    |
 
 ---
 
@@ -185,26 +197,31 @@ Loading states: `isLoadingAssets`, `isLoadingCategories`, `isLoadingAccounts`, `
 All features follow the **feature-first (gold)** layout. Reference: `features/assets/`.
 
 #### Assets (`features/assets/`)
+
 - Gateway: `get_assets`, `add_asset`, `update_asset`, `delete_asset`
 - Sub-features: `asset_table/`, `add_asset/`, `edit_asset_modal/`
 - Shared: `shared/presenter.ts`, `shared/validateAsset.ts`
 
 #### Categories (`features/categories/`)
+
 - Gateway: `get_categories`, `add_category`, `update_category`, `delete_category`
 - Sub-features: `category_table/`, `add_category/`, `edit_category_modal/`
 - Shared: `shared/presenter.ts` — `isSystemCategory(id)` predicate, `SYSTEM_CATEGORY_ID` constant
 - UX: FAB triggers `AddCategoryModal`; table rows show Edit/Delete `IconButton`s; system category has "Défaut" badge, Edit disabled
 
 #### Accounts (`features/accounts/`)
+
 - Gateway: `get_accounts`, `add_account`, `update_account`, `delete_account`
 - Sub-features: `account_table/`, `add_account/`, `edit_account_modal/`
 
 #### Account Asset Details (`features/account_asset_details/`)
+
 - Drill-down view: assets held within a specific account
 - Gateway: `get_account_holdings`, `upsert_account_holding`, `remove_account_holding`
 - Component: `AccountAssetDetailsView.tsx`
 
 #### Shell (`features/shell/`)
+
 - Layout wrapper: `MainLayout.tsx`, `Sidebar.tsx`, `Content.tsx`, `Footer.tsx`
 - `Header.tsx` — indigo gradient header with `ThemeToggle`
 - `useSidebar.ts` — `NAV_ITEMS` constant (base items + `"Design System"` entry added only when `import.meta.env.DEV`)
@@ -212,6 +229,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - `theme_toggle/ThemeToggle.tsx` — Sun/Moon/Monitor icon button
 
 #### Design System (`features/design-system/`) — **dev only**
+
 - `DesignSystemPage.tsx` — component showcase page (Button, IconButton variants, sizes, states)
 - Gated by `import.meta.env.DEV` in both `useSidebar.ts` (nav item) and `App.tsx` (render)
 
@@ -254,6 +272,7 @@ features/{domain}/
 ```
 
 **Key rules:**
+
 - `gateway.ts` at the feature root — no `api/` wrapper folder
 - Sub-features are directories grouped by **feature concern**, not by layer (no `components/`, `hooks/` folders)
 - Hooks are colocated next to their component inside the sub-feature folder
