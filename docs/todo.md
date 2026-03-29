@@ -4,24 +4,9 @@
 
 ## (deps) — Mettre à jour specta vers rc.23
 
-`tauri-specta rc.21` impose `specta = "=2.0.0-rc.22"` (version exacte). Attendre la sortie de `tauri-specta rc.22` avant de passer à `specta rc.23` + `specta-typescript 0.0.10`.
+`tauri-specta rc.21` impose `specta = "=2.0.0-rc.22"` (version exacte). Attendre la sortie de `tauri-specta rc.22+` avant de passer à `specta rc.23` + `specta-typescript 0.0.10`.
+État (2026-03-29) : `specta rc.23` disponible, `tauri-specta` toujours bloqué à `rc.21`.
 
-## (deps) — Mettre à jour vite v7 → v8
-
-Montée de version majeure. Vérifier la compatibilité avec `@tailwindcss/vite`, `vitest` et le serveur de dev Tauri.
-Faire en même temps que `@vitejs/plugin-react` (dépend de Vite 8).
-
-## (deps) — Mettre à jour @vitejs/plugin-react v5 → v6
-
-Dépend de Vite 8. Faire après la montée de version de Vite.
-
-## (deps) — Mettre à jour TypeScript v5 → v6
-
-Vérification de type plus stricte par défaut. Corriger les erreurs de compilation introduites par la montée de version.
-
-## (deps) — Mettre à jour lucide-react v0 → v1
-
-API potentiellement modifiée. Vérifier les imports d'icônes existants et les adapter si nécessaire.
 
 ## (frontend/ui) — Passer StatCard.tsx aux tokens M3
 
