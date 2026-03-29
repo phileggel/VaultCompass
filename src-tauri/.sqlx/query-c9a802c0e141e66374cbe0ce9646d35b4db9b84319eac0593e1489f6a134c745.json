@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id, \n                c.name as category_name\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.is_deleted = 0 AND c.is_deleted = 0\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "reference",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "asset_class",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "currency",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "risk_level",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "category_id",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "category_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c9a802c0e141e66374cbe0ce9646d35b4db9b84319eac0593e1489f6a134c745"
+}
