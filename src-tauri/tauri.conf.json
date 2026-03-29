@@ -1,37 +1,45 @@
 {
-	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "PortfolioManager",
-	"version": "0.1.0",
-	"identifier": "com.eagle.portfolio-manager",
-	"build": {
-		"beforeDevCommand": "npm run dev",
-		"devUrl": "http://localhost:1420",
-		"beforeBuildCommand": "npm run build",
-		"frontendDist": "../dist"
-	},
-	"app": {
-		"windows": [
-			{
-				"title": "PortfolioManager",
-				"width": 800,
-				"height": 600,
-				"minWidth": 800,
-				"minHeight": 600
-			}
-		],
-		"security": {
-			"csp": null
-		}
-	},
-	"bundle": {
-		"active": true,
-		"targets": "all",
-		"icon": [
-			"icons/32x32.png",
-			"icons/128x128.png",
-			"icons/128x128@2x.png",
-			"icons/icon.icns",
-			"icons/icon.ico"
-		]
-	}
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PortfolioManager",
+  "version": "0.1.0",
+  "identifier": "com.eagle.portfolio-manager",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "PortfolioManager",
+        "width": 800,
+        "height": 600,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwNDI5QUQ5QzBFREE0OTEKUldTUnBPM0EyWnBDUUxoSmtGUE9zeW1ra1hvRjZnMlBoVGE3bWJXdlJXcGttQitNanl2b0VtN0sK",
+      "endpoints": [
+        "https://github.com/phileggel/PortfolioManager/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
 }
