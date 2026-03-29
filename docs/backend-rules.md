@@ -1,0 +1,99 @@
+# Backend Rules
+
+**AI AGENT SHOULD NEVER UPDATE THIS DOCUMENT**
+
+## Folder Structure
+
+**B0** — The backend source tree MUST follow this layout:
+
+```
+src-tauri/src/
+├── core/             # Shared infrastructure (db, logger, event_bus, specta)
+│   ├── db.rs
+│   ├── logger.rs
+│   ├── specta_types.rs
+│   ├── specta_builder.rs
+│   └── event_bus/
+│       ├── bus.rs
+│       ├── event.rs
+│       └── mod.rs
+├── context/          # DDD bounded contexts — no cross-context imports
+│   └── {domain}/
+│       ├── domain/       # Entities + repository traits
+│       ├── repository/   # SQLite implementations of repository traits
+│       ├── service.rs    # Business logic
+│       ├── api.rs        # Tauri command handlers
+│       └── mod.rs        # Public re-exports only
+├── use_cases/        # Cross-context orchestrators (if needed)
+└── lib.rs            # App wiring: state construction + Tauri setup
+```
+
+**B0a** — `core/` MUST only contain infrastructure utilities with no domain knowledge.
+
+**B0b** — `context/{domain}/repository/` MUST only contain SQLite implementations of traits declared in `context/{domain}/domain/`. No business logic.
+
+**B0c** — `core/specta_builder.rs` is the ONLY place where Tauri commands are registered.
+
+## Domain Object
+
+**B1** — MUST be created with a factory method:
+
+- `new()` — validates fields and generates id (use in service)
+- `with_id()` — validates fields, uses provided id (use in api/service)
+- `restore()` — direct restore from database, no validation (use in repository only)
+
+## Bounded Context (`/context`)
+
+**B2** — MUST never import from another context.
+
+**B3** — MUST share its external API directly through its main `mod.rs`.
+
+- Outside the context, never import `crate::context::patient::domain::::MyDomainObject` — always import `crate::context::patient::MyDomainObject`.
+
+**B4** — SHOULD always publish a `{Domain}Updated` event when its state changes (create, update, delete, etc.).
+
+**B5** — MUST declare its Tauri commands in the `api.rs` file.
+
+## Use Cases (`/use_cases`)
+
+**B6** — MAY import from contexts, MUST NOT import from another use case.
+
+**B7** — MUST share its external API directly through its main `mod.rs`.
+
+**B8** — MUST NOT publish a `{Domain}Updated` event (orchestrators do not own state).
+
+**B9** — MUST declare its Tauri commands in the `api.rs` file.
+
+**B10** — SHOULD have an orchestrator as its main entry point (after api) that handles the global logic.
+
+## Repository
+
+**B11** — MUST use sqlx macros for queries. Use `just clean-db` to reset the database if needed.
+
+## Logging
+
+**B12** — MUST use `tracing::{info, debug, warn, error}` with structured fields. Never use `println!`.
+
+**B16** — When using the `target:` field in tracing calls, MUST use the `BACKEND` or `FRONTEND` constant from `crate::core::logger` instead of string literals:
+
+```rust
+use crate::core::logger::BACKEND;
+tracing::info!(target: BACKEND, field = value, "message");
+```
+
+## General
+
+**B13** — MUST use `anyhow::Result<T>` for error handling.
+
+- Exception: Tauri command responses use `Result<T, String>`.
+
+**B14** — MAY use `#[allow(clippy::too_many_arguments)]` on domain factory methods.
+
+## Tests
+
+**B15** — Tests MUST NOT be trivial. A trivial test is one that verifies:
+
+- A constructor does not panic
+- An empty input returns empty output (no logic traversed)
+- A getter returns what was just passed in
+- A test helper disguised as a test

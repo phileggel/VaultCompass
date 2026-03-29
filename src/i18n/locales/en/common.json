@@ -1,0 +1,44 @@
+{
+  "category": {
+    "title": "Categories",
+    "badge_default": "Default",
+    "fab_label": "Add category",
+    "add_modal_title": "New category",
+    "delete_confirm_title": "Delete category",
+    "delete_confirm_message": "Associated assets will be moved to \"Uncategorized\". This action cannot be undone.",
+    "error_duplicate": "This name is already in use.",
+    "error_system_readonly": "The system category cannot be renamed.",
+    "error_system_protected": "The system category cannot be deleted.",
+    "error_load": "Failed to load categories.",
+    "error_generic": "An error occurred. Please try again.",
+    "search_placeholder": "Search categories...",
+    "column_name": "Name",
+    "column_actions": "Actions",
+    "loading": "Loading categories...",
+    "empty": "No categories found.",
+    "edit_modal_title": "Edit category",
+    "form_name_label": "Category name",
+    "form_name_placeholder": "e.g. US Equities, Bonds, Real Estate"
+  },
+  "action": {
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirm": "Confirm",
+    "close": "Close",
+    "continue": "Continue",
+    "retry": "Retry",
+    "search": "Search",
+    "clearSearch": "Clear search",
+    "dismiss": "Dismiss"
+  },
+  "field": {
+    "datePlaceholder": "MM/DD/YYYY",
+    "clearAriaLabel": "Clear",
+    "amountAriaLabel": "Amount",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
+  }
+}

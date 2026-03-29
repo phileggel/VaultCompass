@@ -1,0 +1,90 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: release-windows-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: windows-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Clear stale WiX artifacts
+        shell: powershell
+        run: Remove-Item -Recurse -Force "src-tauri\target\x86_64-pc-windows-msvc\release\wix" -ErrorAction SilentlyContinue
+
+      - name: Verify tag is on main
+        shell: bash
+        run: git fetch origin main && git merge-base --is-ancestor ${{ github.sha }} origin/main || (echo "Tag is not on main branch — aborting release" && exit 1)
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: npm ci
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          SQLX_OFFLINE: true
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: "-C debuginfo=0"
+        with:
+          tauriScript: npm run tauri
+          args: --target x86_64-pc-windows-msvc
+          tagName: ${{ github.ref_name }}
+          releaseName: "PortfolioManager ${{ github.ref_name }}"
+          releaseBody: "See the release assets to download and install this version."
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+
+      - name: Verify updater manifest published
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Waiting for release assets to be available..."
+          sleep 10
+          STATUS=$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json assets --jq '[.assets[].name] | map(select(test("latest\\.json"))) | length')
+          if [ "$STATUS" -eq 0 ]; then
+            echo "::warning::latest.json was not found in release assets — updater endpoint may be broken"
+          else
+            echo "✓ latest.json found in release assets"
+          fi
+
+      - name: Clear Rust cache on failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh cache delete --all --repo ${{ github.repository }} || true

@@ -1,0 +1,44 @@
+{
+  "category": {
+    "title": "Catégories",
+    "badge_default": "Défaut",
+    "fab_label": "Ajouter une catégorie",
+    "add_modal_title": "Nouvelle catégorie",
+    "delete_confirm_title": "Supprimer la catégorie",
+    "delete_confirm_message": "Les assets associés seront déplacés vers « Non catégorisé ». Cette action est irréversible.",
+    "error_duplicate": "Ce nom est déjà utilisé.",
+    "error_system_readonly": "La catégorie système ne peut pas être renommée.",
+    "error_system_protected": "La catégorie système ne peut pas être supprimée.",
+    "error_load": "Impossible de charger les catégories.",
+    "error_generic": "Une erreur est survenue. Réessayez.",
+    "search_placeholder": "Rechercher une catégorie...",
+    "column_name": "Nom",
+    "column_actions": "Actions",
+    "loading": "Chargement des catégories...",
+    "empty": "Aucune catégorie trouvée.",
+    "edit_modal_title": "Modifier la catégorie",
+    "form_name_label": "Nom de la catégorie",
+    "form_name_placeholder": "Ex. Actions US, Obligations, Immobilier"
+  },
+  "action": {
+    "add": "Ajouter",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "continue": "Continuer",
+    "retry": "Réessayer",
+    "search": "Rechercher",
+    "clearSearch": "Effacer la recherche",
+    "dismiss": "Fermer"
+  },
+  "field": {
+    "datePlaceholder": "JJ/MM/AAAA",
+    "clearAriaLabel": "Effacer",
+    "amountAriaLabel": "Montant",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant"
+  }
+}
