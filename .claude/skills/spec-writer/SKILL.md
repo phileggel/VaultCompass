@@ -257,6 +257,8 @@ Then ask: **"Valider, affiner une section, ou lancer le plan d'implémentation ?
 10. Write specs in French, matching the existing docs/ style
 11. Use the **Write** tool (not curl) to save `.stitch` HTML files
 12. **Moindre friction** — ne pose pas de question sur ce que les patterns existants du projet tranchent déjà (navigation, feedback de succès, gestion d'erreur réseau) ; génère directement une règle alignée sur ces patterns. Les questions sont réservées aux décisions métier genuinement nouvelles.
+13. **No implicit behaviour** — every observable behaviour must be covered by an explicit Rn rule. If a behaviour is described in the workflow or UX section but has no corresponding rule, add the rule. Common implicit gaps: default values in forms, sort toggle behaviour, modal-stays-open-on-error, empty-state vs no-search-results distinction.
+14. **Rn numbers are permanent** — once a rule number is assigned it never changes for the lifetime of the project. Tests reference rules by number (`// R1 — ...`). If a rule is removed, leave the number vacant. New rules always get the next available number. Never renumber existing rules.
 
 ---
 
