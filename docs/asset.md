@@ -13,24 +13,31 @@ Cette spec couvre la création, la modification et l'archivage de l'entité `Ass
 ## Définition des champs d'un asset
 
 ### `name`
+
 Nom lisible de l'instrument (ex. « Apple Inc. », « SCPI Pierval »).
 
 ### `class`
+
 Type d'actif financier parmi les valeurs fixes de `AssetClass` (voir R3). Non personnalisable par l'utilisateur.
 
 ### `category`
+
 Regroupement libre défini par l'utilisateur (ex. « Actions US », « Immo Europe »). Sert à agréger les valeurs dans le dashboard de performance. Ce n'est pas une taxonomie fixe : l'utilisateur crée ses propres catégories.
 
 ### `currency`
+
 Devise de **cotation** du titre (ISO 4217 : USD, EUR, BTC…). C'est la devise dans laquelle le prix de l'asset est exprimé — distincte de la devise de référence du compte. Ex. : une action Apple cotée en USD dans un compte dont la devise de référence est EUR.
 
 ### `risk_level`
+
 Score de risque subjectif de 1 (risque faible) à 5 (risque élevé). Le frontend suggère une valeur par défaut selon la `class` choisie (voir R3), modifiable manuellement.
 
 ### `reference`
+
 Identifiant du titre : ticker boursier (ex. `AAPL`), code ISIN (ex. `FR0000131104`), ou identifiant libre saisi par l'utilisateur (ex. `APPART-PARIS-15`) pour les actifs non cotés. Obligatoire.
 
 ### `is_archived`
+
 Indique si l'asset est archivé (retiré des listes actives). Un asset archivé conserve toutes ses données historiques mais ne peut plus être modifié ni recevoir de nouveaux prix.
 
 ---

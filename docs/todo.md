@@ -7,7 +7,6 @@
 `tauri-specta rc.21` impose `specta = "=2.0.0-rc.22"` (version exacte). Attendre la sortie de `tauri-specta rc.22+` avant de passer à `specta rc.23` + `specta-typescript 0.0.10`.
 État (2026-03-29) : `specta rc.23` disponible, `tauri-specta` toujours bloqué à `rc.21`.
 
-
 ## (frontend/ui) — Passer StatCard.tsx aux tokens M3
 
 `StatCard` utilise `bg-emerald-100 text-emerald-700` / `bg-rose-100 text-rose-700` pour les badges positif/négatif.
@@ -26,18 +25,26 @@ Remplacer par les tokens M3 sémantiques correspondants.
 
 ## (frontend) — Internationalisation (i18n) de tous les formulaires
 
-Les labels et placeholders des formulaires `AssetForm` et `AccountForm` sont des chaînes anglaises codées en dur.
+Les labels et placeholders du formulaire `AccountForm` sont des chaînes anglaises codées en dur.
+(Note: `AssetForm` est désormais i18n-compliant.)
 Ajouter `useTranslation` et les clés i18n correspondantes (en + fr).
 
 ## (frontend) — Implémenter les presenters et validateurs des features
 
-Les fichiers `presenter.ts` et `validate*.ts` de toutes les features (`assets`, `accounts`, `categories`) sont des placeholders vides.
+Les fichiers `presenter.ts` et `validate*.ts` des features `accounts` sont des placeholders vides.
+(Note: `assets` et `categories` sont désormais implémentés.)
 Y déplacer les transformations domaine → UI et la logique de validation des formulaires.
 
 ## (frontend) — Utiliser le logger centralisé dans les hooks de features
 
-`useAssets.ts`, `useAccounts.ts` et `useCategories.ts` utilisent `console.error` directement au lieu du `logger` centralisé (`src/lib/logger.ts`).
+`useAccounts.ts` et `useCategories.ts` utilisent `console.error` directement au lieu du `logger` centralisé (`src/lib/logger.ts`).
+(Note: `useAssets.ts` est désormais migré.)
 Remplacer les appels `console.error` par `logger.error` pour que les erreurs remontent au backend via `tracing`.
+
+## (frontend/assets) — Feedback succès par snackbar
+
+Les mutations d'assets (création, modification, archivage) n'ont pas de feedback de succès visible.
+Une fois la mécanique snackbar/toast en place (feature dédiée), brancher un appel `showSnackbar(t("asset.success_*"))` après chaque mutation dans `useAssets.ts`.
 
 ## (frontend/shell) — Implémenter la page Settings et câbler le bouton Settings de la Sidebar
 

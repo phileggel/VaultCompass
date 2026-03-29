@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Asset, AssetClass } from "@/bindings";
 import { useCategories } from "@/features/categories/useCategories";
+import { logger } from "@/lib/logger";
+import { hasDuplicateReference } from "../shared/validateAsset";
 import { useAssets } from "../useAssets";
 
 interface UseEditAssetModalProps {
@@ -9,7 +11,7 @@ interface UseEditAssetModalProps {
 }
 
 export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
-  const { updateAsset } = useAssets();
+  const { updateAsset, assets } = useAssets();
   const { categories } = useCategories();
 
   const [formData, setFormData] = useState({
@@ -20,20 +22,29 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
     risk_level: 3,
     category_id: "",
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sync form data when asset changes
   useEffect(() => {
     if (asset) {
       setFormData({
         name: asset.name,
-        reference: asset.reference || "",
+        reference: asset.reference,
         class: asset.class,
         currency: asset.currency,
         risk_level: asset.risk_level,
         category_id: asset.category.id,
       });
+      setError(null);
     }
   }, [asset]);
+
+  // Duplicate reference warning — R9 (excludes self, includes archived)
+  const duplicateWarning = useMemo(
+    () => hasDuplicateReference(formData.reference, assets, asset?.id),
+    [formData.reference, assets, asset?.id],
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -43,27 +54,45 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
     }));
   };
 
+  // R12: class change in edit mode does NOT auto-fill risk_level
+  const handleClassChange = (_assetClass: AssetClass) => {
+    // intentionally a no-op — risk_level suggestion only applies at creation (R10)
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (asset) {
-      const success = await updateAsset({
-        asset_id: asset.id,
-        name: formData.name,
-        reference: formData.reference || null,
-        class: formData.class as AssetClass,
-        currency: formData.currency,
-        risk_level: formData.risk_level,
-        category_id: formData.category_id,
-      });
-      if (success) {
-        onClose();
-      }
+    if (!asset) return;
+
+    setError(null);
+    setIsSubmitting(true);
+    const result = await updateAsset({
+      asset_id: asset.id,
+      name: formData.name,
+      reference: formData.reference,
+      class: formData.class,
+      currency: formData.currency,
+      risk_level: formData.risk_level,
+      category_id: formData.category_id,
+    });
+
+    setIsSubmitting(false);
+
+    if (result.error) {
+      logger.error("[useEditAssetModal] update failed", { error: result.error });
+      setError(result.error);
+      return;
     }
+
+    onClose();
   };
 
   return {
     formData,
+    error,
+    isSubmitting,
+    duplicateWarning,
     handleChange,
+    handleClassChange,
     handleSubmit,
     categories,
   };

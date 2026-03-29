@@ -74,9 +74,11 @@ context/{domain}/
 
 **Entity: `Asset`**
 
-- `id`, `name`, `class: AssetClass`, `category: AssetCategory`, `currency` (ISO 4217), `risk_level` (1–5), `reference` (ticker/ISIN or auto-generated `INT-{class}-{short_id}`)
-- Factory methods: `new()` (generates ID + validates), `update_from()` (uses provided ID + validates), `from_storage()` (no validation)
+- `id`, `name`, `class: AssetClass`, `category: AssetCategory`, `currency` (ISO 4217), `risk_level` (1–5), `reference` (mandatory — ticker/ISIN), `is_archived: bool`
+- Factory methods: `new()` (generates ID + validates), `with_id()` (uses provided ID + validates), `restore()` (no validation — from storage)
 - `AssetClass` enum: `RealEstate`, `Cash`, `Stocks`, `Bonds`, `ETF`, `MutualFunds`, `DigitalAsset`
+- `AssetClass::default_risk()` — returns default risk level per class (Cash→1, Bonds/RE→2, MF/ETF→3, Stocks→4, Digital→5)
+- Archive is reversible soft-flag (`is_archived`). Soft-delete (`is_deleted`) is permanent and separate.
 
 **Entity: `AssetCategory`**
 
@@ -90,19 +92,23 @@ context/{domain}/
 
 **Repository traits: `AssetRepository`, `AssetCategoryRepository`, `PriceRepository`**
 
-- `get_all`, `get_by_id`, `create`, `update`, `delete`
+- `get_all` (active only), `get_all_including_archived`, `get_by_id`, `create`, `update`, `delete`
+- `archive(id)`, `unarchive(id)` — toggle `is_archived` flag
 - `AssetCategoryRepository` extras: `find_by_name` (case-insensitive), `reassign_assets_and_delete` (atomic transaction)
 
 **Service: `AssetService`**
 
 - CRUD for assets, categories, and prices
+- `update_asset` rejects archived assets with `error.asset.archived_readonly`
 - Publishes `AssetUpdated` and `CategoryUpdated` events
 
 **Tauri commands (`api.rs`)**
 
-- `get_assets() -> Vec<Asset>`
-- `add_asset(name, class, categoryId, currency, riskLevel, reference?) -> Asset`
+- `get_assets() -> Vec<Asset>` — active only
+- `get_assets_with_archived() -> Vec<Asset>` — active + archived
+- `add_asset(name, class, categoryId, currency, riskLevel, reference) -> Asset`
 - `update_asset(...) -> Asset`
+- `archive_asset(id)`, `unarchive_asset(id)`
 - `delete_asset(id)`
 - `get_categories() -> Vec<AssetCategory>`
 - `add_category(label) -> AssetCategory`
@@ -151,6 +157,7 @@ context/{domain}/
 - After schema changes: `just clean-db` → `cargo sqlx prepare`
 - Never add `BEGIN`/`COMMIT` in migrations (sqlx wraps each in a transaction)
 - `202603280001_categories_case_insensitive.sql` — replaces `categories` name index with `UNIQUE ON LOWER(name)` for case-insensitive enforcement
+- `202603290001_asset_archiving.sql` — adds `is_archived INTEGER NOT NULL DEFAULT 0` column to `assets`, drops the old unique index on reference (duplicates now allowed)
 
 ---
 
@@ -160,11 +167,11 @@ context/{domain}/
 
 **`useAppStore`** (Zustand) — shared data across features:
 
-| Field        | Type              | Reloaded on event |
-| ------------ | ----------------- | ----------------- |
-| `assets`     | `Asset[]`         | `AssetUpdated`    |
-| `categories` | `AssetCategory[]` | `CategoryUpdated` |
-| `accounts`   | `Account[]`       | `AccountUpdated`  |
+| Field        | Type                          | Reloaded on event |
+| ------------ | ----------------------------- | ----------------- |
+| `assets`     | `Asset[]` (active + archived) | `AssetUpdated`    |
+| `categories` | `AssetCategory[]`             | `CategoryUpdated` |
+| `accounts`   | `Account[]`                   | `AccountUpdated`  |
 
 Loading states: `isLoadingAssets`, `isLoadingCategories`, `isLoadingAccounts`, `isInitialized`
 
@@ -198,9 +205,12 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Assets (`features/assets/`)
 
-- Gateway: `get_assets`, `add_asset`, `update_asset`, `delete_asset`
+- Gateway: `get_assets`, `get_assets_with_archived`, `add_asset`, `update_asset`, `archive_asset`, `unarchive_asset`, `delete_asset`
+- `useAssets()` hook: exposes `assets` (all incl. archived), `activeCount` (computed), `addAsset`, `updateAsset`, `archiveAsset`, `unarchiveAsset`, `deleteAsset`
 - Sub-features: `asset_table/`, `add_asset/`, `edit_asset_modal/`
-- Shared: `shared/presenter.ts`, `shared/validateAsset.ts`
+- Shared: `shared/presenter.ts` (risk badge classes, default risk), `shared/validateAsset.ts` (duplicate reference check), `shared/constants.ts` (`SYSTEM_CATEGORY_ID`, `DEFAULT_RISK_BY_CLASS`)
+- `AssetTable` filters display by `showArchived`; archived rows shown at 50% opacity
+- Spec: `docs/asset.md`
 
 #### Categories (`features/categories/`)
 

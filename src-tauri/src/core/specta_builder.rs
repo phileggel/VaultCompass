@@ -15,8 +15,11 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::UpdateFrequency>()
         .commands(tauri_specta::collect_commands![
             asset::get_assets,
+            asset::get_assets_with_archived,
             asset::add_asset,
             asset::update_asset,
+            asset::archive_asset,
+            asset::unarchive_asset,
             asset::delete_asset,
             asset::get_categories,
             asset::add_category,

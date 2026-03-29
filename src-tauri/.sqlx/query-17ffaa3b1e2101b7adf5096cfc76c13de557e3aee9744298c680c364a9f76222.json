@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT \n                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id, \n                c.name as category_name\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.is_deleted = 0 AND c.is_deleted = 0\n            ",
+  "query": "\n            SELECT\n                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id,\n                c.name as category_name,\n                a.is_archived as \"is_archived: bool\"\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.is_deleted = 0 AND a.is_archived = 0 AND c.is_deleted = 0\n            ",
   "describe": {
     "columns": [
       {
@@ -42,6 +42,11 @@
         "name": "category_name",
         "ordinal": 7,
         "type_info": "Text"
+      },
+      {
+        "name": "is_archived: bool",
+        "ordinal": 8,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -55,8 +60,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "c9a802c0e141e66374cbe0ce9646d35b4db9b84319eac0593e1489f6a134c745"
+  "hash": "17ffaa3b1e2101b7adf5096cfc76c13de557e3aee9744298c680c364a9f76222"
 }

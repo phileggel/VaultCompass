@@ -1,42 +1,34 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import type { AssetClass } from "@/bindings";
 import { useCategories } from "@/features/categories/useCategories";
+import { DEFAULT_RISK_BY_CLASS, SYSTEM_CATEGORY_ID } from "../shared/constants";
+import { hasDuplicateReference } from "../shared/validateAsset";
 import { useAssets } from "../useAssets";
 
 interface UseAddAssetProps {
-  initialData?: {
-    name: string;
-    reference: string;
-    class: AssetClass;
-    currency: string;
-    risk_level: number;
-    category_id: string;
-  };
   onSubmitSuccess?: () => void;
 }
 
-export function useAddAsset({ initialData, onSubmitSuccess }: UseAddAssetProps = {}) {
-  const { addAsset } = useAssets();
+export function useAddAsset({ onSubmitSuccess }: UseAddAssetProps = {}) {
+  const { addAsset, assets } = useAssets();
   const { categories } = useCategories();
 
   const [formData, setFormData] = useState({
-    name: initialData?.name || "",
-    reference: initialData?.reference || "",
-    class: initialData?.class || ("Stocks" as AssetClass),
-    currency: initialData?.currency || "USD",
-    risk_level: initialData?.risk_level || 3,
-    category_id: initialData?.category_id || "",
+    name: "",
+    reference: "",
+    class: "Cash" as AssetClass,
+    currency: "EUR",
+    risk_level: DEFAULT_RISK_BY_CLASS.Cash,
+    category_id: SYSTEM_CATEGORY_ID,
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Effect to set initial category once categories are loaded
-  useEffect(() => {
-    if (!formData.category_id && categories.length > 0) {
-      const firstCat = categories[0];
-      if (firstCat) {
-        setFormData((prev) => ({ ...prev, category_id: firstCat.id }));
-      }
-    }
-  }, [categories, formData.category_id]);
+  // Duplicate reference warning — R9 (includes archived assets)
+  const duplicateWarning = useMemo(
+    () => hasDuplicateReference(formData.reference, assets),
+    [formData.reference, assets],
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -46,38 +38,57 @@ export function useAddAsset({ initialData, onSubmitSuccess }: UseAddAssetProps =
     }));
   };
 
+  // Auto-fill risk_level when class changes — R10 (creation only)
+  const handleClassChange = (assetClass: AssetClass) => {
+    setFormData((prev) => ({
+      ...prev,
+      class: assetClass,
+      risk_level: DEFAULT_RISK_BY_CLASS[assetClass],
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
 
-    const success = await addAsset({
+    const result = await addAsset({
       name: formData.name,
-      reference: formData.reference || null,
-      class: formData.class as AssetClass,
+      reference: formData.reference,
+      class: formData.class,
       currency: formData.currency,
       risk_level: formData.risk_level,
-      category_id: formData.category_id,
+      category_id: formData.category_id || SYSTEM_CATEGORY_ID,
     });
 
-    if (success && onSubmitSuccess) {
+    setIsSubmitting(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    if (onSubmitSuccess) {
       onSubmitSuccess();
     }
 
-    if (!initialData && success) {
-      const firstCat = categories[0];
-      setFormData({
-        name: "",
-        reference: "",
-        class: "Stocks",
-        currency: "USD",
-        risk_level: 3,
-        category_id: firstCat ? firstCat.id : "",
-      });
-    }
+    setFormData({
+      name: "",
+      reference: "",
+      class: "Cash",
+      currency: "EUR",
+      risk_level: DEFAULT_RISK_BY_CLASS.Cash,
+      category_id: SYSTEM_CATEGORY_ID,
+    });
   };
 
   return {
     formData,
+    error,
+    isSubmitting,
+    duplicateWarning,
     handleChange,
+    handleClassChange,
     handleSubmit,
     categories,
   };

@@ -9,11 +9,22 @@
 
 export const commands = {
 /**
- * Fetches all non-deleted assets.
+ * Fetches all active (non-archived) assets.
  */
 async getAssets() : Promise<Result<Asset[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_assets") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Fetches all assets including archived ones.
+ */
+async getAssetsWithArchived() : Promise<Result<Asset[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_assets_with_archived") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -36,6 +47,28 @@ async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, string>> {
 async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_asset", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Archives an asset (reversible soft-archive — R6).
+ */
+async archiveAsset(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("archive_asset", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Unarchives an asset (R18).
+ */
+async unarchiveAsset(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("unarchive_asset", { id }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -255,7 +288,11 @@ risk_level: number;
 /**
  * Identifier like ticker or ISIN.
  */
-reference: string }
+reference: string; 
+/**
+ * Whether the asset is archived (soft-archived, reversible).
+ */
+is_archived: boolean }
 /**
  * Link between an Account and an Asset with holdings data.
  */
@@ -361,9 +398,9 @@ export type CreateAssetDTO = {
  */
 name: string; 
 /**
- * Optional ticker or reference.
+ * Ticker, ISIN, or user-defined reference (mandatory — R1).
  */
-reference: string | null; 
+reference: string; 
 /**
  * Classification type.
  */
@@ -446,9 +483,9 @@ asset_id: string;
  */
 name: string; 
 /**
- * New reference.
+ * New reference (mandatory — R1).
  */
-reference: string | null; 
+reference: string; 
 /**
  * New classification.
  */

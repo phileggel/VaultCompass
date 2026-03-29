@@ -40,6 +40,21 @@ pub enum AssetClass {
     DigitalAsset,
 }
 
+impl AssetClass {
+    /// Returns the default risk level for this asset class (R3).
+    pub fn default_risk(&self) -> u8 {
+        match self {
+            AssetClass::Cash => 1,
+            AssetClass::Bonds => 2,
+            AssetClass::RealEstate => 2,
+            AssetClass::MutualFunds => 3,
+            AssetClass::ETF => 3,
+            AssetClass::Stocks => 4,
+            AssetClass::DigitalAsset => 5,
+        }
+    }
+}
+
 /// A financial instrument or resource held by a user.
 #[derive(Debug, Serialize, Deserialize, Clone, Type)]
 pub struct Asset {
@@ -57,6 +72,8 @@ pub struct Asset {
     pub risk_level: u8,
     /// Identifier like ticker or ISIN.
     pub reference: String,
+    /// Whether the asset is archived (soft-archived, reversible).
+    pub is_archived: bool,
 }
 
 impl Asset {
@@ -67,14 +84,11 @@ impl Asset {
         category: AssetCategory,
         currency: String,
         risk_level: u8,
-        reference: Option<String>,
+        reference: String,
     ) -> Result<Self> {
-        Self::validate(&name, risk_level, &currency)?;
+        Self::validate(&name, risk_level, &currency, &reference)?;
 
-        let reference = match reference {
-            Some(r) if !r.trim().is_empty() => r.trim().to_uppercase(),
-            _ => Self::generate_internal_reference(&class),
-        };
+        let reference = reference.trim().to_uppercase();
 
         Ok(Self {
             id: Uuid::new_v4().to_string(),
@@ -84,25 +98,25 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            is_archived: false,
         })
     }
 
-    /// Updates an existing Asset.
-    pub fn update_from(
+    /// Reconstructs an Asset with a known ID (used for updates).
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_id(
         asset_id: String,
         name: String,
         class: AssetClass,
         category: AssetCategory,
         currency: String,
         risk_level: u8,
-        reference: Option<String>,
+        reference: String,
+        is_archived: bool,
     ) -> Result<Self> {
-        Self::validate(&name, risk_level, &currency)?;
+        Self::validate(&name, risk_level, &currency, &reference)?;
 
-        let reference = match reference {
-            Some(r) if !r.trim().is_empty() => r.trim().to_uppercase(),
-            _ => Self::generate_internal_reference(&class),
-        };
+        let reference = reference.trim().to_uppercase();
 
         Ok(Self {
             id: asset_id,
@@ -112,12 +126,16 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            is_archived,
         })
     }
 
-    fn validate(name: &str, risk_level: u8, currency: &str) -> Result<()> {
+    fn validate(name: &str, risk_level: u8, currency: &str, reference: &str) -> Result<()> {
         if name.trim().is_empty() {
             anyhow::bail!("Asset name cannot be empty");
+        }
+        if reference.trim().is_empty() {
+            anyhow::bail!("Asset reference cannot be empty");
         }
         if !(1..=5).contains(&risk_level) {
             anyhow::bail!(
@@ -131,20 +149,9 @@ impl Asset {
         Ok(())
     }
 
-    fn generate_internal_reference(class: &AssetClass) -> String {
-        let reference: String = class
-            .to_string()
-            .to_lowercase()
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '-' })
-            .collect();
-
-        let short_id = &uuid::Uuid::new_v4().to_string()[..4];
-        format!("INT-{}-{}", reference.trim_matches('-'), short_id).to_uppercase()
-    }
-
-    /// Creates a new Asset from storage.
-    pub fn from_storage(
+    /// Restores an Asset from storage (no validation — already validated at write time).
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore(
         asset_id: String,
         name: String,
         class: AssetClass,
@@ -152,6 +159,7 @@ impl Asset {
         currency: String,
         risk_level: u8,
         reference: String,
+        is_archived: bool,
     ) -> Self {
         Self {
             id: asset_id,
@@ -161,6 +169,7 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            is_archived,
         }
     }
 }
@@ -168,8 +177,10 @@ impl Asset {
 /// Interface for asset persistence.
 #[async_trait]
 pub trait AssetRepository: Send + Sync {
-    /// Fetches all active assets.
+    /// Fetches all active (non-archived) assets.
     async fn get_all(&self) -> Result<Vec<Asset>>;
+    /// Fetches all assets including archived ones.
+    async fn get_all_including_archived(&self) -> Result<Vec<Asset>>;
     /// Fetches an asset by its ID.
     async fn get_by_id(&self, id: &str) -> Result<Option<Asset>>;
     /// Persists a new asset.
@@ -178,4 +189,8 @@ pub trait AssetRepository: Send + Sync {
     async fn update(&self, asset: Asset) -> Result<Asset>;
     /// Soft-deletes an asset.
     async fn delete(&self, id: &str) -> Result<()>;
+    /// Archives an asset (reversible).
+    async fn archive(&self, id: &str) -> Result<()>;
+    /// Unarchives an asset.
+    async fn unarchive(&self, id: &str) -> Result<()>;
 }

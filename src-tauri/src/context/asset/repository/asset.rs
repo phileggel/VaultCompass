@@ -14,12 +14,13 @@ struct AssetRow {
     risk_level: i64,
     category_id: String,
     category_name: String,
+    is_archived: bool,
 }
 
 impl From<AssetRow> for Asset {
     fn from(row: AssetRow) -> Self {
         let asset_class = AssetClass::from_str(&row.asset_class).unwrap_or_default();
-        Asset::from_storage(
+        Asset::restore(
             row.id,
             row.name,
             asset_class,
@@ -27,6 +28,7 @@ impl From<AssetRow> for Asset {
             row.currency,
             row.risk_level.try_into().unwrap_or(0),
             row.reference,
+            row.is_archived,
         )
     }
 }
@@ -50,13 +52,14 @@ impl AssetRepository for SqliteAssetRepository {
         let rows = sqlx::query_as!(
             AssetRow,
             r#"
-            SELECT 
+            SELECT
                 a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,
-                c.id as category_id, 
-                c.name as category_name
+                c.id as category_id,
+                c.name as category_name,
+                a.is_archived as "is_archived: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
-            WHERE a.is_deleted = 0 AND c.is_deleted = 0
+            WHERE a.is_deleted = 0 AND a.is_archived = 0 AND c.is_deleted = 0
             "#
         )
         .fetch_all(&self.pool)
@@ -66,17 +69,39 @@ impl AssetRepository for SqliteAssetRepository {
         Ok(rows.into_iter().map(Asset::from).collect())
     }
 
+    async fn get_all_including_archived(&self) -> Result<Vec<Asset>> {
+        let rows = sqlx::query_as!(
+            AssetRow,
+            r#"
+            SELECT
+                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,
+                c.id as category_id,
+                c.name as category_name,
+                a.is_archived as "is_archived: bool"
+            FROM assets a
+            JOIN categories c ON a.category_id = c.id
+            WHERE a.is_deleted = 0 AND c.is_deleted = 0
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| "Failed to fetch assets including archived from database")?;
+
+        Ok(rows.into_iter().map(Asset::from).collect())
+    }
+
     async fn get_by_id(&self, id: &str) -> Result<Option<Asset>> {
         let row = sqlx::query_as!(
             AssetRow,
             r#"
-            SELECT 
+            SELECT
                 a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,
-                c.id as category_id, 
-                c.name as category_name
+                c.id as category_id,
+                c.name as category_name,
+                a.is_archived as "is_archived: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
-            WHERE a.id = ? 
+            WHERE a.id = ?
                 AND a.is_deleted = 0
                 AND c.is_deleted = 0
             "#,
@@ -92,7 +117,7 @@ impl AssetRepository for SqliteAssetRepository {
     async fn create(&self, asset: Asset) -> Result<Asset> {
         let asset_class_str = asset.class.to_string();
         sqlx::query!(
-            r#"INSERT INTO assets (id, name, reference, asset_class, currency, risk_level, is_deleted, category_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?)"#,
+            r#"INSERT INTO assets (id, name, reference, asset_class, currency, risk_level, is_deleted, is_archived, category_id) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)"#,
             asset.id,
             asset.name,
             asset.reference,
@@ -110,7 +135,7 @@ impl AssetRepository for SqliteAssetRepository {
     async fn update(&self, asset: Asset) -> Result<Asset> {
         let asset_class_str = asset.class.to_string();
         sqlx::query!(
-            r#"UPDATE assets SET name = ?, reference = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ? WHERE id = ?"#,
+            r#"UPDATE assets SET name = ?, reference = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ? WHERE id = ? AND is_archived = 0"#,
             asset.name,
             asset.reference,
             asset_class_str,
@@ -130,6 +155,28 @@ impl AssetRepository for SqliteAssetRepository {
             .execute(&self.pool)
             .await
             .with_context(|| format!("Failed to soft delete asset with id: {}", id))?;
+        Ok(())
+    }
+
+    async fn archive(&self, id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"UPDATE assets SET is_archived = 1 WHERE id = ? AND is_deleted = 0"#,
+            id
+        )
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("Failed to archive asset with id: {}", id))?;
+        Ok(())
+    }
+
+    async fn unarchive(&self, id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"UPDATE assets SET is_archived = 0 WHERE id = ? AND is_deleted = 0"#,
+            id
+        )
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("Failed to unarchive asset with id: {}", id))?;
         Ok(())
     }
 }

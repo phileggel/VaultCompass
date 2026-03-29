@@ -53,8 +53,8 @@ Use **AskUserQuestion** to get:
 
 1. Commit type (mandatory, default to suggested)
 2. Optional scope (e.g. `account`, `asset`, `ci`) — leave blank for no scope
-3. Commit message (imperative, ≤72 characters)
-4. Commit body (optional, max 5 lines; include context, references to tasks)
+3. Commit message (imperative, **English**, ≤72 characters)
+4. Commit body (optional, **English**, max 5 lines; include context, references to tasks)
 
 ### 6. Validate message format
 
@@ -83,7 +83,7 @@ git log -1 --oneline
 1. Never commit sensitive files
 2. All tests must pass (`./scripts/check.sh`) before committing
 3. All linters must pass
-4. Commit message must follow conventional format: `type: message` or `type(scope): message`
+4. Commit message must be in **English** and follow conventional format: `type: message` or `type(scope): message`
 5. Never use `git add -A` — stage files explicitly by name
 6. User confirmation required before commit
 7. No bypassing rules in production

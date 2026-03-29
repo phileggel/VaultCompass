@@ -1,4 +1,8 @@
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { Asset } from "@/bindings";
+import { logger } from "@/lib/logger";
+import { Button } from "@/ui/components/button/Button";
 import { Dialog } from "@/ui/components/modal/Dialog";
 import { AssetForm } from "../shared/AssetForm";
 import { useEditAssetModal } from "./useEditAssetModal";
@@ -10,23 +14,39 @@ interface EditAssetModalProps {
 }
 
 export function EditAssetModal({ isOpen, onClose, asset }: EditAssetModalProps) {
-  const { formData, handleChange, handleSubmit, categories } = useEditAssetModal({
-    asset,
-    onClose,
-  });
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    logger.info("[EditAssetModal] mounted");
+  }, []);
+  const {
+    formData,
+    error,
+    isSubmitting,
+    duplicateWarning,
+    handleChange,
+    handleClassChange,
+    handleSubmit,
+    categories,
+  } = useEditAssetModal({ asset, onClose });
+
+  const isSubmitDisabled =
+    !formData.name.trim() || !formData.reference.trim() || !formData.currency.trim();
 
   const actions = (
     <>
-      <button
-        type="button"
-        onClick={onClose}
-        className="px-6 py-2.5 rounded-full text-sm font-medium text-m3-primary hover:bg-m3-primary/5 transition-all"
+      <Button variant="secondary" onClick={onClose}>
+        {t("action.cancel")}
+      </Button>
+      <Button
+        type="submit"
+        form="edit-asset-form"
+        variant="primary"
+        loading={isSubmitting}
+        disabled={isSubmitDisabled || isSubmitting}
       >
-        Cancel
-      </button>
-      <button type="submit" form="edit-asset-form" className="m3-button-filled px-8">
-        Save Changes
-      </button>
+        {t("action.save")}
+      </Button>
     </>
   );
 
@@ -34,7 +54,7 @@ export function EditAssetModal({ isOpen, onClose, asset }: EditAssetModalProps) 
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit Asset"
+      title={t("asset.edit_modal_title")}
       actions={actions}
       maxWidth="max-w-xl"
     >
@@ -42,9 +62,12 @@ export function EditAssetModal({ isOpen, onClose, asset }: EditAssetModalProps) 
         <AssetForm
           formData={formData}
           handleChange={handleChange}
+          onClassChange={handleClassChange}
           categories={categories}
-          idPrefix="edit"
+          duplicateWarning={duplicateWarning}
+          idPrefix="edit-asset"
         />
+        {error && <p className="mt-3 text-sm text-m3-error">{error}</p>}
       </form>
     </Dialog>
   );

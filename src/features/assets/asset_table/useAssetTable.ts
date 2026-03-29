@@ -6,7 +6,7 @@ export type SortConfig = {
   direction: "asc" | "desc";
 };
 
-export function useAssetTable(assets: Asset[], searchTerm: string) {
+export function useAssetTable(assets: Asset[], searchTerm: string, showArchived: boolean) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "name", direction: "asc" });
 
   const handleSort = (key: SortConfig["key"]) => {
@@ -17,10 +17,14 @@ export function useAssetTable(assets: Asset[], searchTerm: string) {
   };
 
   const sortedAndFilteredAssets = useMemo(() => {
-    const filtered = assets.filter(
+    // R7/R19: filter by archive state first
+    const visibleAssets = showArchived ? assets : assets.filter((a) => !a.is_archived);
+
+    // R16: fuzzy search applies only to currently displayed assets
+    const filtered = visibleAssets.filter(
       (a) =>
         a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.class.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.category.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
@@ -43,7 +47,7 @@ export function useAssetTable(assets: Asset[], searchTerm: string) {
       if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [assets, searchTerm, sortConfig]);
+  }, [assets, searchTerm, showArchived, sortConfig]);
 
   return {
     sortedAndFilteredAssets,

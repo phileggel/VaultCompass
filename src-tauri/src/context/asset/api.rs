@@ -16,8 +16,8 @@ use super::domain::{Asset, AssetCategory, AssetClass, AssetPrice};
 pub struct CreateAssetDTO {
     /// Display name.
     pub name: String,
-    /// Optional ticker or reference.
-    pub reference: Option<String>,
+    /// Ticker, ISIN, or user-defined reference (mandatory — R1).
+    pub reference: String,
     /// Classification type.
     pub class: AssetClass,
     /// ISO currency code.
@@ -35,8 +35,8 @@ pub struct UpdateAssetDTO {
     pub asset_id: String,
     /// New display name.
     pub name: String,
-    /// New reference.
-    pub reference: Option<String>,
+    /// New reference (mandatory — R1).
+    pub reference: String,
     /// New classification.
     pub class: AssetClass,
     /// New currency.
@@ -60,13 +60,24 @@ pub struct CreatePriceDTO {
 
 // --- Assets ---
 
-/// Fetches all non-deleted assets.
+/// Fetches all active (non-archived) assets.
 #[tauri::command]
 #[specta::specta]
 pub async fn get_assets(state: State<'_, AppState>) -> Result<Vec<Asset>, String> {
     state
         .asset_service
         .get_all_assets()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Fetches all assets including archived ones.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_assets_with_archived(state: State<'_, AppState>) -> Result<Vec<Asset>, String> {
+    state
+        .asset_service
+        .get_all_assets_with_archived()
         .await
         .map_err(|e| e.to_string())
 }
@@ -92,6 +103,28 @@ pub async fn update_asset(
     state
         .asset_service
         .update_asset(dto)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Archives an asset (reversible soft-archive — R6).
+#[tauri::command]
+#[specta::specta]
+pub async fn archive_asset(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state
+        .asset_service
+        .archive_asset(&id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Unarchives an asset (R18).
+#[tauri::command]
+#[specta::specta]
+pub async fn unarchive_asset(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state
+        .asset_service
+        .unarchive_asset(&id)
         .await
         .map_err(|e| e.to_string())
 }

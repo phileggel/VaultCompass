@@ -6,6 +6,7 @@ import App from "./App";
 vi.mock("./bindings", () => ({
   commands: {
     getAssets: vi.fn(() => Promise.resolve({ status: "ok", data: [] })),
+    getAssetsWithArchived: vi.fn(() => Promise.resolve({ status: "ok", data: [] })),
     addAsset: vi.fn(),
     deleteAsset: vi.fn(),
     getAccountTypes: vi.fn(() => Promise.resolve({ status: "ok", data: [] })),

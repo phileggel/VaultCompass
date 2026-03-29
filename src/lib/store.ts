@@ -16,6 +16,7 @@ interface AppState {
 
   // Error handling
   error: string | null;
+  assetsError: string | null;
 
   // Actions
   fetchAssets: () => Promise<void>;
@@ -54,9 +55,17 @@ export const useAppStore = create<AppState>((set, get) => {
     isLoadingAccounts: false,
     isInitialized: false,
     error: null,
+    assetsError: null,
 
-    fetchAssets: () =>
-      handleFetch("isLoadingAssets", assetGateway.getAssets, (data) => set({ assets: data })),
+    fetchAssets: async () => {
+      set({ isLoadingAssets: true, assetsError: null });
+      const result = await assetGateway.getAssetsWithArchived();
+      if (result.status === "ok") {
+        set({ assets: result.data, isLoadingAssets: false });
+      } else {
+        set({ assetsError: result.error, isLoadingAssets: false });
+      }
+    },
 
     fetchCategories: () =>
       handleFetch("isLoadingCategories", commands.getCategories, (data) =>
