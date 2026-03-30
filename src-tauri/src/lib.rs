@@ -19,9 +19,10 @@ use crate::context::asset::{
 };
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
+use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
 use std::{fs, path::PathBuf, sync::Arc};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_specta::Event as _;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -44,6 +45,9 @@ pub struct AppState {
     pub account_service: AccountService,
 }
 
+/// Update lifecycle state — managed separately so it is accessible without a DB.
+pub(crate) type ManagedUpdateState = Arc<UpdateState>;
+
 /// Entry point for the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -61,6 +65,7 @@ pub fn run() {
     let invoke_handler = builder.invoke_handler();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
@@ -73,12 +78,19 @@ pub fn run() {
             tracing::info!(target: BACKEND, "Initializing application backend");
             tracing::trace!(target: BACKEND, data_dir = ?dirs.local_data_dir, log_dir = ?dirs.log_dir, "Application directories");
 
+            // Manage update state before DB init so it is available even on migration failure (R10, R18)
+            app_handle.manage(Arc::new(UpdateState::new()) as ManagedUpdateState);
+
             tauri::async_runtime::block_on(async move {
-                let db = Arc::new(
-                    Database::new(dirs.local_data_dir)
-                        .await
-                        .expect("Failed to initialize database"),
-                );
+                // R18 — emit migration error and keep app running so frontend can show error screen
+                let db = match Database::new(dirs.local_data_dir).await {
+                    Ok(db) => Arc::new(db),
+                    Err(e) => {
+                        tracing::error!(target: BACKEND, error = %e, "Database initialization failed (R18)");
+                        let _ = app_handle.emit("db:migration_error", e.to_string());
+                        return;
+                    }
+                };
                 tracing::info!(target: BACKEND, "Database initialized successfully");
 
                 let event_bus = Arc::new(SideEffectEventBus::new());
@@ -116,6 +128,7 @@ pub fn run() {
                     asset_service,
                     account_service,
                 });
+
                 tracing::info!(target: BACKEND, "Application backend initialized successfully");
             });
 

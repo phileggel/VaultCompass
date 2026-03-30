@@ -1,4 +1,4 @@
-import { BarChart3, Palette, PieChart, Tag, Wallet } from "lucide-react";
+import { BarChart3, Info, Palette, PieChart, Tag, Wallet } from "lucide-react";
 import type { ElementType } from "react";
 
 export interface NavItem {
@@ -11,6 +11,7 @@ const BASE_NAV_ITEMS: NavItem[] = [
   { label: "Accounts", icon: Wallet },
   { label: "Account Details", icon: BarChart3 },
   { label: "Categories", icon: Tag },
+  { label: "About", icon: Info },
 ];
 
 const DEV_NAV_ITEMS: NavItem[] = import.meta.env.DEV

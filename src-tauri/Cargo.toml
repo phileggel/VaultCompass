@@ -44,6 +44,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tauri-plugin-window-state = "2.4.1"
+tauri-plugin-updater = "2.10.0"
 iso_currency = "0.5.3"
 strum = "0.27.2"
 strum_macros = "0.27.2"

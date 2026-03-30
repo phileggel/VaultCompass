@@ -125,6 +125,7 @@ L'application est distribuée sous forme d'exécutable desktop. Lorsqu'une nouve
 ### Points d'entrée
 
 Deux points d'entrée :
+
 1. **Automatique** — déclenché au démarrage, une fois l'interface entièrement chargée (R1).
 2. **Manuel** — bouton « Vérifier les mises à jour » sur la page « À propos » (R25).
 

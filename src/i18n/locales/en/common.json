@@ -72,11 +72,34 @@
     "clearSearch": "Clear search",
     "dismiss": "Dismiss"
   },
+  "update": {
+    "available": "Version {{version}} available",
+    "downloading": "Downloading…",
+    "ready": "Ready to install",
+    "error": "Download failed",
+    "action_install": "Install",
+    "action_dismiss": "Dismiss",
+    "action_restart": "Restart now",
+    "action_retry": "Retry",
+    "progress_label": "{{percent}}%"
+  },
+  "about": {
+    "title": "About",
+    "version_label": "Version",
+    "check_updates": "Check for updates",
+    "checking": "Checking…",
+    "up_to_date": "The application is up to date.",
+    "check_failed": "Check failed. Please try again."
+  },
   "field": {
     "datePlaceholder": "MM/DD/YYYY",
     "clearAriaLabel": "Clear",
     "amountAriaLabel": "Amount",
     "previousMonth": "Previous month",
     "nextMonth": "Next month"
+  },
+  "app": {
+    "migration_error": "A database migration error occurred. Please contact support.",
+    "migration_in_progress": "Initializing…"
   }
 }

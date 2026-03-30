@@ -26,6 +26,7 @@
 3. `Arc<Database>`, `Arc<SideEffectEventBus>`
 4. Bounded context services: `AssetService`, `AccountService`
 5. Event forwarder spawned to bridge `SideEffectEventBus` → Tauri frontend events
+6. `Arc<UpdateState>` — managed separately from `AppState` so it is accessible before the DB is ready
 
 Log file location: `{app_log_dir}/app.log` (use `just collect-logs` to retrieve).
 
@@ -52,6 +53,24 @@ Published on every state change. Frontend listens via a single `events.event.lis
 | `AssetUpdated`    | `context/asset/`   |
 | `CategoryUpdated` | `context/asset/`   |
 | `AccountUpdated`  | `context/account/` |
+
+### Use Cases (`use_cases/`)
+
+Cross-cutting application use cases that span multiple bounded contexts or require app-level infrastructure.
+
+#### Update Checker (`use_cases/update_checker/`)
+
+Implements the application auto-update lifecycle (spec: `docs/update.md`).
+
+- `service.rs` — `check()`, `download()`, `install()` functions; `UpdateInfo` (version string) + `UpdateState` (concurrent download guard + downloaded bytes store)
+- `api.rs` — three Tauri commands: `check_for_update`, `download_update`, `install_update`
+- Raw Tauri events emitted by the backend (frontend listens via `listen()`):
+  - `update:available` — emitted on check when a new version exists (carries `UpdateInfo`)
+  - `update:progress` — emitted during download (carries `percent: u64`)
+  - `update:complete` — emitted when download + checksum OK
+  - `update:error` — emitted on download or checksum failure (carries error message)
+  - `db:migration_error` — emitted by `core/db.rs` if a migration fails at startup
+- Business invariants: concurrent downloads blocked via `AtomicBool`; downloaded bytes stored in `Mutex<Option<Vec<u8>>>` between download and install commands; no breaking schema changes allowed (R15)
 
 ---
 
@@ -230,11 +249,24 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - Gateway: `get_account_holdings`, `upsert_account_holding`, `remove_account_holding`
 - Component: `AccountAssetDetailsView.tsx`
 
+#### Update (`features/update/`)
+
+- Gateway: `checkForUpdate`, `downloadUpdate`, `installUpdate` (via Tauri commands); event listeners for `update:available`, `update:progress`, `update:complete`, `update:error`
+- `update_banner/useUpdateBanner.ts` — state machine: `idle → available → downloading → ready / error`; exposed as `UpdateBannerData` with handlers
+- `update_banner/UpdateBanner.tsx` — renders banner in shell for states `available`, `downloading`, `ready`, `error`; returns `null` when `idle`
+- Spec: `docs/update.md` (R1–R27)
+
+#### About (`features/about/`)
+
+- `about_page/useAboutPage.ts` — reads `import.meta.env.VITE_APP_VERSION`; manual check trigger with `CheckStatus: idle | checking | up_to_date | error`
+- `about_page/AboutPage.tsx` — version display + manual update check button (R25–R27)
+
 #### Shell (`features/shell/`)
 
 - Layout wrapper: `MainLayout.tsx`, `Sidebar.tsx`, `Content.tsx`, `Footer.tsx`
 - `Header.tsx` — indigo gradient header with `ThemeToggle`
 - `useSidebar.ts` — `NAV_ITEMS` constant (base items + `"Design System"` entry added only when `import.meta.env.DEV`)
+- `gateway.ts` — shell-level event listeners: `onMigrationError` (listens to `db:migration_error`)
 - `theme_toggle/useThemeToggle.ts` — day/night/auto cycle, localStorage persistence, OS media query listener
 - `theme_toggle/ThemeToggle.tsx` — Sun/Moon/Monitor icon button
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-03-29
 
 ### Added
+
 - add archive/unarchive, reference validation and UX improvements
 - Implement R1-R20: mandatory reference, archive/unarchive, duplicate warning,
   load-error state with retry, isSubmitting guard, showArchived toggle

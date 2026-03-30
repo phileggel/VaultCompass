@@ -1,4 +1,7 @@
 //! Application use cases layer.
 //!
-//! This module will contain cross-cutting application use cases
-//! that orchestrate multiple bounded contexts.
+//! Cross-cutting application use cases that orchestrate multiple bounded
+//! contexts or platform capabilities.
+
+/// Application auto-update: detection, download, and installation (R1–R27).
+pub mod update_checker;

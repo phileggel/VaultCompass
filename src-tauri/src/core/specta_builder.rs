@@ -1,11 +1,13 @@
 use crate::{
     context::{account, asset},
     core::{logger, Event},
+    use_cases::update_checker,
 };
 
 /// create the Specta builder for standard and generate_bindings
 pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
+        .typ::<update_checker::UpdateInfo>()
         .typ::<asset::Asset>()
         .typ::<asset::AssetCategory>()
         .typ::<asset::AssetPrice>()
@@ -33,7 +35,10 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::get_account_holdings,
             account::upsert_account_holding,
             account::remove_account_holding,
-            logger::log_frontend
+            logger::log_frontend,
+            update_checker::check_for_update,
+            update_checker::download_update,
+            update_checker::install_update
         ])
         .events(tauri_specta::collect_events![Event])
 }

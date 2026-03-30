@@ -223,6 +223,52 @@ async removeAccountHolding(accountId: string, assetId: string) : Promise<Result<
  */
 async logFrontend(level: string, message: string) : Promise<void> {
     await TAURI_INVOKE("log_frontend", { level, message });
+},
+/**
+ * Checks whether a new application version is available (R1, R25).
+ * 
+ * Returns `None` if the application is up to date or if the check fails due
+ * to network or server errors (R21). Emits `"update:available"` on the app
+ * handle if an update is found.
+ */
+async checkForUpdate() : Promise<Result<UpdateInfo | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_for_update") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Starts downloading the available update in the background (R6).
+ * 
+ * Returns immediately — the download runs as a detached async task.
+ * Progress is reported via `"update:progress"` events (R8).
+ * On success, emits `"update:complete"` (R11).
+ * On failure, emits `"update:error"` (R23).
+ * Concurrent download requests are silently ignored (R10).
+ */
+async downloadUpdate() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_update") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Installs the downloaded update and restarts the application (R13).
+ * 
+ * Must be called after `download_update` has completed successfully.
+ * Returns an error if no downloaded update is available.
+ */
+async installUpdate() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_update") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -526,6 +572,14 @@ export type UpdateFrequency =
  * Manual update yearly
  */
 "ManualYear"
+/**
+ * Information about an available application update.
+ */
+export type UpdateInfo = { 
+/**
+ * Semantic version string of the available update (e.g. "1.2.3").
+ */
+version: string }
 /**
  * Parameters for recording asset holdings in an account.
  */

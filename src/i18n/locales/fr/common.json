@@ -72,11 +72,34 @@
     "clearSearch": "Effacer la recherche",
     "dismiss": "Fermer"
   },
+  "update": {
+    "available": "Version {{version}} disponible",
+    "downloading": "Téléchargement en cours…",
+    "ready": "Prêt à installer",
+    "error": "Échec du téléchargement",
+    "action_install": "Installer",
+    "action_dismiss": "Ignorer",
+    "action_restart": "Redémarrer maintenant",
+    "action_retry": "Réessayer",
+    "progress_label": "{{percent}} %"
+  },
+  "about": {
+    "title": "À propos",
+    "version_label": "Version",
+    "check_updates": "Vérifier les mises à jour",
+    "checking": "Vérification…",
+    "up_to_date": "L'application est à jour.",
+    "check_failed": "La vérification a échoué. Veuillez réessayer."
+  },
   "field": {
     "datePlaceholder": "JJ/MM/AAAA",
     "clearAriaLabel": "Effacer",
     "amountAriaLabel": "Montant",
     "previousMonth": "Mois précédent",
     "nextMonth": "Mois suivant"
+  },
+  "app": {
+    "migration_error": "Une erreur est survenue lors de la mise à jour de la base de données. Veuillez contacter le support.",
+    "migration_in_progress": "Initialisation en cours…"
   }
 }

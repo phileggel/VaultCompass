@@ -2,6 +2,11 @@ import { render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import App from "./App";
 
+// Mock Tauri event system (used by useUpdateBanner and db:migration_error listener)
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
 // Mock Tauri bindings
 vi.mock("./bindings", () => ({
   commands: {
@@ -14,6 +19,9 @@ vi.mock("./bindings", () => ({
     deleteAccountType: vi.fn(),
     getAccounts: vi.fn(() => Promise.resolve({ status: "ok", data: [] })),
     getCategories: vi.fn(() => Promise.resolve({ status: "ok", data: [] })),
+    checkForUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
+    downloadUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
+    installUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
   },
   events: {
     event: {
