@@ -293,7 +293,7 @@ class ReleaseManager:
         try:
             subprocess.run(
                 ['git', 'add', 'package.json', 'src-tauri/Cargo.toml',
-                 'src-tauri/tauri.conf.json', 'CHANGELOG.md'],
+                 'src-tauri/Cargo.lock', 'src-tauri/tauri.conf.json', 'CHANGELOG.md'],
                 cwd=self.repo_root,
                 check=True
             )
