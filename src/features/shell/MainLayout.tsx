@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { UpdateBanner, useUpdateBanner } from "@/features/update";
 import { logger } from "@/lib/logger";
 import { Content } from "./Content";
-import { Footer } from "./Footer";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 
@@ -46,8 +45,6 @@ export function MainLayout({ children, activeItem, onNavItemClick }: MainLayoutP
         <UpdateBanner data={updateBannerData} />
 
         <Content>{children}</Content>
-
-        <Footer />
       </div>
     </div>
   );

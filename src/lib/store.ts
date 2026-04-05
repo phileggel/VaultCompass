@@ -1,3 +1,4 @@
+import { getName, getVersion } from "@tauri-apps/api/app";
 import { create } from "zustand";
 import { type Account, type Asset, type AssetCategory, commands, events } from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
@@ -5,6 +6,11 @@ import { assetGateway } from "../features/assets/gateway";
 import { logger } from "./logger";
 
 interface AppState {
+  // Application metadata
+  appName: string;
+  appVersion: string;
+
+  // Data
   assets: Asset[];
   categories: AssetCategory[];
   accounts: Account[];
@@ -32,6 +38,8 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => {
   return {
+    appName: "PortfolioManager",
+    appVersion: "...",
     assets: [],
     categories: [],
     accounts: [],
@@ -85,8 +93,17 @@ export const useAppStore = create<AppState>((set, get) => {
 
       const { fetchAssets, fetchCategories, fetchAccounts } = get();
 
+      const fetchMetadata = async () => {
+        try {
+          const [name, version] = await Promise.all([getName(), getVersion()]);
+          set({ appName: name, appVersion: version });
+        } catch (e) {
+          logger.error("[store] failed to fetch app metadata", e);
+        }
+      };
+
       // initial parallelized fetch
-      Promise.all([fetchAssets(), fetchCategories(), fetchAccounts()]).then(() => {
+      Promise.all([fetchAssets(), fetchCategories(), fetchAccounts(), fetchMetadata()]).then(() => {
         set({ isInitialized: true });
       });
 

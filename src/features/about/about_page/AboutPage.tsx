@@ -1,12 +1,15 @@
 import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components";
 import { useAboutPage } from "./useAboutPage";
 
 // R25 — About page: shows current version and manual check button
 export function AboutPage() {
   const { t } = useTranslation();
-  const { currentVersion, checkStatus, handleCheckForUpdate } = useAboutPage();
+  const { checkStatus, handleCheckForUpdate } = useAboutPage();
+
+  const currentVersion = useAppStore((state) => state.appVersion);
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-md">

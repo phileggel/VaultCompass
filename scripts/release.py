@@ -290,6 +290,33 @@ class ReleaseManager:
         changelog.write_text(content, encoding='utf-8')
         print('  ✓ CHANGELOG.md')
 
+    def format_files(self) -> bool:
+        """Run 'just format' to ensure CHANGELOG and code are clean."""
+        mode = self._format_mode_prefix()
+        print(f'{BLUE}{mode}Running formatters via just...{NC}')
+
+        if self.dry_run:
+            print('  → just format')
+            return True
+
+        try:
+            # On lance 'just format' à la racine du repo
+            subprocess.run(
+                ['just', 'format'],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            print('  ✓ Files formatted')
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f'{RED}❌ Error during format: {e.stderr or e.stdout}{NC}')
+            return False
+        except FileNotFoundError:
+            print(f'{YELLOW}⚠ "just" command not found. Skipping format.{NC}')
+            return True
+
     def commit_and_tag(self) -> bool:
         """Commit version changes and create git tag."""
         mode = self._format_mode_prefix()
@@ -465,6 +492,10 @@ class ReleaseManager:
 
         self.update_version_files()
         self.update_changelog()
+
+        if not self.format_files():
+            print(f'\n{RED}❌ Formatting failed. Release cancelled.{NC}\n')
+            return False
 
         if not self.commit_and_tag():
             return False

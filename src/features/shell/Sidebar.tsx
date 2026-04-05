@@ -1,4 +1,5 @@
-import { Menu, Settings, TrendingUp, X } from "lucide-react";
+import { Menu, TrendingUp, X } from "lucide-react";
+import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components";
 import { NAV_ITEMS } from "./useSidebar";
 
@@ -10,13 +11,9 @@ interface SidebarProps {
   onSettingsClick?: () => void;
 }
 
-export function Sidebar({
-  isOpen,
-  toggleDrawer,
-  activeItem,
-  onNavItemClick,
-  onSettingsClick,
-}: SidebarProps) {
+export function Sidebar({ isOpen, toggleDrawer, activeItem, onNavItemClick }: SidebarProps) {
+  const appVersion = useAppStore((state) => state.appVersion);
+
   return (
     <aside
       className={`
@@ -65,17 +62,15 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Footer — tonal surface shift instead of border (No-Line rule) */}
-      <div className="px-3 py-4 bg-m3-surface-container-highest">
-        <button
-          type="button"
-          onClick={onSettingsClick}
-          aria-label="Settings"
-          className={`w-full m3-navigation-item ${!isOpen && "justify-center px-0"}`}
+      <div className="px-3 py-4 flex flex-col items-center justify-center min-h-12">
+        <span
+          className={`
+            font-mono text-[14px] tracking-tight transition-opacity duration-300
+            ${isOpen ? "opacity-60" : "opacity-40"}
+          `}
         >
-          <Settings size={24} />
-          {isOpen && <span>Settings</span>}
-        </button>
+          {isOpen ? `Version: ${appVersion}` : `v${appVersion}`}
+        </span>
       </div>
     </aside>
   );

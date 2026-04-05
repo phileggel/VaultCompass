@@ -1,4 +1,3 @@
-import { getVersion } from "@tauri-apps/api/app";
 import { useCallback, useEffect, useState } from "react";
 import { updateGateway } from "@/features/update/gateway";
 import { logger } from "@/lib/logger";
@@ -6,8 +5,6 @@ import { logger } from "@/lib/logger";
 export type CheckStatus = "idle" | "checking" | "up_to_date" | "error";
 
 export interface AboutPageData {
-  /** Current application version injected at build time (R25). */
-  currentVersion: string;
   /** Status of the last manual update check (R26, R27). */
   checkStatus: CheckStatus;
   /** Triggers a manual update check (R25). */
@@ -16,16 +13,9 @@ export interface AboutPageData {
 
 export function useAboutPage(): AboutPageData {
   const [checkStatus, setCheckStatus] = useState<CheckStatus>("idle");
-  const [currentVersion, setCurrentVersion] = useState<string>("...");
 
   useEffect(() => {
     logger.info("[AboutPage] mounted");
-
-    const fetchVersion = async () => {
-      const v = await getVersion();
-      setCurrentVersion(v);
-    };
-    fetchVersion();
   }, []);
 
   // R25 — manual check; R26 — button disabled while checking
@@ -43,5 +33,5 @@ export function useAboutPage(): AboutPageData {
     }
   }, [checkStatus]);
 
-  return { currentVersion, checkStatus, handleCheckForUpdate };
+  return { checkStatus, handleCheckForUpdate };
 }
