@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { useCallback, useEffect, useState } from "react";
 import { updateGateway } from "@/features/update/gateway";
 import { logger } from "@/lib/logger";
@@ -15,13 +16,17 @@ export interface AboutPageData {
 
 export function useAboutPage(): AboutPageData {
   const [checkStatus, setCheckStatus] = useState<CheckStatus>("idle");
+  const [currentVersion, setCurrentVersion] = useState<string>("...");
 
   useEffect(() => {
     logger.info("[AboutPage] mounted");
-  }, []);
 
-  // Vite injects __APP_VERSION__ from tauri.conf.json at build time
-  const currentVersion = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "—";
+    const fetchVersion = async () => {
+      const v = await getVersion();
+      setCurrentVersion(v);
+    };
+    fetchVersion();
+  }, []);
 
   // R25 — manual check; R26 — button disabled while checking
   const handleCheckForUpdate = useCallback(async () => {

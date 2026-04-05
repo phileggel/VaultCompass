@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0] - 2026-04-05
 
 ### Added
+
 - implement account CRUD with full backend and frontend
 
 ### Fixed
+
 - stage Cargo.lock in release commit
 
 ## [0.3.0] - 2026-04-04

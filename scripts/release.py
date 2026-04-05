@@ -222,6 +222,16 @@ class ReleaseManager:
         self._update_json_file(self.repo_root / 'src-tauri' / 'tauri.conf.json', 'version')
         print('  ✓ src-tauri/tauri.conf.json')
 
+        if not self.dry_run:
+            print(f'{BLUE}  Updating src-tauri/Cargo.lock...{NC}')
+            subprocess.run(
+                ['cargo', 'metadata', '--format-version', '1'],
+                cwd=self.repo_root / 'src-tauri',
+                capture_output=True,
+                check=True
+            )
+            print('  ✓ src-tauri/Cargo.lock updated')
+
     def _build_changelog_entry(self) -> str:
         """Build new changelog entry from commits."""
         today = datetime.now().strftime('%Y-%m-%d')

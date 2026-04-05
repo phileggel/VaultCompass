@@ -77,7 +77,8 @@ jobs:
           sleep 10
           STATUS=$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json assets --jq '[.assets[].name] | map(select(test("latest\\.json"))) | length')
           if [ "$STATUS" -eq 0 ]; then
-            echo "::warning::latest.json was not found in release assets — updater endpoint may be broken"
+            echo "::error::latest.json was not found in release assets — updater endpoint may be broken"
+            exit 1
           else
             echo "✓ latest.json found in release assets"
           fi
