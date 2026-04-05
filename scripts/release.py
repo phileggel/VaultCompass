@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Release script for PortfolioManager.
+Release script for YourProject.
 
 Automates version bumping, changelog generation, and git tagging.
 
 Process:
-  1. Verify src-tauri/.sqlx/ offline files are committed and up to date
-  2. Run all tests (React + Rust) - stops if tests fail
-  3. Analyze git history since last tag
-  4. Determine version bump using semver
-  5. Update version in package.json, Cargo.toml, and tauri.conf.json
-  6. Create/update CHANGELOG.md
+  1. Run all quality checks via check.py (tests, lint, SQLx, build)
+  2. Analyze git history since last tag
+  3. Determine version bump using semver
+  4. Update version in package.json, Cargo.toml, and tauri.conf.json
+  5. Create/update CHANGELOG.md
+  6. Format files via just format
   7. Create commit and git tag
 
 Usage:
@@ -301,7 +301,6 @@ class ReleaseManager:
             return True
 
         try:
-            # On lance 'just format' à la racine du repo
             subprocess.run(
                 ['just', 'format'],
                 cwd=self.repo_root,
@@ -361,14 +360,14 @@ class ReleaseManager:
         Exécute la suite de tests complète via le QualityChecker de check.py.
         """
         print(f"{BLUE}🚀 Lancement de la validation qualité complète...{NC}")
-        
+
         if self.dry_run:
             print(f"{YELLOW}[DRY-RUN] Simulation de la suite de tests (check.py){NC}")
             return True
 
         # On initialise le checker (fast_mode=False pour une release officielle)
         checker = QualityChecker(fast_mode=False)
-        
+
         # On lance la suite complète (Tests, Build, Lint, SQLx)
         # La méthode run_all() affiche déjà tout dans le terminal en temps réel
         success = checker.run_all()
@@ -477,7 +476,7 @@ class ReleaseManager:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Release manager for PortfolioManager.')
+    parser = argparse.ArgumentParser(description='Release manager for YourProject.')
     parser.add_argument('--dry-run', action='store_true', help='Preview release without making changes')
     parser.add_argument('--version', metavar='X.Y.Z', help='Force a specific version (e.g. 0.12.1)')
     parser.add_argument('-y', '--yes', action='store_true', help='Skip confirmation prompt (auto-confirm suggested version)')

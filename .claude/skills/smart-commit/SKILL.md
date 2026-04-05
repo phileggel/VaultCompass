@@ -28,7 +28,7 @@ git status --porcelain | grep -E '\.(env|key|pem|secret|password)$|credentials'
 ### 3. Run tests and linters (mandatory)
 
 ```bash
-./scripts/check.sh
+python3 scripts/check.py
 ```
 
 - If any check fails: stop, report the failure, do not proceed to commit
@@ -52,7 +52,7 @@ Based on changed files, recommend:
 Use **AskUserQuestion** to get:
 
 1. Commit type (mandatory, default to suggested)
-2. Optional scope (e.g. `account`, `asset`, `ci`) — leave blank for no scope
+2. Optional scope (e.g. `domain`, `feature`, `ci`) — leave blank for no scope
 3. Commit message (imperative, **English**, ≤72 characters)
 4. Commit body (optional, **English**, max 5 lines; include context, references to tasks)
 
@@ -81,7 +81,7 @@ git log -1 --oneline
 ## Critical Rules
 
 1. Never commit sensitive files
-2. All tests must pass (`./scripts/check.sh`) before committing
+2. All tests must pass (`python3 scripts/check.py`) before committing
 3. All linters must pass
 4. Commit message must be in **English** and follow conventional format: `type: message` or `type(scope): message`
 5. Never use `git add -A` — stage files explicitly by name

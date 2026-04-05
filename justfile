@@ -1,6 +1,8 @@
 # Portfolio Manager — Command Runner
 # Install just: https://github.com/casey/just
 
+import ".justfile-common"
+
 # List all available commands
 default:
     @just --list

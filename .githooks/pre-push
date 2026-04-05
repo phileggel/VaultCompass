@@ -21,7 +21,7 @@ if [ ! -f "$CHECK_SCRIPT" ]; then
     exit 0
 fi
 
-# Execute the full check.sh without the --fast flag.
+# Execute the full check.py without the --fast flag.
 # This will run Vitest, Cargo tests, and the final production build.
 if python3 "$CHECK_SCRIPT"; then
     echo -e "${GREEN}✅ Full suite passed. Pushing code to remote...${NC}"

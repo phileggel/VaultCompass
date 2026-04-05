@@ -129,7 +129,9 @@ For every component, verify:
 - Cancel button MUST always be `variant="secondary"`, confirm MUST be `variant="primary"`.
 - Destructive confirm MUST use `variant="danger"`.
 - All user-visible text MUST use `useTranslation` — no hardcoded French or English strings.
-- Amount display MUST be formatted using `Intl.NumberFormat` with the relevant currency code — never raw integers or hardcoded currency symbols.
+- Amount display formatting depends on the project's data model — two valid patterns:
+  - **Multi-currency / data-driven** (e.g. PortfolioManager): use `Intl.NumberFormat` with the currency code from data — never hardcode the symbol.
+  - **Single-currency / millis storage** (e.g. PatientManager / ProjectSF): use `€{(millis / 1000).toFixed(2)}` — amounts are stored as integer centimes/millis, never as floats. Check `ARCHITECTURE.md` or a domain entity to determine which model applies.
 - Dates MUST be formatted consistently (use `Intl.DateTimeFormat` or a shared formatter — never raw ISO strings shown to user).
 
 ---

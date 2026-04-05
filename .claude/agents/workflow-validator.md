@@ -37,7 +37,7 @@ Steps 1–6 (spec, docs reading, analysis, plan, Stitch, implementation) are hum
 | --- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | 0   | TaskList exists and contains a task for every mandatory step + every triggered conditional step | Always                                                                                                     |
 | 1   | `just format` run                                                                               | Always                                                                                                     |
-| 2   | `./scripts/check.sh` passed                                                                     | Always                                                                                                     |
+| 2   | `./scripts/check.py` passed                                                                     | Always                                                                                                     |
 | 3   | `reviewer` run, 0 unresolved criticals                                                          | Always                                                                                                     |
 | 4   | `ux-reviewer` run, 0 unresolved criticals                                                       | If any `.tsx` modified                                                                                     |
 | 5   | `script-reviewer` run                                                                           | If any `.sh`, `.py`, or `.githooks` modified                                                               |
@@ -58,7 +58,7 @@ Steps 1–6 (spec, docs reading, analysis, plan, Stitch, implementation) are hum
 |------|-------|--------|
 | 0  | TaskList complete | ✅ |
 | 1  | just format | ✅ |
-| 2  | check.sh passed | ✅ |
+| 2  | check.py passed | ✅ |
 | 3  | reviewer clean | ✅ |
 | 4  | ux-reviewer clean (.tsx modified) | ✅ |
 | 5  | script-reviewer (n/a) | — |
