@@ -1,54 +1,118 @@
-import { ArrowDown, ArrowUp, Calendar, Edit2, Trash2 } from "lucide-react";
-import { useState } from "react";
-import type { Account, UpdateFrequency } from "@/bindings";
+import { Calendar, Edit2, Trash2, X } from "lucide-react";
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { logger } from "@/lib/logger";
+import { Button } from "@/ui/components/button/Button";
+import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
+import { SortIcon } from "@/ui/components/SortIcon";
 import { EditAccountModal } from "../edit_account_modal/EditAccountModal";
-import { FREQUENCY_LABELS } from "../shared/constants";
+import { FREQUENCY_I18N_KEYS } from "../shared/presenter";
 import { useAccounts } from "../useAccounts";
-import { type SortConfig, useAccountTable } from "./useAccount";
+import { useAccountTable } from "./useAccountTable";
 
 interface AccountTableProps {
   searchTerm: string;
 }
 
 export function AccountTable({ searchTerm }: AccountTableProps) {
-  const { accounts, loading, deleteAccount } = useAccounts();
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const { t } = useTranslation();
+  const { accounts, loading, fetchError, fetchAccounts, deleteAccount } = useAccounts();
 
-  const { sortedAndFilteredAccounts, sortConfig, handleSort } = useAccountTable(
-    accounts,
-    searchTerm,
-  );
+  useEffect(() => {
+    logger.info("[AccountTable] mounted");
+  }, []);
 
-  // Modals
-  const [deleteData, setDeleteData] = useState<{ id: string; name: string } | null>(null);
-  const [editData, setEditData] = useState<Account | null>(null);
-
-  const SortIcon = ({ column }: { column: SortConfig["key"] }) => {
-    if (sortConfig.key !== column) return null;
-    return sortConfig.direction === "asc" ? (
-      <ArrowUp size={14} className="ml-1 text-m3-primary" />
-    ) : (
-      <ArrowDown size={14} className="ml-1 text-m3-primary" />
-    );
-  };
+  const {
+    sortedAndFilteredAccounts,
+    sortConfig,
+    handleSort,
+    isEmpty,
+    hasNoSearchResults,
+    deleteData,
+    setDeleteData,
+    editData,
+    setEditData,
+    actionError,
+    setActionError,
+    handleDeleteConfirm,
+  } = useAccountTable(accounts, searchTerm, deleteAccount);
 
   return (
     <div className="m3-table-container flex-1">
+      {/* R13 — inline action error with dismiss */}
+      {actionError && (
+        <div
+          role="alert"
+          className="mb-3 flex items-center justify-between gap-2 text-sm text-m3-error px-2"
+        >
+          <span>{t(actionError, { defaultValue: actionError })}</span>
+          <IconButton
+            icon={<X size={14} />}
+            size="sm"
+            aria-label={t("action.close")}
+            onClick={() => setActionError(null)}
+          />
+        </div>
+      )}
       <table className="w-full border-collapse">
         <thead className="sticky top-0 bg-m3-surface-container z-10">
           <tr>
-            <th className="m3-th" onClick={() => handleSort("name")}>
+            <th
+              className="m3-th cursor-pointer"
+              tabIndex={0}
+              scope="col"
+              aria-sort={
+                sortConfig.key === "name"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              onClick={() => handleSort("name")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleSort("name");
+                }
+              }}
+            >
               <div className="flex items-center">
-                Name <SortIcon column="name" />
+                {t("account.column_name")}
+                <SortIcon
+                  active={sortConfig.key === "name"}
+                  direction={sortConfig.key === "name" ? sortConfig.direction : null}
+                />
               </div>
             </th>
-            <th className="m3-th" onClick={() => handleSort("update_frequency")}>
+            <th
+              className="m3-th cursor-pointer"
+              tabIndex={0}
+              scope="col"
+              aria-sort={
+                sortConfig.key === "update_frequency"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              onClick={() => handleSort("update_frequency")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleSort("update_frequency");
+                }
+              }}
+            >
               <div className="flex items-center">
-                Update Frequency <SortIcon column="update_frequency" />
+                {t("account.column_frequency")}
+                <SortIcon
+                  active={sortConfig.key === "update_frequency"}
+                  direction={sortConfig.key === "update_frequency" ? sortConfig.direction : null}
+                />
               </div>
             </th>
-            <th className="m3-th text-right">Actions</th>
+            <th className="m3-th text-right">{t("account.column_actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -56,55 +120,62 @@ export function AccountTable({ searchTerm }: AccountTableProps) {
             <tr>
               <td colSpan={3} className="m3-td text-center py-12">
                 <span className="text-m3-on-surface-variant animate-pulse">
-                  Loading accounts...
+                  {t("account.loading")}
                 </span>
               </td>
             </tr>
-          ) : sortedAndFilteredAccounts.length === 0 ? (
+          ) : fetchError ? (
+            // R12 — error state with retry
             <tr>
-              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant">
-                No accounts found.
+              <td colSpan={3} className="m3-td text-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <span className="text-m3-error text-sm">{t("account.error_load")}</span>
+                  <Button variant="outline" size="sm" onClick={fetchAccounts}>
+                    {t("action.retry")}
+                  </Button>
+                </div>
+              </td>
+            </tr>
+          ) : isEmpty ? (
+            // R11 — empty state distinct from no-search-results
+            <tr>
+              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+                {t("account.empty")}
+              </td>
+            </tr>
+          ) : hasNoSearchResults ? (
+            // R10 — no search results (filter active, no match)
+            <tr>
+              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+                {t("account.no_search_results")}
               </td>
             </tr>
           ) : (
-            sortedAndFilteredAccounts.map((account: Account) => (
-              <tr
-                key={account.id}
-                onClick={() => setSelectedAccountId(account.id)}
-                className={`m3-tr ${selectedAccountId === account.id ? "m3-tr-selected" : ""}`}
-              >
+            sortedAndFilteredAccounts.map((account) => (
+              <tr key={account.id} className="m3-tr">
                 <td className="m3-td font-medium text-m3-on-surface">{account.name}</td>
                 <td className="m3-td">
                   <div className="flex items-center gap-2 text-m3-on-surface-variant">
                     <Calendar size={14} className="text-m3-primary" />
                     <span className="m3-chip-outline">
-                      {FREQUENCY_LABELS[account.update_frequency as UpdateFrequency] ||
-                        account.update_frequency}
+                      {t(FREQUENCY_I18N_KEYS[account.update_frequency])}
                     </span>
                   </div>
                 </td>
                 <td className="m3-td text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      className="m3-icon-button-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditData(account);
-                      }}
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      className="m3-icon-button-error"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteData({ id: account.id, name: account.name });
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <IconButton
+                      icon={<Edit2 size={16} />}
+                      variant="ghost"
+                      aria-label={t("action.edit")}
+                      onClick={() => setEditData(account)}
+                    />
+                    <IconButton
+                      icon={<Trash2 size={16} />}
+                      variant="danger"
+                      aria-label={t("action.delete")}
+                      onClick={() => setDeleteData({ id: account.id, name: account.name })}
+                    />
                   </div>
                 </td>
               </tr>
@@ -113,22 +184,17 @@ export function AccountTable({ searchTerm }: AccountTableProps) {
         </tbody>
       </table>
 
-      {/* Edit Account Modal */}
       <EditAccountModal isOpen={!!editData} onClose={() => setEditData(null)} account={editData} />
 
-      {/* Delete Confirmation Dialog */}
+      {/* R16 — standard confirmation dialog for delete */}
       <ConfirmationDialog
         isOpen={!!deleteData}
         onCancel={() => setDeleteData(null)}
-        onConfirm={async () => {
-          if (deleteData) {
-            await deleteAccount(deleteData.id);
-          }
-        }}
-        title="Delete Account"
-        message={`Are you sure you want to delete ${deleteData?.name}? All asset links to this account will be removed.`}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
+        onConfirm={handleDeleteConfirm}
+        title={t("account.delete_confirm_title")}
+        message={t("account.delete_confirm_message", { name: deleteData?.name ?? "" })}
+        confirmLabel={t("action.delete")}
+        cancelLabel={t("action.cancel")}
         variant="danger"
       />
     </div>

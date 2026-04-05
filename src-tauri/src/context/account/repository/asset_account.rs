@@ -13,12 +13,12 @@ struct AssetAccountRow {
 
 impl From<AssetAccountRow> for AssetAccount {
     fn from(row: AssetAccountRow) -> Self {
-        AssetAccount {
-            account_id: row.account_id,
-            asset_id: row.asset_id,
-            average_price: row.average_price,
-            quantity: row.quantity,
-        }
+        AssetAccount::restore(
+            row.account_id,
+            row.asset_id,
+            row.average_price,
+            row.quantity,
+        )
     }
 }
 

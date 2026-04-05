@@ -40,17 +40,19 @@ Un compte financier appartenant à l'utilisateur.
 
 **R6 — Suppression des transactions en cascade (backend)** : La suppression d'un `Account` entraîne la suppression de toutes les transactions associées à ce compte. Les `Asset` référencés par ces transactions ne sont pas affectés.
 
+> ⚠️ **Dépendance** : R6 n'est implémentable qu'une fois la feature Transaction disponible (`docs/transaction.md`). Tant que cette table n'existe pas en base, seul le cascade sur les `Holding` (R5) est actif.
+
 ### Frontend
 
 **R7 — Valeur par défaut UpdateFrequency (frontend)** : Le formulaire de création pré-sélectionne `ManualMonth` comme fréquence par défaut.
 
 **R8 — Tableau des comptes (frontend)** : Le tableau affiche les colonnes suivantes, trié par défaut par Nom ascendant :
 
-| Colonne   | Contenu                               | Triable |
-| --------- | ------------------------------------- | ------- |
-| Nom       | `account.name`                        | Oui     |
+| Colonne   | Contenu                               | Triable                                                                                                        |
+| --------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Nom       | `account.name`                        | Oui                                                                                                            |
 | Fréquence | Libellé lisible de `update_frequency` | Oui — tri sur l'ordre logique de l'énumération : Automatic → ManualDay → ManualWeek → ManualMonth → ManualYear |
-| Actions   | Bouton Éditer + Bouton Supprimer      | Non     |
+| Actions   | Bouton Éditer + Bouton Supprimer      | Non                                                                                                            |
 
 Un en-tête affiche le titre « Comptes », le nombre total de comptes et un champ de recherche filtrant par nom en temps réel (correspondance partielle, insensible à la casse).
 

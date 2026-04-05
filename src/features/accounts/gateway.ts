@@ -50,6 +50,7 @@ export const accountGateway = {
 
   /**
    * Updates or creates an asset holding in an account.
+   * TODO(R17): used by AccountAssetDetails — pending Holding feature implementation
    */
   async upsertAccountHolding(dto: UpsertHoldingDTO): Promise<Result<AssetAccount, string>> {
     return await commands.upsertAccountHolding(dto);
@@ -57,6 +58,7 @@ export const accountGateway = {
 
   /**
    * Removes an asset holding from an account.
+   * TODO(R17): used by AccountAssetDetails — pending Holding feature implementation
    */
   async removeAccountHolding(accountId: string, assetId: string): Promise<Result<null, string>> {
     return await commands.removeAccountHolding(accountId, assetId);

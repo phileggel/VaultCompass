@@ -1,14 +1,18 @@
+import type { ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { UpdateFrequency } from "@/bindings";
 import { SelectField } from "@/ui/components/field/SelectField";
 import { TextField } from "@/ui/components/field/TextField";
-import { FREQUENCY_LABELS } from "./constants";
+import { FREQUENCY_I18N_KEYS } from "./presenter";
+
+export interface AccountFormData {
+  name: string;
+  update_frequency: UpdateFrequency;
+}
 
 interface AccountFormProps {
-  formData: {
-    name: string;
-    update_frequency: UpdateFrequency;
-  };
-  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  formData: AccountFormData;
+  handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   frequencies: UpdateFrequency[];
   idPrefix?: string;
 }
@@ -19,25 +23,27 @@ export function AccountForm({
   frequencies,
   idPrefix = "account",
 }: AccountFormProps) {
+  const { t } = useTranslation();
+
   const frequencyOptions = frequencies.map((freq) => ({
-    label: FREQUENCY_LABELS[freq],
+    label: t(FREQUENCY_I18N_KEYS[freq]),
     value: freq,
   }));
 
   return (
     <div className="space-y-6">
       <TextField
-        label="Account Name"
+        label={t("account.form_name_label")}
         id={`${idPrefix}-name`}
         name="name"
         required
-        placeholder="e.g. My Savings, Brokerage"
+        placeholder={t("account.form_name_placeholder")}
         value={formData.name}
         onChange={handleChange}
       />
 
       <SelectField
-        label="Update Frequency"
+        label={t("account.form_frequency_label")}
         id={`${idPrefix}-update-frequency`}
         name="update_frequency"
         value={formData.update_frequency}

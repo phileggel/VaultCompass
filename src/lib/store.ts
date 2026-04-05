@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { type Account, type Asset, type AssetCategory, commands, events } from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
 import { assetGateway } from "../features/assets/gateway";
+import { logger } from "./logger";
 
 interface AppState {
   assets: Asset[];
@@ -15,8 +16,9 @@ interface AppState {
   isInitialized: boolean;
 
   // Error handling
-  error: string | null;
   assetsError: string | null;
+  categoriesError: string | null;
+  accountsError: string | null;
 
   // Actions
   fetchAssets: () => Promise<void>;
@@ -29,23 +31,6 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set, get) => {
-  const handleFetch = async <T>(
-    loadingKey: keyof AppState,
-    fetchFn: () => Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>,
-    onSuccess: (data: T) => void,
-  ) => {
-    set({ [loadingKey]: true, error: null } as Partial<AppState>);
-
-    const result = await fetchFn();
-
-    if (result.status === "ok") {
-      onSuccess(result.data);
-      set({ [loadingKey]: false } as Partial<AppState>);
-    } else {
-      set({ error: result.error, [loadingKey]: false } as Partial<AppState>);
-    }
-  };
-
   return {
     assets: [],
     categories: [],
@@ -54,8 +39,9 @@ export const useAppStore = create<AppState>((set, get) => {
     isLoadingCategories: false,
     isLoadingAccounts: false,
     isInitialized: false,
-    error: null,
     assetsError: null,
+    categoriesError: null,
+    accountsError: null,
 
     fetchAssets: async () => {
       set({ isLoadingAssets: true, assetsError: null });
@@ -67,15 +53,25 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    fetchCategories: () =>
-      handleFetch("isLoadingCategories", commands.getCategories, (data) =>
-        set({ categories: data }),
-      ),
+    fetchCategories: async () => {
+      set({ isLoadingCategories: true, categoriesError: null });
+      const result = await commands.getCategories();
+      if (result.status === "ok") {
+        set({ categories: result.data, isLoadingCategories: false });
+      } else {
+        set({ categoriesError: result.error, isLoadingCategories: false });
+      }
+    },
 
-    fetchAccounts: () =>
-      handleFetch("isLoadingAccounts", accountGateway.getAccounts, (data) =>
-        set({ accounts: data }),
-      ),
+    fetchAccounts: async () => {
+      set({ isLoadingAccounts: true, accountsError: null });
+      const result = await accountGateway.getAccounts();
+      if (result.status === "ok") {
+        set({ accounts: result.data, isLoadingAccounts: false });
+      } else {
+        set({ accountsError: result.error, isLoadingAccounts: false });
+      }
+    },
 
     isAnyLoading: () => {
       const state = get();
@@ -106,6 +102,8 @@ export const useAppStore = create<AppState>((set, get) => {
         const handler = eventMap[event.payload.type];
         if (handler) {
           handler();
+        } else {
+          logger.debug("[store] unhandled event", { type: event.payload.type });
         }
       });
 

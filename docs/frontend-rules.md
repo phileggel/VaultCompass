@@ -20,7 +20,7 @@ feature/
 - Component file, its hook, and its tests are colocated in that folder.
 - Example: `add_fund_panel/AddFundPanel.tsx` + `useAddFundPanel.ts` + `useAddFundPanel.test.ts`
 
-**F3** — `gateway.ts` is the ONLY file allowed to call `commands.*`. Sub-features with a dedicated use case may have their own `gateway.ts` (e.g. `manual_match/gateway.ts`).
+**F3** — `gateway.ts` or `store.ts` are the ONLY files allowed to call `commands.*`. Sub-features with a dedicated use case may have their own `gateway.ts` (e.g. `manual_match/gateway.ts`).
 
 **F4** — Shared utilities, types, and sub-components used by multiple sub-features MUST live in `shared/`.
 
@@ -91,3 +91,7 @@ feature/
 ## Comments
 
 **F20** — SHOULD have concise English comments explaining usage and the sources a component listens to.
+
+## Backend/Frontend common ground
+
+**F21** — MUST never redeclare Specta enum values in the frontend.

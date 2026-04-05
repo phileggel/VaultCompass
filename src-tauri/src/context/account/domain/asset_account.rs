@@ -17,7 +17,7 @@ pub struct AssetAccount {
 }
 
 impl AssetAccount {
-    /// Creates a new AssetAccount link.
+    /// Creates a new AssetAccount link with validation.
     pub fn new(
         account_id: String,
         asset_id: String,
@@ -36,6 +36,21 @@ impl AssetAccount {
             average_price,
             quantity,
         })
+    }
+
+    /// Reconstructs an AssetAccount from storage without validation.
+    pub fn restore(
+        account_id: String,
+        asset_id: String,
+        average_price: f64,
+        quantity: f64,
+    ) -> Self {
+        Self {
+            account_id,
+            asset_id,
+            average_price,
+            quantity,
+        }
     }
 }
 

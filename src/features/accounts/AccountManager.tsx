@@ -1,27 +1,36 @@
-import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
+import { FAB } from "@/ui/components/fab/FAB";
 import { ManagerLayout } from "@/ui/components/layout/ManagerLayout";
 import { AccountTable } from "./account_table/AccountTable";
-import { AddAccount } from "./add_account/AddAccount";
+import { AddAccountModal } from "./add_account/AddAccountModal";
 
 export function AccountManager() {
+  const { t } = useTranslation();
   const accountCount = useAppStore((state) => state.accounts.length);
   const [query, setQuery] = useState("");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    logger.info("[AccountManager] mounted");
+  }, []);
 
   return (
-    <ManagerLayout
-      searchId="account-search"
-      title="Account"
-      count={accountCount}
-      searchTerm={query}
-      onSearchChange={setQuery}
-      searchPlaceholder="Search history..."
-      table={<AccountTable searchTerm={query} />}
-      sidePanelTitle="Add Account"
-      sidePanelIcon={<Plus size={24} strokeWidth={2.5} />}
-      sidePanelDescription="Add a new account."
-      sidePanelContent={<AddAccount />}
-    />
+    <>
+      <ManagerLayout
+        searchId="account-search"
+        title={t("account.title")}
+        count={accountCount}
+        searchTerm={query}
+        onSearchChange={setQuery}
+        searchPlaceholder={t("account.search_placeholder")}
+        table={<AccountTable searchTerm={query} />}
+      />
+      {/* R14 — FAB opens add modal */}
+      <FAB onClick={() => setIsAddModalOpen(true)} label={t("account.fab_label")} />
+      <AddAccountModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+    </>
   );
 }

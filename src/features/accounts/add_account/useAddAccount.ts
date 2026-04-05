@@ -1,57 +1,67 @@
 import { useState } from "react";
-import type { UpdateFrequency } from "@/bindings";
-import { FREQUENCY_LABELS } from "../shared/constants";
+import type { AccountFormData } from "../shared/AccountForm";
+import { FREQUENCIES } from "../shared/presenter";
+import { validateAccountName } from "../shared/validateAccount";
 import { useAccounts } from "../useAccounts";
 
-interface UseAccountFormProps {
-  initialData?: {
-    name: string;
-    update_frequency: UpdateFrequency;
-  };
+interface UseAddAccountProps {
   onSubmitSuccess?: () => void;
 }
 
-export function useAddAccount({ initialData, onSubmitSuccess }: UseAccountFormProps = {}) {
+export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
   const { addAccount } = useAccounts();
 
-  const [formData, setFormData] = useState({
-    name: initialData?.name || "",
-    update_frequency: initialData?.update_frequency || ("ManualMonth" as UpdateFrequency),
+  const [formData, setFormData] = useState<AccountFormData>({
+    name: "",
+    update_frequency: "ManualMonth",
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!initialData) {
-      const success = await addAccount({
-        name: formData.name,
-        update_frequency: formData.update_frequency as UpdateFrequency,
-      });
-      if (success && onSubmitSuccess) {
-        onSubmitSuccess();
-      }
+    // R14 — block if name is empty or whitespace-only
+    const validationError = validateAccountName(formData.name);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
-    if (!initialData) {
-      setFormData({
-        name: "",
-        update_frequency: "ManualMonth",
-      });
+    setError(null);
+    setIsSubmitting(true);
+
+    const result = await addAccount({
+      name: formData.name,
+      update_frequency: formData.update_frequency,
+    });
+
+    setIsSubmitting(false);
+
+    // R13 — keep modal open on error
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    setFormData({ name: "", update_frequency: "ManualMonth" });
+
+    if (onSubmitSuccess) {
+      onSubmitSuccess();
     }
   };
 
   return {
     formData,
+    error,
+    isSubmitting,
     handleChange,
     handleSubmit,
-    frequencies: Object.keys(FREQUENCY_LABELS) as UpdateFrequency[],
+    frequencies: FREQUENCIES,
   };
 }

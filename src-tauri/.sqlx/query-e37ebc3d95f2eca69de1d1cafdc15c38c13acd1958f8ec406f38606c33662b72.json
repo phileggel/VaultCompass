@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, update_frequency FROM accounts WHERE id = ? AND is_deleted = 0",
+  "query": "SELECT id, name, update_frequency FROM accounts WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -28,5 +28,5 @@
       false
     ]
   },
-  "hash": "4cfb916e07b64d7ec55691f1410a9497e5e64cde1e36dcba356ded72be43a4b3"
+  "hash": "e37ebc3d95f2eca69de1d1cafdc15c38c13acd1958f8ec406f38606c33662b72"
 }

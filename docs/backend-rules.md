@@ -74,6 +74,8 @@ src-tauri/src/
 
 **B12** — MUST use `tracing::{info, debug, warn, error}` with structured fields. Never use `println!`.
 
+**B17** - MUST use `target:` field when adding a new backend specific log.
+
 **B16** — When using the `target:` field in tracing calls, MUST use the `BACKEND` or `FRONTEND` constant from `crate::core::logger` instead of string literals:
 
 ```rust

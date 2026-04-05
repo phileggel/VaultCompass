@@ -3,6 +3,7 @@ use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
 use crate::context::account::domain::{Account, AccountRepository, UpdateFrequency};
+use crate::core::logger::BACKEND;
 
 #[derive(sqlx::FromRow)]
 struct AccountRow {
@@ -13,11 +14,11 @@ struct AccountRow {
 
 impl From<AccountRow> for Account {
     fn from(row: AccountRow) -> Self {
-        Account::from_storage(
-            row.id,
-            row.name,
-            UpdateFrequency::from_str(&row.update_frequency).unwrap_or_default(),
-        )
+        let update_frequency = UpdateFrequency::from_str(&row.update_frequency).unwrap_or_else(|_| {
+            tracing::warn!(target: BACKEND, value = %row.update_frequency, "unknown update_frequency value, falling back to default");
+            UpdateFrequency::default()
+        });
+        Account::restore(row.id, row.name, update_frequency)
     }
 }
 
@@ -39,7 +40,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_all(&self) -> Result<Vec<Account>> {
         let rows = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, update_frequency FROM accounts WHERE is_deleted = 0"#
+            r#"SELECT id, name, update_frequency FROM accounts"#
         )
         .fetch_all(&self.pool)
         .await
@@ -51,7 +52,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_by_id(&self, id: &str) -> Result<Option<Account>> {
         let row = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, update_frequency FROM accounts WHERE id = ? AND is_deleted = 0"#,
+            r#"SELECT id, name, update_frequency FROM accounts WHERE id = ?"#,
             id
         )
         .fetch_optional(&self.pool)
@@ -61,10 +62,23 @@ impl AccountRepository for SqliteAccountRepository {
         Ok(row.map(Account::from))
     }
 
+    async fn find_by_name(&self, name: &str) -> Result<Option<Account>> {
+        let row = sqlx::query_as!(
+            AccountRow,
+            r#"SELECT id, name, update_frequency FROM accounts WHERE LOWER(name) = LOWER(?)"#,
+            name
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .with_context(|| format!("Failed to find account by name {}", name))?;
+
+        Ok(row.map(Account::from))
+    }
+
     async fn create(&self, account: Account) -> Result<Account> {
         let update_freq_str = account.update_frequency.to_string();
         sqlx::query!(
-            r#"INSERT INTO accounts (id, name, update_frequency, is_deleted) VALUES (?, ?, ?, 0)"#,
+            r#"INSERT INTO accounts (id, name, update_frequency) VALUES (?, ?, ?)"#,
             account.id,
             account.name,
             update_freq_str
@@ -92,7 +106,7 @@ impl AccountRepository for SqliteAccountRepository {
     }
 
     async fn delete(&self, id: &str) -> Result<()> {
-        sqlx::query!(r#"UPDATE accounts SET is_deleted = 1 WHERE id = ?"#, id)
+        sqlx::query!(r#"DELETE FROM accounts WHERE id = ?"#, id)
             .execute(&self.pool)
             .await
             .with_context(|| format!("Failed to delete account {}", id))?;

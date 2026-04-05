@@ -143,7 +143,8 @@ context/{domain}/
 
 - `id`, `name`, `update_frequency: UpdateFrequency`
 - `UpdateFrequency` enum: `Automatic`, `ManualDay`, `ManualWeek`, `ManualMonth`, `ManualYear`
-- Factory methods: `new()` (generates ID + validates), `from_storage()` (no validation)
+- Factory methods: `new()` (generates ID + trims + validates), `with_id()` (uses provided ID + trims + validates), `restore()` (no validation, DB reconstruction)
+- Hard-delete: `DELETE FROM accounts WHERE id = ?`; holdings cascade via `ON DELETE CASCADE` on `asset_accounts.account_id`
 
 **Entity: `AssetAccount`**
 
@@ -151,11 +152,13 @@ context/{domain}/
 
 **Repository traits: `AccountRepository`, `AssetAccountRepository`**
 
-- `get_all`, `get_by_id`, `create`, `update`, `delete`
+- `get_all`, `get_by_id`, `find_by_name` (case-insensitive uniqueness check), `create`, `update`, `delete`
 
 **Service: `AccountService`**
 
 - CRUD for accounts and account holdings (asset–account links)
+- `create`: validates uniqueness via `find_by_name` before insert (R3)
+- `update`: calls `update_from()` for trim+validation; validates uniqueness excluding own ID (R3)
 - Publishes `AccountUpdated` events
 
 **Tauri commands (`api.rs`)**
@@ -241,7 +244,10 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 #### Accounts (`features/accounts/`)
 
 - Gateway: `get_accounts`, `add_account`, `update_account`, `delete_account`
-- Sub-features: `account_table/`, `add_account/`, `edit_account_modal/`
+- Sub-features: `account_table/` (`AccountTable`, `useAccountTable` — sort/filter/isEmpty/hasNoSearchResults), `add_account/` (`AddAccountModal`, `useAddAccount` — FAB modal pattern), `edit_account_modal/` (`EditAccountModal`, `useEditAccountModal`)
+- Shared: `shared/presenter.ts` — `FREQUENCY_ORDER` (logical enum sort order), `FREQUENCY_I18N_KEYS`; `shared/validateAccount.ts` — `validateAccountName()`
+- UX: FAB triggers `AddAccountModal`; table rows show Edit/Delete `IconButton`s; inline errors on backend rejection; loading/error/retry states; empty vs no-search-results states distinct
+- Spec: `docs/account.md` (R1–R16; R17 deferred pending Holding feature; R6 deferred pending Transaction feature)
 
 #### Account Asset Details (`features/account_asset_details/`)
 

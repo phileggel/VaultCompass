@@ -5,7 +5,7 @@ import { categoryGateway } from "./gateway";
 export function useCategories() {
   const categories = useAppStore((state) => state.categories);
   const loading = useAppStore((state) => state.isLoadingCategories);
-  const error = useAppStore((state) => state.error);
+  const error = useAppStore((state) => state.categoriesError);
   const fetchCategories = useAppStore((state) => state.fetchCategories);
 
   const addCategory = useCallback(async (label: string) => {

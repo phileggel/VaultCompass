@@ -1,26 +1,25 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { Account } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { Dialog } from "@/ui/components/modal/Dialog";
 import { AccountForm } from "../shared/AccountForm";
-import { useEditAccountModal } from "./useEditAccountModal";
+import { useAddAccount } from "./useAddAccount";
 
-interface EditAccountModalProps {
+interface AddAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  account: Account | null;
 }
 
-export function EditAccountModal({ isOpen, onClose, account }: EditAccountModalProps) {
+export function AddAccountModal({ isOpen, onClose }: AddAccountModalProps) {
   const { t } = useTranslation();
   useEffect(() => {
-    logger.info("[EditAccountModal] mounted");
+    logger.info("[AddAccountModal] mounted");
   }, []);
 
-  const { formData, error, isSubmitting, handleChange, handleSubmit, frequencies } =
-    useEditAccountModal({ account, onClose });
+  const { formData, error, isSubmitting, handleChange, handleSubmit, frequencies } = useAddAccount({
+    onSubmitSuccess: onClose,
+  });
 
   const actions = (
     <>
@@ -29,12 +28,12 @@ export function EditAccountModal({ isOpen, onClose, account }: EditAccountModalP
       </Button>
       <Button
         type="submit"
-        form="edit-account-form"
+        form="add-account-form"
         variant="primary"
         loading={isSubmitting}
         disabled={isSubmitting || formData.name.trim().length === 0}
       >
-        {t("action.save")}
+        {t("action.add")}
       </Button>
     </>
   );
@@ -43,18 +42,17 @@ export function EditAccountModal({ isOpen, onClose, account }: EditAccountModalP
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title={t("account.edit_modal_title")}
+      title={t("account.add_modal_title")}
       actions={actions}
-      maxWidth="max-w-xl"
     >
-      <form id="edit-account-form" className="py-2" onSubmit={handleSubmit}>
+      <form id="add-account-form" className="py-2" onSubmit={handleSubmit}>
         <AccountForm
           formData={formData}
           handleChange={handleChange}
           frequencies={frequencies}
-          idPrefix="edit-account"
+          idPrefix="add-account"
         />
-        {/* R13 — inline error, modal stays open */}
+        {/* R13 — inline error stays modal open */}
         {error && (
           <p role="alert" className="mt-3 text-sm text-m3-error">
             {t(error, { defaultValue: error })}

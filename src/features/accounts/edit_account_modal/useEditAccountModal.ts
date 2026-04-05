@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Account, UpdateFrequency } from "@/bindings";
-import { FREQUENCY_LABELS } from "../shared/constants";
+import type { Account } from "@/bindings";
+import type { AccountFormData } from "../shared/AccountForm";
+import { FREQUENCIES } from "../shared/presenter";
+import { validateAccountName } from "../shared/validateAccount";
 import { useAccounts } from "../useAccounts";
 
 interface UseEditAccountModalProps {
@@ -11,47 +13,65 @@ interface UseEditAccountModalProps {
 export function useEditAccountModal({ account, onClose }: UseEditAccountModalProps) {
   const { updateAccount } = useAccounts();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AccountFormData>({
     name: "",
-    update_frequency: "ManualMonth" as UpdateFrequency,
+    update_frequency: "ManualMonth",
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync form data when account changes
+  // Sync form data when account changes; reset error (R13)
   useEffect(() => {
     if (account) {
       setFormData({
         name: account.name,
         update_frequency: account.update_frequency,
       });
+      setError(null);
     }
   }, [account]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (account) {
-      const success = await updateAccount({
-        id: account.id,
-        name: formData.name,
-        update_frequency: formData.update_frequency,
-      });
-      if (success) {
-        onClose();
-      }
+    if (!account) return;
+
+    const validationError = validateAccountName(formData.name);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
+
+    setError(null);
+    setIsSubmitting(true);
+
+    const result = await updateAccount({
+      id: account.id,
+      name: formData.name,
+      update_frequency: formData.update_frequency,
+    });
+
+    setIsSubmitting(false);
+
+    // R13, R15 — keep modal open on error
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    onClose();
   };
 
   return {
     formData,
+    error,
+    isSubmitting,
     handleChange,
     handleSubmit,
-    frequencies: Object.keys(FREQUENCY_LABELS) as UpdateFrequency[],
+    frequencies: FREQUENCIES,
   };
 }
