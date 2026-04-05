@@ -27,6 +27,7 @@ import subprocess
 import json
 import re
 import sys
+from check import QualityChecker
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
@@ -355,93 +356,29 @@ class ReleaseManager:
             print(f'{RED}Error: {e}{NC}')
             return False
 
-    def _run_test(self, name: str, cmd: List[str], cwd: Optional[Path] = None,
-                  extra_env: Optional[dict] = None) -> bool:
-        """Run test command and return success status."""
-        import os
-        env = {**os.environ, **(extra_env or {})}
-        print(f'\n{BLUE}Running {name}...{NC}')
-        result = subprocess.run(cmd, cwd=cwd or self.repo_root, capture_output=False, env=env)
-
-        if result.returncode != 0:
-            print(f'{RED}❌ {name} failed{NC}')
-            return False
-
-        print(f'{GREEN}✓ {name} passed{NC}')
-        return True
-
     def run_tests(self) -> bool:
-        """Run React and Rust tests."""
-        print(f'{BLUE}Running tests...{NC}')
-
+        """
+        Exécute la suite de tests complète via le QualityChecker de check.py.
+        """
+        print(f"{BLUE}🚀 Lancement de la validation qualité complète...{NC}")
+        
         if self.dry_run:
-            print('  → npm test (React tests)')
-            print('  → cargo test (Rust tests)')
+            print(f"{YELLOW}[DRY-RUN] Simulation de la suite de tests (check.py){NC}")
             return True
 
-        if not self._run_test('React tests', ['npm', 'test', '--', '--run']):
+        # On initialise le checker (fast_mode=False pour une release officielle)
+        checker = QualityChecker(fast_mode=False)
+        
+        # On lance la suite complète (Tests, Build, Lint, SQLx)
+        # La méthode run_all() affiche déjà tout dans le terminal en temps réel
+        success = checker.run_all()
+
+        if not success:
+            print(f"\n{RED}❌ La validation qualité a échoué.{NC}")
+            print(f"{RED}Corrigez les erreurs avant de tenter une nouvelle release.{NC}")
             return False
 
-        if not self._run_test('Rust tests', ['cargo', 'test'],
-                            cwd=self.repo_root / 'src-tauri',
-                            extra_env={'SQLX_OFFLINE': '1'}):
-            return False
-
-        return True
-
-    def check_sqlx_files(self) -> bool:
-        """Verify .sqlx offline query files are committed and up to date."""
-        print(f'{BLUE}Checking SQLx offline files...{NC}')
-
-        sqlx_dir = self.repo_root / 'src-tauri' / '.sqlx'
-        if not sqlx_dir.exists() or not any(sqlx_dir.iterdir()):
-            print(f'{RED}❌ src-tauri/.sqlx/ is missing or empty.{NC}')
-            print(f'   Run: cd src-tauri && cargo sqlx prepare')
-            return False
-
-        # Check for uncommitted .sqlx changes
-        result = subprocess.run(
-            ['git', 'status', '--porcelain', 'src-tauri/.sqlx/'],
-            cwd=self.repo_root,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        if result.stdout.strip():
-            print(f'{RED}❌ Uncommitted .sqlx file changes detected:{NC}')
-            print(result.stdout)
-            print(f'   Run: cd src-tauri && cargo sqlx prepare')
-            print(f'   Then commit the updated .sqlx/ files before releasing.')
-            return False
-
-        # Run cargo sqlx prepare --check if sqlx CLI is available
-        sqlx_available = subprocess.run(
-            ['cargo', 'sqlx', '--version'],
-            cwd=self.repo_root / 'src-tauri',
-            capture_output=True
-        ).returncode == 0
-
-        if sqlx_available:
-            if self.dry_run:
-                print(f'  → cargo sqlx prepare --check (skipped in dry-run)')
-            else:
-                result = subprocess.run(
-                    ['cargo', 'sqlx', 'prepare', '--check'],
-                    cwd=self.repo_root / 'src-tauri',
-                    capture_output=True,
-                    text=True
-                )
-                if result.returncode != 0:
-                    print(f'{RED}❌ SQLx offline files are stale (queries changed but .sqlx/ not regenerated):{NC}')
-                    print(result.stderr or result.stdout)
-                    print(f'   Run: cd src-tauri && cargo sqlx prepare')
-                    print(f'   Then commit the updated .sqlx/ files before releasing.')
-                    return False
-        else:
-            print(f'{YELLOW}⚠ cargo-sqlx not installed — skipping prepare --check (only uncommitted changes checked).{NC}')
-            print(f'  Install with: cargo install sqlx-cli --no-default-features --features sqlite')
-
-        print(f'{GREEN}✓ SQLx offline files OK{NC}')
+        print(f"\n{GREEN}✅ Validation qualité réussie. Passage au versionnage...{NC}")
         return True
 
     def run(self) -> bool:
@@ -449,12 +386,7 @@ class ReleaseManager:
         dry_run_banner = f' {YELLOW}[DRY-RUN MODE]{NC}' if self.dry_run else ''
         print(f'\n{BLUE}🚀 Release Manager{dry_run_banner}{NC}\n')
 
-        if not self.check_sqlx_files():
-            print(f'\n{RED}❌ SQLx check failed. Release cancelled.{NC}\n')
-            return False
-
         if not self.run_tests():
-            print(f'\n{RED}❌ Tests failed. Release cancelled.{NC}\n')
             return False
 
         latest_tag = self.get_latest_tag()
