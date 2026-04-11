@@ -1,6 +1,6 @@
 ---
 name: spec-writer
-description: Interactive spec writer for new features. Interviews the user to understand the feature (even if vague), reads the existing domain, then produces docs/{feature}.md with structured Rn business rules and an optional UX draft (textual or Stitch mockup).
+description: Interactive spec writer for new features. Interviews the user to understand the feature (even if vague), reads the existing domain, then produces docs/spec/{feature}.md with structured TRIGRAMME-NNN business rules and an optional UX draft (textual or Stitch mockup).
 tools: Read, Glob, Grep, Write, AskUserQuestion, mcp__stitch__generate_screen_from_text, mcp__stitch__list_screens, mcp__stitch__get_screen
 ---
 
@@ -19,11 +19,11 @@ Before asking anything, read:
 
 - `ARCHITECTURE.md` — bounded contexts, data flow, naming conventions
   - If `ARCHITECTURE.md` does not exist, note it in the Open Questions section and proceed
-- List all files in `docs/` with Glob to understand what already exists
-- Read the most recently modified spec in `docs/` (excluding `todo.md`, `stitch/`, `*-rules.md`) to internalize the exact format and writing style
+- List all files in `docs/spec/` with Glob to understand what spec documents already exist
+- Read the most recently modified spec in `docs/spec/` (excluding `todo.md`, `stitch/`, `*-rules.md`) to internalize the exact format and writing style
 - Read docs/adr/ (if exists) to identify historical architectural decisions
   (e.g., amount storage format, soft-delete strategy, state management)
-  that MUST be respected in the new Rn rules.
+  that MUST be respected in the new TRIGRAMME-NNN rules.
 
 This avoids asking the user what the codebase already answers.
 
@@ -33,14 +33,14 @@ This avoids asking the user what the codebase already answers.
 
 Use **AskUserQuestion** with up to 4 questions at once:
 
-1. **Nom de la feature** — quel nom court utilisera-t-on pour le fichier et les règles ?
-2. **Besoin métier** — en une phrase : qui fait quoi, et pourquoi ?
-3. **Domaine touché** — quel(s) contexte(s) sont impliqués ? (lire ARCHITECTURE.md pour les bounded contexts du projet)
-4. **Contraintes connues** — y a-t-il des règles métier déjà certaines ? (ex. "ne peut pas supprimer si lié", "nécessite qu'un fond existe")
+1. **Feature name** — what short name will be used for the file and rules?
+2. **Trigram** — Assign a 3-letter identifier for this spec (e.g., `REF`, `PAY`, `INV`). Trigram must be unique per project. If your choice collides with an existing trigram in `docs/spec-index.md`, you'll be prompted to pick a different one (up to 2 collision attempts allowed; see Step 2.5).
+3. **Business need** — in one sentence: who does what, and why?
+4. **Domain** — which bounded context(s) are involved? (read ARCHITECTURE.md for the project's bounded contexts)
 
 If the user's answers reveal new unknowns, continue with additional rounds — up to **3 rounds maximum** to avoid indefinite ping-pong. Each subsequent round is more targeted than the previous: max 3 questions in round 2, max 2 in round 3.
 
-After round 3 (or earlier if all blocking uncertainties are resolved), draft the spec with what you have and move any remaining unknowns into `## Questions ouvertes` for step 5.
+After round 3 (or earlier if all blocking uncertainties are resolved), draft the spec with what you have and move any remaining unknowns into `## Open Questions` for step 5.
 
 - Only ask what you genuinely cannot infer from the codebase
 - Never ask about file names, function names, or implementation choices (that's `feature-planner`'s job)
@@ -48,14 +48,31 @@ After round 3 (or earlier if all blocking uncertainties are resolved), draft the
 
 ---
 
+### 2.5. Register trigram in spec-index.md
+
+After Round 1, immediately:
+
+1. **Read or create** `docs/spec-index.md` in the downstream project:
+   - If it exists, read all current registrations
+   - If it does NOT exist, create it with a template (see "Spec Registry" section at end of this skill)
+2. **Register the trigram**: Add the assigned trigram, spec name, and description to the registry table
+3. **Check for collisions**: If the trigram already exists:
+   - Ask the user to choose a different trigram
+   - Allow max 2 collision attempts; if collisions persist after 2 attempts, escalate: ask user to review the existing registration in spec-index.md and confirm they want to abandon this spec or use a different approach
+4. **Persist the change**: Ensure `docs/spec-index.md` is updated and saved. **Important**: This file must be committed to version control — it is the single source of truth for trigram registrations across all project specs.
+
+This step guarantees trigram uniqueness across all specs in the project.
+
+---
+
 ### 3. Retro-engineering mode (exception only)
 
-Only if the user explicitly asked to derive the spec from existing code (e.g., "retro-engineering", "documente ce qui existe"):
+Only if the user explicitly asked to derive the spec from existing code (e.g., "retro-engineering", "document what already exists"):
 
 - Grep for related entities in `src-tauri/src/context/`
 - Grep for related frontend components in `src/features/`
 - Check `src-tauri/src/core/specta_builder.rs` for existing commands in the domain
-- Look for existing i18n keys in `src/i18n/locales/fr/` for the domain
+- Look for existing i18n keys in `src/i18n/locales/` for the domain (inspect whatever locale directories are present)
 
 In all other cases, skip this step. The spec must express business intent, not describe current implementation.
 
@@ -63,109 +80,120 @@ In all other cases, skip this step. The spec must express business intent, not d
 
 ### 4. Write the spec
 
-Create `docs/{feature-name}.md` using **exactly this structure** (French, matching the project's existing spec style):
+Create `docs/spec/{feature-name}.md` using **exactly this structure** (English):
 
 ```markdown
-# Règles métier — {Titre de la feature}
+# Business Rules — {Feature Title} ({TRIGRAM})
 
-## Contexte
+## Context
 
-{2-4 phrases décrivant le besoin métier, le rôle de cette feature dans l'application,
-et les entités principales impliquées.}
+{2-4 sentences describing the business need, the role of this feature in the application,
+and the main entities involved.}
 
 ---
 
-## Définition des entités
+## Entity Definition
 
-> Omettre cette section si la feature ne manipule pas d'entité persistée.
+> Omit this section if the feature does not manipulate a persisted entity.
 
 ### {EntityName}
 
-{Une phrase décrivant ce que représente cette entité dans le domaine métier.}
+{One sentence describing what this entity represents in the business domain.}
 
-| Champ         | Signification métier                                                    |
-| ------------- | ----------------------------------------------------------------------- |
-| `field_name`  | {Ce que représente ce champ pour l'utilisateur, sans détail technique.} |
-| `other_field` | {Idem.}                                                                 |
+| Field         | Business meaning                                                    |
+| ------------- | ------------------------------------------------------------------- |
+| `field_name`  | {What this field represents to the user, without technical detail.} |
+| `other_field` | {Same.}                                                             |
 
-> Noms d'entités et de champs en anglais, convention Rust (`snake_case` pour les champs,
-> `PascalCase` pour les entités). Aucun détail d'implémentation : décrire le sens métier,
-> pas le type, le format de stockage, ni la valeur par défaut.
+> Entity and field names in English, Rust convention (`snake_case` for fields,
+> `PascalCase` for entities). No implementation detail: describe business meaning only,
+> not the type, storage format, or default value.
 
 ---
 
-## Règles métier
+## Business Rules
 
-**R1 — {Titre court} (frontend + backend)** : {Description précise et testable de la règle.}
+### Eligibility and Initiation (010–019)
 
-**R2 — {Titre court} (backend)** : {Description.}
+**{TRIGRAM}-010 — {Short Title} (frontend + backend)**: {Precise, testable description of the rule.}
 
-**R3 — {Titre court} (frontend)** : {Description.}
+**{TRIGRAM}-011 — {Short Title} (backend)**: {Description.}
 
-...
+### Creation (020–029)
 
-> Les règles couvrent : création, validation, modification, suppression,
-> transitions d'état, dépendances inter-entités, cas limites.
+**{TRIGRAM}-020 — {Short Title} (frontend)**: {Description.}
+
+### Status Updates (030–039)
+
+**{TRIGRAM}-030 — {Short Title} (frontend + backend)**: {Description.}
+
+---
+
+> Rules cover: creation, validation, update, deletion, state transitions,
+> inter-entity dependencies, edge cases.
+>
+> **Trigram Registry**: Trigram must be registered in `docs/spec-index.md` (see step 2.5).
 
 ---
 
 ## Workflow
 
-{Diagramme ASCII du flux utilisateur principal, si pertinent}
+{ASCII diagram of the main user flow, if relevant}
 
 ---
 
-## Maquette UX
+## UX Draft
 
-### Point d'entrée
+### Entry Point
 
-{Comment l'utilisateur accède à la feature : entrée drawer, bouton FAB, action contextuelle...}
+{How the user accesses the feature: drawer entry, FAB button, contextual action...}
 
-### Composant principal
+### Main Component
 
-{Type : modal / page / panel / dialog. Sous-composants notables.}
+{Type: modal / page / panel / dialog. Notable sub-components.}
 
-### États
+### States
 
-- **Vide** : {ce que l'utilisateur voit sans données}
-- **Chargement** : {état de chargement}
-- **Erreur** : {messages d'erreur, validation}
-- **Succès** : {feedback de succès}
+- **Empty**: {what the user sees with no data}
+- **Loading**: {loading state}
+- **Error**: {error messages, validation}
+- **Success**: {success feedback}
 
-### Flux utilisateur
+### User Flow
 
-1. {Étape 1}
-2. {Étape 2}
+1. {Step 1}
+2. {Step 2}
 3. ...
 
 ---
 
-## Questions ouvertes
+## Open Questions
 
-- [ ] {Point à clarifier avant ou pendant l'implémentation}
+- [ ] {Point to clarify before or during implementation}
 ```
 
 **Rules for writing:**
 
-- Each Rn rule must be atomic (one behavior per rule) and testable
+- Each `{TRIGRAM}-NNN` rule must be atomic (one behavior per rule) and testable
 - Scope `(frontend + backend)`, `(frontend)`, or `(backend)` is mandatory on every rule
-- Open Questions must list every assumption you made — do not silently decide
+- **Trigram declaration**: Header must include the trigram in parentheses (e.g., `# Business Rules — Feature Name (REF)`)
+- **Thematic numbering**: Group rules by operation type (010–019 initiation, 020–029 creation, 030–039 updates, 040–049 deletion, 050+ future).- **Registry entry**: Trigram MUST be registered in `docs/spec-index.md` before writing the spec file (done in step 2.5).- Open Questions must list every assumption you made — do not silently decide
 - If a rule has a notable edge case, add it as a separate rule (not a sub-clause)
 - **What & why only** — never describe how something is implemented (no SQL, no component names, no library choices, no data structures); describe the observable behaviour and its business reason
-- Entity/field names in the field table use English Rust conventions (`snake_case` fields, `PascalCase` entities); all surrounding prose remains French
+- Entity and field names use English Rust conventions (`snake_case` fields, `PascalCase` entities); all surrounding prose in English
 
 ---
 
 ### 4.1 Architecture Decision (ADR) Detection
 
-While drafting the Rn rules, if the feature requires a choice that:
+While drafting the `{TRIGRAM}-NNN` rules, if the feature requires a choice that:
 
 - Differs from existing patterns in the codebase
 - Impacts multiple contexts (e.g., a new complex UseCase)
 - Requires a trade-off between two technical solutions
 - Supersedes a previous ADR found in Step 1
 
-**Action**: Add a mandatory item in `## Questions ouvertes` :
+**Action**: Add a mandatory item in `## Open Questions`:
 
 - [ ] `ADR-REQUIRED`: {Briefly describe the architectural decision to be recorded}.
 
@@ -173,26 +201,26 @@ While drafting the Rn rules, if the feature requires a choice that:
 
 ### 5. Resolve open questions (loop)
 
-After writing the spec, check the `## Questions ouvertes` section for unchecked items (`[ ]`).
+After writing the spec, check the `## Open Questions` section for unchecked items (`[ ]`).
 
 **While `[ ]` items remain:**
 
 1. Group remaining open questions into a single **AskUserQuestion** call (max 4 at a time, prioritise the most blocking ones first).
 2. For each answer received:
-   - If the answer resolves the question: update the affected Rn rule(s) in the spec, then mark the item `[x]` (or remove it if the answer makes the question moot).
+   - If the answer resolves the question: update the affected `{TRIGRAM}-NNN` rule(s) in the spec, then mark the item `[x]` (or remove it if the answer makes the question moot).
    - If the answer reveals a new unknown: add a new `[ ]` item for it.
-   - **If the user has no preference** ("peu importe", "comme tu veux", "je ne sais pas", or similar): do NOT decide silently. Instead:
+   - **If the user has no preference** ("doesn't matter", "up to you", "I don't know", or similar): do NOT decide silently. Instead:
      1. Reason from DDD/UX best practices and the patterns visible in `docs/` specs and ADRs (no code search).
      2. Propose 2–3 concrete options (each one sentence, no implementation detail), with a recommended default clearly marked. Present them via **AskUserQuestion** so the user explicitly picks one.
      3. Once a choice is made, apply it and close the question.
-   - **If the user remains indecisive after options have been proposed** (still no preference on a second pass): apply the recommended default, close the question, and annotate the resulting rule with `<!-- IA-Decision -->` so the user can spot and revisit it later. Never loop more than twice on the same open question.
+   - **If the user remains indecisive after options have been proposed** (still no preference on a second pass): apply the recommended default, close the question, and annotate the resulting rule with `<!-- AI-Decision -->` so the user can spot and revisit it later. Never loop more than twice on the same open question.
 3. Rewrite the spec file with the updated rules and question list.
 4. Loop back — ask again if `[ ]` items still remain.
 
-**Exit condition:** all items in `## Questions ouvertes` are either `[x]` or removed. The section must end with the line:
+**Exit condition:** all items in `## Open Questions` are either `[x]` or removed. The section must end with the line:
 
 ```
-Aucune — toutes les questions ont été tranchées.
+None — all questions have been resolved.
 ```
 
 Only proceed to step 6 once this condition is met.
@@ -214,7 +242,7 @@ Before presenting to the user, run the following checklist mentally against the 
 
 **Coherence — are the rules internally consistent:**
 
-- No two Rn rules contradict each other
+- No two `{TRIGRAM}-NNN` rules contradict each other
 - Every entity, field, or state referenced in a rule is defined somewhere (field table, context section, or ARCHITECTURE.md)
 - Backend rules and frontend rules are aligned — a backend guard has a corresponding frontend error display, and vice versa
 - Scope tags `(frontend)` / `(backend)` / `(frontend + backend)` are accurate — no rule tagged `(frontend)` describes server-side behaviour
@@ -228,18 +256,18 @@ After applying all fixes, rewrite the spec file once. Then proceed to step 7.
 
 Use **AskUserQuestion**:
 
-> "Voulez-vous générer un mockup visuel via Stitch ?"
+> "Do you want to generate a visual mockup via Stitch?"
 
 **If yes:**
 
 1. Call `mcp__stitch__generate_screen_from_text` with:
-   - `project_id`: `7705025027636758446`
+   - `project_id`: `{STITCH_PROJECT_ID}`
    - `device`: `DESKTOP`
    - `model`: `GEMINI_3_1_PRO`
-   - Prompt: derive from the `## Maquette UX` section just written — describe the layout, key components, states
+   - Prompt: derive from the `## UX Draft` section just written — describe the layout, key components, states
 2. Call `mcp__stitch__list_screens` then `mcp__stitch__get_screen` to fetch the HTML
 3. Use the **Write** tool to save the HTML to `docs/stitch/{feature-name}.stitch`
-4. Add a `> Mockup Stitch : docs/stitch/{feature-name}.stitch` reference in the `## Maquette UX` section of the spec
+4. Add a `> Stitch mockup: docs/stitch/{feature-name}.stitch` reference in the `## UX Draft` section of the spec
 
 **If no:** skip — the textual UX draft is sufficient to start.
 
@@ -249,15 +277,16 @@ Use **AskUserQuestion**:
 
 Show the user:
 
-- Path of the spec: `docs/{feature-name}.md`
-- List of Rn rules extracted
+- Path of the spec: `docs/spec/{feature-name}.md`
+- Trigram assigned: `{TRIGRAM}`
+- List of `{TRIGRAM}-NNN` rules extracted
 - **Architectural Alert**: If an `ADR-REQUIRED` was flagged in Open Questions, explicitly tell the user:
-  > "Une décision d'architecture a été identifiée. Il est recommandé de lancer le skill `adr-manager` pour documenter ce point avant de passer au `feature-planner`."
+  > "An architectural decision has been identified. It is recommended to run the `adr-manager` skill to document it before proceeding to `feature-planner`."
 
-Then ask: **"Valider, affiner, passer à la rédaction de l'ADR, ou lancer le plan d'implémentation ?"**
+Then ask: **"Validate, refine, write the ADR, or generate the implementation plan?"**
 
-- **Valider** → spec ready, done
-- **Affiner** → iterate on the specified section, rewrite, re-present
+- **Validate** → spec ready, done
+- **Refine** → iterate on the specified section, rewrite, re-present
 - **Plan** → tell the user to invoke the `feature-planner` agent with this spec path (Claude does not invoke it automatically from within this skill — the user triggers it as a separate step)
 
 ---
@@ -265,25 +294,52 @@ Then ask: **"Valider, affiner, passer à la rédaction de l'ADR, ou lancer le pl
 ## Critical Rules
 
 1. Read design docs BEFORE asking (`ARCHITECTURE.md`, `docs/`, ADRs) — never ask what the docs already answer. Do NOT read source code unless the user explicitly requested retro-engineering.
-2. Interview is capped at 3 rounds (Round 1: max 4 questions, Round 2: max 3, Round 3: max 2) — stop earlier if all blocking unknowns are resolved; remaining unknowns go into `## Questions ouvertes` for step 5
-3. Open Questions section is mandatory — never decide silently; if the user has no preference, search the codebase for similar patterns, propose 2–3 options with a recommended default, and let the user pick
-4. **Never leave `[ ]` items unresolved** — step 5 loops until all opens are closed
-5. **Run the coherence & completeness check (step 6) silently** — fix spec directly, only loop back to step 5 if a fix requires a new business decision
-6. **What & why, never how** — the spec describes observable behaviour and business intent only; no SQL, no file paths, no function names, no component names, no library choices, no data structures; implementation is `feature-planner`'s job
-7. **Entity section mandatory when an entity is involved** — names in English Rust convention, field descriptions in French, business meaning only
-8. Each Rn rule must be independently verifiable by a test
-9. Stitch uses project `7705025027636758446` exclusively — never create a new project
-10. Write specs in French, matching the existing docs/ style
-11. Use the **Write** tool (not curl) to save `.stitch` HTML files
-12. **Moindre friction** — ne pose pas de question sur ce que les patterns existants du projet tranchent déjà (navigation, feedback de succès, gestion d'erreur réseau) ; génère directement une règle alignée sur ces patterns. Les questions sont réservées aux décisions métier genuinement nouvelles.
-13. **No implicit behaviour** — every observable behaviour must be covered by an explicit Rn rule. If a behaviour is described in the workflow or UX section but has no corresponding rule, add the rule. Common implicit gaps: default values in forms, sort toggle behaviour, modal-stays-open-on-error, empty-state vs no-search-results distinction.
-14. **Rn numbers are permanent** — once a rule number is assigned it never changes for the lifetime of the project. Tests reference rules by number (`// R1 — ...`). If a rule is removed, leave the number vacant. New rules always get the next available number. Never renumber existing rules.
-15. **ADR Consistency** — If a choice is already documented in `docs/adr/` (e.g., storing amounts in i64), you MUST apply it in the Rn rules without asking the user. You only ask if the new feature explicitly requires breaking a past ADR.
+2. **Trigram is mandatory** — assign it in Round 1. Create or update `docs/spec-index.md` in step 2.5 to register it (prevents collisions).
+3. Interview is capped at 3 rounds (Round 1: max 4 questions, Round 2: max 3, Round 3: max 2) — stop earlier if all blocking unknowns are resolved; remaining unknowns go into `## Open Questions` for step 5
+4. Open Questions section is mandatory — never decide silently; if the user has no preference, search the codebase for similar patterns, propose 2–3 options with a recommended default, and let the user pick
+5. **Never leave `[ ]` items unresolved** — step 5 loops until all opens are closed
+6. **Run the coherence & completeness check (step 6) silently** — fix spec directly, only loop back to step 5 if a fix requires a new business decision
+7. **What & why, never how** — the spec describes observable behaviour and business intent only; no SQL, no file paths, no function names, no component names, no library choices, no data structures; implementation is `feature-planner`'s job
+8. **Entity section mandatory when an entity is involved** — names in English Rust convention, field descriptions in English, business meaning only
+9. Each `{TRIGRAM}-NNN` rule must be independently verifiable by a test
+10. Stitch uses project `{STITCH_PROJECT_ID}` exclusively — never create a new project
+11. Write specs in English — all prose, section headers, and rule descriptions must be in English
+12. Use the **Write** tool (not curl) to save `.stitch` HTML files- **Create in correct folder** — specs MUST be saved to `docs/spec/` folder (created automatically if missing)13. **Minimum friction** — do not ask about what the project's existing patterns already answer (navigation, success feedback, network error handling); generate a rule aligned with those patterns directly. Questions are reserved for genuinely new business decisions.
+13. **No implicit behaviour** — every observable behaviour must be covered by an explicit `{TRIGRAM}-NNN` rule. If a behaviour is described in the workflow or UX section but has no corresponding rule, add the rule. Common implicit gaps: default values in forms, sort toggle behaviour, modal-stays-open-on-error, empty-state vs no-search-results distinction.
+14. **Rule IDs are permanent** — once a rule number is assigned it never changes for the lifetime of the project. Tests reference rules by ID (e.g., `// REF-010 — ...`). If a rule is removed, leave the number vacant. New rules in the same theme increment by 1 (REF-010, REF-011, REF-012...). Never renumber existing rules.
+15. **ADR Consistency** — If a choice is already documented in `docs/adr/` (e.g., storing amounts in i64), you MUST apply it in the TRIGRAMME-NNN rules without asking the user. You only ask if the new feature explicitly requires breaking a past ADR.
 
 ---
 
 ## Notes
 
-The 3-round cap on the initial interview forces an early draft rather than endless clarification. For simple features one round is enough; the cap only kicks in for complex ones. Anything unresolved goes into `## Questions ouvertes` as `[ ]` items. Step 5 then loops — interviewing the user until every `[ ]` is answered and the spec is fully closed. The spec must always end with "Aucune — toutes les questions ont été tranchées." before proceeding.
+The 3-round cap on the initial interview forces an early draft rather than endless clarification. For simple features one round is enough; the cap only kicks in for complex ones. Anything unresolved goes into `## Open Questions` as `[ ]` items. Step 5 then loops — interviewing the user until every `[ ]` is answered and the spec is fully closed. The spec must always end with "None — all questions have been resolved." before proceeding.
 
-Specs are written in French to match the project's existing doc language (`docs/backend-rules.md`, `docs/frontend-rules.md`, etc.). Code identifiers (function names, file paths) remain in English as per the codebase convention.
+Specs are written in English. Code identifiers (function names, file paths) remain in English as per the codebase convention.
+
+**Folder convention**: Specs always live in `docs/spec/` subfolder, not at `docs/` root.
+
+**Stitch MCP setup**: Replace `{STITCH_PROJECT_ID}` in this file with your project's actual Stitch project ID before use. If the Stitch MCP is not configured in your environment, skip step 7 entirely — the textual UX draft is sufficient.
+
+---
+
+## Spec Registry (Mandatory per-project artifact)
+
+Every downstream project **MUST** maintain a `docs/spec-index.md` file to track all active trigrams and prevent collisions. This is created automatically by spec-writer during the first spec creation:
+
+```markdown
+# Trigram Registry
+
+| Trigram | Spec Name          | Description                    | Status   |
+| ------- | ------------------ | ------------------------------ | -------- |
+| REF     | Refund Management  | Recording overpayments/refunds | active   |
+| PAY     | Payment Processing | Payments and reconciliation    | active   |
+| INV     | Inventory Tracking | Stock levels and transfers     | planning |
+```
+
+This registry:
+
+- **Created and maintained locally** — Lives in `docs/spec-index.md` in your project
+- **Prevents trigram collisions** across all specs
+- **Mandatory** — spec-writer creates it automatically if missing (see step 2.5)
+- **Project-managed** — Updated when you write or archive specs
