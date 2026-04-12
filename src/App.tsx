@@ -2,7 +2,6 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AboutPage } from "@/features/about";
-import { AccountAssetDetailsView } from "@/features/account_asset_details";
 import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
@@ -66,8 +65,6 @@ function App() {
         {activeItem === "Accounts" && <AccountManager />}
 
         {activeItem === "Categories" && <CategoryManager />}
-
-        {activeItem === "Account Details" && <AccountAssetDetailsView />}
 
         {/* R25 — About page with manual update check */}
         {activeItem === "About" && <AboutPage />}

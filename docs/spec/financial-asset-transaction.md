@@ -36,13 +36,13 @@ Represents a single purchase (or sale) event for an asset in an account.
 
 Represents the current state of a position (asset held within an account). Computed from transactions.
 
-| Field           | Business meaning                                                          |
-| --------------- | ------------------------------------------------------------------------- |
-| `id`            | Unique identifier of the holding.                                         |
-| `account_id`    | The account holding the asset.                                            |
-| `asset_id`      | The financial asset held.                                                 |
-| `quantity`      | Current number of units held (i64 micros).                                |
-| `average_price` | Volume-weighted average purchase price in account currency (i64 micros).  |
+| Field           | Business meaning                                                         |
+| --------------- | ------------------------------------------------------------------------ |
+| `id`            | Unique identifier of the holding.                                        |
+| `account_id`    | The account holding the asset.                                           |
+| `asset_id`      | The financial asset held.                                                |
+| `quantity`      | Current number of units held (i64 micros).                               |
+| `average_price` | Volume-weighted average purchase price in account currency (i64 micros). |
 
 ---
 
@@ -98,7 +98,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 ### Lifecycle Management
 
-**TRX-040 — Zero quantity handling (backend)**: If a `Holding.quantity` reaches zero due to future `Sell` transactions, the `Holding` entity remains in the database to accommodate potential future purchase transactions. The `average_price` is maintained at its last known value until the next purchase transaction initiates a new VWAP calculation. *(Implementation deferred until `Sell` transaction type is introduced.)*
+**TRX-040 — Zero quantity handling (backend)**: If a `Holding.quantity` reaches zero due to future `Sell` transactions, the `Holding` entity remains in the database to accommodate potential future purchase transactions. The `average_price` is maintained at its last known value until the next purchase transaction initiates a new VWAP calculation. _(Implementation deferred until `Sell` transaction type is introduced.)_
 
 ---
 
@@ -147,7 +147,7 @@ Represents the current state of a position (asset held within an account). Compu
 - Total Amount (Amount field with account currency suffix, auto-calculated and read-only)
 - Note (Textarea, optional)
 
-*`transaction_type` is not shown in the form. It is hardcoded to `Purchase` until the `Sell` type is introduced.*
+_`transaction_type` is not shown in the form. It is hardcoded to `Purchase` until the `Sell` type is introduced._
 
 ### States
 
@@ -169,16 +169,16 @@ Represents the current state of a position (asset held within an account). Compu
 
 ## Open Questions
 
-**OQ-1 — ~~`unit_price = 0` validity~~** *(resolved)*: A zero unit price is valid (gifted shares, inherited assets). TRX-020 unchanged.
+**OQ-1 — ~~`unit_price = 0` validity~~** _(resolved)_: A zero unit price is valid (gifted shares, inherited assets). TRX-020 unchanged.
 
-**OQ-2 — ~~Transaction `date` lower bound~~** *(resolved)*: Minimum date set to `1900-01-01`. Converted to TRX-020.
+**OQ-2 — ~~Transaction `date` lower bound~~** _(resolved)_: Minimum date set to `1900-01-01`. Converted to TRX-020.
 
-**OQ-3 — ~~Frontend reactivity after transaction mutation~~** *(resolved)*: `TransactionUpdated` event published by the use case; frontend refreshes holdings on receipt. Implementation mechanism left to feature-planner. Converted to TRX-037 and TRX-038.
+**OQ-3 — ~~Frontend reactivity after transaction mutation~~** _(resolved)_: `TransactionUpdated` event published by the use case; frontend refreshes holdings on receipt. Implementation mechanism left to feature-planner. Converted to TRX-037 and TRX-038.
 
-**OQ-4 — ~~TRX-040 / Sell scope~~** *(closed)*: Zero-quantity handling and Sell transaction type are out of scope for the initial implementation. TRX-040 remains in spec as forward documentation only.
+**OQ-4 — ~~TRX-040 / Sell scope~~** _(closed)_: Zero-quantity handling and Sell transaction type are out of scope for the initial implementation. TRX-040 remains in spec as forward documentation only.
 
-**OQ-5 — ~~Archived asset behaviour~~** *(resolved)*: Auto-unarchive with user confirmation. Converted to TRX-028 (backend atomicity) and TRX-029 (frontend confirmation dialog).
+**OQ-5 — ~~Archived asset behaviour~~** _(resolved)_: Auto-unarchive with user confirmation. Converted to TRX-028 (backend atomicity) and TRX-029 (frontend confirmation dialog).
 
-**OQ-6 — Asset archiving eligibility rule** *(deferred — asset spec)*: An asset should only be archivable if its `Holding.quantity` is zero across all accounts. Out of scope for this spec; requires a new rule in the asset spec (`docs/asset.md`) once the `Holding` entity is available.
+**OQ-6 — Asset archiving eligibility rule** _(deferred — asset spec)_: An asset should only be archivable if its `Holding.quantity` is zero across all accounts. Out of scope for this spec; requires a new rule in the asset spec (`docs/asset.md`) once the `Holding` entity is available.
 
-**OQ-7 — ~~Edit/delete workflow diagrams~~** *(deferred)*: Diagrams for the edit and delete paths are out of scope for the initial implementation. To be added in a future spec update alongside the `Sell` transaction type.
+**OQ-7 — ~~Edit/delete workflow diagrams~~** _(deferred)_: Diagrams for the edit and delete paths are out of scope for the initial implementation. To be added in a future spec update alongside the `Sell` transaction type.

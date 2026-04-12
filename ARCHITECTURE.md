@@ -48,12 +48,12 @@ All Tauri commands are registered here via `tauri_specta::collect_commands![]`. 
 
 Published on every state change. Frontend listens via a single `events.event.listen()` subscription in the global store.
 
-| Event                | Published by              |
-| -------------------- | ------------------------- |
-| `AssetUpdated`       | `context/asset/`          |
-| `CategoryUpdated`    | `context/asset/`          |
-| `AccountUpdated`     | `context/account/`        |
-| `TransactionUpdated` | `context/transaction/` *(pending — TRX spec)* |
+| Event                | Published by                                  |
+| -------------------- | --------------------------------------------- |
+| `AssetUpdated`       | `context/asset/`                              |
+| `CategoryUpdated`    | `context/asset/`                              |
+| `AccountUpdated`     | `context/account/`                            |
+| `TransactionUpdated` | `context/transaction/` _(pending — TRX spec)_ |
 
 ### Use Cases (`use_cases/`)
 
@@ -138,7 +138,7 @@ context/{domain}/
 
 ---
 
-### Transaction (`context/transaction/`) — *pending implementation (TRX spec)*
+### Transaction (`context/transaction/`) — _pending implementation (TRX spec)_
 
 **Entity: `Transaction`**
 
@@ -172,7 +172,7 @@ context/{domain}/
 - Factory methods: `new()` (generates ID + trims + validates), `with_id()` (uses provided ID + trims + validates), `restore()` (no validation, DB reconstruction)
 - Hard-delete: `DELETE FROM accounts WHERE id = ?`; holdings cascade via `ON DELETE CASCADE` on `holdings.account_id`
 
-**Entity: `Holding`** *(pending — replaces `AssetAccount`, see [ADR-002](docs/adr/002-replace-asset-account-with-holding.md))*
+**Entity: `Holding`** _(pending — replaces `AssetAccount`, see [ADR-002](docs/adr/002-replace-asset-account-with-holding.md))_
 
 - Represents the current state of a financial position: an asset held within an account
 - `id`, `account_id`, `asset_id`, `quantity: i64` (micros), `average_price: i64` (micros)

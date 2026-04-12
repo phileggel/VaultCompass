@@ -1,4 +1,4 @@
-import { BarChart3, Info, Palette, PieChart, Tag, Wallet } from "lucide-react";
+import { Info, Palette, PieChart, Tag, Wallet } from "lucide-react";
 import type { ElementType } from "react";
 
 export interface NavItem {
@@ -9,7 +9,6 @@ export interface NavItem {
 const BASE_NAV_ITEMS: NavItem[] = [
   { label: "Assets", icon: PieChart },
   { label: "Accounts", icon: Wallet },
-  { label: "Account Details", icon: BarChart3 },
   { label: "Categories", icon: Tag },
   { label: "About", icon: Info },
 ];

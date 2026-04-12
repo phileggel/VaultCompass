@@ -11,9 +11,7 @@
 #![cfg_attr(not(test), deny(clippy::todo))]
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
-use crate::context::account::{
-    AccountService, SqliteAccountRepository, SqliteAssetAccountRepository,
-};
+use crate::context::account::{AccountService, SqliteAccountRepository};
 use crate::context::asset::{
     AssetService, SqliteAssetCategoryRepository, SqliteAssetRepository, SqlitePriceRepository,
 };
@@ -117,10 +115,8 @@ pub fn run() {
                         .with_event_bus(event_bus.clone());
 
                 let account_repo = SqliteAccountRepository::new(db.pool.clone());
-                let asset_account_repo = SqliteAssetAccountRepository::new(db.pool.clone());
-                let account_service =
-                    AccountService::new(Box::new(account_repo), Box::new(asset_account_repo))
-                        .with_event_bus(event_bus.clone());
+                let account_service = AccountService::new(Box::new(account_repo))
+                    .with_event_bus(event_bus.clone());
 
                 app_handle.manage(AppState {
                     db,

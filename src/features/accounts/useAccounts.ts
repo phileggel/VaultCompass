@@ -49,17 +49,6 @@ export function useAccounts() {
     }
   }, []);
 
-  // TODO(R17): used by AccountAssetDetails — pending Holding feature implementation
-  const getAccountHoldings = useCallback(async (accountId: string) => {
-    try {
-      const res = await accountGateway.getAccountHoldings(accountId);
-      if (res.status === "ok") return res.data;
-    } catch (e) {
-      logger.error("Failed to get holdings", { error: e });
-    }
-    return [];
-  }, []);
-
   return {
     accounts,
     loading,
@@ -68,6 +57,5 @@ export function useAccounts() {
     addAccount,
     updateAccount,
     deleteAccount,
-    getAccountHoldings,
   };
 }

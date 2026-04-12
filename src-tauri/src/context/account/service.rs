@@ -1,27 +1,20 @@
-use super::domain::{
-    Account, AccountRepository, AssetAccount, AssetAccountRepository, UpdateFrequency,
-};
+use super::domain::{Account, AccountRepository, UpdateFrequency};
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use anyhow::Result;
 use std::sync::Arc;
 use tracing::info;
 
-/// Orchestrates business logic for accounts and asset-account mappings.
+/// Orchestrates business logic for accounts.
 pub struct AccountService {
     account_repo: Box<dyn AccountRepository>,
-    asset_account_repo: Box<dyn AssetAccountRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
 }
 
 impl AccountService {
     /// Creates a new AccountService.
-    pub fn new(
-        account_repo: Box<dyn AccountRepository>,
-        asset_account_repo: Box<dyn AssetAccountRepository>,
-    ) -> Self {
+    pub fn new(account_repo: Box<dyn AccountRepository>) -> Self {
         Self {
             account_repo,
-            asset_account_repo,
             event_bus: None,
         }
     }
@@ -98,42 +91,6 @@ impl AccountService {
 
         Ok(())
     }
-
-    // --- AssetAccount Methods ---
-
-    /// Gets all asset holdings for an account.
-    pub async fn get_holdings(&self, account_id: &str) -> Result<Vec<AssetAccount>> {
-        self.asset_account_repo.get_by_account(account_id).await
-    }
-
-    /// Updates or creates an asset holding in an account.
-    pub async fn upsert_holding(
-        &self,
-        account_id: String,
-        asset_id: String,
-        average_price: f64,
-        quantity: f64,
-    ) -> Result<AssetAccount> {
-        let aa = AssetAccount::new(account_id, asset_id, average_price, quantity)?;
-        let upserted = self.asset_account_repo.upsert(aa).await?;
-
-        if let Some(bus) = &self.event_bus {
-            bus.publish(Event::AccountUpdated);
-        }
-
-        Ok(upserted)
-    }
-
-    /// Removes an asset holding from an account.
-    pub async fn remove_holding(&self, account_id: &str, asset_id: &str) -> Result<()> {
-        self.asset_account_repo.remove(account_id, asset_id).await?;
-
-        if let Some(bus) = &self.event_bus {
-            bus.publish(Event::AccountUpdated);
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -141,7 +98,7 @@ mod tests {
     use super::*;
     // Integration tests: use concrete SQLite repos against an in-memory DB to catch
     // real constraint violations (e.g. UNIQUE ON LOWER(name)) that mocks would miss.
-    use crate::context::account::{SqliteAccountRepository, SqliteAssetAccountRepository};
+    use crate::context::account::SqliteAccountRepository;
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup_service() -> AccountService {
@@ -154,10 +111,7 @@ mod tests {
             .run(&pool)
             .await
             .expect("migrations");
-        AccountService::new(
-            Box::new(SqliteAccountRepository::new(pool.clone())),
-            Box::new(SqliteAssetAccountRepository::new(pool)),
-        )
+        AccountService::new(Box::new(SqliteAccountRepository::new(pool)))
     }
 
     // R3 — duplicate name (case-insensitive) is rejected at creation

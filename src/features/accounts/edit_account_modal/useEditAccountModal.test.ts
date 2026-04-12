@@ -20,7 +20,6 @@ vi.mock("../useAccounts", () => ({
     fetchAccounts: vi.fn(),
     addAccount: vi.fn(),
     deleteAccount: vi.fn(),
-    getAccountHoldings: vi.fn(),
   }),
 }));
 

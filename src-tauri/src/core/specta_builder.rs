@@ -13,7 +13,6 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<asset::AssetPrice>()
         .typ::<asset::AssetClass>()
         .typ::<account::Account>()
-        .typ::<account::AssetAccount>()
         .typ::<account::UpdateFrequency>()
         .commands(tauri_specta::collect_commands![
             asset::get_assets,
@@ -32,9 +31,6 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::add_account,
             account::update_account,
             account::delete_account,
-            account::get_account_holdings,
-            account::upsert_account_holding,
-            account::remove_account_holding,
             logger::log_frontend,
             update_checker::check_for_update,
             update_checker::download_update,

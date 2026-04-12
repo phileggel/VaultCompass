@@ -185,39 +185,6 @@ async deleteAccount(id: string) : Promise<Result<null, string>> {
 }
 },
 /**
- * Gets holdings for an account.
- */
-async getAccountHoldings(accountId: string) : Promise<Result<AssetAccount[], string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_account_holdings", { accountId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Updates or creates an asset holding in an account.
- */
-async upsertAccountHolding(dto: UpsertHoldingDTO) : Promise<Result<AssetAccount, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("upsert_account_holding", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Removes an asset holding from an account.
- */
-async removeAccountHolding(accountId: string, assetId: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("remove_account_holding", { accountId, assetId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Tauri command allowing the frontend to emit structured log entries
  * into the backend tracing system (visible in app logs and collect-logs output).
  */
@@ -339,26 +306,6 @@ reference: string;
  * Whether the asset is archived (soft-archived, reversible).
  */
 is_archived: boolean }
-/**
- * Link between an Account and an Asset with holdings data.
- */
-export type AssetAccount = { 
-/**
- * Linked account ID.
- */
-account_id: string; 
-/**
- * Linked asset ID.
- */
-asset_id: string; 
-/**
- * Average purchase price in the asset's currency.
- */
-average_price: number; 
-/**
- * Quantity of the asset held.
- */
-quantity: number }
 /**
  * A user-defined grouping for assets.
  */
@@ -580,26 +527,6 @@ export type UpdateInfo = {
  * Semantic version string of the available update (e.g. "1.2.3").
  */
 version: string }
-/**
- * Parameters for recording asset holdings in an account.
- */
-export type UpsertHoldingDTO = { 
-/**
- * Linked account ID.
- */
-account_id: string; 
-/**
- * Linked asset ID.
- */
-asset_id: string; 
-/**
- * Average purchase price in the asset's currency.
- */
-average_price: number; 
-/**
- * Quantity of the asset held.
- */
-quantity: number }
 
 /** tauri-specta globals **/
 
