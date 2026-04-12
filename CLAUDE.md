@@ -4,6 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Full architecture reference: [ARCHITECTURE.md](ARCHITECTURE.md)
 
+## 🧭 Behavioral Principles
+
+Before coding:
+
+- State assumptions explicitly. If multiple interpretations exist, present them — don't pick silently.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+While coding:
+
+- Every changed line must trace directly to the user's request.
+- If you notice unrelated dead code, mention it — don't delete it.
+- If 200 lines could be 50, stop and rewrite. Ask: "Would a senior engineer say this is overcomplicated?"
+
 ## ⚠️ Workflow & Planning
 
 **IMPORTANT**: Claude Code will NOT commit, create branches, or create PRs. The user handles all git operations.
