@@ -262,7 +262,9 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
       />
 
       {/* Buy Transaction Modal — TRX-010, TRX-011 */}
+      {/* key forces remount when asset changes so useAddTransaction re-initialises form state (TRX-011) */}
       <AddTransactionModal
+        key={buyPrefillAssetId ?? "none"}
         isOpen={isBuyModalOpen}
         onClose={() => {
           setIsBuyModalOpen(false);

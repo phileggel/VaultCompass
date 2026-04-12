@@ -97,7 +97,8 @@
     "retry": "Retry",
     "search": "Search",
     "clearSearch": "Clear search",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "select": "Select"
   },
   "update": {
     "available": "Version {{version}} available",

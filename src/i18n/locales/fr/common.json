@@ -97,7 +97,8 @@
     "retry": "Réessayer",
     "search": "Rechercher",
     "clearSearch": "Effacer la recherche",
-    "dismiss": "Fermer"
+    "dismiss": "Fermer",
+    "select": "Sélectionner"
   },
   "update": {
     "available": "Version {{version}} disponible",

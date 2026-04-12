@@ -2,6 +2,11 @@
 
 <!-- Ajouter les nouvelles dettes techniques et items de backlog ici. Format : ## (domaine) — Titre court -->
 
+## (ai/agents) — i18n-checker : inclure les fichiers nouvellement ajoutés
+
+L'agent utilise `git diff --name-only HEAD` + `git diff --name-only --cached` mais rate les nouveaux fichiers staged (`A ` dans `git status --porcelain`) quand ils n'ont pas encore de diff HEAD.
+Ajouter `git status --porcelain | grep "^A " | awk '{print $2}'` à la liste des fichiers à analyser dans la définition de l'agent.
+
 ## (deps) — Mettre à jour specta vers rc.23
 
 `tauri-specta rc.21` impose `specta = "=2.0.0-rc.22"` (version exacte). Attendre la sortie de `tauri-specta rc.22+` avant de passer à `specta rc.23` + `specta-typescript 0.0.10`.
@@ -71,6 +76,13 @@ La vue Account Details n'existe pas encore — `AccountAssetDetailsView` est un 
 `deleteTransaction` est câblé dans `gateway.ts` et `useTransactions.ts`, mais aucun composant UI n'expose l'action de suppression avec une `ConfirmationDialog`.
 À implémenter dans la vue transaction list (non encore créée).
 Clés i18n `transaction.delete_confirm_title` et `transaction.delete_confirm_message` déjà définies.
+
+## (spec/account) — Ajouter un champ `currency` à l'entité Account
+
+La logique `showExchangeRate` dans `AddTransactionModal` et `EditTransactionModal` compare `selectedAsset.currency !== "EUR"` en dur.
+Elle devrait comparer `selectedAsset.currency !== selectedAccount.currency`.
+L'entité `Account` n'a pas de champ `currency` : il faut l'ajouter dans la spec account, puis dans le domaine, la migration SQL, les bindings, et les modales de transaction.
+Impact TRX-021 et la règle de visibilité du champ Exchange Rate.
 
 ## (frontend/transactions) — TRX-038: implémenter l'affichage des positions (holdings)
 

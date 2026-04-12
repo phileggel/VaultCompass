@@ -23,7 +23,7 @@ const defaultForm = (): TransactionFormData => ({
   quantity: "",
   unitPrice: "",
   exchangeRate: "1.000000",
-  fees: "0",
+  fees: "",
   note: "",
 });
 
