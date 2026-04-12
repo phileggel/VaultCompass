@@ -29,6 +29,17 @@ Remplacer par les tokens M3 sémantiques correspondants.
 (Note: `useAssets.ts` et `useAccounts.ts` sont désormais migrés.)
 Remplacer les appels `console.error` par `logger.error` pour que les erreurs remontent au backend via `tracing`.
 
+## (frontend/ui) — Créer le composant TextareaField
+
+`AddTransactionModal` et `EditTransactionModal` utilisent une balise `<textarea>` brute pour le champ Note au lieu d'un composant partagé (violation F11/F12).
+Créer `ui/components/field/TextareaField.tsx` (même interface que `TextField`, label + id + className + placeholder) et l'utiliser dans les deux modales.
+
+## (frontend/transactions) — Feedback succès par snackbar (transactions)
+
+`AddTransactionModal` et `EditTransactionModal` n'ont pas de retour visuel positif après soumission réussie (le modal se ferme silencieusement).
+Brancher `showSnackbar(t("transaction.success_created"))` / `showSnackbar(t("transaction.success_updated"))` dans `doSubmit` une fois l'infrastructure toast en place.
+Les clés i18n `transaction.success_created` et `transaction.success_updated` sont déjà définies dans `fr/common.json` et `en/common.json`.
+
 ## (frontend/assets) — Feedback succès par snackbar
 
 Les mutations d'assets (création, modification, archivage) n'ont pas de feedback de succès visible.
@@ -38,6 +49,33 @@ Une fois la mécanique snackbar/toast en place (feature dédiée), brancher un a
 
 Le bouton Settings du footer de `Sidebar.tsx` est câblé via `onSettingsClick?` mais `MainLayout` ne passe pas encore ce handler.
 Créer la page Settings (feature `settings/`) et passer `onSettingsClick` depuis `MainLayout`.
+
+## (frontend/transactions) — Buy button désactivé pour les assets archivés
+
+Dans `AssetTable.tsx`, le bouton "Buy" (`ShoppingCart`) n'est pas désactivé pour les assets archivés (contrairement au bouton Edit qui est `disabled={asset.is_archived}`).
+Ajouter `disabled={asset.is_archived}` avec un tooltip explicatif, ou laisser le modal gérer la confirmation (TRX-029 déjà en place).
+
+## (frontend/transactions) — Déplacer la logique du Buy modal dans useAssetTable
+
+La logique d'état pour le Buy modal (`isBuyModalOpen`, `buyPrefillAssetId`) est inline dans `AssetTable.tsx` au lieu d'être dans le hook `useAssetTable` (violation F10).
+Déplacer dans `asset_table/useAssetTable.ts`.
+
+## (frontend/transactions) — TRX-010: bouton "Add Transaction" dans la vue Account Details
+
+L'entrée contextuelle depuis la vue "Account Details" (FAB ou bouton) est manquante (TRX-010).
+La vue Account Details n'existe pas encore — `AccountAssetDetailsView` est un placeholder.
+À implémenter quand la vue des positions par compte sera construite.
+
+## (frontend/transactions) — TRX-035: dialog de confirmation de suppression d'une transaction
+
+`deleteTransaction` est câblé dans `gateway.ts` et `useTransactions.ts`, mais aucun composant UI n'expose l'action de suppression avec une `ConfirmationDialog`.
+À implémenter dans la vue transaction list (non encore créée).
+Clés i18n `transaction.delete_confirm_title` et `transaction.delete_confirm_message` déjà définies.
+
+## (frontend/transactions) — TRX-038: implémenter l'affichage des positions (holdings)
+
+`useTransactionStore.refreshHoldings()` est un stub: le backend a une table `holdings` (créée par la use case RecordTransaction), mais il n'existe pas de commande Tauri `getHoldings`.
+Créer la commande `get_holdings(account_id) -> Vec<Holding>` dans `use_cases/record_transaction/api.rs` (ou `context/account/api.rs`) et l'utiliser dans `store.ts` pour afficher les positions par compte.
 
 ## (frontend/shell) — Renommer useSidebar.ts en navItems.ts
 

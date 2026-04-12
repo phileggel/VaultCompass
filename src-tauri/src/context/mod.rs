@@ -2,3 +2,5 @@
 pub mod account;
 /// Asset-related business logic.
 pub mod asset;
+/// Transaction-related business logic.
+pub mod transaction;

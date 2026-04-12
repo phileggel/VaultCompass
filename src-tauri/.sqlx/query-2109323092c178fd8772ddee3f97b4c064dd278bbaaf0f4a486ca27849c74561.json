@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note\n               FROM transactions\n               WHERE account_id = ? AND asset_id = ?\n               ORDER BY date ASC, rowid ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "asset_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "transaction_type",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "date",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "quantity",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "unit_price",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "exchange_rate",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "fees",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_amount",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "note",
+        "ordinal": 10,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "2109323092c178fd8772ddee3f97b4c064dd278bbaaf0f4a486ca27849c74561"
+}

@@ -24,7 +24,7 @@
 1. `create_app_dirs()` — resolves and creates `local_data_dir` + `log_dir`
 2. `initialize_tracing()` — sets up dual-output subscriber: `app.log` (no ANSI) + stderr; `EnvFilter` defaults to `debug` (override with `RUST_LOG`)
 3. `Arc<Database>`, `Arc<SideEffectEventBus>`
-4. Bounded context services: `AssetService`, `AccountService`
+4. Bounded context services: `AssetService`, `AccountService`, `TransactionService`
 5. Event forwarder spawned to bridge `SideEffectEventBus` → Tauri frontend events
 6. `Arc<UpdateState>` — managed separately from `AppState` so it is accessible before the DB is ready
 
@@ -53,11 +53,23 @@ Published on every state change. Frontend listens via a single `events.event.lis
 | `AssetUpdated`       | `context/asset/`                              |
 | `CategoryUpdated`    | `context/asset/`                              |
 | `AccountUpdated`     | `context/account/`                            |
-| `TransactionUpdated` | `context/transaction/` _(pending — TRX spec)_ |
+| `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()` |
 
 ### Use Cases (`use_cases/`)
 
 Cross-cutting application use cases that span multiple bounded contexts or require app-level infrastructure.
+
+#### Record Transaction (`use_cases/record_transaction/`)
+
+Orchestrates purchase transaction creation, update, and deletion across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`).
+
+- `orchestrator.rs` — `RecordTransactionUseCase` with `create_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
+  - Atomicity (TRX-027): all DB writes within each operation use `pool.begin()` + `commit()` directly
+  - VWAP computation (TRX-030, TRX-036): i128 intermediates, accumulates `qty * price * rate / MICRO / MICRO`
+  - Auto-unarchive on purchase of archived asset (TRX-028)
+  - Event published via `TransactionService.notify_transaction_updated()` after commit (B8)
+- `api.rs` — four Tauri commands: `add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
+- `CreateTransactionDTO` — serializable DTO struct passed as single command parameter (Specta limit workaround)
 
 #### Update Checker (`use_cases/update_checker/`)
 
@@ -138,28 +150,29 @@ context/{domain}/
 
 ---
 
-### Transaction (`context/transaction/`) — _pending implementation (TRX spec)_
+### Transaction (`context/transaction/`)
 
 **Entity: `Transaction`**
 
 - `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`
-- `TransactionType` enum: `Purchase` (Sell deferred)
-- All financial fields in i64 micro-units per ADR-001
+- `TransactionType` enum: `Purchase` (Sell deferred — TRX-040)
+- All financial fields in i64 micro-units (ADR-001)
+- Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount == (qty * price / MICRO) * rate / MICRO + fees` (i128 arithmetic)
 - Factory methods: `new()`, `with_id()`, `restore()`
 
 **Repository trait: `TransactionRepository`**
 
-- `get_by_account_asset(account_id, asset_id) -> Vec<Transaction>` (chronological)
+- `get_by_id`, `get_by_account_asset(account_id, asset_id) -> Vec<Transaction>` (chronological — TRX-036)
 - `create`, `update`, `delete`
 
 **Service: `TransactionService`**
 
-- CRUD for transactions
-- Publishes `TransactionUpdated` event after any mutation
+- Read access: `get_by_id`, `get_by_account_asset`
+- `notify_transaction_updated()` — publishes `TransactionUpdated` event (B8); called by `RecordTransactionUseCase` after commit
 
-**Tauri commands (`api.rs`)**
+**Tauri commands**
 
-- Defined by the transaction use case (see `use_cases/`)
+- Defined in `use_cases/record_transaction/api.rs` (B9 pattern — cross-context use case owns the API)
 
 ---
 
@@ -172,17 +185,18 @@ context/{domain}/
 - Factory methods: `new()` (generates ID + trims + validates), `with_id()` (uses provided ID + trims + validates), `restore()` (no validation, DB reconstruction)
 - Hard-delete: `DELETE FROM accounts WHERE id = ?`; holdings cascade via `ON DELETE CASCADE` on `holdings.account_id`
 
-**Entity: `Holding`** _(pending — replaces `AssetAccount`, see [ADR-002](docs/adr/002-replace-asset-account-with-holding.md))_
+**Entity: `Holding`** (replaces `AssetAccount`, see [ADR-002](docs/adr/002-replace-asset-account-with-holding.md))
 
 - Represents the current state of a financial position: an asset held within an account
 - `id`, `account_id`, `asset_id`, `quantity: i64` (micros), `average_price: i64` (micros)
-- Computed from `Transaction` records via VWAP (see spec: `docs/spec/financial-asset-transaction.md`)
+- Computed from `Transaction` records via VWAP by `RecordTransactionUseCase`
 - Factory methods: `new()`, `with_id()`, `restore()`
-- Hard-delete: removed when no transactions remain for the `(account_id, asset_id)` pair
+- Hard-delete: removed when no transactions remain for the `(account_id, asset_id)` pair (TRX-034)
 
 **Repository traits: `AccountRepository`, `HoldingRepository`**
 
-- `get_all`, `get_by_id`, `find_by_name` (case-insensitive uniqueness check), `create`, `update`, `delete`
+- `AccountRepository`: `get_all`, `get_by_id`, `find_by_name`, `create`, `update`, `delete`
+- `HoldingRepository`: `get_by_account`, `get_by_account_asset`, `upsert`, `delete`, `delete_by_account_asset`
 
 **Service: `AccountService`**
 
@@ -207,6 +221,8 @@ context/{domain}/
 - Never add `BEGIN`/`COMMIT` in migrations (sqlx wraps each in a transaction)
 - `202603280001_categories_case_insensitive.sql` — replaces `categories` name index with `UNIQUE ON LOWER(name)` for case-insensitive enforcement
 - `202603290001_asset_archiving.sql` — adds `is_archived INTEGER NOT NULL DEFAULT 0` column to `assets`, drops the old unique index on reference (duplicates now allowed)
+- `202604120001_create_holdings.sql` — creates `holdings` table (account_id, asset_id, quantity, average_price — all i64 micro-units, ADR-001)
+- `202604120002_create_transactions.sql` — creates `transactions` table with FK cascade on `accounts.id` and restrict on `assets.id`
 
 ---
 
@@ -275,6 +291,22 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - Shared: `shared/presenter.ts` — `FREQUENCY_ORDER` (logical enum sort order), `FREQUENCY_I18N_KEYS`; `shared/validateAccount.ts` — `validateAccountName()`
 - UX: FAB triggers `AddAccountModal`; table rows show Edit/Delete `IconButton`s; inline errors on backend rejection; loading/error/retry states; empty vs no-search-results states distinct
 - Spec: `docs/account.md` (R1–R16; R17 deferred pending Holding feature; R6 deferred pending Transaction feature)
+
+#### Transactions (`features/transactions/`)
+
+- Gateway: `addTransaction(dto)`, `updateTransaction(id, dto)`, `deleteTransaction(id)`, `getTransactions(accountId, assetId)`
+- `useTransactions()` hook: wraps gateway calls with error normalization (`{ data, error }` return shape)
+- Sub-features:
+  - `add_transaction/` — `AddTransactionModal` + `useAddTransaction` hook (TRX-010, TRX-011, TRX-026, TRX-029)
+  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033)
+- Shared:
+  - `shared/types.ts` — `TransactionFormData` (decimal strings)
+  - `shared/microUnits.ts` — `decimalToMicro`, `microToDecimal`, `calculateTotalAmount` (mirrors TRX-026 integer arithmetic)
+  - `shared/presenter.ts` — `toTransactionRow()` — domain → view model
+  - `shared/validateTransaction.ts` — client-side validation (mirrors TRX-020)
+- `store.ts` — `useTransactionStore`: `lastFetchedKey`, `refreshHoldings()` (TRX-038 stub — called on `TransactionUpdated` event)
+- Entry point: "Buy" `IconButton` in `AssetTable` opens `AddTransactionModal` with pre-filled `assetId` (TRX-010, TRX-011)
+- Spec: `docs/spec/financial-asset-transaction.md`
 
 #### Account Asset Details (`features/account_asset_details/`) — **placeholder, to be replaced**
 

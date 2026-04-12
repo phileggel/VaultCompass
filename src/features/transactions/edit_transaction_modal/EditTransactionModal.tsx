@@ -1,0 +1,207 @@
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import type { Transaction } from "@/bindings";
+import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
+import { Button } from "@/ui/components/button/Button";
+import { ComboboxField } from "@/ui/components/field/ComboboxField";
+import { DateField } from "@/ui/components/field/DateField";
+import { SelectField } from "@/ui/components/field/SelectField";
+import { TextField } from "@/ui/components/field/TextField";
+import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
+import { FormModal } from "@/ui/components/modal/FormModal";
+import { useEditTransactionModal } from "./useEditTransactionModal";
+
+interface EditTransactionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  transaction: Transaction;
+}
+
+export function EditTransactionModal({ isOpen, onClose, transaction }: EditTransactionModalProps) {
+  const { t } = useTranslation();
+  useEffect(() => {
+    logger.info("[EditTransactionModal] mounted");
+  }, []);
+
+  const assets = useAppStore((state) => state.assets);
+  const accounts = useAppStore((state) => state.accounts);
+
+  const {
+    formData,
+    totalAmountDisplay,
+    error,
+    isSubmitting,
+    isFormValid,
+    showArchivedConfirm,
+    handleChange,
+    handleSubmit,
+    handleConfirmArchived,
+    handleCancelArchived,
+  } = useEditTransactionModal({ transaction, onSubmitSuccess: onClose });
+
+  const selectedAsset = assets.find((a) => a.id === formData.assetId);
+  const selectedAccount = accounts.find((a) => a.id === formData.accountId);
+  const showExchangeRate =
+    !!selectedAsset && !!selectedAccount ? selectedAsset.currency !== "EUR" : true;
+
+  const accountOptions = accounts.map((a) => ({ label: a.name, value: a.id }));
+
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+        {t("action.cancel")}
+      </Button>
+      <Button
+        type="submit"
+        form="edit-transaction-form"
+        variant="primary"
+        loading={isSubmitting}
+        disabled={isSubmitting || showArchivedConfirm || !isFormValid}
+      >
+        {t("action.save")}
+      </Button>
+    </div>
+  );
+
+  return (
+    <>
+      <FormModal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={t("transaction.edit_modal_title")}
+        footer={footer}
+        maxWidth="max-w-2xl"
+      >
+        <form id="edit-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* Account */}
+          <SelectField
+            id="edit-trx-account"
+            label={t("transaction.form_account_label")}
+            value={formData.accountId}
+            onChange={(e) => handleChange("accountId", e.target.value)}
+            options={[{ label: `— ${t("action.select")} —`, value: "" }, ...accountOptions]}
+            required
+          />
+
+          {/* Asset */}
+          <ComboboxField
+            id="edit-trx-asset"
+            label={`${t("transaction.form_asset_label")} *`}
+            items={assets}
+            displayKey="name"
+            idKey="id"
+            value={formData.assetId}
+            onChange={(id) => handleChange("assetId", id)}
+            searchKeys={["name", "reference"]}
+            placeholder={t("transaction.form_asset_placeholder")}
+          />
+
+          {/* Date */}
+          <DateField
+            id="edit-trx-date"
+            label={t("transaction.form_date_label")}
+            value={formData.date}
+            onChange={(e) => handleChange("date", e.target.value)}
+            required
+          />
+
+          {/* Quantity + Unit Price */}
+          <div className="grid grid-cols-2 gap-4">
+            <TextField
+              id="edit-trx-quantity"
+              label={t("transaction.form_quantity_label")}
+              type="number"
+              min="0"
+              step="0.000001"
+              value={formData.quantity}
+              onChange={(e) => handleChange("quantity", e.target.value)}
+              placeholder="0.000"
+              required
+            />
+            <TextField
+              id="edit-trx-unit-price"
+              label={`${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`}
+              type="number"
+              min="0"
+              step="0.000001"
+              value={formData.unitPrice}
+              onChange={(e) => handleChange("unitPrice", e.target.value)}
+              placeholder="0.000"
+              required
+            />
+          </div>
+
+          {/* Exchange Rate */}
+          {showExchangeRate && (
+            <TextField
+              id="edit-trx-exchange-rate"
+              label={t("transaction.form_exchange_rate_label")}
+              type="number"
+              min="0"
+              step="0.000001"
+              value={formData.exchangeRate}
+              onChange={(e) => handleChange("exchangeRate", e.target.value)}
+              placeholder="1.000000"
+            />
+          )}
+
+          {/* Fees + Total Amount */}
+          <div className="grid grid-cols-2 gap-4">
+            <TextField
+              id="edit-trx-fees"
+              label={t("transaction.form_fees_label")}
+              type="number"
+              min="0"
+              step="0.000001"
+              value={formData.fees}
+              onChange={(e) => handleChange("fees", e.target.value)}
+              placeholder="0.000"
+            />
+            <TextField
+              id="edit-trx-total"
+              label={t("transaction.form_total_amount_label")}
+              type="text"
+              value={totalAmountDisplay}
+              readOnly
+              aria-readonly="true"
+            />
+          </div>
+
+          {/* Note */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="edit-trx-note" className="m3-input-label">
+              {t("transaction.form_note_label")}
+            </label>
+            <textarea
+              id="edit-trx-note"
+              className="m3-input w-full resize-none"
+              rows={2}
+              value={formData.note}
+              onChange={(e) => handleChange("note", e.target.value)}
+              placeholder={t("transaction.form_note_placeholder")}
+            />
+          </div>
+
+          {/* Inline error */}
+          {error && (
+            <p role="alert" className="text-sm text-m3-error">
+              {t(error, { defaultValue: error })}
+            </p>
+          )}
+        </form>
+      </FormModal>
+
+      {/* TRX-029 — archived asset confirmation */}
+      <ConfirmationDialog
+        isOpen={showArchivedConfirm}
+        onCancel={handleCancelArchived}
+        onConfirm={handleConfirmArchived}
+        title={t("transaction.archived_asset_confirm_title")}
+        message={t("transaction.archived_asset_confirm_message")}
+        confirmLabel={t("action.confirm")}
+        cancelLabel={t("action.cancel")}
+      />
+    </>
+  );
+}

@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Edit2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Edit2, ShoppingCart, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Asset } from "@/bindings";
@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
+import { AddTransactionModal } from "../../transactions/add_transaction/AddTransactionModal";
 import { EditAssetModal } from "../edit_asset_modal/EditAssetModal";
 import { getRiskBadgeClasses } from "../shared/presenter";
 import { useAssets } from "../useAssets";
@@ -45,6 +46,10 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
   // Edit state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
+
+  // Buy transaction state (TRX-010)
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+  const [buyPrefillAssetId, setBuyPrefillAssetId] = useState<string | undefined>(undefined);
 
   const SortIcon = ({ column }: { column: SortConfig["key"] }) => {
     if (sortConfig.key !== column) return null;
@@ -193,6 +198,17 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                 </td>
                 <td className="m3-td text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {/* TRX-010 — Buy action entry point */}
+                    <IconButton
+                      icon={<ShoppingCart size={16} />}
+                      size="sm"
+                      aria-label={t("transaction.action_buy")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBuyPrefillAssetId(asset.id);
+                        setIsBuyModalOpen(true);
+                      }}
+                    />
                     <IconButton
                       icon={<Edit2 size={16} />}
                       size="sm"
@@ -243,6 +259,16 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
           setAssetToEdit(null);
         }}
         asset={assetToEdit}
+      />
+
+      {/* Buy Transaction Modal — TRX-010, TRX-011 */}
+      <AddTransactionModal
+        isOpen={isBuyModalOpen}
+        onClose={() => {
+          setIsBuyModalOpen(false);
+          setBuyPrefillAssetId(undefined);
+        }}
+        prefillAssetId={buyPrefillAssetId}
       />
 
       {/* Archive Confirmation Dialog — R13 */}

@@ -1,0 +1,160 @@
+use anyhow::{Context, Result};
+use async_trait::async_trait;
+use sqlx::{Pool, Sqlite};
+use std::str::FromStr;
+
+use crate::context::transaction::domain::{Transaction, TransactionRepository, TransactionType};
+use crate::core::logger::BACKEND;
+
+#[derive(sqlx::FromRow)]
+struct TransactionRow {
+    id: String,
+    account_id: String,
+    asset_id: String,
+    transaction_type: String,
+    date: String,
+    quantity: i64,
+    unit_price: i64,
+    exchange_rate: i64,
+    fees: i64,
+    total_amount: i64,
+    note: Option<String>,
+}
+
+impl From<TransactionRow> for Transaction {
+    fn from(row: TransactionRow) -> Self {
+        let transaction_type =
+            TransactionType::from_str(&row.transaction_type).unwrap_or_else(|_| {
+                tracing::warn!(
+                    target: BACKEND,
+                    value = %row.transaction_type,
+                    "unknown transaction_type, falling back to Purchase"
+                );
+                TransactionType::Purchase
+            });
+        Transaction::restore(
+            row.id,
+            row.account_id,
+            row.asset_id,
+            transaction_type,
+            row.date,
+            row.quantity,
+            row.unit_price,
+            row.exchange_rate,
+            row.fees,
+            row.total_amount,
+            row.note,
+        )
+    }
+}
+
+/// SQLite implementation of the TransactionRepository.
+#[derive(Clone)]
+pub struct SqliteTransactionRepository {
+    pool: Pool<Sqlite>,
+}
+
+impl SqliteTransactionRepository {
+    /// Creates a new SqliteTransactionRepository.
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl TransactionRepository for SqliteTransactionRepository {
+    async fn get_by_id(&self, id: &str) -> Result<Option<Transaction>> {
+        let row = sqlx::query_as!(
+            TransactionRow,
+            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note FROM transactions WHERE id = ?"#,
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .with_context(|| format!("Failed to fetch transaction {}", id))?;
+
+        Ok(row.map(Transaction::from))
+    }
+
+    async fn get_by_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<Vec<Transaction>> {
+        let rows = sqlx::query_as!(
+            TransactionRow,
+            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note
+               FROM transactions
+               WHERE account_id = ? AND asset_id = ?
+               ORDER BY date ASC, rowid ASC"#,
+            account_id,
+            asset_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to fetch transactions for account {} asset {}",
+                account_id, asset_id
+            )
+        })?;
+
+        Ok(rows.into_iter().map(Transaction::from).collect())
+    }
+
+    async fn create(&self, tx: Transaction) -> Result<Transaction> {
+        let transaction_type = tx.transaction_type.to_string();
+        sqlx::query!(
+            r#"INSERT INTO transactions (id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            tx.id,
+            tx.account_id,
+            tx.asset_id,
+            transaction_type,
+            tx.date,
+            tx.quantity,
+            tx.unit_price,
+            tx.exchange_rate,
+            tx.fees,
+            tx.total_amount,
+            tx.note
+        )
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("Failed to create transaction {}", tx.id))?;
+
+        Ok(tx)
+    }
+
+    async fn update(&self, tx: Transaction) -> Result<Transaction> {
+        let transaction_type = tx.transaction_type.to_string();
+        sqlx::query!(
+            r#"UPDATE transactions SET account_id = ?, asset_id = ?, transaction_type = ?, date = ?, quantity = ?, unit_price = ?, exchange_rate = ?, fees = ?, total_amount = ?, note = ? WHERE id = ?"#,
+            tx.account_id,
+            tx.asset_id,
+            transaction_type,
+            tx.date,
+            tx.quantity,
+            tx.unit_price,
+            tx.exchange_rate,
+            tx.fees,
+            tx.total_amount,
+            tx.note,
+            tx.id
+        )
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("Failed to update transaction {}", tx.id))?;
+
+        Ok(tx)
+    }
+
+    async fn delete(&self, id: &str) -> Result<()> {
+        sqlx::query!(r#"DELETE FROM transactions WHERE id = ?"#, id)
+            .execute(&self.pool)
+            .await
+            .with_context(|| format!("Failed to delete transaction {}", id))?;
+
+        Ok(())
+    }
+}

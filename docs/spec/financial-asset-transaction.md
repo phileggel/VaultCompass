@@ -56,7 +56,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 ### Creation
 
-**TRX-020 — Field validation (backend)**: A transaction is valid if: `account_id` and `asset_id` exist, `date` is not in the future and not before `1900-01-01`, `quantity` is strictly positive, `unit_price` is positive or zero, and `total_amount` is positive.
+**TRX-020 — Field validation (backend)**: A transaction is valid if: `account_id` and `asset_id` exist, `date` is not in the future and not before `1900-01-01`, `quantity` is strictly positive, `unit_price` is positive or zero, `exchange_rate` is strictly positive, and the backend-computed `total_amount` is positive.
 
 **TRX-021 — Multi-currency semantics (backend)**: The `unit_price` is stored in the asset's native currency. The `exchange_rate` is the conversion rate from the asset's currency to the account's currency, and is stored explicitly with the transaction.
 
@@ -68,7 +68,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-025 — Holding cost basis update (backend)**: Creating a purchase transaction updates the `Holding.average_price` using the VWAP method (TRX-030).
 
-**TRX-026 — Total amount formula invariant (backend)**: `total_amount` must equal `(quantity × unit_price × exchange_rate) + fees`. All values are `i64` micro-units end-to-end (TRX-024); arithmetic is exact integer arithmetic. The backend performs a strict equality check and rejects the transaction if the invariant is not satisfied.
+**TRX-026 — Total amount computation (backend)**: `total_amount` is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) + fees`. All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend — the DTO (`CreateTransactionDTO`) intentionally omits it. The frontend computes the same formula locally for real-time display preview only (see TRX-024).
 
 **TRX-027 — Atomicity of transaction and holding updates (backend)**: The transaction record insert and all associated `Holding` mutations (quantity and average_price) must be performed within a single database transaction. A failure in any step rolls back the entire operation.
 
@@ -116,7 +116,8 @@ Represents the current state of a position (asset held within an account). Compu
           ├─ [Enter Fees]
           ├─ [Enter Note] (optional)
           │
-          └─ [Save] → Backend validates (TRX-020, TRX-026, TRX-033)
+          └─ [Save] → Backend validates (TRX-020, TRX-033)
+                     → Backend computes total_amount (TRX-026)
                      → Persists Transaction in micro-units (TRX-024)
                      → Updates Holding atomically (TRX-022, TRX-025, TRX-027)
                        using VWAP in chronological order (TRX-030, TRX-036)

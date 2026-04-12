@@ -236,6 +236,50 @@ async installUpdate() : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Creates a new purchase transaction and updates the Holding atomically (TRX-027).
+ */
+async addTransaction(dto: CreateTransactionDTO) : Promise<Result<Transaction, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_transaction", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Updates an existing transaction and recalculates the affected Holding(s) (TRX-031, TRX-032).
+ */
+async updateTransaction(id: string, dto: CreateTransactionDTO) : Promise<Result<Transaction, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_transaction", { id, dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes a transaction and recalculates (or removes) the associated Holding (TRX-034).
+ */
+async deleteTransaction(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_transaction", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Retrieves all transactions for an account/asset pair.
+ */
+async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_transactions", { accountId, assetId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -427,6 +471,44 @@ price: number;
  */
 date: string }
 /**
+ * DTO for creating or updating a transaction.
+ * `total_amount` is intentionally absent — the backend computes it from the other
+ * fields (TRX-026) so the frontend never sends a derived value over the wire.
+ */
+export type CreateTransactionDTO = { 
+/**
+ * Account where the transaction occurs.
+ */
+account_id: string; 
+/**
+ * Financial asset involved.
+ */
+asset_id: string; 
+/**
+ * Transaction date (YYYY-MM-DD).
+ */
+date: string; 
+/**
+ * Quantity in micro-units.
+ */
+quantity: number; 
+/**
+ * Unit price in asset currency (micro-units).
+ */
+unit_price: number; 
+/**
+ * Exchange rate asset→account currency (micro-units).
+ */
+exchange_rate: number; 
+/**
+ * Fees in account currency (micro-units).
+ */
+fees: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
  * All possible side-effect events that can be published across the application.
  * Each variant represents a specific business event that features may need to react to.
  */
@@ -446,7 +528,93 @@ export type Event =
 /**
  * A category was created, updated, or deleted
  */
-{ type: "CategoryUpdated" }
+{ type: "CategoryUpdated" } | 
+/**
+ * A transaction was created, updated, or deleted (position data changed)
+ */
+{ type: "TransactionUpdated" }
+/**
+ * Current state of a financial position: an asset held within an account (ADR-002).
+ * All financial fields are stored as i64 micro-units (ADR-001).
+ */
+export type Holding = { 
+/**
+ * Unique identifier.
+ */
+id: string; 
+/**
+ * The account holding the asset.
+ */
+account_id: string; 
+/**
+ * The financial asset held.
+ */
+asset_id: string; 
+/**
+ * Current number of units held (micro-units: value × 10^6).
+ */
+quantity: number; 
+/**
+ * Volume-weighted average purchase price in account currency (micro-units).
+ */
+average_price: number }
+/**
+ * A single financial event affecting an asset's quantity and cost basis within an account.
+ * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
+ */
+export type Transaction = { 
+/**
+ * Unique identifier.
+ */
+id: string; 
+/**
+ * The account where the transaction occurred.
+ */
+account_id: string; 
+/**
+ * The financial asset involved.
+ */
+asset_id: string; 
+/**
+ * Type of transaction (Purchase; Sell deferred per TRX-040).
+ */
+transaction_type: TransactionType; 
+/**
+ * Date when the transaction was executed (ISO 8601, "YYYY-MM-DD").
+ */
+date: string; 
+/**
+ * Number of units acquired (micro-units: value × 10^6). Must be > 0.
+ */
+quantity: number; 
+/**
+ * Price per unit in asset's native currency (micro-units). Can be 0 (gifted assets).
+ */
+unit_price: number; 
+/**
+ * Conversion rate from asset currency to account currency (micro-units).
+ */
+exchange_rate: number; 
+/**
+ * Transaction fees in account currency (micro-units).
+ */
+fees: number; 
+/**
+ * Total cost in account currency including fees (micro-units). Must be > 0.
+ */
+total_amount: number; 
+/**
+ * Optional user comment.
+ */
+note: string | null }
+/**
+ * Type of financial transaction.
+ */
+export type TransactionType = 
+/**
+ * A purchase (acquisition) of an asset.
+ */
+"Purchase"
 /**
  * Parameters for updating an existing account.
  */

@@ -15,4 +15,6 @@ pub enum Event {
     AccountUpdated,
     /// A category was created, updated, or deleted
     CategoryUpdated,
+    /// A transaction was created, updated, or deleted (position data changed)
+    TransactionUpdated,
 }

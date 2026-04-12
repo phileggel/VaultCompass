@@ -128,5 +128,36 @@
   "app": {
     "migration_error": "Une erreur est survenue lors de la mise à jour de la base de données. Veuillez contacter le support.",
     "migration_in_progress": "Initialisation en cours…"
+  },
+  "transaction": {
+    "add_modal_title": "Ajouter une transaction",
+    "edit_modal_title": "Modifier la transaction",
+    "delete_confirm_title": "Supprimer la transaction",
+    "delete_confirm_message": "Êtes-vous sûr de vouloir supprimer cette transaction ? Cette action est irréversible.",
+    "archived_asset_confirm_title": "Actif archivé",
+    "archived_asset_confirm_message": "L'actif sélectionné est archivé. Enregistrer cette transaction le désarchivera automatiquement. Voulez-vous continuer ?",
+    "form_account_label": "Compte",
+    "form_asset_label": "Actif",
+    "form_asset_placeholder": "Rechercher un actif…",
+    "form_date_label": "Date",
+    "form_quantity_label": "Quantité",
+    "form_unit_price_label": "Prix unitaire",
+    "form_exchange_rate_label": "Taux de change",
+    "form_fees_label": "Frais",
+    "form_total_amount_label": "Montant total",
+    "form_note_label": "Note",
+    "form_note_placeholder": "Commentaire optionnel…",
+    "action_buy": "Acheter",
+    "error_load": "Erreur lors du chargement des transactions.",
+    "error_generic": "Une erreur est survenue.",
+    "error_validation_account": "Veuillez sélectionner un compte.",
+    "error_validation_asset": "Veuillez sélectionner un actif.",
+    "error_validation_date": "Veuillez saisir une date valide.",
+    "error_validation_quantity": "La quantité doit être supérieure à 0.",
+    "error_validation_total": "Le montant total doit être supérieur à 0.",
+    "error_invariant_mismatch": "Le montant total ne correspond pas à la formule (quantité × prix × taux) + frais.",
+    "success_created": "Transaction ajoutée avec succès.",
+    "success_updated": "Transaction modifiée avec succès.",
+    "success_deleted": "Transaction supprimée avec succès."
   }
 }

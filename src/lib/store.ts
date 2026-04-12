@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { type Account, type Asset, type AssetCategory, commands, events } from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
 import { assetGateway } from "../features/assets/gateway";
+import { useTransactionStore } from "../features/transactions/store";
 import { logger } from "./logger";
 
 interface AppState {
@@ -112,6 +113,8 @@ export const useAppStore = create<AppState>((set, get) => {
         AssetUpdated: fetchAssets,
         CategoryUpdated: fetchCategories,
         AccountUpdated: fetchAccounts,
+        // TRX-038 — refresh holdings for the currently viewed account on transaction change
+        TransactionUpdated: () => useTransactionStore.getState().refreshHoldings(),
       };
 
       // Setup event listeners
