@@ -48,11 +48,12 @@ All Tauri commands are registered here via `tauri_specta::collect_commands![]`. 
 
 Published on every state change. Frontend listens via a single `events.event.listen()` subscription in the global store.
 
-| Event             | Published by       |
-| ----------------- | ------------------ |
-| `AssetUpdated`    | `context/asset/`   |
-| `CategoryUpdated` | `context/asset/`   |
-| `AccountUpdated`  | `context/account/` |
+| Event                | Published by              |
+| -------------------- | ------------------------- |
+| `AssetUpdated`       | `context/asset/`          |
+| `CategoryUpdated`    | `context/asset/`          |
+| `AccountUpdated`     | `context/account/`        |
+| `TransactionUpdated` | `context/transaction/` *(pending — TRX spec)* |
 
 ### Use Cases (`use_cases/`)
 
@@ -137,6 +138,31 @@ context/{domain}/
 
 ---
 
+### Transaction (`context/transaction/`) — *pending implementation (TRX spec)*
+
+**Entity: `Transaction`**
+
+- `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`
+- `TransactionType` enum: `Purchase` (Sell deferred)
+- All financial fields in i64 micro-units per ADR-001
+- Factory methods: `new()`, `with_id()`, `restore()`
+
+**Repository trait: `TransactionRepository`**
+
+- `get_by_account_asset(account_id, asset_id) -> Vec<Transaction>` (chronological)
+- `create`, `update`, `delete`
+
+**Service: `TransactionService`**
+
+- CRUD for transactions
+- Publishes `TransactionUpdated` event after any mutation
+
+**Tauri commands (`api.rs`)**
+
+- Defined by the transaction use case (see `use_cases/`)
+
+---
+
 ### Account (`context/account/`)
 
 **Entity: `Account`**
@@ -144,21 +170,25 @@ context/{domain}/
 - `id`, `name`, `update_frequency: UpdateFrequency`
 - `UpdateFrequency` enum: `Automatic`, `ManualDay`, `ManualWeek`, `ManualMonth`, `ManualYear`
 - Factory methods: `new()` (generates ID + trims + validates), `with_id()` (uses provided ID + trims + validates), `restore()` (no validation, DB reconstruction)
-- Hard-delete: `DELETE FROM accounts WHERE id = ?`; holdings cascade via `ON DELETE CASCADE` on `asset_accounts.account_id`
+- Hard-delete: `DELETE FROM accounts WHERE id = ?`; holdings cascade via `ON DELETE CASCADE` on `holdings.account_id`
 
-**Entity: `AssetAccount`**
+**Entity: `Holding`** *(pending — replaces `AssetAccount`, see [ADR-002](docs/adr/002-replace-asset-account-with-holding.md))*
 
-- Junction entity linking an account to an asset (holdings)
+- Represents the current state of a financial position: an asset held within an account
+- `id`, `account_id`, `asset_id`, `quantity: i64` (micros), `average_price: i64` (micros)
+- Computed from `Transaction` records via VWAP (see spec: `docs/spec/financial-asset-transaction.md`)
+- Factory methods: `new()`, `with_id()`, `restore()`
+- Hard-delete: removed when no transactions remain for the `(account_id, asset_id)` pair
 
-**Repository traits: `AccountRepository`, `AssetAccountRepository`**
+**Repository traits: `AccountRepository`, `HoldingRepository`**
 
 - `get_all`, `get_by_id`, `find_by_name` (case-insensitive uniqueness check), `create`, `update`, `delete`
 
 **Service: `AccountService`**
 
-- CRUD for accounts and account holdings (asset–account links)
+- CRUD for accounts
 - `create`: validates uniqueness via `find_by_name` before insert (R3)
-- `update`: calls `update_from()` for trim+validation; validates uniqueness excluding own ID (R3)
+- `update`: calls `with_id()` for trim+validation; validates uniqueness excluding own ID (R3)
 - Publishes `AccountUpdated` events
 
 **Tauri commands (`api.rs`)**
@@ -167,9 +197,6 @@ context/{domain}/
 - `add_account(name, updateFrequency) -> Account`
 - `update_account(account) -> Account`
 - `delete_account(id)`
-- `get_account_holdings(accountId) -> Vec<AssetAccount>`
-- `upsert_account_holding(accountId, assetId, ...) -> AssetAccount`
-- `remove_account_holding(accountId, assetId)`
 
 ---
 
@@ -249,11 +276,10 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - UX: FAB triggers `AddAccountModal`; table rows show Edit/Delete `IconButton`s; inline errors on backend rejection; loading/error/retry states; empty vs no-search-results states distinct
 - Spec: `docs/account.md` (R1–R16; R17 deferred pending Holding feature; R6 deferred pending Transaction feature)
 
-#### Account Asset Details (`features/account_asset_details/`)
+#### Account Asset Details (`features/account_asset_details/`) — **placeholder, to be replaced**
 
-- Drill-down view: assets held within a specific account
-- Gateway: `get_account_holdings`, `upsert_account_holding`, `remove_account_holding`
-- Component: `AccountAssetDetailsView.tsx`
+- Scaffolding for the account holdings drill-down view; data-fetching is not yet implemented
+- Will be rebuilt on top of the `Holding` entity as part of the Transaction feature (see ADR-002)
 
 #### Update (`features/update/`)
 
