@@ -135,15 +135,23 @@ Page avec tableau pleine largeur, trié par défaut par Nom ascendant. FAB flott
 
 ---
 
-## Features futures
+### Navigation
 
-### Archivage des comptes
+**ACC-010 — Account details navigation (frontend)**: Clicking on an account table row (excluding action buttons) navigates the user to the Account Details view.
 
-Permettre d'archiver un compte (le rendre inactif) plutôt que de le supprimer définitivement, afin de conserver l'historique des transactions associées. Cette option serait cohérente avec le pattern d'archivage déjà en place pour les assets.
+---
 
-### Feedback de succès par snackbar
+## Future Improvements
 
-Afficher une notification snackbar après les opérations de mutation (création, modification, suppression), en remplacement du simple retour visuel « modal fermée ». Nécessite la mise en place préalable d'un composant snackbar dans le design system.
+### Migration to Standard Spec Format
+
+- **Full migration required**: This specification currently uses the legacy "Rxx" format in French. A full migration to the new standard (TRIGRAM-NNN format, English language, atomic rules) is required to ensure consistency across the documentation suite.
+- **Trigram**: Future updates should use the `ACC` trigram.
+
+### Feature expansion
+
+- **Archiving**: Implement account archiving (soft-delete) instead of permanent deletion to preserve transaction history.
+- **Success Feedback**: Implement snackbar notifications for all mutations.
 
 ---
 

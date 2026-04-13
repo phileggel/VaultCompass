@@ -48,11 +48,11 @@ All Tauri commands are registered here via `tauri_specta::collect_commands![]`. 
 
 Published on every state change. Frontend listens via a single `events.event.listen()` subscription in the global store.
 
-| Event                | Published by                                  |
-| -------------------- | --------------------------------------------- |
-| `AssetUpdated`       | `context/asset/`                              |
-| `CategoryUpdated`    | `context/asset/`                              |
-| `AccountUpdated`     | `context/account/`                            |
+| Event                | Published by                                                                 |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `AssetUpdated`       | `context/asset/`                                                             |
+| `CategoryUpdated`    | `context/asset/`                                                             |
+| `AccountUpdated`     | `context/account/`                                                           |
 | `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()` |
 
 ### Use Cases (`use_cases/`)

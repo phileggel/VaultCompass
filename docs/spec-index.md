@@ -1,5 +1,7 @@
 # Trigram Registry
 
-| Trigram | Spec Name                   | Description                                    | Status   |
-| ------- | --------------------------- | ---------------------------------------------- | -------- |
-| TRX     | Financial Asset Transaction | Recording asset purchases (sell part deferred) | planning |
+| Trigram | Spec Name                   | Description                                  | Status |
+| ------- | --------------------------- | -------------------------------------------- | ------ |
+| TRX     | Financial Asset Transaction | recording purchases and managing holdings    | active |
+| ACD     | Account Details             | Account holdings, performance and asset list | active |
+| ACC     | Account Management          | CRUD operations for financial accounts       | active |
