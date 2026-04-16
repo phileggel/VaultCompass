@@ -2,6 +2,7 @@
 name: spec-checker
 description: Verifies that all business rules (TRIGRAMME-NNN, e.g. REF-010, REF-020) in a feature spec doc are fully implemented in code and covered by tests. Use when implementation is complete and ready for spec compliance check.
 tools: Read, Grep, Glob, Bash
+model: claude-opus-4-6
 ---
 
 You are a spec compliance auditor for this Tauri 2 / React 19 / Rust project.
@@ -21,6 +22,7 @@ The user normally passes the spec path explicitly. If no document is specified, 
 1. Read the spec document: extract every rule identifier matching **TRIGRAMME-NNN** format (e.g. REF-010, REF-020, REF-030, PAY-011).
 2. Extract their scope (`frontend`, `backend`, or `frontend + backend`) and description.
 3. Read the following for project conventions (skip silently if absent):
+   - `ARCHITECTURE.md` — bounded contexts, module layout, naming conventions (required for the Context alignment check in the output).
    - `docs/adr/` — global technical constraints (storage types, soft-delete, event naming).
    - `docs/backend-rules.md` — factory methods, service layer, repository traits.
    - `docs/frontend-rules.md` — gateway, hook, component patterns.

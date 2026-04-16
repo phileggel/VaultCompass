@@ -36,25 +36,27 @@ While coding:
 5. **(Optional)** Stitch mockup — for significant new/redesigned UI (see 🎨 Stitch Workflow section).
 6. Implementation.
 7. `just format` — auto-fix formatting (Rust, TS, MD).
-8. `./scripts/check.sh` — all checks must pass.
+8. `python3 scripts/check.py` — all checks must pass.
 9. `reviewer` → show full report → fix criticals → re-run until 0 critical.
-10. `ux-reviewer` — if any `.tsx` modified → show full report → fix criticals → re-run until 0 critical.
-11. `script-reviewer` — if any `.sh`, `.py`, or `.githooks` modified.
-12. `maintainer` — if any CI/config file modified (`.github/workflows/`, `tauri.conf.json`, `Cargo.toml`, `package.json`, `justfile`).
-13. `i18n-checker` — if any UI text was added or changed.
-14. Tests — if non-trivial logic added (backend: `#[cfg(test)]` inline; frontend: `.test.ts` colocated).
-15. `dep-audit` — if preparing a release (CVEs are a release blocker).
-16. Update docs — `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; spec in `docs/` if new business rules; then run `spec-checker` if a spec exists.
-17. **CRITICAL: run `workflow-validator`** — blocks commit if any required step is incomplete.
-18. Ask user if a commit is needed → follow `/commit` skill.
+10. `reviewer-backend` — if any `.rs` modified → show full report → fix criticals → re-run until 0 critical.
+11. `reviewer-frontend` — if any `.ts` or `.tsx` modified → show full report → fix criticals → re-run until 0 critical.
+12. `reviewer-sql` — if any `migrations/` file modified → show full report → fix criticals → re-run until 0 critical.
+13. `script-reviewer` — if any `.sh`, `.py`, or `.githooks` modified.
+14. `maintainer` — if any CI/config file modified (`.github/workflows/`, `tauri.conf.json`, `Cargo.toml`, `package.json`, `justfile`).
+15. `i18n-checker` — if any UI text was added or changed.
+16. Tests — if non-trivial logic added (backend: `#[cfg(test)]` inline; frontend: `.test.ts` colocated).
+17. `dep-audit` — if preparing a release (CVEs are a release blocker).
+18. Update docs — `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; spec in `docs/` if new business rules; then run `spec-checker` if a spec exists.
+19. **CRITICAL: run `workflow-validator`** — blocks commit if any required step is incomplete.
+20. Ask user if a commit is needed → follow `/commit` skill.
 
 ### Task tracking (within a conversation)
 
 **MANDATORY** for every implementation task — use `TaskCreate` / `TaskUpdate`:
 
-- At step 4: create one task per applicable step (steps 7–16 and 18, plus all triggered conditional steps) before implementing anything — do NOT create a task for step 17 (workflow-validator runs outside the TaskList)
+- At step 4: create one task per applicable step (steps 7–18 and 20, plus all triggered conditional steps) before implementing anything — do NOT create a task for step 19 (workflow-validator runs outside the TaskList)
 - Mark each task `in_progress` when starting, `completed` when done
-- The `workflow-validator` (step 17) reads this TaskList — missing or incomplete tasks = blocked commit
+- The `workflow-validator` (step 19) reads this TaskList — missing or incomplete tasks = blocked commit
 
 ### Available Subagents (`.claude/agents/`)
 
@@ -65,17 +67,16 @@ While coding:
 
 **Post-implementation (review & quality)**
 
-- `reviewer` — DDD + backend/frontend rules compliance check (step 8)
-- `ux-reviewer` — M3 + Clinical Atelier compliance, empty/loading/error states, form UX, accessibility, consistency (step 9, if .tsx modified)
-- `script-reviewer` — Bash and Python expert reviewer; checks safety, robustness, portability (step 10, if .sh/.py/.githooks modified)
-- `maintainer` — reviews CI/config files (`workflows/`, `tauri.conf.json`, `Cargo.toml`, `package.json`, `justfile`) for correctness, security, reliability (step 11, if config modified)
-- `i18n-checker` — finds hardcoded strings, missing/dead translation keys fr + en (step 12, if UI text changed)
-- `spec-checker` — verifies all Rn rules in a feature spec are implemented and tested (step 15, if spec exists)
-- `workflow-validator` — **mandatory at step 16**: reads TaskList + git diff, reports ✅/❌ for each workflow step, blocks commit if incomplete
+- `reviewer` — DDD architecture compliance: bounded context isolation, gateway pattern, factory methods, data flow direction, dead code, English-only (step 9)
+- `reviewer-backend` — Rust quality: anyhow error handling, no `unwrap()` in production, Clippy, trait-based repositories, async correctness, inline tests (step 10, if `.rs` modified)
+- `reviewer-frontend` — React/TS quality + UX/M3: gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, M3 design tokens, UX completeness (empty/loading/error states), accessibility (step 11, if `.ts`/`.tsx` modified)
+- `reviewer-sql` — SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, SQLite type affinity, primary key convention, NOT NULL (step 12, if `migrations/` modified)
+- `script-reviewer` — Bash and Python expert reviewer; checks safety, robustness, portability (step 13, if .sh/.py/.githooks modified)
+- `maintainer` — reviews CI/config files (`workflows/`, `tauri.conf.json`, `Cargo.toml`, `package.json`, `justfile`) for correctness, security, reliability (step 14, if config modified)
+- `i18n-checker` — finds hardcoded strings, missing/dead translation keys fr + en (step 15, if UI text changed)
+- `spec-checker` — verifies all Rn rules in a feature spec are implemented and tested (step 18, if spec exists)
+- `workflow-validator` — **mandatory at step 19**: reads TaskList + git diff, reports ✅/❌ for each workflow step, blocks commit if incomplete
 
-**Meta**
-
-- `ia-reviewer` — meta-reviewer for AI configuration: audits all agent definitions, skills, and CLAUDE.md for correctness, clarity, completeness, and internal consistency
 
 ### Subagent workflow map
 
@@ -90,22 +91,24 @@ While coding:
           ↓
 7.    just format
           ↓
-8.    check.sh
+8.    check.py
           ↓
 9.    reviewer
-10.   ux-reviewer        — if any .tsx modified
-11.   script-reviewer    — if any .sh/.py/.githooks modified
-12.   maintainer         — if any CI/config file modified
-13.   i18n-checker       — if UI text changed
+10.   reviewer-backend   — if any .rs modified
+11.   reviewer-frontend  — if any .ts/.tsx modified
+12.   reviewer-sql       — if any migrations/ file modified
+13.   script-reviewer    — if any .sh/.py/.githooks modified
+14.   maintainer         — if any CI/config file modified
+15.   i18n-checker       — if UI text changed
           ↓
-14.   Tests              — if non-trivial logic
-15.   dep-audit          — if release
+16.   Tests              — if non-trivial logic
+17.   dep-audit          — if release
           ↓
-16.   Update docs (ARCHITECTURE.md + todo.md + spec-checker)
+18.   Update docs (ARCHITECTURE.md + todo.md + spec-checker)
           ↓
-17.   workflow-validator  ← MANDATORY, blocks commit
+19.   workflow-validator  ← MANDATORY, blocks commit
           ↓
-18.   /commit (skill)
+20.   /commit (skill)
 ```
 
 ### Available Skills (`.claude/skills/`)
@@ -158,11 +161,11 @@ After downloading, Claude identifies UX elements added/changed by the user in St
 
 - Created at step 3b-3
 - Used during implementation (step 5) as visual reference
-- **Delete when `ux-reviewer` passes** on the implemented component — the reference is done
+- **Delete when `reviewer-frontend` passes** on the implemented component — the reference is done
 
 ### Design system alignment
 
-When Stitch introduces new design patterns (new tokens, shadows, component styles), create a **dedicated todo** for design system alignment — never block feature implementation on it. After alignment, update the `ux-reviewer` agent rules to enforce the new patterns. Stitch project design system and our `tailwind.css` stay naturally in sync once T20 is done.
+When Stitch introduces new design patterns (new tokens, shadows, component styles), create a **dedicated todo** for design system alignment — never block feature implementation on it. After alignment, update the `reviewer-frontend` agent rules to enforce the new patterns. Stitch project design system and our `tailwind.css` stay naturally in sync once T20 is done.
 
 ### Design system reference
 
@@ -173,7 +176,7 @@ When Stitch introduces new design patterns (new tokens, shadows, component style
 ## 🛠 Commands
 
 - Dev: `./scripts/start-app.sh`
-- Quality: `./scripts/check.sh` (Full check)
+- Quality: `python3 scripts/check.py` (Full check)
 - Tests: `npm run test` (Frontend) | `cd src-tauri && cargo test` (Backend)
 - Types: `just generate-types` (Sync Rust to TS via Specta)
 - Database schema update: `just clean-db`
