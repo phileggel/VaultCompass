@@ -7,7 +7,7 @@ use specta::Type;
 
 use tauri::State;
 
-use super::domain::{Asset, AssetCategory, AssetClass, AssetPrice};
+use super::domain::{Asset, AssetCategory, AssetClass};
 
 // --- DTOs ---
 
@@ -45,17 +45,6 @@ pub struct UpdateAssetDTO {
     pub risk_level: u8,
     /// New category link.
     pub category_id: String,
-}
-
-/// Parameters for creating a new asset price.
-#[derive(Debug, Serialize, Deserialize, Type)]
-pub struct CreatePriceDTO {
-    /// ID of the linked asset.
-    pub asset_id: String,
-    /// Valuation at the specific date.
-    pub price: f64,
-    /// ISO 8601 formatted date (YYYY-MM-DD).
-    pub date: String,
 }
 
 // --- Assets ---
@@ -136,22 +125,6 @@ pub async fn delete_asset(state: State<'_, AppState>, id: String) -> Result<(), 
     state
         .asset_service
         .delete_asset(&id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-// --- Prices ---
-
-/// Creates a new price for an asset.
-#[tauri::command]
-#[specta::specta]
-pub async fn create_asset_price(
-    state: State<'_, AppState>,
-    dto: CreatePriceDTO,
-) -> Result<AssetPrice, String> {
-    state
-        .asset_service
-        .create_price(dto)
         .await
         .map_err(|e| e.to_string())
 }

@@ -1,19 +1,17 @@
 use super::domain::{
-    Asset, AssetCategory, AssetCategoryRepository, AssetPrice, AssetRepository, PriceRepository,
-    SYSTEM_CATEGORY_ID,
+    Asset, AssetCategory, AssetCategoryRepository, AssetRepository, SYSTEM_CATEGORY_ID,
 };
 use crate::{
-    context::asset::{CreateAssetDTO, CreatePriceDTO, UpdateAssetDTO},
+    context::asset::{CreateAssetDTO, UpdateAssetDTO},
     core::{Event, SideEffectEventBus},
 };
 use anyhow::Result;
 use std::sync::Arc;
 
-/// Orchestrates business logic for assets, categories, and prices.
+/// Orchestrates business logic for assets and categories.
 pub struct AssetService {
     asset_repo: Box<dyn AssetRepository>,
     category_repo: Box<dyn AssetCategoryRepository>,
-    price_repo: Arc<dyn PriceRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
 }
 
@@ -22,12 +20,10 @@ impl AssetService {
     pub fn new(
         asset_repo: Box<dyn AssetRepository>,
         category_repo: Box<dyn AssetCategoryRepository>,
-        price_repo: Arc<dyn PriceRepository>,
     ) -> Self {
         Self {
             asset_repo,
             category_repo,
-            price_repo,
             event_bus: None,
         }
     }
@@ -205,31 +201,6 @@ impl AssetService {
         }
         Ok(())
     }
-
-    // --- Price Methods ---
-
-    /// Retrieves all price history for an asset.
-    pub async fn get_all_prices_by_asset(&self, asset_id: &str) -> Result<Vec<AssetPrice>> {
-        self.price_repo.get_by_asset(asset_id).await
-    }
-
-    /// Retrieves price history within a specific range.
-    pub async fn get_prices_by_asset_and_date_range(
-        &self,
-        asset_id: &str,
-        start_date: &str,
-        end_date: &str,
-    ) -> Result<Vec<AssetPrice>> {
-        self.price_repo
-            .get_by_asset_and_date_range(asset_id, start_date, end_date)
-            .await
-    }
-
-    /// Creates a new price snapshot.
-    pub async fn create_price(&self, dto: CreatePriceDTO) -> Result<AssetPrice> {
-        let price = AssetPrice::new(dto.asset_id, dto.price, dto.date)?;
-        self.price_repo.create(price).await
-    }
 }
 
 #[cfg(test)]
@@ -237,7 +208,6 @@ mod tests {
     use super::*;
     use crate::context::asset::{
         AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetRepository,
-        SqlitePriceRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -253,8 +223,7 @@ mod tests {
             .expect("migrations");
         AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Arc::new(SqlitePriceRepository::new(pool)),
+            Box::new(SqliteAssetCategoryRepository::new(pool)),
         )
     }
 

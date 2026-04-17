@@ -10,7 +10,6 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<update_checker::UpdateInfo>()
         .typ::<asset::Asset>()
         .typ::<asset::AssetCategory>()
-        .typ::<asset::AssetPrice>()
         .typ::<asset::AssetClass>()
         .typ::<account::Account>()
         .typ::<account::UpdateFrequency>()
@@ -30,7 +29,6 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset::add_category,
             asset::update_category,
             asset::delete_category,
-            asset::create_asset_price,
             account::get_accounts,
             account::add_account,
             account::update_account,

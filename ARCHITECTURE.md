@@ -118,11 +118,7 @@ context/{domain}/
 - `SYSTEM_CATEGORY_ID = "default-uncategorized"` — fixed ID of the system fallback category
 - Factory methods: `new()`, `update_from()`, `from_storage()`
 
-**Entity: `AssetPrice`**
-
-- Price/valuation data for an asset at a point in time
-
-**Repository traits: `AssetRepository`, `AssetCategoryRepository`, `PriceRepository`**
+**Repository traits: `AssetRepository`, `AssetCategoryRepository`**
 
 - `get_all` (active only), `get_all_including_archived`, `get_by_id`, `create`, `update`, `delete`
 - `archive(id)`, `unarchive(id)` — toggle `is_archived` flag
@@ -130,7 +126,7 @@ context/{domain}/
 
 **Service: `AssetService`**
 
-- CRUD for assets, categories, and prices
+- CRUD for assets and categories
 - `update_asset` rejects archived assets with `error.asset.archived_readonly`
 - Publishes `AssetUpdated` and `CategoryUpdated` events
 
@@ -146,7 +142,6 @@ context/{domain}/
 - `add_category(label) -> AssetCategory`
 - `update_category(id, label) -> AssetCategory`
 - `delete_category(id)`
-- `create_asset_price(...) -> AssetPrice`
 
 ---
 

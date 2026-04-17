@@ -130,17 +130,6 @@ async deleteCategory(id: string) : Promise<Result<null, string>> {
 }
 },
 /**
- * Creates a new price for an asset.
- */
-async createAssetPrice(dto: CreatePriceDTO) : Promise<Result<AssetPrice, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("create_asset_price", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Retrieves all accounts.
  */
 async getAccounts() : Promise<Result<Account[], string>> {
@@ -395,26 +384,6 @@ export type AssetClass =
  */
 "DigitalAsset"
 /**
- * A historical price point for an asset.
- */
-export type AssetPrice = { 
-/**
- * Unique identifier for the price record.
- */
-id: string; 
-/**
- * ID of the linked asset.
- */
-asset_id: string; 
-/**
- * Valuation at the specific date.
- */
-price: number; 
-/**
- * ISO 8601 formatted date (YYYY-MM-DD).
- */
-date: string }
-/**
  * Parameters for creating a new account.
  */
 export type CreateAccountDTO = { 
@@ -454,22 +423,6 @@ risk_level: number;
  * ID of the primary category.
  */
 category_id: string }
-/**
- * Parameters for creating a new asset price.
- */
-export type CreatePriceDTO = { 
-/**
- * ID of the linked asset.
- */
-asset_id: string; 
-/**
- * Valuation at the specific date.
- */
-price: number; 
-/**
- * ISO 8601 formatted date (YYYY-MM-DD).
- */
-date: string }
 /**
  * DTO for creating or updating a transaction.
  * `total_amount` is intentionally absent — the backend computes it from the other

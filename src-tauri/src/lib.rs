@@ -12,9 +12,7 @@
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
 use crate::context::account::{AccountService, SqliteAccountRepository, SqliteHoldingRepository};
-use crate::context::asset::{
-    AssetService, SqliteAssetCategoryRepository, SqliteAssetRepository, SqlitePriceRepository,
-};
+use crate::context::asset::{AssetService, SqliteAssetCategoryRepository, SqliteAssetRepository};
 use crate::context::transaction::{SqliteTransactionRepository, TransactionService};
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
@@ -113,10 +111,9 @@ pub fn run() {
 
                 let asset_repo = SqliteAssetRepository::new(db.pool.clone());
                 let category_repo = SqliteAssetCategoryRepository::new(db.pool.clone());
-                let price_repo = Arc::new(SqlitePriceRepository::new(db.pool.clone()));
 
                 let asset_service =
-                    AssetService::new(Box::new(asset_repo), Box::new(category_repo), price_repo)
+                    AssetService::new(Box::new(asset_repo), Box::new(category_repo))
                         .with_event_bus(event_bus.clone());
 
                 let account_repo = SqliteAccountRepository::new(db.pool.clone());
