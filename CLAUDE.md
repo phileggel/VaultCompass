@@ -77,7 +77,6 @@ While coding:
 - `spec-checker` — verifies all Rn rules in a feature spec are implemented and tested (step 18, if spec exists)
 - `workflow-validator` — **mandatory at step 19**: reads TaskList + git diff, reports ✅/❌ for each workflow step, blocks commit if incomplete
 
-
 ### Subagent workflow map
 
 ```
