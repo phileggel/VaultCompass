@@ -78,7 +78,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 ### Update and Deletion
 
-**TRX-030 — VWAP Calculation (backend)**: Average purchase price for a `Holding` is calculated using the Volume Weighted Average Price (VWAP) method: `Sum(quantity × unit_price × exchange_rate) / Total Quantity`. Only purchase transactions are included in this calculation. This rule applies on creation (TRX-025) and on recalculation triggered by modification or deletion.
+**TRX-030 — VWAP Calculation (backend)**: Average purchase price for a `Holding` is calculated using the Volume Weighted Average Price (VWAP) method: `average_price = Sum(total_amount_i) / Total Quantity`, where `total_amount_i` is computed per TRX-026 (fees included). This ensures the displayed transaction cost and the cost basis use the same value. Only purchase transactions are included. This rule applies on creation (TRX-025) and on recalculation triggered by modification or deletion.
 
 **TRX-031 — Transaction modification (backend)**: Modifying a transaction triggers a full recalculation of the `Holding` cost basis and quantity for the `(account_id, asset_id)` pair, processing all associated transactions in chronological order (TRX-036).
 

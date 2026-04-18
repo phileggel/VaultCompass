@@ -427,11 +427,10 @@ impl RecordTransactionUseCase {
         for t in transactions {
             if t.transaction_type == TransactionType::Purchase {
                 let qty = t.quantity as i128;
-                let price = t.unit_price as i128;
-                let rate = t.exchange_rate as i128;
                 total_quantity += qty;
-                // Multiply all three before dividing to minimise intermediate rounding loss.
-                vwap_numerator += qty * price * rate / MICRO / MICRO;
+                // Use stored total_amount (TRX-026) so VWAP and displayed cost share the same value (TRX-030).
+                // total_amount is MICRO; scale to MICRO² so dividing by total_quantity (MICRO) yields MICRO.
+                vwap_numerator += t.total_amount as i128 * MICRO;
             }
         }
 
