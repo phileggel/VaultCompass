@@ -30,6 +30,11 @@ impl TransactionService {
         self.repo.get_by_id(id).await
     }
 
+    /// Returns distinct asset IDs that have transactions for the given account (TXL-013).
+    pub async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>> {
+        self.repo.get_asset_ids_for_account(account_id).await
+    }
+
     /// Retrieves all transactions for an account/asset pair in chronological order (TRX-036).
     pub async fn get_by_account_asset(
         &self,

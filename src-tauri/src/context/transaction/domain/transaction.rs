@@ -179,6 +179,7 @@ impl Transaction {
         if parsed_date > today {
             anyhow::bail!("Transaction date cannot be in the future");
         }
+        // Safety: literal date components are compile-time constants and always valid.
         let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).expect("1900-01-01 is a valid date");
         if parsed_date < min_date {
             anyhow::bail!("Transaction date cannot be before 1900-01-01");
@@ -219,6 +220,8 @@ pub trait TransactionRepository: Send + Sync {
         account_id: &str,
         asset_id: &str,
     ) -> Result<Vec<Transaction>>;
+    /// Returns distinct asset IDs that have transactions for the given account (TXL-013).
+    async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>>;
     /// Persists a new transaction.
     async fn create(&self, tx: Transaction) -> Result<Transaction>;
     /// Updates an existing transaction.

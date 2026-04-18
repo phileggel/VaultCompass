@@ -43,6 +43,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             record_transaction::update_transaction,
             record_transaction::delete_transaction,
             record_transaction::get_transactions,
+            transaction::get_asset_ids_for_account,
             account_details::get_account_details
         ])
         .events(tauri_specta::collect_events![Event])

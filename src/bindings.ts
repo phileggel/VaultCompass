@@ -271,6 +271,17 @@ async getTransactions(accountId: string, assetId: string) : Promise<Result<Trans
 }
 },
 /**
+ * Returns the distinct asset IDs that have transactions for the given account (TXL-013).
+ */
+async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_asset_ids_for_account", { accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
  */
 async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, string>> {

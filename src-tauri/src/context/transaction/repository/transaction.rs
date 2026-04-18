@@ -149,6 +149,18 @@ impl TransactionRepository for SqliteTransactionRepository {
         Ok(tx)
     }
 
+    async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>> {
+        let rows: Vec<String> = sqlx::query_scalar!(
+            r#"SELECT DISTINCT asset_id as "asset_id: String" FROM transactions WHERE account_id = ? ORDER BY asset_id"#,
+            account_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| format!("Failed to fetch asset IDs for account {}", account_id))?;
+
+        Ok(rows)
+    }
+
     async fn delete(&self, id: &str) -> Result<()> {
         sqlx::query!(r#"DELETE FROM transactions WHERE id = ?"#, id)
             .execute(&self.pool)
