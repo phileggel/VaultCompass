@@ -1,21 +1,23 @@
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { ThemeToggle } from "./theme_toggle/ThemeToggle";
 import { NAV_ITEMS } from "./useSidebar";
 
-function resolveTitle(pathname: string): string {
+function usePageTitle(pathname: string): string {
+  const { t } = useTranslation("common");
   const exact = NAV_ITEMS.find((item) => item.path === pathname);
-  if (exact) return exact.label;
+  if (exact) return t(exact.labelKey);
   const parent = NAV_ITEMS.find(
     (item) => item.path !== "/" && pathname.startsWith(`${item.path}/`),
   );
-  return parent?.label ?? "";
+  return parent ? t(parent.labelKey) : "";
 }
 
 export function Header() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const title = resolveTitle(pathname);
+  const title = usePageTitle(pathname);
 
   useEffect(() => {
     logger.info("[Header] mounted");

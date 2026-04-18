@@ -5,7 +5,6 @@ import {
   createRouter,
   redirect,
 } from "@tanstack/react-router";
-import { AboutPage } from "@/features/about";
 import { AccountDetailsView } from "@/features/account_details";
 import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
@@ -47,12 +46,6 @@ const categoriesRoute = createRoute({
   component: CategoryManager,
 });
 
-const aboutRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/about",
-  component: AboutPage,
-});
-
 const designSystemRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/design-system",
@@ -65,7 +58,6 @@ const routeTree = rootRoute.addChildren([
   accountsRoute,
   accountDetailsRoute,
   categoriesRoute,
-  aboutRoute,
   designSystemRoute,
 ]);
 

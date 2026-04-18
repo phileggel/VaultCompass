@@ -95,3 +95,15 @@ feature/
 ## Backend/Frontend common ground
 
 **F21** — MUST never redeclare Specta enum values in the frontend.
+
+
+## Navigation
+
+**F22** — Inter-feature navigation MUST go through the router
+
+Features are bounded contexts: a feature MUST NOT import components, hooks, or utilities directly from another
+feature. Cross-feature navigation is handled exclusively via useNavigate / route paths.
+
+The only authorised cross-feature imports are:
+- router.tsx — registers page-level components (single wiring point)
+- Shell features (shell/) — may import modal components they own and host

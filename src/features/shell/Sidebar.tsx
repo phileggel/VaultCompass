@@ -1,5 +1,8 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Menu, TrendingUp, X } from "lucide-react";
+import { Info, Menu, TrendingUp, X } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { AboutModal } from "@/features/about";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components";
 import { NAV_ITEMS } from "./useSidebar";
@@ -10,9 +13,11 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
+  const { t } = useTranslation("common");
   const appVersion = useAppStore((state) => state.appVersion);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   return (
     <aside
@@ -37,8 +42,10 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
             <div className="w-8 h-8 bg-m3-primary rounded-lg flex items-center justify-center text-m3-on-primary">
               <TrendingUp size={20} />
             </div>
-            {/* "Vault M3" is the fixed product brand name — intentionally not i18n'd */}
-            <span className="text-lg font-bold text-m3-on-surface tracking-tight">Vault M3</span>
+            {/* "VaultCompass" is the fixed product brand name — intentionally not i18n'd */}
+            <span className="text-lg font-bold text-m3-on-surface tracking-tight">
+              VaultCompass
+            </span>
           </div>
         )}
       </div>
@@ -46,12 +53,13 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
       <nav className="flex-1 px-3 mt-2 space-y-1">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+          const label = t(item.labelKey);
           return (
             <button
               type="button"
               key={item.path}
               onClick={() => navigate({ to: item.path })}
-              aria-label={item.label}
+              aria-label={label}
               className={`
                 w-full m3-navigation-item
                 ${isActive ? "m3-navigation-item-active" : ""}
@@ -59,10 +67,20 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
               `}
             >
               <item.icon size={24} />
-              {isOpen && <span>{item.label}</span>}
+              {isOpen && <span>{label}</span>}
             </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setAboutOpen(true)}
+          aria-label={t("nav.about")}
+          className={`w-full m3-navigation-item ${!isOpen && "justify-center px-0"}`}
+        >
+          <Info size={24} />
+          {isOpen && <span>{t("nav.about")}</span>}
+        </button>
       </nav>
 
       <div className="px-3 py-4 flex flex-col items-center justify-center min-h-12">
@@ -75,6 +93,8 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
           {isOpen ? `Version: ${appVersion}` : `v${appVersion}`}
         </span>
       </div>
+
+      <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
     </aside>
   );
 }

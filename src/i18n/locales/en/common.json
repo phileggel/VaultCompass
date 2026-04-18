@@ -113,11 +113,13 @@
   },
   "about": {
     "title": "About",
+    "description": "VaultCompass is a personal portfolio manager designed to track your financial assets across multiple accounts. It lets you record purchases, monitor your positions, and follow your cost basis over time. All data is stored locally on your device.",
     "version_label": "Version",
     "check_updates": "Check for updates",
     "checking": "Checking…",
     "up_to_date": "The application is up to date.",
-    "check_failed": "Check failed. Please try again."
+    "check_failed": "Check failed. Please try again.",
+    "license": "MIT License — © 2026 Philippe Eggel"
   },
   "field": {
     "datePlaceholder": "MM/DD/YYYY",
@@ -125,6 +127,12 @@
     "amountAriaLabel": "Amount",
     "previousMonth": "Previous month",
     "nextMonth": "Next month"
+  },
+  "nav": {
+    "accounts": "Accounts",
+    "assets": "Assets",
+    "categories": "Categories",
+    "about": "About"
   },
   "app": {
     "migration_error": "A database migration error occurred. Please contact support.",
