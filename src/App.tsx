@@ -1,18 +1,13 @@
+import { RouterProvider } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AboutPage } from "@/features/about";
-import { AccountManager } from "@/features/accounts";
-import { AssetManager } from "@/features/assets";
-import { CategoryManager } from "@/features/categories";
-import { DesignSystemPage } from "@/features/design-system";
 import { shellGateway } from "@/features/shell/gateway";
-import { MainLayout } from "@/features/shell/MainLayout";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
+import { router } from "./router";
 
 function App() {
-  const [activeItem, setActiveItem] = useState("Assets");
   const [dbError, setDbError] = useState<string | null>(null);
   const init = useAppStore((state) => state.init);
   const isInitialized = useAppStore((state) => state.isInitialized);
@@ -57,22 +52,7 @@ function App() {
     );
   }
 
-  return (
-    <MainLayout activeItem={activeItem} onNavItemClick={setActiveItem}>
-      <div className="h-full py-2 px-2 overflow-auto">
-        {activeItem === "Assets" && <AssetManager />}
-
-        {activeItem === "Accounts" && <AccountManager />}
-
-        {activeItem === "Categories" && <CategoryManager />}
-
-        {/* R25 — About page with manual update check */}
-        {activeItem === "About" && <AboutPage />}
-
-        {import.meta.env.DEV && activeItem === "Design System" && <DesignSystemPage />}
-      </div>
-    </MainLayout>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;

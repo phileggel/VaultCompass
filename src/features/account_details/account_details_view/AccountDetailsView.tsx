@@ -1,3 +1,4 @@
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,13 +7,10 @@ import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { useAccountDetails } from "./useAccountDetails";
 
-interface AccountDetailsViewProps {
-  accountId: string;
-  onBack: () => void;
-}
-
-export function AccountDetailsView({ accountId, onBack }: AccountDetailsViewProps) {
+export function AccountDetailsView() {
   const { t } = useTranslation();
+  const { accountId } = useParams({ from: "/accounts/$accountId" });
+  const navigate = useNavigate();
   const { isLoading, error, retry, holdings, summary } = useAccountDetails(accountId);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -26,7 +24,7 @@ export function AccountDetailsView({ accountId, onBack }: AccountDetailsViewProp
       <div className="flex items-center gap-3 px-2">
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => navigate({ to: "/accounts" })}
           className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
           aria-label={t("account_details.back")}
         >

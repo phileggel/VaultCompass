@@ -102,9 +102,17 @@ Créer la commande `get_holdings(account_id) -> Vec<Holding>` dans `use_cases/re
 Les labels de `NAV_ITEMS` ("Assets", "Accounts", etc.), le nom de l'app ("Vault M3"), et les tooltips du menu hamburger ("Collapse menu" / "Expand menu") sont des chaînes anglaises codées en dur dans `Sidebar.tsx`.
 À traiter dans le sprint i18n général — nécessite de séparer les clés de routage (`navKey`) des labels traduits pour éviter de casser la navigation.
 
-## (frontend) - ACD-011 -- Spec violation (routing)
+## From the two reviewers, the i18n findings (all pre-existing, not introduced by this migration):
 
-The spec explicitly requires the route /accounts/:id for "direct
-linking and browser Back navigation." The implementation uses useState in AccountManager.tsx:17 instead of
-URL-based routing. Browser Back button and direct linking do not work. This is a functional gap, not just a
-missing test.
+  src/features/shell/useSidebar.ts — label values "Assets", "Accounts", "Categories", "About", "Design System" are
+  hardcoded English strings rendered in three places: sidebar nav text, aria-label on nav buttons, and the <h1> page
+  title via Header.tsx. They should be i18n keys resolved with t().
+
+  src/features/shell/Header.tsx — resolveTitle() returns raw item.label strings, so the page title is hardcoded English.
+   Fix is coupled to the useSidebar.ts fix above.
+
+  src/features/shell/Sidebar.tsx — "Version: " prefix (expanded sidebar) is a hardcoded English string, e.g. should be
+  t("shell.sidebar_version", { version: appVersion }).
+
+  These were present before this task — the migration just exposed them because the files were touched. Want me to fix
+  them as a follow-up?

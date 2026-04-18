@@ -1,3 +1,4 @@
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Menu, TrendingUp, X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components";
@@ -6,13 +7,12 @@ import { NAV_ITEMS } from "./useSidebar";
 interface SidebarProps {
   isOpen: boolean;
   toggleDrawer: () => void;
-  activeItem: string;
-  onNavItemClick: (label: string) => void;
-  onSettingsClick?: () => void;
 }
 
-export function Sidebar({ isOpen, toggleDrawer, activeItem, onNavItemClick }: SidebarProps) {
+export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
   const appVersion = useAppStore((state) => state.appVersion);
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <aside
@@ -44,22 +44,25 @@ export function Sidebar({ isOpen, toggleDrawer, activeItem, onNavItemClick }: Si
       </div>
 
       <nav className="flex-1 px-3 mt-2 space-y-1">
-        {NAV_ITEMS.map((item) => (
-          <button
-            type="button"
-            key={item.label}
-            onClick={() => onNavItemClick(item.label)}
-            aria-label={item.label}
-            className={`
-              w-full m3-navigation-item
-              ${activeItem === item.label ? "m3-navigation-item-active" : ""}
-              ${!isOpen && "justify-center px-0"}
-            `}
-          >
-            <item.icon size={24} />
-            {isOpen && <span>{item.label}</span>}
-          </button>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+          return (
+            <button
+              type="button"
+              key={item.path}
+              onClick={() => navigate({ to: item.path })}
+              aria-label={item.label}
+              className={`
+                w-full m3-navigation-item
+                ${isActive ? "m3-navigation-item-active" : ""}
+                ${!isOpen && "justify-center px-0"}
+              `}
+            >
+              <item.icon size={24} />
+              {isOpen && <span>{item.label}</span>}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="px-3 py-4 flex flex-col items-center justify-center min-h-12">

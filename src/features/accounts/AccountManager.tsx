@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AccountDetailsView } from "@/features/account_details";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { FAB } from "@/ui/components/fab/FAB";
@@ -13,19 +13,15 @@ export function AccountManager() {
   const accountCount = useAppStore((state) => state.accounts.length);
   const [query, setQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  // ACD-011 — selected account drives navigation to the details view
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const handleAccountClick = useCallback(
+    (id: string) => navigate({ to: "/accounts/$accountId", params: { accountId: id } }),
+    [navigate],
+  );
 
   useEffect(() => {
     logger.info("[AccountManager] mounted");
   }, []);
-
-  // ACD-011 — render details view when an account is selected
-  if (selectedAccountId) {
-    return (
-      <AccountDetailsView accountId={selectedAccountId} onBack={() => setSelectedAccountId(null)} />
-    );
-  }
 
   return (
     <>
@@ -36,7 +32,7 @@ export function AccountManager() {
         searchTerm={query}
         onSearchChange={setQuery}
         searchPlaceholder={t("account.search_placeholder")}
-        table={<AccountTable searchTerm={query} onAccountClick={setSelectedAccountId} />}
+        table={<AccountTable searchTerm={query} onAccountClick={handleAccountClick} />}
       />
       {/* R14 — FAB opens add modal */}
       <FAB onClick={() => setIsAddModalOpen(true)} label={t("account.fab_label")} />
