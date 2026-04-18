@@ -109,13 +109,13 @@ export function ComboboxField<T extends object>({
           {showDropdown && (
             <ComboboxOptions
               anchor={{ to: "bottom start", gap: "4px" }}
-              className="z-50 w-[var(--input-width)] bg-m3-surface border border-m3-outline/20 shadow-elevation-3 rounded-lg py-1 overflow-auto max-h-48"
+              className="z-50 w-(--input-width) bg-m3-surface border border-m3-outline/20 shadow-elevation-3 rounded-lg py-1 overflow-auto max-h-48"
             >
               {filteredItems.slice(0, 6).map((item) => (
                 <ComboboxOption
                   key={String(item[idKey])}
                   value={item}
-                  className="px-4 py-2 text-sm text-m3-on-surface cursor-pointer data-[focus]:bg-m3-primary/10 data-[focus]:text-m3-primary"
+                  className="px-4 py-2 text-sm text-m3-on-surface cursor-pointer data-focus:bg-m3-primary/10 data-focus:text-m3-primary"
                 >
                   {String(item[displayKey])}
                 </ComboboxOption>
@@ -124,7 +124,7 @@ export function ComboboxField<T extends object>({
               {onCreateNew && (
                 <ComboboxOption
                   value={CREATE_MARKER}
-                  className="px-4 py-2 text-sm font-medium text-m3-primary cursor-pointer border-t border-m3-outline/10 data-[focus]:bg-m3-primary/10"
+                  className="px-4 py-2 text-sm font-medium text-m3-primary cursor-pointer border-t border-m3-outline/10 data-focus:bg-m3-primary/10"
                 >
                   {createLabel}
                 </ComboboxOption>
