@@ -100,6 +100,8 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 **ACD-041 — Precision handling (backend)**: All financial values in `HoldingDetail` and `AccountDetailsResponse` are serialised as `i64` micro-unit values per ADR-001. The frontend presenter is responsible for converting them to display-ready strings.
 
+**ACD-042 — Holding row inspect action (frontend)**: Each holding row in the Account Details view exposes an inspect action (e.g. a magnifier icon). Clicking it navigates to the Transaction List view for that holding (`/accounts/:accountId/transactions/:assetId`), per TXL-010. Navigation goes through the router; the Account Details view does not import from the `transactions` feature.
+
 ---
 
 ## Workflow
