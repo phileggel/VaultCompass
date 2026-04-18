@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
 import { computeTotalMicro, decimalToMicro, microToDecimal } from "../shared/microUnits";
 import type { TransactionFormData } from "../shared/types";
@@ -33,6 +34,7 @@ export function useAddTransaction({
   onSubmitSuccess,
 }: UseAddTransactionProps = {}) {
   const { t } = useTranslation();
+  const showSnackbar = useSnackbar();
   const { addTransaction } = useTransactions();
   const assets = useAppStore((state) => state.assets);
 
@@ -102,13 +104,23 @@ export function useAddTransaction({
       return;
     }
 
+    showSnackbar(t("transaction.success_created"), "success");
     setFormData({
       ...defaultForm(),
       assetId: prefillAssetId ?? "",
       accountId: prefillAccountId ?? "",
     });
     onSubmitSuccess?.();
-  }, [formData, microValues, addTransaction, t, prefillAssetId, prefillAccountId, onSubmitSuccess]);
+  }, [
+    formData,
+    microValues,
+    addTransaction,
+    t,
+    prefillAssetId,
+    prefillAccountId,
+    onSubmitSuccess,
+    showSnackbar,
+  ]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {

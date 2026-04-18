@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
+import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
 import { computeTotalMicro, decimalToMicro, microToDecimal } from "../shared/microUnits";
 import type { TransactionFormData } from "../shared/types";
@@ -21,6 +22,7 @@ export function useEditTransactionModal({
   onSubmitSuccess,
 }: UseEditTransactionModalProps) {
   const { t } = useTranslation();
+  const showSnackbar = useSnackbar();
   const { updateTransaction } = useTransactions();
   const assets = useAppStore((state) => state.assets);
 
@@ -96,8 +98,9 @@ export function useEditTransactionModal({
       return;
     }
 
+    showSnackbar(t("transaction.success_updated"), "success");
     onSubmitSuccess?.();
-  }, [formData, microValues, updateTransaction, transaction.id, t, onSubmitSuccess]);
+  }, [formData, microValues, updateTransaction, transaction.id, t, onSubmitSuccess, showSnackbar]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {

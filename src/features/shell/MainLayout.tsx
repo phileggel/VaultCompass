@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UpdateBanner, useUpdateBanner } from "@/features/update";
 import { logger } from "@/lib/logger";
+import { Snackbar } from "@/ui/components";
 import { Content } from "./Content";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
@@ -39,6 +40,8 @@ export function MainLayout({ children }: MainLayoutProps) {
 
         <Content>{children}</Content>
       </div>
+
+      <Snackbar />
     </div>
   );
 }

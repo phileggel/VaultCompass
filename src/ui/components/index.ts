@@ -27,3 +27,5 @@ export {
   TabModal,
 } from "./modal";
 export { SortIcon } from "./SortIcon";
+// Snackbar
+export { Snackbar } from "./snackbar";

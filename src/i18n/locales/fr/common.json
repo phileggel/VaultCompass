@@ -56,7 +56,12 @@
     "action_archive": "Archiver",
     "action_unarchive": "Désarchiver",
     "action_edit": "Modifier",
-    "error_load": "Impossible de charger les assets."
+    "error_load": "Impossible de charger les assets.",
+    "success_created": "Actif ajouté avec succès.",
+    "success_updated": "Actif modifié avec succès.",
+    "success_archived": "Actif archivé.",
+    "success_unarchived": "Actif désarchivé.",
+    "success_deleted": "Actif supprimé."
   },
   "account": {
     "title": "Comptes",

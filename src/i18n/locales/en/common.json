@@ -56,7 +56,12 @@
     "action_archive": "Archive",
     "action_unarchive": "Unarchive",
     "action_edit": "Edit",
-    "error_load": "Failed to load assets."
+    "error_load": "Failed to load assets.",
+    "success_created": "Asset added successfully.",
+    "success_updated": "Asset updated successfully.",
+    "success_archived": "Asset archived.",
+    "success_unarchived": "Asset unarchived.",
+    "success_deleted": "Asset deleted."
   },
   "account": {
     "title": "Accounts",
