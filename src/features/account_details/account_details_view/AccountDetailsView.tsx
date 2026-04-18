@@ -1,10 +1,11 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AddTransactionModal } from "@/features/transactions/add_transaction/AddTransactionModal";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { IconButton } from "@/ui/components/button/IconButton";
 import { useAccountDetails } from "./useAccountDetails";
 
 export function AccountDetailsView() {
@@ -124,6 +125,7 @@ export function AccountDetailsView() {
                     <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
                     <th className="m3-th text-right">{t("account_details.column_avg_price")}</th>
                     <th className="m3-th text-right">{t("account_details.column_cost_basis")}</th>
+                    <th className="m3-th">{t("transaction.column_actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -140,6 +142,19 @@ export function AccountDetailsView() {
                       <td className="m3-td text-right tabular-nums">{row.quantity}</td>
                       <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
                       <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
+                      <td className="m3-td">
+                        <IconButton
+                          icon={<Search size={16} />}
+                          size="sm"
+                          aria-label={t("transaction.list_title")}
+                          onClick={() =>
+                            navigate({
+                              to: "/accounts/$accountId/transactions/$assetId",
+                              params: { accountId, assetId: row.assetId },
+                            })
+                          }
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

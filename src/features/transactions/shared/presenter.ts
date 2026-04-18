@@ -8,6 +8,8 @@ export interface TransactionRowViewModel {
   assetId: string;
   assetName: string;
   accountName: string;
+  /** Transaction type label (e.g. "Purchase"). */
+  type: string;
   date: string;
   /** Formatted quantity string (3 decimal places). */
   quantity: string;
@@ -36,6 +38,7 @@ export function toTransactionRow(
     assetId: tx.asset_id,
     assetName,
     accountName,
+    type: tx.transaction_type,
     date: tx.date,
     quantity: microToDecimal(tx.quantity),
     unitPrice: microToDecimal(tx.unit_price),

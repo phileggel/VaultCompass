@@ -172,7 +172,21 @@
     "error_invariant_mismatch": "Total amount does not match the formula (quantity × price × rate) + fees.",
     "success_created": "Transaction added successfully.",
     "success_updated": "Transaction updated successfully.",
-    "success_deleted": "Transaction deleted successfully."
+    "success_deleted": "Transaction deleted successfully.",
+    "list_title": "Transactions",
+    "column_type": "Type",
+    "column_date": "Date",
+    "column_quantity": "Quantity",
+    "column_unit_price": "Unit Price",
+    "column_exchange_rate": "Exchange Rate",
+    "column_fees": "Fees",
+    "column_total_amount": "Total Amount",
+    "column_actions": "Actions",
+    "type_purchase": "Purchase",
+    "no_transactions": "No transactions recorded for this position.",
+    "select_asset_prompt": "Select an asset to view transactions.",
+    "back_to_account": "Back to account",
+    "error_load_assets": "Failed to load asset list."
   },
   "account_details": {
     "title": "Account Details",

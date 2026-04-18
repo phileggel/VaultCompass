@@ -7,15 +7,15 @@ ADRs: ADR-001 (i64 micro-units for monetary amounts), ADR-004 (use cases inject 
 
 ## 1. Workflow TaskList
 
-- [ ] Backend Implementation (new repository method, service method, API command for TXL-013)
-- [ ] Type Synchronization (`just generate-types`)
-- [ ] Frontend Implementation (Gateway, Route, Hook, Components, Presenter, i18n)
-- [ ] Formatting and Linting (`just format` + `python3 scripts/check.py`)
-- [ ] Code Review (`reviewer` + `reviewer-backend` + `reviewer-frontend`)
-- [ ] i18n Review (`i18n-checker`)
-- [ ] Unit and Integration Tests
-- [ ] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
-- [ ] Final Validation (`spec-checker` + `workflow-validator`)
+- [x] Backend Implementation (new repository method, service method, API command for TXL-013)
+- [x] Type Synchronization (`just generate-types`)
+- [x] Frontend Implementation (Gateway, Route, Hook, Components, Presenter, i18n)
+- [x] Formatting and Linting (`just format` + `python3 scripts/check.py`)
+- [x] Code Review (`reviewer` + `reviewer-backend` + `reviewer-frontend`)
+- [x] i18n Review (`i18n-checker`)
+- [x] Unit and Integration Tests
+- [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
+- [x] Final Validation (`spec-checker` + `workflow-validator`)
 
 ---
 
@@ -193,6 +193,7 @@ Uses `useAppStore` to read `accounts` (for account dropdown, TXL-012) and `asset
 Structure (uses `ManagerLayout` wrapper):
 
 #### Header section
+
 - Back link: navigates to `/accounts/$selectedAccountId` (TXL-015) -- uses current dropdown value, not route param.
 - Account `SelectField` dropdown: lists all accounts from `useAppStore`, pre-selected from route (TXL-011, TXL-012).
 - Asset `SelectField` dropdown: lists only assets from `assetIdsForAccount`, resolved to names via global asset list (TXL-014). Pre-selected from route (TXL-011).
@@ -208,20 +209,24 @@ Structure (uses `ManagerLayout` wrapper):
 7. **Table**: renders columns per TXL-022. Date column header is clickable with `SortIcon` (TXL-024).
 
 #### Row actions
+
 - Edit `IconButton`: opens `EditTransactionModal` with the selected `Transaction` (TXL-030).
 - Delete `IconButton`: opens `ConfirmationDialog` (TXL-040, TXL-041).
 
 #### Modals and dialogs managed via local state:
+
 - `editingTransaction: Transaction | null` -- controls `EditTransactionModal` open state.
 - `deletingTransactionId: string | null` -- controls `ConfirmationDialog` open state.
 - `isAddModalOpen: boolean` -- controls `AddTransactionModal` for empty-state CTA.
 
 #### Delete flow (TXL-040 through TXL-044):
+
 - On confirm: call `deleteTransaction(id)` via `useTransactions` hook.
 - On success: close dialog, show success snackbar (`transaction.success_deleted`), call `refreshTransactions` (TXL-042). If result is empty, navigate back (TXL-043).
 - On failure: close dialog, show error snackbar (TXL-044).
 
 #### Edit flow (TXL-030, TXL-031):
+
 - `EditTransactionModal` `onClose` callback: call `refreshTransactions` (TXL-031).
 
 **Rules covered**: TXL-010, TXL-015, TXL-022, TXL-023, TXL-024, TXL-030, TXL-031, TXL-040, TXL-041, TXL-042, TXL-043, TXL-044, TXL-050, TXL-051, TXL-052, TXL-053, TXL-054, F6, F7, F8, F11, F13, F16
@@ -256,24 +261,25 @@ No cross-feature imports -- navigation is through the router (F22).
 
 New keys under the `"transaction"` namespace:
 
-| Key | EN | FR |
-|-----|----|----|
-| `transaction.list_title` | Transactions | Transactions |
-| `transaction.column_type` | Type | Type |
-| `transaction.column_date` | Date | Date |
-| `transaction.column_quantity` | Quantity | Quantite |
-| `transaction.column_unit_price` | Unit Price | Prix unitaire |
-| `transaction.column_exchange_rate` | Exchange Rate | Taux de change |
-| `transaction.column_fees` | Fees | Frais |
-| `transaction.column_total_amount` | Total Amount | Montant total |
-| `transaction.column_actions` | Actions | Actions |
-| `transaction.type_purchase` | Purchase | Achat |
-| `transaction.no_transactions` | No transactions recorded for this position. | Aucune transaction enregistree pour cette position. |
-| `transaction.select_asset_prompt` | Select an asset to view transactions. | Selectionnez un actif pour voir les transactions. |
-| `transaction.back_to_account` | Back to account | Retour au compte |
-| `transaction.error_load_assets` | Failed to load asset list. | Erreur lors du chargement de la liste des actifs. |
+| Key                                | EN                                          | FR                                                  |
+| ---------------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| `transaction.list_title`           | Transactions                                | Transactions                                        |
+| `transaction.column_type`          | Type                                        | Type                                                |
+| `transaction.column_date`          | Date                                        | Date                                                |
+| `transaction.column_quantity`      | Quantity                                    | Quantite                                            |
+| `transaction.column_unit_price`    | Unit Price                                  | Prix unitaire                                       |
+| `transaction.column_exchange_rate` | Exchange Rate                               | Taux de change                                      |
+| `transaction.column_fees`          | Fees                                        | Frais                                               |
+| `transaction.column_total_amount`  | Total Amount                                | Montant total                                       |
+| `transaction.column_actions`       | Actions                                     | Actions                                             |
+| `transaction.type_purchase`        | Purchase                                    | Achat                                               |
+| `transaction.no_transactions`      | No transactions recorded for this position. | Aucune transaction enregistree pour cette position. |
+| `transaction.select_asset_prompt`  | Select an asset to view transactions.       | Selectionnez un actif pour voir les transactions.   |
+| `transaction.back_to_account`      | Back to account                             | Retour au compte                                    |
+| `transaction.error_load_assets`    | Failed to load asset list.                  | Erreur lors du chargement de la liste des actifs.   |
 
 Existing keys reused (no changes needed):
+
 - `transaction.delete_confirm_title`, `transaction.delete_confirm_message` (TXL-041)
 - `transaction.success_deleted` (TXL-042)
 - `transaction.error_load` (TXL-053)
@@ -285,34 +291,34 @@ Existing keys reused (no changes needed):
 
 ## 3. Rules Coverage Matrix
 
-| Rule | Layer | Task | Section |
-|------|-------|------|---------|
-| TXL-010 | Frontend | Inspect action in AccountDetailsView + route navigation | 2.3, 2.8 |
-| TXL-011 | Frontend | Route params as initial filter state in useTransactionList | 2.6 |
-| TXL-012 | Frontend | Account dropdown in TransactionListPage, reset asset on change | 2.6, 2.7 |
-| TXL-013 | Backend | `get_asset_ids_for_account` command in transaction context | 2.1 |
-| TXL-014 | Frontend | Asset dropdown filtered by TXL-013 results, name resolution | 2.4, 2.6, 2.7 |
-| TXL-015 | Frontend | Back link using current dropdown accountId | 2.7 |
-| TXL-016 | Frontend | Sort direction reset on filter change, preserved on refresh | 2.6 |
-| TXL-020 | Backend | Existing `get_transactions` command (no change) | -- |
-| TXL-021 | Frontend | Transaction fetch on mount and on filter change | 2.6 |
-| TXL-022 | Frontend | Table columns in TransactionListPage | 2.7, 2.10 |
-| TXL-023 | Frontend | Type column shows "Purchase" via presenter | 2.5 |
-| TXL-024 | Frontend | Default desc sort + toggle via Date header | 2.6, 2.7 |
-| TXL-025 | Frontend | Financial values formatted to 3 decimals via presenter | 2.5 |
-| TXL-026 | Frontend | Re-fetch after edit/delete, sort preserved | 2.6 |
-| TXL-030 | Frontend | Edit action opens EditTransactionModal | 2.7 |
-| TXL-031 | Frontend | Edit success triggers refresh | 2.6, 2.7 |
-| TXL-040 | Frontend | Delete action opens ConfirmationDialog | 2.7 |
-| TXL-041 | Frontend | Confirmation dialog uses existing i18n keys | 2.7, 2.10 |
-| TXL-042 | Frontend | Delete success: close dialog, snackbar, refresh | 2.7 |
-| TXL-043 | Frontend | Navigate back if 0 records after delete | 2.6 |
-| TXL-044 | Frontend | Delete failure: close dialog, snackbar error | 2.7 |
-| TXL-050 | Frontend | Loading state with skeleton rows | 2.7 |
-| TXL-051 | Frontend | Empty state with Add Transaction shortcut | 2.7 |
-| TXL-052 | Frontend | Incomplete filter prompt | 2.7 |
-| TXL-053 | Frontend | Transaction fetch error with retry | 2.7 |
-| TXL-054 | Frontend | Asset list fetch error with retry | 2.7 |
+| Rule    | Layer    | Task                                                           | Section       |
+| ------- | -------- | -------------------------------------------------------------- | ------------- |
+| TXL-010 | Frontend | Inspect action in AccountDetailsView + route navigation        | 2.3, 2.8      |
+| TXL-011 | Frontend | Route params as initial filter state in useTransactionList     | 2.6           |
+| TXL-012 | Frontend | Account dropdown in TransactionListPage, reset asset on change | 2.6, 2.7      |
+| TXL-013 | Backend  | `get_asset_ids_for_account` command in transaction context     | 2.1           |
+| TXL-014 | Frontend | Asset dropdown filtered by TXL-013 results, name resolution    | 2.4, 2.6, 2.7 |
+| TXL-015 | Frontend | Back link using current dropdown accountId                     | 2.7           |
+| TXL-016 | Frontend | Sort direction reset on filter change, preserved on refresh    | 2.6           |
+| TXL-020 | Backend  | Existing `get_transactions` command (no change)                | --            |
+| TXL-021 | Frontend | Transaction fetch on mount and on filter change                | 2.6           |
+| TXL-022 | Frontend | Table columns in TransactionListPage                           | 2.7, 2.10     |
+| TXL-023 | Frontend | Type column shows "Purchase" via presenter                     | 2.5           |
+| TXL-024 | Frontend | Default desc sort + toggle via Date header                     | 2.6, 2.7      |
+| TXL-025 | Frontend | Financial values formatted to 3 decimals via presenter         | 2.5           |
+| TXL-026 | Frontend | Re-fetch after edit/delete, sort preserved                     | 2.6           |
+| TXL-030 | Frontend | Edit action opens EditTransactionModal                         | 2.7           |
+| TXL-031 | Frontend | Edit success triggers refresh                                  | 2.6, 2.7      |
+| TXL-040 | Frontend | Delete action opens ConfirmationDialog                         | 2.7           |
+| TXL-041 | Frontend | Confirmation dialog uses existing i18n keys                    | 2.7, 2.10     |
+| TXL-042 | Frontend | Delete success: close dialog, snackbar, refresh                | 2.7           |
+| TXL-043 | Frontend | Navigate back if 0 records after delete                        | 2.6           |
+| TXL-044 | Frontend | Delete failure: close dialog, snackbar error                   | 2.7           |
+| TXL-050 | Frontend | Loading state with skeleton rows                               | 2.7           |
+| TXL-051 | Frontend | Empty state with Add Transaction shortcut                      | 2.7           |
+| TXL-052 | Frontend | Incomplete filter prompt                                       | 2.7           |
+| TXL-053 | Frontend | Transaction fetch error with retry                             | 2.7           |
+| TXL-054 | Frontend | Asset list fetch error with retry                              | 2.7           |
 
 ---
 
@@ -340,11 +346,13 @@ Existing keys reused (no changes needed):
 ## 5. Files Created or Modified
 
 ### New files
+
 - `src/features/transactions/transaction_list/TransactionListPage.tsx`
 - `src/features/transactions/transaction_list/useTransactionList.ts`
 - `src/features/transactions/transaction_list/useTransactionList.test.ts`
 
 ### Modified files
+
 - `src-tauri/src/context/transaction/domain/transaction.rs` -- add trait method
 - `src-tauri/src/context/transaction/repository/transaction.rs` -- add implementation
 - `src-tauri/src/context/transaction/service.rs` -- add service method

@@ -39,4 +39,11 @@ export const transactionGateway = {
   ): Promise<Result<Transaction[], string>> {
     return await commands.getTransactions(accountId, assetId);
   },
+
+  /**
+   * Returns distinct asset IDs that have transactions for the given account (TXL-013).
+   */
+  async getAssetIdsForAccount(accountId: string): Promise<Result<string[], string>> {
+    return await commands.getAssetIdsForAccount(accountId);
+  },
 };

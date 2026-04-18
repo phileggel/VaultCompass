@@ -10,6 +10,7 @@ import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
 import { DesignSystemPage } from "@/features/design-system";
+import { TransactionListPage } from "@/features/transactions";
 import { AppShell } from "./AppShell";
 
 const rootRoute = createRootRoute({ component: AppShell });
@@ -40,6 +41,12 @@ const accountDetailsRoute = createRoute({
   component: AccountDetailsView,
 });
 
+const transactionListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/accounts/$accountId/transactions/$assetId",
+  component: TransactionListPage,
+});
+
 const categoriesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/categories",
@@ -57,6 +64,7 @@ const routeTree = rootRoute.addChildren([
   assetsRoute,
   accountsRoute,
   accountDetailsRoute,
+  transactionListRoute,
   categoriesRoute,
   designSystemRoute,
 ]);

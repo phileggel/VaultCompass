@@ -15,10 +15,17 @@ import { useEditTransactionModal } from "./useEditTransactionModal";
 interface EditTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Called only after a confirmed successful save (not on cancel). */
+  onSuccess?: () => void;
   transaction: Transaction;
 }
 
-export function EditTransactionModal({ isOpen, onClose, transaction }: EditTransactionModalProps) {
+export function EditTransactionModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  transaction,
+}: EditTransactionModalProps) {
   const { t } = useTranslation();
   useEffect(() => {
     logger.info("[EditTransactionModal] mounted");
@@ -38,7 +45,7 @@ export function EditTransactionModal({ isOpen, onClose, transaction }: EditTrans
     handleSubmit,
     handleConfirmArchived,
     handleCancelArchived,
-  } = useEditTransactionModal({ transaction, onSubmitSuccess: onClose });
+  } = useEditTransactionModal({ transaction, onSubmitSuccess: onSuccess ?? onClose });
 
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
   const selectedAccount = accounts.find((a) => a.id === formData.accountId);

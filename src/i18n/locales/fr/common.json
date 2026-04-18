@@ -172,7 +172,21 @@
     "error_invariant_mismatch": "Le montant total ne correspond pas à la formule (quantité × prix × taux) + frais.",
     "success_created": "Transaction ajoutée avec succès.",
     "success_updated": "Transaction modifiée avec succès.",
-    "success_deleted": "Transaction supprimée avec succès."
+    "success_deleted": "Transaction supprimée avec succès.",
+    "list_title": "Transactions",
+    "column_type": "Type",
+    "column_date": "Date",
+    "column_quantity": "Quantité",
+    "column_unit_price": "Prix unitaire",
+    "column_exchange_rate": "Taux de change",
+    "column_fees": "Frais",
+    "column_total_amount": "Montant total",
+    "column_actions": "Actions",
+    "type_purchase": "Achat",
+    "no_transactions": "Aucune transaction enregistrée pour cette position.",
+    "select_asset_prompt": "Sélectionnez un actif pour voir les transactions.",
+    "back_to_account": "Retour au compte",
+    "error_load_assets": "Erreur lors du chargement de la liste des actifs."
   },
   "account_details": {
     "title": "Détails du compte",

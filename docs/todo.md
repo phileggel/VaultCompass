@@ -65,17 +65,13 @@ Ajouter `disabled={asset.is_archived}` avec un tooltip explicatif, ou laisser le
 La logique d'état pour le Buy modal (`isBuyModalOpen`, `buyPrefillAssetId`) est inline dans `AssetTable.tsx` au lieu d'être dans le hook `useAssetTable` (violation F10).
 Déplacer dans `asset_table/useAssetTable.ts`.
 
-## (frontend/transactions) — TRX-010: bouton "Add Transaction" dans la vue Account Details
+## ~~(frontend/transactions) — TRX-010: bouton "Add Transaction" dans la vue Account Details~~ ✅ résolu
 
-L'entrée contextuelle depuis la vue "Account Details" (FAB ou bouton) est manquante (TRX-010).
-La vue Account Details n'existe pas encore — `AccountAssetDetailsView` est un placeholder.
-À implémenter quand la vue des positions par compte sera construite.
+Magnifier `IconButton` par ligne dans `AccountDetailsView` navigue vers `/accounts/$accountId/transactions/$assetId` (TXL-010, ACD-042).
 
-## (frontend/transactions) — TRX-035: dialog de confirmation de suppression d'une transaction
+## ~~(frontend/transactions) — TRX-035: dialog de confirmation de suppression d'une transaction~~ ✅ résolu
 
-`deleteTransaction` est câblé dans `gateway.ts` et `useTransactions.ts`, mais aucun composant UI n'expose l'action de suppression avec une `ConfirmationDialog`.
-À implémenter dans la vue transaction list (non encore créée).
-Clés i18n `transaction.delete_confirm_title` et `transaction.delete_confirm_message` déjà définies.
+`TransactionListPage` expose l'action de suppression via `ConfirmationDialog` (TXL-040, TXL-041). Clés i18n existantes utilisées.
 
 ## (spec/account) — Ajouter un champ `currency` à l'entité Account
 
@@ -103,15 +99,15 @@ Labels `NAV_ITEMS` et nom de l'app migrés vers i18n (`nav.*`). App renommée Va
 
 ## From the two reviewers, the i18n findings (all pre-existing, not introduced by this migration):
 
-  src/features/shell/useSidebar.ts — label values "Assets", "Accounts", "Categories", "About", "Design System" are
-  hardcoded English strings rendered in three places: sidebar nav text, aria-label on nav buttons, and the <h1> page
-  title via Header.tsx. They should be i18n keys resolved with t().
+src/features/shell/useSidebar.ts — label values "Assets", "Accounts", "Categories", "About", "Design System" are
+hardcoded English strings rendered in three places: sidebar nav text, aria-label on nav buttons, and the <h1> page
+title via Header.tsx. They should be i18n keys resolved with t().
 
-  src/features/shell/Header.tsx — resolveTitle() returns raw item.label strings, so the page title is hardcoded English.
-   Fix is coupled to the useSidebar.ts fix above.
+src/features/shell/Header.tsx — resolveTitle() returns raw item.label strings, so the page title is hardcoded English.
+Fix is coupled to the useSidebar.ts fix above.
 
-  src/features/shell/Sidebar.tsx — "Version: " prefix (expanded sidebar) is a hardcoded English string, e.g. should be
-  t("shell.sidebar_version", { version: appVersion }).
+src/features/shell/Sidebar.tsx — "Version: " prefix (expanded sidebar) is a hardcoded English string, e.g. should be
+t("shell.sidebar_version", { version: appVersion }).
 
-  These were present before this task — the migration just exposed them because the files were touched. Want me to fix
-  them as a follow-up?
+These were present before this task — the migration just exposed them because the files were touched. Want me to fix
+them as a follow-up?

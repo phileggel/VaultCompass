@@ -166,16 +166,18 @@ context/{domain}/
 **Repository trait: `TransactionRepository`**
 
 - `get_by_id`, `get_by_account_asset(account_id, asset_id) -> Vec<Transaction>` (chronological — TRX-036)
+- `get_asset_ids_for_account(account_id) -> Vec<String>` — distinct asset IDs with transactions for an account (TXL-013)
 - `create`, `update`, `delete`
 
 **Service: `TransactionService`**
 
-- Read access: `get_by_id`, `get_by_account_asset`
+- Read access: `get_by_id`, `get_by_account_asset`, `get_asset_ids_for_account`
 - `notify_transaction_updated()` — publishes `TransactionUpdated` event (B8); called by `RecordTransactionUseCase` after commit
 
 **Tauri commands**
 
-- Defined in `use_cases/record_transaction/api.rs` (B9 pattern — cross-context use case owns the API)
+- Write commands (`add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`) defined in `use_cases/record_transaction/api.rs` (B9 — cross-context use case)
+- `get_asset_ids_for_account` defined in `context/transaction/api.rs` (B5 — single-context read, no orchestration)
 
 ---
 
@@ -297,19 +299,20 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Transactions (`features/transactions/`)
 
-- Gateway: `addTransaction(dto)`, `updateTransaction(id, dto)`, `deleteTransaction(id)`, `getTransactions(accountId, assetId)`
+- Gateway: `addTransaction(dto)`, `updateTransaction(id, dto)`, `deleteTransaction(id)`, `getTransactions(accountId, assetId)`, `getAssetIdsForAccount(accountId)`
 - `useTransactions()` hook: wraps gateway calls with error normalization (`{ data, error }` return shape)
 - Sub-features:
   - `add_transaction/` — `AddTransactionModal` + `useAddTransaction` hook (TRX-010, TRX-011, TRX-026, TRX-029)
-  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033)
+  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033); supports optional `onSuccess` prop for post-save callbacks distinct from `onClose`
+  - `transaction_list/` — `TransactionListPage` + `useTransactionList` hook (TXL spec): account/asset filter dropdowns, sortable table, edit/delete/add row actions, all UX states (loading, error, empty, incomplete filter)
 - Shared:
   - `shared/types.ts` — `TransactionFormData` (decimal strings)
   - `shared/microUnits.ts` — `decimalToMicro`, `microToDecimal`, `calculateTotalAmount` (mirrors TRX-026 integer arithmetic)
-  - `shared/presenter.ts` — `toTransactionRow()` — domain → view model
+  - `shared/presenter.ts` — `toTransactionRow()` — domain → `TransactionRowViewModel` (includes `type` field)
   - `shared/validateTransaction.ts` — client-side validation (mirrors TRX-020)
 - `store.ts` — `useTransactionStore`: `lastFetchedKey`, `refreshHoldings()` (TRX-038 stub — called on `TransactionUpdated` event)
-- Entry point: "Buy" `IconButton` in `AssetTable` opens `AddTransactionModal` with pre-filled `assetId` (TRX-010, TRX-011)
-- Spec: `docs/spec/financial-asset-transaction.md`
+- Entry points: "Buy" `IconButton` in `AssetTable` (TRX-010); magnifier `IconButton` per holding row in `AccountDetailsView` navigates to `/accounts/$accountId/transactions/$assetId` (TXL-010, ACD-042)
+- Spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/transaction-list.md`
 
 #### Account Details (`features/account_details/`)
 
