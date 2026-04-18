@@ -16,6 +16,7 @@ use crate::context::asset::{AssetService, SqliteAssetCategoryRepository, SqliteA
 use crate::context::transaction::{SqliteTransactionRepository, TransactionService};
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
+use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::record_transaction::RecordTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
@@ -38,9 +39,9 @@ pub struct AppState {
     /// System-wide event bus.
     pub event_bus: Arc<SideEffectEventBus>,
     /// Unified asset management service.
-    pub asset_service: AssetService,
+    pub asset_service: Arc<AssetService>,
     /// Account management service.
-    pub account_service: AccountService,
+    pub account_service: Arc<AccountService>,
     /// Transaction service.
     pub transaction_service: Arc<TransactionService>,
 }
@@ -112,13 +113,20 @@ pub fn run() {
                 let asset_repo = SqliteAssetRepository::new(db.pool.clone());
                 let category_repo = SqliteAssetCategoryRepository::new(db.pool.clone());
 
-                let asset_service =
+                let asset_service = Arc::new(
                     AssetService::new(Box::new(asset_repo), Box::new(category_repo))
-                        .with_event_bus(event_bus.clone());
+                        .with_event_bus(event_bus.clone()),
+                );
 
                 let account_repo = SqliteAccountRepository::new(db.pool.clone());
-                let account_service = AccountService::new(Box::new(account_repo))
-                    .with_event_bus(event_bus.clone());
+                let holding_repo_for_svc = SqliteHoldingRepository::new(db.pool.clone());
+                let account_service = Arc::new(
+                    AccountService::new(
+                        Box::new(account_repo),
+                        Box::new(holding_repo_for_svc),
+                    )
+                    .with_event_bus(event_bus.clone()),
+                );
 
                 let transaction_repo =
                     SqliteTransactionRepository::new(db.pool.clone());
@@ -139,7 +147,13 @@ pub fn run() {
                     Arc::new(account_repo_for_uc),
                 );
 
+                let account_details_uc = AccountDetailsUseCase::new(
+                    Arc::clone(&account_service),
+                    Arc::clone(&asset_service),
+                );
+
                 app_handle.manage(record_transaction_uc);
+                app_handle.manage(account_details_uc);
 
                 app_handle.manage(AppState {
                     db,

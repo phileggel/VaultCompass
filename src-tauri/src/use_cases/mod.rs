@@ -3,6 +3,8 @@
 //! Cross-cutting application use cases that orchestrate multiple bounded
 //! contexts or platform capabilities.
 
+/// Account Details: cross-context read of holdings + asset metadata (ACD feature).
+pub mod account_details;
 /// Record transaction: create, update, delete transactions and update Holdings (TRX feature).
 pub mod record_transaction;
 /// Application auto-update: detection, download, and installation (R1–R27).

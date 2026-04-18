@@ -7,15 +7,15 @@ ADRs: ADR-003 (sequential service calls), ADR-004 (inject services not repos)
 
 ## 1. Workflow TaskList
 
-- [ ] Backend Implementation (Domain DTOs, AccountService method, Use Case, API)
-- [ ] Type Synchronization (`just generate-types`)
-- [ ] Frontend Implementation (Gateway, Hook, Components, Presenter, i18n)
-- [ ] Formatting and Linting (`just format` + `python3 scripts/check.py`)
-- [ ] Code Review (`reviewer` + `reviewer-backend` + `reviewer-frontend`)
-- [ ] i18n Review (`i18n-checker`)
-- [ ] Unit and Integration Tests
-- [ ] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
-- [ ] Final Validation (`spec-checker` + `workflow-validator`)
+- [x] Backend Implementation (Domain DTOs, AccountService method, Use Case, API)
+- [x] Type Synchronization (`just generate-types`)
+- [x] Frontend Implementation (Gateway, Hook, Components, Presenter, i18n)
+- [x] Formatting and Linting (`just format` + `python3 scripts/check.py`)
+- [x] Code Review (`reviewer` + `reviewer-backend` + `reviewer-frontend`)
+- [x] i18n Review (`i18n-checker`)
+- [x] Unit and Integration Tests
+- [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
+- [x] Final Validation (`spec-checker` + `workflow-validator`)
 
 ---
 
@@ -89,10 +89,12 @@ AccountDetailsResponse {
 **File**: `src-tauri/src/use_cases/account_details/orchestrator.rs`
 
 `AccountDetailsUseCase` struct:
+
 - Fields: `account_service: Arc<AccountService>`, `asset_service: Arc<AssetService>`
 - Constructor: `new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self`
 
 Method `get_account_details(&self, account_id: &str) -> anyhow::Result<AccountDetailsResponse>`:
+
 1. Call `self.account_service.get_by_id(account_id)` -- if `None`, bail with not-found error (ACD-012)
 2. Call `self.account_service.get_holdings_for_account(account_id)` -- returns `Vec<Holding>`
 3. Store `total_holding_count = all_holdings.len()` (ACD-034 distinction)
@@ -162,6 +164,7 @@ pub use orchestrator::*;
 ### 2.6 Type synchronization
 
 Run `just generate-types` after backend compiles. This regenerates `src/bindings.ts` with:
+
 - `HoldingDetail` type
 - `AccountDetailsResponse` type
 - `commands.getAccountDetails(accountId: string)` function
@@ -174,7 +177,9 @@ Run `just generate-types` after backend compiles. This regenerates `src/bindings
 
 ```typescript
 export const accountDetailsGateway = {
-  async getAccountDetails(accountId: string): Promise<Result<AccountDetailsResponse, string>> {
+  async getAccountDetails(
+    accountId: string,
+  ): Promise<Result<AccountDetailsResponse, string>> {
     return await commands.getAccountDetails(accountId);
   },
 };
@@ -189,11 +194,13 @@ export const accountDetailsGateway = {
 **File**: `src/features/account_details/shared/presenter.ts` (new)
 
 Functions:
+
 - `formatMicroAmount(micros: number, decimals?: number): string` -- converts i64 micro-units to display string (reuse logic from `microToDecimal` in transactions, or import it)
 - `toHoldingRow(detail: HoldingDetail): HoldingRowViewModel` -- maps `HoldingDetail` to display-ready object with formatted quantity, average_price, cost_basis
 - `toAccountSummary(response: AccountDetailsResponse): AccountSummaryViewModel` -- maps response to header display data
 
 Types:
+
 - `HoldingRowViewModel { assetId, assetName, assetReference, quantity, averagePrice, costBasis }` (all display strings)
 - `AccountSummaryViewModel { accountName, totalCostBasis, holdingCount, isEmpty, isAllClosed }`
   - `isEmpty`: `totalHoldingCount === 0`
@@ -208,11 +215,13 @@ Types:
 **File**: `src/features/account_details/account_details_view/useAccountDetails.ts` (new)
 
 State:
+
 - `data: AccountDetailsResponse | null`
 - `isLoading: boolean`
 - `error: string | null`
 
 Logic:
+
 - `fetchDetails(accountId)`: calls `accountDetailsGateway.getAccountDetails(accountId)`, sets state
 - On mount (when `accountId` changes): fetch details (ACD-037 loading state)
 - Listen to `TransactionUpdated` event: re-fetch (ACD-039)
@@ -233,6 +242,7 @@ Logic:
 Props: `{ accountId: string, onBack: () => void }`
 
 Structure:
+
 - Uses `useAccountDetails(accountId)`
 - **Header**: Account name + formatted total cost basis (ACD-032, ACD-031)
   - Back button to return to account list
@@ -277,20 +287,20 @@ Structure:
 
 New keys under `"account_details"` namespace:
 
-| Key | EN | FR |
-|-----|----|----|
-| `account_details.title` | Account Details | Details du compte |
-| `account_details.column_asset` | Asset | Actif |
-| `account_details.column_quantity` | Quantity | Quantite |
-| `account_details.column_avg_price` | Avg. Price | Prix moyen |
-| `account_details.column_cost_basis` | Cost Basis | Cout de revient |
-| `account_details.total_cost_basis` | Total Cost Basis | Cout de revient total |
-| `account_details.empty_no_positions` | No positions yet | Aucune position |
-| `account_details.empty_all_closed` | All positions are closed | Toutes les positions sont cloturees |
-| `account_details.add_transaction` | Add Transaction | Ajouter une transaction |
-| `account_details.error_load` | Failed to load account details | Erreur lors du chargement des details |
-| `account_details.back` | Back to accounts | Retour aux comptes |
-| `account_details.loading` | Loading... | Chargement... |
+| Key                                  | EN                             | FR                                    |
+| ------------------------------------ | ------------------------------ | ------------------------------------- |
+| `account_details.title`              | Account Details                | Details du compte                     |
+| `account_details.column_asset`       | Asset                          | Actif                                 |
+| `account_details.column_quantity`    | Quantity                       | Quantite                              |
+| `account_details.column_avg_price`   | Avg. Price                     | Prix moyen                            |
+| `account_details.column_cost_basis`  | Cost Basis                     | Cout de revient                       |
+| `account_details.total_cost_basis`   | Total Cost Basis               | Cout de revient total                 |
+| `account_details.empty_no_positions` | No positions yet               | Aucune position                       |
+| `account_details.empty_all_closed`   | All positions are closed       | Toutes les positions sont cloturees   |
+| `account_details.add_transaction`    | Add Transaction                | Ajouter une transaction               |
+| `account_details.error_load`         | Failed to load account details | Erreur lors du chargement des details |
+| `account_details.back`               | Back to accounts               | Retour aux comptes                    |
+| `account_details.loading`            | Loading...                     | Chargement...                         |
 
 **Rules covered**: F16, ACD-034, ACD-035, ACD-036
 
@@ -321,32 +331,32 @@ src/features/account_details/
 
 ### Backend rules
 
-| Rule | Description | Implementation location |
-|------|-------------|----------------------|
-| ACD-012 | Invalid account guard | `orchestrator.rs` -- `get_by_id` returns None, bail with not-found |
-| ACD-020 | Active holding filter (qty > 0) | `orchestrator.rs` -- filter step |
-| ACD-021 | Archived asset inclusion | `orchestrator.rs` -- `get_asset_by_id` returns regardless of archive status |
-| ACD-022 | Asset metadata enrichment | `orchestrator.rs` -- calls `AssetService::get_asset_by_id` per holding |
-| ACD-023 | Cost basis calculation | `orchestrator.rs` -- `qty * avg_price / MICRO` |
-| ACD-024 | i128 intermediate precision | `orchestrator.rs` -- cast to i128 before multiply |
-| ACD-031 | Total account cost basis | `orchestrator.rs` -- sum of cost_basis, 0 if empty |
-| ACD-032 | Account name in response | `orchestrator.rs` -- fetched via `AccountService::get_by_id` |
-| ACD-033 | Holdings sort by asset_name | `orchestrator.rs` -- sort after enrichment |
-| ACD-041 | i64 micro-unit serialization | DTO definitions -- all financial fields are i64 |
+| Rule    | Description                     | Implementation location                                                     |
+| ------- | ------------------------------- | --------------------------------------------------------------------------- |
+| ACD-012 | Invalid account guard           | `orchestrator.rs` -- `get_by_id` returns None, bail with not-found          |
+| ACD-020 | Active holding filter (qty > 0) | `orchestrator.rs` -- filter step                                            |
+| ACD-021 | Archived asset inclusion        | `orchestrator.rs` -- `get_asset_by_id` returns regardless of archive status |
+| ACD-022 | Asset metadata enrichment       | `orchestrator.rs` -- calls `AssetService::get_asset_by_id` per holding      |
+| ACD-023 | Cost basis calculation          | `orchestrator.rs` -- `qty * avg_price / MICRO`                              |
+| ACD-024 | i128 intermediate precision     | `orchestrator.rs` -- cast to i128 before multiply                           |
+| ACD-031 | Total account cost basis        | `orchestrator.rs` -- sum of cost_basis, 0 if empty                          |
+| ACD-032 | Account name in response        | `orchestrator.rs` -- fetched via `AccountService::get_by_id`                |
+| ACD-033 | Holdings sort by asset_name     | `orchestrator.rs` -- sort after enrichment                                  |
+| ACD-041 | i64 micro-unit serialization    | DTO definitions -- all financial fields are i64                             |
 
 ### Frontend rules
 
-| Rule | Description | Implementation location |
-|------|-------------|----------------------|
-| ACD-010 | View entry point (row click) | `AccountTable.tsx` -- clickable row |
-| ACD-011 | Account selection persistence | `AccountManager.tsx` -- `selectedAccountId` state |
-| ACD-034 | Empty account state | `AccountDetailsView.tsx` -- conditional rendering |
-| ACD-035 | Empty state CTA | `AccountDetailsView.tsx` -- "Add Transaction" button |
-| ACD-036 | Non-empty state CTA | `AccountDetailsView.tsx` -- FAB button |
-| ACD-037 | Loading state | `AccountDetailsView.tsx` -- skeleton screens |
-| ACD-038 | Error state with retry | `AccountDetailsView.tsx` -- error + retry button |
-| ACD-039 | Reactivity to TransactionUpdated | `useAccountDetails.ts` -- event listener re-fetch |
-| ACD-040 | Reactivity to AssetUpdated | `useAccountDetails.ts` -- event listener re-fetch |
+| Rule    | Description                      | Implementation location                              |
+| ------- | -------------------------------- | ---------------------------------------------------- |
+| ACD-010 | View entry point (row click)     | `AccountTable.tsx` -- clickable row                  |
+| ACD-011 | Account selection persistence    | `AccountManager.tsx` -- `selectedAccountId` state    |
+| ACD-034 | Empty account state              | `AccountDetailsView.tsx` -- conditional rendering    |
+| ACD-035 | Empty state CTA                  | `AccountDetailsView.tsx` -- "Add Transaction" button |
+| ACD-036 | Non-empty state CTA              | `AccountDetailsView.tsx` -- FAB button               |
+| ACD-037 | Loading state                    | `AccountDetailsView.tsx` -- skeleton screens         |
+| ACD-038 | Error state with retry           | `AccountDetailsView.tsx` -- error + retry button     |
+| ACD-039 | Reactivity to TransactionUpdated | `useAccountDetails.ts` -- event listener re-fetch    |
+| ACD-040 | Reactivity to AssetUpdated       | `useAccountDetails.ts` -- event listener re-fetch    |
 
 ---
 
@@ -389,6 +399,7 @@ src/features/account_details/
 ### Arc wrapping of services
 
 Currently `AppState` holds `AssetService` and `AccountService` by value. To share them with `AccountDetailsUseCase`, they must be wrapped in `Arc`. This means:
+
 - `AppState.asset_service: Arc<AssetService>`
 - `AppState.account_service: Arc<AccountService>`
 - All existing `api.rs` handlers in `context/asset/` and `context/account/` that access these fields will need to work through the Arc (which is transparent for `&self` method calls)

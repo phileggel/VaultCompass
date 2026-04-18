@@ -13,9 +13,11 @@ import { useAccountTable } from "./useAccountTable";
 
 interface AccountTableProps {
   searchTerm: string;
+  /** ACD-010 — callback when the user clicks an account row (excluding action buttons). */
+  onAccountClick: (accountId: string) => void;
 }
 
-export function AccountTable({ searchTerm }: AccountTableProps) {
+export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) {
   const { t } = useTranslation();
   const { accounts, loading, fetchError, fetchAccounts, deleteAccount } = useAccounts();
 
@@ -153,14 +155,28 @@ export function AccountTable({ searchTerm }: AccountTableProps) {
           ) : (
             sortedAndFilteredAccounts.map((account) => (
               <tr key={account.id} className="m3-tr">
-                <td className="m3-td font-medium text-m3-on-surface">{account.name}</td>
+                {/* ACD-010 — clicking the name navigates to account details */}
                 <td className="m3-td">
-                  <div className="flex items-center gap-2 text-m3-on-surface-variant">
+                  <button
+                    type="button"
+                    className="font-medium text-m3-on-surface hover:text-m3-primary transition-colors text-left"
+                    onClick={() => onAccountClick(account.id)}
+                  >
+                    {account.name}
+                  </button>
+                </td>
+                {/* ACD-010 — frequency cell also navigates (row click excl. actions) */}
+                <td className="m3-td">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 text-m3-on-surface-variant w-full text-left"
+                    onClick={() => onAccountClick(account.id)}
+                  >
                     <Calendar size={14} className="text-m3-primary" />
                     <span className="m3-chip-outline">
                       {t(FREQUENCY_I18N_KEYS[account.update_frequency])}
                     </span>
-                  </div>
+                  </button>
                 </td>
                 <td className="m3-td text-right">
                   <div className="flex items-center justify-end gap-1">

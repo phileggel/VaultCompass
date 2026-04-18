@@ -59,6 +59,14 @@ Published on every state change. Frontend listens via a single `events.event.lis
 
 Cross-cutting application use cases that span multiple bounded contexts or require app-level infrastructure.
 
+#### Account Details (`use_cases/account_details/`)
+
+Orchestrates a cross-context read of account + asset data for the Account Details view (spec: `docs/spec/account-details.md`, ADR-003, ADR-004).
+
+- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>` (no repositories directly, per ADR-004); `get_account_details(account_id)` fetches account, all holdings, filters active (qty > 0), enriches with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), sorts by asset_name (ACD-033), returns `AccountDetailsResponse`
+- DTOs: `HoldingDetail` (asset_id, asset_name, asset_reference, quantity, average_price, cost_basis — all i64 micros), `AccountDetailsResponse` (account_name, holdings, total_holding_count, total_cost_basis)
+- `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
+
 #### Record Transaction (`use_cases/record_transaction/`)
 
 Orchestrates purchase transaction creation, update, and deletion across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`).
@@ -195,7 +203,7 @@ context/{domain}/
 
 **Service: `AccountService`**
 
-- CRUD for accounts
+- CRUD for accounts; exposes `get_holdings_for_account` (delegating to `HoldingRepository`) for use by `AccountDetailsUseCase` (ADR-004)
 - `create`: validates uniqueness via `find_by_name` before insert (R3)
 - `update`: calls `with_id()` for trim+validation; validates uniqueness excluding own ID (R3)
 - Publishes `AccountUpdated` events
@@ -303,10 +311,14 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - Entry point: "Buy" `IconButton` in `AssetTable` opens `AddTransactionModal` with pre-filled `assetId` (TRX-010, TRX-011)
 - Spec: `docs/spec/financial-asset-transaction.md`
 
-#### Account Asset Details (`features/account_asset_details/`) — **placeholder, to be replaced**
+#### Account Details (`features/account_details/`)
 
-- Scaffolding for the account holdings drill-down view; data-fetching is not yet implemented
-- Will be rebuilt on top of the `Holding` entity as part of the Transaction feature (see ADR-002)
+- Gateway: `getAccountDetails(accountId)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
+- `account_details_view/AccountDetailsView.tsx` — renders header (account name + total cost basis), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty with CTA)
+- `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
+- `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings (micro-unit formatting via `microToDecimal`)
+- Navigation: `AccountManager` holds `selectedAccountId` state; sets it when a row is clicked in `AccountTable`; renders `AccountDetailsView` instead of the account list when set
+- Spec: `docs/spec/account-details.md` (ACD-010–ACD-041)
 
 #### Update (`features/update/`)
 

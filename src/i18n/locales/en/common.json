@@ -160,5 +160,19 @@
     "success_created": "Transaction added successfully.",
     "success_updated": "Transaction updated successfully.",
     "success_deleted": "Transaction deleted successfully."
+  },
+  "account_details": {
+    "title": "Account Details",
+    "back": "Back to accounts",
+    "column_asset": "Asset",
+    "column_quantity": "Quantity",
+    "column_avg_price": "Avg. Price",
+    "column_cost_basis": "Cost Basis",
+    "total_cost_basis": "Total Cost Basis",
+    "empty_no_positions": "No positions yet",
+    "empty_all_closed": "All positions are closed",
+    "add_transaction": "Add Transaction",
+    "error_load": "Failed to load account details",
+    "loading": "Loading..."
   }
 }

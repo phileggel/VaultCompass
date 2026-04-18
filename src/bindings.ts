@@ -269,6 +269,17 @@ async getTransactions(accountId: string, assetId: string) : Promise<Result<Trans
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Returns the full account details view for the given account (ACD-012 to ACD-041).
+ */
+async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_account_details", { accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -303,6 +314,26 @@ name: string;
  * How often this account is updated.
  */
 update_frequency: UpdateFrequency }
+/**
+ * Top-level response for the get_account_details command (ACD spec).
+ */
+export type AccountDetailsResponse = { 
+/**
+ * Display name of the account (ACD-032).
+ */
+account_name: string; 
+/**
+ * Active holdings sorted by asset_name ascending (ACD-020, ACD-033).
+ */
+holdings: HoldingDetail[]; 
+/**
+ * Total holding count regardless of quantity (ACD-034).
+ */
+total_holding_count: number; 
+/**
+ * Sum of cost_basis across all active holdings, 0 if none (ACD-031).
+ */
+total_cost_basis: number }
 /**
  * A financial instrument or resource held by a user.
  */
@@ -511,6 +542,34 @@ quantity: number;
  * Volume-weighted average purchase price in account currency (micro-units).
  */
 average_price: number }
+/**
+ * Enriched view of a single holding with asset metadata and computed cost basis (ACD spec).
+ */
+export type HoldingDetail = { 
+/**
+ * ID of the held asset.
+ */
+asset_id: string; 
+/**
+ * Display name of the asset.
+ */
+asset_name: string; 
+/**
+ * Ticker or user-defined reference.
+ */
+asset_reference: string; 
+/**
+ * Current units held (i64 micro-units, ADR-001).
+ */
+quantity: number; 
+/**
+ * VWAP purchase price in account currency (i64 micro-units, ADR-001).
+ */
+average_price: number; 
+/**
+ * Total cost of position: quantity × average_price / MICRO (i64 micro-units, ACD-023).
+ */
+cost_basis: number }
 /**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).

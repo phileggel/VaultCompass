@@ -28,25 +28,25 @@ Represents the current state of a financial position within the account.
 
 A computed view of a holding enriched with asset metadata and cost basis. Defined as a Rust struct with `#[derive(Type, Serialize)]` so it is auto-generated into `bindings.ts` via Specta. It is returned as part of the `AccountDetailsResponse` wrapper; the frontend presenter maps it to display-ready values.
 
-| Field             | Business meaning                                                        |
-| ----------------- | ----------------------------------------------------------------------- |
-| `asset_id`        | ID of the held asset.                                                   |
-| `asset_name`      | Display name of the asset (from asset context).                         |
-| `asset_reference` | Ticker or user-defined reference of the asset (from asset context).     |
-| `quantity`        | Current number of units held (i64 micros).                              |
-| `average_price`   | VWAP purchase price in account currency (i64 micros).                   |
-| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros).    |
+| Field             | Business meaning                                                     |
+| ----------------- | -------------------------------------------------------------------- |
+| `asset_id`        | ID of the held asset.                                                |
+| `asset_name`      | Display name of the asset (from asset context).                      |
+| `asset_reference` | Ticker or user-defined reference of the asset (from asset context).  |
+| `quantity`        | Current number of units held (i64 micros).                           |
+| `average_price`   | VWAP purchase price in account currency (i64 micros).                |
+| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros). |
 
 ### AccountDetailsResponse (Backend DTO)
 
 The top-level response returned by the `get_account_details(account_id)` Tauri command. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field                 | Business meaning                                                                |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `account_name`        | Display name of the account (per ACD-032).                                      |
+| Field                 | Business meaning                                                                 |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `account_name`        | Display name of the account (per ACD-032).                                       |
 | `holdings`            | Filtered list of `HoldingDetail` sorted per ACD-033 (quantity > 0, per ACD-020). |
-| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034). |
-| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                  |
+| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).  |
+| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                    |
 
 ---
 

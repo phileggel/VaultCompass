@@ -160,5 +160,19 @@
     "success_created": "Transaction ajoutée avec succès.",
     "success_updated": "Transaction modifiée avec succès.",
     "success_deleted": "Transaction supprimée avec succès."
+  },
+  "account_details": {
+    "title": "Détails du compte",
+    "back": "Retour aux comptes",
+    "column_asset": "Actif",
+    "column_quantity": "Quantité",
+    "column_avg_price": "Prix moyen",
+    "column_cost_basis": "Coût de revient",
+    "total_cost_basis": "Coût de revient total",
+    "empty_no_positions": "Aucune position",
+    "empty_all_closed": "Toutes les positions sont clôturées",
+    "add_transaction": "Ajouter une transaction",
+    "error_load": "Erreur lors du chargement des détails",
+    "loading": "Chargement..."
   }
 }

@@ -1,4 +1,4 @@
-use super::domain::{Account, AccountRepository, UpdateFrequency};
+use super::domain::{Account, AccountRepository, Holding, HoldingRepository, UpdateFrequency};
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use anyhow::Result;
 use std::sync::Arc;
@@ -7,14 +7,19 @@ use tracing::info;
 /// Orchestrates business logic for accounts.
 pub struct AccountService {
     account_repo: Box<dyn AccountRepository>,
+    holding_repo: Box<dyn HoldingRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
 }
 
 impl AccountService {
     /// Creates a new AccountService.
-    pub fn new(account_repo: Box<dyn AccountRepository>) -> Self {
+    pub fn new(
+        account_repo: Box<dyn AccountRepository>,
+        holding_repo: Box<dyn HoldingRepository>,
+    ) -> Self {
         Self {
             account_repo,
+            holding_repo,
             event_bus: None,
         }
     }
@@ -33,6 +38,11 @@ impl AccountService {
     /// Retrieves an account by ID.
     pub async fn get_by_id(&self, id: &str) -> Result<Option<Account>> {
         self.account_repo.get_by_id(id).await
+    }
+
+    /// Retrieves all holdings for a given account (ACD-022, ADR-004).
+    pub async fn get_holdings_for_account(&self, account_id: &str) -> Result<Vec<Holding>> {
+        self.holding_repo.get_by_account(account_id).await
     }
 
     /// Creates a new account.
@@ -98,7 +108,7 @@ mod tests {
     use super::*;
     // Integration tests: use concrete SQLite repos against an in-memory DB to catch
     // real constraint violations (e.g. UNIQUE ON LOWER(name)) that mocks would miss.
-    use crate::context::account::SqliteAccountRepository;
+    use crate::context::account::{SqliteAccountRepository, SqliteHoldingRepository};
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup_service() -> AccountService {
@@ -111,7 +121,10 @@ mod tests {
             .run(&pool)
             .await
             .expect("migrations");
-        AccountService::new(Box::new(SqliteAccountRepository::new(pool)))
+        AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool)),
+        )
     }
 
     // R3 — duplicate name (case-insensitive) is rejected at creation
