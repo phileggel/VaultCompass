@@ -2969,34 +2969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "portfolio-manager"
-version = "0.5.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "iso_currency",
- "serde",
- "serde_json",
- "specta",
- "specta-typescript",
- "sqlx",
- "strum",
- "strum_macros",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tauri-plugin-updater",
- "tauri-plugin-window-state",
- "tauri-specta",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "potential_utf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5288,6 +5260,34 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
+
+[[package]]
+name = "vault-compass"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "iso_currency",
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-typescript",
+ "sqlx",
+ "strum",
+ "strum_macros",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tauri-plugin-updater",
+ "tauri-plugin-window-state",
+ "tauri-specta",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
 
 [[package]]
 name = "vcpkg"

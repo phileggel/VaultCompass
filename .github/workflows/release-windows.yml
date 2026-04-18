@@ -61,7 +61,7 @@ jobs:
           tauriScript: npm run tauri
           args: --target x86_64-pc-windows-msvc
           tagName: ${{ github.ref_name }}
-          releaseName: "PortfolioManager ${{ github.ref_name }}"
+          releaseName: "VaultCompass ${{ github.ref_name }}"
           releaseBody: "See the release assets to download and install this version."
           releaseDraft: true
           prerelease: false

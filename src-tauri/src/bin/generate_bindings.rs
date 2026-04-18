@@ -1,5 +1,5 @@
-use portfolio_manager_lib::core::create_specta_builder;
 use specta_typescript::{BigIntExportBehavior, Typescript};
+use vault_compass_lib::core::create_specta_builder;
 
 fn main() {
     // Create tauri-specta builder for type-safe bindings

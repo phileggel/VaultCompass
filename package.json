@@ -1,5 +1,7 @@
 {
-  "name": "portfolio-manager",
+  "name": "vault-compass",
+  "author": "Philippe Eggel",
+  "license": "MIT",
   "private": true,
   "version": "0.5.0",
   "type": "module",

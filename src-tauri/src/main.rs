@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    portfolio_manager_lib::run()
+    vault_compass_lib::run()
 }

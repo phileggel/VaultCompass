@@ -39,7 +39,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => {
   return {
-    appName: "PortfolioManager",
+    appName: "VaultCompass",
     appVersion: "...",
     assets: [],
     categories: [],

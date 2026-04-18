@@ -97,10 +97,9 @@ Créer la commande `get_holdings(account_id) -> Vec<Holding>` dans `use_cases/re
 
 `Sidebar.tsx` et `DesignSystemPage.tsx` n'ont pas de `logger.info("[ComponentName] mounted")` dans leur `useEffect`. Ajouter conformément à la règle F13.
 
-## (frontend) — i18n des labels de navigation et du shell
+## ~~(frontend) — i18n des labels de navigation et du shell~~ ✅ résolu
 
-Les labels de `NAV_ITEMS` ("Assets", "Accounts", etc.), le nom de l'app ("Vault M3"), et les tooltips du menu hamburger ("Collapse menu" / "Expand menu") sont des chaînes anglaises codées en dur dans `Sidebar.tsx`.
-À traiter dans le sprint i18n général — nécessite de séparer les clés de routage (`navKey`) des labels traduits pour éviter de casser la navigation.
+Labels `NAV_ITEMS` et nom de l'app migrés vers i18n (`nav.*`). App renommée VaultCompass.
 
 ## From the two reviewers, the i18n findings (all pre-existing, not introduced by this migration):
 

@@ -30,9 +30,9 @@ vi.mock("./bindings", () => ({
   },
 }));
 
-test("renders Vault M3 title", async () => {
+test("renders VaultCompass title", async () => {
   render(<App />);
-  const titleElements = await screen.findAllByText(/Vault M3/i);
+  const titleElements = await screen.findAllByText(/VaultCompass/i);
   expect(titleElements.length).toBeGreaterThan(0);
 });
 

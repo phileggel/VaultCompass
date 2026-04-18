@@ -1,4 +1,4 @@
-//! Portfolio Manager Backend
+//! VaultCompass Backend
 //!
 //! This crate provides the backend logic for managing financial portfolios,
 //! including assets, accounts, and exchange rates.

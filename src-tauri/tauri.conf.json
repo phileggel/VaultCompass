@@ -9,7 +9,7 @@
   "app": {
     "windows": [
       {
-        "title": "PortfolioManager",
+        "title": "VaultCompass",
         "width": 800,
         "height": 600,
         "minWidth": 800,
@@ -20,14 +20,14 @@
       "csp": null
     }
   },
-  "productName": "PortfolioManager",
+  "productName": "VaultCompass",
   "version": "0.5.0",
-  "identifier": "com.eagle.portfolio-manager",
+  "identifier": "com.phileggel.vault-compass",
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwNDI5QUQ5QzBFREE0OTEKUldTUnBPM0EyWnBDUUxoSmtGUE9zeW1ra1hvRjZnMlBoVGE3bWJXdlJXcGttQitNanl2b0VtN0sK",
       "endpoints": [
-        "https://github.com/phileggel/PortfolioManager/releases/latest/download/latest.json"
+        "https://github.com/phileggel/VaultCompass/releases/latest/download/latest.json"
       ]
     }
   },

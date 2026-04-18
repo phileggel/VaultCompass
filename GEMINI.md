@@ -1,4 +1,4 @@
-# Project Context: PortfolioManager
+# Project Context: VaultCompass
 
 ## My Role
 

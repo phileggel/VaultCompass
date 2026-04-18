@@ -1,8 +1,9 @@
 [package]
-name = "portfolio-manager"
+name = "vault-compass"
 version = "0.5.0"
 description = "A Tauri App"
 authors = ["Phil Eggel"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.90"
 default-run = "tauri-app"
@@ -13,7 +14,7 @@ default-run = "tauri-app"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "portfolio_manager_lib"
+name = "vault_compass_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]

@@ -41,8 +41,8 @@ done
 
 # Determine app log directory
 case "$OSTYPE" in
-  linux-gnu*) APP_LOG_DIR="$HOME/.local/share/com.eagle.portfolio-manager/logs" ;;
-  darwin*)    APP_LOG_DIR="$HOME/Library/Logs/PortfolioManager" ;;
+  linux-gnu*) APP_LOG_DIR="$HOME/.local/share/com.phileggel.vault-compass/logs" ;;
+  darwin*)    APP_LOG_DIR="$HOME/Library/Logs/VaultCompass" ;;
   *)          echo -e "${RED}❌ Unsupported OS: $OSTYPE${NC}"; exit 1 ;;
 esac
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start PortfolioManager in development mode
+# Start VaultCompass in development mode
 # Usage: ./start-app.sh [--reset-db] [--log-level LEVEL]
 set -euo pipefail
 
@@ -16,7 +16,7 @@ NC='\033[0m'
 
 show_help() {
   cat <<EOF
-PortfolioManager - Start development server
+VaultCompass - Start development server
 
 Usage: $(basename "$0") [OPTIONS]
 
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo -e "${BLUE}🚀 Starting PortfolioManager${NC}"
+echo -e "${BLUE}🚀 Starting VaultCompass${NC}"
 [[ "$RESET_DB" == true ]] && echo -e "${YELLOW}⚠️  Database will be reset${NC}"
 echo -e "${BLUE}📝 Log level: $LOG_LEVEL${NC}"
 
