@@ -158,7 +158,7 @@ context/{domain}/
 **Entity: `Transaction`**
 
 - `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`
-- `TransactionType` enum: `Purchase` (Sell deferred — TRX-040)
+- `TransactionType` enum: `Purchase`, `Sell` (activated by SEL spec)
 - All financial fields in i64 micro-units (ADR-001)
 - Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount == (qty * price / MICRO) * rate / MICRO + fees` (i128 arithmetic)
 - Factory methods: `new()`, `with_id()`, `restore()`

@@ -40,9 +40,9 @@ The feature lives within the `transaction` bounded context (`features/transactio
 
 **TXL-021 — Transaction list loading — frontend (frontend)**: The transaction list is loaded on mount using the `accountId` and `assetId` from the route params, and reloaded whenever either filter changes to a complete selection.
 
-**TXL-022 — Displayed columns (frontend)**: The transaction table displays the following columns for each row: Type, Date, Quantity, Unit Price, Exchange Rate, Fees, Total Amount.
+**TXL-022 — Displayed columns (frontend)**: The transaction table displays the following columns for each row: Type, Date, Quantity, Unit Price, Exchange Rate, Fees, Total Amount, Realized P&L. The Realized P&L column displays the `realized_pnl` value for sell rows (per SEL-041) and a neutral placeholder (`—`) for purchase rows.
 
-**TXL-023 — Type column value (frontend)**: The Type column displays "Purchase" for every row. When the `Sell` transaction type is introduced (TRX-040), this column will reflect the actual transaction type.
+**TXL-023 — Type column value (frontend)**: The Type column displays the actual transaction type for each row: "Purchase" for purchase transactions and "Sell" for sell transactions, per SEL-040. Sell rows are visually distinguished from Purchase rows.
 
 **TXL-024 — Default sort order (frontend)**: Transactions are displayed with the most recent date first (descending). The user can toggle the sort direction by clicking the Date column header.
 
@@ -124,7 +124,7 @@ The feature lives within the `transaction` bounded context (`features/transactio
 
 ### Transaction Table
 
-Columns: Type | Date | Quantity | Unit Price | Exchange Rate | Fees | Total Amount | Actions
+Columns: Type | Date | Quantity | Unit Price | Exchange Rate | Fees | Total Amount | Realized P&L | Actions
 
 Actions per row: Edit icon button + Delete icon button.
 

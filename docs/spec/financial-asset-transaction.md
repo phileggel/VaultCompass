@@ -23,7 +23,7 @@ Represents a single purchase (or sale) event for an asset in an account.
 | `id`               | Unique identifier of the transaction.                                 |
 | `account_id`       | The account where the transaction occurred.                           |
 | `asset_id`         | The financial asset involved in the transaction.                      |
-| `transaction_type` | Type of transaction: `Purchase` or `Sell` (future).                   |
+| `transaction_type` | Type of transaction: `Purchase` or `Sell`. Immutable once saved (SEL-035). |
 | `date`             | Date when the transaction was executed.                               |
 | `quantity`         | Number of units acquired (positive, stored in micros: value \* 10^6). |
 | `unit_price`       | Price per unit in asset's currency (stored in micros: value \* 10^6). |
@@ -68,11 +68,11 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-025 — Holding cost basis update (backend)**: Creating a purchase transaction updates the `Holding.average_price` using the VWAP method (TRX-030).
 
-**TRX-026 — Total amount computation (backend)**: `total_amount` is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) + fees`. All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend — the DTO (`CreateTransactionDTO`) intentionally omits it. The frontend computes the same formula locally for real-time display preview only (see TRX-024).
+**TRX-026 — Total amount computation for purchases (backend)**: For `Purchase` transactions, `total_amount` is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) + fees` (fees increase cost). All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend — the DTO (`CreateTransactionDTO`) intentionally omits it. The frontend computes the same formula locally for real-time display preview only (see TRX-024). For `Sell` transactions, the formula differs in fee sign — see SEL-023.
 
 **TRX-027 — Atomicity of transaction and holding updates (backend)**: The transaction record insert and all associated `Holding` mutations (quantity and average_price) must be performed within a single database transaction. A failure in any step rolls back the entire operation.
 
-**TRX-028 — Archived asset auto-unarchive (backend)**: If the referenced asset is archived at the time of transaction creation or modification, the use case atomically unarchives the asset and persists the transaction in a single database operation. The archived flag is reverted if the transaction fails.
+**TRX-028 — Archived asset auto-unarchive on purchase (backend)**: For `Purchase` transactions only — if the referenced asset is archived at the time of transaction creation or modification, the use case atomically unarchives the asset and persists the transaction in a single database operation. The archived flag is reverted if the transaction fails. `Sell` transactions are explicitly excluded: selling an archived asset is rejected (see SEL-037).
 
 **TRX-029 — Archived asset confirmation (frontend)**: If the selected asset is archived, a confirmation dialog is shown before form submission, informing the user that saving will automatically unarchive the asset. The transaction is submitted only upon explicit user confirmation.
 
@@ -82,15 +82,15 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-031 — Transaction modification (backend)**: Modifying a transaction triggers a full recalculation of the `Holding` cost basis and quantity for the `(account_id, asset_id)` pair, processing all associated transactions in chronological order (TRX-036).
 
-**TRX-032 — Modifiable fields (backend)**: All fields of a transaction are modifiable. Changing the `asset_id` or `account_id` is permitted and triggers a recalculation of Holdings for both the old and new `(account_id, asset_id)` pairs.
+**TRX-032 — Modifiable fields (backend)**: All fields of a transaction are modifiable except `transaction_type`, which is immutable once saved (see SEL-035). Changing the `asset_id` or `account_id` is permitted and triggers a recalculation of Holdings for both the old and new `(account_id, asset_id)` pairs.
 
-**TRX-033 — Update field validation (backend)**: When modifying a transaction, the same field constraints as TRX-020 apply, and the archived asset guard (TRX-028) is enforced. If `account_id` or `asset_id` is changed, the existence and non-archived status of the new values is verified before proceeding.
+**TRX-033 — Update field validation (backend)**: When modifying a transaction, the same field constraints as TRX-020 apply, and the archived asset guard (TRX-028) is enforced. If `account_id` or `asset_id` is changed, the existence and non-archived status of the new values is verified before proceeding. When the `Sell` transaction type is active, editing a purchase transaction must also verify that no subsequent sell in the chronological sequence for the `(account_id, asset_id)` pair would become invalid (oversell) as a result — see SEL-032.
 
 **TRX-034 — Transaction deletion (backend)**: Deleting a transaction triggers a recalculation of the `Holding` for the `(account_id, asset_id)` pair. If no transactions remain for that asset in the account, the `Holding` record is removed.
 
 **TRX-035 — Deletion confirmation (frontend)**: Deleting a transaction requires a user confirmation dialog to prevent accidental data loss.
 
-**TRX-036 — Chronological integrity (backend)**: Recalculations of `Holding` state following a transaction mutation must process all associated transactions for the specific `(account_id, asset_id)` pair in chronological order to ensure the cost basis and quantity remain accurate.
+**TRX-036 — Chronological integrity (backend)**: Recalculations of `Holding` state following a transaction mutation must process all associated transactions for the specific `(account_id, asset_id)` pair in chronological order (`date ASC, created_at ASC`) to ensure the cost basis and quantity remain accurate. When two transactions share the same date, the one with the earlier `created_at` timestamp is processed first. The `transactions` table must include a `created_at TEXT NOT NULL` column (ISO 8601, default `datetime('now')`) to guarantee this ordering.
 
 **TRX-037 — TransactionUpdated event (backend)**: After any successful transaction mutation (create, update, or delete), the `TransactionService` (owned by the `transaction/` bounded context) publishes a `TransactionUpdated` event on the event bus. The use case delegates to the service; the service owns the event publication (B8 compliance). This event is distinct from `AccountUpdated`: `AccountUpdated` signals structural account changes; `TransactionUpdated` signals position-data changes.
 
@@ -98,7 +98,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 ### Lifecycle Management
 
-**TRX-040 — Zero quantity handling (backend)**: If a `Holding.quantity` reaches zero due to future `Sell` transactions, the `Holding` entity remains in the database to accommodate potential future purchase transactions. The `average_price` is maintained at its last known value until the next purchase transaction initiates a new VWAP calculation. _(Implementation deferred until `Sell` transaction type is introduced.)_
+**TRX-040 — Zero quantity handling (backend)**: If a `Holding.quantity` reaches zero due to `Sell` transactions, the `Holding` entity remains in the database to accommodate potential future purchase transactions. The `average_price` is maintained at its last known value until the next purchase transaction initiates a new VWAP calculation. _(Activated by the SEL spec.)_
 
 ---
 

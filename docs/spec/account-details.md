@@ -4,7 +4,7 @@
 
 The `Account Details` feature provides a view of a specific account's current positions and their cost basis. It allows users to drill down into an account to see their active holdings, the quantity held, the volume-weighted average purchase price, and the total cost basis for each position.
 
-This feature consumes data from two bounded contexts: `account` (for Holding data) and `asset` (for asset metadata: name, ticker, currency). Because these contexts must not import each other directly (B2), all cross-context reads are orchestrated by a dedicated `use_cases/account_details/` use case that injects `AccountService` and `AssetService` (per ADR-003 and ADR-004).
+This feature consumes data from three bounded contexts: `account` (for Holding data), `asset` (for asset metadata: name, ticker, currency), and `transaction` (for realized P&L per holding, per SEL-042). Because these contexts must not import each other directly (B2), all cross-context reads are orchestrated by a dedicated `use_cases/account_details/` use case that injects `AccountService`, `AssetService`, and `TransactionService` (per ADR-003, ADR-004, and ADR-005).
 
 > Cross-spec dependency: entry-point navigation behavior is owned by [Account Management](account.md) rule ACC-010.
 
@@ -33,9 +33,10 @@ A computed view of a holding enriched with asset metadata and cost basis. Define
 | `asset_id`        | ID of the held asset.                                                |
 | `asset_name`      | Display name of the asset (from asset context).                      |
 | `asset_reference` | Ticker or user-defined reference of the asset (from asset context).  |
-| `quantity`        | Current number of units held (i64 micros).                           |
-| `average_price`   | VWAP purchase price in account currency (i64 micros).                |
-| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros). |
+| `quantity`        | Current number of units held (i64 micros).                                                                                                              |
+| `average_price`   | VWAP purchase price in account currency (i64 micros).                                                                                                   |
+| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros).                                                                                    |
+| `realized_pnl`    | Cumulative realized profit or loss from all sell transactions for this holding, in account currency (i64 micros). Zero when no sells exist. See SEL-042. |
 
 ### AccountDetailsResponse (Backend DTO)
 
@@ -113,6 +114,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
           ├─ [use_cases/account_details/: Fetch Account metadata from account context]
           ├─ [use_cases/account_details/: Fetch Holdings (quantity > 0) from account context]
           ├─ [use_cases/account_details/: Fetch asset metadata for each holding from asset context]
+          ├─ [use_cases/account_details/: Fetch realized_pnl per holding from transaction context (SEL-042)]
           ├─ [use_cases/account_details/: Compute cost_basis per holding (ACD-023)]
           ├─ [use_cases/account_details/: Compute total_cost_basis (ACD-031)]
           │
@@ -139,6 +141,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
   - Quantity
   - Avg. Price
   - Cost Basis
+  - Realized P&L (per SEL-042; `—` when zero or no sells)
 
 ### States
 
@@ -163,6 +166,6 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 - ADR-003: cross-context use cases use sequential service calls.
 - ADR-004: use cases always inject services, never repositories.
 
-The `use_cases/account_details/` use case injects `AccountService` and `AssetService` and calls them in sequence. `TransactionService` is not injected — holdings already carry the pre-computed VWAP `average_price`.
+The `use_cases/account_details/` use case injects `AccountService`, `AssetService`, and `TransactionService` and calls them in sequence. `TransactionService` was added by ADR-005 to provide realized P&L aggregation per holding (SEL-042).
 
 **~~OQ-ACD-002~~ — Double re-fetch on TransactionUpdated** _(resolved)_: ACD-039 is the authoritative re-fetch for the Account Details view. TRX-038's store action is scoped to the transaction list feature and does not overlap with account details data. No duplication occurs.

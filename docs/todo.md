@@ -67,10 +67,9 @@ Une fois la mécanique snackbar/toast en place (feature dédiée), brancher un a
 Le bouton Settings du footer de `Sidebar.tsx` est câblé via `onSettingsClick?` mais `MainLayout` ne passe pas encore ce handler.
 Créer la page Settings (feature `settings/`) et passer `onSettingsClick` depuis `MainLayout`.
 
-## (frontend/transactions) — Buy button désactivé pour les assets archivés
+## ~~(frontend/transactions) — Buy button désactivé pour les assets archivés~~ ✅ résolu par TRX-029
 
-Dans `AssetTable.tsx`, le bouton "Buy" (`ShoppingCart`) n'est pas désactivé pour les assets archivés (contrairement au bouton Edit qui est `disabled={asset.is_archived}`).
-Ajouter `disabled={asset.is_archived}` avec un tooltip explicatif (TRX-029 déjà en place côté modal).
+Le bouton "Buy" reste actif pour les assets archivés : TRX-029 (dialog de confirmation auto-désarchivage) est le comportement retenu. Désactiver le bouton serait contradictoire avec ce flow.
 
 ## ~~(frontend/transactions) — TRX-010: bouton "Add Transaction" dans la vue Account Details~~ ✅ résolu
 
@@ -122,5 +121,12 @@ them as a follow-up?
 ## (frontend/accounts) — Extraire les handlers de ligne dans useAccountTable
 
 `AccountTable.tsx` définit des arrow functions inline dans le `.map()` des lignes : `onClick`/`onKeyDown` sur le `<tr>` et `onClick` sur les `IconButton` d'action. Déplacer ces handlers dans `useAccountTable` pour stabiliser les références et faciliter les tests. Voir warning frontend-reviewer (tâche account-page).
+
+## (backend/assets) — Implémenter le garde d'archivage (OQ-6) : bloquer l'archivage si position active
+
+`AssetService::archive_asset()` n'a aucun garde sur les holdings actives. Un asset avec `Holding.quantity > 0` peut actuellement être archivé sans erreur.
+Ajouter une vérification dans `AssetService::archive_asset()` : si au moins un `Holding.quantity > 0` existe pour cet asset (toutes comptes confondus), retourner une erreur métier.
+Ce garde est un prérequis pour retirer la vérification défensive de SEL-037 (Sell button désactivé si asset archivé).
+Spec de référence : OQ-6 dans `docs/spec/financial-asset-transaction.md`, et roadmap item 6.
 
 ## Add proper application icon

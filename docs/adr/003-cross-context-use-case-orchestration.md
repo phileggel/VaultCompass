@@ -1,7 +1,7 @@
 # ADR 003 — Cross-Context Use Case Orchestration via Sequential Service Calls
 
 **Date**: 2026-04-16
-**Status**: Accepted
+**Status**: Accepted — amended by ADR-005 (TransactionService added to account_details)
 
 ## Context
 
@@ -17,7 +17,7 @@ Three strategies were considered:
 
 Use **sequential service calls**. The use case injects the services it requires and calls them in order to assemble the response.
 
-For `use_cases/account_details/`: injects `AccountService` and `AssetService` only. `TransactionService` is not injected because holdings already carry the pre-computed VWAP `average_price`; no raw transaction data is needed.
+For `use_cases/account_details/`: injects `AccountService`, `AssetService`, and `TransactionService` (amended by ADR-005 — `TransactionService` was added to provide realized P&L aggregation per holding).
 
 Rationale:
 
