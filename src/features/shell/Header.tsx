@@ -1,23 +1,12 @@
-import { useRouterState } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
+import { IconButton } from "@/ui/components/button/IconButton";
 import { ThemeToggle } from "./theme_toggle/ThemeToggle";
-import { NAV_ITEMS } from "./useSidebar";
-
-function usePageTitle(pathname: string): string {
-  const { t } = useTranslation("common");
-  const exact = NAV_ITEMS.find((item) => item.path === pathname);
-  if (exact) return t(exact.labelKey);
-  const parent = NAV_ITEMS.find(
-    (item) => item.path !== "/" && pathname.startsWith(`${item.path}/`),
-  );
-  return parent ? t(parent.labelKey) : "";
-}
+import { useHeaderConfig } from "./useHeaderConfig";
 
 export function Header() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const title = usePageTitle(pathname);
+  const { title, onBack } = useHeaderConfig();
 
   useEffect(() => {
     logger.info("[Header] mounted");
@@ -36,6 +25,14 @@ export function Header() {
         shadow-elevation-1
       "
     >
+      {onBack && (
+        <IconButton
+          icon={<ArrowLeft size={20} />}
+          onClick={onBack}
+          aria-label="Back"
+          className="text-white hover:enabled:bg-white/20"
+        />
+      )}
       <div className="flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
       </div>

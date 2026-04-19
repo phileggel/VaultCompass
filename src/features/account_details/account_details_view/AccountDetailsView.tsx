@@ -1,11 +1,67 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
+import type { HoldingRowViewModel } from "../shared/presenter";
 import { useAccountDetails } from "./useAccountDetails";
+
+type HoldingRowProps = {
+  row: HoldingRowViewModel;
+  accountId: string;
+};
+
+function HoldingRow({ row, accountId }: HoldingRowProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  const handleAddTransaction = useCallback(() => {
+    navigate({
+      to: "/transactions/new",
+      search: { prefillAccountId: accountId, prefillAssetId: row.assetId },
+    });
+  }, [navigate, accountId, row.assetId]);
+
+  const handleViewTransactions = useCallback(() => {
+    navigate({
+      to: "/accounts/$accountId/transactions/$assetId",
+      params: { accountId, assetId: row.assetId },
+      search: { pendingTransactionAssetId: undefined },
+    });
+  }, [navigate, accountId, row.assetId]);
+
+  return (
+    <tr className="m3-tr">
+      <td className="m3-td">
+        <div className="flex flex-col">
+          <span className="font-medium text-m3-on-surface">{row.assetName}</span>
+          <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
+        </div>
+      </td>
+      <td className="m3-td text-right tabular-nums">{row.quantity}</td>
+      <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
+      <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
+      <td className="m3-td">
+        <div className="flex items-center gap-1">
+          <IconButton
+            icon={<Plus size={16} />}
+            size="sm"
+            aria-label={t("account_details.add_transaction")}
+            onClick={handleAddTransaction}
+          />
+          <IconButton
+            icon={<Search size={16} />}
+            size="sm"
+            aria-label={t("transaction.list_title")}
+            onClick={handleViewTransactions}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 export function AccountDetailsView() {
   const { t } = useTranslation();
@@ -26,36 +82,17 @@ export function AccountDetailsView() {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-2">
-        <button
-          type="button"
-          onClick={() => navigate({ to: "/accounts" })}
-          className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
-          aria-label={t("account_details.back")}
-        >
-          <ArrowLeft size={18} />
-          <span>{t("account_details.back")}</span>
-        </button>
-      </div>
-
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
         {/* Summary header */}
         <div className="px-6 py-4 bg-m3-surface-container-high">
           {isLoading ? (
-            <div className="space-y-2 animate-pulse">
-              <div className="h-6 w-48 bg-m3-surface-variant rounded" />
-              <div className="h-4 w-32 bg-m3-surface-variant rounded" />
-            </div>
+            <div className="h-4 w-32 bg-m3-surface-variant rounded animate-pulse" />
           ) : summary ? (
-            <div className="flex items-end justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-m3-on-surface">{summary.accountName}</h1>
-                <p className="text-sm text-m3-on-surface-variant mt-0.5">
-                  {t("account_details.total_cost_basis")}:{" "}
-                  <span className="font-semibold text-m3-on-surface">{summary.totalCostBasis}</span>
-                </p>
-              </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-m3-on-surface-variant">
+                {t("account_details.total_cost_basis")}:{" "}
+                <span className="font-semibold text-m3-on-surface">{summary.totalCostBasis}</span>
+              </p>
               {/* ACD-036 — non-empty state CTA */}
               {!summary.isEmpty && !summary.isAllClosed && (
                 <Button
@@ -135,33 +172,7 @@ export function AccountDetailsView() {
                 </thead>
                 <tbody>
                   {holdings.map((row) => (
-                    <tr key={row.assetId} className="m3-tr">
-                      <td className="m3-td">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-m3-on-surface">{row.assetName}</span>
-                          <span className="text-xs text-m3-on-surface-variant">
-                            {row.assetReference}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="m3-td text-right tabular-nums">{row.quantity}</td>
-                      <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
-                      <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
-                      <td className="m3-td">
-                        <IconButton
-                          icon={<Search size={16} />}
-                          size="sm"
-                          aria-label={t("transaction.list_title")}
-                          onClick={() =>
-                            navigate({
-                              to: "/accounts/$accountId/transactions/$assetId",
-                              params: { accountId, assetId: row.assetId },
-                              search: { pendingTransactionAssetId: undefined },
-                            })
-                          }
-                        />
-                      </td>
-                    </tr>
+                    <HoldingRow key={row.assetId} row={row} accountId={accountId} />
                   ))}
                 </tbody>
               </table>

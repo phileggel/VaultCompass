@@ -1,5 +1,4 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -24,9 +23,13 @@ export function AddTransactionPage() {
   const assets = useAppStore((s) => s.assets);
   const accounts = useAppStore((s) => s.accounts);
 
-  const handleSuccess = useCallback(() => {
-    navigate({ to: -1 as unknown as "." });
-  }, [navigate]);
+  const handleBack = useCallback(() => {
+    if (prefillAccountId) {
+      navigate({ to: "/accounts/$accountId", params: { accountId: prefillAccountId } });
+    } else {
+      navigate({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
+    }
+  }, [navigate, prefillAccountId]);
 
   const {
     formData,
@@ -39,7 +42,7 @@ export function AddTransactionPage() {
     handleSubmit,
     handleConfirmArchived,
     handleCancelArchived,
-  } = useAddTransaction({ prefillAssetId, prefillAccountId, onSubmitSuccess: handleSuccess });
+  } = useAddTransaction({ prefillAssetId, prefillAccountId, onSubmitSuccess: handleBack });
 
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
   const selectedAccount = accounts.find((a) => a.id === formData.accountId);
@@ -47,39 +50,22 @@ export function AddTransactionPage() {
 
   const accountOptions = accounts.map((a) => ({ label: a.name, value: a.id }));
 
-  const handleCreateNewAsset = (query: string) => {
-    const returnPath = prefillAccountId
-      ? `/transactions/new?prefillAccountId=${prefillAccountId}`
-      : "/transactions/new";
-    navigate({
-      to: "/assets",
-      search: { createNew: query, returnPath },
-    });
-  };
+  const handleCreateNewAsset = useCallback(
+    (query: string) => {
+      const returnPath = prefillAccountId
+        ? `/transactions/new?prefillAccountId=${prefillAccountId}`
+        : "/transactions/new";
+      navigate({
+        to: "/assets",
+        search: { createNew: query, returnPath },
+      });
+    },
+    [navigate, prefillAccountId],
+  );
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-2">
-        <button
-          type="button"
-          onClick={() => navigate({ to: -1 as unknown as "." })}
-          className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
-          aria-label={t("action.back")}
-        >
-          <ArrowLeft size={18} />
-          <span>{t("action.back")}</span>
-        </button>
-      </div>
-
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
-        {/* Title bar */}
-        <div className="px-6 py-4 bg-m3-surface-container-high">
-          <h1 className="text-2xl font-bold text-m3-on-surface">
-            {t("transaction.add_modal_title")}
-          </h1>
-        </div>
-
         {/* Form */}
         <div className="flex-1 overflow-auto px-6 py-6">
           <form
@@ -228,11 +214,7 @@ export function AddTransactionPage() {
 
         {/* Footer actions */}
         <div className="px-6 py-4 bg-m3-surface-container-high flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => navigate({ to: -1 as unknown as "." })}
-            disabled={isSubmitting}
-          >
+          <Button variant="secondary" onClick={handleBack} disabled={isSubmitting}>
             {t("action.cancel")}
           </Button>
           <Button

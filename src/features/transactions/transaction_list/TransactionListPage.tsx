@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
@@ -98,27 +98,9 @@ export function TransactionListPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-2">
-        <button
-          type="button"
-          onClick={() =>
-            navigate({ to: "/accounts/$accountId", params: { accountId: selectedAccountId } })
-          }
-          className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
-          aria-label={t("transaction.back_to_account")}
-        >
-          <ArrowLeft size={18} />
-          <span>{t("transaction.back_to_account")}</span>
-        </button>
-      </div>
-
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
         {/* Filter bar */}
         <div className="px-6 py-4 bg-m3-surface-container-high flex flex-wrap gap-4 items-end">
-          <h1 className="text-2xl font-bold text-m3-on-surface mr-auto">
-            {t("transaction.list_title")}
-          </h1>
           <div className="w-56">
             <SelectField
               id="txl-account"
