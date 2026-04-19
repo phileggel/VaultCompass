@@ -1,24 +1,28 @@
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Edit2, ShoppingCart, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { Archive, ArchiveRestore, Edit2, ShoppingCart, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Asset } from "@/bindings";
+import { AddTransactionModal } from "@/features/transactions";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
-import { AddTransactionModal } from "../../transactions/add_transaction/AddTransactionModal";
+import { SortIcon } from "@/ui/components/SortIcon";
 import { EditAssetModal } from "../edit_asset_modal/EditAssetModal";
 import { getRiskBadgeClasses } from "../shared/presenter";
 import { useAssets } from "../useAssets";
-import { type SortConfig, useAssetTable } from "./useAssetTable";
+import { useAssetTable } from "./useAssetTable";
 
 interface AssetTableProps {
   searchTerm: string;
   showArchived: boolean;
+  pendingBuyAssetId?: string;
 }
 
-export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
+export function AssetTable({ searchTerm, showArchived, pendingBuyAssetId }: AssetTableProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { archiveAsset, unarchiveAsset, assets, loading, fetchError, fetchAssets } = useAssets();
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -48,17 +52,18 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
 
   // Buy transaction state (TRX-010)
-  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
-  const [buyPrefillAssetId, setBuyPrefillAssetId] = useState<string | undefined>(undefined);
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(!!pendingBuyAssetId);
+  const [buyPrefillAssetId, setBuyPrefillAssetId] = useState<string | undefined>(pendingBuyAssetId);
 
-  const SortIcon = ({ column }: { column: SortConfig["key"] }) => {
-    if (sortConfig.key !== column) return null;
-    return sortConfig.direction === "asc" ? (
-      <ArrowUp size={14} className="ml-1 text-m3-primary" />
-    ) : (
-      <ArrowDown size={14} className="ml-1 text-m3-primary" />
-    );
-  };
+  const handleCreateNewAsset = useCallback(
+    (query: string) => {
+      navigate({
+        to: "/assets",
+        search: { createNew: query, returnPath: "/assets", pendingTransactionAssetId: undefined },
+      });
+    },
+    [navigate],
+  );
 
   const handleArchiveConfirm = async () => {
     if (!assetToArchive) return;
@@ -96,27 +101,35 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
           <tr>
             <th className="m3-th cursor-pointer" onClick={() => handleSort("name")}>
               <div className="flex items-center">
-                {t("asset.column_name")} <SortIcon column="name" />
+                {t("asset.column_name")}
+                <SortIcon active={sortConfig.key === "name"} direction={sortConfig.direction} />
               </div>
             </th>
             <th className="m3-th cursor-pointer" onClick={() => handleSort("reference")}>
               <div className="flex items-center">
-                {t("asset.column_reference")} <SortIcon column="reference" />
+                {t("asset.column_reference")}
+                <SortIcon
+                  active={sortConfig.key === "reference"}
+                  direction={sortConfig.direction}
+                />
               </div>
             </th>
             <th className="m3-th cursor-pointer" onClick={() => handleSort("class")}>
               <div className="flex items-center">
-                {t("asset.column_class")} <SortIcon column="class" />
+                {t("asset.column_class")}
+                <SortIcon active={sortConfig.key === "class"} direction={sortConfig.direction} />
               </div>
             </th>
             <th className="m3-th cursor-pointer" onClick={() => handleSort("category")}>
               <div className="flex items-center">
-                {t("asset.column_category")} <SortIcon column="category" />
+                {t("asset.column_category")}
+                <SortIcon active={sortConfig.key === "category"} direction={sortConfig.direction} />
               </div>
             </th>
             <th className="m3-th text-center cursor-pointer" onClick={() => handleSort("currency")}>
               <div className="flex items-center justify-center">
-                {t("asset.column_currency")} <SortIcon column="currency" />
+                {t("asset.column_currency")}
+                <SortIcon active={sortConfig.key === "currency"} direction={sortConfig.direction} />
               </div>
             </th>
             <th
@@ -124,7 +137,11 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
               onClick={() => handleSort("risk_level")}
             >
               <div className="flex items-center justify-center">
-                {t("asset.column_risk")} <SortIcon column="risk_level" />
+                {t("asset.column_risk")}
+                <SortIcon
+                  active={sortConfig.key === "risk_level"}
+                  direction={sortConfig.direction}
+                />
               </div>
             </th>
             <th className="m3-th">{t("asset.column_status")}</th>
@@ -271,6 +288,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
           setBuyPrefillAssetId(undefined);
         }}
         prefillAssetId={buyPrefillAssetId}
+        onCreateNewAsset={handleCreateNewAsset}
       />
 
       {/* Archive Confirmation Dialog — R13 */}

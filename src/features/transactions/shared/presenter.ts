@@ -1,5 +1,5 @@
 import type { Transaction } from "@/bindings";
-import { microToDecimal } from "./microUnits";
+import { microToDecimal } from "@/lib/microUnits";
 
 /** Display-ready shape for a transaction row. */
 export interface TransactionRowViewModel {

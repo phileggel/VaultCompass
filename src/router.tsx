@@ -19,7 +19,10 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/assets" });
+    throw redirect({
+      to: "/assets",
+      search: { createNew: undefined, returnPath: undefined, pendingTransactionAssetId: undefined },
+    });
   },
 });
 
@@ -27,6 +30,14 @@ const assetsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/assets",
   component: AssetManager,
+  validateSearch: (search: Record<string, unknown>) => ({
+    createNew: typeof search.createNew === "string" ? search.createNew : undefined,
+    returnPath: typeof search.returnPath === "string" ? search.returnPath : undefined,
+    pendingTransactionAssetId:
+      typeof search.pendingTransactionAssetId === "string"
+        ? search.pendingTransactionAssetId
+        : undefined,
+  }),
 });
 
 const accountsRoute = createRoute({
@@ -39,12 +50,24 @@ const accountDetailsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts/$accountId",
   component: AccountDetailsView,
+  validateSearch: (search: Record<string, unknown>) => ({
+    pendingTransactionAssetId:
+      typeof search.pendingTransactionAssetId === "string"
+        ? search.pendingTransactionAssetId
+        : undefined,
+  }),
 });
 
 const transactionListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts/$accountId/transactions/$assetId",
   component: TransactionListPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    pendingTransactionAssetId:
+      typeof search.pendingTransactionAssetId === "string"
+        ? search.pendingTransactionAssetId
+        : undefined,
+  }),
 });
 
 const categoriesRoute = createRoute({

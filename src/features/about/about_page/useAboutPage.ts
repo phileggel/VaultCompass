@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { updateGateway } from "@/features/update/gateway";
 import { logger } from "@/lib/logger";
+import { updateGateway } from "@/lib/update";
 
 export type CheckStatus = "idle" | "checking" | "up_to_date" | "error";
 

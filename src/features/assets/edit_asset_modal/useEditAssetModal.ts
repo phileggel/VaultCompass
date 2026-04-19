@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Asset, AssetClass } from "@/bindings";
-import { useCategories } from "@/features/categories/useCategories";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import { hasDuplicateReference } from "../shared/validateAsset";
 import { useAssets } from "../useAssets";
 
@@ -12,7 +12,7 @@ interface UseEditAssetModalProps {
 
 export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
   const { updateAsset, assets } = useAssets();
-  const { categories } = useCategories();
+  const categories = useAppStore((s) => s.categories);
 
   const [formData, setFormData] = useState({
     name: "",

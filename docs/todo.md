@@ -2,6 +2,18 @@
 
 <!-- Ajouter les nouvelles dettes techniques et items de backlog ici. Format : ## (domaine) — Titre court -->
 
+## ~~(frontend/assets) — F22: AssetTable importe AddTransactionModal (cross-feature)~~ ✅ résolu
+
+Import corrigé vers `@/features/transactions` (index public).
+
+## ~~(frontend/assets) — SortIcon défini dans le corps de AssetTable (remontage à chaque render)~~ ✅ résolu
+
+Remplacé par `<SortIcon>` de `@/ui/components/SortIcon` (composant partagé).
+
+## ~~(frontend/account_details) — F22: AccountDetailsView importe AddTransactionModal (cross-feature)~~ ✅ résolu
+
+Import corrigé vers `@/features/transactions` (index public).
+
 ## (ai/agents) — i18n-checker : inclure les fichiers nouvellement ajoutés
 
 L'agent utilise `git diff --name-only HEAD` + `git diff --name-only --cached` mais rate les nouveaux fichiers staged (`A ` dans `git status --porcelain`) quand ils n'ont pas encore de diff HEAD.
@@ -111,3 +123,5 @@ t("shell.sidebar_version", { version: appVersion }).
 
 These were present before this task — the migration just exposed them because the files were touched. Want me to fix
 them as a follow-up?
+
+## Add proper application icon

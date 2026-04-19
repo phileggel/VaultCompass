@@ -18,6 +18,8 @@ interface AddTransactionModalProps {
   prefillAssetId?: string;
   /** Pre-fill the account (TRX-011). */
   prefillAccountId?: string;
+  /** Called when the user wants to create a new asset not yet in the catalog. */
+  onCreateNewAsset?: (query: string) => void;
 }
 
 export function AddTransactionModal({
@@ -25,6 +27,7 @@ export function AddTransactionModal({
   onClose,
   prefillAssetId,
   prefillAccountId,
+  onCreateNewAsset,
 }: AddTransactionModalProps) {
   const { t } = useTranslation();
   useEffect(() => {
@@ -102,6 +105,8 @@ export function AddTransactionModal({
             onChange={(id) => handleChange("assetId", id)}
             searchKeys={["name", "reference"]}
             placeholder={t("transaction.form_asset_placeholder")}
+            onCreateNew={onCreateNewAsset}
+            createLabel={onCreateNewAsset ? t("asset.create_new") : undefined}
           />
 
           {/* Date */}

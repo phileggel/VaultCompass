@@ -114,7 +114,11 @@ export function useTransactionList() {
   const handleDeleteSuccess = useCallback(async () => {
     const remaining = await refreshTransactions();
     if (remaining.length === 0) {
-      navigate({ to: "/accounts/$accountId", params: { accountId: selectedAccountId } });
+      navigate({
+        to: "/accounts/$accountId",
+        params: { accountId: selectedAccountId },
+        search: { pendingTransactionAssetId: undefined },
+      });
     }
   }, [refreshTransactions, selectedAccountId, navigate]);
 

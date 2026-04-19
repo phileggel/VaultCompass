@@ -18,16 +18,16 @@ This document maps every operation needed to cover the full lifecycle of a finan
 
 Manage the list of tradable instruments the user can reference in transactions.
 
-| Operation                 | Status     | Notes                                                     |
-| ------------------------- | ---------- | --------------------------------------------------------- |
-| Create asset              | ✅ Done    | Name, ticker, class, category, currency, risk level       |
-| Edit asset                | ✅ Done    |                                                           |
-| Archive asset             | ✅ Done    | Soft delete; preserves history                            |
-| Unarchive asset           | ✅ Done    |                                                           |
-| Delete asset              | ✅ Done    | Hard delete; only safe when no holdings exist             |
-| Archive eligibility guard | 🔲 Planned | Block archiving if `Holding.quantity > 0` (spec TRX OQ-6) |
-| Delete eligibility guard  | 🔲 Planned | Block hard delete if any transaction exists for the asset |
-| Inline asset creation     | 🔲 Planned | Create a new asset from Add/Edit Transaction modal when the asset does not exist yet; `ComboboxField` already supports `onCreateNew` + `createLabel` props — work is wiring them to the asset `ComboboxField` in both modals and opening the existing `AddAssetModal` pre-filled with the typed query |
+| Operation                 | Status     | Notes                                                                                                                                                                                                                                     |
+| ------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create asset              | ✅ Done    | Name, ticker, class, category, currency, risk level                                                                                                                                                                                       |
+| Edit asset                | ✅ Done    |                                                                                                                                                                                                                                           |
+| Archive asset             | ✅ Done    | Soft delete; preserves history                                                                                                                                                                                                            |
+| Unarchive asset           | ✅ Done    |                                                                                                                                                                                                                                           |
+| Delete asset              | ✅ Done    | Hard delete; only safe when no holdings exist                                                                                                                                                                                             |
+| Archive eligibility guard | 🔲 Planned | Block archiving if `Holding.quantity > 0` (spec TRX OQ-6)                                                                                                                                                                                 |
+| Delete eligibility guard  | 🔲 Planned | Block hard delete if any transaction exists for the asset                                                                                                                                                                                 |
+| Inline asset creation     | ✅ Done    | `ComboboxField` `onCreateNew` navigates to `/assets?createNew=<query>&returnPath=<origin>`; on success navigates back with `pendingTransactionAssetId` and auto-opens the transaction modal with new asset pre-filled (DDD F22 compliant) |
 
 Spec: `docs/spec/asset.md`
 
@@ -37,19 +37,19 @@ Spec: `docs/spec/asset.md`
 
 Record a purchase that opens or increases a position in an account.
 
-| Operation                     | Status       | Notes                                                         |
-| ----------------------------- | ------------ | ------------------------------------------------------------- |
-| Add purchase transaction      | ✅ Done      | Quantity, unit price, exchange rate, fees, note               |
-| Total amount auto-computation | ✅ Done      | Backend formula: `floor(qty×price/M)×rate/M + fees` (TRX-026) |
-| Multi-currency support        | ✅ Done      | Exchange rate stored per transaction (TRX-021)                |
-| VWAP cost basis update        | ✅ Done      | `avg_price = Σ total_amount / Σ quantity` (TRX-030)           |
-| Atomic holding update         | ✅ Done      | Transaction + holding in one DB transaction (TRX-027)         |
-| Archived asset auto-unarchive | ✅ Done      | With frontend confirmation dialog (TRX-028, TRX-029)          |
-| Edit purchase transaction     | ✅ Done      | Full recalculation of holding on save (TRX-031)               |
-| Delete transaction            | ✅ Done      | Full flow: backend + confirmation dialog + snackbar (TRX-035) |
-| Delete confirmation dialog    | ✅ Done      | ConfirmationDialog in TransactionListPage (TRX-035)           |
-| Transaction list view         | ✅ Done      | Per-account/asset filter, sort, edit/delete actions (TXL spec) |
-| Account currency field        | 🔲 Planned   | Exchange rate visibility currently hardcoded vs EUR (todo)    |
+| Operation                     | Status     | Notes                                                          |
+| ----------------------------- | ---------- | -------------------------------------------------------------- |
+| Add purchase transaction      | ✅ Done    | Quantity, unit price, exchange rate, fees, note                |
+| Total amount auto-computation | ✅ Done    | Backend formula: `floor(qty×price/M)×rate/M + fees` (TRX-026)  |
+| Multi-currency support        | ✅ Done    | Exchange rate stored per transaction (TRX-021)                 |
+| VWAP cost basis update        | ✅ Done    | `avg_price = Σ total_amount / Σ quantity` (TRX-030)            |
+| Atomic holding update         | ✅ Done    | Transaction + holding in one DB transaction (TRX-027)          |
+| Archived asset auto-unarchive | ✅ Done    | With frontend confirmation dialog (TRX-028, TRX-029)           |
+| Edit purchase transaction     | ✅ Done    | Full recalculation of holding on save (TRX-031)                |
+| Delete transaction            | ✅ Done    | Full flow: backend + confirmation dialog + snackbar (TRX-035)  |
+| Delete confirmation dialog    | ✅ Done    | ConfirmationDialog in TransactionListPage (TRX-035)            |
+| Transaction list view         | ✅ Done    | Per-account/asset filter, sort, edit/delete actions (TXL spec) |
+| Account currency field        | 🔲 Planned | Exchange rate visibility currently hardcoded vs EUR (todo)     |
 
 Spec: `docs/spec/financial-asset-transaction.md`
 
@@ -140,11 +140,11 @@ Based on value and dependency chain:
 
 1. ~~**Delete confirmation UI**~~ — ✅ done
 2. ~~**Transaction list view**~~ — ✅ done
-3. **Inline asset creation from Account Details** — small UX win; no new backend spec needed
+3. ~~**Inline asset creation from Account Details**~~ — ✅ done
 4. **Sell transaction** — unlocks phases 5 & 6; requires new spec
-4. **Realized P&L** — follows sell; display per transaction and per position
-5. **Archive eligibility guard** — depends on phase 5 (need sell to reach `qty = 0`)
-6. **Current market price** — data source decision needed (manual vs. feed); standalone spec
-7. **Unrealized P&L + performance %** — depends on market price
-8. **Corporate events (dividends, splits)** — standalone spec; relatively independent
-9. **Portfolio dashboard** — aggregation of phases 3–6; last to implement
+5. **Realized P&L** — follows sell; display per transaction and per position
+6. **Archive eligibility guard** — depends on phase 5 (need sell to reach `qty = 0`)
+7. **Current market price** — data source decision needed (manual vs. feed); standalone spec
+8. **Unrealized P&L + performance %** — depends on market price
+9. **Corporate events (dividends, splits)** — standalone spec; relatively independent
+10. **Portfolio dashboard** — aggregation of phases 3–6; last to implement

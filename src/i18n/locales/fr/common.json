@@ -61,7 +61,8 @@
     "success_updated": "Actif modifié avec succès.",
     "success_archived": "Actif archivé.",
     "success_unarchived": "Actif désarchivé.",
-    "success_deleted": "Actif supprimé."
+    "success_deleted": "Actif supprimé.",
+    "create_new": "+ Nouvel actif"
   },
   "account": {
     "title": "Comptes",

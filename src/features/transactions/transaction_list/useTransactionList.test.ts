@@ -125,6 +125,7 @@ describe("useTransactionList", () => {
     expect(mockNavigate).toHaveBeenCalledWith({
       to: "/accounts/$accountId",
       params: { accountId: "account-1" },
+      search: { pendingTransactionAssetId: undefined },
     });
   });
 

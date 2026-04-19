@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,6 +18,12 @@ import { useTransactionList } from "./useTransactionList";
 export function TransactionListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { accountId: routeAccountId, assetId: routeAssetId } = useParams({
+    from: "/accounts/$accountId/transactions/$assetId",
+  });
+  const { pendingTransactionAssetId } = useSearch({
+    from: "/accounts/$accountId/transactions/$assetId",
+  });
 
   useEffect(() => {
     logger.info("[TransactionListPage] mounted");
@@ -50,6 +56,34 @@ export function TransactionListPage() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [pendingAssetId, setPendingAssetId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (pendingTransactionAssetId) {
+      setPendingAssetId(pendingTransactionAssetId);
+      setIsAddModalOpen(true);
+      navigate({
+        to: "/accounts/$accountId/transactions/$assetId",
+        params: { accountId: routeAccountId, assetId: routeAssetId },
+        search: { pendingTransactionAssetId: undefined },
+        replace: true,
+      });
+    }
+  }, [pendingTransactionAssetId, routeAccountId, routeAssetId, navigate]);
+
+  const handleCreateNewAsset = useCallback(
+    (query: string) => {
+      navigate({
+        to: "/assets",
+        search: {
+          createNew: query,
+          returnPath: `/accounts/${selectedAccountId}/transactions/${selectedAssetId ?? ""}`,
+          pendingTransactionAssetId: undefined,
+        },
+      });
+    },
+    [navigate, selectedAccountId, selectedAssetId],
+  );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingTransactionId) return;
@@ -70,7 +104,11 @@ export function TransactionListPage() {
         <button
           type="button"
           onClick={() =>
-            navigate({ to: "/accounts/$accountId", params: { accountId: selectedAccountId } })
+            navigate({
+              to: "/accounts/$accountId",
+              params: { accountId: selectedAccountId },
+              search: { pendingTransactionAssetId: undefined },
+            })
           }
           className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
           aria-label={t("transaction.back_to_account")}
@@ -232,6 +270,7 @@ export function TransactionListPage() {
             handleEditSuccess();
           }}
           transaction={editingTransaction}
+          onCreateNewAsset={handleCreateNewAsset}
         />
       )}
 
@@ -250,9 +289,13 @@ export function TransactionListPage() {
       {/* Add transaction modal — empty state CTA */}
       <AddTransactionModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setPendingAssetId(undefined);
+        }}
         prefillAccountId={selectedAccountId}
-        prefillAssetId={selectedAssetId ?? undefined}
+        prefillAssetId={pendingAssetId ?? selectedAssetId ?? undefined}
+        onCreateNewAsset={handleCreateNewAsset}
       />
     </div>
   );

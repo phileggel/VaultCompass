@@ -61,7 +61,8 @@
     "success_updated": "Asset updated successfully.",
     "success_archived": "Asset archived.",
     "success_unarchived": "Asset unarchived.",
-    "success_deleted": "Asset deleted."
+    "success_deleted": "Asset deleted.",
+    "create_new": "+ New asset"
   },
   "account": {
     "title": "Accounts",

@@ -1,5 +1,5 @@
 import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
-import { microToDecimal } from "@/features/transactions/shared/microUnits";
+import { microToDecimal } from "@/lib/microUnits";
 
 export interface HoldingRowViewModel {
   assetId: string;

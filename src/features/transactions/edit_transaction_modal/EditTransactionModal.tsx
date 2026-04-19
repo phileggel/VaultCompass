@@ -18,6 +18,8 @@ interface EditTransactionModalProps {
   /** Called only after a confirmed successful save (not on cancel). */
   onSuccess?: () => void;
   transaction: Transaction;
+  /** Called when the user wants to create a new asset not yet in the catalog. */
+  onCreateNewAsset?: (query: string) => void;
 }
 
 export function EditTransactionModal({
@@ -25,6 +27,7 @@ export function EditTransactionModal({
   onClose,
   onSuccess,
   transaction,
+  onCreateNewAsset,
 }: EditTransactionModalProps) {
   const { t } = useTranslation();
   useEffect(() => {
@@ -102,6 +105,8 @@ export function EditTransactionModal({
             onChange={(id) => handleChange("assetId", id)}
             searchKeys={["name", "reference"]}
             placeholder={t("transaction.form_asset_placeholder")}
+            onCreateNew={onCreateNewAsset}
+            createLabel={onCreateNewAsset ? t("asset.create_new") : undefined}
           />
 
           {/* Date */}

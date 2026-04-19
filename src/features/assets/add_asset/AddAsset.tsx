@@ -9,9 +9,11 @@ import { useAddAsset } from "./useAddAsset";
 interface AddAssetModalProps {
   isOpen: boolean;
   onClose: () => void;
+  prefillName?: string;
+  onSuccess?: (assetId: string) => void;
 }
 
-export function AddAssetModal({ isOpen, onClose }: AddAssetModalProps) {
+export function AddAssetModal({ isOpen, onClose, prefillName, onSuccess }: AddAssetModalProps) {
   const { t } = useTranslation();
   const {
     formData,
@@ -22,7 +24,13 @@ export function AddAssetModal({ isOpen, onClose }: AddAssetModalProps) {
     handleClassChange,
     handleSubmit,
     categories,
-  } = useAddAsset({ onSubmitSuccess: onClose });
+  } = useAddAsset({
+    prefillName,
+    onSubmitSuccess: (assetId) => {
+      onSuccess?.(assetId);
+      onClose();
+    },
+  });
 
   useEffect(() => {
     logger.info("[AddAssetModal] mounted");
