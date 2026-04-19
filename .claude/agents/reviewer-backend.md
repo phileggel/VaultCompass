@@ -69,6 +69,7 @@ Group findings by file, then by severity:
 
 ### 🔴 Critical (must fix)
 - Line X: <issue> → <fix>
+- Line X: <issue> [DECISION] → <decision guidance>
 
 ### 🟡 Warning (should fix)
 - Line X: <issue> → <fix>
@@ -77,7 +78,9 @@ Group findings by file, then by severity:
 - Line X: <issue> → <fix>
 ```
 
+Use the `[DECISION]` tag on a Critical when the correct fix requires an architectural choice that cannot be resolved without domain or team input. Do not use it for Criticals with an obvious mechanical fix.
+
 If a file has no issues, write `✅ No issues found.`
 
 At the end, output a one-line summary:
-`Review complete: N critical, N warnings, N suggestions across N files.`
+`Review complete: N critical (D decisions), N warnings, N suggestions across N files.`
