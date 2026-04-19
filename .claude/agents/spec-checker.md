@@ -1,6 +1,6 @@
 ---
 name: spec-checker
-description: Verifies that all business rules (TRIGRAMME-NNN, e.g. REF-010, REF-020) in a feature spec doc are fully implemented in code and covered by tests. Use when implementation is complete and ready for spec compliance check.
+description: Verifies that all business rules (TRIGRAM-NNN, e.g. REF-010, REF-020) in a feature spec doc are fully implemented in code and covered by tests. Use when implementation is complete and ready for spec compliance check.
 tools: Read, Grep, Glob, Bash
 model: claude-opus-4-6
 ---
@@ -19,7 +19,7 @@ The user normally passes the spec path explicitly. If no document is specified, 
 
 ### Step 1 — Extract rules & context
 
-1. Read the spec document: extract every rule identifier matching **TRIGRAMME-NNN** format (e.g. REF-010, REF-020, REF-030, PAY-011).
+1. Read the spec document: extract every rule identifier matching **TRIGRAM-NNN** format (e.g. REF-010, REF-020, REF-030, PAY-011).
 2. Extract their scope (`frontend`, `backend`, or `frontend + backend`) and description.
 3. Read the following for project conventions (skip silently if absent):
    - `ARCHITECTURE.md` — bounded contexts, module layout, naming conventions (required for the Context alignment check in the output).
@@ -93,8 +93,8 @@ Action required: list rules needing attention.
 
 ## Critical Rules
 
-1. **Be Pedantic & Exact** — If a rule says "read-only" and the code allows editing, or if a validation is missing a constraint defined in the TRIGRAMME-NNN rule, it must be flagged as `⚠️ partial`.
-2. **ADR is Law** — Even if a business rule (TRIGRAMME-NNN) is functional, if the code violates an active ADR (e.g., uses `f64` instead of `i64`, or omits `soft-delete`), it is a **🔴 Critical violation**.
+1. **Be Pedantic & Exact** — If a rule says "read-only" and the code allows editing, or if a validation is missing a constraint defined in the TRIGRAM-NNN rule, it must be flagged as `⚠️ partial`.
+2. **ADR is Law** — Even if a business rule (TRIGRAM-NNN) is functional, if the code violates an active ADR (e.g., uses `f64` instead of `i64`, or omits `soft-delete`), it is a **🔴 Critical violation**.
 3. **Context Integrity** — Verify the physical location of the code. If a feature for context 'Billing' is implemented inside the 'Inventory' folder, flag it as a 🔴 Critical architectural misalignment.
 4. **No "Ghost" Tests** — Do not assume a rule is tested because the file exists. You must find the specific test case exercising the logic. If no match is found, mark it as `⚠️ no test`.
 5. **Strict Traceability** — Always link findings to the file name and line number using tools.

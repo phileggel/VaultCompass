@@ -8,6 +8,58 @@ Each item lists its **trigger** (when to invoke it) and a one-line description.
 
 ---
 
+## Workflows
+
+### Option A — Full Feature Workflow
+
+_Use for: New features, new business logic, significant UI changes, or complex refactoring._
+
+**Phase 1: Pre-implementation (Spec & Plan)**
+
+1. Run **`/spec-writer`** skill → produces `docs/spec/{feature}.md`.
+2. _(Optional)_ Run **`/adr-manager`** skill → produces `docs/adr/{ref}.md` if an architectural decision is needed.
+3. Run **`spec-reviewer`** agent to validate spec quality (DDD alignment, rule atomicity, UX completeness).
+4. Run **`feature-planner`** agent → produces `docs/plan/{feature}-plan.md` with a task checklist.
+
+**Phase 2: Execution**
+
+1. Read `docs/plan/{feature}-plan.md` — this is your Primary TaskList. Do not deviate from it.
+2. Implement the feature layer by layer, updating checkboxes (`[ ]` → `[x]`) in the plan file after each completed task.
+
+**Phase 3: Review & Quality**
+
+1. Run `python3 scripts/check.py` (or `just check-full`) and fix all issues.
+2. Write missing tests.
+3. Run the reviewer gauntlet:
+   - **`reviewer`** agent → fix issues.
+   - If `.rs` modified: **`reviewer-backend`** agent → fix issues.
+   - If `.ts` / `.tsx` modified: **`reviewer-frontend`** agent → fix issues.
+   - If `migrations/` modified: **`reviewer-sql`** agent → fix issues.
+   - If `.sh`, `.py`, or `.githooks` modified: **`script-reviewer`** agent.
+   - If `capabilities/*.json` or `tauri.conf.json` modified: **`maintainer`** agent.
+   - If UI text changed: **`i18n-checker`** agent.
+
+**Phase 4: Validation & Closure**
+
+1. Run **`spec-checker`** agent to confirm all spec rules are covered — tick its checkbox in the plan.
+2. Use **`/smart-commit`** skill to commit.
+3. Run **`workflow-validator`** agent as the final gate — verifies all plan checkboxes are ticked. Its successful completion is the sign-off; no checkbox needed.
+
+---
+
+### Option B — Simple Technical Workflow
+
+_Use for: Bug fixes, dependency updates, minor maintenance (no new business rules or features)._
+
+1. **Analysis**: Read relevant documentation and analyze the codebase.
+2. **Direct Plan**: Propose a concise TODO plan with exact file paths in the chat. Ask user to validate.
+3. **Tracking**: Use `TaskCreate` / `TaskUpdate` tools to track workflow steps (`in_progress` when starting, `completed` when done).
+4. **Implementation**: Execute the code changes.
+5. **Review & Quality**: Run `python3 scripts/check.py` (or `just check-full`), write missing tests, and run relevant subagents (`reviewer`, `script-reviewer`, etc.) as in Phase 3 above.
+6. **Closure**: Ask user if another task is needed before commit, otherwise use **`/smart-commit`** skill.
+
+---
+
 ## Code Review Agents
 
 | Agent               | Trigger                                  | Description                                                                                                                                                                                           |
@@ -21,23 +73,23 @@ Each item lists its **trigger** (when to invoke it) and a one-line description.
 
 ## Spec & Planning Agents
 
-| Agent             | Trigger                                   | Description                                                                                                          |
-| ----------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `spec-writer`     | Starting a new feature                    | Interactive interview → `docs/spec/{feature}.md` with TRIGRAMME-NNN business rules and optional UX draft             |
-| `spec-reviewer`   | After spec-writer, before feature-planner | Quality gate on a spec doc: rule atomicity, scope, DDD alignment, UX completeness, conflicts                         |
-| `feature-planner` | After spec-reviewer approves              | Translates spec into `docs/plan/{feature}-plan.md` with DDD layer breakdown, rule-to-task mapping, Workflow TaskList |
-| `spec-checker`    | After implementation, before commit       | Verifies every TRIGRAMME-NNN rule from the spec is implemented in code and covered by tests                          |
+| Agent             | Trigger                                   | Description                                                                                                                                    |
+| ----------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spec-reviewer`   | After spec-writer, before feature-planner | Quality gate on a spec doc: rule atomicity, scope, DDD alignment, UX completeness, conflicts                                                   |
+| `retro-spec`      | Onboarding an existing feature to the kit | Infers TRIGRAM-NNN rules from existing code and writes a first-pass `docs/spec/{domain}.md` with `retro-inferred` annotations for human review |
+| `feature-planner` | After spec-reviewer approves              | Translates spec into `docs/plan/{feature}-plan.md` with DDD layer breakdown, rule-to-task mapping, Workflow TaskList                           |
+| `spec-checker`    | After implementation, before commit       | Verifies every TRIGRAM-NNN rule from the spec is implemented in code and covered by tests                                                      |
 
 ---
 
 ## Quality & Process Agents
 
-| Agent                | Trigger                                                               | Description                                                                                                      |
-| -------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `i18n-checker`       | Any `.ts` / `.tsx` or translation JSON modified                       | Hardcoded strings, missing/unused translation keys, cross-locale mismatches                                      |
-| `workflow-validator` | Before committing a feature implementation                            | Reads `docs/plan/*-plan.md` Workflow TaskList; produces ✅/❌ table; blocks commit if required steps are missing |
-| `script-reviewer`    | Any `.sh`, `.py` (in `scripts/`) or `.githooks/` file modified        | Script quality: `set -euo pipefail`, shebang, quoting, portability, security                                     |
-| `maintainer`         | Any GitHub Actions workflow or config file modified; before a release | CI/config correctness, security, consistency; delegates dependency audit to `/dep-audit`                         |
+| Agent                | Trigger                                                                   | Description                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `i18n-checker`       | Any `.ts` / `.tsx` or translation JSON modified                           | Hardcoded strings, missing/unused translation keys, cross-locale mismatches                                      |
+| `workflow-validator` | Before committing a feature implementation                                | Reads `docs/plan/*-plan.md` Workflow TaskList; produces ✅/❌ table; blocks commit if required steps are missing |
+| `script-reviewer`    | Any `.sh`, `.py` (in `scripts/`) or `.githooks/` file modified            | Script quality: `set -euo pipefail`, shebang, quoting, portability, security                                     |
+| `maintainer`         | Any workflow, config, or `capabilities/*.json` modified; before a release | CI/config/capability correctness, security, consistency; delegates dependency audit to `/dep-audit`              |
 
 ---
 
@@ -58,7 +110,7 @@ Each item lists its **trigger** (when to invoke it) and a one-line description.
 | ------------ | ------------ | --------------------------------------------------------------------------------------------------- |
 | `pre-commit` | `git commit` | Runs `python3 scripts/check.py --fast` (lint + format); rejects commit on failure                   |
 | `commit-msg` | `git commit` | Enforces conventional format (`type: description`), valid types, ≤72-char title, no co-author lines |
-| `pre-push`   | `git push`   | Additional safety checks before pushing to remote                                                   |
+| `pre-push`   | `git push`   | Runs `python3 scripts/check.py` (full suite: tests + build + lint); blocks push on failure          |
 
 Activate with: `git config core.hooksPath .githooks`
 

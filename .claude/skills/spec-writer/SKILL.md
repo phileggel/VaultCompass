@@ -1,6 +1,6 @@
 ---
 name: spec-writer
-description: Interactive spec writer for new features. Interviews the user to understand the feature (even if vague), reads the existing domain, then produces docs/spec/{feature}.md with structured TRIGRAMME-NNN business rules and an optional UX draft (textual or Stitch mockup).
+description: Interactive spec writer for new features. Interviews the user to understand the feature (even if vague), reads the existing domain, then produces docs/spec/{feature}.md with structured TRIGRAM-NNN business rules and an optional UX draft (textual or Stitch mockup).
 tools: Read, Glob, Grep, Write, AskUserQuestion, mcp__stitch__generate_screen_from_text, mcp__stitch__list_screens, mcp__stitch__get_screen
 ---
 
@@ -23,7 +23,7 @@ Before asking anything, read:
 - Read the most recently modified spec in `docs/spec/` (excluding `todo.md`, `stitch/`, `*-rules.md`) to internalize the exact format and writing style
 - Read docs/adr/ (if exists) to identify historical architectural decisions
   (e.g., amount storage format, soft-delete strategy, state management)
-  that MUST be respected in the new TRIGRAMME-NNN rules.
+  that MUST be respected in the new TRIGRAM-NNN rules.
 
 This avoids asking the user what the codebase already answers.
 
@@ -313,7 +313,7 @@ Then ask: **"Validate, refine, write the ADR, or generate the implementation pla
 14. **Minimum friction** — do not ask about what the project's existing patterns already answer (navigation, success feedback, network error handling); generate a rule aligned with those patterns directly. Questions are reserved for genuinely new business decisions.
 15. **No implicit behaviour** — every observable behaviour must be covered by an explicit `{TRIGRAM}-NNN` rule. If a behaviour is described in the workflow or UX section but has no corresponding rule, add the rule. Common implicit gaps: default values in forms, sort toggle behaviour, modal-stays-open-on-error, empty-state vs no-search-results distinction.
 16. **Rule IDs are permanent** — once a rule number is assigned it never changes for the lifetime of the project. Tests reference rules by ID (e.g., `// REF-010 — ...`). If a rule is removed, leave the number vacant. New rules in the same theme increment by 1 (REF-010, REF-011, REF-012...). Never renumber existing rules.
-17. **ADR Consistency** — If a choice is already documented in `docs/adr/` (e.g., storing amounts in i64), you MUST apply it in the TRIGRAMME-NNN rules without asking the user. You only ask if the new feature explicitly requires breaking a past ADR.
+17. **ADR Consistency** — If a choice is already documented in `docs/adr/` (e.g., storing amounts in i64), you MUST apply it in the TRIGRAM-NNN rules without asking the user. You only ask if the new feature explicitly requires breaking a past ADR.
 
 ---
 

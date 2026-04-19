@@ -71,7 +71,7 @@ Print the validation table and result.
 | 7 | i18n Review | — |
 | 8 | Unit & Integration Tests | ✅ |
 | 9 | Documentation Update | ❌ |
-| 10 | Final Validation (spec-checker + workflow-validator) | ✅ |
+| 10 | Spec check (spec-checker) | ✅ |
 
 Result: ❌ Workflow incomplete — fix before committing.
 Blocking: step 9 (Documentation Update) not marked [x] in plan.
@@ -89,3 +89,4 @@ If any `❌`: print `Result: ❌ Workflow incomplete — fix before committing.`
 3. Conditional steps whose trigger is not met are always `—`, never `❌`
 4. If no plan file exists, block commit and instruct the user to run `feature-planner` first
 5. Human-driven phases (spec writing, planning, implementation code) are not validated — they are tracked in the plan's implementation section, not the Workflow TaskList
+6. **No self-reference**: do not look for or validate a checkbox referencing `workflow-validator` itself — your successful completion is the final gate, not a checkbox

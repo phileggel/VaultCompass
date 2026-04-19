@@ -26,7 +26,7 @@ If no path is given, list files in `docs/spec/` and ask the user which spec to r
 
 Read the full spec. Extract:
 
-- All TRIGRAMME-NNN rules (e.g. REF-010, REF-020) with their scope and description
+- All TRIGRAM-NNN rules (e.g. REF-010, REF-020) with their scope and description
 - Verify the trigram is declared in the Context or metadata section
 - The UX draft section (if present)
 - Open Questions (if present)
@@ -52,9 +52,9 @@ Read for comparison (skip silently if a file or directory is absent):
 
 - 🔴 Missing `## Context` section
 - 🔴 Missing `## Business Rules` section
-- 🔴 No TRIGRAMME-NNN rules found
+- 🔴 No TRIGRAM-NNN rules found
 - 🔴 **Trigram not registered**: Trigram must be listed in `docs/spec-index.md` (spec-writer creates it in step 2.5)
-- 🟡 Rules not using the `**TRIGRAMME-NNN — Title (scope)**` format with description (e.g. `**REF-010 — Record overpayment (backend)**: {description of the rule}`) — each rule must include scope and a testable description
+- 🟡 Rules not using the `**TRIGRAM-NNN — Title (scope)**` format with description (e.g. `**REF-010 — Record overpayment (backend)**: {description of the rule}`) — each rule must include scope and a testable description
 - 🟡 Trigram not declared in title — must be in main title (e.g. `# Business Rules — Feature Name (REF)`) per spec-writer template
 - 🟡 Missing `## UX Draft` section when frontend rules are present
 - 🔴 Prose is not in English — all spec content must be in English
@@ -88,7 +88,7 @@ Read for comparison (skip silently if a file or directory is absent):
 
 #### E — Conflicts with existing specs
 
-- 🔴 A TRIGRAMME-NNN rule in this spec contradicts a rule in another spec (same entity, opposite behavior)
+- 🔴 A TRIGRAM-NNN rule in this spec contradicts a rule in another spec (same entity, opposite behavior)
 - 🟡 This spec introduces a status transition that bypasses a transition defined in another spec
 
 #### F — Open questions

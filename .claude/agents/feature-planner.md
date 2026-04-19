@@ -1,6 +1,6 @@
 ---
 name: feature-planner
-description: Senior Architect Agent that translates a validated spec into a persistent, detailed implementation plan (docs/plan/{feature-name}-plan.md) mapping TRIGRAMME-NNN rules to DDD layers and CLAUDE.md workflow. Use when a spec has been reviewed and approved by spec-reviewer.
+description: Senior Architect Agent that translates a validated spec into a persistent, detailed implementation plan (docs/plan/{feature-name}-plan.md) mapping TRIGRAM-NNN rules to DDD layers and CLAUDE.md workflow. Use when a spec has been reviewed and approved by spec-reviewer.
 tools: Read, Write, Grep, Glob, Bash
 model: claude-opus-4-6
 ---
@@ -19,13 +19,13 @@ Given a feature spec document, you must produce a comprehensive, step-by-step im
 
 Read the spec doc (e.g., `docs/spec/asset-pricing.md`) and identify:
 
-- All **TRIGRAMME-NNN rules** (e.g. REF-010, REF-020, PAY-030), their scope (frontend / backend / both), and descriptions.
+- All **TRIGRAM-NNN rules** (e.g. REF-010, REF-020, PAY-030), their scope (frontend / backend / both), and descriptions.
 - The declared trigram and its registration in `docs/spec-index.md` (mandatory per spec-writer Step 2.5).
 - Entities and UI components to be created or modified.
 - Cross-context dependencies.
 - **CRITICAL**: Read `docs/adr/` to identify technical constraints (e.g., ADR-001 for currency types, ADR-002 for soft-delete) that MUST dictate the implementation details.
 
-_If the spec contains no TRIGRAMME-NNN rules, report it and ask the user to complete it via `/spec-writer` before proceeding._
+_If the spec contains no TRIGRAM-NNN rules, report it and ask the user to complete it via `/spec-writer` before proceeding._
 
 ### Step 2 — Architectural Contextualization
 
@@ -45,12 +45,14 @@ Verify existing paths using `Glob` or `Grep` before referencing them in the plan
 
 ### Step 4 — Mapping & Dependency Graph
 
-For each TRIGRAMME-NNN rule, identify concrete tasks:
+For each TRIGRAM-NNN rule, identify concrete tasks:
 
 - Determine if it requires a creation or a modification.
 - Map which layer(s) are affected.
 - **ADR Application**: Explicitly mention ADR constraints in the tasks (e.g., "Implement amount using i64 as per ADR-001").
 - Define dependencies (e.g., Backend logic -> `just generate-types` -> Frontend gateway).
+- **Commit phases**: identify thematic boundaries where a `/smart-commit` is appropriate. Suggest a conventional commit title for each (e.g., `feat(asset): implement pricing backend`).
+- **Schema changes**: identify rules that imply a database schema change (new entity, new field, new status column, new FK). For each, note the expected migration filename (`{timestamp}_create_{table}.sql` or `{timestamp}_add_{column}_to_{table}.sql`) and infer the columns from the domain rules. Flag that `just prepare-sqlx` must be run after migrating.
 
 ---
 
@@ -63,24 +65,29 @@ You MUST generate and **WRITE** a file with the following sections:
 A synthetic checklist for mandatory quality and process steps:
 
 - [ ] 📖 Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
+- [ ] 🗄️ Database Migration (`just migrate` + `just prepare-sqlx`) — if schema changes required
 - [ ] 🏗️ Backend Implementation (Domain, Repository, Service, API)
 - [ ] 🔗 Type Synchronization (`just generate-types`)
+- [ ] 💾 Commit: backend layer (suggested title from plan)
 - [ ] 💻 Frontend Implementation (Gateway, Hook, Component, i18n)
 - [ ] 🧹 Formatting & Linting (`just format` + `python3 scripts/check.py`)
-- [ ] 🔍 Code Review (`reviewer` always + `reviewer-backend` if .rs modified + `reviewer-frontend` if .ts/.tsx modified — includes UX/M3 review for .tsx)
+- [ ] 🔍 Code Review (`reviewer` always + `reviewer-backend` if .rs modified + `reviewer-frontend` if .ts/.tsx modified — includes UX/M3 review for .tsx + `maintainer` if capabilities/\*.json or tauri.conf.json modified)
+- [ ] 💾 Commit: frontend layer (suggested title from plan)
 - [ ] 🌐 i18n Review (`i18n-checker` if UI text changed)
 - [ ] 🔧 Script Review (`script-reviewer` if any script or hook was added/modified)
 - [ ] 🧪 Unit & Integration Tests
 - [ ] 📚 Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` — entries in English)
-- [ ] ✅ Final Validation (`spec-checker` + `workflow-validator`)
+- [ ] ✅ Spec check (`spec-checker`)
+- [ ] 💾 Commit: tests & docs (suggested title from plan)
 
 ### 2. Detailed Implementation Plan
 
 A granular breakdown by architectural layer:
 
+- **Migrations** (if any): List each migration file with its suggested filename, inferred columns, and a reminder to run `just migrate` then `just prepare-sqlx` before writing backend code. Omit this section if no schema changes are required.
 - **Backend**: Exact file paths, struct names, factory methods (follow project conventions from `docs/backend-rules.md`), service methods, and Tauri handlers.
 - **Frontend**: Exact file paths, gateway methods, custom hooks, and React components.
-- **Rules Coverage**: A table mapping every TRIGRAMME-NNN rule to its corresponding implementation task.
+- **Rules Coverage**: A table mapping every TRIGRAM-NNN rule to its corresponding implementation task.
 
 ---
 
@@ -94,3 +101,4 @@ A granular breakdown by architectural layer:
 6. **No Code Implementation**: Your output is a plan describing _what_ to do and _where_, not the actual code.
 7. **Task Tracking**: Ensure the main agent can progressively update the checkboxes in this file during the implementation phase.
 8. **Cross-Context**: If a use case spans multiple bounded contexts, use `src-tauri/src/use_cases/`—never cross-import between `context/` modules directly.
+9. **Commit Checkpoints**: Every plan must include at least one commit checkpoint per thematic phase (backend, frontend, tests & docs). Each checkpoint provides only a suggested conventional commit title — the `/smart-commit` skill handles the rest.
