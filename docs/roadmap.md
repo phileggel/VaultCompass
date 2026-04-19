@@ -18,15 +18,15 @@ This document maps every operation needed to cover the full lifecycle of a finan
 
 Manage the list of tradable instruments the user can reference in transactions.
 
-| Operation                 | Status     | Notes                                                                                                                                                                                                                                     |
-| ------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create asset              | ✅ Done    | Name, ticker, class, category, currency, risk level                                                                                                                                                                                       |
-| Edit asset                | ✅ Done    |                                                                                                                                                                                                                                           |
-| Archive asset             | ✅ Done    | Soft delete; preserves history                                                                                                                                                                                                            |
-| Unarchive asset           | ✅ Done    |                                                                                                                                                                                                                                           |
-| Delete asset              | ✅ Done    | Hard delete; only safe when no holdings exist                                                                                                                                                                                             |
-| Archive eligibility guard | 🔲 Planned | Block archiving if `Holding.quantity > 0` (spec TRX OQ-6)                                                                                                                                                                                 |
-| Delete eligibility guard  | 🔲 Planned | Block hard delete if any transaction exists for the asset                                                                                                                                                                                 |
+| Operation                 | Status     | Notes                                                                                                                                                                                |
+| ------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create asset              | ✅ Done    | Name, ticker, class, category, currency, risk level                                                                                                                                  |
+| Edit asset                | ✅ Done    |                                                                                                                                                                                      |
+| Archive asset             | ✅ Done    | Soft delete; preserves history                                                                                                                                                       |
+| Unarchive asset           | ✅ Done    |                                                                                                                                                                                      |
+| Delete asset              | ✅ Done    | Hard delete; only safe when no holdings exist                                                                                                                                        |
+| Archive eligibility guard | 🔲 Planned | Block archiving if `Holding.quantity > 0` (spec TRX OQ-6)                                                                                                                            |
+| Delete eligibility guard  | 🔲 Planned | Block hard delete if any transaction exists for the asset                                                                                                                            |
 | Inline asset creation     | ✅ Done    | From `/transactions/new`, `ComboboxField` `onCreateNew` navigates to `/assets?createNew=<query>&returnPath=...`; on success returns to `/transactions/new` with new asset pre-filled |
 
 Spec: `docs/spec/asset.md`

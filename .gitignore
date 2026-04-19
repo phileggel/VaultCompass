@@ -25,3 +25,14 @@ dist-ssr
 
 # Custom Project folders
 .screenshots
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
