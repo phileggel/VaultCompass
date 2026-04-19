@@ -89,7 +89,8 @@
     "frequency_manual_day": "Quotidien",
     "frequency_manual_week": "Hebdomadaire",
     "frequency_manual_month": "Mensuel",
-    "frequency_manual_year": "Annuel"
+    "frequency_manual_year": "Annuel",
+    "open_account": "Ouvrir le compte {{name}}"
   },
   "action": {
     "add": "Ajouter",

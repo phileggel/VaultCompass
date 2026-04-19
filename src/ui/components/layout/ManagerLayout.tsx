@@ -4,8 +4,8 @@ import { ManagerHeader } from "./ManagerHeader";
 interface ManagerLayoutProps {
   // Left panel (list)
   searchId: string;
-  title: string;
-  count: number;
+  title?: string;
+  count?: number;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;

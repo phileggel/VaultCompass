@@ -1,4 +1,4 @@
-import { Calendar, Edit2, Trash2, X } from "lucide-react";
+import { Calendar, ChevronRight, Edit2, Trash2, X } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -154,29 +154,35 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
             </tr>
           ) : (
             sortedAndFilteredAccounts.map((account) => (
-              <tr key={account.id} className="m3-tr">
-                {/* ACD-010 — clicking the name navigates to account details */}
+              <tr
+                key={account.id}
+                className="m3-tr cursor-pointer group hover:bg-m3-primary/5"
+                tabIndex={0}
+                aria-label={t("account.open_account", { name: account.name })}
+                onClick={() => onAccountClick(account.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onAccountClick(account.id);
+                  }
+                }}
+              >
                 <td className="m3-td">
-                  <button
-                    type="button"
-                    className="font-medium text-m3-on-surface hover:text-m3-primary transition-colors text-left"
-                    onClick={() => onAccountClick(account.id)}
-                  >
-                    {account.name}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-m3-on-surface">{account.name}</span>
+                    <ChevronRight
+                      size={14}
+                      className="text-m3-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
+                  </div>
                 </td>
-                {/* ACD-010 — frequency cell also navigates (row click excl. actions) */}
                 <td className="m3-td">
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 text-m3-on-surface-variant w-full text-left"
-                    onClick={() => onAccountClick(account.id)}
-                  >
+                  <div className="flex items-center gap-2 text-m3-on-surface-variant">
                     <Calendar size={14} className="text-m3-primary" />
                     <span className="m3-chip-outline">
                       {t(FREQUENCY_I18N_KEYS[account.update_frequency])}
                     </span>
-                  </button>
+                  </div>
                 </td>
                 <td className="m3-td text-right">
                   <div className="flex items-center justify-end gap-1">
@@ -184,13 +190,19 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       icon={<Edit2 size={16} />}
                       variant="ghost"
                       aria-label={t("action.edit")}
-                      onClick={() => setEditData(account)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditData(account);
+                      }}
                     />
                     <IconButton
                       icon={<Trash2 size={16} />}
                       variant="danger"
                       aria-label={t("action.delete")}
-                      onClick={() => setDeleteData({ id: account.id, name: account.name })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteData({ id: account.id, name: account.name });
+                      }}
                     />
                   </div>
                 </td>
