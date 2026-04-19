@@ -119,4 +119,8 @@ t("shell.sidebar_version", { version: appVersion }).
 These were present before this task — the migration just exposed them because the files were touched. Want me to fix
 them as a follow-up?
 
+## (frontend/accounts) — Extraire les handlers de ligne dans useAccountTable
+
+`AccountTable.tsx` définit des arrow functions inline dans le `.map()` des lignes : `onClick`/`onKeyDown` sur le `<tr>` et `onClick` sur les `IconButton` d'action. Déplacer ces handlers dans `useAccountTable` pour stabiliser les références et faciliter les tests. Voir warning frontend-reviewer (tâche account-page).
+
 ## Add proper application icon

@@ -320,7 +320,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - `account_details_view/AccountDetailsView.tsx` — renders header (account name + total cost basis), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty with CTA)
 - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
 - `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings (micro-unit formatting via `microToDecimal`)
-- Navigation: `AccountManager` holds `selectedAccountId` state; sets it when a row is clicked in `AccountTable`; renders `AccountDetailsView` instead of the account list when set
+- Navigation: clicking an `AccountTable` row calls `useNavigate` to `/accounts/$accountId`; `AccountDetailsView` is rendered by its own route, not conditionally by `AccountManager`
 - Spec: `docs/spec/account-details.md` (ACD-010–ACD-041)
 
 #### Update (`features/update/`)
