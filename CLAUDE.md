@@ -19,6 +19,8 @@ While coding:
 
 ## ⚠️ Workflow & Planning
 
+See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.md` for the agent/skill reference.
+
 **IMPORTANT**: Claude Code will NOT commit, create branches, or create PRs. The user handles all git operations.
 
 ### CRITICAL: Implementation task
@@ -27,94 +29,23 @@ While coding:
 - ONLY exception is doc files
 - Every task should follow _Plan Before Implementation_
 
-### Workflow
+### Project-specific workflow additions
 
-1. **(Optional)** Spec — run `/spec-writer` → `spec-reviewer` → `feature-planner` for features with unclear requirements.
-2. Read docs — backend: `docs/backend-rules.md` / frontend: `docs/frontend-rules.md`.
-3. Analyze the request and current codebase.
-4. **Propose a TODO plan** — CRITICAL: immediately create a TaskList (`TaskCreate`) with one task per remaining step (5–17). Ask user to validate; loop back to step 3 if changes needed.
-5. **(Optional)** Stitch mockup — for significant new/redesigned UI (see 🎨 Stitch Workflow section).
-6. Implementation.
-7. `just format` — auto-fix formatting (Rust, TS, MD).
-8. `python3 scripts/check.py` — all checks must pass.
-9. `reviewer` → show full report → fix criticals → re-run until 0 critical.
-10. `reviewer-backend` — if any `.rs` modified → show full report → fix criticals → re-run until 0 critical.
-11. `reviewer-frontend` — if any `.ts` or `.tsx` modified → show full report → fix criticals → re-run until 0 critical.
-12. `reviewer-sql` — if any `migrations/` file modified → show full report → fix criticals → re-run until 0 critical.
-13. `script-reviewer` — if any `.sh`, `.py`, or `.githooks` modified.
-14. `maintainer` — if any CI/config file modified (`.github/workflows/`, `tauri.conf.json`, `Cargo.toml`, `package.json`, `justfile`).
-15. `i18n-checker` — if any UI text was added or changed.
-16. Tests — if non-trivial logic added (backend: `#[cfg(test)]` inline; frontend: `.test.ts` colocated).
-17. `dep-audit` — if preparing a release (CVEs are a release blocker).
-18. Update docs — `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; spec in `docs/` if new business rules; then run `spec-checker` if a spec exists.
-19. **CRITICAL: run `workflow-validator`** — blocks commit if any required step is incomplete.
-20. Ask user if a commit is needed → follow `/commit` skill.
+On top of the standard kit workflow, this project requires:
+
+1. **Before implementing**: read `docs/backend-rules.md` (backend changes) and/or `docs/frontend-rules.md` (frontend changes).
+2. **Plan step**: after proposing the TODO plan, immediately create a TaskList (`TaskCreate`) with one task per remaining step. Ask user to validate before implementing.
+3. **Optional UI step**: Stitch mockup for significant new/redesigned UI — see 🎨 Stitch Workflow section below.
+4. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; spec in `docs/` if new business rules.
+5. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
 
 ### Task tracking (within a conversation)
 
 **MANDATORY** for every implementation task — use `TaskCreate` / `TaskUpdate`:
 
-- At step 4: create one task per applicable step (steps 7–18 and 20, plus all triggered conditional steps) before implementing anything — do NOT create a task for step 19 (workflow-validator runs outside the TaskList)
+- Create tasks before implementing anything — do NOT create a task for `workflow-validator` (it runs outside the TaskList)
 - Mark each task `in_progress` when starting, `completed` when done
-- The `workflow-validator` (step 19) reads this TaskList — missing or incomplete tasks = blocked commit
-
-### Available Subagents (`.claude/agents/`)
-
-**Pre-implementation (spec & planning)**
-
-- `spec-reviewer` — reviews a draft spec doc for quality before implementation: rule atomicity, scope coverage, DDD alignment, UX completeness, conflicts; use between spec-writer and feature-planner
-- `feature-planner` — reads a validated spec doc + architecture, produces an exact TODO plan (file paths, function names, layers); use at step 1 for complex features
-
-**Post-implementation (review & quality)**
-
-- `reviewer` — DDD architecture compliance: bounded context isolation, gateway pattern, factory methods, data flow direction, dead code, English-only (step 9)
-- `reviewer-backend` — Rust quality: anyhow error handling, no `unwrap()` in production, Clippy, trait-based repositories, async correctness, inline tests (step 10, if `.rs` modified)
-- `reviewer-frontend` — React/TS quality + UX/M3: gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, M3 design tokens, UX completeness (empty/loading/error states), accessibility (step 11, if `.ts`/`.tsx` modified)
-- `reviewer-sql` — SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, SQLite type affinity, primary key convention, NOT NULL (step 12, if `migrations/` modified)
-- `script-reviewer` — Bash and Python expert reviewer; checks safety, robustness, portability (step 13, if .sh/.py/.githooks modified)
-- `maintainer` — reviews CI/config files (`workflows/`, `tauri.conf.json`, `Cargo.toml`, `package.json`, `justfile`) for correctness, security, reliability (step 14, if config modified)
-- `i18n-checker` — finds hardcoded strings, missing/dead translation keys fr + en (step 15, if UI text changed)
-- `spec-checker` — verifies all Rn rules in a feature spec are implemented and tested (step 18, if spec exists)
-- `workflow-validator` — **mandatory at step 19**: reads TaskList + git diff, reports ✅/❌ for each workflow step, blocks commit if incomplete
-
-### Subagent workflow map
-
-```
-1.  spec-writer → spec-reviewer → feature-planner  [optional]
-          ↓
-2–4.  Read docs + Analyze + Plan + TaskCreate (mandatory)
-          ↓
-5.    Stitch mockup  [optional]
-          ↓
-6.    Implementation
-          ↓
-7.    just format
-          ↓
-8.    check.py
-          ↓
-9.    reviewer
-10.   reviewer-backend   — if any .rs modified
-11.   reviewer-frontend  — if any .ts/.tsx modified
-12.   reviewer-sql       — if any migrations/ file modified
-13.   script-reviewer    — if any .sh/.py/.githooks modified
-14.   maintainer         — if any CI/config file modified
-15.   i18n-checker       — if UI text changed
-          ↓
-16.   Tests              — if non-trivial logic
-17.   dep-audit          — if release
-          ↓
-18.   Update docs (ARCHITECTURE.md + todo.md + spec-checker)
-          ↓
-19.   workflow-validator  ← MANDATORY, blocks commit
-          ↓
-20.   /commit (skill)
-```
-
-### Available Skills (`.claude/skills/`)
-
-- `/spec-writer` — interactive spec writer: interviews the user, reads the domain, produces `docs/{feature}.md` with Rn rules + UX draft; optional Stitch mockup generation (step 1)
-- `/commit` — smart-commit: conventional commit avec validation tests + linters + confirmation (step 17)
-- `/dep-audit` — dependency audit: checks npm + Cargo for outdated packages and CVEs using live web search; run before every release or after dependency changes (step 14)
+- The `workflow-validator` reads this TaskList — missing or incomplete tasks = blocked commit
 
 ---
 
