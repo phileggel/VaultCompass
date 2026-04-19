@@ -11,6 +11,7 @@ import { useAssets } from "./useAssets";
 type ReturnNavTarget =
   | { type: "txList"; accountId: string; assetId: string }
   | { type: "account"; accountId: string }
+  | { type: "addTransaction"; prefillAccountId?: string }
   | { type: "assets" };
 
 function resolveReturnNav(returnPath: string | undefined): ReturnNavTarget {
@@ -21,6 +22,8 @@ function resolveReturnNav(returnPath: string | undefined): ReturnNavTarget {
   const accMatch = returnPath.match(/^\/accounts\/([^/]+)$/);
   // biome-ignore lint/style/noNonNullAssertion: group is present when regex matches
   if (accMatch) return { type: "account", accountId: accMatch[1]! };
+  const txNewMatch = returnPath.match(/^\/transactions\/new(?:\?prefillAccountId=([^&]+))?$/);
+  if (txNewMatch) return { type: "addTransaction", prefillAccountId: txNewMatch[1] };
   return { type: "assets" };
 }
 
@@ -28,7 +31,7 @@ export function AssetManager() {
   const { t } = useTranslation();
   const { activeCount } = useAssets();
   const navigate = useNavigate();
-  const { createNew, returnPath, pendingTransactionAssetId } = useSearch({ from: "/assets" });
+  const { createNew, returnPath } = useSearch({ from: "/assets" });
 
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -42,20 +45,27 @@ export function AssetManager() {
     (newAssetId: string) => {
       setIsAddModalOpen(false);
       const target = resolveReturnNav(returnPath);
-      const search = { pendingTransactionAssetId: newAssetId };
       if (target.type === "txList") {
         navigate({
           to: "/accounts/$accountId/transactions/$assetId",
           params: { accountId: target.accountId, assetId: target.assetId },
-          search,
+          search: { pendingTransactionAssetId: newAssetId },
         });
       } else if (target.type === "account") {
-        navigate({ to: "/accounts/$accountId", params: { accountId: target.accountId }, search });
-      } else {
         navigate({
-          to: "/assets",
-          search: { ...search, createNew: undefined, returnPath: undefined },
+          to: "/accounts/$accountId",
+          params: { accountId: target.accountId },
         });
+      } else if (target.type === "addTransaction") {
+        navigate({
+          to: "/transactions/new",
+          search: {
+            prefillAssetId: newAssetId,
+            prefillAccountId: target.prefillAccountId,
+          },
+        });
+      } else {
+        navigate({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
       }
     },
     [navigate, returnPath],
@@ -75,11 +85,7 @@ export function AssetManager() {
         </label>
       </div>
       <div className="flex-1 overflow-auto">
-        <AssetTable
-          searchTerm={query}
-          showArchived={showArchived}
-          pendingBuyAssetId={pendingTransactionAssetId}
-        />
+        <AssetTable searchTerm={query} showArchived={showArchived} />
       </div>
     </div>
   );

@@ -10,7 +10,7 @@ import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
 import { DesignSystemPage } from "@/features/design-system";
-import { TransactionListPage } from "@/features/transactions";
+import { AddTransactionPage, TransactionListPage } from "@/features/transactions";
 import { AppShell } from "./AppShell";
 
 const rootRoute = createRootRoute({ component: AppShell });
@@ -21,7 +21,7 @@ const indexRoute = createRoute({
   beforeLoad: () => {
     throw redirect({
       to: "/assets",
-      search: { createNew: undefined, returnPath: undefined, pendingTransactionAssetId: undefined },
+      search: { createNew: undefined, returnPath: undefined },
     });
   },
 });
@@ -33,10 +33,6 @@ const assetsRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => ({
     createNew: typeof search.createNew === "string" ? search.createNew : undefined,
     returnPath: typeof search.returnPath === "string" ? search.returnPath : undefined,
-    pendingTransactionAssetId:
-      typeof search.pendingTransactionAssetId === "string"
-        ? search.pendingTransactionAssetId
-        : undefined,
   }),
 });
 
@@ -50,12 +46,6 @@ const accountDetailsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts/$accountId",
   component: AccountDetailsView,
-  validateSearch: (search: Record<string, unknown>) => ({
-    pendingTransactionAssetId:
-      typeof search.pendingTransactionAssetId === "string"
-        ? search.pendingTransactionAssetId
-        : undefined,
-  }),
 });
 
 const transactionListRoute = createRoute({
@@ -67,6 +57,17 @@ const transactionListRoute = createRoute({
       typeof search.pendingTransactionAssetId === "string"
         ? search.pendingTransactionAssetId
         : undefined,
+  }),
+});
+
+const addTransactionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/transactions/new",
+  component: AddTransactionPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    prefillAssetId: typeof search.prefillAssetId === "string" ? search.prefillAssetId : undefined,
+    prefillAccountId:
+      typeof search.prefillAccountId === "string" ? search.prefillAccountId : undefined,
   }),
 });
 
@@ -88,6 +89,7 @@ const routeTree = rootRoute.addChildren([
   accountsRoute,
   accountDetailsRoute,
   transactionListRoute,
+  addTransactionRoute,
   categoriesRoute,
   designSystemRoute,
 ]);

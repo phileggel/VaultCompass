@@ -1,0 +1,262 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
+import { useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
+import { Button } from "@/ui/components/button/Button";
+import { ComboboxField } from "@/ui/components/field/ComboboxField";
+import { DateField } from "@/ui/components/field/DateField";
+import { SelectField } from "@/ui/components/field/SelectField";
+import { TextField } from "@/ui/components/field/TextField";
+import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
+import { useAddTransaction } from "../add_transaction/useAddTransaction";
+
+export function AddTransactionPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { prefillAssetId, prefillAccountId } = useSearch({ from: "/transactions/new" });
+
+  useEffect(() => {
+    logger.info("[AddTransactionPage] mounted");
+  }, []);
+
+  const assets = useAppStore((s) => s.assets);
+  const accounts = useAppStore((s) => s.accounts);
+
+  const handleSuccess = useCallback(() => {
+    navigate({ to: -1 as unknown as "." });
+  }, [navigate]);
+
+  const {
+    formData,
+    totalAmountDisplay,
+    error,
+    isSubmitting,
+    isFormValid,
+    showArchivedConfirm,
+    handleChange,
+    handleSubmit,
+    handleConfirmArchived,
+    handleCancelArchived,
+  } = useAddTransaction({ prefillAssetId, prefillAccountId, onSubmitSuccess: handleSuccess });
+
+  const selectedAsset = assets.find((a) => a.id === formData.assetId);
+  const selectedAccount = accounts.find((a) => a.id === formData.accountId);
+  const showExchangeRate = !!selectedAsset && !!selectedAccount && selectedAsset.currency !== "EUR";
+
+  const accountOptions = accounts.map((a) => ({ label: a.name, value: a.id }));
+
+  const handleCreateNewAsset = (query: string) => {
+    const returnPath = prefillAccountId
+      ? `/transactions/new?prefillAccountId=${prefillAccountId}`
+      : "/transactions/new";
+    navigate({
+      to: "/assets",
+      search: { createNew: query, returnPath },
+    });
+  };
+
+  return (
+    <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-2">
+        <button
+          type="button"
+          onClick={() => navigate({ to: -1 as unknown as "." })}
+          className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
+          aria-label={t("action.back")}
+        >
+          <ArrowLeft size={18} />
+          <span>{t("action.back")}</span>
+        </button>
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
+        {/* Title bar */}
+        <div className="px-6 py-4 bg-m3-surface-container-high">
+          <h1 className="text-2xl font-bold text-m3-on-surface">
+            {t("transaction.add_modal_title")}
+          </h1>
+        </div>
+
+        {/* Form */}
+        <div className="flex-1 overflow-auto px-6 py-6">
+          <form
+            id="add-transaction-form"
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4 max-w-2xl"
+          >
+            {/* Account — locked if prefillAccountId provided */}
+            {prefillAccountId ? (
+              <TextField
+                id="trx-account"
+                label={t("transaction.form_account_label")}
+                value={selectedAccount?.name ?? prefillAccountId}
+                readOnly
+                aria-readonly="true"
+              />
+            ) : (
+              <SelectField
+                id="trx-account"
+                label={t("transaction.form_account_label")}
+                value={formData.accountId}
+                onChange={(e) => handleChange("accountId", e.target.value)}
+                options={[{ label: `— ${t("action.select")} —`, value: "" }, ...accountOptions]}
+                required
+              />
+            )}
+
+            {/* Asset — locked if prefillAssetId provided */}
+            {prefillAssetId ? (
+              <TextField
+                id="trx-asset"
+                label={t("transaction.form_asset_label")}
+                value={selectedAsset?.name ?? prefillAssetId}
+                readOnly
+                aria-readonly="true"
+              />
+            ) : (
+              <ComboboxField
+                id="trx-asset"
+                label={`${t("transaction.form_asset_label")} *`}
+                items={assets}
+                displayKey="name"
+                idKey="id"
+                value={formData.assetId}
+                onChange={(id) => handleChange("assetId", id)}
+                searchKeys={["name", "reference"]}
+                placeholder={t("transaction.form_asset_placeholder")}
+                onCreateNew={handleCreateNewAsset}
+                createLabel={t("asset.create_new")}
+              />
+            )}
+
+            {/* Date */}
+            <DateField
+              id="trx-date"
+              label={t("transaction.form_date_label")}
+              value={formData.date}
+              onChange={(e) => handleChange("date", e.target.value)}
+              required
+            />
+
+            {/* Quantity + Unit Price */}
+            <div className="grid grid-cols-2 gap-4">
+              <TextField
+                id="trx-quantity"
+                label={t("transaction.form_quantity_label")}
+                type="number"
+                min="0"
+                step="0.000001"
+                value={formData.quantity}
+                onChange={(e) => handleChange("quantity", e.target.value)}
+                placeholder="0.000"
+                required
+              />
+              <TextField
+                id="trx-unit-price"
+                label={`${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`}
+                type="number"
+                min="0"
+                step="0.000001"
+                value={formData.unitPrice}
+                onChange={(e) => handleChange("unitPrice", e.target.value)}
+                placeholder="0.000"
+                required
+              />
+            </div>
+
+            {/* Exchange Rate */}
+            {showExchangeRate && (
+              <TextField
+                id="trx-exchange-rate"
+                label={t("transaction.form_exchange_rate_label")}
+                type="number"
+                min="0"
+                step="0.000001"
+                value={formData.exchangeRate}
+                onChange={(e) => handleChange("exchangeRate", e.target.value)}
+                placeholder="1.000000"
+              />
+            )}
+
+            {/* Fees + Total */}
+            <div className="grid grid-cols-2 gap-4">
+              <TextField
+                id="trx-fees"
+                label={t("transaction.form_fees_label")}
+                type="number"
+                min="0"
+                step="0.000001"
+                value={formData.fees}
+                onChange={(e) => handleChange("fees", e.target.value)}
+                placeholder="0.000"
+              />
+              <TextField
+                id="trx-total"
+                label={t("transaction.form_total_amount_label")}
+                type="text"
+                value={totalAmountDisplay}
+                readOnly
+                aria-readonly="true"
+              />
+            </div>
+
+            {/* Note */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="trx-note" className="m3-input-label">
+                {t("transaction.form_note_label")}
+              </label>
+              <textarea
+                id="trx-note"
+                className="m3-input w-full resize-none"
+                rows={2}
+                value={formData.note}
+                onChange={(e) => handleChange("note", e.target.value)}
+                placeholder={t("transaction.form_note_placeholder")}
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="text-sm text-m3-error">
+                {t(error, { defaultValue: error })}
+              </p>
+            )}
+          </form>
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-6 py-4 bg-m3-surface-container-high flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => navigate({ to: -1 as unknown as "." })}
+            disabled={isSubmitting}
+          >
+            {t("action.cancel")}
+          </Button>
+          <Button
+            type="submit"
+            form="add-transaction-form"
+            variant="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting || showArchivedConfirm || !isFormValid}
+          >
+            {t("action.add")}
+          </Button>
+        </div>
+      </div>
+
+      {/* TRX-029 — archived asset confirmation */}
+      <ConfirmationDialog
+        isOpen={showArchivedConfirm}
+        onCancel={handleCancelArchived}
+        onConfirm={handleConfirmArchived}
+        title={t("transaction.archived_asset_confirm_title")}
+        message={t("transaction.archived_asset_confirm_message")}
+        confirmLabel={t("action.confirm")}
+        cancelLabel={t("action.cancel")}
+      />
+    </div>
+  );
+}

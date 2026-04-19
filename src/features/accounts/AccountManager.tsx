@@ -15,12 +15,7 @@ export function AccountManager() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const navigate = useNavigate();
   const handleAccountClick = useCallback(
-    (id: string) =>
-      navigate({
-        to: "/accounts/$accountId",
-        params: { accountId: id },
-        search: { pendingTransactionAssetId: undefined },
-      }),
+    (id: string) => navigate({ to: "/accounts/$accountId", params: { accountId: id } }),
     [navigate],
   );
 

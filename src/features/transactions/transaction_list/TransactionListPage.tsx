@@ -78,7 +78,6 @@ export function TransactionListPage() {
         search: {
           createNew: query,
           returnPath: `/accounts/${selectedAccountId}/transactions/${selectedAssetId ?? ""}`,
-          pendingTransactionAssetId: undefined,
         },
       });
     },
@@ -104,11 +103,7 @@ export function TransactionListPage() {
         <button
           type="button"
           onClick={() =>
-            navigate({
-              to: "/accounts/$accountId",
-              params: { accountId: selectedAccountId },
-              search: { pendingTransactionAssetId: undefined },
-            })
+            navigate({ to: "/accounts/$accountId", params: { accountId: selectedAccountId } })
           }
           className="flex items-center gap-1 text-sm text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
           aria-label={t("transaction.back_to_account")}

@@ -1,8 +1,7 @@
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Plus, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { AddTransactionModal } from "@/features/transactions";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
@@ -12,41 +11,18 @@ export function AccountDetailsView() {
   const { t } = useTranslation();
   const { accountId } = useParams({ from: "/accounts/$accountId" });
   const navigate = useNavigate();
-  const { pendingTransactionAssetId } = useSearch({ from: "/accounts/$accountId" });
   const { isLoading, error, retry, holdings, summary } = useAccountDetails(accountId);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [pendingAssetId, setPendingAssetId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
   }, []);
 
-  useEffect(() => {
-    if (pendingTransactionAssetId) {
-      setPendingAssetId(pendingTransactionAssetId);
-      setIsAddModalOpen(true);
-      navigate({
-        to: "/accounts/$accountId",
-        params: { accountId },
-        search: { pendingTransactionAssetId: undefined },
-        replace: true,
-      });
-    }
-  }, [pendingTransactionAssetId, accountId, navigate]);
-
-  const handleCreateNewAsset = useCallback(
-    (query: string) => {
-      navigate({
-        to: "/assets",
-        search: {
-          createNew: query,
-          returnPath: `/accounts/${accountId}`,
-          pendingTransactionAssetId: undefined,
-        },
-      });
-    },
-    [navigate, accountId],
-  );
+  const handleAddTransaction = useCallback(() => {
+    navigate({
+      to: "/transactions/new",
+      search: { prefillAccountId: accountId, prefillAssetId: undefined },
+    });
+  }, [navigate, accountId]);
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
@@ -86,7 +62,7 @@ export function AccountDetailsView() {
                   variant="tonal"
                   size="sm"
                   icon={<Plus size={14} />}
-                  onClick={() => setIsAddModalOpen(true)}
+                  onClick={handleAddTransaction}
                 >
                   {t("account_details.add_transaction")}
                 </Button>
@@ -123,7 +99,7 @@ export function AccountDetailsView() {
                 variant="primary"
                 size="sm"
                 icon={<Plus size={14} />}
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={handleAddTransaction}
               >
                 {t("account_details.add_transaction")}
               </Button>
@@ -139,7 +115,7 @@ export function AccountDetailsView() {
                 variant="primary"
                 size="sm"
                 icon={<Plus size={14} />}
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={handleAddTransaction}
               >
                 {t("account_details.add_transaction")}
               </Button>
@@ -193,18 +169,6 @@ export function AccountDetailsView() {
           )}
         </div>
       </div>
-
-      {/* ACD-035/036 — Add Transaction modal pre-filled with account */}
-      <AddTransactionModal
-        isOpen={isAddModalOpen}
-        onClose={() => {
-          setIsAddModalOpen(false);
-          setPendingAssetId(undefined);
-        }}
-        prefillAccountId={accountId}
-        prefillAssetId={pendingAssetId}
-        onCreateNewAsset={handleCreateNewAsset}
-      />
     </div>
   );
 }

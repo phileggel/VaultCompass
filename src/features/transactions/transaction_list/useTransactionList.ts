@@ -98,9 +98,9 @@ export function useTransactionList() {
     [selectedAccountId, fetchTransactions],
   );
 
-  const toggleSortDirection = () => {
+  const toggleSortDirection = useCallback(() => {
     setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
-  };
+  }, []);
 
   const refreshTransactions = useCallback(
     async (preserveSort = true): Promise<Transaction[]> => {
@@ -114,11 +114,7 @@ export function useTransactionList() {
   const handleDeleteSuccess = useCallback(async () => {
     const remaining = await refreshTransactions();
     if (remaining.length === 0) {
-      navigate({
-        to: "/accounts/$accountId",
-        params: { accountId: selectedAccountId },
-        search: { pendingTransactionAssetId: undefined },
-      });
+      navigate({ to: "/accounts/$accountId", params: { accountId: selectedAccountId } });
     }
   }, [refreshTransactions, selectedAccountId, navigate]);
 

@@ -1,9 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Archive, ArchiveRestore, Edit2, ShoppingCart, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Asset } from "@/bindings";
-import { AddTransactionModal } from "@/features/transactions";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
@@ -17,10 +16,9 @@ import { useAssetTable } from "./useAssetTable";
 interface AssetTableProps {
   searchTerm: string;
   showArchived: boolean;
-  pendingBuyAssetId?: string;
 }
 
-export function AssetTable({ searchTerm, showArchived, pendingBuyAssetId }: AssetTableProps) {
+export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { archiveAsset, unarchiveAsset, assets, loading, fetchError, fetchAssets } = useAssets();
@@ -50,20 +48,6 @@ export function AssetTable({ searchTerm, showArchived, pendingBuyAssetId }: Asse
   // Edit state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
-
-  // Buy transaction state (TRX-010)
-  const [isBuyModalOpen, setIsBuyModalOpen] = useState(!!pendingBuyAssetId);
-  const [buyPrefillAssetId, setBuyPrefillAssetId] = useState<string | undefined>(pendingBuyAssetId);
-
-  const handleCreateNewAsset = useCallback(
-    (query: string) => {
-      navigate({
-        to: "/assets",
-        search: { createNew: query, returnPath: "/assets", pendingTransactionAssetId: undefined },
-      });
-    },
-    [navigate],
-  );
 
   const handleArchiveConfirm = async () => {
     if (!assetToArchive) return;
@@ -215,15 +199,16 @@ export function AssetTable({ searchTerm, showArchived, pendingBuyAssetId }: Asse
                 </td>
                 <td className="m3-td text-right">
                   <div className="flex items-center justify-end gap-1">
-                    {/* TRX-010 — Buy action entry point */}
                     <IconButton
                       icon={<ShoppingCart size={16} />}
                       size="sm"
                       aria-label={t("transaction.action_buy")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setBuyPrefillAssetId(asset.id);
-                        setIsBuyModalOpen(true);
+                        navigate({
+                          to: "/transactions/new",
+                          search: { prefillAssetId: asset.id, prefillAccountId: undefined },
+                        });
                       }}
                     />
                     <IconButton
@@ -276,19 +261,6 @@ export function AssetTable({ searchTerm, showArchived, pendingBuyAssetId }: Asse
           setAssetToEdit(null);
         }}
         asset={assetToEdit}
-      />
-
-      {/* Buy Transaction Modal — TRX-010, TRX-011 */}
-      {/* key forces remount when asset changes so useAddTransaction re-initialises form state (TRX-011) */}
-      <AddTransactionModal
-        key={buyPrefillAssetId ?? "none"}
-        isOpen={isBuyModalOpen}
-        onClose={() => {
-          setIsBuyModalOpen(false);
-          setBuyPrefillAssetId(undefined);
-        }}
-        prefillAssetId={buyPrefillAssetId}
-        onCreateNewAsset={handleCreateNewAsset}
       />
 
       {/* Archive Confirmation Dialog — R13 */}

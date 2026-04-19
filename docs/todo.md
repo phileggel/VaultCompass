@@ -70,12 +70,7 @@ Créer la page Settings (feature `settings/`) et passer `onSettingsClick` depuis
 ## (frontend/transactions) — Buy button désactivé pour les assets archivés
 
 Dans `AssetTable.tsx`, le bouton "Buy" (`ShoppingCart`) n'est pas désactivé pour les assets archivés (contrairement au bouton Edit qui est `disabled={asset.is_archived}`).
-Ajouter `disabled={asset.is_archived}` avec un tooltip explicatif, ou laisser le modal gérer la confirmation (TRX-029 déjà en place).
-
-## (frontend/transactions) — Déplacer la logique du Buy modal dans useAssetTable
-
-La logique d'état pour le Buy modal (`isBuyModalOpen`, `buyPrefillAssetId`) est inline dans `AssetTable.tsx` au lieu d'être dans le hook `useAssetTable` (violation F10).
-Déplacer dans `asset_table/useAssetTable.ts`.
+Ajouter `disabled={asset.is_archived}` avec un tooltip explicatif (TRX-029 déjà en place côté modal).
 
 ## ~~(frontend/transactions) — TRX-010: bouton "Add Transaction" dans la vue Account Details~~ ✅ résolu
 
