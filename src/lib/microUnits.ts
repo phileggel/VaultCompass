@@ -51,3 +51,18 @@ export function computeTotalMicro(
 ): number {
   return Math.floor((Math.floor((qtyMicro * priceMicro) / MICRO) * rateMicro) / MICRO) + feesMicro;
 }
+
+/**
+ * Computes sell total proceeds from micro-unit values (SEL-023 formula).
+ * Formula: floor(floor(qty × price / MICRO) × rate / MICRO) − fees
+ *
+ * Fees are subtracted (not added) because they reduce the proceeds received.
+ */
+export function computeSellTotalMicro(
+  qtyMicro: number,
+  priceMicro: number,
+  rateMicro: number,
+  feesMicro: number,
+): number {
+  return Math.floor((Math.floor((qtyMicro * priceMicro) / MICRO) * rateMicro) / MICRO) - feesMicro;
+}

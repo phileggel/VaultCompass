@@ -179,11 +179,14 @@ impl RecordTransactionUseCase {
             .get_by_account_asset(&dto.account_id, &dto.asset_id)
             .await?;
 
-        // SEL-012 — closed position guard
+        // SEL-012 — closed position guard.
+        // Note: recalculate_holding runs before pool.begin(). SQLite WAL serialises all writers
+        // so there is no concurrent-write risk in this single-user desktop app.
+        let existing_refs: Vec<&Transaction> = existing.iter().collect();
         let (holding_before, _) = Self::recalculate_holding(
             &dto.account_id,
             &dto.asset_id,
-            &existing.iter().collect::<Vec<_>>(),
+            &existing_refs,
             self.holding_repo.as_ref(),
         )
         .await?;

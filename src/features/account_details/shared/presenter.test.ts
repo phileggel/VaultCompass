@@ -44,12 +44,28 @@ describe("toHoldingRow", () => {
     expect(row.assetName).toBe("Apple Inc");
     expect(row.assetReference).toBe("AAPL");
   });
+
+  it("formats realizedPnl with 2 decimals (SEL-042)", () => {
+    const row = toHoldingRow(makeHolding({ realized_pnl: 5_000_000 }));
+    expect(row.realizedPnl).toBe("5.00");
+    expect(row.realizedPnlRaw).toBe(5_000_000);
+  });
+
+  it("passes quantityMicro as raw value for sell modal (SEL-010)", () => {
+    const row = toHoldingRow(makeHolding({ quantity: 3_500_000 }));
+    expect(row.quantityMicro).toBe(3_500_000);
+  });
 });
 
 describe("toAccountSummary", () => {
   it("formats totalCostBasis with 2 decimals", () => {
     const summary = toAccountSummary(makeResponse({ total_cost_basis: 250_000_000 }));
     expect(summary.totalCostBasis).toBe("250.00");
+  });
+
+  it("formats totalRealizedPnl with 2 decimals (SEL-042)", () => {
+    const summary = toAccountSummary(makeResponse({ total_realized_pnl: 12_500_000 }));
+    expect(summary.totalRealizedPnl).toBe("12.50");
   });
 
   it("isEmpty true when total_holding_count is 0", () => {

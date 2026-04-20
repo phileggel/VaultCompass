@@ -196,8 +196,7 @@ impl Transaction {
         if parsed_date > today {
             anyhow::bail!("Transaction date cannot be in the future");
         }
-        // Safety: literal date components are compile-time constants and always valid.
-        let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).expect("1900-01-01 is a valid date");
+        let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).unwrap_or(chrono::NaiveDate::MIN);
         if parsed_date < min_date {
             anyhow::bail!("Transaction date cannot be before 1900-01-01");
         }

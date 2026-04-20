@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
-import { computeTotalMicro, decimalToMicro, microToDecimal } from "@/lib/microUnits";
+import {
+  computeSellTotalMicro,
+  computeTotalMicro,
+  decimalToMicro,
+  microToDecimal,
+} from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
 import type { TransactionFormData } from "../shared/types";
@@ -42,14 +47,24 @@ export function useEditTransactionModal({
   const [showArchivedConfirm, setShowArchivedConfirm] = useState(false);
 
   // Derive micro-unit values from form strings — single conversion at the input boundary (ADR-001).
+  // Use sell formula when editing a Sell transaction (SEL-023).
   const microValues = useMemo(() => {
     const qtyMicro = decimalToMicro(formData.quantity);
     const priceMicro = decimalToMicro(formData.unitPrice);
     const rateMicro = decimalToMicro(formData.exchangeRate);
     const feesMicro = decimalToMicro(formData.fees);
-    const totalMicro = computeTotalMicro(qtyMicro, priceMicro, rateMicro, feesMicro);
+    const totalMicro =
+      transaction.transaction_type === "Sell"
+        ? computeSellTotalMicro(qtyMicro, priceMicro, rateMicro, feesMicro)
+        : computeTotalMicro(qtyMicro, priceMicro, rateMicro, feesMicro);
     return { qtyMicro, priceMicro, rateMicro, feesMicro, totalMicro };
-  }, [formData.quantity, formData.unitPrice, formData.exchangeRate, formData.fees]);
+  }, [
+    formData.quantity,
+    formData.unitPrice,
+    formData.exchangeRate,
+    formData.fees,
+    transaction.transaction_type,
+  ]);
 
   // Derived form validity
   const isFormValid = useMemo(

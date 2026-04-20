@@ -4,7 +4,6 @@ use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
 use crate::context::transaction::domain::{Transaction, TransactionRepository, TransactionType};
-use crate::core::logger::BACKEND;
 
 #[derive(sqlx::FromRow)]
 struct TransactionRow {
@@ -23,18 +22,14 @@ struct TransactionRow {
     created_at: String,
 }
 
-impl From<TransactionRow> for Transaction {
-    fn from(row: TransactionRow) -> Self {
-        let transaction_type =
-            TransactionType::from_str(&row.transaction_type).unwrap_or_else(|_| {
-                tracing::warn!(
-                    target: BACKEND,
-                    value = %row.transaction_type,
-                    "unknown transaction_type, falling back to Purchase"
-                );
-                TransactionType::Purchase
-            });
-        Transaction::restore(
+impl TryFrom<TransactionRow> for Transaction {
+    type Error = anyhow::Error;
+
+    fn try_from(row: TransactionRow) -> Result<Self> {
+        let transaction_type = TransactionType::from_str(&row.transaction_type).map_err(|_| {
+            anyhow::anyhow!("unknown transaction_type in DB: '{}'", row.transaction_type)
+        })?;
+        Ok(Transaction::restore(
             row.id,
             row.account_id,
             row.asset_id,
@@ -48,7 +43,7 @@ impl From<TransactionRow> for Transaction {
             row.note,
             row.realized_pnl,
             row.created_at,
-        )
+        ))
     }
 }
 
@@ -77,7 +72,7 @@ impl TransactionRepository for SqliteTransactionRepository {
         .await
         .with_context(|| format!("Failed to fetch transaction {}", id))?;
 
-        Ok(row.map(Transaction::from))
+        Ok(row.map(Transaction::try_from).transpose()?)
     }
 
     async fn get_by_account_asset(
@@ -103,7 +98,9 @@ impl TransactionRepository for SqliteTransactionRepository {
             )
         })?;
 
-        Ok(rows.into_iter().map(Transaction::from).collect())
+        rows.into_iter()
+            .map(Transaction::try_from)
+            .collect::<Result<Vec<_>>>()
     }
 
     async fn create(&self, tx: Transaction) -> Result<Transaction> {
@@ -134,6 +131,7 @@ impl TransactionRepository for SqliteTransactionRepository {
 
     async fn update(&self, tx: Transaction) -> Result<Transaction> {
         let transaction_type = tx.transaction_type.to_string();
+        // created_at is intentionally excluded from SET — it is immutable after creation (SEL-024).
         sqlx::query!(
             r#"UPDATE transactions SET account_id = ?, asset_id = ?, transaction_type = ?, date = ?, quantity = ?, unit_price = ?, exchange_rate = ?, fees = ?, total_amount = ?, note = ?, realized_pnl = ? WHERE id = ?"#,
             tx.account_id,

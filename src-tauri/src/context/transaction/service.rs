@@ -1,6 +1,6 @@
 use crate::context::transaction::domain::{Transaction, TransactionRepository};
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::sync::Arc;
 use tracing::info;
 
@@ -55,7 +55,11 @@ impl TransactionService {
     /// Persists a new transaction and publishes TransactionUpdated (TRX-037).
     pub async fn create(&self, tx: Transaction) -> Result<Transaction> {
         info!(target: BACKEND, transaction_id = %tx.id, account_id = %tx.account_id, asset_id = %tx.asset_id, "creating transaction");
-        let created = self.repo.create(tx).await?;
+        let created = self
+            .repo
+            .create(tx)
+            .await
+            .context("TransactionService::create failed")?;
         self.publish();
         Ok(created)
     }
@@ -63,7 +67,11 @@ impl TransactionService {
     /// Updates an existing transaction and publishes TransactionUpdated (TRX-037).
     pub async fn update(&self, tx: Transaction) -> Result<Transaction> {
         info!(target: BACKEND, transaction_id = %tx.id, "updating transaction");
-        let updated = self.repo.update(tx).await?;
+        let updated = self
+            .repo
+            .update(tx)
+            .await
+            .context("TransactionService::update failed")?;
         self.publish();
         Ok(updated)
     }
@@ -71,7 +79,10 @@ impl TransactionService {
     /// Deletes a transaction and publishes TransactionUpdated (TRX-037).
     pub async fn delete(&self, id: &str) -> Result<()> {
         info!(target: BACKEND, transaction_id = %id, "deleting transaction");
-        self.repo.delete(id).await?;
+        self.repo
+            .delete(id)
+            .await
+            .context("TransactionService::delete failed")?;
         self.publish();
         Ok(())
     }

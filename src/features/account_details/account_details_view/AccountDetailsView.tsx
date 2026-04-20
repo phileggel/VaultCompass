@@ -1,21 +1,39 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Plus, Search } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { Plus, Search, TrendingDown } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
+import { SellTransactionModal } from "../../transactions";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import { useAccountDetails } from "./useAccountDetails";
+
+type SellTarget = {
+  assetId: string;
+  assetName: string;
+  assetCurrency: string;
+  holdingQuantityMicro: number;
+  showExchangeRate: boolean;
+};
 
 type HoldingRowProps = {
   row: HoldingRowViewModel;
   accountId: string;
+  onSell: (target: SellTarget) => void;
 };
 
-function HoldingRow({ row, accountId }: HoldingRowProps) {
+function PnlCell({ value, raw }: { value: string; raw: number }) {
+  const colorClass =
+    raw > 0 ? "text-m3-success" : raw < 0 ? "text-m3-error" : "text-m3-on-surface-variant";
+  return <span className={`tabular-nums ${colorClass}`}>{raw === 0 ? "—" : value}</span>;
+}
+
+function HoldingRow({ row, accountId, onSell }: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const assets = useAppStore((state) => state.assets);
 
   const handleAddTransaction = useCallback(() => {
     navigate({
@@ -32,6 +50,20 @@ function HoldingRow({ row, accountId }: HoldingRowProps) {
     });
   }, [navigate, accountId, row.assetId]);
 
+  const handleSell = useCallback(() => {
+    const asset = assets.find((a) => a.id === row.assetId);
+    onSell({
+      assetId: row.assetId,
+      assetName: row.assetName,
+      assetCurrency: asset?.currency ?? "EUR",
+      holdingQuantityMicro: row.quantityMicro,
+      showExchangeRate: asset ? asset.currency !== "EUR" : false,
+    });
+  }, [assets, row.assetId, row.assetName, row.quantityMicro, onSell]);
+
+  const asset = assets.find((a) => a.id === row.assetId);
+  const isArchived = asset?.is_archived ?? false;
+
   return (
     <tr className="m3-tr">
       <td className="m3-td">
@@ -43,6 +75,9 @@ function HoldingRow({ row, accountId }: HoldingRowProps) {
       <td className="m3-td text-right tabular-nums">{row.quantity}</td>
       <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
       <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
+      <td className="m3-td text-right">
+        <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
+      </td>
       <td className="m3-td">
         <div className="flex items-center gap-1">
           <IconButton
@@ -50,6 +85,14 @@ function HoldingRow({ row, accountId }: HoldingRowProps) {
             size="sm"
             aria-label={t("account_details.add_transaction")}
             onClick={handleAddTransaction}
+          />
+          {/* SEL-010 — Sell button; disabled when asset is archived (SEL-037) */}
+          <IconButton
+            icon={<TrendingDown size={16} />}
+            size="sm"
+            aria-label={t("transaction.action_sell")}
+            onClick={handleSell}
+            disabled={isArchived}
           />
           <IconButton
             icon={<Search size={16} />}
@@ -69,6 +112,8 @@ export function AccountDetailsView() {
   const navigate = useNavigate();
   const { isLoading, error, retry, holdings, summary } = useAccountDetails(accountId);
 
+  const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
+
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
   }, []);
@@ -80,6 +125,11 @@ export function AccountDetailsView() {
     });
   }, [navigate, accountId]);
 
+  const handleSellSuccess = useCallback(() => {
+    setSellTarget(null);
+    retry();
+  }, [retry]);
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
@@ -89,10 +139,24 @@ export function AccountDetailsView() {
             <div className="h-4 w-32 bg-m3-surface-variant rounded animate-pulse" />
           ) : summary ? (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-m3-on-surface-variant">
-                {t("account_details.total_cost_basis")}:{" "}
-                <span className="font-semibold text-m3-on-surface">{summary.totalCostBasis}</span>
-              </p>
+              <div className="flex gap-6">
+                <p className="text-sm text-m3-on-surface-variant">
+                  {t("account_details.total_cost_basis")}:{" "}
+                  <span className="font-semibold text-m3-on-surface">{summary.totalCostBasis}</span>
+                </p>
+                {summary.totalRealizedPnlRaw !== 0 && (
+                  <p className="text-sm text-m3-on-surface-variant">
+                    {t("account_details.total_realized_pnl")}:{" "}
+                    <span
+                      className={`font-semibold ${
+                        summary.totalRealizedPnlRaw < 0 ? "text-m3-error" : "text-m3-success"
+                      }`}
+                    >
+                      {summary.totalRealizedPnl}
+                    </span>
+                  </p>
+                )}
+              </div>
               {/* ACD-036 — non-empty state CTA */}
               {!summary.isEmpty && !summary.isAllClosed && (
                 <Button
@@ -167,12 +231,19 @@ export function AccountDetailsView() {
                     <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
                     <th className="m3-th text-right">{t("account_details.column_avg_price")}</th>
                     <th className="m3-th text-right">{t("account_details.column_cost_basis")}</th>
+                    {/* SEL-042 — Realized P&L column */}
+                    <th className="m3-th text-right">{t("account_details.column_realized_pnl")}</th>
                     <th className="m3-th">{t("transaction.column_actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {holdings.map((row) => (
-                    <HoldingRow key={row.assetId} row={row} accountId={accountId} />
+                    <HoldingRow
+                      key={row.assetId}
+                      row={row}
+                      accountId={accountId}
+                      onSell={setSellTarget}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -180,6 +251,21 @@ export function AccountDetailsView() {
           )}
         </div>
       </div>
+
+      {/* SEL-010 — Sell modal */}
+      {sellTarget && (
+        <SellTransactionModal
+          isOpen
+          onClose={() => setSellTarget(null)}
+          accountId={accountId}
+          assetId={sellTarget.assetId}
+          assetName={sellTarget.assetName}
+          assetCurrency={sellTarget.assetCurrency}
+          holdingQuantityMicro={sellTarget.holdingQuantityMicro}
+          showExchangeRate={sellTarget.showExchangeRate}
+          onSubmitSuccess={handleSellSuccess}
+        />
+      )}
     </div>
   );
 }

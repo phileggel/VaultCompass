@@ -122,7 +122,8 @@ impl AccountDetailsUseCase {
 
         // ACD-031 — sum of cost_basis; 0 when no active holdings
         let total_cost_basis: i64 = details.iter().map(|d| d.cost_basis).sum();
-        let total_realized_pnl: i64 = details.iter().map(|d| d.realized_pnl).sum();
+        // SEL-042 — sum across ALL asset IDs including fully-closed positions (quantity == 0).
+        let total_realized_pnl: i64 = pnl_map.values().sum();
 
         Ok(AccountDetailsResponse {
             account_name: account.name,

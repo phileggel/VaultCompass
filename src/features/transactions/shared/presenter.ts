@@ -22,6 +22,10 @@ export interface TransactionRowViewModel {
   /** Formatted total amount string (3 decimal places). */
   totalAmount: string;
   note: string | null;
+  /** Formatted realized P&L string (3 decimal places), null for Purchase rows (SEL-041). */
+  realizedPnl: string | null;
+  /** Raw realized P&L in micro-units — used for sign-based color styling (SEL-043). */
+  realizedPnlRaw: number | null;
 }
 
 /**
@@ -46,5 +50,7 @@ export function toTransactionRow(
     fees: microToDecimal(tx.fees),
     totalAmount: microToDecimal(tx.total_amount),
     note: tx.note ?? null,
+    realizedPnl: tx.realized_pnl != null ? microToDecimal(tx.realized_pnl) : null,
+    realizedPnlRaw: tx.realized_pnl ?? null,
   };
 }

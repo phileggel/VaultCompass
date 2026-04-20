@@ -193,6 +193,7 @@ export function TransactionListPage() {
                     <th className="m3-th text-right">{t("transaction.column_exchange_rate")}</th>
                     <th className="m3-th text-right">{t("transaction.column_fees")}</th>
                     <th className="m3-th text-right">{t("transaction.column_total_amount")}</th>
+                    <th className="m3-th text-right">{t("transaction.column_realized_pnl")}</th>
                     <th className="m3-th">{t("transaction.column_actions")}</th>
                   </tr>
                 </thead>
@@ -207,6 +208,18 @@ export function TransactionListPage() {
                       <td className="m3-td text-right tabular-nums">{row.fees}</td>
                       <td className="m3-td text-right tabular-nums font-medium">
                         {row.totalAmount}
+                      </td>
+                      {/* SEL-041 — Realized P&L column (SEL-043: zero shown as —) */}
+                      <td className="m3-td text-right tabular-nums">
+                        {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (
+                          <span
+                            className={row.realizedPnlRaw > 0 ? "text-m3-success" : "text-m3-error"}
+                          >
+                            {row.realizedPnl}
+                          </span>
+                        ) : (
+                          <span className="text-m3-on-surface-variant">—</span>
+                        )}
                       </td>
                       <td className="m3-td">
                         <div className="flex items-center gap-1">

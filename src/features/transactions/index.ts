@@ -2,6 +2,7 @@ export { AddTransactionModal } from "./add_transaction/AddTransactionModal";
 export { AddTransactionPage } from "./add_transaction_page/AddTransactionPage";
 export { EditTransactionModal } from "./edit_transaction_modal/EditTransactionModal";
 export { transactionGateway } from "./gateway";
+export { SellTransactionModal } from "./sell_transaction/SellTransactionModal";
 export { useTransactionStore } from "./store";
 export { TransactionListPage } from "./transaction_list/TransactionListPage";
 export { useTransactions } from "./useTransactions";
