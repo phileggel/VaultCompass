@@ -83,6 +83,7 @@ export function useEditTransactionModal({
     const result = await updateTransaction(transaction.id, {
       account_id: formData.accountId,
       asset_id: formData.assetId,
+      transaction_type: transaction.transaction_type,
       date: formData.date,
       quantity: microValues.qtyMicro,
       unit_price: microValues.priceMicro,
@@ -100,7 +101,16 @@ export function useEditTransactionModal({
 
     showSnackbar(t("transaction.success_updated"), "success");
     onSubmitSuccess?.();
-  }, [formData, microValues, updateTransaction, transaction.id, t, onSubmitSuccess, showSnackbar]);
+  }, [
+    formData,
+    microValues,
+    updateTransaction,
+    transaction.id,
+    transaction.transaction_type,
+    t,
+    onSubmitSuccess,
+    showSnackbar,
+  ]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {

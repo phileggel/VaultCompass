@@ -35,6 +35,14 @@ impl TransactionService {
         self.repo.get_asset_ids_for_account(account_id).await
     }
 
+    /// Returns sum of realized_pnl grouped by asset_id for Sell transactions in the account (SEL-038).
+    pub async fn get_realized_pnl_by_account(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<(String, i64)>> {
+        self.repo.get_realized_pnl_by_account(account_id).await
+    }
+
     /// Retrieves all transactions for an account/asset pair in chronological order (TRX-036).
     pub async fn get_by_account_asset(
         &self,

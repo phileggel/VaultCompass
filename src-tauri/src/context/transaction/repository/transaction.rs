@@ -19,6 +19,8 @@ struct TransactionRow {
     fees: i64,
     total_amount: i64,
     note: Option<String>,
+    realized_pnl: Option<i64>,
+    created_at: String,
 }
 
 impl From<TransactionRow> for Transaction {
@@ -44,6 +46,8 @@ impl From<TransactionRow> for Transaction {
             row.fees,
             row.total_amount,
             row.note,
+            row.realized_pnl,
+            row.created_at,
         )
     }
 }
@@ -66,7 +70,7 @@ impl TransactionRepository for SqliteTransactionRepository {
     async fn get_by_id(&self, id: &str) -> Result<Option<Transaction>> {
         let row = sqlx::query_as!(
             TransactionRow,
-            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note FROM transactions WHERE id = ?"#,
+            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at FROM transactions WHERE id = ?"#,
             id
         )
         .fetch_optional(&self.pool)
@@ -83,10 +87,10 @@ impl TransactionRepository for SqliteTransactionRepository {
     ) -> Result<Vec<Transaction>> {
         let rows = sqlx::query_as!(
             TransactionRow,
-            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note
+            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at
                FROM transactions
                WHERE account_id = ? AND asset_id = ?
-               ORDER BY date ASC, rowid ASC"#,
+               ORDER BY date ASC, created_at ASC"#,
             account_id,
             asset_id
         )
@@ -105,8 +109,8 @@ impl TransactionRepository for SqliteTransactionRepository {
     async fn create(&self, tx: Transaction) -> Result<Transaction> {
         let transaction_type = tx.transaction_type.to_string();
         sqlx::query!(
-            r#"INSERT INTO transactions (id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            r#"INSERT INTO transactions (id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             tx.id,
             tx.account_id,
             tx.asset_id,
@@ -117,7 +121,9 @@ impl TransactionRepository for SqliteTransactionRepository {
             tx.exchange_rate,
             tx.fees,
             tx.total_amount,
-            tx.note
+            tx.note,
+            tx.realized_pnl,
+            tx.created_at
         )
         .execute(&self.pool)
         .await
@@ -129,7 +135,7 @@ impl TransactionRepository for SqliteTransactionRepository {
     async fn update(&self, tx: Transaction) -> Result<Transaction> {
         let transaction_type = tx.transaction_type.to_string();
         sqlx::query!(
-            r#"UPDATE transactions SET account_id = ?, asset_id = ?, transaction_type = ?, date = ?, quantity = ?, unit_price = ?, exchange_rate = ?, fees = ?, total_amount = ?, note = ? WHERE id = ?"#,
+            r#"UPDATE transactions SET account_id = ?, asset_id = ?, transaction_type = ?, date = ?, quantity = ?, unit_price = ?, exchange_rate = ?, fees = ?, total_amount = ?, note = ?, realized_pnl = ? WHERE id = ?"#,
             tx.account_id,
             tx.asset_id,
             transaction_type,
@@ -140,6 +146,7 @@ impl TransactionRepository for SqliteTransactionRepository {
             tx.fees,
             tx.total_amount,
             tx.note,
+            tx.realized_pnl,
             tx.id
         )
         .execute(&self.pool)
@@ -147,6 +154,30 @@ impl TransactionRepository for SqliteTransactionRepository {
         .with_context(|| format!("Failed to update transaction {}", tx.id))?;
 
         Ok(tx)
+    }
+
+    async fn get_realized_pnl_by_account(&self, account_id: &str) -> Result<Vec<(String, i64)>> {
+        #[derive(sqlx::FromRow)]
+        struct PnlRow {
+            asset_id: String,
+            total_pnl: Option<i64>,
+        }
+        let rows = sqlx::query_as!(
+            PnlRow,
+            r#"SELECT asset_id, SUM(realized_pnl) as "total_pnl: i64"
+               FROM transactions
+               WHERE account_id = ? AND transaction_type = 'Sell'
+               GROUP BY asset_id"#,
+            account_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| format!("Failed to fetch realized P&L for account {}", account_id))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.asset_id, r.total_pnl.unwrap_or(0)))
+            .collect())
     }
 
     async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>> {

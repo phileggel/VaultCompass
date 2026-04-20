@@ -89,6 +89,7 @@ export function useAddTransaction({
     const result = await addTransaction({
       account_id: formData.accountId,
       asset_id: formData.assetId,
+      transaction_type: "Purchase",
       date: formData.date,
       quantity: microValues.qtyMicro,
       unit_price: microValues.priceMicro,

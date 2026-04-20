@@ -9,6 +9,7 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   quantity: 2_000_000,
   average_price: 100_000_000,
   cost_basis: 200_000_000,
+  realized_pnl: 0,
   ...overrides,
 });
 
@@ -17,6 +18,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   holdings: [makeHolding()],
   total_holding_count: 1,
   total_cost_basis: 200_000_000,
+  total_realized_pnl: 0,
   ...overrides,
 });
 

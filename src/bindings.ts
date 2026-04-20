@@ -344,7 +344,11 @@ total_holding_count: number;
 /**
  * Sum of cost_basis across all active holdings, 0 if none (ACD-031).
  */
-total_cost_basis: number }
+total_cost_basis: number; 
+/**
+ * Sum of realized_pnl across all holdings (SEL-042).
+ */
+total_realized_pnl: number }
 /**
  * A financial instrument or resource held by a user.
  */
@@ -480,6 +484,10 @@ account_id: string;
  */
 asset_id: string; 
 /**
+ * Transaction type: "Purchase" or "Sell".
+ */
+transaction_type: string; 
+/**
  * Transaction date (YYYY-MM-DD).
  */
 date: string; 
@@ -580,7 +588,11 @@ average_price: number;
 /**
  * Total cost of position: quantity × average_price / MICRO (i64 micro-units, ACD-023).
  */
-cost_basis: number }
+cost_basis: number; 
+/**
+ * Sum of realized P&L from all Sell transactions for this asset (i64 micro-units, SEL-042).
+ */
+realized_pnl: number }
 /**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
@@ -599,7 +611,7 @@ account_id: string;
  */
 asset_id: string; 
 /**
- * Type of transaction (Purchase; Sell deferred per TRX-040).
+ * Type of transaction: Purchase or Sell.
  */
 transaction_type: TransactionType; 
 /**
@@ -607,7 +619,7 @@ transaction_type: TransactionType;
  */
 date: string; 
 /**
- * Number of units acquired (micro-units: value × 10^6). Must be > 0.
+ * Number of units traded (micro-units: value × 10^6). Must be > 0.
  */
 quantity: number; 
 /**
@@ -623,13 +635,21 @@ exchange_rate: number;
  */
 fees: number; 
 /**
- * Total cost in account currency including fees (micro-units). Must be > 0.
+ * Total cost (Purchase) or proceeds (Sell) in account currency (micro-units). Must be > 0.
  */
 total_amount: number; 
 /**
  * Optional user comment.
  */
-note: string | null }
+note: string | null; 
+/**
+ * Realized P&L for Sell transactions (micro-units, SEL-024). NULL for Purchase.
+ */
+realized_pnl: number | null; 
+/**
+ * ISO 8601 timestamp of record creation — used for same-date tie-breaking (SEL-024).
+ */
+created_at: string }
 /**
  * Type of financial transaction.
  */
@@ -637,7 +657,11 @@ export type TransactionType =
 /**
  * A purchase (acquisition) of an asset.
  */
-"Purchase"
+"Purchase" | 
+/**
+ * A sale of a previously purchased asset.
+ */
+"Sell"
 /**
  * Parameters for updating an existing account.
  */

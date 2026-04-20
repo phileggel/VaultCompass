@@ -48,6 +48,8 @@ const baseTransaction: Transaction = {
   fees: 0,
   total_amount: 100 * MICRO,
   note: "initial note",
+  realized_pnl: null,
+  created_at: "2024-01-10T00:00:00Z",
 };
 
 describe("useEditTransactionModal", () => {

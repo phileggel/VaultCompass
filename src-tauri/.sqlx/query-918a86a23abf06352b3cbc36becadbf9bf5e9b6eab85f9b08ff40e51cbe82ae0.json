@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note FROM transactions WHERE id = ?",
+  "query": "SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at FROM transactions WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,16 @@
         "name": "note",
         "ordinal": 10,
         "type_info": "Text"
+      },
+      {
+        "name": "realized_pnl",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 12,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -73,8 +83,10 @@
       false,
       false,
       false,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "5ab79189ddd618eaf661245b27724465b03c477bfb354a416f2682680e8a625a"
+  "hash": "918a86a23abf06352b3cbc36becadbf9bf5e9b6eab85f9b08ff40e51cbe82ae0"
 }

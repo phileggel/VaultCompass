@@ -1,8 +1,10 @@
 use crate::context::account::AccountService;
 use crate::context::asset::AssetService;
+use crate::context::transaction::TransactionService;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use specta::Type;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Enriched view of a single holding with asset metadata and computed cost basis (ACD spec).
@@ -20,6 +22,8 @@ pub struct HoldingDetail {
     pub average_price: i64,
     /// Total cost of position: quantity × average_price / MICRO (i64 micro-units, ACD-023).
     pub cost_basis: i64,
+    /// Sum of realized P&L from all Sell transactions for this asset (i64 micro-units, SEL-042).
+    pub realized_pnl: i64,
 }
 
 /// Top-level response for the get_account_details command (ACD spec).
@@ -33,20 +37,28 @@ pub struct AccountDetailsResponse {
     pub total_holding_count: usize,
     /// Sum of cost_basis across all active holdings, 0 if none (ACD-031).
     pub total_cost_basis: i64,
+    /// Sum of realized_pnl across all holdings (SEL-042).
+    pub total_realized_pnl: i64,
 }
 
-/// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
+/// Orchestrates a cross-context read of account + asset + transaction data (ADR-003, ADR-004, ADR-005).
 pub struct AccountDetailsUseCase {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
+    transaction_service: Arc<TransactionService>,
 }
 
 impl AccountDetailsUseCase {
     /// Creates a new use case instance.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    pub fn new(
+        account_service: Arc<AccountService>,
+        asset_service: Arc<AssetService>,
+        transaction_service: Arc<TransactionService>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
+            transaction_service,
         }
     }
 
@@ -72,6 +84,13 @@ impl AccountDetailsUseCase {
             .filter(|h| h.quantity > 0)
             .collect();
 
+        // SEL-038 — fetch realized P&L per asset for this account
+        let pnl_entries = self
+            .transaction_service
+            .get_realized_pnl_by_account(account_id)
+            .await?;
+        let pnl_map: HashMap<String, i64> = pnl_entries.into_iter().collect();
+
         // ACD-022 — enrich each holding with asset metadata; ACD-021 — archived assets included
         let mut details: Vec<HoldingDetail> = Vec::with_capacity(active_holdings.len());
         for holding in active_holdings {
@@ -85,6 +104,8 @@ impl AccountDetailsUseCase {
             let cost_basis =
                 (holding.quantity as i128 * holding.average_price as i128 / 1_000_000) as i64;
 
+            let realized_pnl = pnl_map.get(&holding.asset_id).copied().unwrap_or(0);
+
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -92,6 +113,7 @@ impl AccountDetailsUseCase {
                 quantity: holding.quantity,
                 average_price: holding.average_price,
                 cost_basis,
+                realized_pnl,
             });
         }
 
@@ -100,12 +122,14 @@ impl AccountDetailsUseCase {
 
         // ACD-031 — sum of cost_basis; 0 when no active holdings
         let total_cost_basis: i64 = details.iter().map(|d| d.cost_basis).sum();
+        let total_realized_pnl: i64 = details.iter().map(|d| d.realized_pnl).sum();
 
         Ok(AccountDetailsResponse {
             account_name: account.name,
             holdings: details,
             total_holding_count,
             total_cost_basis,
+            total_realized_pnl,
         })
     }
 }
@@ -121,9 +145,16 @@ mod tests {
         AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetRepository,
         SYSTEM_CATEGORY_ID,
     };
+    use crate::context::transaction::{SqliteTransactionRepository, TransactionService};
     use sqlx::sqlite::SqlitePoolOptions;
 
-    async fn setup(pool: &sqlx::Pool<sqlx::Sqlite>) -> (Arc<AccountService>, Arc<AssetService>) {
+    async fn setup(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+    ) -> (
+        Arc<AccountService>,
+        Arc<AssetService>,
+        Arc<TransactionService>,
+    ) {
         let account_svc = Arc::new(AccountService::new(
             Box::new(SqliteAccountRepository::new(pool.clone())),
             Box::new(SqliteHoldingRepository::new(pool.clone())),
@@ -132,7 +163,10 @@ mod tests {
             Box::new(SqliteAssetRepository::new(pool.clone())),
             Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
         ));
-        (account_svc, asset_svc)
+        let tx_svc = Arc::new(TransactionService::new(Box::new(
+            SqliteTransactionRepository::new(pool.clone()),
+        )));
+        (account_svc, asset_svc, tx_svc)
     }
 
     async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
@@ -152,8 +186,8 @@ mod tests {
     #[tokio::test]
     async fn unknown_account_returns_error() {
         let pool = make_pool().await;
-        let (account_svc, asset_svc) = setup(&pool).await;
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, tx_svc);
         let err = uc.get_account_details("nonexistent-id").await.unwrap_err();
         assert!(err.to_string().contains("Account not found"), "got: {err}");
     }
@@ -162,7 +196,7 @@ mod tests {
     #[tokio::test]
     async fn zero_quantity_holdings_excluded_from_active() {
         let pool = make_pool().await;
-        let (account_svc, asset_svc) = setup(&pool).await;
+        let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
             .create("Test".to_string(), UpdateFrequency::ManualMonth)
@@ -189,7 +223,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, tx_svc);
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 0, "active holdings should be empty");
@@ -204,7 +238,7 @@ mod tests {
     #[tokio::test]
     async fn cost_basis_and_total_computed_correctly() {
         let pool = make_pool().await;
-        let (account_svc, asset_svc) = setup(&pool).await;
+        let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
             .create("Portfolio".to_string(), UpdateFrequency::ManualMonth)
@@ -239,7 +273,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, tx_svc);
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 1);
@@ -251,7 +285,7 @@ mod tests {
     #[tokio::test]
     async fn archived_asset_holding_included() {
         let pool = make_pool().await;
-        let (account_svc, asset_svc) = setup(&pool).await;
+        let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
             .create("Archived Test".to_string(), UpdateFrequency::ManualMonth)
@@ -283,7 +317,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, tx_svc);
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert_eq!(
@@ -298,7 +332,7 @@ mod tests {
     #[tokio::test]
     async fn holdings_sorted_by_asset_name_ascending() {
         let pool = make_pool().await;
-        let (account_svc, asset_svc) = setup(&pool).await;
+        let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
             .create("Alpha".to_string(), UpdateFrequency::ManualMonth)
@@ -330,7 +364,7 @@ mod tests {
                 .unwrap();
         }
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, tx_svc);
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         let names: Vec<&str> = resp

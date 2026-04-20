@@ -23,6 +23,8 @@ pub enum TransactionType {
     /// A purchase (acquisition) of an asset.
     #[default]
     Purchase,
+    /// A sale of a previously purchased asset.
+    Sell,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -35,11 +37,11 @@ pub struct Transaction {
     pub account_id: String,
     /// The financial asset involved.
     pub asset_id: String,
-    /// Type of transaction (Purchase; Sell deferred per TRX-040).
+    /// Type of transaction: Purchase or Sell.
     pub transaction_type: TransactionType,
     /// Date when the transaction was executed (ISO 8601, "YYYY-MM-DD").
     pub date: String,
-    /// Number of units acquired (micro-units: value × 10^6). Must be > 0.
+    /// Number of units traded (micro-units: value × 10^6). Must be > 0.
     pub quantity: i64,
     /// Price per unit in asset's native currency (micro-units). Can be 0 (gifted assets).
     pub unit_price: i64,
@@ -47,10 +49,14 @@ pub struct Transaction {
     pub exchange_rate: i64,
     /// Transaction fees in account currency (micro-units).
     pub fees: i64,
-    /// Total cost in account currency including fees (micro-units). Must be > 0.
+    /// Total cost (Purchase) or proceeds (Sell) in account currency (micro-units). Must be > 0.
     pub total_amount: i64,
     /// Optional user comment.
     pub note: Option<String>,
+    /// Realized P&L for Sell transactions (micro-units, SEL-024). NULL for Purchase.
+    pub realized_pnl: Option<i64>,
+    /// ISO 8601 timestamp of record creation — used for same-date tie-breaking (SEL-024).
+    pub created_at: String,
 }
 
 impl Transaction {
@@ -68,6 +74,7 @@ impl Transaction {
         fees: i64,
         total_amount: i64,
         note: Option<String>,
+        realized_pnl: Option<i64>,
     ) -> Result<Self> {
         Self::validate(
             &date,
@@ -89,6 +96,8 @@ impl Transaction {
             fees,
             total_amount,
             note,
+            realized_pnl,
+            created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         })
     }
 
@@ -107,6 +116,8 @@ impl Transaction {
         fees: i64,
         total_amount: i64,
         note: Option<String>,
+        realized_pnl: Option<i64>,
+        created_at: String,
     ) -> Result<Self> {
         Self::validate(
             &date,
@@ -128,6 +139,8 @@ impl Transaction {
             fees,
             total_amount,
             note,
+            realized_pnl,
+            created_at,
         })
     }
 
@@ -145,6 +158,8 @@ impl Transaction {
         fees: i64,
         total_amount: i64,
         note: Option<String>,
+        realized_pnl: Option<i64>,
+        created_at: String,
     ) -> Self {
         Self {
             id,
@@ -158,6 +173,8 @@ impl Transaction {
             fees,
             total_amount,
             note,
+            realized_pnl,
+            created_at,
         }
     }
 
@@ -222,6 +239,8 @@ pub trait TransactionRepository: Send + Sync {
     ) -> Result<Vec<Transaction>>;
     /// Returns distinct asset IDs that have transactions for the given account (TXL-013).
     async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>>;
+    /// Returns sum of realized_pnl grouped by asset_id for Sell transactions in the account (SEL-038).
+    async fn get_realized_pnl_by_account(&self, account_id: &str) -> Result<Vec<(String, i64)>>;
     /// Persists a new transaction.
     async fn create(&self, tx: Transaction) -> Result<Transaction>;
     /// Updates an existing transaction.
@@ -251,6 +270,7 @@ mod tests {
             exchange_rate,
             fees,
             total_amount,
+            None,
             None,
         )
     }
@@ -288,6 +308,7 @@ mod tests {
             0,
             micro,
             None,
+            None,
         );
         assert!(result.is_err());
     }
@@ -306,6 +327,7 @@ mod tests {
             micro,
             0,
             micro,
+            None,
             None,
         );
         assert!(result.is_err());

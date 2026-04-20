@@ -8,10 +8,10 @@
 
 ## 1. Workflow TaskList
 
-- [ ] Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
-- [ ] Database Migration (`just migrate` + `just prepare-sqlx`)
-- [ ] Backend Implementation (Domain, Repository, Service, Orchestrator)
-- [ ] Type Synchronization (`just generate-types`)
+- [x] Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
+- [x] Database Migration (`just migrate` + `just prepare-sqlx`)
+- [x] Backend Implementation (Domain, Repository, Service, Orchestrator)
+- [x] Type Synchronization (`just generate-types`)
 - [ ] Commit: backend layer -- `feat(sell): implement sell transaction backend with realized P&L`
 - [ ] Frontend Implementation (Gateway, Hook, Component, i18n)
 - [ ] Formatting & Linting (`just format` + `python3 scripts/check.py`)
