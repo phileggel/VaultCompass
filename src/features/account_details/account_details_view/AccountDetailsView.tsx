@@ -11,6 +11,7 @@ import type { HoldingRowViewModel } from "../shared/presenter";
 import { useAccountDetails } from "./useAccountDetails";
 
 type SellTarget = {
+  accountName: string;
   assetId: string;
   assetName: string;
   assetCurrency: string;
@@ -25,9 +26,14 @@ type HoldingRowProps = {
 };
 
 function PnlCell({ value, raw }: { value: string; raw: number }) {
+  const { t } = useTranslation();
   const colorClass =
     raw > 0 ? "text-m3-success" : raw < 0 ? "text-m3-error" : "text-m3-on-surface-variant";
-  return <span className={`tabular-nums ${colorClass}`}>{raw === 0 ? "—" : value}</span>;
+  return (
+    <span className={`tabular-nums ${colorClass}`}>
+      {raw === 0 ? t("account_details.pnl_placeholder") : value}
+    </span>
+  );
 }
 
 function HoldingRow({ row, accountId, onSell }: HoldingRowProps) {
@@ -50,16 +56,20 @@ function HoldingRow({ row, accountId, onSell }: HoldingRowProps) {
     });
   }, [navigate, accountId, row.assetId]);
 
+  const accounts = useAppStore((state) => state.accounts);
+
   const handleSell = useCallback(() => {
     const asset = assets.find((a) => a.id === row.assetId);
+    const account = accounts.find((a) => a.id === accountId);
     onSell({
+      accountName: account?.name ?? accountId,
       assetId: row.assetId,
       assetName: row.assetName,
       assetCurrency: asset?.currency ?? "EUR",
       holdingQuantityMicro: row.quantityMicro,
       showExchangeRate: asset ? asset.currency !== "EUR" : false,
     });
-  }, [assets, row.assetId, row.assetName, row.quantityMicro, onSell]);
+  }, [accounts, assets, accountId, row.assetId, row.assetName, row.quantityMicro, onSell]);
 
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
@@ -258,6 +268,7 @@ export function AccountDetailsView() {
           isOpen
           onClose={() => setSellTarget(null)}
           accountId={accountId}
+          accountName={sellTarget.accountName}
           assetId={sellTarget.assetId}
           assetName={sellTarget.assetName}
           assetCurrency={sellTarget.assetCurrency}

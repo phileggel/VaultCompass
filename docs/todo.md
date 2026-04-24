@@ -86,6 +86,11 @@ Elle devrait comparer `selectedAsset.currency !== selectedAccount.currency`.
 L'entité `Account` n'a pas de champ `currency` : il faut l'ajouter dans la spec account, puis dans le domaine, la migration SQL, les bindings, et les modales de transaction.
 Impact TRX-021 et la règle de visibilité du champ Exchange Rate.
 
+## (sell/SEL-036) — Visibilité du champ Exchange Rate dans SellTransactionModal
+
+`AccountDetailsView.tsx` calcule `showExchangeRate` avec `asset.currency !== "EUR"` en dur (même limitation structurelle que TRX-021 ci-dessus).
+Résoudre en même temps que l'ajout de `currency` à `Account` : passer `accountCurrency` à `SellTarget` et remplacer le hardcode par `asset.currency !== account.currency`.
+
 ## (frontend/transactions) — TRX-038: implémenter l'affichage des positions (holdings)
 
 `useTransactionStore.refreshHoldings()` est un stub: le backend a une table `holdings` (créée par la use case RecordTransaction), mais il n'existe pas de commande Tauri `getHoldings`.

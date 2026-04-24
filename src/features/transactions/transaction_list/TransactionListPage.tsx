@@ -209,7 +209,7 @@ export function TransactionListPage() {
                       <td className="m3-td text-right tabular-nums font-medium">
                         {row.totalAmount}
                       </td>
-                      {/* SEL-041 — Realized P&L column (SEL-043: zero shown as —) */}
+                      {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}
                       <td className="m3-td text-right tabular-nums">
                         {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (
                           <span
@@ -218,7 +218,9 @@ export function TransactionListPage() {
                             {row.realizedPnl}
                           </span>
                         ) : (
-                          <span className="text-m3-on-surface-variant">—</span>
+                          <span className="text-m3-on-surface-variant">
+                            {t("account_details.pnl_placeholder")}
+                          </span>
                         )}
                       </td>
                       <td className="m3-td">

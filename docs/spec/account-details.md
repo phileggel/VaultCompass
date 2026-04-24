@@ -28,14 +28,14 @@ Represents the current state of a financial position within the account.
 
 A computed view of a holding enriched with asset metadata and cost basis. Defined as a Rust struct with `#[derive(Type, Serialize)]` so it is auto-generated into `bindings.ts` via Specta. It is returned as part of the `AccountDetailsResponse` wrapper; the frontend presenter maps it to display-ready values.
 
-| Field             | Business meaning                                                     |
-| ----------------- | -------------------------------------------------------------------- |
-| `asset_id`        | ID of the held asset.                                                |
-| `asset_name`      | Display name of the asset (from asset context).                      |
-| `asset_reference` | Ticker or user-defined reference of the asset (from asset context).  |
-| `quantity`        | Current number of units held (i64 micros).                                                                                                              |
-| `average_price`   | VWAP purchase price in account currency (i64 micros).                                                                                                   |
-| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros).                                                                                    |
+| Field             | Business meaning                                                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `asset_id`        | ID of the held asset.                                                                                                                                    |
+| `asset_name`      | Display name of the asset (from asset context).                                                                                                          |
+| `asset_reference` | Ticker or user-defined reference of the asset (from asset context).                                                                                      |
+| `quantity`        | Current number of units held (i64 micros).                                                                                                               |
+| `average_price`   | VWAP purchase price in account currency (i64 micros).                                                                                                    |
+| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros).                                                                                     |
 | `realized_pnl`    | Cumulative realized profit or loss from all sell transactions for this holding, in account currency (i64 micros). Zero when no sells exist. See SEL-042. |
 
 ### AccountDetailsResponse (Backend DTO)

@@ -11,6 +11,7 @@ interface SellTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   accountId: string;
+  accountName: string;
   assetId: string;
   assetName: string;
   assetCurrency: string;
@@ -26,6 +27,7 @@ export function SellTransactionModal({
   isOpen,
   onClose,
   accountId,
+  accountName,
   assetId,
   assetName,
   assetCurrency,
@@ -81,15 +83,25 @@ export function SellTransactionModal({
       maxWidth="max-w-2xl"
     >
       <form id="sell-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* Asset (read-only, SEL-011) */}
-        <TextField
-          id="sell-trx-asset"
-          label={t("transaction.form_asset_label")}
-          type="text"
-          value={assetName}
-          readOnly
-          aria-readonly="true"
-        />
+        {/* Account + Asset (read-only, SEL-011) */}
+        <div className="grid grid-cols-2 gap-4">
+          <TextField
+            id="sell-trx-account"
+            label={t("transaction.form_account_label")}
+            type="text"
+            value={accountName}
+            readOnly
+            aria-readonly="true"
+          />
+          <TextField
+            id="sell-trx-asset"
+            label={t("transaction.form_asset_label")}
+            type="text"
+            value={assetName}
+            readOnly
+            aria-readonly="true"
+          />
+        </div>
 
         {/* Date */}
         <DateField

@@ -605,6 +605,7 @@ impl RecordTransactionUseCase {
 
         let mut total_quantity: i128 = 0;
         let mut vwap_numerator: i128 = 0;
+        let mut last_vwap: i64 = 0;
         let mut pnl_map: HashMap<String, i64> = HashMap::new();
 
         for t in transactions {
@@ -628,6 +629,7 @@ impl RecordTransactionUseCase {
                     } else {
                         0
                     };
+                    last_vwap = vwap_before;
                     // SEL-024 — realized P&L
                     let pnl = Self::compute_realized_pnl(t.total_amount, vwap_before, t.quantity);
                     pnl_map.insert(t.id.clone(), pnl);
@@ -639,10 +641,11 @@ impl RecordTransactionUseCase {
             }
         }
 
+        // SEL-026 / TRX-040 — when qty reaches zero, preserve last known VWAP
         let average_price: i64 = if total_quantity > 0 {
             (vwap_numerator / total_quantity) as i64
         } else {
-            0
+            last_vwap
         };
         // SEL-026 — retain holding at qty=0
         let quantity = total_quantity as i64;
@@ -670,6 +673,25 @@ impl RecordTransactionUseCase {
     }
 
     /// Executes an upsert holding query within an active sqlx transaction.
+    #[cfg(test)]
+    pub(crate) fn compute_sell_total_pub(
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+    ) -> i64 {
+        Self::compute_sell_total(quantity, unit_price, exchange_rate, fees)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn compute_realized_pnl_pub(
+        total_sell_amount: i64,
+        vwap_before_sell: i64,
+        sold_quantity: i64,
+    ) -> i64 {
+        Self::compute_realized_pnl(total_sell_amount, vwap_before_sell, sold_quantity)
+    }
+
     async fn upsert_holding_in_tx(
         &self,
         db_tx: &mut sqlx::Transaction<'_, Sqlite>,
@@ -692,5 +714,53 @@ impl RecordTransactionUseCase {
         .context("Failed to upsert holding")?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SEL-023 — sell total = floor(floor(qty × price / MICRO) × rate / MICRO) - fees
+    #[test]
+    fn compute_sell_total_subtracts_fees() {
+        // 2 units @ 50.00, rate=1.0, fees=5.00 → 95.00
+        let result = RecordTransactionUseCase::compute_sell_total_pub(
+            2_000_000, 50_000_000, 1_000_000, 5_000_000,
+        );
+        assert_eq!(result, 95_000_000);
+    }
+
+    #[test]
+    fn compute_sell_total_applies_exchange_rate() {
+        // 1 unit @ 100.00, rate=1.5, fees=0 → 150.00
+        let result =
+            RecordTransactionUseCase::compute_sell_total_pub(1_000_000, 100_000_000, 1_500_000, 0);
+        assert_eq!(result, 150_000_000);
+    }
+
+    // SEL-024 — realized_pnl = total_sell - floor(vwap × qty / MICRO)
+    #[test]
+    fn compute_realized_pnl_profit() {
+        // Sell 1 unit for 95.00; cost basis VWAP=80.00 → P&L = +15.00
+        let result =
+            RecordTransactionUseCase::compute_realized_pnl_pub(95_000_000, 80_000_000, 1_000_000);
+        assert_eq!(result, 15_000_000);
+    }
+
+    #[test]
+    fn compute_realized_pnl_loss() {
+        // Sell 1 unit for 60.00; VWAP=80.00 → P&L = -20.00
+        let result =
+            RecordTransactionUseCase::compute_realized_pnl_pub(60_000_000, 80_000_000, 1_000_000);
+        assert_eq!(result, -20_000_000);
+    }
+
+    #[test]
+    fn compute_realized_pnl_zero() {
+        // Sell at exactly VWAP → P&L = 0
+        let result =
+            RecordTransactionUseCase::compute_realized_pnl_pub(50_000_000, 50_000_000, 1_000_000);
+        assert_eq!(result, 0);
     }
 }

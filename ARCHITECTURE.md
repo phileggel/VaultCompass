@@ -63,18 +63,21 @@ Cross-cutting application use cases that span multiple bounded contexts or requi
 
 Orchestrates a cross-context read of account + asset data for the Account Details view (spec: `docs/spec/account-details.md`, ADR-003, ADR-004).
 
-- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>` (no repositories directly, per ADR-004); `get_account_details(account_id)` fetches account, all holdings, filters active (qty > 0), enriches with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), sorts by asset_name (ACD-033), returns `AccountDetailsResponse`
-- DTOs: `HoldingDetail` (asset_id, asset_name, asset_reference, quantity, average_price, cost_basis — all i64 micros), `AccountDetailsResponse` (account_name, holdings, total_holding_count, total_cost_basis)
+- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>` + `Arc<TransactionService>`; `get_account_details(account_id)` fetches account, all holdings, filters active (qty > 0), enriches with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), attaches `realized_pnl` from `pnl_map` (SEL-038), sorts by asset_name (ACD-033), returns `AccountDetailsResponse`
+- DTOs: `HoldingDetail` (asset_id, asset_name, asset_reference, quantity, average_price, cost_basis, realized_pnl — all i64 micros), `AccountDetailsResponse` (account_name, holdings, total_holding_count, total_cost_basis, total_realized_pnl — SEL-042)
+- `total_realized_pnl` sums `pnl_map.values()` — includes fully-closed positions (qty=0), not just active holdings
 - `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
 
 #### Record Transaction (`use_cases/record_transaction/`)
 
-Orchestrates purchase transaction creation, update, and deletion across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`).
+Orchestrates transaction creation, update, and deletion (Purchase + Sell) across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/sell-transaction.md`).
 
 - `orchestrator.rs` — `RecordTransactionUseCase` with `create_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
   - Atomicity (TRX-027): all DB writes within each operation use `pool.begin()` + `commit()` directly
-  - VWAP computation (TRX-030, TRX-036): i128 intermediates, accumulates `qty * price * rate / MICRO / MICRO`
-  - Auto-unarchive on purchase of archived asset (TRX-028)
+  - Purchase: VWAP computation (TRX-030, TRX-036), auto-unarchive on purchase of archived asset (TRX-028)
+  - Sell: `compute_sell_total` (SEL-023): `floor(floor(qty×price/MICRO)×rate/MICRO) − fees`; closed-position guard (SEL-012); oversell guard (SEL-021); archived-asset guard (SEL-037)
+  - `recalculate_holding`: full chronological replay over all transactions for an (account, asset) pair; computes running VWAP and `realized_pnl` per sell via `compute_realized_pnl` (SEL-024: `total_sell − floor(vwap×qty/MICRO)`); returns `(Holding, HashMap<tx_id, pnl>)`
+  - Sell recalculation cascades on update (SEL-031) and delete (SEL-033) — all sibling sells get updated P&L
   - Event published via `TransactionService.notify_transaction_updated()` after commit (B8)
 - `api.rs` — four Tauri commands: `add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
 - `CreateTransactionDTO` — serializable DTO struct passed as single command parameter (Specta limit workaround)
@@ -157,21 +160,22 @@ context/{domain}/
 
 **Entity: `Transaction`**
 
-- `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`
-- `TransactionType` enum: `Purchase`, `Sell` (activated by SEL spec)
+- `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`, `realized_pnl: Option<i64>`, `created_at: String`
+- `TransactionType` enum: `Purchase`, `Sell` — parsed via `FromStr`; unknown variants are a hard error (TryFrom)
 - All financial fields in i64 micro-units (ADR-001)
-- Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount == (qty * price / MICRO) * rate / MICRO + fees` (i128 arithmetic)
-- Factory methods: `new()`, `with_id()`, `restore()`
+- Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount` invariant checked for Purchase only (Sell uses subtraction formula)
+- Factory methods: `new()`, `with_id()`, `restore()`; `created_at` is set once in `new()`, immutable on update
 
 **Repository trait: `TransactionRepository`**
 
 - `get_by_id`, `get_by_account_asset(account_id, asset_id) -> Vec<Transaction>` (chronological — TRX-036)
 - `get_asset_ids_for_account(account_id) -> Vec<String>` — distinct asset IDs with transactions for an account (TXL-013)
+- `get_realized_pnl_by_account(account_id) -> Vec<(String, i64)>` — (asset_id, sum_pnl) for all Sell transactions (SEL-038)
 - `create`, `update`, `delete`
 
 **Service: `TransactionService`**
 
-- Read access: `get_by_id`, `get_by_account_asset`, `get_asset_ids_for_account`
+- Read access: `get_by_id`, `get_by_account_asset`, `get_asset_ids_for_account`, `get_realized_pnl_by_account`
 - `notify_transaction_updated()` — publishes `TransactionUpdated` event (B8); called by `RecordTransactionUseCase` after commit
 
 **Tauri commands**
@@ -228,6 +232,7 @@ context/{domain}/
 - `202603290001_asset_archiving.sql` — adds `is_archived INTEGER NOT NULL DEFAULT 0` column to `assets`, drops the old unique index on reference (duplicates now allowed)
 - `202604120001_create_holdings.sql` — creates `holdings` table (account_id, asset_id, quantity, average_price — all i64 micro-units, ADR-001)
 - `202604120002_create_transactions.sql` — creates `transactions` table with FK cascade on `accounts.id` and restrict on `assets.id`
+- `202604190001_add_realized_pnl_and_created_at_to_transactions.sql` — adds `realized_pnl INTEGER` (nullable, SEL-024) and `created_at TEXT NOT NULL DEFAULT (datetime('now'))` to `transactions`; adds index on `(account_id, transaction_type)` for realized P&L queries (SEL-038)
 
 ---
 
@@ -303,23 +308,25 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - `useTransactions()` hook: wraps gateway calls with error normalization (`{ data, error }` return shape)
 - Sub-features:
   - `add_transaction/` — `AddTransactionModal` + `useAddTransaction` hook (TRX-010, TRX-011, TRX-026, TRX-029)
-  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033); supports optional `onSuccess` prop for post-save callbacks distinct from `onClose`
-  - `transaction_list/` — `TransactionListPage` + `useTransactionList` hook (TXL spec): account/asset filter dropdowns, sortable table, edit/delete/add row actions, all UX states (loading, error, empty, incomplete filter)
+  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033); uses `computeSellTotalMicro` when `transaction_type === "Sell"`
+  - `transaction_list/` — `TransactionListPage` + `useTransactionList` hook (TXL spec): account/asset filter dropdowns, sortable date column, edit/delete/add row actions, realized P&L column (SEL-041, SEL-043), all UX states
+  - `sell_transaction/` — `SellTransactionModal` + `useSellTransaction` hook (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional, `transaction_type: "Sell"` DTO
 - Shared:
   - `shared/types.ts` — `TransactionFormData` (decimal strings)
-  - `shared/microUnits.ts` — `decimalToMicro`, `microToDecimal`, `calculateTotalAmount` (mirrors TRX-026 integer arithmetic)
-  - `shared/presenter.ts` — `toTransactionRow()` — domain → `TransactionRowViewModel` (includes `type` field)
-  - `shared/validateTransaction.ts` — client-side validation (mirrors TRX-020)
-- `store.ts` — `useTransactionStore`: `lastFetchedKey`, `refreshHoldings()` (TRX-038 stub — called on `TransactionUpdated` event)
-- Entry points: "Buy" `IconButton` in `AssetTable` (TRX-010); magnifier `IconButton` per holding row in `AccountDetailsView` navigates to `/accounts/$accountId/transactions/$assetId` (TXL-010, ACD-042)
-- Spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/transaction-list.md`
+  - `lib/microUnits.ts` — `decimalToMicro`, `microToDecimal`, `computeTotalMicro` (TRX-026), `computeSellTotalMicro` (SEL-023)
+  - `shared/presenter.ts` — `toTransactionRow()` → `TransactionRowViewModel` with `realizedPnl: string | null`, `realizedPnlRaw: number | null` for sign-based color rendering
+  - `shared/validateTransaction.ts` — `validateTransactionForm()` (base) + `validateSellForm()` (adds oversell guard SEL-022)
+- `store.ts` — `useTransactionStore`: `lastFetchedKey`, `refreshHoldings()` (TRX-038 stub)
+- Barrel `index.ts` — public exports including `SellTransactionModal` (prevents cross-feature deep imports)
+- Entry points: "Buy" `IconButton` in `AssetTable` (TRX-010); "Sell" `IconButton` per holding row in `AccountDetailsView` (SEL-010, disabled when archived — SEL-037); magnifier `IconButton` navigates to transaction list (TXL-010)
+- Spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/transaction-list.md`, `docs/spec/sell-transaction.md`
 
 #### Account Details (`features/account_details/`)
 
 - Gateway: `getAccountDetails(accountId)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
 - `account_details_view/AccountDetailsView.tsx` — renders header (account name + total cost basis), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty with CTA)
 - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
-- `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings (micro-unit formatting via `microToDecimal`)
+- `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number` on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number` on `AccountSummaryViewModel` for sign-based color rendering (SEL-042, SEL-043)
 - Navigation: clicking an `AccountTable` row calls `useNavigate` to `/accounts/$accountId`; `AccountDetailsView` is rendered by its own route, not conditionally by `AccountManager`
 - Spec: `docs/spec/account-details.md` (ACD-010–ACD-041)
 

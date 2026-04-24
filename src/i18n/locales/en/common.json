@@ -212,7 +212,7 @@
     "column_realized_pnl": "Realized P&L",
     "total_cost_basis": "Total Cost Basis",
     "total_realized_pnl": "Total Realized P&L",
-    "pnl_placeholder": "--",
+    "pnl_placeholder": "—",
     "empty_no_positions": "No positions yet",
     "empty_all_closed": "All positions are closed",
     "add_transaction": "Add Transaction",

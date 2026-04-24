@@ -212,7 +212,7 @@
     "column_realized_pnl": "P&L réalisé",
     "total_cost_basis": "Coût de revient total",
     "total_realized_pnl": "P&L réalisé total",
-    "pnl_placeholder": "--",
+    "pnl_placeholder": "—",
     "empty_no_positions": "Aucune position",
     "empty_all_closed": "Toutes les positions sont clôturées",
     "add_transaction": "Ajouter une transaction",

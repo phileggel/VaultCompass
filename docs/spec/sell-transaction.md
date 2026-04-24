@@ -16,9 +16,9 @@ All financial values are stored as `i64` micro-units per [ADR-001](../adr/001-us
 
 The `Transaction` entity is defined in the TRX spec. This spec adds one field activated only for `Sell` transactions:
 
-| Field           | Business meaning                                                                                                                                      |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `realized_pnl`  | Net profit or loss crystallized at sell time, in account currency (micros). Positive = gain, negative = loss. Present only for `Sell` transactions.  |
+| Field          | Business meaning                                                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `realized_pnl` | Net profit or loss crystallized at sell time, in account currency (micros). Positive = gain, negative = loss. Present only for `Sell` transactions. |
 
 All other fields (`id`, `account_id`, `asset_id`, `transaction_type`, `date`, `quantity`, `unit_price`, `exchange_rate`, `fees`, `total_amount`, `note`) retain the definitions from the TRX spec.
 

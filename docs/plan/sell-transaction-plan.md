@@ -16,11 +16,11 @@
 - [x] Frontend Implementation (Gateway, Hook, Component, i18n)
 - [x] Formatting & Linting (`just format` + `python3 scripts/check.py`)
 - [x] Code Review (`reviewer` + `reviewer-backend` + `reviewer-frontend` + `reviewer-sql`)
-- [ ] Commit: frontend layer -- `feat(sell): implement sell transaction frontend with P&L display`
-- [ ] i18n Review (`i18n-checker`)
-- [ ] Unit & Integration Tests
-- [ ] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
-- [ ] Spec check (`spec-checker`)
+- [x] Commit: frontend layer -- `feat(sell): implement sell transaction frontend with P&L display`
+- [x] i18n Review (`i18n-checker`)
+- [x] Unit & Integration Tests
+- [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
+- [x] Spec check (`spec-checker`)
 - [ ] Commit: tests & docs -- `test(sell): add sell transaction tests and update docs`
 
 ---
