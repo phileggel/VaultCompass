@@ -110,6 +110,18 @@ impl HoldingRepository for SqliteHoldingRepository {
         Ok(())
     }
 
+    async fn has_active_holdings_for_asset(&self, asset_id: &str) -> Result<bool> {
+        let count = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM holdings WHERE asset_id = ? AND quantity > 0"#,
+            asset_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .with_context(|| format!("Failed to check active holdings for asset {}", asset_id))?;
+
+        Ok(count > 0)
+    }
+
     async fn delete_by_account_asset(&self, account_id: &str, asset_id: &str) -> Result<()> {
         sqlx::query!(
             r#"DELETE FROM holdings WHERE account_id = ? AND asset_id = ?"#,

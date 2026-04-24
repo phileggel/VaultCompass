@@ -86,7 +86,7 @@ impl AssetService {
             .ok_or_else(|| anyhow::anyhow!("Asset not found: {}", dto.asset_id))?;
 
         if existing.is_archived {
-            anyhow::bail!("error.asset.archived_readonly");
+            anyhow::bail!("Cannot edit an archived asset");
         }
 
         let category = self
@@ -350,7 +350,10 @@ mod tests {
             })
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("archived_readonly"), "got: {err}");
+        assert!(
+            err.to_string().contains("Cannot edit an archived asset"),
+            "got: {err}"
+        );
     }
 
     // R6 — archiving sets is_archived = true

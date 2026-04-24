@@ -17,6 +17,7 @@ use crate::context::transaction::{SqliteTransactionRepository, TransactionServic
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
 use crate::use_cases::account_details::AccountDetailsUseCase;
+use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::record_transaction::RecordTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
@@ -153,8 +154,15 @@ pub fn run() {
                     Arc::clone(&transaction_service),
                 );
 
+                let holding_repo_for_archive = SqliteHoldingRepository::new(db.pool.clone());
+                let archive_asset_uc = ArchiveAssetUseCase::new(
+                    Arc::clone(&asset_service),
+                    Arc::new(holding_repo_for_archive),
+                );
+
                 app_handle.manage(record_transaction_uc);
                 app_handle.manage(account_details_uc);
+                app_handle.manage(archive_asset_uc);
 
                 app_handle.manage(AppState {
                     db,

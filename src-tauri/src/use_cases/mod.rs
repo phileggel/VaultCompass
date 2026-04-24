@@ -5,6 +5,8 @@
 
 /// Account Details: cross-context read of holdings + asset metadata (ACD feature).
 pub mod account_details;
+/// Archive asset: guards archiving against active holdings across bounded contexts (OQ-6).
+pub mod archive_asset;
 /// Record transaction: create, update, delete transactions and update Holdings (TRX feature).
 pub mod record_transaction;
 /// Application auto-update: detection, download, and installation (R1–R27).

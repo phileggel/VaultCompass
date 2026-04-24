@@ -1,6 +1,7 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
+use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -96,15 +97,11 @@ pub async fn update_asset(
         .map_err(|e| e.to_string())
 }
 
-/// Archives an asset (reversible soft-archive — R6).
+/// Archives an asset, guarded against active holdings (R6, OQ-6).
 #[tauri::command]
 #[specta::specta]
-pub async fn archive_asset(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    state
-        .asset_service
-        .archive_asset(&id)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn archive_asset(uc: State<'_, ArchiveAssetUseCase>, id: String) -> Result<(), String> {
+    uc.archive_asset(&id).await.map_err(|e| e.to_string())
 }
 
 /// Unarchives an asset (R18).

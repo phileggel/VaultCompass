@@ -101,4 +101,6 @@ pub trait HoldingRepository: Send + Sync {
     async fn delete(&self, id: &str) -> Result<()>;
     /// Deletes a holding by account and asset (used when no transactions remain, TRX-034).
     async fn delete_by_account_asset(&self, account_id: &str, asset_id: &str) -> Result<()>;
+    /// Returns true if any holding for the given asset has quantity > 0 (OQ-6).
+    async fn has_active_holdings_for_asset(&self, asset_id: &str) -> Result<bool>;
 }
