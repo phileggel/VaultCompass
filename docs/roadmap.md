@@ -25,7 +25,7 @@ Manage the list of tradable instruments the user can reference in transactions.
 | Archive asset             | ✅ Done    | Soft delete; preserves history                                                                                                                                                       |
 | Unarchive asset           | ✅ Done    |                                                                                                                                                                                      |
 | Delete asset              | ✅ Done    | Hard delete; only safe when no holdings exist                                                                                                                                        |
-| Archive eligibility guard | 🔲 Planned | Block archiving if `Holding.quantity > 0` (spec TRX OQ-6)                                                                                                                            |
+| Archive eligibility guard | ✅ Done    | Block archiving if `Holding.quantity > 0` (OQ-6) — `ArchiveAssetUseCase`                                                                                                             |
 | Delete eligibility guard  | 🔲 Planned | Block hard delete if any transaction exists for the asset                                                                                                                            |
 | Inline asset creation     | ✅ Done    | From `/transactions/new`, `ComboboxField` `onCreateNew` navigates to `/assets?createNew=<query>&returnPath=...`; on success returns to `/transactions/new` with new asset pre-filled |
 
@@ -125,12 +125,12 @@ A position is closed when `Holding.quantity` reaches zero.
 
 An asset can be archived once it has no active positions, preserving its historical data.
 
-| Operation                  | Status     | Notes                                                                    |
-| -------------------------- | ---------- | ------------------------------------------------------------------------ |
-| Archive action             | ✅ Done    | Available from asset table                                               |
-| Auto-unarchive on new buy  | ✅ Done    | Transparent to user, with confirmation dialog (TRX-028, TRX-029)         |
-| Archive eligibility guard  | 🔲 Planned | Block archiving if any `Holding.quantity > 0` across all accounts (OQ-6) |
-| Archived asset in holdings | ✅ Done    | Included in Account Details as long as `quantity > 0` (ACD-021)          |
+| Operation                  | Status  | Notes                                                                    |
+| -------------------------- | ------- | ------------------------------------------------------------------------ |
+| Archive action             | ✅ Done | Available from asset table                                               |
+| Auto-unarchive on new buy  | ✅ Done | Transparent to user, with confirmation dialog (TRX-028, TRX-029)         |
+| Archive eligibility guard  | ✅ Done | Block archiving if any `Holding.quantity > 0` across all accounts (OQ-6) |
+| Archived asset in holdings | ✅ Done | Included in Account Details as long as `quantity > 0` (ACD-021)          |
 
 ---
 

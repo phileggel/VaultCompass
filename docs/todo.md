@@ -1,137 +1,132 @@
 # TODO
 
-<!-- Ajouter les nouvelles dettes techniques et items de backlog ici. Format : ## (domaine) — Titre court -->
+<!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## ~~(frontend/assets) — F22: AssetTable importe AddTransactionModal (cross-feature)~~ ✅ résolu
+## ~~(frontend/assets) — F22: AssetTable imports AddTransactionModal (cross-feature)~~ ✅ resolved
 
-Import corrigé vers `@/features/transactions` (index public).
+Import fixed to `@/features/transactions` (public index).
 
-## ~~(frontend/assets) — SortIcon défini dans le corps de AssetTable (remontage à chaque render)~~ ✅ résolu
+## ~~(frontend/assets) — SortIcon defined inside AssetTable body (remounts on every render)~~ ✅ resolved
 
-Remplacé par `<SortIcon>` de `@/ui/components/SortIcon` (composant partagé).
+Replaced with `<SortIcon>` from `@/ui/components/SortIcon` (shared component).
 
-## ~~(frontend/account_details) — F22: AccountDetailsView importe AddTransactionModal (cross-feature)~~ ✅ résolu
+## ~~(frontend/account_details) — F22: AccountDetailsView imports AddTransactionModal (cross-feature)~~ ✅ resolved
 
-Import corrigé vers `@/features/transactions` (index public).
+Import fixed to `@/features/transactions` (public index).
 
-## (ai/agents) — i18n-checker : inclure les fichiers nouvellement ajoutés
+## (ai/agents) — i18n-checker: include newly added files
 
-L'agent utilise `git diff --name-only HEAD` + `git diff --name-only --cached` mais rate les nouveaux fichiers staged (`A ` dans `git status --porcelain`) quand ils n'ont pas encore de diff HEAD.
-Ajouter `git status --porcelain | grep "^A " | awk '{print $2}'` à la liste des fichiers à analyser dans la définition de l'agent.
+The agent uses `git diff --name-only HEAD` + `git diff --name-only --cached` but misses newly staged files (`A ` in `git status --porcelain`) that have no HEAD diff yet.
+Add `git status --porcelain | grep "^A " | awk '{print $2}'` to the file list in the agent definition.
 
-## (deps) — Mettre à jour specta vers rc.23
+## (deps) — Update specta to rc.23
 
-`tauri-specta rc.21` impose `specta = "=2.0.0-rc.22"` (version exacte). Attendre la sortie de `tauri-specta rc.22+` avant de passer à `specta rc.23` + `specta-typescript 0.0.10`.
-État (2026-03-29) : `specta rc.23` disponible, `tauri-specta` toujours bloqué à `rc.21`.
+`tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
+Status (2026-03-29): `specta rc.23` available, `tauri-specta` still blocked at `rc.21`.
 
-## (frontend/ui) — Passer StatCard.tsx aux tokens M3
+## (frontend/ui) — Migrate StatCard.tsx to M3 tokens
 
-`StatCard` utilise `bg-emerald-100 text-emerald-700` / `bg-rose-100 text-rose-700` pour les badges positif/négatif.
-Remplacer par `bg-m3-tertiary-container text-m3-on-tertiary-container` / `bg-m3-error-container text-m3-on-error-container`.
+`StatCard` uses `bg-emerald-100 text-emerald-700` / `bg-rose-100 text-rose-700` for positive/negative badges.
+Replace with `bg-m3-tertiary-container text-m3-on-tertiary-container` / `bg-m3-error-container text-m3-on-error-container`.
 
-## (frontend/ui) — Supprimer les bordures structurelles dans ManagerLayout et ManagerHeader
+## (frontend/ui) — Remove structural borders from ManagerLayout and ManagerHeader
 
-`ManagerLayout` et `ManagerHeader` utilisent `border border-m3-outline/10` et `shadow-sm` (Tailwind brut).
-Remplacer par `shadow-elevation-1` et différenciation tonale des surfaces.
+`ManagerLayout` and `ManagerHeader` use `border border-m3-outline/10` and `shadow-sm` (raw Tailwind).
+Replace with `shadow-elevation-1` and tonal surface differentiation.
 
-## (frontend/ui) — Remplacer les couleurs Tailwind brutes dans AccountAssetDetailsView et Footer
+## (frontend/ui) — Replace raw Tailwind colors in AccountAssetDetailsView and Footer
 
-`AccountAssetDetailsView.tsx` utilise `bg-white` et `border-gray-200` (hors tokens M3).
-`Footer.tsx` utilise `bg-emerald-100 text-emerald-700` pour le badge de statut de connexion.
-Remplacer par les tokens M3 sémantiques correspondants.
+`AccountAssetDetailsView.tsx` uses `bg-white` and `border-gray-200` (outside M3 tokens).
+`Footer.tsx` uses `bg-emerald-100 text-emerald-700` for the connection status badge.
+Replace with the corresponding semantic M3 tokens.
 
-## (frontend) — Utiliser le logger centralisé dans les hooks de features
+## (frontend) — Use centralized logger in feature hooks
 
-`useCategories.ts` utilise `console.error` directement au lieu du `logger` centralisé (`src/lib/logger.ts`).
-(Note: `useAssets.ts` et `useAccounts.ts` sont désormais migrés.)
-Remplacer les appels `console.error` par `logger.error` pour que les erreurs remontent au backend via `tracing`.
+`useCategories.ts` calls `console.error` directly instead of the centralized `logger` (`src/lib/logger.ts`).
+(Note: `useAssets.ts` and `useAccounts.ts` are already migrated.)
+Replace `console.error` calls with `logger.error` so errors surface in the backend via `tracing`.
 
-## (frontend/ui) — Créer le composant TextareaField
+## (frontend/ui) — Create TextareaField component
 
-`AddTransactionModal` et `EditTransactionModal` utilisent une balise `<textarea>` brute pour le champ Note au lieu d'un composant partagé (violation F11/F12).
-Créer `ui/components/field/TextareaField.tsx` (même interface que `TextField`, label + id + className + placeholder) et l'utiliser dans les deux modales.
+`AddTransactionModal` and `EditTransactionModal` use a raw `<textarea>` tag for the Note field instead of a shared component (violation F11/F12).
+Create `ui/components/field/TextareaField.tsx` (same interface as `TextField`: label + id + className + placeholder) and use it in both modals.
 
-## (frontend/transactions) — Feedback succès par snackbar (transactions)
+## (frontend/transactions) — Success snackbar feedback (transactions)
 
-`AddTransactionModal` et `EditTransactionModal` n'ont pas de retour visuel positif après soumission réussie (le modal se ferme silencieusement).
-Brancher `showSnackbar(t("transaction.success_created"))` / `showSnackbar(t("transaction.success_updated"))` dans `doSubmit` une fois l'infrastructure toast en place.
-Les clés i18n `transaction.success_created` et `transaction.success_updated` sont déjà définies dans `fr/common.json` et `en/common.json`.
+`AddTransactionModal` and `EditTransactionModal` have no positive visual feedback after a successful submission (the modal closes silently).
+Wire `showSnackbar(t("transaction.success_created"))` / `showSnackbar(t("transaction.success_updated"))` into `doSubmit` once the toast infrastructure is in place.
+The i18n keys `transaction.success_created` and `transaction.success_updated` are already defined in `fr/common.json` and `en/common.json`.
 
-## (frontend/assets) — Feedback succès par snackbar
+## (frontend/assets) — Success snackbar feedback
 
-Les mutations d'assets (création, modification, archivage) n'ont pas de feedback de succès visible.
-Une fois la mécanique snackbar/toast en place (feature dédiée), brancher un appel `showSnackbar(t("asset.success_*"))` après chaque mutation dans `useAssets.ts`.
+Asset mutations (create, edit, archive) have no visible success feedback.
+Once the snackbar/toast mechanism is in place (dedicated feature), wire `showSnackbar(t("asset.success_*"))` after each mutation in `useAssets.ts`.
 
-## (frontend/shell) — Implémenter la page Settings et câbler le bouton Settings de la Sidebar
+## (frontend/shell) — Implement Settings page and wire the Settings button in Sidebar
 
-Le bouton Settings du footer de `Sidebar.tsx` est câblé via `onSettingsClick?` mais `MainLayout` ne passe pas encore ce handler.
-Créer la page Settings (feature `settings/`) et passer `onSettingsClick` depuis `MainLayout`.
+The Settings button in `Sidebar.tsx` footer is wired via `onSettingsClick?` but `MainLayout` does not yet pass that handler.
+Create the Settings page (feature `settings/`) and pass `onSettingsClick` from `MainLayout`.
 
-## ~~(frontend/transactions) — Buy button désactivé pour les assets archivés~~ ✅ résolu par TRX-029
+## ~~(frontend/transactions) — Buy button disabled for archived assets~~ ✅ resolved by TRX-029
 
-Le bouton "Buy" reste actif pour les assets archivés : TRX-029 (dialog de confirmation auto-désarchivage) est le comportement retenu. Désactiver le bouton serait contradictoire avec ce flow.
+The "Buy" button stays active for archived assets: TRX-029 (auto-unarchive confirmation dialog) is the chosen behaviour. Disabling the button would contradict that flow.
 
-## ~~(frontend/transactions) — TRX-010: bouton "Add Transaction" dans la vue Account Details~~ ✅ résolu
+## ~~(frontend/transactions) — TRX-010: "Add Transaction" button in Account Details view~~ ✅ resolved
 
-Magnifier `IconButton` par ligne dans `AccountDetailsView` navigue vers `/accounts/$accountId/transactions/$assetId` (TXL-010, ACD-042).
+`IconButton` per row in `AccountDetailsView` navigates to `/accounts/$accountId/transactions/$assetId` (TXL-010, ACD-042).
 
-## ~~(frontend/transactions) — TRX-035: dialog de confirmation de suppression d'une transaction~~ ✅ résolu
+## ~~(frontend/transactions) — TRX-035: delete transaction confirmation dialog~~ ✅ resolved
 
-`TransactionListPage` expose l'action de suppression via `ConfirmationDialog` (TXL-040, TXL-041). Clés i18n existantes utilisées.
+`TransactionListPage` exposes the delete action via `ConfirmationDialog` (TXL-040, TXL-041). Existing i18n keys used.
 
-## (spec/account) — Ajouter un champ `currency` à l'entité Account
+## (spec/account) — Add `currency` field to the Account entity
 
-La logique `showExchangeRate` dans `AddTransactionModal` et `EditTransactionModal` compare `selectedAsset.currency !== "EUR"` en dur.
-Elle devrait comparer `selectedAsset.currency !== selectedAccount.currency`.
-L'entité `Account` n'a pas de champ `currency` : il faut l'ajouter dans la spec account, puis dans le domaine, la migration SQL, les bindings, et les modales de transaction.
-Impact TRX-021 et la règle de visibilité du champ Exchange Rate.
+The `showExchangeRate` logic in `AddTransactionModal` and `EditTransactionModal` hardcodes `selectedAsset.currency !== "EUR"`.
+It should compare `selectedAsset.currency !== selectedAccount.currency`.
+The `Account` entity has no `currency` field: add it to the account spec, then to the domain, SQL migration, bindings, and transaction modals.
+Impacts TRX-021 and the Exchange Rate field visibility rule.
 
-## (sell/SEL-036) — Visibilité du champ Exchange Rate dans SellTransactionModal
+## (sell/SEL-036) — Exchange Rate field visibility in SellTransactionModal
 
-`AccountDetailsView.tsx` calcule `showExchangeRate` avec `asset.currency !== "EUR"` en dur (même limitation structurelle que TRX-021 ci-dessus).
-Résoudre en même temps que l'ajout de `currency` à `Account` : passer `accountCurrency` à `SellTarget` et remplacer le hardcode par `asset.currency !== account.currency`.
+`AccountDetailsView.tsx` computes `showExchangeRate` with `asset.currency !== "EUR"` hardcoded (same structural limitation as TRX-021 above).
+Resolve together with adding `currency` to `Account`: pass `accountCurrency` into `SellTarget` and replace the hardcode with `asset.currency !== account.currency`.
 
-## (frontend/transactions) — TRX-038: implémenter l'affichage des positions (holdings)
+## (frontend/transactions) — TRX-038: implement holdings display
 
-`useTransactionStore.refreshHoldings()` est un stub: le backend a une table `holdings` (créée par la use case RecordTransaction), mais il n'existe pas de commande Tauri `getHoldings`.
-Créer la commande `get_holdings(account_id) -> Vec<Holding>` dans `use_cases/record_transaction/api.rs` (ou `context/account/api.rs`) et l'utiliser dans `store.ts` pour afficher les positions par compte.
+`useTransactionStore.refreshHoldings()` is a stub: the backend has a `holdings` table (populated by `RecordTransactionUseCase`) but there is no `getHoldings` Tauri command.
+Create `get_holdings(account_id) -> Vec<Holding>` in `use_cases/record_transaction/api.rs` (or `context/account/api.rs`) and use it in `store.ts` to display positions per account.
 
-## (frontend/shell) — Renommer useSidebar.ts en navItems.ts
+## (frontend/shell) — Rename useSidebar.ts to navItems.ts
 
-`useSidebar.ts` exporte uniquement des constantes et un type (pas de hook). Renommer en `navItems.ts` pour respecter la convention `use*` des hooks React.
+`useSidebar.ts` only exports constants and a type (no hook). Rename to `navItems.ts` to follow the `use*` hook naming convention.
 
-## (frontend/shell) — Ajouter les logs de montage manquants (F13)
+## (frontend/shell) — Add missing mount logs (F13)
 
-`Sidebar.tsx` et `DesignSystemPage.tsx` n'ont pas de `logger.info("[ComponentName] mounted")` dans leur `useEffect`. Ajouter conformément à la règle F13.
+`Sidebar.tsx` and `DesignSystemPage.tsx` have no `logger.info("[ComponentName] mounted")` in their `useEffect`. Add per rule F13.
 
-## ~~(frontend) — i18n des labels de navigation et du shell~~ ✅ résolu
+## ~~(frontend) — i18n for navigation labels and shell~~ ✅ resolved
 
-Labels `NAV_ITEMS` et nom de l'app migrés vers i18n (`nav.*`). App renommée VaultCompass.
+`NAV_ITEMS` labels and app name migrated to i18n (`nav.*`). App renamed VaultCompass.
 
-## From the two reviewers, the i18n findings (all pre-existing, not introduced by this migration):
+## (frontend/shell) — Hardcoded strings in shell components (pre-existing i18n debt)
 
-src/features/shell/useSidebar.ts — label values "Assets", "Accounts", "Categories", "About", "Design System" are
-hardcoded English strings rendered in three places: sidebar nav text, aria-label on nav buttons, and the <h1> page
-title via Header.tsx. They should be i18n keys resolved with t().
+`useSidebar.ts` — label values "Assets", "Accounts", "Categories", "About", "Design System" are hardcoded English strings rendered in three places: sidebar nav text, aria-label on nav buttons, and the `<h1>` page title via `Header.tsx`. Should be i18n keys resolved with `t()`.
 
-src/features/shell/Header.tsx — resolveTitle() returns raw item.label strings, so the page title is hardcoded English.
-Fix is coupled to the useSidebar.ts fix above.
+`Header.tsx` — `resolveTitle()` returns raw `item.label` strings, so the page title is hardcoded English. Fix is coupled to the `useSidebar.ts` fix above.
 
-src/features/shell/Sidebar.tsx — "Version: " prefix (expanded sidebar) is a hardcoded English string, e.g. should be
-t("shell.sidebar_version", { version: appVersion }).
+`Sidebar.tsx` — "Version: " prefix (expanded sidebar) is a hardcoded English string; should be `t("shell.sidebar_version", { version: appVersion })`.
 
-These were present before this task — the migration just exposed them because the files were touched. Want me to fix
-them as a follow-up?
+## (frontend/accounts) — Extract row handlers into useAccountTable
 
-## (frontend/accounts) — Extraire les handlers de ligne dans useAccountTable
+`AccountTable.tsx` defines inline arrow functions inside the row `.map()`: `onClick`/`onKeyDown` on `<tr>` and `onClick` on action `IconButton`s. Move these handlers into `useAccountTable` to stabilise references and ease testing. See frontend-reviewer warning (account-page task).
 
-`AccountTable.tsx` définit des arrow functions inline dans le `.map()` des lignes : `onClick`/`onKeyDown` sur le `<tr>` et `onClick` sur les `IconButton` d'action. Déplacer ces handlers dans `useAccountTable` pour stabiliser les références et faciliter les tests. Voir warning frontend-reviewer (tâche account-page).
+## ~~(backend/assets) — Implement archive eligibility guard (OQ-6): block archiving with active positions~~ ✅ resolved
 
-## (backend/assets) — Implémenter le garde d'archivage (OQ-6) : bloquer l'archivage si position active
+Implemented via `ArchiveAssetUseCase` (cross-context use case) that checks `HoldingRepository::has_active_holdings_for_asset()` before delegating to `AssetService::archive_asset()`.
 
-`AssetService::archive_asset()` n'a aucun garde sur les holdings actives. Un asset avec `Holding.quantity > 0` peut actuellement être archivé sans erreur.
-Ajouter une vérification dans `AssetService::archive_asset()` : si au moins un `Holding.quantity > 0` existe pour cet asset (toutes comptes confondus), retourner une erreur métier.
-Ce garde est un prérequis pour retirer la vérification défensive de SEL-037 (Sell button désactivé si asset archivé).
-Spec de référence : OQ-6 dans `docs/spec/financial-asset-transaction.md`, et roadmap item 6.
+## (backend) — Replace string-matching error assertions with structured error types
 
-## Add proper application icon
+Backend errors are currently `anyhow::Error` strings (e.g. `"Cannot edit an archived asset"`, `"Cannot archive an asset with active holdings"`). Tests assert with `err.to_string().contains(...)` — fragile: wording changes silently break intent, and there is no structural match.
+Introduce a domain error enum (e.g. `AssetError`, `TransactionError`) so tests can match on variants rather than substrings, and callers can handle errors programmatically without parsing strings.
+
+## (app) — Add proper application icon
