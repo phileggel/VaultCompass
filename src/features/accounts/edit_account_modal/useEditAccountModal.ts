@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Account } from "@/bindings";
 import type { AccountFormData } from "../shared/AccountForm";
 import { FREQUENCIES } from "../shared/presenter";
-import { validateAccountName } from "../shared/validateAccount";
+import { validateAccountCurrency, validateAccountName } from "../shared/validateAccount";
 import { useAccounts } from "../useAccounts";
 
 interface UseEditAccountModalProps {
@@ -15,6 +15,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
 
   const [formData, setFormData] = useState<AccountFormData>({
     name: "",
+    currency: "EUR",
     update_frequency: "ManualMonth",
   });
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +26,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     if (account) {
       setFormData({
         name: account.name,
+        currency: account.currency,
         update_frequency: account.update_frequency,
       });
       setError(null);
@@ -40,7 +42,8 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     e.preventDefault();
     if (!account) return;
 
-    const validationError = validateAccountName(formData.name);
+    const validationError =
+      validateAccountName(formData.name) ?? validateAccountCurrency(formData.currency);
     if (validationError) {
       setError(validationError);
       return;
@@ -52,6 +55,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     const result = await updateAccount({
       id: account.id,
       name: formData.name,
+      currency: formData.currency,
       update_frequency: formData.update_frequency,
     });
 

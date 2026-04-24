@@ -53,7 +53,7 @@ async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, string>> {
 }
 },
 /**
- * Archives an asset (reversible soft-archive — R6).
+ * Archives an asset, guarded against active holdings (R6, OQ-6).
  */
 async archiveAsset(id: string) : Promise<Result<null, string>> {
     try {
@@ -322,6 +322,10 @@ id: string;
  */
 name: string; 
 /**
+ * ISO 4217 currency code for this account (TRX-021).
+ */
+currency: string; 
+/**
  * How often this account is updated.
  */
 update_frequency: UpdateFrequency }
@@ -437,6 +441,10 @@ export type CreateAccountDTO = {
  * Display name.
  */
 name: string; 
+/**
+ * ISO 4217 currency code.
+ */
+currency: string; 
 /**
  * Update frequency.
  */
@@ -674,6 +682,10 @@ id: string;
  * New display name.
  */
 name: string; 
+/**
+ * ISO 4217 currency code.
+ */
+currency: string; 
 /**
  * New update frequency.
  */

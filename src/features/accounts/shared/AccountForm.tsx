@@ -7,6 +7,7 @@ import { FREQUENCY_I18N_KEYS } from "./presenter";
 
 export interface AccountFormData {
   name: string;
+  currency: string;
   update_frequency: UpdateFrequency;
 }
 
@@ -39,6 +40,17 @@ export function AccountForm({
         required
         placeholder={t("account.form_name_placeholder")}
         value={formData.name}
+        onChange={handleChange}
+      />
+
+      <TextField
+        label={t("account.form_currency_label")}
+        id={`${idPrefix}-currency`}
+        name="currency"
+        required
+        maxLength={3}
+        placeholder={t("account.form_currency_placeholder")}
+        value={formData.currency}
         onChange={handleChange}
       />
 

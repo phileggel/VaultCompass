@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, update_frequency FROM accounts",
+  "query": "SELECT id, name, currency, update_frequency FROM accounts",
   "describe": {
     "columns": [
       {
@@ -14,8 +14,13 @@
         "type_info": "Text"
       },
       {
-        "name": "update_frequency",
+        "name": "currency",
         "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "update_frequency",
+        "ordinal": 3,
         "type_info": "Text"
       }
     ],
@@ -25,8 +30,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "99e63c3065bb689a5f05688ffb94d871ea330b6e5150f77465b3245460cab2ce"
+  "hash": "81b365861b0cdd6e2f3de6ba16cc0bafb38a31835b683ace301c2d19cd2bd398"
 }

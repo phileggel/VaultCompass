@@ -49,7 +49,7 @@ Record a purchase that opens or increases a position in an account.
 | Delete transaction            | ✅ Done    | Full flow: backend + confirmation dialog + snackbar (TRX-035)  |
 | Delete confirmation dialog    | ✅ Done    | ConfirmationDialog in TransactionListPage (TRX-035)            |
 | Transaction list view         | ✅ Done    | Per-account/asset filter, sort, edit/delete actions (TXL spec) |
-| Account currency field        | 🔲 Planned | Exchange rate visibility currently hardcoded vs EUR (todo)     |
+| Account currency field        | ✅ Done    | Exchange rate visibility now compares asset vs account currency (TRX-021, SEL-036) |
 
 Spec: `docs/spec/financial-asset-transaction.md`
 

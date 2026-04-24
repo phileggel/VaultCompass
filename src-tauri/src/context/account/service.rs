@@ -46,8 +46,13 @@ impl AccountService {
     }
 
     /// Creates a new account.
-    pub async fn create(&self, name: String, update_frequency: UpdateFrequency) -> Result<Account> {
-        let account = Account::new(name, update_frequency)?;
+    pub async fn create(
+        &self,
+        name: String,
+        currency: String,
+        update_frequency: UpdateFrequency,
+    ) -> Result<Account> {
+        let account = Account::new(name, currency, update_frequency)?;
         if self
             .account_repo
             .find_by_name(&account.name)
@@ -71,9 +76,10 @@ impl AccountService {
         &self,
         id: String,
         name: String,
+        currency: String,
         update_frequency: UpdateFrequency,
     ) -> Result<Account> {
-        let account = Account::with_id(id, name, update_frequency)?;
+        let account = Account::with_id(id, name, currency, update_frequency)?;
         if let Some(existing) = self.account_repo.find_by_name(&account.name).await? {
             if existing.id != account.id {
                 anyhow::bail!("An account with this name already exists");
@@ -131,11 +137,19 @@ mod tests {
     #[tokio::test]
     async fn create_rejects_duplicate_name_case_insensitive() {
         let svc = setup_service().await;
-        svc.create("Alpha".to_string(), UpdateFrequency::ManualMonth)
-            .await
-            .unwrap();
+        svc.create(
+            "Alpha".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .unwrap();
         let err = svc
-            .create("alpha".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "alpha".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap_err();
         assert!(err.to_string().contains("already exists"), "got: {err}");
@@ -145,15 +159,28 @@ mod tests {
     #[tokio::test]
     async fn update_rejects_name_collision_with_other_account() {
         let svc = setup_service().await;
-        svc.create("Alpha".to_string(), UpdateFrequency::ManualMonth)
-            .await
-            .unwrap();
+        svc.create(
+            "Alpha".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .unwrap();
         let beta = svc
-            .create("Beta".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "Beta".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap();
         let err = svc
-            .update(beta.id, "ALPHA".to_string(), UpdateFrequency::ManualMonth)
+            .update(
+                beta.id,
+                "ALPHA".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap_err();
         assert!(err.to_string().contains("already exists"), "got: {err}");
@@ -164,11 +191,20 @@ mod tests {
     async fn update_allows_same_name_on_same_account() {
         let svc = setup_service().await;
         let account = svc
-            .create("Alpha".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "Alpha".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap();
         let result = svc
-            .update(account.id, "Alpha".to_string(), UpdateFrequency::ManualDay)
+            .update(
+                account.id,
+                "Alpha".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualDay,
+            )
             .await;
         assert!(result.is_ok());
     }

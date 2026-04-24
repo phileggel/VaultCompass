@@ -200,7 +200,11 @@ mod tests {
         let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
-            .create("Test".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "Test".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap();
         let asset = asset_svc
@@ -242,7 +246,11 @@ mod tests {
         let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
-            .create("Portfolio".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "Portfolio".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap();
         let asset = asset_svc
@@ -289,7 +297,11 @@ mod tests {
         let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
-            .create("Archived Test".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "Archived Test".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap();
         let asset = asset_svc
@@ -336,7 +348,11 @@ mod tests {
         let (account_svc, asset_svc, tx_svc) = setup(&pool).await;
 
         let account = account_svc
-            .create("Alpha".to_string(), UpdateFrequency::ManualMonth)
+            .create(
+                "Alpha".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
             .await
             .unwrap();
 

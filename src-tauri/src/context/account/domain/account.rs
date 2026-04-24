@@ -1,7 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use iso_currency::Currency;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// Defines how often an account's data should be updated.
@@ -39,44 +41,68 @@ pub struct Account {
     pub id: String,
     /// User defined name.
     pub name: String,
+    /// ISO 4217 currency code for this account (TRX-021).
+    pub currency: String,
     /// How often this account is updated.
     pub update_frequency: UpdateFrequency,
 }
 
 impl Account {
     /// Creates a new Account. Trims the name before validation and storage (R1).
-    pub fn new(name: String, update_frequency: UpdateFrequency) -> Result<Self> {
+    pub fn new(name: String, currency: String, update_frequency: UpdateFrequency) -> Result<Self> {
         let name = name.trim().to_string();
         if name.is_empty() {
             anyhow::bail!("Account name cannot be empty");
         }
+        Self::validate_currency(&currency)?;
         Ok(Self {
             id: Uuid::new_v4().to_string(),
             name,
+            currency,
             update_frequency,
         })
     }
 
     /// Updates an existing Account. Trims and validates identically to new() (R1, R2).
-    pub fn with_id(id: String, name: String, update_frequency: UpdateFrequency) -> Result<Self> {
+    pub fn with_id(
+        id: String,
+        name: String,
+        currency: String,
+        update_frequency: UpdateFrequency,
+    ) -> Result<Self> {
         let name = name.trim().to_string();
         if name.is_empty() {
             anyhow::bail!("Account name cannot be empty");
         }
+        Self::validate_currency(&currency)?;
         Ok(Self {
             id,
             name,
+            currency,
             update_frequency,
         })
     }
 
     /// Reconstructs an Account from storage without validation.
-    pub fn restore(id: String, name: String, update_frequency: UpdateFrequency) -> Self {
+    pub fn restore(
+        id: String,
+        name: String,
+        currency: String,
+        update_frequency: UpdateFrequency,
+    ) -> Self {
         Self {
             id,
             name,
+            currency,
             update_frequency,
         }
+    }
+
+    fn validate_currency(currency: &str) -> Result<()> {
+        if Currency::from_str(currency).is_err() {
+            anyhow::bail!("Invalid currency code: {}", currency);
+        }
+        Ok(())
     }
 }
 
@@ -104,15 +130,34 @@ mod tests {
     // R1 — trim at creation
     #[test]
     fn new_trims_leading_trailing_spaces() {
-        let account =
-            Account::new("  My Account  ".to_string(), UpdateFrequency::ManualMonth).unwrap();
+        let account = Account::new(
+            "  My Account  ".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .unwrap();
         assert_eq!(account.name, "My Account");
     }
 
     // R1, R2 — spaces-only name is invalid after trim
     #[test]
     fn new_rejects_whitespace_only_name() {
-        let result = Account::new("   ".to_string(), UpdateFrequency::ManualMonth);
+        let result = Account::new(
+            "   ".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        );
+        assert!(result.is_err());
+    }
+
+    // currency — invalid ISO code rejected
+    #[test]
+    fn new_rejects_invalid_currency() {
+        let result = Account::new(
+            "My Account".to_string(),
+            "INVALID".to_string(),
+            UpdateFrequency::ManualMonth,
+        );
         assert!(result.is_err());
     }
 
@@ -122,6 +167,7 @@ mod tests {
         let account = Account::with_id(
             "some-id".to_string(),
             "  Trimmed  ".to_string(),
+            "USD".to_string(),
             UpdateFrequency::ManualDay,
         )
         .unwrap();
@@ -134,6 +180,7 @@ mod tests {
         let result = Account::with_id(
             "some-id".to_string(),
             "  ".to_string(),
+            "EUR".to_string(),
             UpdateFrequency::ManualMonth,
         );
         assert!(result.is_err());

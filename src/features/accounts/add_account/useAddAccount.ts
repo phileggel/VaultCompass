@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AccountFormData } from "../shared/AccountForm";
 import { FREQUENCIES } from "../shared/presenter";
-import { validateAccountName } from "../shared/validateAccount";
+import { validateAccountCurrency, validateAccountName } from "../shared/validateAccount";
 import { useAccounts } from "../useAccounts";
 
 interface UseAddAccountProps {
@@ -13,6 +13,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
 
   const [formData, setFormData] = useState<AccountFormData>({
     name: "",
+    currency: "EUR",
     update_frequency: "ManualMonth",
   });
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,8 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
     e.preventDefault();
 
     // R14 — block if name is empty or whitespace-only
-    const validationError = validateAccountName(formData.name);
+    const validationError =
+      validateAccountName(formData.name) ?? validateAccountCurrency(formData.currency);
     if (validationError) {
       setError(validationError);
       return;
@@ -38,6 +40,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
 
     const result = await addAccount({
       name: formData.name,
+      currency: formData.currency,
       update_frequency: formData.update_frequency,
     });
 
@@ -49,7 +52,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
       return;
     }
 
-    setFormData({ name: "", update_frequency: "ManualMonth" });
+    setFormData({ name: "", currency: "EUR", update_frequency: "ManualMonth" });
 
     if (onSubmitSuccess) {
       onSubmitSuccess();

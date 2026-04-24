@@ -9,6 +9,7 @@ use crate::core::logger::BACKEND;
 struct AccountRow {
     id: String,
     name: String,
+    currency: String,
     update_frequency: String,
 }
 
@@ -18,7 +19,7 @@ impl From<AccountRow> for Account {
             tracing::warn!(target: BACKEND, value = %row.update_frequency, "unknown update_frequency value, falling back to default");
             UpdateFrequency::default()
         });
-        Account::restore(row.id, row.name, update_frequency)
+        Account::restore(row.id, row.name, row.currency, update_frequency)
     }
 }
 
@@ -40,7 +41,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_all(&self) -> Result<Vec<Account>> {
         let rows = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, update_frequency FROM accounts"#
+            r#"SELECT id, name, currency, update_frequency FROM accounts"#
         )
         .fetch_all(&self.pool)
         .await
@@ -52,7 +53,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_by_id(&self, id: &str) -> Result<Option<Account>> {
         let row = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, update_frequency FROM accounts WHERE id = ?"#,
+            r#"SELECT id, name, currency, update_frequency FROM accounts WHERE id = ?"#,
             id
         )
         .fetch_optional(&self.pool)
@@ -65,7 +66,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn find_by_name(&self, name: &str) -> Result<Option<Account>> {
         let row = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, update_frequency FROM accounts WHERE LOWER(name) = LOWER(?)"#,
+            r#"SELECT id, name, currency, update_frequency FROM accounts WHERE LOWER(name) = LOWER(?)"#,
             name
         )
         .fetch_optional(&self.pool)
@@ -78,9 +79,10 @@ impl AccountRepository for SqliteAccountRepository {
     async fn create(&self, account: Account) -> Result<Account> {
         let update_freq_str = account.update_frequency.to_string();
         sqlx::query!(
-            r#"INSERT INTO accounts (id, name, update_frequency) VALUES (?, ?, ?)"#,
+            r#"INSERT INTO accounts (id, name, currency, update_frequency) VALUES (?, ?, ?, ?)"#,
             account.id,
             account.name,
+            account.currency,
             update_freq_str
         )
         .execute(&self.pool)
@@ -93,8 +95,9 @@ impl AccountRepository for SqliteAccountRepository {
     async fn update(&self, account: Account) -> Result<Account> {
         let update_freq_str = account.update_frequency.to_string();
         sqlx::query!(
-            r#"UPDATE accounts SET name = ?, update_frequency = ? WHERE id = ?"#,
+            r#"UPDATE accounts SET name = ?, currency = ?, update_frequency = ? WHERE id = ?"#,
             account.name,
+            account.currency,
             update_freq_str,
             account.id
         )

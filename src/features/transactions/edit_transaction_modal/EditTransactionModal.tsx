@@ -53,7 +53,9 @@ export function EditTransactionModal({
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
   const selectedAccount = accounts.find((a) => a.id === formData.accountId);
   const showExchangeRate =
-    !!selectedAsset && !!selectedAccount ? selectedAsset.currency !== "EUR" : true;
+    !!selectedAsset && !!selectedAccount
+      ? selectedAsset.currency !== selectedAccount.currency
+      : true;
 
   const accountOptions = accounts.map((a) => ({ label: a.name, value: a.id }));
 

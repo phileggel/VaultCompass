@@ -65,9 +65,9 @@ function HoldingRow({ row, accountId, onSell }: HoldingRowProps) {
       accountName: account?.name ?? accountId,
       assetId: row.assetId,
       assetName: row.assetName,
-      assetCurrency: asset?.currency ?? "EUR",
+      assetCurrency: asset?.currency ?? "",
       holdingQuantityMicro: row.quantityMicro,
-      showExchangeRate: asset ? asset.currency !== "EUR" : false,
+      showExchangeRate: asset && account ? asset.currency !== account.currency : false,
     });
   }, [accounts, assets, accountId, row.assetId, row.assetName, row.quantityMicro, onSell]);
 

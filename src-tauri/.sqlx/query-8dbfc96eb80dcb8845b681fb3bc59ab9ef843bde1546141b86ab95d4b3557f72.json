@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, update_frequency FROM accounts WHERE LOWER(name) = LOWER(?)",
+  "query": "SELECT id, name, currency, update_frequency FROM accounts WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -14,8 +14,13 @@
         "type_info": "Text"
       },
       {
-        "name": "update_frequency",
+        "name": "currency",
         "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "update_frequency",
+        "ordinal": 3,
         "type_info": "Text"
       }
     ],
@@ -25,8 +30,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "76a620f6b3049227f5a4fcf5da3fb379d0459f03e658b336137659da4fd0f89e"
+  "hash": "8dbfc96eb80dcb8845b681fb3bc59ab9ef843bde1546141b86ab95d4b3557f72"
 }

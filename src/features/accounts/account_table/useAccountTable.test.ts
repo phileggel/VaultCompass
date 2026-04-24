@@ -4,7 +4,7 @@ import type { Account } from "@/bindings";
 import { useAccountTable } from "./useAccountTable";
 
 function makeAccount(id: string, name: string, freq: Account["update_frequency"]): Account {
-  return { id, name, update_frequency: freq };
+  return { id, name, currency: "EUR", update_frequency: freq };
 }
 
 const accounts: Account[] = [

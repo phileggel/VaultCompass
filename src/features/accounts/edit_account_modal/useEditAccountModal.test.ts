@@ -8,6 +8,7 @@ const mockUpdateAccount = vi.fn();
 const mockAccount: Account = {
   id: "account-1",
   name: "Alpha",
+  currency: "EUR",
   update_frequency: "ManualMonth",
 };
 
@@ -73,7 +74,12 @@ describe("useEditAccountModal", () => {
       // We'll just check the initial state is null, then rerender with new account.
     });
 
-    const otherAccount: Account = { id: "account-2", name: "Beta", update_frequency: "ManualDay" };
+    const otherAccount: Account = {
+      id: "account-2",
+      name: "Beta",
+      currency: "EUR",
+      update_frequency: "ManualDay",
+    };
     rerender({ account: otherAccount });
 
     expect(result.current.error).toBeNull();

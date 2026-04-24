@@ -79,17 +79,13 @@ The "Buy" button stays active for archived assets: TRX-029 (auto-unarchive confi
 
 `TransactionListPage` exposes the delete action via `ConfirmationDialog` (TXL-040, TXL-041). Existing i18n keys used.
 
-## (spec/account) — Add `currency` field to the Account entity
+## ~~(spec/account) — Add `currency` field to the Account entity~~ ✅ resolved
 
-The `showExchangeRate` logic in `AddTransactionModal` and `EditTransactionModal` hardcodes `selectedAsset.currency !== "EUR"`.
-It should compare `selectedAsset.currency !== selectedAccount.currency`.
-The `Account` entity has no `currency` field: add it to the account spec, then to the domain, SQL migration, bindings, and transaction modals.
-Impacts TRX-021 and the Exchange Rate field visibility rule.
+`Account` domain, migration, repository, service, API, bindings, account form, and both transaction modals updated. Exchange rate field now compares `asset.currency !== account.currency` (TRX-021 fixed).
 
-## (sell/SEL-036) — Exchange Rate field visibility in SellTransactionModal
+## ~~(sell/SEL-036) — Exchange Rate field visibility in SellTransactionModal~~ ✅ resolved
 
-`AccountDetailsView.tsx` computes `showExchangeRate` with `asset.currency !== "EUR"` hardcoded (same structural limitation as TRX-021 above).
-Resolve together with adding `currency` to `Account`: pass `accountCurrency` into `SellTarget` and replace the hardcode with `asset.currency !== account.currency`.
+`AccountDetailsView.tsx` now uses `account.currency` instead of `"EUR"` in `showExchangeRate` (resolved together with TRX-021).
 
 ## (frontend/transactions) — TRX-038: implement holdings display
 

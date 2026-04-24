@@ -14,6 +14,8 @@ use tauri::State;
 pub struct CreateAccountDTO {
     /// Display name.
     pub name: String,
+    /// ISO 4217 currency code.
+    pub currency: String,
     /// Update frequency.
     pub update_frequency: UpdateFrequency,
 }
@@ -25,6 +27,8 @@ pub struct UpdateAccountDTO {
     pub id: String,
     /// New display name.
     pub name: String,
+    /// ISO 4217 currency code.
+    pub currency: String,
     /// New update frequency.
     pub update_frequency: UpdateFrequency,
 }
@@ -51,7 +55,7 @@ pub async fn add_account(
 ) -> Result<Account, String> {
     state
         .account_service
-        .create(dto.name, dto.update_frequency)
+        .create(dto.name, dto.currency, dto.update_frequency)
         .await
         .map_err(|e| e.to_string())
 }
@@ -65,7 +69,7 @@ pub async fn update_account(
 ) -> Result<Account, String> {
     state
         .account_service
-        .update(dto.id, dto.name, dto.update_frequency)
+        .update(dto.id, dto.name, dto.currency, dto.update_frequency)
         .await
         .map_err(|e| e.to_string())
 }
