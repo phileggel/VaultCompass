@@ -4,7 +4,9 @@
 
 The `Account Details` feature provides a view of a specific account's current positions and their cost basis. It allows users to drill down into an account to see their active holdings, the quantity held, the volume-weighted average purchase price, and the total cost basis for each position.
 
-This feature consumes data from three bounded contexts: `account` (for Holding data), `asset` (for asset metadata: name, ticker, currency), and `transaction` (for realized P&L per holding, per SEL-042). Because these contexts must not import each other directly (B2), all cross-context reads are orchestrated by a dedicated `use_cases/account_details/` use case that injects `AccountService`, `AssetService`, and `TransactionService` (per ADR-003, ADR-004, and ADR-005).
+This feature consumes data from two bounded contexts: `account` (for Holding data including pre-computed realized P&L per ACD-043) and `asset` (for asset metadata: name, ticker, currency). Because these contexts must not import each other directly (B2), all cross-context reads are orchestrated by a dedicated `use_cases/account_details/` use case that injects `AccountService` and `AssetService` (per ADR-003, ADR-004).
+
+> **ACD-045 change:** `TransactionService` was previously injected to aggregate realized P&L via `get_realized_pnl_by_account` (SEL-038, ADR-005). This is superseded by ACD-043/ACD-045 — P&L is now pre-computed on the `Holding` entity during the transaction replay. `TransactionService` is no longer a dependency of `AccountDetailsUseCase`. SEL-038 is superseded for the account details aggregation path.
 
 > Cross-spec dependency: entry-point navigation behavior is owned by [Account Management](account.md) rule ACC-010.
 
@@ -16,38 +18,54 @@ This feature consumes data from three bounded contexts: `account` (for Holding d
 
 ### Holding (Position)
 
-Represents the current state of a financial position within the account.
+Represents the current state of a financial position within the account. Persisted in the `holdings` table; all financial fields are computed by `RecordTransactionUseCase` via a full chronological replay of transactions on every create/edit/delete.
 
-| Field           | Business meaning                                                         |
-| --------------- | ------------------------------------------------------------------------ |
-| `asset_id`      | The financial asset held.                                                |
-| `quantity`      | Current number of units held (i64 micros).                               |
-| `average_price` | Volume-weighted average purchase price in account currency (i64 micros). |
+| Field                | Business meaning                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| `asset_id`           | The financial asset held.                                                                                 |
+| `quantity`           | Current number of units held (i64 micros). Zero when the position is closed.                             |
+| `average_price`      | Volume-weighted average purchase price in account currency (i64 micros). Preserved at closure (TRX-040). |
+| `last_sold_date`     | ISO date of the most recent Sell transaction for this holding. NULL if no sell has ever occurred.         |
+| `total_realized_pnl` | Cumulative realized profit or loss across all Sell transactions for this holding (i64 micros). Zero if no sells. |
 
 ### HoldingDetail (Backend DTO)
 
-A computed view of a holding enriched with asset metadata and cost basis. Defined as a Rust struct with `#[derive(Type, Serialize)]` so it is auto-generated into `bindings.ts` via Specta. It is returned as part of the `AccountDetailsResponse` wrapper; the frontend presenter maps it to display-ready values.
+Read projection for **open** positions (`quantity > 0`). Enriched by `AccountDetailsUseCase` with asset metadata. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field             | Business meaning                                                                                                                                         |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `asset_id`        | ID of the held asset.                                                                                                                                    |
-| `asset_name`      | Display name of the asset (from asset context).                                                                                                          |
-| `asset_reference` | Ticker or user-defined reference of the asset (from asset context).                                                                                      |
-| `quantity`        | Current number of units held (i64 micros).                                                                                                               |
-| `average_price`   | VWAP purchase price in account currency (i64 micros).                                                                                                    |
-| `cost_basis`      | Total cost of the position (`quantity × average_price`, i64 micros).                                                                                     |
-| `realized_pnl`    | Cumulative realized profit or loss from all sell transactions for this holding, in account currency (i64 micros). Zero when no sells exist. See SEL-042. |
+| Field             | Source        | Business meaning                                                                           |
+| ----------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| `asset_id`        | `Holding`     | ID of the held asset.                                                                      |
+| `asset_name`      | `AssetService`| Display name of the asset.                                                                 |
+| `asset_reference` | `AssetService`| Ticker or user-defined reference.                                                          |
+| `quantity`        | `Holding`     | Current number of units held (i64 micros). Always > 0.                                     |
+| `average_price`   | `Holding`     | VWAP purchase price in account currency (i64 micros).                                      |
+| `cost_basis`      | computed      | `quantity × average_price` (i128 intermediate, per ACD-023/ACD-024). Not stored in DB.    |
+| `realized_pnl`    | `Holding.total_realized_pnl` | Cumulative realized P&L from partial sells (i64 micros). Zero if none. See SEL-042. |
+
+### ClosedHoldingDetail (Backend DTO)
+
+Read projection for **closed** positions (`quantity = 0`). New DTO introduced by this spec. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
+
+| Field             | Source        | Business meaning                                                                 |
+| ----------------- | ------------- | -------------------------------------------------------------------------------- |
+| `asset_id`        | `Holding`     | ID of the asset.                                                                 |
+| `asset_name`      | `AssetService`| Display name of the asset.                                                       |
+| `asset_reference` | `AssetService`| Ticker or user-defined reference.                                                |
+| `realized_pnl`    | `Holding.total_realized_pnl` | Total realized profit or loss for this position (i64 micros).   |
+| `last_sold_date`  | `Holding.last_sold_date` | ISO date when the position was fully closed. Rust type: `String` (non-optional) — only holdings where `last_sold_date IS NOT NULL` are included in `closed_holdings`, enforced in application code in `AccountDetailsUseCase`. |
 
 ### AccountDetailsResponse (Backend DTO)
 
 The top-level response returned by the `get_account_details(account_id)` Tauri command. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field                 | Business meaning                                                                 |
-| --------------------- | -------------------------------------------------------------------------------- |
-| `account_name`        | Display name of the account (per ACD-032).                                       |
-| `holdings`            | Filtered list of `HoldingDetail` sorted per ACD-033 (quantity > 0, per ACD-020). |
-| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).  |
-| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                    |
+| Field                 | Business meaning                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| `account_name`        | Display name of the account (per ACD-032).                                                               |
+| `holdings`            | Active holdings (`quantity > 0`), sorted per ACD-033.                                                    |
+| `closed_holdings`     | Closed holdings (`quantity = 0`), sorted per ACD-044. Empty list when none exist.                        |
+| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).                          |
+| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                                            |
+| `total_realized_pnl`  | Sum of `total_realized_pnl` across **all** holdings (open + closed) in the account (per SEL-042/ACD-045).|
 
 ---
 
@@ -63,7 +81,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 ### Holding List and Cost Basis
 
-**ACD-020 — Active holding filter (backend)**: Only holdings with `quantity > 0` are included in the Account Details view. Holdings that reach zero quantity (e.g. from future Sell transactions, per TRX-040) are excluded from display.
+**ACD-020 — Active holding filter (backend)**: Only holdings with `quantity > 0` are included in the **active holdings section** of the Account Details view. Holdings with `quantity = 0` are excluded from the active section but may appear in the closed positions section (ACD-044, ACD-047).
 
 **ACD-021 — Archived asset inclusion (backend)**: Holdings for archived assets are included in the display as long as their `quantity > 0`. Archiving an asset does not close its position.
 
@@ -103,6 +121,39 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 **ACD-042 — Holding row inspect action (frontend)**: Each holding row in the Account Details view exposes an inspect action (e.g. a magnifier icon). Clicking it navigates to the Transaction List view for that holding (`/accounts/:accountId/transactions/:assetId`), per TXL-010. Navigation goes through the router; the Account Details view does not import from the `transactions` feature.
 
+### Closed Position History
+
+**ACD-043 — Holding persistence fields (backend)**: The `holdings` table is extended with two new columns computed during the chronological replay in `RecordTransactionUseCase`: `last_sold_date TEXT` (nullable — NULL when no Sell transaction has ever occurred for this holding) and `total_realized_pnl INTEGER NOT NULL DEFAULT 0` (cumulative sum of `realized_pnl` across all Sell transactions for this holding). Both are updated on every transaction create, edit, and delete via the full replay — including the delete case, where removing a Sell transaction recalculates `last_sold_date` from the remaining Sells (or sets it to NULL if none remain).
+
+The `Holding` domain entity gains both fields: `last_sold_date: Option<String>` and `total_realized_pnl: i64`. All three factory methods (`new()`, `with_id()`, `restore()`) must be updated to accept and carry these fields. `SqliteHoldingRepository.upsert()` must write both columns; its row mapping must read them.
+
+The migration that adds these columns also backfills existing rows using SQL aggregation against the `transactions` table, so no replay-on-startup is required:
+```sql
+UPDATE holdings SET
+  total_realized_pnl = COALESCE((
+    SELECT SUM(realized_pnl) FROM transactions
+    WHERE account_id = holdings.account_id AND asset_id = holdings.asset_id
+    AND transaction_type = 'Sell'), 0),
+  last_sold_date = (
+    SELECT MAX(date) FROM transactions
+    WHERE account_id = holdings.account_id AND asset_id = holdings.asset_id
+    AND transaction_type = 'Sell');
+```
+
+**ACD-044 — Closed holdings query (backend)**: `AccountDetailsUseCase` splits the full holdings list for the account into active (`quantity > 0`) and closed (`quantity = 0`). No new DB query is needed — the existing holdings fetch returns all rows regardless of quantity; the split happens in application code. Closed holdings are enriched with asset name and reference via `AssetService`, identical to the active holdings enrichment path (ACD-022).
+
+**ACD-045 — AccountDetailsResponse total_realized_pnl source (backend)**: `AccountDetailsResponse.total_realized_pnl` is computed as the sum of `Holding.total_realized_pnl` across **all** holdings for the account (both active and closed). This supersedes SEL-038's `get_realized_pnl_by_account` aggregation query for this use case — the value is semantically identical as long as ACD-043's backfill migration has run. `TransactionService` is no longer injected into `AccountDetailsUseCase`; the P&L data is available directly from the holdings fetch (ACD-044). No new error variant is introduced: the only failure path remains the holdings fetch itself, already covered by ACD-038. `TransactionService.get_realized_pnl_by_account` is retained in the service and repository layers as it may serve future use cases, but is no longer called from `AccountDetailsUseCase`.
+
+**ACD-046 — Closed holdings sort order (backend)**: Closed holdings in `AccountDetailsResponse.closed_holdings` are sorted alphabetically by `asset_name` ascending, consistent with ACD-033.
+
+**ACD-047 — Closed positions section visibility (frontend)**: A "Closed positions" section is rendered below the active holdings table only when `closed_holdings` is non-empty. When the list is empty, no section header or table is rendered.
+
+**ACD-048 — Closed positions table columns (frontend)**: The closed positions table displays three columns: Asset (name + ticker), Realized P&L, Last sold date. Quantity, average price, and cost basis columns are omitted — they carry no meaning for a position with `quantity = 0`.
+
+**ACD-049 — Closed positions row actions (frontend)**: Each closed position row exposes only the inspect action (magnifier icon, per ACD-042) to navigate to the transaction history for that asset. Buy (+) and Sell (−) action buttons are not shown for closed positions.
+
+**ACD-050 — "All positions closed" state scope (frontend)**: The "All positions closed" empty-state message (ACD-034) applies to the active holdings area only. When `closed_holdings` is non-empty, the closed positions section is still rendered below — the page is not considered empty.
+
 ---
 
 ## Workflow
@@ -112,14 +163,17 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
   → Route: /accounts/:id
           │
           ├─ [use_cases/account_details/: Fetch Account metadata from account context]
-          ├─ [use_cases/account_details/: Fetch Holdings (quantity > 0) from account context]
-          ├─ [use_cases/account_details/: Fetch asset metadata for each holding from asset context]
-          ├─ [use_cases/account_details/: Fetch realized_pnl per holding from transaction context (SEL-042)]
-          ├─ [use_cases/account_details/: Compute cost_basis per holding (ACD-023)]
+          ├─ [use_cases/account_details/: Fetch ALL Holdings for account (no qty filter)]
+          ├─ [use_cases/account_details/: Split → active (qty > 0) + closed (qty = 0)]
+          ├─ [use_cases/account_details/: Fetch asset metadata for all holdings from asset context]
+          ├─ [use_cases/account_details/: Build HoldingDetail list (active) — cost_basis computed]
+          ├─ [use_cases/account_details/: Build ClosedHoldingDetail list (closed)]
           ├─ [use_cases/account_details/: Compute total_cost_basis (ACD-031)]
+          ├─ [use_cases/account_details/: Compute total_realized_pnl = Σ holding.total_realized_pnl (ACD-045)]
           │
-          └─ [Frontend: Loading state → Header (Account name + Total Cost Basis)]
-             [Frontend: Holdings table (one row per HoldingDetail)]
+          └─ [Frontend: Loading state → Header (Account name + Total Cost Basis + Total Realized P&L)]
+             [Frontend: Active holdings table (one row per HoldingDetail)]
+             [Frontend: Closed positions section (one row per ClosedHoldingDetail, ACD-047–ACD-049)]
              [Frontend: Empty / Error state as applicable]
 ```
 
@@ -135,37 +189,49 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 **ManagerLayout** containing:
 
-- **Header**: Account name + Total Cost Basis (large).
-- **Position Table**:
+- **Header**: Account name + Total Cost Basis + Total Realized P&L (large).
+- **Active Positions Table**:
   - Asset (Name + Ticker)
   - Quantity
   - Avg. Price
   - Cost Basis
-  - Realized P&L (per SEL-042; `—` when zero or no sells)
+  - Realized P&L (`—` when zero or no sells)
+  - Actions: Buy, Sell, Inspect
+- **Closed Positions Section** (rendered only when `closed_holdings` non-empty, per ACD-047):
+  - Section heading "Closed positions"
+  - Table columns: Asset (Name + Ticker), Realized P&L, Last sold date
+  - Actions: Inspect only (per ACD-049)
 
 ### States
 
 - **Loading**: Skeleton screens for the header and table.
-- **Empty (no positions)**: Illustration "No positions yet" + "Add Transaction" button.
-- **Empty (all closed)**: Message "All positions are closed" + "Add Transaction" button.
+- **Empty (no positions)**: "No positions yet" + "Add Transaction" button.
+- **Empty (all closed)**: "All positions are closed" + "Add Transaction" button + closed positions section still rendered below (ACD-050).
 - **Error**: Generic error message with "Retry" button.
 
 ### User Flow
 
 1. User clicks on an account row in the Account Table.
 2. Route navigates to `/accounts/:id`; loading skeletons appear.
-3. Data loads: user sees each active position with its cost basis, and the total account cost basis.
-4. User can add a transaction via the FAB or "Add Transaction" button.
+3. Data loads: user sees active positions with cost basis and the account totals.
+4. If closed positions exist, they appear below the active table with realized P&L and last sold date.
+5. User can add a transaction via the FAB or "Add Transaction" button.
 
 ---
 
 ## Open Questions
+
+**OQ-ACD-003 — last_sold_date display format**: The `last_sold_date` ISO string from the backend should be formatted as a locale-aware short date in the frontend presenter (e.g. "25 Apr 2026"). The exact format is left to the presenter implementation; consistency with other date displays in the app is required.
+
+**OQ-ACD-004 — CTA in "all closed + closed section visible" state**: ACD-035 governs the CTA when there are no active holdings. When `closed_holdings` is non-empty and active holdings are empty, ACD-035 still fires (the "Add Transaction" button appears). ACD-050 confirms the closed section renders. No ambiguity — ACD-035 and ACD-050 compose correctly without conflict.
+
+**OQ-ACD-005 — ARCHITECTURE.md update required**: `ARCHITECTURE.md` currently describes the old `pnl_map`/`TransactionService` orchestration path, omits `ClosedHoldingDetail`, and omits `closed_holdings` from `AccountDetailsResponse`. It must be updated as part of implementation (workflow step 10) to reflect ACD-043–ACD-050.
 
 **~~ADR-REQUIRED~~ — Multi-context read orchestration** _(resolved)_: Orchestration strategy and dependency injection boundary are both decided.
 
 - ADR-003: cross-context use cases use sequential service calls.
 - ADR-004: use cases always inject services, never repositories.
 
-The `use_cases/account_details/` use case injects `AccountService`, `AssetService`, and `TransactionService` and calls them in sequence. `TransactionService` was added by ADR-005 to provide realized P&L aggregation per holding (SEL-042).
+The `use_cases/account_details/` use case injects `AccountService` and `AssetService` and calls them in sequence. `TransactionService` was previously injected via ADR-005 for realized P&L aggregation (SEL-042) but is removed by ACD-045 — P&L is now pre-computed on `Holding`.
 
 **~~OQ-ACD-002~~ — Double re-fetch on TransactionUpdated** _(resolved)_: ACD-039 is the authoritative re-fetch for the Account Details view. TRX-038's store action is scoped to the transaction list feature and does not overlap with account details data. No duplication occurs.
