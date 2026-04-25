@@ -26,10 +26,6 @@ test-rust:
 # Run all tests
 test-all: test test-rust
 
-# Generate TypeScript bindings from Rust
-generate-types:
-    ./scripts/generate-types.sh
-
 # Collect logs for debugging
 collect-logs:
     ./scripts/collect-logs.sh

@@ -126,3 +126,7 @@ Backend errors are currently `anyhow::Error` strings (e.g. `"Cannot edit an arch
 Introduce a domain error enum (e.g. `AssetError`, `TransactionError`) so tests can match on variants rather than substrings, and callers can handle errors programmatically without parsing strings.
 
 ## (app) — Add proper application icon
+
+## (frontend) - Save current view between session. Start on the account page by default.
+
+## (backend/frontend) - Be able to add a new financial asset metadata directly from the web
