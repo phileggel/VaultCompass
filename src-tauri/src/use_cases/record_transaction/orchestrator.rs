@@ -764,7 +764,11 @@ mod tests {
             Box::new(SqliteAccountRepository::new(pool.clone())),
             Box::new(SqliteHoldingRepository::new(pool.clone())),
         )
-        .create("Test Account".to_string(), "EUR".to_string(), UpdateFrequency::ManualMonth)
+        .create(
+            "Test Account".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
         .await
         .unwrap()
         .id
@@ -903,10 +907,7 @@ mod tests {
 
         let mut sell_edit = sell_dto(&account_id, &asset_id, micro);
         sell_edit.transaction_type = "Sell".to_string();
-        let err = uc
-            .update_transaction(buy.id, sell_edit)
-            .await
-            .unwrap_err();
+        let err = uc.update_transaction(buy.id, sell_edit).await.unwrap_err();
         assert!(
             err.to_string().contains("Cannot change transaction type"),
             "got: {err}"

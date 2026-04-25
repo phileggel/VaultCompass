@@ -21,7 +21,7 @@
 - [x] Unit & Integration Tests
 - [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md`)
 - [x] Spec check (`spec-checker`)
-- [ ] Commit: tests & docs -- `test(sell): add sell transaction tests and update docs`
+- [x] Commit: tests & docs -- `test(sell): add sell transaction tests and update docs`
 
 ---
 
