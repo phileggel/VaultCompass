@@ -198,4 +198,16 @@ impl TransactionRepository for SqliteTransactionRepository {
 
         Ok(())
     }
+
+    async fn has_transactions_for_asset(&self, asset_id: &str) -> Result<bool> {
+        let count: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) as "count: i64" FROM transactions WHERE asset_id = ? LIMIT 1"#,
+            asset_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .with_context(|| format!("Failed to check transactions for asset {}", asset_id))?;
+
+        Ok(count > 0)
+    }
 }

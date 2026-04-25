@@ -2,6 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
+use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -115,15 +116,11 @@ pub async fn unarchive_asset(state: State<'_, AppState>, id: String) -> Result<(
         .map_err(|e| e.to_string())
 }
 
-/// Deletes an asset.
+/// Deletes an asset, guarded against existing transactions.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_asset(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    state
-        .asset_service
-        .delete_asset(&id)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn delete_asset(uc: State<'_, DeleteAssetUseCase>, id: String) -> Result<(), String> {
+    uc.delete_asset(&id).await.map_err(|e| e.to_string())
 }
 
 // --- Categories ---

@@ -7,3 +7,19 @@
 | ACC     | Account Management          | CRUD operations for financial accounts                         | active   |
 | TXL     | Transaction List            | Browse, edit and delete transactions per (account, asset) pair | planning |
 | SEL     | Sell Transaction            | Recording asset sales, holding reduction, and realized P&L     | planning |
+
+---
+
+## Spec granularity rule
+
+**One spec per backend domain/use case, with sections for variants.**
+
+If two operations share a use case and entity, they belong in the same spec under the same TRIGRAM — even if they appear as separate UI flows (e.g. buy modal vs sell modal). Spec granularity follows backend domain boundaries, not frontend modal boundaries.
+
+```
+## Entity definition
+## Operation A rules   (TRX-010 … TRX-040)
+## Operation B rules   (TRX-041 … TRX-080)
+```
+
+> **Historical exception:** TRX and SEL are split because SEL was added as an extension spec after TRX was stable. Rule numbers are permanent — do not merge or renumber. The `record_transaction` contract references both. All future transaction-domain rules go into TRX.

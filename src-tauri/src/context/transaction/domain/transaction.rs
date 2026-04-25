@@ -251,6 +251,8 @@ pub trait TransactionRepository: Send + Sync {
     async fn update(&self, tx: Transaction) -> Result<Transaction>;
     /// Deletes a transaction by ID.
     async fn delete(&self, id: &str) -> Result<()>;
+    /// Returns true if any transaction references this asset (across all accounts).
+    async fn has_transactions_for_asset(&self, asset_id: &str) -> Result<bool>;
 }
 
 #[cfg(test)]

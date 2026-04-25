@@ -18,6 +18,7 @@ use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
 use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
+use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::use_cases::record_transaction::RecordTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
@@ -160,9 +161,17 @@ pub fn run() {
                     Arc::new(holding_repo_for_archive),
                 );
 
+                let transaction_repo_for_delete =
+                    SqliteTransactionRepository::new(db.pool.clone());
+                let delete_asset_uc = DeleteAssetUseCase::new(
+                    Arc::clone(&asset_service),
+                    Arc::new(transaction_repo_for_delete),
+                );
+
                 app_handle.manage(record_transaction_uc);
                 app_handle.manage(account_details_uc);
                 app_handle.manage(archive_asset_uc);
+                app_handle.manage(delete_asset_uc);
 
                 app_handle.manage(AppState {
                     db,

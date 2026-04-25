@@ -2,6 +2,23 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## ~~(backend/assets) — Delete eligibility guard~~ ✅ resolved
+
+`DeleteAssetUseCase` blocks hard-delete when any transaction references the asset. Mirrors `ArchiveAssetUseCase` pattern. `delete_asset` Tauri command now routes through the use case. Two tests added.
+
+## (kit) — Back-fill IPC contracts for all existing domains
+
+The kit workflow now requires `docs/contracts/{domain}.md` (derived via `/contract` from the validated spec). No contracts exist yet. Run `/contract` for each domain in order:
+
+1. `asset` — spec: `docs/spec/asset.md`
+2. `account` — spec: `docs/spec/account.md`
+3. `transaction` — specs: `docs/spec/financial-asset-transaction.md` + `docs/spec/sell-transaction.md`
+4. `account_details` — spec: `docs/spec/account-details.md`
+5. `record_transaction` — spec: `docs/spec/financial-asset-transaction.md` + `docs/spec/sell-transaction.md`
+6. `update` — spec: `docs/spec/update.md`
+
+After each `/contract`, run `contract-reviewer` to validate before moving on.
+
 ## ~~(frontend/assets) — F22: AssetTable imports AddTransactionModal (cross-feature)~~ ✅ resolved
 
 Import fixed to `@/features/transactions` (public index).
@@ -32,16 +49,13 @@ Removed `border-b border-m3-outline/5` from `ManagerHeader`. `ManagerLayout` alr
 `AddTransactionModal` and `EditTransactionModal` use a raw `<textarea>` tag for the Note field instead of a shared component (violation F11/F12).
 Create `ui/components/field/TextareaField.tsx` (same interface as `TextField`: label + id + className + placeholder) and use it in both modals.
 
-## (frontend/transactions) — Success snackbar feedback (transactions)
+## ~~(frontend/transactions) — Success snackbar feedback (transactions)~~ ✅ resolved
 
-`AddTransactionModal` and `EditTransactionModal` have no positive visual feedback after a successful submission (the modal closes silently).
-Wire `showSnackbar(t("transaction.success_created"))` / `showSnackbar(t("transaction.success_updated"))` into `doSubmit` once the toast infrastructure is in place.
-The i18n keys `transaction.success_created` and `transaction.success_updated` are already defined in `fr/common.json` and `en/common.json`.
+`useAddTransaction` and `useEditTransactionModal` both call `showSnackbar(t("transaction.success_created/updated"), "success")`. Snackbar infra (`snackbarStore.ts` + `Snackbar.tsx`) is in place and mounted in `MainLayout`.
 
-## (frontend/assets) — Success snackbar feedback
+## ~~(frontend/assets) — Success snackbar feedback~~ ✅ resolved
 
-Asset mutations (create, edit, archive) have no visible success feedback.
-Once the snackbar/toast mechanism is in place (dedicated feature), wire `showSnackbar(t("asset.success_*"))` after each mutation in `useAssets.ts`.
+All asset mutations (create, update, archive, unarchive, delete) call `showSnackbar` in `useAssets.ts`.
 
 ## (frontend/shell) — Implement Settings page and wire the Settings button in Sidebar
 
