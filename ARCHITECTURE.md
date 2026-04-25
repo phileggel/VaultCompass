@@ -311,22 +311,26 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
   - `add_transaction/` — `AddTransactionModal` + `useAddTransaction` hook (TRX-010, TRX-011, TRX-026, TRX-029)
   - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033); uses `computeSellTotalMicro` when `transaction_type === "Sell"`
   - `transaction_list/` — `TransactionListPage` + `useTransactionList` hook (TXL spec): account/asset filter dropdowns, sortable date column, edit/delete/add row actions, realized P&L column (SEL-041, SEL-043), all UX states
-  - `sell_transaction/` — `SellTransactionModal` + `useSellTransaction` hook (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional, `transaction_type: "Sell"` DTO
 - Shared:
   - `shared/types.ts` — `TransactionFormData` (decimal strings)
   - `lib/microUnits.ts` — `decimalToMicro`, `microToDecimal`, `computeTotalMicro` (TRX-026), `computeSellTotalMicro` (SEL-023)
   - `shared/presenter.ts` — `toTransactionRow()` → `TransactionRowViewModel` with `realizedPnl: string | null`, `realizedPnlRaw: number | null` for sign-based color rendering
   - `shared/validateTransaction.ts` — `validateTransactionForm()` (base) + `validateSellForm()` (adds oversell guard SEL-022)
 - `store.ts` — `useTransactionStore`: `lastFetchedKey`, `refreshHoldings()` (TRX-038 stub)
-- Barrel `index.ts` — public exports including `SellTransactionModal` (prevents cross-feature deep imports)
-- Entry points: "Buy" `IconButton` in `AssetTable` (TRX-010); "Sell" `IconButton` per holding row in `AccountDetailsView` (SEL-010, disabled when archived — SEL-037); magnifier `IconButton` navigates to transaction list (TXL-010)
+- Barrel `index.ts` — shared infrastructure exports (`useTransactions`, `transactionGateway`, stores, modals); buy/sell modals live in `account_details/` (use-case boundary)
+- Entry points: "Add Transaction" button navigates to `/transactions/new` (TRX-010); magnifier `IconButton` per holding row navigates to transaction list (TXL-010)
 - Spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/transaction-list.md`, `docs/spec/sell-transaction.md`
 
 #### Account Details (`features/account_details/`)
 
 - Gateway: `getAccountDetails(accountId)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
-- `account_details_view/AccountDetailsView.tsx` — renders header (account name + total cost basis), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty with CTA)
-- `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
+- Sub-features (use-case boundary: buy/sell modals live here, not in `transactions/`):
+  - `account_details_view/AccountDetailsView.tsx` — renders header (total cost basis + realized P&L), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty CTA)
+  - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / magnifier action buttons; `buildTarget()` resolves account+asset metadata for modal props
+  - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
+  - `buy_transaction/BuyTransactionModal.tsx` + `useBuyTransaction.ts` — buy form opened from holding row (TRX-041); mirrors sell modal; includes archived-asset confirmation dialog (TRX-029)
+  - `sell_transaction/SellTransactionModal.tsx` + `useSellTransaction.ts` — sell form opened from holding row (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional, `transaction_type: "Sell"` DTO
+  - `shared/types.ts` — `ModalTarget` (accountName, assetId, assetName, assetCurrency, showExchangeRate) and `SellTarget` (extends ModalTarget with holdingQuantityMicro)
 - `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number` on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number` on `AccountSummaryViewModel` for sign-based color rendering (SEL-042, SEL-043)
 - Navigation: clicking an `AccountTable` row calls `useNavigate` to `/accounts/$accountId`; `AccountDetailsView` is rendered by its own route, not conditionally by `AccountManager`
 - Spec: `docs/spec/account-details.md` (ACD-010–ACD-041)
@@ -347,7 +351,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 - Layout wrapper: `MainLayout.tsx`, `Sidebar.tsx`, `Content.tsx`, `Footer.tsx`
 - `Header.tsx` — indigo gradient header with `ThemeToggle`
-- `useSidebar.ts` — `NAV_ITEMS` constant (base items + `"Design System"` entry added only when `import.meta.env.DEV`)
+- `navItems.ts` — `NAV_ITEMS` constant (base items + `"Design System"` entry added only when `import.meta.env.DEV`)
 - `gateway.ts` — shell-level event listeners: `onMigrationError` (listens to `db:migration_error`)
 - `theme_toggle/useThemeToggle.ts` — day/night/auto cycle, localStorage persistence, OS media query listener
 - `theme_toggle/ThemeToggle.tsx` — Sun/Moon/Monitor icon button
@@ -355,7 +359,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 #### Design System (`features/design-system/`) — **dev only**
 
 - `DesignSystemPage.tsx` — component showcase page (Button, IconButton variants, sizes, states)
-- Gated by `import.meta.env.DEV` in both `useSidebar.ts` (nav item) and `App.tsx` (render)
+- Gated by `import.meta.env.DEV` in both `navItems.ts` (nav item) and `App.tsx` (render)
 
 ---
 
