@@ -14,7 +14,7 @@ export function StatCard({ label, value, change, positive }: StatCardProps) {
       <div className="flex items-end justify-between mt-2">
         <span className="text-2xl font-bold text-m3-on-surface">{value}</span>
         <span
-          className={`text-xs font-bold px-2 py-0.5 rounded-full ${positive ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}
+          className={`text-xs font-bold px-2 py-0.5 rounded-full ${positive ? "bg-m3-success-container text-m3-on-success-container" : "bg-m3-error-container text-m3-on-error-container"}`}
         >
           {change}
         </span>

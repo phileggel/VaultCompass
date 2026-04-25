@@ -1,7 +1,7 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
-import { NAV_ITEMS } from "./useSidebar";
+import { NAV_ITEMS } from "./navItems";
 
 interface HeaderConfig {
   title: string;

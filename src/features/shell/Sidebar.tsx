@@ -1,11 +1,12 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Info, Menu, TrendingUp, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AboutModal } from "@/features/about";
+import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components";
-import { NAV_ITEMS } from "./useSidebar";
+import { NAV_ITEMS } from "./navItems";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -18,6 +19,10 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [aboutOpen, setAboutOpen] = useState(false);
+
+  useEffect(() => {
+    logger.info("[Sidebar] mounted");
+  }, []);
 
   return (
     <aside

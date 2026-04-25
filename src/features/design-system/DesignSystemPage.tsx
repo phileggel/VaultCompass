@@ -1,5 +1,6 @@
 import { ArrowRight, Edit2, Mail, Plus, Share2, Star, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Button, IconButton } from "@/ui/components";
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -33,6 +34,10 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function DesignSystemPage() {
+  useEffect(() => {
+    logger.info("[DesignSystemPage] mounted");
+  }, []);
+
   return (
     <div className="flex-1 overflow-y-auto bg-m3-surface p-8">
       <div className="max-w-5xl mx-auto flex flex-col gap-8">

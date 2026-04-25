@@ -18,7 +18,7 @@ export function ManagerHeader({
   searchPlaceholder,
 }: ManagerHeaderProps) {
   return (
-    <div className="p-4 border-b border-m3-outline/5 flex items-center justify-between gap-4">
+    <div className="p-4 flex items-center justify-between gap-4">
       {title !== undefined && (
         <div className="flex items-center gap-4 pl-2">
           <h2 className="text-2xl font-medium text-m3-on-surface">{title}</h2>

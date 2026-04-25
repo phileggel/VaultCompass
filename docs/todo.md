@@ -14,37 +14,18 @@ Replaced with `<SortIcon>` from `@/ui/components/SortIcon` (shared component).
 
 Import fixed to `@/features/transactions` (public index).
 
-## (ai/agents) — i18n-checker: include newly added files
-
-The agent uses `git diff --name-only HEAD` + `git diff --name-only --cached` but misses newly staged files (`A ` in `git status --porcelain`) that have no HEAD diff yet.
-Add `git status --porcelain | grep "^A " | awk '{print $2}'` to the file list in the agent definition.
-
 ## (deps) — Update specta to rc.23
 
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
 Status (2026-03-29): `specta rc.23` available, `tauri-specta` still blocked at `rc.21`.
 
-## (frontend/ui) — Migrate StatCard.tsx to M3 tokens
+## ~~(frontend/ui) — Migrate StatCard.tsx to M3 tokens~~ ✅ resolved
 
-`StatCard` uses `bg-emerald-100 text-emerald-700` / `bg-rose-100 text-rose-700` for positive/negative badges.
-Replace with `bg-m3-tertiary-container text-m3-on-tertiary-container` / `bg-m3-error-container text-m3-on-error-container`.
+Replaced `bg-emerald-100/text-emerald-700` with `m3-success-container/on-success-container` and `bg-rose-100/text-rose-700` with `m3-error-container/on-error-container`.
 
-## (frontend/ui) — Remove structural borders from ManagerLayout and ManagerHeader
+## ~~(frontend/ui) — Remove structural borders from ManagerLayout and ManagerHeader~~ ✅ resolved
 
-`ManagerLayout` and `ManagerHeader` use `border border-m3-outline/10` and `shadow-sm` (raw Tailwind).
-Replace with `shadow-elevation-1` and tonal surface differentiation.
-
-## (frontend/ui) — Replace raw Tailwind colors in AccountAssetDetailsView and Footer
-
-`AccountAssetDetailsView.tsx` uses `bg-white` and `border-gray-200` (outside M3 tokens).
-`Footer.tsx` uses `bg-emerald-100 text-emerald-700` for the connection status badge.
-Replace with the corresponding semantic M3 tokens.
-
-## (frontend) — Use centralized logger in feature hooks
-
-`useCategories.ts` calls `console.error` directly instead of the centralized `logger` (`src/lib/logger.ts`).
-(Note: `useAssets.ts` and `useAccounts.ts` are already migrated.)
-Replace `console.error` calls with `logger.error` so errors surface in the backend via `tracing`.
+Removed `border-b border-m3-outline/5` from `ManagerHeader`. `ManagerLayout` already used `shadow-elevation-1`.
 
 ## (frontend/ui) — Create TextareaField component
 
@@ -92,13 +73,13 @@ The "Buy" button stays active for archived assets: TRX-029 (auto-unarchive confi
 `useTransactionStore.refreshHoldings()` is a stub: the backend has a `holdings` table (populated by `RecordTransactionUseCase`) but there is no `getHoldings` Tauri command.
 Create `get_holdings(account_id) -> Vec<Holding>` in `use_cases/record_transaction/api.rs` (or `context/account/api.rs`) and use it in `store.ts` to display positions per account.
 
-## (frontend/shell) — Rename useSidebar.ts to navItems.ts
+## ~~(frontend/shell) — Rename useSidebar.ts to navItems.ts~~ ✅ resolved
 
-`useSidebar.ts` only exports constants and a type (no hook). Rename to `navItems.ts` to follow the `use*` hook naming convention.
+Renamed to `navItems.ts`; updated imports in `Sidebar.tsx` and `useHeaderConfig.ts`.
 
-## (frontend/shell) — Add missing mount logs (F13)
+## ~~(frontend/shell) — Add missing mount logs (F13)~~ ✅ resolved
 
-`Sidebar.tsx` and `DesignSystemPage.tsx` have no `logger.info("[ComponentName] mounted")` in their `useEffect`. Add per rule F13.
+Added `useEffect` + `logger.info` in `Sidebar.tsx` and `DesignSystemPage.tsx`.
 
 ## ~~(frontend) — i18n for navigation labels and shell~~ ✅ resolved
 
