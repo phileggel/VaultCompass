@@ -232,7 +232,8 @@ context/{domain}/
 - `202603290001_asset_archiving.sql` — adds `is_archived INTEGER NOT NULL DEFAULT 0` column to `assets`, drops the old unique index on reference (duplicates now allowed)
 - `202604120001_create_holdings.sql` — creates `holdings` table (account_id, asset_id, quantity, average_price — all i64 micro-units, ADR-001)
 - `202604120002_create_transactions.sql` — creates `transactions` table with FK cascade on `accounts.id` and restrict on `assets.id`
-- `202604190001_add_realized_pnl_and_created_at_to_transactions.sql` — adds `realized_pnl INTEGER` (nullable, SEL-024) and `created_at TEXT NOT NULL DEFAULT (datetime('now'))` to `transactions`; adds index on `(account_id, transaction_type)` for realized P&L queries (SEL-038)
+- `202604190001_add_realized_pnl_and_created_at_to_transactions.sql` — adds `realized_pnl INTEGER` (nullable, SEL-024) and `created_at TEXT NOT NULL DEFAULT (datetime('now'))` to `transactions`
+- `202604250001_add_currency_to_accounts.sql` — adds `currency TEXT NOT NULL DEFAULT 'EUR'` to `accounts` (TRX-021, SEL-036)
 
 ---
 

@@ -720,6 +720,198 @@ impl RecordTransactionUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::account::{
+        AccountService, SqliteAccountRepository, SqliteHoldingRepository, UpdateFrequency,
+    };
+    use crate::context::asset::{
+        AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetRepository,
+        SYSTEM_CATEGORY_ID,
+    };
+    use crate::context::transaction::SqliteTransactionRepository;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    async fn setup_uc(pool: &sqlx::Pool<sqlx::Sqlite>) -> RecordTransactionUseCase {
+        let account_repo = Arc::new(SqliteAccountRepository::new(pool.clone()));
+        let holding_repo = Arc::new(SqliteHoldingRepository::new(pool.clone()));
+        let asset_repo = Arc::new(SqliteAssetRepository::new(pool.clone()));
+        let tx_service = Arc::new(crate::context::transaction::TransactionService::new(
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        ));
+        RecordTransactionUseCase::new(
+            Arc::new(pool.clone()),
+            tx_service,
+            holding_repo,
+            asset_repo,
+            account_repo,
+        )
+    }
+
+    async fn create_account(pool: &sqlx::Pool<sqlx::Sqlite>) -> String {
+        AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+        )
+        .create("Test Account".to_string(), "EUR".to_string(), UpdateFrequency::ManualMonth)
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn create_asset(pool: &sqlx::Pool<sqlx::Sqlite>) -> String {
+        crate::context::asset::AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+        )
+        .create_asset(CreateAssetDTO {
+            name: "AAPL".to_string(),
+            reference: "AAPL".to_string(),
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 3,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+        })
+        .await
+        .unwrap()
+        .id
+    }
+
+    fn buy_dto(account_id: &str, asset_id: &str, qty: i64) -> CreateTransactionDTO {
+        let micro = 1_000_000i64;
+        CreateTransactionDTO {
+            account_id: account_id.to_string(),
+            asset_id: asset_id.to_string(),
+            transaction_type: "Purchase".to_string(),
+            date: "2024-01-01".to_string(),
+            quantity: qty,
+            unit_price: 100 * micro,
+            exchange_rate: micro,
+            fees: 0,
+            note: None,
+        }
+    }
+
+    fn sell_dto(account_id: &str, asset_id: &str, qty: i64) -> CreateTransactionDTO {
+        let micro = 1_000_000i64;
+        CreateTransactionDTO {
+            account_id: account_id.to_string(),
+            asset_id: asset_id.to_string(),
+            transaction_type: "Sell".to_string(),
+            date: "2024-06-01".to_string(),
+            quantity: qty,
+            unit_price: 120 * micro,
+            exchange_rate: micro,
+            fees: 0,
+            note: None,
+        }
+    }
+
+    // SEL-012 — selling when holding quantity is 0 is rejected
+    #[tokio::test]
+    async fn sell_rejected_when_no_holding() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+
+        let err = uc
+            .create_transaction(sell_dto(&account_id, &asset_id, 1_000_000))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("No units available"), "got: {err}");
+    }
+
+    // SEL-026 — when full position is sold, holding is retained at quantity=0 with last VWAP preserved
+    #[tokio::test]
+    async fn full_sell_retains_holding_at_zero_with_last_vwap() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        uc.create_transaction(buy_dto(&account_id, &asset_id, 2 * micro))
+            .await
+            .unwrap();
+        uc.create_transaction(sell_dto(&account_id, &asset_id, 2 * micro))
+            .await
+            .unwrap();
+
+        let holding_repo = SqliteHoldingRepository::new(pool.clone());
+        let holdings = holding_repo.get_by_account(&account_id).await.unwrap();
+        let h = holdings.iter().find(|h| h.asset_id == asset_id).unwrap();
+        assert_eq!(h.quantity, 0, "holding should be retained at qty=0");
+        assert_eq!(h.average_price, 100 * micro, "VWAP should be preserved");
+    }
+
+    // SEL-032 — editing a purchase so it creates an oversell on a subsequent sell is rejected
+    #[tokio::test]
+    async fn edit_purchase_rejected_when_causes_oversell() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        let buy = uc
+            .create_transaction(buy_dto(&account_id, &asset_id, 3 * micro))
+            .await
+            .unwrap();
+        uc.create_transaction(sell_dto(&account_id, &asset_id, 2 * micro))
+            .await
+            .unwrap();
+
+        // Edit the buy down to 1 unit — now the sell of 2 would exceed the holding
+        let mut reduced_buy = buy_dto(&account_id, &asset_id, micro);
+        reduced_buy.transaction_type = "Purchase".to_string();
+        let err = uc
+            .update_transaction(buy.id, reduced_buy)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().to_lowercase().contains("oversell")
+                || err.to_string().to_lowercase().contains("exceed"),
+            "got: {err}"
+        );
+    }
+
+    // SEL-035 — changing transaction_type on update is rejected
+    #[tokio::test]
+    async fn update_rejects_transaction_type_change() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        let buy = uc
+            .create_transaction(buy_dto(&account_id, &asset_id, micro))
+            .await
+            .unwrap();
+
+        let mut sell_edit = sell_dto(&account_id, &asset_id, micro);
+        sell_edit.transaction_type = "Sell".to_string();
+        let err = uc
+            .update_transaction(buy.id, sell_edit)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Cannot change transaction type"),
+            "got: {err}"
+        );
+    }
 
     // SEL-023 — sell total = floor(floor(qty × price / MICRO) × rate / MICRO) - fees
     #[test]

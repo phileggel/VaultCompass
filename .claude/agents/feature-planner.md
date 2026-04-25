@@ -1,6 +1,6 @@
 ---
 name: feature-planner
-description: Senior Architect Agent that translates a validated spec into a persistent, detailed implementation plan (docs/plan/{feature-name}-plan.md) mapping TRIGRAM-NNN rules to DDD layers and CLAUDE.md workflow. Use when a spec has been reviewed and approved by spec-reviewer.
+description: Senior Architect Agent that translates a validated spec into a persistent, detailed implementation plan (docs/plan/{feature-name}-plan.md) mapping TRIGRAM-NNN rules to DDD layers and CLAUDE.md workflow. Use after spec-reviewer and contract-reviewer both approve.
 tools: Read, Write, Grep, Glob, Bash
 model: claude-opus-4-6
 ---
@@ -35,6 +35,8 @@ Read the following to ensure compliance (skip silently if a file is absent):
 - `docs/backend-rules.md`: Factory methods, service layer, repository traits.
 - `docs/frontend-rules.md`: Gateway, hook, component patterns, colocated tests.
 - `docs/testing.md`: Testing conventions (inline `#[cfg(test)]` for Rust, colocated `.test.ts` for React).
+- `docs/contracts/{domain}.md`: If present, mandatory — commands anchor the test-writer tasks
+  in the plan. Derive the domain name from the spec's Context section.
 
 ### Step 3 — Codebase Verification
 
@@ -66,16 +68,24 @@ A synthetic checklist for mandatory quality and process steps:
 
 - [ ] 📖 Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
 - [ ] 🗄️ Database Migration (`just migrate` + `just prepare-sqlx`) — if schema changes required
-- [ ] 🏗️ Backend Implementation (Domain, Repository, Service, API)
-- [ ] 🔗 Type Synchronization (`just generate-types`)
+- [ ] 📄 Contract (`/contract` — human approves shape) — if backend rules present
+- [ ] 🔍 Contract Review (`contract-reviewer` → fix issues) — if backend rules present
+- [ ] ✍️ Backend test stubs (`test-writer-backend` — all stubs written, red confirmed) — if backend rules present
+- [ ] 🏗️ Backend Implementation (minimal — make failing tests pass, green confirmed)
+- [ ] 🧹 `just format` (rustfmt + clippy --fix)
+- [ ] 🔍 Backend Review (`reviewer-backend` → fix issues) — if .rs modified
+- [ ] 🔗 Type Synchronization (`just generate-types`) — if backend rules present
+- [ ] 🔧 Compilation fixup (TypeScript errors from new bindings only — no UI work) — if backend rules present
+- [ ] ✅ `just check` — TypeScript clean
 - [ ] 💾 Commit: backend layer (suggested title from plan)
-- [ ] 💻 Frontend Implementation (Gateway, Hook, Component, i18n)
-- [ ] 🧹 Formatting & Linting (`just format` + `python3 scripts/check.py`)
-- [ ] 🔍 Code Review (`reviewer` always + `reviewer-backend` if .rs modified + `reviewer-frontend` if .ts/.tsx modified — includes UX/M3 review for .tsx + `maintainer` if capabilities/\*.json or tauri.conf.json modified)
+- [ ] ✍️ Frontend test stubs (`test-writer-frontend` — all stubs written, red confirmed) — if frontend rules present
+- [ ] 💻 Frontend Implementation (minimal — make failing tests pass, green confirmed)
+- [ ] 🧹 `just format`
+- [ ] 🔍 Frontend Review (`reviewer-frontend` → fix issues) — if .ts/.tsx modified
 - [ ] 💾 Commit: frontend layer (suggested title from plan)
+- [ ] 🔍 Cross-cutting Review (`reviewer` always + `reviewer-sql` if migrations + `maintainer` if capabilities/\*.json or tauri.conf.json modified)
 - [ ] 🌐 i18n Review (`i18n-checker` if UI text changed)
 - [ ] 🔧 Script Review (`script-reviewer` if any script or hook was added/modified)
-- [ ] 🧪 Unit & Integration Tests
 - [ ] 📚 Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` — entries in English)
 - [ ] ✅ Spec check (`spec-checker`)
 - [ ] 💾 Commit: tests & docs (suggested title from plan)
@@ -102,3 +112,4 @@ A granular breakdown by architectural layer:
 7. **Task Tracking**: Ensure the main agent can progressively update the checkboxes in this file during the implementation phase.
 8. **Cross-Context**: If a use case spans multiple bounded contexts, use `src-tauri/src/use_cases/`—never cross-import between `context/` modules directly.
 9. **Commit Checkpoints**: Every plan must include at least one commit checkpoint per thematic phase (backend, frontend, tests & docs). Each checkpoint provides only a suggested conventional commit title — the `/smart-commit` skill handles the rest.
+10. **Minimal implementation**: The backend and frontend implementation tasks must explicitly state "implement only what is required to make the failing tests pass — no additional methods, no defensive code, no anticipation of future rules." The `test-writer-*` agents define the scope; the implementation must not exceed it.

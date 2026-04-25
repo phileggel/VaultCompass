@@ -1,6 +1,6 @@
 ---
 name: spec-reviewer
-description: Reviews a feature spec doc (docs/spec/*.md) for quality before implementation: checks rule atomicity, scope coverage, DDD alignment, UX completeness, and conflicts with existing specs. Use after spec-writer produces a draft and before feature-planner generates the implementation plan.
+description: Reviews a feature spec doc (docs/spec/*.md) for quality before implementation: checks rule atomicity, scope coverage, DDD alignment, UX completeness, contractability, and conflicts. Use after spec-writer produces a draft and before /contract derives the IPC contract.
 tools: Read, Grep, Glob
 model: claude-sonnet-4-6
 ---
@@ -96,6 +96,15 @@ Read for comparison (skip silently if a file or directory is absent):
 - 🟡 A rule contains ambiguous language but there is no corresponding Open Question
 - 🔵 Open Questions section is missing entirely (acceptable only if spec has zero ambiguity)
 
+#### G — Contractability
+
+- 🔴 Backend rules are present but the `## Entity Definition` section is missing — payload types
+  cannot be derived for the IPC contract
+- 🔴 A backend rule describes a mutation (create / update / delete) but no error cases are
+  described — contract error variants cannot be derived
+- 🟡 A backend rule's return type cannot be inferred (entity shape too vague for Specta)
+- 🟡 A state-transition rule implies an event but no event name is given
+
 ---
 
 ## Output format
@@ -131,7 +140,7 @@ End with:
 
 ```
 Review complete: N critical, N warning(s), N suggestion(s).
-Ready for feature-planner: yes — 0 critical findings. / no — blocked by N critical finding(s).
+Ready for /contract: yes — 0 critical findings (incl. contractability). / no — blocked by N critical finding(s).
 ```
 
 ---

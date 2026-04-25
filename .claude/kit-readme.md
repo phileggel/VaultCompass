@@ -12,36 +12,49 @@ Onboarding guide for tauri-claude-kit. For the full inventory of agents, skills,
 
 _Use for: New features, new business logic, significant UI changes, or complex refactoring._
 
-**Phase 1: Pre-implementation (Spec & Plan)**
+**Gate types:**
 
-1. Run **`/spec-writer`** skill → produces `docs/spec/{feature}.md`.
-2. _(Optional)_ Run **`/adr-manager`** skill → produces `docs/adr/{ref}.md` if an architectural decision is needed.
-3. Run **`spec-reviewer`** agent to validate spec quality (DDD alignment, rule atomicity, UX completeness).
-4. Run **`feature-planner`** agent → produces `docs/plan/{feature}-plan.md` with a task checklist.
+- **Hard gate** — must stop and wait for user: `/smart-commit` only
+- **Soft gate** — agent presents output, user may review; auto-proceeds if no 🔴 criticals
 
-**Phase 2: Execution**
+**Phase 1: Pre-implementation (Spec & Contract & Plan)**
 
-1. Read `docs/plan/{feature}-plan.md` — this is your Primary TaskList. Do not deviate from it.
-2. Implement the feature layer by layer, updating checkboxes (`[ ]` → `[x]`) in the plan file after each completed task.
+1. Run **`/spec-writer`** skill → produces `docs/spec/{feature}.md`. [soft gate]
+2. _(Optional)_ Run **`/adr-manager`** skill → produces `docs/adr/{ref}.md`.
+3. Run **`spec-reviewer`** agent → validate spec quality + contractability. [soft gate — hard if 🔴]
+4. Run **`/contract`** skill → produces or updates `docs/contracts/{domain}.md`. [soft gate: human approves shape]
+5. Run **`contract-reviewer`** agent → validate contract vs spec. [soft gate — hard if 🔴]
+6. Run **`feature-planner`** agent → produces `docs/plan/{feature}-plan.md`. [auto]
 
-**Phase 3: Review & Quality**
+**Phase 2: Backend layer**
 
-1. Run `python3 scripts/check.py` (or `just check-full`) and fix all issues.
-2. Write missing tests.
-3. Run the reviewer gauntlet:
-   - **`reviewer`** agent → fix issues.
-   - If `.rs` modified: **`reviewer-backend`** agent → fix issues.
-   - If `.ts` / `.tsx` modified: **`reviewer-frontend`** agent → fix issues.
-   - If `migrations/` modified: **`reviewer-sql`** agent → fix issues.
-   - If `.sh`, `.py`, or `.githooks` modified: **`script-reviewer`** agent.
-   - If `capabilities/*.json` or `tauri.conf.json` modified: **`maintainer`** agent.
-   - If UI text changed: **`i18n-checker`** agent.
+1. Read `docs/plan/{feature}-plan.md` — Primary TaskList. Do not deviate from it.
+2. Run **`test-writer-backend`** agent → writes all Rust stubs from contract, confirms red.
+3. Implement backend — minimal: make failing tests pass, confirm green.
+4. Run `just format` (rustfmt + clippy --fix).
+5. Run **`reviewer-backend`** agent → fix issues.
+6. Run `just generate-types` → updates `src/bindings.ts`.
+7. Fix TypeScript compilation errors from new bindings only (no UI work).
+8. Run `just check` → TypeScript clean.
+9. **`/smart-commit`**: backend layer. [HARD GATE]
 
-**Phase 4: Validation & Closure**
+**Phase 3: Frontend layer**
 
-1. Run **`spec-checker`** agent to confirm all spec rules are covered — tick its checkbox in the plan.
-2. Use **`/smart-commit`** skill to commit.
-3. Run **`workflow-validator`** agent as the final gate — verifies all plan checkboxes are ticked. Its successful completion is the sign-off; no checkbox needed.
+1. Run **`test-writer-frontend`** agent → writes all Vitest stubs from contract (reads fresh bindings), confirms red.
+2. Implement frontend — minimal: make failing tests pass, confirm green.
+3. Run `just format`.
+4. Run **`reviewer-frontend`** agent → fix issues.
+5. **`/smart-commit`**: frontend layer. [HARD GATE]
+
+**Phase 4: Review & Closure**
+
+1. Run **`reviewer`** agent (always) + **`reviewer-sql`** (if migrations) + **`maintainer`** (if capabilities or tauri.conf.json changed).
+2. Run **`i18n-checker`** if UI text changed.
+3. Run **`script-reviewer`** if scripts or hooks were modified.
+4. Update documentation (`ARCHITECTURE.md`, `docs/todo.md`).
+5. Run **`spec-checker`** agent → confirm all spec rules and contract commands are covered.
+6. **`/smart-commit`**: tests & docs. [HARD GATE]
+7. Run **`workflow-validator`** agent → final sign-off (verifies all plan checkboxes ticked).
 
 ---
 

@@ -25,6 +25,11 @@ format:
 migrate:
     cd src-tauri && sqlx migrate run
 
+# Regenerate Specta TypeScript bindings (run after adding or changing Tauri commands)
+# The exact command depends on your Specta export setup — override in your local justfile if needed
+generate-types:
+    cd src-tauri && cargo test export_bindings
+
 # Regenerate SQLx offline query cache (run after schema or query changes)
 prepare-sqlx:
     cd src-tauri && DATABASE_URL="sqlite:.local/dev_check.sqlite" cargo sqlx prepare -- --tests

@@ -56,6 +56,27 @@ For each rule:
 - Backend: look for `#[tokio::test]` or `#[test]` in relevant `.rs` files
 - Frontend: look for `.test.ts` / `.test.tsx` files covering the feature
 
+### Step 5 — Contract compliance
+
+If `docs/contracts/{domain}.md` exists for this feature's domain:
+
+For each command in the contract:
+
+- **Backend**: verify a `#[tauri::command]` with that name exists in `src-tauri/`
+- **Frontend**: verify a gateway call to that command exists in `src/features/{domain}/gateway.ts`
+- **Tests**: verify at least one `#[tokio::test]` (backend) and one `it(` or `test(` (frontend)
+  references or is named after that command
+
+Output per command:
+
+```
+get_user    ✅ backend + ✅ frontend + ✅ tested
+update_user ✅ backend + ✅ frontend + ⚠️ no frontend test
+delete_user ❌ no backend implementation
+```
+
+If no contract file exists for the domain, skip this step and note it in the summary.
+
 ---
 
 ## Output format
@@ -86,7 +107,8 @@ Final summary:
 
 ```
 Spec coverage: N/total rules fully implemented, N/total tested.
-Action required: list rules needing attention.
+Contract coverage: N/total commands implemented + tested. (omit if no contract file)
+Action required: list rules and commands needing attention.
 ```
 
 ---

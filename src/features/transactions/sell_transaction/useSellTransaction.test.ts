@@ -137,6 +137,46 @@ describe("useSellTransaction", () => {
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
+  // SEL-011 — accountId and assetId are pre-filled from props (read-only)
+  it("initialises formData accountId and assetId from props (SEL-011)", () => {
+    const { result } = renderHook(() =>
+      useSellTransaction({ ...BASE_PROPS, accountId: "acc-42", assetId: "ast-99" }),
+    );
+    expect(result.current.formData.accountId).toBe("acc-42");
+    expect(result.current.formData.assetId).toBe("ast-99");
+  });
+
+  // SEL-029 — default form values: date=today, exchangeRate=1.000000, fees=0
+  it("initialises defaults: date=today, exchangeRate=1.000000, fees=0 (SEL-029)", () => {
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    const expectedToday = new Date().toISOString().slice(0, 10);
+    expect(result.current.formData.date).toBe(expectedToday);
+    expect(result.current.formData.exchangeRate).toBe("1.000000");
+    expect(result.current.formData.fees).toBe("0");
+  });
+
+  // SEL-036 — when exchange rate field is hidden (currencies match), default 1.000000 is submitted
+  it("submits exchangeRate=1000000 micro when using default (SEL-036)", async () => {
+    mockAddTransaction.mockResolvedValue({ data: { id: "tx-3" }, error: null });
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "100");
+      // exchangeRate left at default "1.000000"
+      result.current.handleChange("fees", "0");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ exchange_rate: 1_000_000 }),
+    );
+  });
+
   // Success calls onSubmitSuccess
   it("calls onSubmitSuccess on successful submit", async () => {
     mockAddTransaction.mockResolvedValue({ data: { id: "tx-2" }, error: null });

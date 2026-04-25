@@ -186,7 +186,7 @@ impl Transaction {
         quantity: i64,
         unit_price: i64,
         exchange_rate: i64,
-        _fees: i64,
+        fees: i64,
         total_amount: i64,
     ) -> Result<()> {
         // TRX-020 — date must be parseable, not in the future, not before 1900-01-01
@@ -209,6 +209,11 @@ impl Transaction {
         // TRX-020 — unit_price must be >= 0
         if unit_price < 0 {
             anyhow::bail!("Unit price cannot be negative");
+        }
+
+        // SEL-020 — fees must be zero or positive
+        if fees < 0 {
+            anyhow::bail!("Fees cannot be negative");
         }
 
         // TRX-020 — exchange_rate must be strictly positive
@@ -338,6 +343,14 @@ mod tests {
         let micro = 1_000_000i64;
         // total_amount=0 also fails (TRX-020) but exchange_rate=0 is caught first
         let result = make_transaction(micro, micro, 0, 0, 0);
+        assert!(result.is_err());
+    }
+
+    // SEL-020 — fees cannot be negative
+    #[test]
+    fn rejects_negative_fees() {
+        let micro = 1_000_000i64;
+        let result = make_transaction(micro, micro, micro, -1, micro);
         assert!(result.is_err());
     }
 }

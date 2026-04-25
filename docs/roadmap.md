@@ -94,14 +94,14 @@ Record a sale that reduces or closes a position.
 
 | Operation                    | Status     | Notes                                                                  |
 | ---------------------------- | ---------- | ---------------------------------------------------------------------- |
-| Sell transaction type        | 🔲 Planned | `transaction_type: Sell` defined in entity (TRX-026), not implemented  |
-| Sell form                    | 🔲 Planned | Same fields as buy; quantity must not exceed current holding           |
-| Holding quantity decrease    | 🔲 Planned | On sell, `Holding.quantity -= sold_quantity`                           |
-| Sell validation              | 🔲 Planned | Cannot sell more than currently held (oversell guard)                  |
-| Realized P&L computation     | 🔲 Planned | `(sell_price − average_price) × quantity`; crystallized at sell time   |
-| Realized P&L display         | 🔲 Planned | Shown per sell transaction and cumulated per holding                   |
-| Partial sell                 | 🔲 Planned | Holding remains open; VWAP unchanged for remaining quantity            |
-| Edit/delete sell transaction | 🔲 Planned | Full recalculation required; same recalc engine as purchases (TRX-031) |
+| Sell transaction type        | ✅ Done    | `TransactionType::Sell` variant; backend + frontend (SEL-010)          |
+| Sell form                    | ✅ Done    | `SellTransactionModal` from Account Details holding row (SEL-010)      |
+| Holding quantity decrease    | ✅ Done    | `recalculate_holding` decreases qty on sell (SEL-025)                  |
+| Sell validation              | ✅ Done    | Oversell guard frontend + backend (SEL-021, SEL-022)                   |
+| Realized P&L computation     | ✅ Done    | `(sell_proceeds − vwap × qty)` crystallized at sell time (SEL-024)     |
+| Realized P&L display         | ✅ Done    | Per sell row in transaction list + cumulated per holding in ACD (SEL-038, SEL-042) |
+| Partial sell                 | ✅ Done    | Holding remains open; VWAP unchanged by sells (SEL-027)                |
+| Edit/delete sell transaction | ✅ Done    | Full chronological recalculation on edit/delete (SEL-030, SEL-031, SEL-033) |
 
 > Prerequisite: sell transaction type must be introduced before corporate events (phase 4) can be fully modelled.
 

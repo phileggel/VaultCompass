@@ -38,7 +38,8 @@ Run `git diff --name-only HEAD` and `git status --short`. Determine which condit
 - `.ts` / `.tsx` files modified → Frontend + UX Review (`reviewer-frontend`) required
 - User-visible text added/changed in `.tsx`/`.ts` feature files → i18n Review (`i18n-checker`) required
 - `migrations/` file added/modified → SQL Review (`reviewer-sql`) required
-- A spec doc exists in `docs/` for this feature → `spec-checker` required
+- A spec doc exists in `docs/spec/` for this feature → `spec-checker` required
+- A contract doc exists in `docs/contracts/` for this feature's domain → Contract Review (`contract-reviewer`), Backend test stubs (`test-writer-backend`), and Frontend test stubs (`test-writer-frontend`) steps required
 - Any `.sh`, `.py` (in `scripts/`) or `.githooks/` file added/modified → Script Review (`script-reviewer`) required
 
 ### Step 4 — Validate each item
