@@ -15,10 +15,10 @@ release *ARGS:
 
 # Auto-fix formatting and linting
 format:
-    cd src-tauri && cargo fmt
-    cd src-tauri && cargo clippy --fix --allow-dirty
-    npm run format:fix
-    npm run format:docs
+    @cd src-tauri && cargo fmt
+    @cd src-tauri && cargo clippy --fix --allow-dirty --quiet
+    @npm run format:fix
+    @npm run format:docs
 
 # Run pending database migrations
 # Prerequisites: sqlx must be on $PATH and DATABASE_URL must be set
