@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type IconButtonVariant = "filled" | "outlined" | "tonal" | "ghost" | "danger";
+type IconButtonVariant = "filled" | "outlined" | "tonal" | "ghost" | "danger" | "success" | "error";
 type IconButtonShape = "round" | "square";
 type IconButtonSize = "sm" | "md" | "lg";
 
@@ -40,6 +40,8 @@ export function IconButton({
     ghost: "bg-transparent text-m3-on-surface-variant hover:enabled:bg-m3-surface-variant/40",
     danger:
       "bg-transparent text-m3-on-surface-variant hover:enabled:text-m3-error hover:enabled:bg-m3-error/10",
+    success: "bg-m3-success-container text-m3-on-success-container hover:enabled:brightness-105",
+    error: "bg-m3-error-container text-m3-on-error-container hover:enabled:brightness-105",
   };
 
   return (

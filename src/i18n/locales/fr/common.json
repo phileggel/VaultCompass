@@ -191,6 +191,7 @@
     "type_purchase": "Achat",
     "type_sell": "Vente",
     "action_sell": "Vendre",
+    "buy_modal_title": "Acheter la position",
     "sell_modal_title": "Vendre la position",
     "form_max_quantity_hint": "Max : {{max}}",
     "error_validation_oversell": "La quantité dépasse la position actuelle ({{max}}).",

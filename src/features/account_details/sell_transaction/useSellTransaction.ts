@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TransactionFormData } from "@/features/transactions/shared/types";
+import { validateSellForm } from "@/features/transactions/shared/validateTransaction";
+import { useTransactions } from "@/features/transactions/useTransactions";
 import { computeSellTotalMicro, decimalToMicro, microToDecimal } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
-import type { TransactionFormData } from "../shared/types";
-import { validateSellForm } from "../shared/validateTransaction";
-import { useTransactions } from "../useTransactions";
 
 interface UseSellTransactionProps {
   accountId: string;
@@ -39,7 +39,6 @@ export function useSellTransaction({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Derive micro-unit values from form strings (ADR-001).
   const microValues = useMemo(() => {
     const qtyMicro = decimalToMicro(formData.quantity);
     const priceMicro = decimalToMicro(formData.unitPrice);
@@ -87,27 +86,29 @@ export function useSellTransaction({
       setError(null);
       setIsSubmitting(true);
 
-      const result = await addTransaction({
-        account_id: formData.accountId,
-        asset_id: formData.assetId,
-        transaction_type: "Sell",
-        date: formData.date,
-        quantity: microValues.qtyMicro,
-        unit_price: microValues.priceMicro,
-        exchange_rate: microValues.rateMicro,
-        fees: microValues.feesMicro,
-        note: formData.note || null,
-      });
+      try {
+        const result = await addTransaction({
+          account_id: formData.accountId,
+          asset_id: formData.assetId,
+          transaction_type: "Sell",
+          date: formData.date,
+          quantity: microValues.qtyMicro,
+          unit_price: microValues.priceMicro,
+          exchange_rate: microValues.rateMicro,
+          fees: microValues.feesMicro,
+          note: formData.note || null,
+        });
 
-      setIsSubmitting(false);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
 
-      if (result.error) {
-        setError(result.error);
-        return;
+        showSnackbar(t("transaction.success_sell_created"), "success");
+        onSubmitSuccess?.();
+      } finally {
+        setIsSubmitting(false);
       }
-
-      showSnackbar(t("transaction.success_sell_created"), "success");
-      onSubmitSuccess?.();
     },
     [formData, microValues, holdingQuantityMicro, addTransaction, t, showSnackbar, onSubmitSuccess],
   );

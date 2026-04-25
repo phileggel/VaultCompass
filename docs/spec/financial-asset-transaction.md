@@ -50,9 +50,9 @@ Represents the current state of a position (asset held within an account). Compu
 
 ### Eligibility and Initiation
 
-**TRX-010 — Purchase entry point (frontend)**: A purchase can be initiated from the "Assets" table (contextual action on an asset) or from the "Account Details" view (FAB or "Add Transaction" button).
+**TRX-010 — Purchase entry point (frontend)**: A purchase can be initiated from three entry points: (1) the "Assets" table (contextual action on an asset) — navigates to the full transaction form page; (2) the "Account Details" view standalone button — navigates to the full transaction form page; (3) a holding row in "Account Details" — opens a `BuyTransactionModal` (inline modal, both account and asset pre-determined). Entry points (1) and (2) use page navigation because account or asset selection is still needed. Entry point (3) uses a modal because both contexts are already fixed, consistent with the sell flow (SEL-010).
 
-**TRX-011 — Contextual pre-filling (frontend)**: When initiated from a specific asset, the asset is pre-selected. When initiated from an account view, the account is pre-selected. When both contexts are available (e.g., entry from a specific holding row), both are pre-selected.
+**TRX-011 — Contextual pre-filling (frontend)**: When initiated from a specific asset (entry point 1), the asset is pre-selected and the user selects the account. When initiated from the account standalone button (entry point 2), the account is pre-selected and the user selects the asset. When initiated from a holding row (entry point 3), both account and asset are pre-filled and read-only — no selection needed.
 
 ### Creation
 
@@ -99,6 +99,8 @@ Represents the current state of a position (asset held within an account). Compu
 ### Lifecycle Management
 
 **TRX-040 — Zero quantity handling (backend)**: If a `Holding.quantity` reaches zero due to `Sell` transactions, the `Holding` entity remains in the database to accommodate potential future purchase transactions. The `average_price` is maintained at its last known value until the next purchase transaction initiates a new VWAP calculation. _(Activated by the SEL spec.)_
+
+**TRX-041 — Buy-from-holding-row modal (frontend)**: When a purchase is initiated from a holding row (TRX-010 entry point 3), the form opens as a `BuyTransactionModal`. Account and asset are pre-filled from the holding row context and are read-only (TRX-011). Default values follow TRX-023 (date=today, exchange_rate=1.0, fees=0). The exchange rate field is visible only when the asset currency differs from the account currency (consistent with SEL-036). On success the modal closes and a success snackbar is shown; the holdings view refreshes via the existing `TransactionUpdated` event (TRX-038).
 
 ---
 

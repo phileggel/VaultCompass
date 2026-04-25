@@ -1,120 +1,14 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Plus, Search, TrendingDown } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
-import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
-import { IconButton } from "@/ui/components/button/IconButton";
-import { SellTransactionModal } from "../../transactions";
-import type { HoldingRowViewModel } from "../shared/presenter";
+import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
+import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
+import type { ModalTarget, SellTarget } from "../shared/types";
+import { HoldingRow } from "./HoldingRow";
 import { useAccountDetails } from "./useAccountDetails";
-
-type SellTarget = {
-  accountName: string;
-  assetId: string;
-  assetName: string;
-  assetCurrency: string;
-  holdingQuantityMicro: number;
-  showExchangeRate: boolean;
-};
-
-type HoldingRowProps = {
-  row: HoldingRowViewModel;
-  accountId: string;
-  onSell: (target: SellTarget) => void;
-};
-
-function PnlCell({ value, raw }: { value: string; raw: number }) {
-  const { t } = useTranslation();
-  const colorClass =
-    raw > 0 ? "text-m3-success" : raw < 0 ? "text-m3-error" : "text-m3-on-surface-variant";
-  return (
-    <span className={`tabular-nums ${colorClass}`}>
-      {raw === 0 ? t("account_details.pnl_placeholder") : value}
-    </span>
-  );
-}
-
-function HoldingRow({ row, accountId, onSell }: HoldingRowProps) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const assets = useAppStore((state) => state.assets);
-
-  const handleAddTransaction = useCallback(() => {
-    navigate({
-      to: "/transactions/new",
-      search: { prefillAccountId: accountId, prefillAssetId: row.assetId },
-    });
-  }, [navigate, accountId, row.assetId]);
-
-  const handleViewTransactions = useCallback(() => {
-    navigate({
-      to: "/accounts/$accountId/transactions/$assetId",
-      params: { accountId, assetId: row.assetId },
-      search: { pendingTransactionAssetId: undefined },
-    });
-  }, [navigate, accountId, row.assetId]);
-
-  const accounts = useAppStore((state) => state.accounts);
-
-  const handleSell = useCallback(() => {
-    const asset = assets.find((a) => a.id === row.assetId);
-    const account = accounts.find((a) => a.id === accountId);
-    onSell({
-      accountName: account?.name ?? accountId,
-      assetId: row.assetId,
-      assetName: row.assetName,
-      assetCurrency: asset?.currency ?? "",
-      holdingQuantityMicro: row.quantityMicro,
-      showExchangeRate: asset && account ? asset.currency !== account.currency : false,
-    });
-  }, [accounts, assets, accountId, row.assetId, row.assetName, row.quantityMicro, onSell]);
-
-  const asset = assets.find((a) => a.id === row.assetId);
-  const isArchived = asset?.is_archived ?? false;
-
-  return (
-    <tr className="m3-tr">
-      <td className="m3-td">
-        <div className="flex flex-col">
-          <span className="font-medium text-m3-on-surface">{row.assetName}</span>
-          <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
-        </div>
-      </td>
-      <td className="m3-td text-right tabular-nums">{row.quantity}</td>
-      <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
-      <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
-      <td className="m3-td text-right">
-        <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
-      </td>
-      <td className="m3-td">
-        <div className="flex items-center gap-1">
-          <IconButton
-            icon={<Plus size={16} />}
-            size="sm"
-            aria-label={t("account_details.add_transaction")}
-            onClick={handleAddTransaction}
-          />
-          {/* SEL-010 — Sell button; disabled when asset is archived (SEL-037) */}
-          <IconButton
-            icon={<TrendingDown size={16} />}
-            size="sm"
-            aria-label={t("transaction.action_sell")}
-            onClick={handleSell}
-            disabled={isArchived}
-          />
-          <IconButton
-            icon={<Search size={16} />}
-            size="sm"
-            aria-label={t("transaction.list_title")}
-            onClick={handleViewTransactions}
-          />
-        </div>
-      </td>
-    </tr>
-  );
-}
 
 export function AccountDetailsView() {
   const { t } = useTranslation();
@@ -122,6 +16,7 @@ export function AccountDetailsView() {
   const navigate = useNavigate();
   const { isLoading, error, retry, holdings, summary } = useAccountDetails(accountId);
 
+  const [buyTarget, setBuyTarget] = useState<ModalTarget | null>(null);
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
 
   useEffect(() => {
@@ -134,6 +29,14 @@ export function AccountDetailsView() {
       search: { prefillAccountId: accountId, prefillAssetId: undefined },
     });
   }, [navigate, accountId]);
+
+  const handleBuyClose = useCallback(() => setBuyTarget(null), []);
+  const handleSellClose = useCallback(() => setSellTarget(null), []);
+
+  const handleBuySuccess = useCallback(() => {
+    setBuyTarget(null);
+    retry();
+  }, [retry]);
 
   const handleSellSuccess = useCallback(() => {
     setSellTarget(null);
@@ -252,6 +155,7 @@ export function AccountDetailsView() {
                       key={row.assetId}
                       row={row}
                       accountId={accountId}
+                      onBuy={setBuyTarget}
                       onSell={setSellTarget}
                     />
                   ))}
@@ -262,11 +166,26 @@ export function AccountDetailsView() {
         </div>
       </div>
 
+      {/* TRX-041 — Buy modal from holding row */}
+      {buyTarget && (
+        <BuyTransactionModal
+          isOpen
+          onClose={handleBuyClose}
+          accountId={accountId}
+          accountName={buyTarget.accountName}
+          assetId={buyTarget.assetId}
+          assetName={buyTarget.assetName}
+          assetCurrency={buyTarget.assetCurrency}
+          showExchangeRate={buyTarget.showExchangeRate}
+          onSubmitSuccess={handleBuySuccess}
+        />
+      )}
+
       {/* SEL-010 — Sell modal */}
       {sellTarget && (
         <SellTransactionModal
           isOpen
-          onClose={() => setSellTarget(null)}
+          onClose={handleSellClose}
           accountId={accountId}
           accountName={sellTarget.accountName}
           assetId={sellTarget.assetId}

@@ -4,7 +4,7 @@ import { useSellTransaction } from "./useSellTransaction";
 
 const mockAddTransaction = vi.fn();
 
-vi.mock("../useTransactions", () => ({
+vi.mock("@/features/transactions/useTransactions", () => ({
   useTransactions: () => ({
     addTransaction: mockAddTransaction,
     updateTransaction: vi.fn(),

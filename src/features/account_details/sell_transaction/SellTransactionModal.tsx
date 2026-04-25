@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
@@ -50,28 +50,26 @@ export function SellTransactionModal({
     isFormValid,
     handleChange,
     handleSubmit,
-  } = useSellTransaction({
-    accountId,
-    assetId,
-    holdingQuantityMicro,
-    onSubmitSuccess,
-  });
+  } = useSellTransaction({ accountId, assetId, holdingQuantityMicro, onSubmitSuccess });
 
-  const footer = (
-    <div className="flex items-center justify-end gap-2">
-      <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-        {t("action.cancel")}
-      </Button>
-      <Button
-        type="submit"
-        form="sell-transaction-form"
-        variant="primary"
-        loading={isSubmitting}
-        disabled={isSubmitting || !isFormValid}
-      >
-        {t("transaction.action_sell")}
-      </Button>
-    </div>
+  const footer = useMemo(
+    () => (
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+          {t("action.cancel")}
+        </Button>
+        <Button
+          type="submit"
+          form="sell-transaction-form"
+          variant="primary"
+          loading={isSubmitting}
+          disabled={isSubmitting || !isFormValid}
+        >
+          {t("transaction.action_sell")}
+        </Button>
+      </div>
+    ),
+    [isSubmitting, isFormValid, t, onClose],
   );
 
   return (
