@@ -29,16 +29,21 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     sortedAndFilteredAccounts,
     sortConfig,
     handleSort,
+    handleNameKeyDown,
+    handleFrequencyKeyDown,
+    handleRowKeyDown,
+    handleEditClick,
+    handleEditClose,
+    handleDeleteClick,
+    handleDeleteCancel,
     isEmpty,
     hasNoSearchResults,
     deleteData,
-    setDeleteData,
     editData,
-    setEditData,
     actionError,
     setActionError,
     handleDeleteConfirm,
-  } = useAccountTable(accounts, searchTerm, deleteAccount);
+  } = useAccountTable(accounts, searchTerm, deleteAccount, onAccountClick);
 
   return (
     <div className="m3-table-container flex-1">
@@ -72,12 +77,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                   : "none"
               }
               onClick={() => handleSort("name")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  handleSort("name");
-                }
-              }}
+              onKeyDown={handleNameKeyDown}
             >
               <div className="flex items-center">
                 {t("account.column_name")}
@@ -99,12 +99,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                   : "none"
               }
               onClick={() => handleSort("update_frequency")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  handleSort("update_frequency");
-                }
-              }}
+              onKeyDown={handleFrequencyKeyDown}
             >
               <div className="flex items-center">
                 {t("account.column_frequency")}
@@ -160,12 +155,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                 tabIndex={0}
                 aria-label={t("account.open_account", { name: account.name })}
                 onClick={() => onAccountClick(account.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onAccountClick(account.id);
-                  }
-                }}
+                onKeyDown={(e) => handleRowKeyDown(e, account.id)}
               >
                 <td className="m3-td">
                   <div className="flex items-center gap-2">
@@ -190,19 +180,13 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       icon={<Edit2 size={16} />}
                       variant="ghost"
                       aria-label={t("action.edit")}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditData(account);
-                      }}
+                      onClick={(e) => handleEditClick(e, account)}
                     />
                     <IconButton
                       icon={<Trash2 size={16} />}
                       variant="danger"
                       aria-label={t("action.delete")}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteData({ id: account.id, name: account.name });
-                      }}
+                      onClick={(e) => handleDeleteClick(e, account.id, account.name)}
                     />
                   </div>
                 </td>
@@ -212,12 +196,12 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
         </tbody>
       </table>
 
-      <EditAccountModal isOpen={!!editData} onClose={() => setEditData(null)} account={editData} />
+      <EditAccountModal isOpen={!!editData} onClose={handleEditClose} account={editData} />
 
       {/* R16 — standard confirmation dialog for delete */}
       <ConfirmationDialog
         isOpen={!!deleteData}
-        onCancel={() => setDeleteData(null)}
+        onCancel={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title={t("account.delete_confirm_title")}
         message={t("account.delete_confirm_message", { name: deleteData?.name ?? "" })}

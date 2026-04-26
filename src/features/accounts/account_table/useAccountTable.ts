@@ -1,3 +1,4 @@
+import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { Account } from "@/bindings";
 import { FREQUENCY_ORDER } from "../shared/presenter";
@@ -11,18 +12,63 @@ export function useAccountTable(
   accounts: Account[],
   searchTerm: string,
   deleteAccount: (id: string) => Promise<{ error: string | null }>,
+  onAccountClick: (accountId: string) => void,
 ) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "name", direction: "asc" });
   const [deleteData, setDeleteData] = useState<{ id: string; name: string } | null>(null);
   const [editData, setEditData] = useState<Account | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const handleSort = (key: SortConfig["key"]) => {
+  const handleSort = useCallback((key: SortConfig["key"]) => {
     setSortConfig((prev) => ({
       key,
       direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
     }));
-  };
+  }, []);
+
+  const handleNameKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSort("name");
+      }
+    },
+    [handleSort],
+  );
+
+  const handleFrequencyKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSort("update_frequency");
+      }
+    },
+    [handleSort],
+  );
+
+  const handleRowKeyDown = useCallback(
+    (e: KeyboardEvent, accountId: string) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onAccountClick(accountId);
+      }
+    },
+    [onAccountClick],
+  );
+
+  const handleEditClick = useCallback((e: MouseEvent, account: Account) => {
+    e.stopPropagation();
+    setEditData(account);
+  }, []);
+
+  const handleEditClose = useCallback(() => setEditData(null), []);
+
+  const handleDeleteClick = useCallback((e: MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    setDeleteData({ id, name });
+  }, []);
+
+  const handleDeleteCancel = useCallback(() => setDeleteData(null), []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteData) return;
@@ -62,12 +108,18 @@ export function useAccountTable(
     sortedAndFilteredAccounts,
     sortConfig,
     handleSort,
+    handleNameKeyDown,
+    handleFrequencyKeyDown,
+    handleRowKeyDown,
+    handleEditClick,
+    handleEditClose,
+    handleDeleteClick,
+    handleDeleteCancel,
     isEmpty,
     hasNoSearchResults,
     deleteData,
     setDeleteData,
     editData,
-    setEditData,
     actionError,
     setActionError,
     handleDeleteConfirm,

@@ -13,8 +13,8 @@
 
 ## Commands
 
-| Command               | Args                 | Return                   | Errors                                                                 |
-| --------------------- | -------------------- | ------------------------ | ---------------------------------------------------------------------- |
+| Command               | Args                 | Return                   | Errors                                                                          |
+| --------------------- | -------------------- | ------------------------ | ------------------------------------------------------------------------------- |
 | `get_account_details` | `account_id: String` | `AccountDetailsResponse` | `String` — `"account not found"` (ACD-012); any DB or service failure (ACD-038) |
 
 ---
@@ -57,10 +57,10 @@ struct AccountDetailsResponse {
 
 ## Events
 
-| Event                | Payload | Direction                                          |
-| -------------------- | ------- | -------------------------------------------------- |
-| `TransactionUpdated` | none    | subscribed — triggers full re-fetch (ACD-039)      |
-| `AssetUpdated`       | none    | subscribed — triggers full re-fetch (ACD-040)      |
+| Event                | Payload | Direction                                     |
+| -------------------- | ------- | --------------------------------------------- |
+| `TransactionUpdated` | none    | subscribed — triggers full re-fetch (ACD-039) |
+| `AssetUpdated`       | none    | subscribed — triggers full re-fetch (ACD-040) |
 
 ---
 

@@ -20,52 +20,52 @@ This feature consumes data from two bounded contexts: `account` (for Holding dat
 
 Represents the current state of a financial position within the account. Persisted in the `holdings` table; all financial fields are computed by `RecordTransactionUseCase` via a full chronological replay of transactions on every create/edit/delete.
 
-| Field                | Business meaning                                                                                          |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `asset_id`           | The financial asset held.                                                                                 |
-| `quantity`           | Current number of units held (i64 micros). Zero when the position is closed.                             |
-| `average_price`      | Volume-weighted average purchase price in account currency (i64 micros). Preserved at closure (TRX-040). |
-| `last_sold_date`     | ISO date of the most recent Sell transaction for this holding. NULL if no sell has ever occurred.         |
+| Field                | Business meaning                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `asset_id`           | The financial asset held.                                                                                        |
+| `quantity`           | Current number of units held (i64 micros). Zero when the position is closed.                                     |
+| `average_price`      | Volume-weighted average purchase price in account currency (i64 micros). Preserved at closure (TRX-040).         |
+| `last_sold_date`     | ISO date of the most recent Sell transaction for this holding. NULL if no sell has ever occurred.                |
 | `total_realized_pnl` | Cumulative realized profit or loss across all Sell transactions for this holding (i64 micros). Zero if no sells. |
 
 ### HoldingDetail (Backend DTO)
 
 Read projection for **open** positions (`quantity > 0`). Enriched by `AccountDetailsUseCase` with asset metadata. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field             | Source        | Business meaning                                                                           |
-| ----------------- | ------------- | ------------------------------------------------------------------------------------------ |
-| `asset_id`        | `Holding`     | ID of the held asset.                                                                      |
-| `asset_name`      | `AssetService`| Display name of the asset.                                                                 |
-| `asset_reference` | `AssetService`| Ticker or user-defined reference.                                                          |
-| `quantity`        | `Holding`     | Current number of units held (i64 micros). Always > 0.                                     |
-| `average_price`   | `Holding`     | VWAP purchase price in account currency (i64 micros).                                      |
-| `cost_basis`      | computed      | `quantity × average_price` (i128 intermediate, per ACD-023/ACD-024). Not stored in DB.    |
-| `realized_pnl`    | `Holding.total_realized_pnl` | Cumulative realized P&L from partial sells (i64 micros). Zero if none. See SEL-042. |
+| Field             | Source                       | Business meaning                                                                       |
+| ----------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| `asset_id`        | `Holding`                    | ID of the held asset.                                                                  |
+| `asset_name`      | `AssetService`               | Display name of the asset.                                                             |
+| `asset_reference` | `AssetService`               | Ticker or user-defined reference.                                                      |
+| `quantity`        | `Holding`                    | Current number of units held (i64 micros). Always > 0.                                 |
+| `average_price`   | `Holding`                    | VWAP purchase price in account currency (i64 micros).                                  |
+| `cost_basis`      | computed                     | `quantity × average_price` (i128 intermediate, per ACD-023/ACD-024). Not stored in DB. |
+| `realized_pnl`    | `Holding.total_realized_pnl` | Cumulative realized P&L from partial sells (i64 micros). Zero if none. See SEL-042.    |
 
 ### ClosedHoldingDetail (Backend DTO)
 
 Read projection for **closed** positions (`quantity = 0`). New DTO introduced by this spec. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field             | Source        | Business meaning                                                                 |
-| ----------------- | ------------- | -------------------------------------------------------------------------------- |
-| `asset_id`        | `Holding`     | ID of the asset.                                                                 |
-| `asset_name`      | `AssetService`| Display name of the asset.                                                       |
-| `asset_reference` | `AssetService`| Ticker or user-defined reference.                                                |
-| `realized_pnl`    | `Holding.total_realized_pnl` | Total realized profit or loss for this position (i64 micros).   |
-| `last_sold_date`  | `Holding.last_sold_date` | ISO date when the position was fully closed. Rust type: `String` (non-optional) — only holdings where `last_sold_date IS NOT NULL` are included in `closed_holdings`, enforced in application code in `AccountDetailsUseCase`. |
+| Field             | Source                       | Business meaning                                                                                                                                                                                                               |
+| ----------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `asset_id`        | `Holding`                    | ID of the asset.                                                                                                                                                                                                               |
+| `asset_name`      | `AssetService`               | Display name of the asset.                                                                                                                                                                                                     |
+| `asset_reference` | `AssetService`               | Ticker or user-defined reference.                                                                                                                                                                                              |
+| `realized_pnl`    | `Holding.total_realized_pnl` | Total realized profit or loss for this position (i64 micros).                                                                                                                                                                  |
+| `last_sold_date`  | `Holding.last_sold_date`     | ISO date when the position was fully closed. Rust type: `String` (non-optional) — only holdings where `last_sold_date IS NOT NULL` are included in `closed_holdings`, enforced in application code in `AccountDetailsUseCase`. |
 
 ### AccountDetailsResponse (Backend DTO)
 
 The top-level response returned by the `get_account_details(account_id)` Tauri command. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field                 | Business meaning                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| `account_name`        | Display name of the account (per ACD-032).                                                               |
-| `holdings`            | Active holdings (`quantity > 0`), sorted per ACD-033.                                                    |
-| `closed_holdings`     | Closed holdings (`quantity = 0`), sorted per ACD-044. Empty list when none exist.                        |
-| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).                          |
-| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                                            |
-| `total_realized_pnl`  | Sum of `total_realized_pnl` across **all** holdings (open + closed) in the account (per SEL-042/ACD-045).|
+| Field                 | Business meaning                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------------------- |
+| `account_name`        | Display name of the account (per ACD-032).                                                                |
+| `holdings`            | Active holdings (`quantity > 0`), sorted per ACD-033.                                                     |
+| `closed_holdings`     | Closed holdings (`quantity = 0`), sorted per ACD-044. Empty list when none exist.                         |
+| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).                           |
+| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                                             |
+| `total_realized_pnl`  | Sum of `total_realized_pnl` across **all** holdings (open + closed) in the account (per SEL-042/ACD-045). |
 
 ---
 
@@ -128,6 +128,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 The `Holding` domain entity gains both fields: `last_sold_date: Option<String>` and `total_realized_pnl: i64`. All three factory methods (`new()`, `with_id()`, `restore()`) must be updated to accept and carry these fields. `SqliteHoldingRepository.upsert()` must write both columns; its row mapping must read them.
 
 The migration that adds these columns also backfills existing rows using SQL aggregation against the `transactions` table, so no replay-on-startup is required:
+
 ```sql
 UPDATE holdings SET
   total_realized_pnl = COALESCE((
