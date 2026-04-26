@@ -313,6 +313,10 @@ impl RecordTransactionUseCase {
             .await?
             .with_context(|| format!("Account {} not found", dto.account_id))?;
 
+        // SEL-037 / TRX-033 — archived asset guard enforced on update
+        if asset.is_archived && tx_type == TransactionType::Sell {
+            bail!("Cannot sell an archived asset");
+        }
         let needs_unarchive = asset.is_archived && tx_type == TransactionType::Purchase;
 
         let total_amount = match tx_type {

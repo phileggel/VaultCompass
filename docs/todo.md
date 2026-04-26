@@ -33,18 +33,18 @@ Two possible surfaces (not mutually exclusive):
 
 Requires the Settings page (see Settings todo) for option 1. Either surface needs a spec update to MKT before implementation.
 
-## (kit) — Back-fill IPC contracts for all existing domains
+## ~~(kit) — Back-fill IPC contracts for all existing domains~~ ✅ resolved
 
-The kit workflow now requires `docs/contracts/{domain}-contract.md` (derived via `/contract` from the validated spec). Run `/contract` for each domain in order:
+All domain contracts written and reviewed:
 
-1. ~~`asset`~~ ✅ — `docs/contracts/asset-contract.md` (extended by `market-price`)
-2. `account` — spec: `docs/spec/account.md`
-3. `transaction` — specs: `docs/spec/financial-asset-transaction.md` + `docs/spec/sell-transaction.md`
-4. ~~`account_details`~~ ✅ — `docs/contracts/account_details-contract.md` (extended by `market-price`)
-5. `record_transaction` — spec: `docs/spec/financial-asset-transaction.md` + `docs/spec/sell-transaction.md`
-6. `update` — spec: `docs/spec/update.md`
+1. ~~`asset`~~ ✅ — `docs/contracts/asset-contract.md`
+2. ~~`account`~~ ✅ — `docs/contracts/account-contract.md`
+3. ~~`transaction`~~ ✅ — `docs/contracts/transaction-contract.md`
+4. ~~`account_details`~~ ✅ — `docs/contracts/account_details-contract.md`
+5. ~~`record_transaction`~~ ✅ — `docs/contracts/record_transaction-contract.md`
+6. ~~`update`~~ ✅ — `docs/contracts/update-contract.md`
 
-After each `/contract`, run `contract-reviewer` to validate before moving on.
+Notable findings from contract-reviewer: `ArchivedAssetSell (SEL-037)` guard is missing from `update_transaction` in the orchestrator — the spec mandates it via TRX-033 but the implementation never enforces it on edits.
 
 ## (deps) — Update specta to rc.23
 
