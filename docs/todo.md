@@ -2,11 +2,9 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (ui) — Locale-aware number formatting in microToDecimal
+## ~~(ui) — Locale-aware number formatting in microToDecimal~~ ✅ resolved
 
-`microToDecimal` uses `toFixed()` which always outputs a period as the decimal separator, regardless of the user's locale. On a French system, `1500.50` should display as `1 500,50`. Affects all numeric columns app-wide (quantity, price, cost basis, P&L, performance %).
-
-Fix: replace `(micro / 1_000_000).toFixed(decimals)` with `Intl.NumberFormat(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(micro / 1_000_000)`. The `undefined` locale uses the runtime locale — verify that Tauri's WebView correctly inherits the OS locale (may need an explicit locale passed from Rust if not).
+Added `microToFormatted` to `src/lib/microUnits.ts` using `Intl.NumberFormat(undefined, ...)`. All display-only values in presenters and hook computed totals now use `microToFormatted`. `microToDecimal` (plain `toFixed`) is kept for editable form pre-fill where the browser requires a period decimal separator. Tauri's WebView inherits the OS locale for `Intl` — verify French display in the running app.
 
 ## ~~(ui) — DateField silent stale state when user types invalid text~~ ✅ resolved
 

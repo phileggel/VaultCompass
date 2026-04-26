@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TransactionFormData } from "@/features/transactions/shared/types";
 import { validateTransactionForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
-import { computeTotalMicro, decimalToMicro, microToDecimal } from "@/lib/microUnits";
+import { computeTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
 
@@ -121,7 +121,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
 
   return {
     formData,
-    totalAmountDisplay: microToDecimal(microValues.totalMicro),
+    totalAmountDisplay: microToFormatted(microValues.totalMicro),
     error,
     isSubmitting,
     isFormValid,

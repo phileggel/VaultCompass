@@ -1,5 +1,5 @@
 import type { Transaction } from "@/bindings";
-import { microToDecimal } from "@/lib/microUnits";
+import { microToFormatted } from "@/lib/microUnits";
 
 /** Display-ready shape for a transaction row. */
 export interface TransactionRowViewModel {
@@ -44,13 +44,13 @@ export function toTransactionRow(
     accountName,
     type: tx.transaction_type,
     date: tx.date,
-    quantity: microToDecimal(tx.quantity),
-    unitPrice: microToDecimal(tx.unit_price),
-    exchangeRate: microToDecimal(tx.exchange_rate),
-    fees: microToDecimal(tx.fees),
-    totalAmount: microToDecimal(tx.total_amount),
+    quantity: microToFormatted(tx.quantity),
+    unitPrice: microToFormatted(tx.unit_price),
+    exchangeRate: microToFormatted(tx.exchange_rate),
+    fees: microToFormatted(tx.fees),
+    totalAmount: microToFormatted(tx.total_amount),
     note: tx.note ?? null,
-    realizedPnl: tx.realized_pnl != null ? microToDecimal(tx.realized_pnl) : null,
+    realizedPnl: tx.realized_pnl != null ? microToFormatted(tx.realized_pnl) : null,
     realizedPnlRaw: tx.realized_pnl ?? null,
   };
 }

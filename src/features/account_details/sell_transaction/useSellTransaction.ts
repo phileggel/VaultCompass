@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TransactionFormData } from "@/features/transactions/shared/types";
 import { validateSellForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
-import { computeSellTotalMicro, decimalToMicro, microToDecimal } from "@/lib/microUnits";
+import { computeSellTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 
 interface UseSellTransactionProps {
@@ -77,7 +77,7 @@ export function useSellTransaction({
         setError(
           t(validationError, {
             defaultValue: validationError,
-            max: microToDecimal(holdingQuantityMicro, 6),
+            max: microToFormatted(holdingQuantityMicro, 6),
           }),
         );
         return;
@@ -116,9 +116,9 @@ export function useSellTransaction({
   return {
     formData,
     /** Sell total proceeds in micro-units formatted for display (SEL-023, read-only). */
-    totalAmountDisplay: microToDecimal(microValues.totalMicro),
+    totalAmountDisplay: microToFormatted(microValues.totalMicro),
     /** Maximum sellable quantity formatted for display (SEL-022). */
-    maxQuantityDisplay: microToDecimal(holdingQuantityMicro, 6),
+    maxQuantityDisplay: microToFormatted(holdingQuantityMicro, 6),
     error,
     isSubmitting,
     isFormValid,

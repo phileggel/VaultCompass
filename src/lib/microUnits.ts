@@ -29,11 +29,24 @@ export function decimalToMicro(value: string): number {
 }
 
 /**
- * Converts an integer micro-unit value to a formatted decimal string.
+ * Converts an integer micro-unit value to a plain decimal string using a period separator.
+ * Use for form pre-fill only — not locale-aware.
  * e.g. 1_500_000 → "1.500" (3 decimal places by default per TRX-024)
  */
 export function microToDecimal(micros: number, decimals = 3): string {
   return (micros / MICRO).toFixed(decimals);
+}
+
+/**
+ * Converts an integer micro-unit value to a locale-aware display string.
+ * Use for read-only display in tables and labels — never for editable inputs.
+ * e.g. 1_500_000 → "1.500" (en-US) or "1,500" (fr-FR) with 3 decimal places
+ */
+export function microToFormatted(micros: number, decimals = 3): string {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(micros / MICRO);
 }
 
 /**

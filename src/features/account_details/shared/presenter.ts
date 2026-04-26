@@ -1,5 +1,5 @@
 import type { AccountDetailsResponse, ClosedHoldingDetail, HoldingDetail } from "@/bindings";
-import { microToDecimal } from "@/lib/microUnits";
+import { microToFormatted } from "@/lib/microUnits";
 
 const DASH = "—";
 
@@ -66,19 +66,20 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     assetName: detail.asset_name,
     assetReference: detail.asset_reference,
     assetCurrency: detail.asset_currency,
-    quantity: microToDecimal(detail.quantity, 6),
+    quantity: microToFormatted(detail.quantity, 6),
     quantityMicro: detail.quantity,
-    averagePrice: microToDecimal(detail.average_price, 2),
-    costBasis: microToDecimal(detail.cost_basis, 2),
-    realizedPnl: microToDecimal(detail.realized_pnl, 2),
+    averagePrice: microToFormatted(detail.average_price, 2),
+    costBasis: microToFormatted(detail.cost_basis, 2),
+    realizedPnl: microToFormatted(detail.realized_pnl, 2),
     realizedPnlRaw: detail.realized_pnl,
     canEnterPrice: true,
-    currentPrice: detail.current_price !== null ? microToDecimal(detail.current_price, 2) : DASH,
+    currentPrice: detail.current_price !== null ? microToFormatted(detail.current_price, 2) : DASH,
     currentPriceDate: detail.current_price_date,
-    unrealizedPnl: detail.unrealized_pnl !== null ? microToDecimal(detail.unrealized_pnl, 2) : DASH,
+    unrealizedPnl:
+      detail.unrealized_pnl !== null ? microToFormatted(detail.unrealized_pnl, 2) : DASH,
     unrealizedPnlRaw: detail.unrealized_pnl,
     performancePct:
-      detail.performance_pct !== null ? `${microToDecimal(detail.performance_pct, 2)}%` : DASH,
+      detail.performance_pct !== null ? `${microToFormatted(detail.performance_pct, 2)}%` : DASH,
   };
 }
 
@@ -87,7 +88,7 @@ export function toClosedHoldingRow(detail: ClosedHoldingDetail): ClosedHoldingRo
     assetId: detail.asset_id,
     assetName: detail.asset_name,
     assetReference: detail.asset_reference,
-    realizedPnl: microToDecimal(detail.realized_pnl, 2),
+    realizedPnl: microToFormatted(detail.realized_pnl, 2),
     realizedPnlRaw: detail.realized_pnl,
     lastSoldDate: detail.last_sold_date,
   };
@@ -96,8 +97,8 @@ export function toClosedHoldingRow(detail: ClosedHoldingDetail): ClosedHoldingRo
 export function toAccountSummary(response: AccountDetailsResponse): AccountSummaryViewModel {
   return {
     accountName: response.account_name,
-    totalCostBasis: microToDecimal(response.total_cost_basis, 2),
-    totalRealizedPnl: microToDecimal(response.total_realized_pnl, 2),
+    totalCostBasis: microToFormatted(response.total_cost_basis, 2),
+    totalRealizedPnl: microToFormatted(response.total_realized_pnl, 2),
     totalRealizedPnlRaw: response.total_realized_pnl,
     holdingCount: response.total_holding_count,
     isEmpty: response.total_holding_count === 0,
@@ -105,7 +106,7 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
     hasClosedHoldings: response.closed_holdings.length > 0,
     totalUnrealizedPnl:
       response.total_unrealized_pnl !== null
-        ? microToDecimal(response.total_unrealized_pnl, 2)
+        ? microToFormatted(response.total_unrealized_pnl, 2)
         : DASH,
   };
 }

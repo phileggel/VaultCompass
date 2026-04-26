@@ -6,6 +6,7 @@ import {
   computeTotalMicro,
   decimalToMicro,
   microToDecimal,
+  microToFormatted,
 } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
@@ -152,7 +153,7 @@ export function useEditTransactionModal({
   return {
     formData,
     /** Total amount in micro-units formatted for display (read-only, derived). */
-    totalAmountDisplay: microToDecimal(microValues.totalMicro),
+    totalAmountDisplay: microToFormatted(microValues.totalMicro),
     error,
     isSubmitting,
     isFormValid,

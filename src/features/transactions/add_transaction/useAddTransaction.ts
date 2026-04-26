@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { computeTotalMicro, decimalToMicro, microToDecimal } from "@/lib/microUnits";
+import { computeTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
 import type { TransactionFormData } from "../shared/types";
@@ -148,7 +148,7 @@ export function useAddTransaction({
   return {
     formData,
     /** Total amount in micro-units formatted for display (read-only, derived). */
-    totalAmountDisplay: microToDecimal(microValues.totalMicro),
+    totalAmountDisplay: microToFormatted(microValues.totalMicro),
     error,
     isSubmitting,
     isFormValid,
