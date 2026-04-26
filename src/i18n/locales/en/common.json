@@ -143,7 +143,13 @@
     "accounts": "Accounts",
     "assets": "Assets",
     "categories": "Categories",
-    "about": "About"
+    "about": "About",
+    "design_system": "Design System"
+  },
+  "shell": {
+    "sidebar_collapse": "Collapse menu",
+    "sidebar_expand": "Expand menu",
+    "sidebar_version": "Version: {{version}}"
   },
   "app": {
     "migration_error": "A database migration error occurred. Please contact support.",

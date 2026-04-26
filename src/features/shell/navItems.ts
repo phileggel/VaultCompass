@@ -14,7 +14,7 @@ const BASE_NAV_ITEMS: NavItem[] = [
 ];
 
 const DEV_NAV_ITEMS: NavItem[] = import.meta.env.DEV
-  ? [{ labelKey: "Design System", path: "/design-system", icon: Palette }]
+  ? [{ labelKey: "nav.design_system", path: "/design-system", icon: Palette }]
   : [];
 
 export const NAV_ITEMS: NavItem[] = [...BASE_NAV_ITEMS, ...DEV_NAV_ITEMS];

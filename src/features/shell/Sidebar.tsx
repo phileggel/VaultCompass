@@ -38,7 +38,7 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
           shape="round"
           size="md"
           icon={isOpen ? <X size={24} /> : <Menu size={24} />}
-          aria-label={isOpen ? "Collapse menu" : "Expand menu"}
+          aria-label={isOpen ? t("shell.sidebar_collapse") : t("shell.sidebar_expand")}
           onClick={toggleDrawer}
           className={!isOpen ? "mx-auto" : undefined}
         />
@@ -95,7 +95,7 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
             ${isOpen ? "opacity-60" : "opacity-40"}
           `}
         >
-          {isOpen ? `Version: ${appVersion}` : `v${appVersion}`}
+          {isOpen ? t("shell.sidebar_version", { version: appVersion }) : `v${appVersion}`}
         </span>
       </div>
 

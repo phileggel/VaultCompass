@@ -143,7 +143,13 @@
     "accounts": "Comptes",
     "assets": "Actifs",
     "categories": "Catégories",
-    "about": "À propos"
+    "about": "À propos",
+    "design_system": "Design System"
+  },
+  "shell": {
+    "sidebar_collapse": "Réduire le menu",
+    "sidebar_expand": "Développer le menu",
+    "sidebar_version": "Version : {{version}}"
   },
   "app": {
     "migration_error": "Une erreur est survenue lors de la mise à jour de la base de données. Veuillez contacter le support.",

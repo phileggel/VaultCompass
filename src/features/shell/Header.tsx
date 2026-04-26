@@ -1,11 +1,13 @@
 import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ThemeToggle } from "./theme_toggle/ThemeToggle";
 import { useHeaderConfig } from "./useHeaderConfig";
 
 export function Header() {
+  const { t } = useTranslation();
   const { title, onBack } = useHeaderConfig();
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function Header() {
         <IconButton
           icon={<ArrowLeft size={20} />}
           onClick={onBack}
-          aria-label="Back"
+          aria-label={t("action.back")}
           className="text-white hover:enabled:bg-white/20"
         />
       )}
