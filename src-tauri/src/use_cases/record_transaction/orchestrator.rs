@@ -916,6 +916,74 @@ mod tests {
         );
     }
 
+    // SEL-037 — creating a sell on an archived asset is rejected
+    #[tokio::test]
+    async fn create_sell_rejected_when_asset_archived() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        uc.create_transaction(buy_dto(&account_id, &asset_id, 2 * micro))
+            .await
+            .unwrap();
+
+        sqlx::query("UPDATE assets SET is_archived = TRUE WHERE id = ?")
+            .bind(&asset_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let err = uc
+            .create_transaction(sell_dto(&account_id, &asset_id, micro))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<RecordTransactionError>(),
+                Some(RecordTransactionError::ArchivedAssetSell)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // SEL-037 / TRX-033 — editing a sell on an archived asset is rejected
+    #[tokio::test]
+    async fn update_sell_rejected_when_asset_archived() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        uc.create_transaction(buy_dto(&account_id, &asset_id, 2 * micro))
+            .await
+            .unwrap();
+        let sell = uc
+            .create_transaction(sell_dto(&account_id, &asset_id, micro))
+            .await
+            .unwrap();
+
+        sqlx::query("UPDATE assets SET is_archived = TRUE WHERE id = ?")
+            .bind(&asset_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let err = uc
+            .update_transaction(sell.id, sell_dto(&account_id, &asset_id, micro))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<RecordTransactionError>(),
+                Some(RecordTransactionError::ArchivedAssetSell)
+            ),
+            "got: {err}"
+        );
+    }
+
     // SEL-035 — changing transaction_type on update is rejected
     #[tokio::test]
     async fn update_rejects_transaction_type_change() {

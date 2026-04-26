@@ -36,7 +36,7 @@ All domain contracts written and reviewed:
 5. ~~`record_transaction`~~ ✅ — `docs/contracts/record_transaction-contract.md`
 6. ~~`update`~~ ✅ — `docs/contracts/update-contract.md`
 
-Notable findings from contract-reviewer: `ArchivedAssetSell (SEL-037)` guard is missing from `update_transaction` in the orchestrator — the spec mandates it via TRX-033 but the implementation never enforces it on edits.
+Notable findings from contract-reviewer: `ArchivedAssetSell (SEL-037)` guard is missing from `update_transaction` in the orchestrator — the spec mandates it via TRX-033 but the implementation never enforces it on edits. ✅ Guard was already present; two tests added (`create_sell_rejected_when_asset_archived`, `update_sell_rejected_when_asset_archived`) in `use_cases/record_transaction/orchestrator.rs`.
 
 ## (deps) — Update specta to rc.23
 
