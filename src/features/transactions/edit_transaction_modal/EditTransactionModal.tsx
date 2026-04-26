@@ -7,6 +7,7 @@ import { Button } from "@/ui/components/button/Button";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
 import { SelectField } from "@/ui/components/field/SelectField";
+import { TextareaField } from "@/ui/components/field/TextareaField";
 import { TextField } from "@/ui/components/field/TextField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { FormModal } from "@/ui/components/modal/FormModal";
@@ -183,19 +184,14 @@ export function EditTransactionModal({
           </div>
 
           {/* Note */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="edit-trx-note" className="m3-input-label">
-              {t("transaction.form_note_label")}
-            </label>
-            <textarea
-              id="edit-trx-note"
-              className="m3-input w-full resize-none"
-              rows={2}
-              value={formData.note}
-              onChange={(e) => handleChange("note", e.target.value)}
-              placeholder={t("transaction.form_note_placeholder")}
-            />
-          </div>
+          <TextareaField
+            id="edit-trx-note"
+            label={t("transaction.form_note_label")}
+            rows={2}
+            value={formData.note}
+            onChange={(e) => handleChange("note", e.target.value)}
+            placeholder={t("transaction.form_note_placeholder")}
+          />
 
           {/* Inline error */}
           {error && (

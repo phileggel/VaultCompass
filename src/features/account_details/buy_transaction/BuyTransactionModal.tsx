@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { DateField } from "@/ui/components/field/DateField";
+import { TextareaField } from "@/ui/components/field/TextareaField";
 import { TextField } from "@/ui/components/field/TextField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { FormModal } from "@/ui/components/modal/FormModal";
@@ -178,19 +179,14 @@ export function BuyTransactionModal({
           </div>
 
           {/* Note */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="buy-trx-note" className="m3-input-label">
-              {t("transaction.form_note_label")}
-            </label>
-            <textarea
-              id="buy-trx-note"
-              className="m3-input w-full resize-none"
-              rows={2}
-              value={formData.note}
-              onChange={(e) => handleChange("note", e.target.value)}
-              placeholder={t("transaction.form_note_placeholder")}
-            />
-          </div>
+          <TextareaField
+            id="buy-trx-note"
+            label={t("transaction.form_note_label")}
+            rows={2}
+            value={formData.note}
+            onChange={(e) => handleChange("note", e.target.value)}
+            placeholder={t("transaction.form_note_placeholder")}
+          />
 
           {/* Inline error */}
           {error && (

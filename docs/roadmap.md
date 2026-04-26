@@ -26,7 +26,7 @@ Manage the list of tradable instruments the user can reference in transactions.
 | Unarchive asset           | ✅ Done    |                                                                                                                                                                                      |
 | Delete asset              | ✅ Done    | Hard delete; only safe when no holdings exist                                                                                                                                        |
 | Archive eligibility guard | ✅ Done    | Block archiving if `Holding.quantity > 0` (OQ-6) — `ArchiveAssetUseCase`                                                                                                             |
-| Delete eligibility guard  | 🔲 Planned | Block hard delete if any transaction exists for the asset                                                                                                                            |
+| Delete eligibility guard  | ✅ Done    | Block hard delete if any transaction exists for the asset                                                                                                                            |
 | Inline asset creation     | ✅ Done    | From `/transactions/new`, `ComboboxField` `onCreateNew` navigates to `/assets?createNew=<query>&returnPath=...`; on success returns to `/transactions/new` with new asset pre-filled |
 
 Spec: `docs/spec/asset.md`
@@ -65,7 +65,8 @@ Display the current state of positions and their performance.
 | Holdings computed from buys   | ✅ Done    | Quantity + VWAP average price per (account, asset) pair              |
 | Account Details view          | ✅ Done    | Holdings list + total cost basis per account (ACD spec)              |
 | Holdings reactivity           | ✅ Done    | Re-fetch on `TransactionUpdated` event (ACD-039)                     |
-| Current market price          | 🔲 Planned | Requires a price data source (manual entry or feed)                  |
+| Current market price (manual) | 🔲 Planned | Manual entry first; price feed as a separate later feature           |
+| Current market price (feed)   | 🔲 Future  | Automatic price feed; depends on manual entry being in place         |
 | Unrealized P&L                | 🔲 Planned | `(current_price − average_price) × quantity`; depends on phase above |
 | Performance %                 | 🔲 Planned | `unrealized_pnl / cost_basis × 100`                                  |
 | Portfolio summary / dashboard | 🔲 Planned | Aggregate view across all accounts                                   |
@@ -117,8 +118,8 @@ A position is closed when `Holding.quantity` reaches zero.
 | Zero-quantity holding retention | ✅ Specced | Holding kept in DB at `quantity = 0`; `average_price` preserved (TRX-040) |
 | Closed position exclusion       | ✅ Done    | `quantity > 0` filter in Account Details (ACD-020)                        |
 | "All positions closed" state    | ✅ Done    | Distinct empty-state message in Account Details (ACD-034)                 |
-| Closed position history         | 🔲 Planned | View past closed positions with realized P&L per position                 |
-| Cumulative realized P&L         | 🔲 Planned | Total gains/losses across all closed positions in an account              |
+| Closed position history         | ✅ Done    | View past closed positions with realized P&L per position (ACD-044–ACD-050) |
+| Cumulative realized P&L         | ✅ Done    | `total_realized_pnl` summed across all holdings; shown in account summary header |
 
 ---
 

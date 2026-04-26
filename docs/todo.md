@@ -44,10 +44,9 @@ Replaced `bg-emerald-100/text-emerald-700` with `m3-success-container/on-success
 
 Removed `border-b border-m3-outline/5` from `ManagerHeader`. `ManagerLayout` already used `shadow-elevation-1`.
 
-## (frontend/ui) — Create TextareaField component
+## ~~(frontend/ui) — Create TextareaField component~~ ✅ resolved
 
-`AddTransactionModal` and `EditTransactionModal` use a raw `<textarea>` tag for the Note field instead of a shared component (violation F11/F12).
-Create `ui/components/field/TextareaField.tsx` (same interface as `TextField`: label + id + className + placeholder) and use it in both modals.
+`TextareaField` created at `ui/components/field/TextareaField.tsx`; replaces raw `<textarea>` in `AddTransactionModal`, `EditTransactionModal`, `AddTransactionPage`, `BuyTransactionModal`, and `SellTransactionModal`.
 
 ## ~~(frontend/transactions) — Success snackbar feedback (transactions)~~ ✅ resolved
 
