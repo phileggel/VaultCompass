@@ -17,4 +17,6 @@ pub enum Event {
     CategoryUpdated,
     /// A transaction was created, updated, or deleted (position data changed)
     TransactionUpdated,
+    /// A market price was recorded or updated for an asset (MKT-026)
+    AssetPriceUpdated,
 }

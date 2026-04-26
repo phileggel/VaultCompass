@@ -2,14 +2,25 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (market-price) — Opt-in: use transaction unit_price as market price
+
+When recording a buy or sell transaction, optionally treat the `unit_price` (excluding fees) as the market price for that date, creating an `AssetPrice` record automatically.
+
+Two possible surfaces (not mutually exclusive):
+
+1. **Global setting** — a toggle in Settings: "Automatically record transaction price as market price". Applies to all future transactions when enabled.
+2. **Per-transaction opt-in** — a checkbox in the buy/sell form: "Use this price as today's market price". Gives per-transaction control.
+
+Requires the Settings page (see Settings todo) for option 1. Either surface needs a spec update to MKT before implementation.
+
 ## (kit) — Back-fill IPC contracts for all existing domains
 
-The kit workflow now requires `docs/contracts/{domain}.md` (derived via `/contract` from the validated spec). No contracts exist yet. Run `/contract` for each domain in order:
+The kit workflow now requires `docs/contracts/{domain}-contract.md` (derived via `/contract` from the validated spec). Run `/contract` for each domain in order:
 
-1. `asset` — spec: `docs/spec/asset.md`
+1. ~~`asset`~~ ✅ — `docs/contracts/asset-contract.md` (extended by `market-price`)
 2. `account` — spec: `docs/spec/account.md`
 3. `transaction` — specs: `docs/spec/financial-asset-transaction.md` + `docs/spec/sell-transaction.md`
-4. `account_details` — spec: `docs/spec/account-details.md`
+4. ~~`account_details`~~ ✅ — `docs/contracts/account_details-contract.md` (extended by `market-price`)
 5. `record_transaction` — spec: `docs/spec/financial-asset-transaction.md` + `docs/spec/sell-transaction.md`
 6. `update` — spec: `docs/spec/update.md`
 

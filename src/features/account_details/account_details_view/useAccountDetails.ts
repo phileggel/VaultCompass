@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AccountDetailsResponse } from "@/bindings";
+import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { accountDetailsGateway } from "../gateway";
 import {
@@ -16,6 +16,8 @@ interface UseAccountDetailsResult {
   error: string | null;
   retry: () => void;
   holdings: HoldingRowViewModel[];
+  /** Raw active HoldingDetail records — used to pass to PriceModal (MKT-013). */
+  holdingDetails: HoldingDetail[];
   closedHoldings: ClosedHoldingRowViewModel[];
   summary: AccountSummaryViewModel | null;
 }
@@ -43,10 +45,14 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     fetchDetails();
   }, [fetchDetails]);
 
-  // ACD-039/040 — re-fetch on TransactionUpdated or AssetUpdated via gateway
+  // ACD-039/040/MKT-036 — re-fetch on TransactionUpdated, AssetUpdated, or AssetPriceUpdated
   useEffect(() => {
     const unlistenPromise = accountDetailsGateway.subscribeToEvents((type) => {
-      if (type === "TransactionUpdated" || type === "AssetUpdated") {
+      if (
+        type === "TransactionUpdated" ||
+        type === "AssetUpdated" ||
+        type === "AssetPriceUpdated"
+      ) {
         fetchDetails();
       }
     });
@@ -54,6 +60,8 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
       unlistenPromise.then((unlisten) => unlisten());
     };
   }, [fetchDetails]);
+
+  const holdingDetails = useMemo<HoldingDetail[]>(() => data?.holdings ?? [], [data]);
 
   const holdings = useMemo<HoldingRowViewModel[]>(
     () => (data ? data.holdings.map(toHoldingRow) : []),
@@ -70,5 +78,13 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     [data],
   );
 
-  return { isLoading, error, retry: fetchDetails, holdings, closedHoldings, summary };
+  return {
+    isLoading,
+    error,
+    retry: fetchDetails,
+    holdings,
+    holdingDetails,
+    closedHoldings,
+    summary,
+  };
 }

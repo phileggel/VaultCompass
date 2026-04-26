@@ -229,6 +229,23 @@
     "error_load": "Failed to load account details",
     "loading": "Loading...",
     "closed_positions_header": "Closed Positions",
-    "column_last_sold_date": "Last Sold"
+    "column_last_sold_date": "Last Sold",
+    "column_current_price": "Current Price",
+    "column_unrealized_pnl": "Unrealized P&L",
+    "column_performance_pct": "Performance",
+    "total_unrealized_pnl": "Total Unrealized P&L",
+    "price_as_of": "as of {{date}}",
+    "action_enter_price": "Enter price"
+  },
+  "price_modal": {
+    "title": "Enter Market Price",
+    "asset_label": "Asset",
+    "date_label": "Date",
+    "price_label": "Price",
+    "submit": "Save Price",
+    "success": "Price recorded",
+    "error_price_not_positive": "Price must be greater than zero",
+    "error_invalid_date": "Date must be a valid date (YYYY-MM-DD)",
+    "error_future_date": "Date cannot be in the future"
   }
 }

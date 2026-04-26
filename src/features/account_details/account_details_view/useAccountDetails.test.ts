@@ -32,6 +32,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   total_holding_count: 0,
   total_cost_basis: 0,
   total_realized_pnl: 0,
+  total_unrealized_pnl: null,
   ...overrides,
 });
 
@@ -104,5 +105,46 @@ describe("useAccountDetails — closed holdings (ACD-044–ACD-050)", () => {
     const { result } = renderHook(() => useAccountDetails("account-1"));
     await act(async () => {});
     expect(result.current.summary?.hasClosedHoldings).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Market-price hook stubs (MKT-NNN)
+// Assertion below is intentionally failing — implement useAccountDetails.ts to fix.
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetails — market price events (MKT)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // MKT-036 — useAccountDetails re-fetches on AssetPriceUpdated event
+  it("MKT-036 — re-fetches when AssetPriceUpdated event is received", async () => {
+    // subscribeToEvents captures the callback so the test can fire it
+    let capturedCallback: ((type: string) => void) | null = null;
+    const mockSubscribe = vi.fn((cb: (type: string) => void) => {
+      capturedCallback = cb;
+      return Promise.resolve(() => {});
+    });
+
+    // Override the module-level mock for this test
+    const { accountDetailsGateway } = await import("../gateway");
+    (accountDetailsGateway.subscribeToEvents as ReturnType<typeof vi.fn>).mockImplementation(
+      mockSubscribe,
+    );
+
+    mockGetAccountDetails.mockResolvedValue({ status: "ok", data: makeResponse() });
+
+    renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+
+    const firstCallCount = mockGetAccountDetails.mock.calls.length;
+
+    // Fire the AssetPriceUpdated event
+    await act(async () => {
+      capturedCallback?.("AssetPriceUpdated");
+    });
+
+    expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
   });
 });

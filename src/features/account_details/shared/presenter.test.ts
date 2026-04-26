@@ -10,6 +10,11 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   average_price: 100_000_000,
   cost_basis: 200_000_000,
   realized_pnl: 0,
+  asset_currency: "EUR",
+  current_price: null,
+  current_price_date: null,
+  unrealized_pnl: null,
+  performance_pct: null,
   ...overrides,
 });
 
@@ -29,6 +34,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   total_holding_count: 1,
   total_cost_basis: 200_000_000,
   total_realized_pnl: 0,
+  total_unrealized_pnl: null,
   ...overrides,
 });
 
@@ -145,5 +151,80 @@ describe("toClosedHoldingRow", () => {
   it("toAccountSummary hasClosedHoldings is true when closed_holdings is non-empty (ACD-044)", () => {
     const summary = toAccountSummary(makeResponse({ closed_holdings: [makeClosedHolding()] }));
     expect(summary.hasClosedHoldings).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Market-price presenter stubs (MKT-NNN)
+// All assertions below are intentionally failing — implement presenter.ts to fix.
+// Types used: HoldingDetail, AccountDetailsResponse, HoldingRowViewModel, AccountSummaryViewModel
+// ---------------------------------------------------------------------------
+
+describe("toHoldingRow — market price fields (MKT)", () => {
+  // MKT-010 — "Enter price" action available on active holding rows
+  it("MKT-010 — canEnterPrice is true on active holding rows", () => {
+    const row = toHoldingRow(makeHolding());
+    expect(row.canEnterPrice).toBe(true);
+  });
+
+  // MKT-030 — current price column: formatted price with 2 decimals
+  it("MKT-030 — currentPrice is formatted with 2 decimals when current_price is set", () => {
+    const row = toHoldingRow(makeHolding({ current_price: 150_500_000 }));
+    expect(row.currentPrice).toBe("150.50");
+  });
+
+  // MKT-030 — "—" sentinel when current_price is null
+  it("MKT-030 — currentPrice is '—' when current_price is null", () => {
+    const row = toHoldingRow(makeHolding({ current_price: null }));
+    expect(row.currentPrice).toBe("—");
+  });
+
+  // MKT-030 — currentPriceDate passed through for "as of {date}" label; null when no price
+  it("MKT-030 — currentPriceDate is the ISO date string when present, null otherwise", () => {
+    const withDate = toHoldingRow(makeHolding({ current_price_date: "2026-04-25" }));
+    expect(withDate.currentPriceDate).toBe("2026-04-25");
+    const noDate = toHoldingRow(makeHolding({ current_price_date: null }));
+    expect(noDate.currentPriceDate).toBeNull();
+  });
+
+  // MKT-032 — "—" in unrealized P&L column when unrealized_pnl is null
+  it("MKT-032 — unrealizedPnl is '—' when unrealized_pnl is null", () => {
+    const row = toHoldingRow(makeHolding({ unrealized_pnl: null }));
+    expect(row.unrealizedPnl).toBe("—");
+  });
+
+  // MKT-032 — "—" in performance % column when performance_pct is null
+  it("MKT-032 — performancePct is '—' when performance_pct is null", () => {
+    const row = toHoldingRow(makeHolding({ performance_pct: null }));
+    expect(row.performancePct).toBe("—");
+  });
+
+  // MKT-034 — currency mismatch: unrealized_pnl null but current_price non-null
+  it("MKT-034 — unrealizedPnl is '—' and performancePct is '—' when unrealized_pnl is null but current_price is set", () => {
+    const row = toHoldingRow(
+      makeHolding({ current_price: 110_000_000, unrealized_pnl: null, performance_pct: null }),
+    );
+    expect(row.unrealizedPnl).toBe("—");
+    expect(row.performancePct).toBe("—");
+  });
+
+  // MKT-034 — currentPrice still formatted on currency mismatch
+  it("MKT-034 — currentPrice is formatted even when unrealized_pnl is null (currency mismatch)", () => {
+    const row = toHoldingRow(makeHolding({ current_price: 110_000_000, unrealized_pnl: null }));
+    expect(row.currentPrice).toBe("110.00");
+  });
+});
+
+describe("toAccountSummary — market price fields (MKT)", () => {
+  // MKT-041 — total_unrealized_pnl formatted with 2 decimals when present
+  it("MKT-041 — totalUnrealizedPnl is formatted with 2 decimals when total_unrealized_pnl is set", () => {
+    const summary = toAccountSummary(makeResponse({ total_unrealized_pnl: 20_000_000 }));
+    expect(summary.totalUnrealizedPnl).toBe("20.00");
+  });
+
+  // MKT-041 — "—" when total_unrealized_pnl is null
+  it("MKT-041 — totalUnrealizedPnl is '—' when total_unrealized_pnl is null", () => {
+    const summary = toAccountSummary(makeResponse({ total_unrealized_pnl: null }));
+    expect(summary.totalUnrealizedPnl).toBe("—");
   });
 });

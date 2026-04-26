@@ -2,6 +2,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
@@ -9,17 +10,19 @@ import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
+import { PriceModal } from "./PriceModal";
 import { useAccountDetails } from "./useAccountDetails";
 
 export function AccountDetailsView() {
   const { t } = useTranslation();
   const { accountId } = useParams({ from: "/accounts/$accountId" });
   const navigate = useNavigate();
-  const { isLoading, error, retry, holdings, closedHoldings, summary } =
+  const { isLoading, error, retry, holdings, holdingDetails, closedHoldings, summary } =
     useAccountDetails(accountId);
 
   const [buyTarget, setBuyTarget] = useState<ModalTarget | null>(null);
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
+  const [priceTarget, setPriceTarget] = useState<HoldingDetail | null>(null);
 
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
@@ -34,6 +37,7 @@ export function AccountDetailsView() {
 
   const handleBuyClose = useCallback(() => setBuyTarget(null), []);
   const handleSellClose = useCallback(() => setSellTarget(null), []);
+  const handlePriceClose = useCallback(() => setPriceTarget(null), []);
 
   const handleBuySuccess = useCallback(() => {
     setBuyTarget(null);
@@ -44,6 +48,20 @@ export function AccountDetailsView() {
     setSellTarget(null);
     retry();
   }, [retry]);
+
+  // MKT-028 — close modal on success; re-fetch happens via AssetPriceUpdated event (MKT-036)
+  const handlePriceSuccess = useCallback(() => {
+    setPriceTarget(null);
+  }, []);
+
+  // MKT-010/013 — find the raw HoldingDetail (no extra fetch) for the price modal
+  const handleEnterPrice = useCallback(
+    (assetId: string) => {
+      const holding = holdingDetails.find((h) => h.asset_id === assetId);
+      if (holding) setPriceTarget(holding);
+    },
+    [holdingDetails],
+  );
 
   const hasActiveHoldings = holdings.length > 0;
   const hasClosedHoldings = summary?.hasClosedHoldings ?? false;
@@ -57,7 +75,7 @@ export function AccountDetailsView() {
             <div className="h-4 w-32 bg-m3-surface-variant rounded animate-pulse" />
           ) : summary ? (
             <div className="flex items-center justify-between">
-              <div className="flex gap-6">
+              <div className="flex gap-6 flex-wrap">
                 <p className="text-sm text-m3-on-surface-variant">
                   {t("account_details.total_cost_basis")}:{" "}
                   <span className="font-semibold text-m3-on-surface">{summary.totalCostBasis}</span>
@@ -71,6 +89,15 @@ export function AccountDetailsView() {
                       }`}
                     >
                       {summary.totalRealizedPnl}
+                    </span>
+                  </p>
+                )}
+                {/* MKT-041 — total unrealized P&L */}
+                {summary.totalUnrealizedPnl !== "—" && (
+                  <p className="text-sm text-m3-on-surface-variant">
+                    {t("account_details.total_unrealized_pnl")}:{" "}
+                    <span className="font-semibold text-m3-on-surface">
+                      {summary.totalUnrealizedPnl}
                     </span>
                   </p>
                 )}
@@ -143,6 +170,18 @@ export function AccountDetailsView() {
                         <th className="m3-th text-right">
                           {t("account_details.column_realized_pnl")}
                         </th>
+                        {/* MKT-030 — Current price column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_current_price")}
+                        </th>
+                        {/* MKT-032/034 — Unrealized P&L column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_unrealized_pnl")}
+                        </th>
+                        {/* MKT-035 — Performance % column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_performance_pct")}
+                        </th>
                         <th className="m3-th">{t("transaction.column_actions")}</th>
                       </tr>
                     </thead>
@@ -154,6 +193,7 @@ export function AccountDetailsView() {
                           accountId={accountId}
                           onBuy={setBuyTarget}
                           onSell={setSellTarget}
+                          onEnterPrice={handleEnterPrice}
                         />
                       ))}
                     </tbody>
@@ -241,6 +281,16 @@ export function AccountDetailsView() {
           holdingQuantityMicro={sellTarget.holdingQuantityMicro}
           showExchangeRate={sellTarget.showExchangeRate}
           onSubmitSuccess={handleSellSuccess}
+        />
+      )}
+
+      {/* MKT-010 — Enter price modal */}
+      {priceTarget && (
+        <PriceModal
+          isOpen
+          onClose={handlePriceClose}
+          holding={priceTarget}
+          onSubmitSuccess={handlePriceSuccess}
         />
       )}
     </div>

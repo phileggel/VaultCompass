@@ -7,14 +7,19 @@
 | ACC     | Account Management          | CRUD operations for financial accounts                         | active   |
 | TXL     | Transaction List            | Browse, edit and delete transactions per (account, asset) pair | planning |
 | SEL     | Sell Transaction            | Recording asset sales, holding reduction, and realized P&L     | planning |
+| MKT     | Market Price                | Manual market price entry per asset; unrealized P&L display    | planning |
 
 ---
 
 ## Spec granularity rule
 
-**One spec per backend domain/use case, with sections for variants.**
+Two tiers — pick the one that fits:
 
-If two operations share a use case and entity, they belong in the same spec under the same TRIGRAM — even if they appear as separate UI flows (e.g. buy modal vs sell modal). Spec granularity follows backend domain boundaries, not frontend modal boundaries.
+**Domain spec** — for pure CRUD within a single bounded context (e.g. `asset.md`, `account.md`). Use when the feature touches one domain and does not extend another use case.
+
+**Feature spec** — for cross-cutting capabilities that span ≥ 2 domains or extend an existing use case (e.g. `account-details.md`, `market-price.md`). One spec per user-visible capability; cross-references the domains it touches.
+
+If two operations share a use case and entity, they belong in the same spec under the same TRIGRAM — even if they appear as separate UI flows (e.g. buy modal vs sell modal).
 
 ```
 ## Entity definition

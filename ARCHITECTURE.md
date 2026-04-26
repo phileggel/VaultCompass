@@ -54,6 +54,7 @@ Published on every state change. Frontend listens via a single `events.event.lis
 | `CategoryUpdated`    | `context/asset/`                                                             |
 | `AccountUpdated`     | `context/account/`                                                           |
 | `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()` |
+| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026)                 |
 
 ### Use Cases (`use_cases/`)
 
@@ -63,12 +64,13 @@ Cross-cutting application use cases that span multiple bounded contexts or requi
 
 Orchestrates a cross-context read of account + asset data for the Account Details view (spec: `docs/spec/account-details.md`, ADR-003, ADR-004).
 
-- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; `get_account_details(account_id)` fetches account, all holdings, splits into active (qty > 0) and closed (qty = 0 with `last_sold_date` set), enriches both with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), sorts both lists by asset_name (ACD-033, ACD-046), returns `AccountDetailsResponse`
+- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; `get_account_details(account_id)` fetches account, all holdings, splits into active (qty > 0) and closed (qty = 0 with `last_sold_date` set), enriches both with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), fetches latest asset price per holding (MKT-031, degrades gracefully on failure), computes `unrealized_pnl` and `performance_pct` when currencies match (MKT-033/034/035), sorts both lists by asset_name (ACD-033, ACD-046), returns `AccountDetailsResponse`
 - DTOs:
-  - `HoldingDetail` — active position: asset_id, asset_name, asset_reference, quantity, average_price, cost_basis, realized_pnl (all i64 micros)
+  - `HoldingDetail` — active position: asset_id, asset_name, asset_reference, asset_currency, quantity, average_price, cost_basis, realized_pnl (all i64 micros), current_price, current_price_date, unrealized_pnl, performance_pct (nullable MKT fields)
   - `ClosedHoldingDetail` — closed position (qty=0): asset_id, asset_name, asset_reference, realized_pnl, last_sold_date: String (ACD-044, ACD-045)
-  - `AccountDetailsResponse` — account_name, holdings, closed_holdings, total_holding_count: i64, total_cost_basis, total_realized_pnl (ACD-047: sum from `Σ holding.total_realized_pnl` across all holdings)
+  - `AccountDetailsResponse` — account_name, holdings, closed_holdings, total_holding_count: i64, total_cost_basis, total_realized_pnl (ACD-047), total_unrealized_pnl (MKT-040: sum of qualifying holdings, None when empty)
 - `total_realized_pnl` is sourced from `Holding.total_realized_pnl` (persisted by `recalculate_holding`), not from a live transaction query; supersedes SEL-038
+- Frontend `useAccountDetails` subscribes to `TransactionUpdated`, `AssetUpdated`, and `AssetPriceUpdated` events to trigger re-fetch (MKT-036)
 - `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
 
 #### Record Transaction (`use_cases/record_transaction/`)

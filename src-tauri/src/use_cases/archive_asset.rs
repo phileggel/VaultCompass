@@ -80,7 +80,8 @@ mod tests {
             .expect("migrations");
         let svc = Arc::new(AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool)),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(crate::context::asset::SqliteAssetPriceRepository::new(pool)),
         ));
         let asset = svc
             .create_asset(CreateAssetDTO {

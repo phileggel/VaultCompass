@@ -793,6 +793,9 @@ mod tests {
         crate::context::asset::AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
             Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(crate::context::asset::SqliteAssetPriceRepository::new(
+                pool.clone(),
+            )),
         )
         .create_asset(CreateAssetDTO {
             name: "AAPL".to_string(),

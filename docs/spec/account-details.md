@@ -67,6 +67,8 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 | `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                                             |
 | `total_realized_pnl`  | Sum of `total_realized_pnl` across **all** holdings (open + closed) in the account (per SEL-042/ACD-045). |
 
+> **MKT extension**: `docs/spec/market-price.md` adds `total_unrealized_pnl: Option<i64>` to this response and five new fields to `HoldingDetail` (`asset_currency`, `current_price`, `current_price_date`, `unrealized_pnl`, `performance_pct`). See the MKT spec for definitions.
+
 ---
 
 ## Business Rules

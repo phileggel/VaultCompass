@@ -175,3 +175,22 @@ pub async fn delete_category(id: String, state: State<'_, AppState>) -> Result<(
         .await
         .map_err(|e| e.to_string())
 }
+
+// --- Market Price ---
+
+/// Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
+/// price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_asset_price(
+    state: State<'_, AppState>,
+    asset_id: String,
+    date: String,
+    price: f64,
+) -> Result<(), String> {
+    state
+        .asset_service
+        .record_price(&asset_id, &date, price)
+        .await
+        .map_err(|e| e.to_string())
+}

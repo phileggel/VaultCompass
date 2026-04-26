@@ -229,6 +229,23 @@
     "error_load": "Erreur lors du chargement des détails",
     "loading": "Chargement...",
     "closed_positions_header": "Positions clôturées",
-    "column_last_sold_date": "Dernière vente"
+    "column_last_sold_date": "Dernière vente",
+    "column_current_price": "Prix actuel",
+    "column_unrealized_pnl": "P&L latent",
+    "column_performance_pct": "Performance",
+    "total_unrealized_pnl": "P&L latent total",
+    "price_as_of": "au {{date}}",
+    "action_enter_price": "Saisir le prix"
+  },
+  "price_modal": {
+    "title": "Saisir le cours de marché",
+    "asset_label": "Actif",
+    "date_label": "Date",
+    "price_label": "Prix",
+    "submit": "Enregistrer",
+    "success": "Prix enregistré",
+    "error_price_not_positive": "Le prix doit être supérieur à zéro",
+    "error_invalid_date": "La date doit être au format AAAA-MM-JJ",
+    "error_future_date": "La date ne peut pas être dans le futur"
   }
 }

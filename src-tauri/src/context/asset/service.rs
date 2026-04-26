@@ -1,17 +1,19 @@
 use super::domain::{
-    Asset, AssetCategory, AssetCategoryRepository, AssetRepository, SYSTEM_CATEGORY_ID,
+    Asset, AssetCategory, AssetCategoryRepository, AssetPrice, AssetPriceRepository,
+    AssetRepository, SYSTEM_CATEGORY_ID,
 };
 use crate::{
     context::asset::{CreateAssetDTO, UpdateAssetDTO},
-    core::{Event, SideEffectEventBus},
+    core::{Event, SideEffectEventBus, BACKEND},
 };
 use anyhow::Result;
 use std::sync::Arc;
 
-/// Orchestrates business logic for assets and categories.
+/// Orchestrates business logic for assets, categories, and market prices.
 pub struct AssetService {
     asset_repo: Box<dyn AssetRepository>,
     category_repo: Box<dyn AssetCategoryRepository>,
+    price_repo: Box<dyn AssetPriceRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
 }
 
@@ -20,10 +22,12 @@ impl AssetService {
     pub fn new(
         asset_repo: Box<dyn AssetRepository>,
         category_repo: Box<dyn AssetCategoryRepository>,
+        price_repo: Box<dyn AssetPriceRepository>,
     ) -> Self {
         Self {
             asset_repo,
             category_repo,
+            price_repo,
             event_bus: None,
         }
     }
@@ -68,7 +72,7 @@ impl AssetService {
         )?;
 
         let asset = self.asset_repo.create(asset).await?;
-        tracing::info!(asset_id = %asset.id, name = %asset.name, "Asset created");
+        tracing::info!(target: BACKEND, asset_id = %asset.id, name = %asset.name, "Asset created");
 
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetUpdated);
@@ -106,7 +110,7 @@ impl AssetService {
         )?;
 
         let asset = self.asset_repo.update(asset).await?;
-        tracing::info!(asset_id = %asset.id, name = %asset.name, "Asset updated");
+        tracing::info!(target: BACKEND, asset_id = %asset.id, name = %asset.name, "Asset updated");
 
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetUpdated);
@@ -118,7 +122,7 @@ impl AssetService {
     /// Archives an asset (reversible — R6).
     pub async fn archive_asset(&self, asset_id: &str) -> Result<()> {
         self.asset_repo.archive(asset_id).await?;
-        tracing::info!(asset_id = %asset_id, "Asset archived");
+        tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset archived");
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetUpdated);
         }
@@ -128,7 +132,7 @@ impl AssetService {
     /// Unarchives an asset (R18).
     pub async fn unarchive_asset(&self, asset_id: &str) -> Result<()> {
         self.asset_repo.unarchive(asset_id).await?;
-        tracing::info!(asset_id = %asset_id, "Asset unarchived");
+        tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset unarchived");
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetUpdated);
         }
@@ -138,7 +142,7 @@ impl AssetService {
     /// Soft-deletes an asset and publishes an AssetUpdated event.
     pub async fn delete_asset(&self, asset_id: &str) -> Result<()> {
         self.asset_repo.delete(asset_id).await?;
-        tracing::info!(asset_id = %asset_id, "Asset deleted");
+        tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset deleted");
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetUpdated);
         }
@@ -201,17 +205,51 @@ impl AssetService {
         }
         Ok(())
     }
+
+    // --- Market Price Methods ---
+
+    /// Records (or overwrites) a market price for an asset on a given date (MKT-025).
+    /// Validates asset exists (MKT-043), price > 0 (MKT-021), date not in future (MKT-022).
+    /// Publishes AssetPriceUpdated on success (MKT-026).
+    pub async fn record_price(&self, asset_id: &str, date: &str, price_f64: f64) -> Result<()> {
+        // MKT-043 — reject unknown asset
+        if self.asset_repo.get_by_id(asset_id).await?.is_none() {
+            anyhow::bail!("Asset not found: {asset_id}");
+        }
+        // MKT-024 — convert f64 decimal to i64 micros at the IPC boundary
+        if !price_f64.is_finite() {
+            anyhow::bail!("Price must be a finite number");
+        }
+        let price_micros = (price_f64 * 1_000_000.0).round() as i64;
+        // MKT-021, MKT-022 — validate via domain entity factory
+        let price = AssetPrice::new(asset_id.to_string(), date.to_string(), price_micros)?;
+        // MKT-025 — upsert
+        self.price_repo.upsert(price).await?;
+        tracing::info!(target: BACKEND, asset_id = %asset_id, date = %date, "Asset price recorded");
+        // MKT-026 — publish bare signal event
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetPriceUpdated);
+        }
+        Ok(())
+    }
+
+    /// Returns the most recently dated market price for the given asset, or None (MKT-031).
+    pub async fn get_latest_price(&self, asset_id: &str) -> Result<Option<AssetPrice>> {
+        self.price_repo.get_latest(asset_id).await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::context::asset::{
-        AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetRepository,
+        AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetPriceRepository,
+        SqliteAssetRepository,
     };
+    use crate::core::SideEffectEventBus;
     use sqlx::sqlite::SqlitePoolOptions;
 
-    async fn setup_service() -> AssetService {
+    async fn setup_pool() -> sqlx::Pool<sqlx::Sqlite> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect("sqlite::memory:")
@@ -221,9 +259,15 @@ mod tests {
             .run(&pool)
             .await
             .expect("migrations");
+        pool
+    }
+
+    async fn setup_service() -> AssetService {
+        let pool = setup_pool().await;
         AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool)),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool)),
         )
     }
 
@@ -478,5 +522,99 @@ mod tests {
         let assets = svc.get_all_assets().await.unwrap();
         let updated = assets.iter().find(|a| a.id == asset.id).unwrap();
         assert_eq!(updated.category.id, SYSTEM_CATEGORY_ID);
+    }
+
+    // MKT-043 — record_price rejects unknown asset
+    #[tokio::test]
+    async fn record_price_rejects_unknown_asset() {
+        let svc = setup_service().await;
+        let err = svc
+            .record_price("nonexistent-id", "2026-01-01", 100.0)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Asset not found"), "got: {err}");
+    }
+
+    // MKT-021 — record_price rejects price <= 0
+    #[tokio::test]
+    async fn record_price_rejects_non_positive_price() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        let err = svc
+            .record_price(&asset.id, "2026-01-01", 0.0)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("strictly positive"), "got: {err}");
+    }
+
+    // MKT-022 — record_price rejects a future date
+    #[tokio::test]
+    async fn record_price_rejects_future_date() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        let err = svc
+            .record_price(&asset.id, "2099-12-31", 100.0)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("future"), "got: {err}");
+    }
+
+    // MKT-025, MKT-026 — record_price upserts the price and publishes AssetPriceUpdated on success
+    #[tokio::test]
+    async fn record_price_upserts_and_publishes_event_on_success() {
+        let pool = setup_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(bus);
+
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        // First record — insert
+        svc.record_price(&asset.id, "2026-01-01", 150.5)
+            .await
+            .unwrap();
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
+
+        // Second record for same date — should overwrite (MKT-025)
+        svc.record_price(&asset.id, "2026-01-01", 160.0)
+            .await
+            .unwrap();
+        let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
+        assert_eq!(latest.price, 160_000_000); // 160.0 → micros
+        assert_eq!(latest.date, "2026-01-01");
+    }
+
+    // MKT-031 — get_latest_price returns None when no price has been recorded for the asset
+    #[tokio::test]
+    async fn get_latest_price_returns_none_when_no_price_recorded() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        let result = svc.get_latest_price(&asset.id).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    // MKT-031 — get_latest_price returns the most recently dated price when multiple exist
+    #[tokio::test]
+    async fn get_latest_price_returns_latest_price_when_one_exists() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset.id, "2026-01-03", 120.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset.id, "2026-01-02", 110.0)
+            .await
+            .unwrap();
+        let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
+        // Most recent by date is 2026-01-03
+        assert_eq!(latest.date, "2026-01-03");
+        assert_eq!(latest.price, 120_000_000);
     }
 }

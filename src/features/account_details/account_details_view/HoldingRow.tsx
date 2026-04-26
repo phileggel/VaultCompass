@@ -1,9 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Minus, Plus, Search } from "lucide-react";
+import { DollarSign, Minus, Plus, Search } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components/button/IconButton";
+import { formatIsoDate } from "../shared/formatDate";
 import { PnlCell } from "../shared/PnlCell";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
@@ -13,9 +14,10 @@ type HoldingRowProps = {
   accountId: string;
   onBuy: (target: ModalTarget) => void;
   onSell: (target: SellTarget) => void;
+  onEnterPrice: (assetId: string) => void;
 };
 
-export function HoldingRow({ row, accountId, onBuy, onSell }: HoldingRowProps) {
+export function HoldingRow({ row, accountId, onBuy, onSell, onEnterPrice }: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const assets = useAppStore((state) => state.assets);
@@ -49,6 +51,10 @@ export function HoldingRow({ row, accountId, onBuy, onSell }: HoldingRowProps) {
     });
   }, [navigate, accountId, row.assetId]);
 
+  const handleEnterPrice = useCallback(() => {
+    onEnterPrice(row.assetId);
+  }, [onEnterPrice, row.assetId]);
+
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
 
@@ -63,8 +69,50 @@ export function HoldingRow({ row, accountId, onBuy, onSell }: HoldingRowProps) {
       <td className="m3-td text-right tabular-nums">{row.quantity}</td>
       <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
       <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
+      {/* SEL-042 — Realized P&L */}
       <td className="m3-td text-right">
         <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
+      </td>
+      {/* MKT-030 — Current price */}
+      <td className="m3-td text-right tabular-nums">
+        {row.currentPrice !== "—" ? (
+          <div className="flex flex-col items-end">
+            <span>{row.currentPrice}</span>
+            {row.currentPriceDate && (
+              <span className="text-xs text-m3-on-surface-variant">
+                {t("account_details.price_as_of", {
+                  date: formatIsoDate(row.currentPriceDate ?? ""),
+                })}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-m3-on-surface-variant">{row.currentPrice}</span>
+        )}
+      </td>
+      {/* MKT-032/034 — Unrealized P&L */}
+      <td className="m3-td text-right">
+        {row.unrealizedPnl !== "—" ? (
+          <PnlCell value={row.unrealizedPnl} raw={row.unrealizedPnlRaw ?? 0} />
+        ) : (
+          <span className="text-m3-on-surface-variant">{row.unrealizedPnl}</span>
+        )}
+      </td>
+      {/* MKT-035 — Performance % */}
+      <td className="m3-td text-right tabular-nums">
+        {row.performancePct !== "—" ? (
+          <span
+            className={
+              row.unrealizedPnlRaw !== null && row.unrealizedPnlRaw < 0
+                ? "text-m3-error"
+                : "text-m3-success"
+            }
+          >
+            {row.performancePct}
+          </span>
+        ) : (
+          <span className="text-m3-on-surface-variant">{row.performancePct}</span>
+        )}
       </td>
       <td className="m3-td">
         <div className="flex items-center gap-1">
@@ -85,6 +133,15 @@ export function HoldingRow({ row, accountId, onBuy, onSell }: HoldingRowProps) {
             onClick={handleSell}
             disabled={isArchived}
           />
+          {/* MKT-010 — Enter price button (active holdings only) */}
+          {row.canEnterPrice && (
+            <IconButton
+              icon={<DollarSign size={16} />}
+              size="sm"
+              aria-label={t("account_details.action_enter_price")}
+              onClick={handleEnterPrice}
+            />
+          )}
           <IconButton
             icon={<Search size={16} />}
             size="sm"

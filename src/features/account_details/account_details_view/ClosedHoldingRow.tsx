@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "@/ui/components/button/IconButton";
+import { formatIsoDate } from "../shared/formatDate";
 import { PnlCell } from "../shared/PnlCell";
 import type { ClosedHoldingRowViewModel } from "../shared/presenter";
 
@@ -10,13 +11,6 @@ type ClosedHoldingRowProps = {
   row: ClosedHoldingRowViewModel;
   accountId: string;
 };
-
-function formatIsoDate(isoDate: string): string {
-  const date = new Date(`${isoDate}T12:00:00`);
-  return Number.isNaN(date.getTime())
-    ? isoDate
-    : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
 
 export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
   const { t } = useTranslation();

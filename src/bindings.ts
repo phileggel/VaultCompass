@@ -130,6 +130,18 @@ async deleteCategory(id: string) : Promise<Result<null, string>> {
 }
 },
 /**
+ * Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
+ * price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
+ */
+async recordAssetPrice(assetId: string, date: string, price: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_asset_price", { assetId, date, price }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Retrieves all accounts.
  */
 async getAccounts() : Promise<Result<Account[], string>> {
@@ -356,7 +368,11 @@ total_cost_basis: number;
 /**
  * Sum of total_realized_pnl across ALL holdings (active + closed), 0 if none (ACD-047).
  */
-total_realized_pnl: number }
+total_realized_pnl: number; 
+/**
+ * Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
+ */
+total_unrealized_pnl: number | null }
 /**
  * A financial instrument or resource held by a user.
  */
@@ -571,7 +587,11 @@ export type Event =
 /**
  * A transaction was created, updated, or deleted (position data changed)
  */
-{ type: "TransactionUpdated" }
+{ type: "TransactionUpdated" } | 
+/**
+ * A market price was recorded or updated for an asset (MKT-026)
+ */
+{ type: "AssetPriceUpdated" }
 /**
  * Current state of a financial position: an asset held within an account (ADR-002).
  * All financial fields are stored as i64 micro-units (ADR-001).
@@ -636,7 +656,29 @@ cost_basis: number;
 /**
  * Sum of realized P&L from all Sell transactions for this asset (i64 micro-units, SEL-042).
  */
-realized_pnl: number }
+realized_pnl: number; 
+/**
+ * ISO 4217 currency code of the asset's native currency (MKT-023).
+ */
+asset_currency: string; 
+/**
+ * Most recently dated price for this asset in asset currency (i64 micros). None if no price recorded (MKT-031).
+ */
+current_price: number | null; 
+/**
+ * ISO date string of the price observation. None when current_price is None (MKT-031).
+ */
+current_price_date: string | null; 
+/**
+ * Unrealized gain/loss in account currency (i64 micros). None on currency mismatch or no price (MKT-033/034).
+ * 0 (not None) when current price equals average price (MKT-033).
+ */
+unrealized_pnl: number | null; 
+/**
+ * Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
+ * 0 (not None) when unrealized_pnl is 0 (MKT-035).
+ */
+performance_pct: number | null }
 /**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).

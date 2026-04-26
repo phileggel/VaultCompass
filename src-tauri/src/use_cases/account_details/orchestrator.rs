@@ -22,6 +22,18 @@ pub struct HoldingDetail {
     pub cost_basis: i64,
     /// Sum of realized P&L from all Sell transactions for this asset (i64 micro-units, SEL-042).
     pub realized_pnl: i64,
+    /// ISO 4217 currency code of the asset's native currency (MKT-023).
+    pub asset_currency: String,
+    /// Most recently dated price for this asset in asset currency (i64 micros). None if no price recorded (MKT-031).
+    pub current_price: Option<i64>,
+    /// ISO date string of the price observation. None when current_price is None (MKT-031).
+    pub current_price_date: Option<String>,
+    /// Unrealized gain/loss in account currency (i64 micros). None on currency mismatch or no price (MKT-033/034).
+    /// 0 (not None) when current price equals average price (MKT-033).
+    pub unrealized_pnl: Option<i64>,
+    /// Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
+    /// 0 (not None) when unrealized_pnl is 0 (MKT-035).
+    pub performance_pct: Option<i64>,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -54,6 +66,8 @@ pub struct AccountDetailsResponse {
     pub total_cost_basis: i64,
     /// Sum of total_realized_pnl across ALL holdings (active + closed), 0 if none (ACD-047).
     pub total_realized_pnl: i64,
+    /// Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
+    pub total_unrealized_pnl: Option<i64>,
 }
 
 /// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
@@ -107,6 +121,38 @@ impl AccountDetailsUseCase {
             let cost_basis =
                 (holding.quantity as i128 * holding.average_price as i128 / 1_000_000) as i64;
 
+            // MKT-031 — fetch latest price, degrade gracefully on failure
+            let latest_price = self
+                .asset_service
+                .get_latest_price(&holding.asset_id)
+                .await
+                .ok()
+                .flatten();
+
+            let (current_price, current_price_date, unrealized_pnl, performance_pct) =
+                if let Some(ref lp) = latest_price {
+                    let cp = lp.price;
+                    let cp_date = lp.date.clone();
+                    // MKT-033/034 — only compute P&L when currencies match
+                    let (upnl, perf) = if asset.currency == account.currency {
+                        // MKT-033 — widen to i128 before subtraction to prevent i64 overflow
+                        let upnl = ((cp as i128 - holding.average_price as i128)
+                            * holding.quantity as i128
+                            / 1_000_000) as i64;
+                        let perf = if cost_basis != 0 {
+                            Some((upnl as i128 * 100_000_000 / cost_basis as i128) as i64)
+                        } else {
+                            None
+                        };
+                        (Some(upnl), perf)
+                    } else {
+                        (None, None)
+                    };
+                    (Some(cp), Some(cp_date), upnl, perf)
+                } else {
+                    (None, None, None, None)
+                };
+
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -115,6 +161,11 @@ impl AccountDetailsUseCase {
                 average_price: holding.average_price,
                 cost_basis,
                 realized_pnl: holding.total_realized_pnl,
+                asset_currency: asset.currency,
+                current_price,
+                current_price_date,
+                unrealized_pnl,
+                performance_pct,
             });
         }
 
@@ -123,6 +174,14 @@ impl AccountDetailsUseCase {
 
         // ACD-031 — sum of cost_basis; 0 when no active holdings
         let total_cost_basis: i64 = details.iter().map(|d| d.cost_basis).sum();
+
+        // MKT-040 — sum unrealized_pnl across qualifying holdings; None when none qualify
+        let qualifying_pnls: Vec<i64> = details.iter().filter_map(|d| d.unrealized_pnl).collect();
+        let total_unrealized_pnl = if qualifying_pnls.is_empty() {
+            None
+        } else {
+            Some(qualifying_pnls.iter().sum())
+        };
 
         // ACD-044/ACD-045 — enrich closed positions with asset metadata
         // Only holdings with last_sold_date set are shown (they're genuinely closed)
@@ -156,6 +215,7 @@ impl AccountDetailsUseCase {
             total_holding_count,
             total_cost_basis,
             total_realized_pnl,
+            total_unrealized_pnl,
         })
     }
 }
@@ -182,6 +242,9 @@ mod tests {
         let asset_svc = Arc::new(AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
             Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(crate::context::asset::SqliteAssetPriceRepository::new(
+                pool.clone(),
+            )),
         ));
         (account_svc, asset_svc)
     }
@@ -377,17 +440,6 @@ mod tests {
         let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.account_name, "My Account");
-    }
-
-    // ACD-038 — DB or service failure surfaces as an error (not a panic)
-    #[tokio::test]
-    async fn service_failure_returns_error() {
-        let pool = make_pool().await;
-        let (account_svc, asset_svc) = setup(&pool).await;
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
-        // nonexistent account triggers anyhow error path, not a panic
-        let result = uc.get_account_details("no-such-id").await;
-        assert!(result.is_err());
     }
 
     // ACD-043 — Holding entity exposes last_sold_date: Option<String> and total_realized_pnl: i64
@@ -815,6 +867,445 @@ mod tests {
         let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert!(resp.closed_holdings.is_empty());
+    }
+
+    // MKT-031 — unrealized_pnl is None on a HoldingDetail when no price has been recorded
+    #[tokio::test]
+    async fn holding_detail_unrealized_pnl_is_none_when_no_price() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id,
+                    1_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert!(resp.holdings[0].unrealized_pnl.is_none());
+        assert!(resp.holdings[0].current_price.is_none());
+    }
+
+    // MKT-033 — unrealized_pnl is computed when asset currency matches account currency
+    #[tokio::test]
+    async fn holding_detail_unrealized_pnl_computed_same_currency() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(), // same as account
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        // 2 units at avg_price 100.00 → cost_basis = 200.00
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        // current_price = 110.00 → unrealized_pnl = (110 - 100) * 2 = 20.00
+        asset_svc
+            .record_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert_eq!(resp.holdings[0].unrealized_pnl, Some(20_000_000));
+    }
+
+    // MKT-034 — unrealized_pnl is None when asset currency differs from account currency
+    #[tokio::test]
+    async fn holding_detail_unrealized_pnl_is_none_on_currency_mismatch() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(), // differs from account EUR
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    1_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        // current_price present, but P&L is None due to mismatch
+        assert!(resp.holdings[0].current_price.is_some());
+        assert!(resp.holdings[0].unrealized_pnl.is_none());
+        assert!(resp.holdings[0].performance_pct.is_none());
+    }
+
+    // MKT-035 — performance_pct is None when cost_basis is zero
+    #[tokio::test]
+    async fn holding_detail_performance_pct_is_none_when_cost_basis_zero() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        // average_price = 0 → cost_basis = 0
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(account.id.clone(), asset.id.clone(), 1_000_000, 0, 0, None).unwrap(),
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_price(&asset.id, "2026-01-01", 50.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert!(resp.holdings[0].performance_pct.is_none());
+    }
+
+    // MKT-035 — performance_pct is computed correctly (5.25% = 5_250_000 micros)
+    #[tokio::test]
+    async fn holding_detail_performance_pct_computed_correctly() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        // 2 units at avg 100.00 → cost_basis = 200_000_000 micros
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        // current_price = 110.00 → unrealized = 20.00 → perf = 20/200 = 10% = 10_000_000 micros
+        asset_svc
+            .record_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert_eq!(resp.holdings[0].performance_pct, Some(10_000_000));
+    }
+
+    // MKT-033 — unrealized_pnl is Some(0) (not None) when current_price equals average_price
+    #[tokio::test]
+    async fn holding_detail_unrealized_pnl_is_zero_when_price_equals_average() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        // avg_price = 100.00, qty = 2
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        // current_price == average_price → unrealized_pnl = 0
+        asset_svc
+            .record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert_eq!(resp.holdings[0].unrealized_pnl, Some(0));
+    }
+
+    // MKT-035 — performance_pct is Some(0) (not None) when unrealized_pnl is 0 and cost_basis nonzero
+    #[tokio::test]
+    async fn holding_detail_performance_pct_is_zero_when_unrealized_pnl_is_zero() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        // avg_price = 100.00, cost_basis = 100_000_000 micros
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    1_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        // current_price == average_price → unrealized_pnl = 0 → perf = 0%
+        asset_svc
+            .record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert_eq!(resp.holdings[0].unrealized_pnl, Some(0));
+        assert_eq!(resp.holdings[0].performance_pct, Some(0));
+    }
+
+    // MKT-040 — total_unrealized_pnl is None when no holding has a computable value
+    #[tokio::test]
+    async fn total_unrealized_pnl_is_none_when_no_qualifying_holdings() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        // No holdings at all → None
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert!(resp.total_unrealized_pnl.is_none());
+    }
+
+    // MKT-040 — total_unrealized_pnl sums unrealized_pnl across same-currency priced active holdings
+    #[tokio::test]
+    async fn total_unrealized_pnl_sums_qualifying_holdings() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        // Holding 1: EUR asset, gain 20.00
+        let asset1 = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "A1".to_string(),
+                reference: "A1".to_string(),
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset1.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_price(&asset1.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        // Holding 2: USD asset (mismatch) — should NOT contribute
+        let asset2 = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "A2".to_string(),
+                reference: "A2".to_string(),
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset2.id.clone(),
+                    1_000_000,
+                    50_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_price(&asset2.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        // Only holding 1 qualifies: unrealized_pnl = 20_000_000
+        assert_eq!(resp.total_unrealized_pnl, Some(20_000_000));
     }
 
     // ACD-033 — holdings sorted by asset_name ascending

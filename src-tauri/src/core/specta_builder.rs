@@ -32,6 +32,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset::add_category,
             asset::update_category,
             asset::delete_category,
+            asset::record_asset_price,
             account::get_accounts,
             account::add_account,
             account::update_account,
