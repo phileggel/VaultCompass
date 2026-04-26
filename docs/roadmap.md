@@ -65,13 +65,13 @@ Display the current state of positions and their performance.
 | Holdings computed from buys   | ✅ Done    | Quantity + VWAP average price per (account, asset) pair              |
 | Account Details view          | ✅ Done    | Holdings list + total cost basis per account (ACD spec)              |
 | Holdings reactivity           | ✅ Done    | Re-fetch on `TransactionUpdated` event (ACD-039)                     |
-| Current market price (manual) | 🔲 Planned | Manual entry first; price feed as a separate later feature           |
-| Current market price (feed)   | 🔲 Future  | Automatic price feed; depends on manual entry being in place         |
-| Unrealized P&L                | 🔲 Planned | `(current_price − average_price) × quantity`; depends on phase above |
-| Performance %                 | 🔲 Planned | `unrealized_pnl / cost_basis × 100`                                  |
-| Portfolio summary / dashboard | 🔲 Planned | Aggregate view across all accounts                                   |
+| Current market price (manual) | ✅ Done    | Manual entry in Account Details holding row; stored as `AssetPrice` (MKT spec) |
+| Current market price (feed)   | 🔲 Future  | Automatic price feed; depends on manual entry being in place                   |
+| Unrealized P&L                | ✅ Done    | `(current_price − average_price) × quantity`; displayed per holding (MKT spec) |
+| Performance %                 | ✅ Done    | `unrealized_pnl / cost_basis × 100`; displayed per holding (MKT spec)          |
+| Portfolio summary / dashboard | 🔲 Planned | Aggregate view across all accounts                                              |
 
-Spec: `docs/spec/account-details.md`
+Specs: `docs/spec/account-details.md`, `docs/spec/market-price.md`
 
 ---
 
@@ -146,7 +146,7 @@ Based on value and dependency chain:
 4. **Sell transaction** — unlocks phases 5 & 6; requires new spec
 5. **Realized P&L** — follows sell; display per transaction and per position
 6. **Archive eligibility guard** — depends on phase 5 (need sell to reach `qty = 0`)
-7. **Current market price** — data source decision needed (manual vs. feed); standalone spec
-8. **Unrealized P&L + performance %** — depends on market price
+7. ~~**Current market price**~~ — ✅ done (manual entry, MKT spec)
+8. ~~**Unrealized P&L + performance %**~~ — ✅ done
 9. **Corporate events (dividends, splits)** — standalone spec; relatively independent
 10. **Portfolio dashboard** — aggregation of phases 3–6; last to implement

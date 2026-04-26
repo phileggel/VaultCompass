@@ -1,7 +1,7 @@
 ---
 name: contract
 description:
-  Derives or updates an IPC contract (docs/contracts/{domain}-contract.md) from a validated
+  Derives or updates a domain contract (docs/contracts/{domain}-contract.md) from a validated
   feature spec. Upsert-aware — adds commands to an existing domain contract without overwriting.
   Run after spec-reviewer approves, before contract-reviewer and feature-planner.
 tools: Read, Glob, Write, Edit, AskUserQuestion
@@ -9,7 +9,7 @@ tools: Read, Glob, Write, Edit, AskUserQuestion
 
 # Skill — `contract`
 
-Produce or update a domain IPC contract from a validated feature spec.
+Produce or update a domain contract from a validated feature spec.
 
 ---
 

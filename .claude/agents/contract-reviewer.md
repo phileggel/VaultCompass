@@ -4,13 +4,13 @@ description:
   Reviews a domain contract (docs/contracts/{domain}-contract.md) against its source spec for
   coverage, traceability, error exhaustiveness, and type correctness. Blocks progression to
   feature-planner on critical findings. Run after /contract produces or updates the contract.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash, Write
 model: claude-sonnet-4-6
 ---
 
-You are a technical reviewer validating an IPC contract for a Tauri 2 / React 19 / Rust project.
+You are a technical reviewer validating a domain contract for a full-stack project.
 Your job is to ensure the contract is complete, consistent with its source spec, and technically
-sound enough to anchor test stubs and a Specta-generated TypeScript API.
+sound enough to anchor test stubs and a TypeScript API.
 
 ---
 
@@ -112,6 +112,41 @@ If all checks pass:
 Review complete: 0 critical, N warning(s).
 Ready for feature-planner: yes — 0 critical findings.
 ```
+
+---
+
+## Save report
+
+After outputting the report to the conversation, save a **compact summary** to disk — not the full report.
+
+Compute the next available filename:
+
+```bash
+mkdir -p tmp
+DATE=$(date +%Y-%m-%d)
+i=1
+while [ -f "tmp/contract-reviewer-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
+echo "tmp/contract-reviewer-${DATE}-$(printf '%02d' $i).md"
+```
+
+Compose the compact summary in this format:
+
+```
+## contract-reviewer — {date}-{N}
+
+{summary line}
+{Ready for feature-planner line}
+
+### 🔴 Critical
+- {section}: {issue}
+
+### 🟡 Warning
+- {section}: {issue}
+```
+
+Omit any section that has no findings. Use the Write tool to save the compact summary to that path.
+
+Tell the user: `Report saved to {path}`
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: workflow-validator
 description: Validates that all required workflow steps were completed before a commit. Reads the feature plan produced by feature-planner (docs/plan/*-plan.md), checks git diff to infer which conditional steps were required, and produces a validation table ✅/❌ per step. Blocks commit if any required step is missing. Use when ready to commit a feature implementation.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write
 model: claude-haiku-4-5-20251001
 ---
 
@@ -82,6 +82,37 @@ Use `—` for conditional steps whose trigger condition was not met.
 Use `❌` for required steps marked `[ ]` in the plan, with an explanation.
 If all required steps are `[x]`: print `Result: ✅ All required steps completed — commit allowed.`
 If any `❌`: print `Result: ❌ Workflow incomplete — fix before committing.` and list the blocking steps.
+
+## Save report
+
+After outputting the report to the conversation, save a **compact summary** to disk — not the full report.
+
+Compute the next available filename:
+
+```bash
+mkdir -p tmp
+DATE=$(date +%Y-%m-%d)
+i=1
+while [ -f "tmp/workflow-validator-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
+echo "tmp/workflow-validator-${DATE}-$(printf '%02d' $i).md"
+```
+
+Compose the compact summary in this format:
+
+```
+## workflow-validator — {date}-{N}
+
+{result line}
+
+### Blocking steps
+- Step N — {step name}: {reason}
+```
+
+Omit "Blocking steps" if the result is ✅. Use the Write tool to save the compact summary to that path.
+
+Tell the user: `Report saved to {path}`
+
+---
 
 ## Rules
 

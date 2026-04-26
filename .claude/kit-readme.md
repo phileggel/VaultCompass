@@ -6,6 +6,39 @@ Onboarding guide for tauri-claude-kit. For the full inventory of agents, skills,
 
 ---
 
+## Profiles
+
+This kit ships a **generic layer** (process agents, skills, hooks) that works for any project, plus **profile overlays** that add stack-specific quality agents and scripts.
+
+Declare your stack in `.claude/kit-profile` (plain text, one line):
+
+```
+tauri
+```
+
+| Profile | What you get                                                                              |
+| ------- | ----------------------------------------------------------------------------------------- |
+| `tauri` | Generic layer + 7 Tauri quality agents + `check.py` / `release.py` + `tauri.just` recipes |
+| `web`   | 🚧 planned — generic layer + Axum/React/PostgreSQL agents (post-Muvimu2 POC)              |
+| (none)  | Generic layer only — process agents, skills, hooks. Manage quality agents locally.        |
+
+**No profile is not an error.** Lua mods, Python CLIs, and any stack the kit doesn't cover yet use the generic layer and add their own local quality agents in `.claude/agents/`.
+
+**To sync with your profile:**
+
+```bash
+# First time — add profile declaration
+echo "tauri" > .claude/kit-profile
+
+# Sync (auto-detects .claude/kit-profile)
+./scripts/sync-config.sh
+
+# Or override once without changing the file
+./scripts/sync-config.sh --profile tauri
+```
+
+---
+
 ## Standard Workflows
 
 ### Option A — Full Feature Workflow
@@ -46,9 +79,9 @@ _Use for: New features, new business logic, significant UI changes, or complex r
 4. Run **`reviewer-frontend`** agent → fix issues.
 5. **`/smart-commit`**: frontend layer. [HARD GATE]
 
-**Phase 4: Review & Closure**
+**Phase 4: Review & Closure** _(Tauri profile agents)_
 
-1. Run **`reviewer`** agent (always) + **`reviewer-sql`** (if migrations) + **`maintainer`** (if capabilities or tauri.conf.json changed).
+1. Run **`reviewer`** agent (always) + **`reviewer-sql`** (if migrations) + **`maintainer`** (if project config files changed).
 2. Run **`i18n-checker`** if UI text changed.
 3. Run **`script-reviewer`** if scripts or hooks were modified.
 4. Update documentation (`ARCHITECTURE.md`, `docs/todo.md`).
@@ -131,7 +164,8 @@ If you need to extend a kit agent's behaviour:
 **Agent not found?**
 
 - Check if the agent file exists: `ls -la .claude/agents/`
-- Re-sync the kit: `./scripts/sync-config.sh`
+- Re-sync the kit (with your profile): `./scripts/sync-config.sh`
+- Tauri-profile agents (reviewer, maintainer, test-writer-\*) require `.claude/kit-profile` to contain `tauri`
 
 **Agent gives wrong output?**
 

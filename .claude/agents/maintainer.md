@@ -1,7 +1,7 @@
 ---
 name: maintainer
 description: Project maintainer reviewer for Tauri 2 / React 19 / Rust projects. Reviews GitHub Actions workflows and config files (tauri.conf.json, capabilities/*.json, Cargo.toml, package.json, justfile). Checks CI/local consistency of scripts and hooks (not internal quality — use script-reviewer for that). Delegates dependency audit to /dep-audit before releases. Use when any workflow, config, or capability file is modified, or before cutting a release.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write
 model: claude-sonnet-4-6
 ---
 
@@ -287,3 +287,40 @@ If a file has no issues, write `✅ No issues found.`
 
 Then output the **Cross-file consistency** section, then the **CI Improvement Opportunities** section, then:
 `Review complete: N critical, N warnings, N suggestions across N files.`
+
+---
+
+## Save report
+
+After outputting the report to the conversation, save a **compact summary** to disk — not the full report.
+
+Compute the next available filename:
+
+```bash
+mkdir -p tmp
+DATE=$(date +%Y-%m-%d)
+i=1
+while [ -f "tmp/maintainer-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
+echo "tmp/maintainer-${DATE}-$(printf '%02d' $i).md"
+```
+
+Compose the compact summary in this format:
+
+```
+## maintainer — {date}-{N}
+
+{summary line}
+
+### 🔴 Critical
+- {file}:{line} — {issue}
+
+### 🟡 Warning
+- {file}:{line} — {issue}
+
+### 🔵 Suggestion
+- {file}:{line} — {issue}
+```
+
+Omit any section that has no findings. Use the Write tool to save the compact summary to that path.
+
+Tell the user: `Report saved to {path}`

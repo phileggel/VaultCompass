@@ -89,7 +89,7 @@ At the end, output a one-line summary:
 
 ## Save report
 
-After outputting the report to the conversation, save it to disk.
+After outputting the report to the conversation, save a **compact summary** to disk — not the full report.
 
 Compute the next available filename:
 
@@ -101,6 +101,23 @@ while [ -f "tmp/reviewer-backend-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)
 echo "tmp/reviewer-backend-${DATE}-$(printf '%02d' $i).md"
 ```
 
-Use the Write tool to save the full report (same content as the conversation output) to that path.
+Compose the compact summary in this format:
+
+```
+## reviewer-backend — {date}-{N}
+
+{summary line}
+
+### 🔴 Critical
+- {file}:{line} — {issue}
+
+### 🟡 Warning
+- {file}:{line} — {issue}
+
+### 🔵 Suggestion
+- {file}:{line} — {issue}
+```
+
+Omit any section that has no findings. Use the Write tool to save the compact summary to that path.
 
 Tell the user: `Report saved to {path}`

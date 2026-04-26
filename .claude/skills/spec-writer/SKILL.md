@@ -69,10 +69,8 @@ This step guarantees trigram uniqueness across all specs in the project.
 
 Only if the user explicitly asked to derive the spec from existing code (e.g., "retro-engineering", "document what already exists"):
 
-- Grep for related entities in `src-tauri/src/context/`
-- Grep for related frontend components in `src/features/`
-- Check `src-tauri/src/core/specta_builder.rs` for existing commands in the domain
-- Look for existing i18n keys in `src/i18n/locales/` for the domain (inspect whatever locale directories are present)
+- Read `ARCHITECTURE.md` to discover backend and frontend module paths, then Grep for related entities in the backend module and frontend feature directory
+- Look for existing i18n keys in the project's i18n directory for the domain (inspect whatever locale directories are present)
 
 In all other cases, skip this step. The spec must express business intent, not describe current implementation.
 
@@ -270,7 +268,7 @@ Then ask: **"Validate, refine, or write the ADR?"**
 Next steps after validation:
 
 1. Run `spec-reviewer` agent to quality-check the spec
-2. Run `/contract` skill to derive the IPC contract
+2. Run `/contract` skill to derive the domain contract
 3. Run `contract-reviewer` agent to validate the contract
 4. Run `feature-planner` agent to generate the implementation plan
 

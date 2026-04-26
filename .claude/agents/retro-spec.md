@@ -1,6 +1,6 @@
 ---
 name: retro-spec
-description: Reverse-engineering agent that infers a spec document from existing code. Reads a target domain in src-tauri/src/context/{domain}/ and src/features/{domain}/, extracts entities, state transitions, and business rules, and produces docs/spec/{feature}.md with TRIGRAM-NNN rules annotated as retro-inferred for mandatory human review. Use when onboarding an existing feature to the kit workflow.
+description: Reverse-engineering agent that infers a spec document from existing code. Discovers backend and frontend module paths from ARCHITECTURE.md (falls back to common conventions), extracts entities, state transitions, and business rules, and produces docs/spec/{feature}.md with TRIGRAM-NNN rules annotated as retro-inferred for mandatory human review. Use when onboarding an existing feature to the kit workflow.
 tools: Read, Grep, Glob, Bash, Write
 model: claude-opus-4-6
 ---
@@ -21,10 +21,12 @@ The user provides a domain name (e.g., `asset`, `payment`, `refund`). If not pro
 
 ### Step 1 — Discover the Domain
 
+Read `ARCHITECTURE.md` to discover the backend and frontend module paths. If absent, fall back to common conventions (`src-tauri/src/context/` for backend, `src/features/` for frontend) and note the assumption.
+
 Locate existing code for the domain:
 
-- **Backend**: `src-tauri/src/context/{domain}/` — look for `domain.rs`, `service.rs`, `repository.rs`, `api.rs`
-- **Frontend**: `src/features/{domain}/` — look for `gateway.ts`, hooks, components, i18n files
+- **Backend**: backend module directory for `{domain}` — look for `domain.rs`, `service.rs`, `repository.rs`, `api.rs`
+- **Frontend**: frontend module directory for `{domain}` — look for `gateway.ts`, hooks, components, i18n files
 
 If neither path exists, report it and stop — there is nothing to retro-spec.
 

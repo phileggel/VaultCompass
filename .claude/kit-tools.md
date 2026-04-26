@@ -4,32 +4,38 @@ Thematic index of all agents, skills, scripts, git hooks, and justfile recipes
 provided by **tauri-claude-kit**. Use this file to discover what is available
 without reading each agent definition individually.
 
-Each item lists its **trigger** (when to invoke it) and a one-line description.
+---
+
+## Profiles
+
+Declare your project's stack in `.claude/kit-profile` (plain text, one line):
+
+```
+tauri
+```
+
+Absent file = generic agents only — not an error. Python CLIs, Lua mods, and other stacks
+use the generic layer and manage quality agents locally.
+
+| Profile | Agents | Scripts              | Justfile   | Status         |
+| ------- | ------ | -------------------- | ---------- | -------------- |
+| `tauri` | 7      | check.py, release.py | tauri.just | ✅ complete    |
+| `web`   | 7      | check.py, release.py | web.just   | 🚧 planned     |
+| (none)  | —      | —                    | —          | ✅ first-class |
 
 ---
 
-## Code Review Agents
+## Generic Agents (always synced)
 
-| Agent               | Trigger                                  | Description                                                                                                                                                                                           |
-| ------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `reviewer`          | Any `.rs`, `.ts`, or `.tsx` modified     | DDD architecture: bounded context isolation, gateway pattern, factory methods, data flow direction, dead code, English-only                                                                           |
-| `reviewer-backend`  | Any `.rs` modified                       | Rust quality: anyhow error handling, no `unwrap()` in production, Clippy, trait-based repositories, async correctness, inline tests                                                                   |
-| `reviewer-frontend` | Any `.ts` / `.tsx` modified              | React/TS quality + UX/M3: gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, M3 design tokens, UX completeness (empty/loading/error states), accessibility |
-| `reviewer-sql`      | Any `migrations/` file modified or added | SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, SQLite type affinity, primary key convention, NOT NULL                                                                    |
+### Spec & Planning Agents
 
----
-
-## Spec & Planning Agents
-
-| Agent                  | Trigger                                      | Description                                                                                                                                    |
-| ---------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `spec-reviewer`        | After spec-writer, before /contract          | Quality gate on a spec doc: rule atomicity, scope, DDD alignment, UX completeness, contractability, conflicts                                  |
-| `contract-reviewer`    | After /contract, before feature-planner      | Quality gate on a domain contract: coverage vs spec, traceability, error exhaustiveness, type correctness                                      |
-| `retro-spec`           | Onboarding an existing feature to the kit    | Infers TRIGRAM-NNN rules from existing code and writes a first-pass `docs/spec/{domain}.md` with `retro-inferred` annotations for human review |
-| `feature-planner`      | After contract-reviewer approves             | Translates spec into `docs/plan/{feature}-plan.md` with DDD layer breakdown, rule-to-task mapping, Workflow TaskList                           |
-| `test-writer-backend`  | After contract-reviewer, before backend impl | Writes all failing Rust test stubs from the domain contract; confirms red via cargo test                                                       |
-| `test-writer-frontend` | After backend commit, before frontend impl   | Writes all failing Vitest stubs from the domain contract; reads fresh bindings.ts; confirms red via vitest                                     |
-| `spec-checker`         | After implementation, before final commit    | Verifies every TRIGRAM-NNN rule is implemented and tested; checks all contract commands are covered in backend, frontend, and tests            |
+| Agent               | Trigger                                   | Description                                                                                                                                    |
+| ------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spec-reviewer`     | After spec-writer, before /contract       | Quality gate on a spec doc: rule atomicity, scope, DDD alignment, UX completeness, contractability, conflicts                                  |
+| `contract-reviewer` | After /contract, before feature-planner   | Quality gate on a domain contract: coverage vs spec, traceability, error exhaustiveness, type correctness                                      |
+| `retro-spec`        | Onboarding an existing feature to the kit | Infers TRIGRAM-NNN rules from existing code and writes a first-pass `docs/spec/{domain}.md` with `retro-inferred` annotations for human review |
+| `feature-planner`   | After contract-reviewer approves          | Translates spec into `docs/plan/{feature}-plan.md` with DDD layer breakdown, rule-to-task mapping, Workflow TaskList                           |
+| `spec-checker`      | After implementation, before final commit | Verifies every TRIGRAM-NNN rule is implemented and tested; checks all contract commands are covered in backend, frontend, and tests            |
 
 > **Resuming after interruption or compaction:** The plan is always saved to `docs/plan/{feature}-plan.md`.
 > After any interruption, ground the agent explicitly:
@@ -40,16 +46,29 @@ Each item lists its **trigger** (when to invoke it) and a one-line description.
 >
 > Never say "continue" alone — the agent will re-plan from scratch instead of resuming.
 
+### Quality & Process Agents
+
+| Agent                | Trigger                                                        | Description                                                                                                      |
+| -------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `i18n-checker`       | Any `.ts` / `.tsx` or translation JSON modified                | Hardcoded strings, missing/unused translation keys, cross-locale mismatches                                      |
+| `workflow-validator` | Before committing a feature implementation                     | Reads `docs/plan/*-plan.md` Workflow TaskList; produces ✅/❌ table; blocks commit if required steps are missing |
+| `script-reviewer`    | Any `.sh`, `.py` (in `scripts/`) or `.githooks/` file modified | Script quality: `set -euo pipefail`, shebang, quoting, portability, security                                     |
+
 ---
 
-## Quality & Process Agents
+## Tauri Profile Agents (`tauri` profile only)
 
-| Agent                | Trigger                                                                   | Description                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `i18n-checker`       | Any `.ts` / `.tsx` or translation JSON modified                           | Hardcoded strings, missing/unused translation keys, cross-locale mismatches                                      |
-| `workflow-validator` | Before committing a feature implementation                                | Reads `docs/plan/*-plan.md` Workflow TaskList; produces ✅/❌ table; blocks commit if required steps are missing |
-| `script-reviewer`    | Any `.sh`, `.py` (in `scripts/`) or `.githooks/` file modified            | Script quality: `set -euo pipefail`, shebang, quoting, portability, security                                     |
-| `maintainer`         | Any workflow, config, or `capabilities/*.json` modified; before a release | CI/config/capability correctness, security, consistency; delegates dependency audit to `/dep-audit`              |
+### Code Review Agents
+
+| Agent                  | Trigger                                                               | Description                                                                                                                                                                                           | Status      |
+| ---------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `reviewer`             | Any `.rs`, `.ts`, or `.tsx` modified                                  | DDD architecture: bounded context isolation, gateway pattern, factory methods, data flow direction, dead code, English-only                                                                           | ✅ complete |
+| `reviewer-backend`     | Any `.rs` modified                                                    | Rust quality: anyhow error handling, no `unwrap()` in production, Clippy, trait-based repositories, async correctness, inline tests                                                                   | ✅ complete |
+| `reviewer-frontend`    | Any `.ts` / `.tsx` modified                                           | React/TS quality + UX/M3: gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, M3 design tokens, UX completeness (empty/loading/error states), accessibility | ✅ complete |
+| `reviewer-sql`         | Any `migrations/` file modified or added                              | SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, SQLite type affinity, primary key convention, NOT NULL                                                                    | ✅ complete |
+| `test-writer-backend`  | After contract-reviewer, before backend impl                          | Writes all failing Rust test stubs from the domain contract; confirms red via cargo test                                                                                                              | ✅ complete |
+| `test-writer-frontend` | After backend commit, before frontend impl                            | Writes all failing Vitest stubs from the domain contract; reads fresh bindings.ts; confirms red via vitest                                                                                            | ✅ complete |
+| `maintainer`           | Any workflow, config, or capabilities file modified; before a release | CI/config/capability correctness, security, consistency; delegates dependency audit to `/dep-audit`                                                                                                   | ✅ complete |
 
 ---
 
@@ -78,7 +97,7 @@ Activate with: `git config core.hooksPath .githooks`
 
 ---
 
-## Scripts
+## Scripts (`tauri` profile)
 
 | Script            | Command                           | Description                                                     |
 | ----------------- | --------------------------------- | --------------------------------------------------------------- |
@@ -88,18 +107,25 @@ Activate with: `git config core.hooksPath .githooks`
 
 ---
 
-## Justfile Recipes (`common.just`)
+## Justfile Recipes
+
+### Generic recipes (`common.just`)
+
+| Recipe           | Command               | Description                                                      |
+| ---------------- | --------------------- | ---------------------------------------------------------------- |
+| `check`          | `just check`          | Fast quality check — lint + format only                          |
+| `check-full`     | `just check-full`     | Full quality check — tests + build + lint                        |
+| `format`         | `just format`         | Auto-fix formatting: `cargo fmt`, `cargo clippy --fix`, frontend |
+| `release`        | `just release`        | Interactive release manager                                      |
+| `sync-kit`       | `just sync-kit`       | Sync this kit into the project (latest release tag)              |
+| `clean-branches` | `just clean-branches` | **Destructive** — removes stale remote-tracking branches         |
+| `stat`           | `just stat`           | Line count stats via `cloc`                                      |
+
+### Tauri profile recipes (`tauri.just`)
 
 | Recipe           | Command               | Description                                                                                          |
 | ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `check`          | `just check`          | Fast quality check — lint + format only                                                              |
-| `check-full`     | `just check-full`     | Full quality check — tests + build + lint                                                            |
-| `format`         | `just format`         | Auto-fix formatting: `cargo fmt`, `cargo clippy --fix`, frontend formatters                          |
 | `migrate`        | `just migrate`        | Run pending SQLx database migrations                                                                 |
 | `generate-types` | `just generate-types` | Regenerate Specta TypeScript bindings after adding or changing Tauri commands (project-configurable) |
 | `prepare-sqlx`   | `just prepare-sqlx`   | Regenerate SQLx offline query cache after schema or query changes                                    |
-| `release`        | `just release`        | Interactive release manager                                                                          |
-| `sync-kit`       | `just sync-kit`       | Sync this kit into the project (latest release tag)                                                  |
 | `clean-db`       | `just clean-db`       | **Destructive** — deletes local database and recreates schema                                        |
-| `clean-branches` | `just clean-branches` | **Destructive** — removes stale remote-tracking branches                                             |
-| `stat`           | `just stat`           | Line count stats via `cloc`                                                                          |
