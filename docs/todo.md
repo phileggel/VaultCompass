@@ -45,6 +45,8 @@ Introduce a domain error enum (e.g. `AssetError`, `TransactionError`) so tests c
 
 ## (app) — Add proper application icon
 
-## (frontend) — Save current view between sessions; start on the accounts page by default
+## ~~(frontend) — Save current view between sessions; start on the accounts page by default~~ ✅ resolved
+
+`lastPath.ts` persists the top-level nav section (`/accounts`, `/assets`, `/categories`) to `localStorage`. `AppShell` saves on every navigation; `indexRoute.beforeLoad` restores on startup. Default is `/accounts`.
 
 ## (backend/frontend) — Add new financial asset metadata directly from the web

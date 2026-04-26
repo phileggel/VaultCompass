@@ -11,6 +11,7 @@ import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
 import { DesignSystemPage } from "@/features/design-system";
 import { AddTransactionPage, TransactionListPage } from "@/features/transactions";
+import { getLastPath } from "@/lib/lastPath";
 import { AppShell } from "./AppShell";
 
 const rootRoute = createRootRoute({ component: AppShell });
@@ -19,10 +20,11 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({
-      to: "/assets",
-      search: { createNew: undefined, returnPath: undefined },
-    });
+    const path = getLastPath();
+    if (path === "/assets") {
+      throw redirect({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
+    }
+    throw redirect({ to: path });
   },
 });
 
