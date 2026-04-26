@@ -1,5 +1,6 @@
 import {
   type Account,
+  type AccountCommandError,
   type CreateAccountDTO,
   commands,
   type Result,
@@ -11,31 +12,19 @@ import {
  * Centralizes all Tauri command calls for the Account feature.
  */
 export const accountGateway = {
-  /**
-   * Retrieves all accounts.
-   */
-  async getAccounts(): Promise<Result<Account[], string>> {
+  async getAccounts(): Promise<Result<Account[], AccountCommandError>> {
     return await commands.getAccounts();
   },
 
-  /**
-   * Adds a new account.
-   */
-  async addAccount(dto: CreateAccountDTO): Promise<Result<Account, string>> {
+  async addAccount(dto: CreateAccountDTO): Promise<Result<Account, AccountCommandError>> {
     return await commands.addAccount(dto);
   },
 
-  /**
-   * Updates an existing account.
-   */
-  async updateAccount(dto: UpdateAccountDTO): Promise<Result<Account, string>> {
+  async updateAccount(dto: UpdateAccountDTO): Promise<Result<Account, AccountCommandError>> {
     return await commands.updateAccount(dto);
   },
 
-  /**
-   * Deletes an account.
-   */
-  async deleteAccount(id: string): Promise<Result<null, string>> {
+  async deleteAccount(id: string): Promise<Result<null, AccountCommandError>> {
     return await commands.deleteAccount(id);
   },
 };

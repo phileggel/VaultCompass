@@ -23,7 +23,7 @@ export function useAssets() {
           showSnackbar(t("asset.success_created"), "success");
           return { data: res.data, error: null };
         }
-        return { data: null, error: res.error };
+        return { data: null, error: `error.${res.error.code}` };
       } catch (e) {
         logger.error("Failed to add asset", { error: e });
         return { data: null, error: String(e) };
@@ -41,7 +41,7 @@ export function useAssets() {
           showSnackbar(t("asset.success_updated"), "success");
           return { data: res.data, error: null };
         }
-        return { data: null, error: res.error };
+        return { data: null, error: `error.${res.error.code}` };
       } catch (e) {
         logger.error("Failed to update asset", { error: e });
         return { data: null, error: String(e) };
@@ -59,7 +59,7 @@ export function useAssets() {
           showSnackbar(t("asset.success_archived"), "success");
           return { error: null };
         }
-        return { error: res.error };
+        return { error: `error.${res.error.code}` };
       } catch (e) {
         logger.error("Failed to archive asset", { error: e });
         return { error: String(e) };
@@ -77,7 +77,7 @@ export function useAssets() {
           showSnackbar(t("asset.success_unarchived"), "success");
           return { error: null };
         }
-        return { error: res.error };
+        return { error: `error.${res.error.code}` };
       } catch (e) {
         logger.error("Failed to unarchive asset", { error: e });
         return { error: String(e) };
@@ -95,7 +95,7 @@ export function useAssets() {
           showSnackbar(t("asset.success_deleted"), "info");
           return { error: null };
         }
-        return { error: res.error };
+        return { error: `error.${res.error.code}` };
       } catch (e) {
         logger.error("Failed to delete asset", { error: e });
         return { error: String(e) };

@@ -38,20 +38,18 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
   const handleDeleteConfirm = async () => {
     if (!deleteData) return;
     setIsDeleting(true);
-    try {
-      await deleteCategory(deleteData.id);
-      setDeleteData(null);
-      setDeleteError(null);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("system_protected")) {
+    const result = await deleteCategory(deleteData.id);
+    if (result.error) {
+      if (result.error === "error.SystemProtected") {
         setDeleteError(t("category.error_system_protected"));
       } else {
         setDeleteError(t("category.error_generic"));
       }
-    } finally {
-      setIsDeleting(false);
+    } else {
+      setDeleteData(null);
+      setDeleteError(null);
     }
+    setIsDeleting(false);
   };
 
   if (loadError) {

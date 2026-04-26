@@ -1,6 +1,7 @@
 use super::domain::{
-    Asset, AssetCategory, AssetCategoryRepository, AssetPrice, AssetPriceRepository,
-    AssetRepository, SYSTEM_CATEGORY_ID,
+    Asset, AssetCategory, AssetCategoryRepository, AssetDomainError, AssetPrice,
+    AssetPriceDomainError, AssetPriceRepository, AssetRepository, CategoryDomainError,
+    SYSTEM_CATEGORY_ID,
 };
 use crate::{
     context::asset::{CreateAssetDTO, UpdateAssetDTO},
@@ -60,7 +61,7 @@ impl AssetService {
         let category = self
             .get_category_by_id(&dto.category_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Category not found: {}", dto.category_id))?;
+            .ok_or_else(|| CategoryDomainError::NotFound(dto.category_id.clone()))?;
 
         let asset = Asset::new(
             dto.name,
@@ -87,16 +88,16 @@ impl AssetService {
             .asset_repo
             .get_by_id(&dto.asset_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Asset not found: {}", dto.asset_id))?;
+            .ok_or_else(|| AssetDomainError::NotFound(dto.asset_id.clone()))?;
 
         if existing.is_archived {
-            anyhow::bail!("Cannot edit an archived asset");
+            return Err(AssetDomainError::Archived.into());
         }
 
         let category = self
             .get_category_by_id(&dto.category_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Category not found: {}", dto.category_id))?;
+            .ok_or_else(|| CategoryDomainError::NotFound(dto.category_id.clone()))?;
 
         let asset = Asset::with_id(
             dto.asset_id,
@@ -164,7 +165,7 @@ impl AssetService {
     /// Creates a category and publishes a CategoryUpdated event.
     pub async fn create_category(&self, label: &str) -> Result<AssetCategory> {
         if self.category_repo.find_by_name(label).await?.is_some() {
-            anyhow::bail!("error.category.duplicate_name");
+            return Err(CategoryDomainError::DuplicateName.into());
         }
         let category = AssetCategory::new(label.to_string())?;
         let category = self.category_repo.create(category).await?;
@@ -177,11 +178,11 @@ impl AssetService {
     /// Updates a category and publishes a CategoryUpdated event.
     pub async fn update_category(&self, id: &str, label: &str) -> Result<AssetCategory> {
         if id == SYSTEM_CATEGORY_ID {
-            anyhow::bail!("error.category.system_readonly");
+            return Err(CategoryDomainError::SystemReadonly.into());
         }
         if let Some(existing) = self.category_repo.find_by_name(label).await? {
             if existing.id != id {
-                anyhow::bail!("error.category.duplicate_name");
+                return Err(CategoryDomainError::DuplicateName.into());
             }
         }
         let category = AssetCategory::update_from(id.to_string(), label.to_string())?;
@@ -195,7 +196,7 @@ impl AssetService {
     /// Reassigns assets to default category, then deletes the category.
     pub async fn delete_category(&self, category_id: &str) -> Result<()> {
         if category_id == SYSTEM_CATEGORY_ID {
-            anyhow::bail!("error.category.system_protected");
+            return Err(CategoryDomainError::SystemProtected.into());
         }
         self.category_repo
             .reassign_assets_and_delete(category_id, SYSTEM_CATEGORY_ID)
@@ -214,11 +215,11 @@ impl AssetService {
     pub async fn record_price(&self, asset_id: &str, date: &str, price_f64: f64) -> Result<()> {
         // MKT-043 — reject unknown asset
         if self.asset_repo.get_by_id(asset_id).await?.is_none() {
-            anyhow::bail!("Asset not found: {asset_id}");
+            return Err(AssetDomainError::NotFound(asset_id.to_string()).into());
         }
         // MKT-024 — convert f64 decimal to i64 micros at the IPC boundary
         if !price_f64.is_finite() {
-            anyhow::bail!("Price must be a finite number");
+            return Err(AssetPriceDomainError::NonFinite.into());
         }
         let price_micros = (price_f64 * 1_000_000.0).round() as i64;
         // MKT-021, MKT-022 — validate via domain entity factory
@@ -294,7 +295,10 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            err.to_string().contains("name cannot be empty"),
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::NameEmpty)
+            ),
             "got: {err}"
         );
     }
@@ -311,7 +315,10 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            err.to_string().contains("reference cannot be empty"),
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::ReferenceEmpty)
+            ),
             "got: {err}"
         );
     }
@@ -327,7 +334,13 @@ mod tests {
             })
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("Invalid currency"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::InvalidCurrency(_))
+            ),
+            "got: {err}"
+        );
     }
 
     // R1 — risk level out of range is rejected
@@ -342,8 +355,10 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            err.to_string()
-                .contains("Risk level must be between 1 and 5"),
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::InvalidRiskLevel(_))
+            ),
             "got: {err}"
         );
     }
@@ -395,7 +410,10 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            err.to_string().contains("Cannot edit an archived asset"),
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::Archived)
+            ),
             "got: {err}"
         );
     }
@@ -465,7 +483,13 @@ mod tests {
         let svc = setup_service().await;
         svc.create_category("Bonds").await.unwrap();
         let err = svc.create_category("Bonds").await.unwrap_err();
-        assert!(err.to_string().contains("duplicate_name"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<CategoryDomainError>(),
+                Some(CategoryDomainError::DuplicateName)
+            ),
+            "got: {err}"
+        );
     }
 
     // R1 — duplicate name, different case
@@ -474,7 +498,13 @@ mod tests {
         let svc = setup_service().await;
         svc.create_category("Bonds").await.unwrap();
         let err = svc.create_category("bonds").await.unwrap_err();
-        assert!(err.to_string().contains("duplicate_name"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<CategoryDomainError>(),
+                Some(CategoryDomainError::DuplicateName)
+            ),
+            "got: {err}"
+        );
     }
 
     // R2 — system category cannot be renamed
@@ -485,7 +515,13 @@ mod tests {
             .update_category(SYSTEM_CATEGORY_ID, "Renamed")
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("system_readonly"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<CategoryDomainError>(),
+                Some(CategoryDomainError::SystemReadonly)
+            ),
+            "got: {err}"
+        );
     }
 
     // R1 — update with name already taken by another category
@@ -495,7 +531,13 @@ mod tests {
         svc.create_category("Bonds").await.unwrap();
         let cat2 = svc.create_category("Equities").await.unwrap();
         let err = svc.update_category(&cat2.id, "bonds").await.unwrap_err();
-        assert!(err.to_string().contains("duplicate_name"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<CategoryDomainError>(),
+                Some(CategoryDomainError::DuplicateName)
+            ),
+            "got: {err}"
+        );
     }
 
     // R2 — system category cannot be deleted
@@ -503,7 +545,13 @@ mod tests {
     async fn delete_category_rejects_system_category() {
         let svc = setup_service().await;
         let err = svc.delete_category(SYSTEM_CATEGORY_ID).await.unwrap_err();
-        assert!(err.to_string().contains("system_protected"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<CategoryDomainError>(),
+                Some(CategoryDomainError::SystemProtected)
+            ),
+            "got: {err}"
+        );
     }
 
     // R3 — deleting a category reassigns its assets to the default category
@@ -532,7 +580,13 @@ mod tests {
             .record_price("nonexistent-id", "2026-01-01", 100.0)
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("Asset not found"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::NotFound(_))
+            ),
+            "got: {err}"
+        );
     }
 
     // MKT-021 — record_price rejects price <= 0
@@ -544,7 +598,13 @@ mod tests {
             .record_price(&asset.id, "2026-01-01", 0.0)
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("strictly positive"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NotPositive)
+            ),
+            "got: {err}"
+        );
     }
 
     // MKT-022 — record_price rejects a future date
@@ -556,7 +616,13 @@ mod tests {
             .record_price(&asset.id, "2099-12-31", 100.0)
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("future"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::DateInFuture)
+            ),
+            "got: {err}"
+        );
     }
 
     // MKT-025, MKT-026 — record_price upserts the price and publishes AssetPriceUpdated on success

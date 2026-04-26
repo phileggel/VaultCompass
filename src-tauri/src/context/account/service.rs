@@ -1,4 +1,6 @@
-use super::domain::{Account, AccountRepository, Holding, HoldingRepository, UpdateFrequency};
+use super::domain::{
+    Account, AccountDomainError, AccountRepository, Holding, HoldingRepository, UpdateFrequency,
+};
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use anyhow::Result;
 use std::sync::Arc;
@@ -59,7 +61,7 @@ impl AccountService {
             .await?
             .is_some()
         {
-            anyhow::bail!("An account with this name already exists");
+            return Err(AccountDomainError::NameAlreadyExists.into());
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "creating account");
         let created = self.account_repo.create(account).await?;
@@ -82,7 +84,7 @@ impl AccountService {
         let account = Account::with_id(id, name, currency, update_frequency)?;
         if let Some(existing) = self.account_repo.find_by_name(&account.name).await? {
             if existing.id != account.id {
-                anyhow::bail!("An account with this name already exists");
+                return Err(AccountDomainError::NameAlreadyExists.into());
             }
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "updating account");
@@ -152,7 +154,13 @@ mod tests {
             )
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("already exists"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AccountDomainError>(),
+                Some(AccountDomainError::NameAlreadyExists)
+            ),
+            "got: {err}"
+        );
     }
 
     // R3 — updating an account to a name used by another account is rejected
@@ -183,7 +191,13 @@ mod tests {
             )
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("already exists"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AccountDomainError>(),
+                Some(AccountDomainError::NameAlreadyExists)
+            ),
+            "got: {err}"
+        );
     }
 
     // R3 — updating an account with its own name (same case) must succeed

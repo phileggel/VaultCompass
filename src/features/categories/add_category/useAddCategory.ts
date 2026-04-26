@@ -23,21 +23,19 @@ export function useAddCategory({ onSubmitSuccess }: UseAddCategoryProps = {}) {
     if (!name.trim()) return;
 
     setIsSubmitting(true);
-    try {
-      await addCategory(name.trim());
-      setName("");
-      setError(null);
-      onSubmitSuccess?.();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("duplicate_name")) {
+    const result = await addCategory(name.trim());
+    if (result.error) {
+      if (result.error === "error.DuplicateName") {
         setError(t("category.error_duplicate"));
       } else {
         setError(t("category.error_generic"));
       }
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      setName("");
+      setError(null);
+      onSubmitSuccess?.();
     }
+    setIsSubmitting(false);
   };
 
   return { name, error, isSubmitting, handleChange, handleSubmit };

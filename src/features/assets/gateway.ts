@@ -1,7 +1,10 @@
 import {
+  type ArchiveAssetCommandError,
   type Asset,
+  type AssetCommandError,
   type CreateAssetDTO,
   commands,
+  type DeleteAssetCommandError,
   type Result,
   type UpdateAssetDTO,
 } from "../../bindings";
@@ -11,52 +14,31 @@ import {
  * Centralizes all Tauri command calls for the Asset feature.
  */
 export const assetGateway = {
-  /**
-   * Fetches all active (non-archived) assets.
-   */
-  async getAssets(): Promise<Result<Asset[], string>> {
+  async getAssets(): Promise<Result<Asset[], AssetCommandError>> {
     return await commands.getAssets();
   },
 
-  /**
-   * Fetches all assets including archived ones.
-   */
-  async getAssetsWithArchived(): Promise<Result<Asset[], string>> {
+  async getAssetsWithArchived(): Promise<Result<Asset[], AssetCommandError>> {
     return await commands.getAssetsWithArchived();
   },
 
-  /**
-   * Creates a new asset.
-   */
-  async createAsset(dto: CreateAssetDTO): Promise<Result<Asset, string>> {
+  async createAsset(dto: CreateAssetDTO): Promise<Result<Asset, AssetCommandError>> {
     return await commands.addAsset(dto);
   },
 
-  /**
-   * Updates an existing asset.
-   */
-  async updateAsset(dto: UpdateAssetDTO): Promise<Result<Asset, string>> {
+  async updateAsset(dto: UpdateAssetDTO): Promise<Result<Asset, AssetCommandError>> {
     return await commands.updateAsset(dto);
   },
 
-  /**
-   * Archives an asset (reversible — R6).
-   */
-  async archiveAsset(id: string): Promise<Result<null, string>> {
+  async archiveAsset(id: string): Promise<Result<null, ArchiveAssetCommandError>> {
     return await commands.archiveAsset(id);
   },
 
-  /**
-   * Unarchives an asset (R18).
-   */
-  async unarchiveAsset(id: string): Promise<Result<null, string>> {
+  async unarchiveAsset(id: string): Promise<Result<null, AssetCommandError>> {
     return await commands.unarchiveAsset(id);
   },
 
-  /**
-   * Deletes an asset by ID.
-   */
-  async deleteAsset(id: string): Promise<Result<null, string>> {
+  async deleteAsset(id: string): Promise<Result<null, DeleteAssetCommandError>> {
     return await commands.deleteAsset(id);
   },
 };

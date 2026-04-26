@@ -1,3 +1,4 @@
+use super::error::TransactionDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -191,39 +192,39 @@ impl Transaction {
     ) -> Result<()> {
         // TRX-020 — date must be parseable, not in the future, not before 1900-01-01
         let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
-            .map_err(|_| anyhow::anyhow!("Invalid date format — expected YYYY-MM-DD"))?;
+            .map_err(|_| TransactionDomainError::InvalidDate)?;
         let today = chrono::Local::now().date_naive();
         if parsed_date > today {
-            anyhow::bail!("Transaction date cannot be in the future");
+            return Err(TransactionDomainError::DateInFuture.into());
         }
         let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).unwrap_or(chrono::NaiveDate::MIN);
         if parsed_date < min_date {
-            anyhow::bail!("Transaction date cannot be before 1900-01-01");
+            return Err(TransactionDomainError::DateTooOld.into());
         }
 
         // TRX-020 — quantity must be strictly positive
         if quantity <= 0 {
-            anyhow::bail!("Quantity must be strictly positive");
+            return Err(TransactionDomainError::QuantityNotPositive.into());
         }
 
         // TRX-020 — unit_price must be >= 0
         if unit_price < 0 {
-            anyhow::bail!("Unit price cannot be negative");
+            return Err(TransactionDomainError::UnitPriceNegative.into());
         }
 
         // SEL-020 — fees must be zero or positive
         if fees < 0 {
-            anyhow::bail!("Fees cannot be negative");
+            return Err(TransactionDomainError::FeesNegative.into());
         }
 
         // TRX-020 — exchange_rate must be strictly positive
         if exchange_rate <= 0 {
-            anyhow::bail!("Exchange rate must be strictly positive");
+            return Err(TransactionDomainError::ExchangeRateNotPositive.into());
         }
 
         // TRX-020 — total_amount must be > 0
         if total_amount <= 0 {
-            anyhow::bail!("Total amount must be strictly positive");
+            return Err(TransactionDomainError::TotalAmountNotPositive.into());
         }
 
         Ok(())

@@ -1,5 +1,6 @@
 use crate::context::account::AccountService;
 use crate::context::asset::AssetService;
+use crate::use_cases::account_details::error::AccountDetailsError;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use specta::Type;
@@ -92,7 +93,7 @@ impl AccountDetailsUseCase {
             .account_service
             .get_by_id(account_id)
             .await?
-            .ok_or_else(|| anyhow!("Account not found: {account_id}"))?;
+            .ok_or(AccountDetailsError::AccountNotFound)?;
 
         // ACD-034 — total count before quantity filter
         let all_holdings = self
@@ -269,7 +270,13 @@ mod tests {
         let (account_svc, asset_svc) = setup(&pool).await;
         let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
         let err = uc.get_account_details("nonexistent-id").await.unwrap_err();
-        assert!(err.to_string().contains("Account not found"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AccountDetailsError>(),
+                Some(AccountDetailsError::AccountNotFound)
+            ),
+            "got: {err}"
+        );
     }
 
     // ACD-020 — holdings with quantity == 0 are excluded; ACD-034 — total_holding_count counts all

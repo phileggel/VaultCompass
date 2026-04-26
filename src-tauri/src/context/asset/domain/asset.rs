@@ -1,3 +1,5 @@
+use super::category::AssetCategory;
+use super::error::AssetDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -5,8 +7,6 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::str::FromStr;
 use uuid::Uuid;
-
-use super::category::AssetCategory;
 
 /// Represents the classification of an asset.
 
@@ -132,19 +132,16 @@ impl Asset {
 
     fn validate(name: &str, risk_level: u8, currency: &str, reference: &str) -> Result<()> {
         if name.trim().is_empty() {
-            anyhow::bail!("Asset name cannot be empty");
+            return Err(AssetDomainError::NameEmpty.into());
         }
         if reference.trim().is_empty() {
-            anyhow::bail!("Asset reference cannot be empty");
+            return Err(AssetDomainError::ReferenceEmpty.into());
         }
         if !(1..=5).contains(&risk_level) {
-            anyhow::bail!(
-                "Risk level must be between 1 and 5 (received: {})",
-                risk_level
-            );
+            return Err(AssetDomainError::InvalidRiskLevel(risk_level).into());
         }
         if Currency::from_str(currency).is_err() {
-            anyhow::bail!("Invalid currency code: {}", currency);
+            return Err(AssetDomainError::InvalidCurrency(currency.to_string()).into());
         }
         Ok(())
     }

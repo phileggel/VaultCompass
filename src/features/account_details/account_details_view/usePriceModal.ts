@@ -88,7 +88,7 @@ export function usePriceModal({
         onSubmitSuccess?.();
       } else {
         logger.error("[usePriceModal] recordAssetPrice failed", result.error);
-        setSubmitError(result.error);
+        setSubmitError(`error.${result.error.code}`);
       }
     },
     [isFormValid, holding.asset_id, date, price, showSnackbar, t, onSubmitSuccess],

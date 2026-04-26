@@ -8,16 +8,25 @@ export function useCategories() {
   const error = useAppStore((state) => state.categoriesError);
   const fetchCategories = useAppStore((state) => state.fetchCategories);
 
-  const addCategory = useCallback(async (label: string) => {
-    await categoryGateway.addCategory(label);
+  const addCategory = useCallback(async (label: string): Promise<{ error?: string }> => {
+    const result = await categoryGateway.addCategory(label);
+    if (result.status === "error") return { error: `error.${result.error.code}` };
+    return {};
   }, []);
 
-  const updateCategory = useCallback(async (id: string, label: string) => {
-    await categoryGateway.updateCategory(id, label);
-  }, []);
+  const updateCategory = useCallback(
+    async (id: string, label: string): Promise<{ error?: string }> => {
+      const result = await categoryGateway.updateCategory(id, label);
+      if (result.status === "error") return { error: `error.${result.error.code}` };
+      return {};
+    },
+    [],
+  );
 
-  const deleteCategory = useCallback(async (id: string) => {
-    await categoryGateway.deleteCategory(id);
+  const deleteCategory = useCallback(async (id: string): Promise<{ error?: string }> => {
+    const result = await categoryGateway.deleteCategory(id);
+    if (result.status === "error") return { error: `error.${result.error.code}` };
+    return {};
   }, []);
 
   return {

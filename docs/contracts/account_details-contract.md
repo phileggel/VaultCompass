@@ -3,11 +3,9 @@
 > Domain: `account_details`
 > Last updated by: `account-details` spec
 
-> **Error model note:** All Tauri commands currently return `Result<T, String>` — errors are
-> `anyhow::Error` converted via `.map_err(|e| e.to_string())`. The Errors column documents the
-> semantic content of those strings. When the structured error type refactor lands (see todo:
-> "Replace string-matching error assertions with structured error types"), error variants here
-> should be replaced with typed enum variants.
+> **Error model**: `get_account_details` returns `Result<AccountDetailsResponse, AccountDetailsCommandError>` —
+> error is serialized as `{ code: "AccountNotFound" | "Unknown" }` (`#[serde(tag = "code")]`).
+> `record_asset_price` returns `Result<(), AssetPriceCommandError>` — see asset-contract for variants.
 
 ---
 
@@ -15,7 +13,7 @@
 
 | Command               | Args                 | Return                   | Errors                                                                                                                                                             |
 | --------------------- | -------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `get_account_details` | `account_id: String` | `AccountDetailsResponse` | `String` — `"account not found"` (ACD-012); any DB or service failure (ACD-038); price lookup failures are silently swallowed — field degrades to `None` (MKT-031) |
+| `get_account_details` | `account_id: String` | `AccountDetailsResponse` | `AccountNotFound (ACD-012)`, `Unknown` (DB/service failure, ACD-038); price lookup failures are silently swallowed — field degrades to `None` (MKT-031) |
 
 ---
 
@@ -75,3 +73,4 @@ struct AccountDetailsResponse {
 
 - 2026-04-25 — Added by `account-details` spec: `get_account_details`
 - 2026-04-26 — Extended by `market-price` spec: HoldingDetail +5 fields, AccountDetailsResponse +total_unrealized_pnl, AssetPriceUpdated event subscription
+- 2026-04-26 — Typed errors: commands return `AccountDetailsCommandError` / `AssetPriceCommandError` instead of `String`

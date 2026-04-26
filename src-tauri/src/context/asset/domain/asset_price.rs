@@ -1,4 +1,5 @@
-use anyhow::{bail, Result};
+use super::error::AssetPriceDomainError;
+use anyhow::Result;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 
@@ -19,13 +20,13 @@ impl AssetPrice {
     /// date is well-formed ISO 8601 and not in the future (MKT-022).
     pub fn new(asset_id: String, date: String, price: i64) -> Result<Self> {
         if price <= 0 {
-            bail!("Price must be strictly positive");
+            return Err(AssetPriceDomainError::NotPositive.into());
         }
         let parsed = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
             .map_err(|_| anyhow::anyhow!("Invalid date format — expected YYYY-MM-DD"))?;
         let today = chrono::Local::now().date_naive();
         if parsed > today {
-            bail!("Date cannot be in the future");
+            return Err(AssetPriceDomainError::DateInFuture.into());
         }
         Ok(Self {
             asset_id,
@@ -61,9 +62,21 @@ mod tests {
     #[test]
     fn new_rejects_non_positive_price() {
         let err = AssetPrice::new("a".to_string(), "2026-01-01".to_string(), 0).unwrap_err();
-        assert!(err.to_string().contains("strictly positive"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NotPositive)
+            ),
+            "got: {err}"
+        );
         let err = AssetPrice::new("a".to_string(), "2026-01-01".to_string(), -1).unwrap_err();
-        assert!(err.to_string().contains("strictly positive"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NotPositive)
+            ),
+            "got: {err}"
+        );
     }
 
     // MKT-022 — new() rejects a malformed date string
@@ -82,7 +95,13 @@ mod tests {
     fn new_rejects_future_date() {
         let err =
             AssetPrice::new("a".to_string(), "2099-12-31".to_string(), 1_000_000).unwrap_err();
-        assert!(err.to_string().contains("future"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::DateInFuture)
+            ),
+            "got: {err}"
+        );
     }
 
     // MKT-021/022 — new() accepts a valid past price and date

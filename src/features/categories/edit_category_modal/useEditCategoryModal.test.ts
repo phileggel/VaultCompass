@@ -29,7 +29,7 @@ describe("useEditCategoryModal", () => {
   });
 
   it("calls updateCategory and closes on success", async () => {
-    mockUpdateCategory.mockResolvedValue(undefined);
+    mockUpdateCategory.mockResolvedValue({});
     const onClose = vi.fn();
     const { result } = renderHook(() => useEditCategoryModal({ category: fakeCategory, onClose }));
 
@@ -48,8 +48,8 @@ describe("useEditCategoryModal", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("sets error_duplicate when updateCategory rejects with duplicate_name", async () => {
-    mockUpdateCategory.mockRejectedValue(new Error("error.category.duplicate_name"));
+  it("sets error_duplicate when updateCategory returns DuplicateName error", async () => {
+    mockUpdateCategory.mockResolvedValue({ error: "error.DuplicateName" });
     const { result } = renderHook(() =>
       useEditCategoryModal({ category: fakeCategory, onClose: vi.fn() }),
     );
@@ -61,8 +61,8 @@ describe("useEditCategoryModal", () => {
     expect(result.current.error).toBe("category.error_duplicate");
   });
 
-  it("sets error_system_readonly when updateCategory rejects with system_readonly", async () => {
-    mockUpdateCategory.mockRejectedValue(new Error("error.category.system_readonly"));
+  it("sets error_system_readonly when updateCategory returns SystemReadonly error", async () => {
+    mockUpdateCategory.mockResolvedValue({ error: "error.SystemReadonly" });
     const { result } = renderHook(() =>
       useEditCategoryModal({ category: fakeCategory, onClose: vi.fn() }),
     );
@@ -75,7 +75,7 @@ describe("useEditCategoryModal", () => {
   });
 
   it("resets name and clears error when category prop changes", async () => {
-    mockUpdateCategory.mockRejectedValue(new Error("error.category.duplicate_name"));
+    mockUpdateCategory.mockResolvedValue({ error: "error.DuplicateName" });
     const onClose = vi.fn();
     const { result, rerender } = renderHook(
       ({ category }) => useEditCategoryModal({ category, onClose }),

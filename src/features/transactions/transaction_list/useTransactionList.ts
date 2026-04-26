@@ -56,7 +56,7 @@ export function useTransactionList() {
           setTransactions(res.data);
           return res.data;
         }
-        setTransactionError(res.error);
+        setTransactionError(`error.${res.error.code}`);
         setTransactions([]);
         return [];
       } catch (e) {

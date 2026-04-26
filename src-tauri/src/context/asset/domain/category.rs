@@ -1,3 +1,4 @@
+use super::error::CategoryDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -29,7 +30,7 @@ impl AssetCategory {
     /// Creates a new AssetCategory.
     pub fn new(label: String) -> Result<Self> {
         if label.trim().is_empty() {
-            anyhow::bail!("Category label cannot be empty");
+            return Err(CategoryDomainError::LabelEmpty.into());
         }
         Ok(Self {
             id: Uuid::new_v4().to_string(),
@@ -40,7 +41,7 @@ impl AssetCategory {
     /// Updates an existing AssetCategory.
     pub fn update_from(id: String, label: String) -> Result<Self> {
         if label.trim().is_empty() {
-            anyhow::bail!("Category label cannot be empty");
+            return Err(CategoryDomainError::LabelEmpty.into());
         }
         Ok(Self { id, name: label })
     }

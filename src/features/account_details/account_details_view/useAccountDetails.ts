@@ -35,7 +35,7 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
       setData(result.data);
     } else {
       logger.error("[useAccountDetails] fetch failed", result.error);
-      setError(result.error);
+      setError(`error.${result.error.code}`);
     }
     setIsLoading(false);
   }, [accountId]);

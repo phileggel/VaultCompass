@@ -200,7 +200,7 @@ describe("usePriceModal", () => {
 
   // MKT-029 — Modal stays open on error + inline error shown
   it("MKT-029 — sets inline error and does not call onSubmitSuccess on backend error", async () => {
-    mockRecordAssetPrice.mockResolvedValue({ status: "error", error: "PriceNotPositive" });
+    mockRecordAssetPrice.mockResolvedValue({ status: "error", error: { code: "NotPositive" } });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess }));
 
@@ -214,6 +214,6 @@ describe("usePriceModal", () => {
     });
 
     expect(onSubmitSuccess).not.toHaveBeenCalled();
-    expect(result.current.error).toBe("PriceNotPositive");
+    expect(result.current.error).toBe("error.NotPositive");
   });
 });

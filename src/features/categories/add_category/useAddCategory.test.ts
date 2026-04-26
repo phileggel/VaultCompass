@@ -28,7 +28,7 @@ describe("useAddCategory", () => {
   });
 
   it("calls addCategory and invokes onSubmitSuccess on success", async () => {
-    mockAddCategory.mockResolvedValue(undefined);
+    mockAddCategory.mockResolvedValue({});
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useAddCategory({ onSubmitSuccess }));
 
@@ -58,8 +58,8 @@ describe("useAddCategory", () => {
     expect(mockAddCategory).not.toHaveBeenCalled();
   });
 
-  it("sets error_duplicate when addCategory rejects with duplicate_name", async () => {
-    mockAddCategory.mockRejectedValue(new Error("error.category.duplicate_name"));
+  it("sets error_duplicate when addCategory returns DuplicateName error", async () => {
+    mockAddCategory.mockResolvedValue({ error: "error.DuplicateName" });
     const { result } = renderHook(() => useAddCategory());
 
     act(() => {
@@ -76,7 +76,7 @@ describe("useAddCategory", () => {
   });
 
   it("sets error_generic for unknown errors", async () => {
-    mockAddCategory.mockRejectedValue(new Error("something went wrong"));
+    mockAddCategory.mockResolvedValue({ error: "error.Unknown" });
     const { result } = renderHook(() => useAddCategory());
 
     act(() => {

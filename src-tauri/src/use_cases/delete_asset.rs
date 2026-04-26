@@ -1,7 +1,15 @@
 use crate::context::asset::AssetService;
 use crate::context::transaction::TransactionRepository;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::sync::Arc;
+
+/// Typed error for the DeleteAsset use case.
+#[derive(Debug, thiserror::Error)]
+pub enum DeleteAssetError {
+    /// At least one transaction references this asset; deletion would break history.
+    #[error("Cannot delete an asset with existing transactions")]
+    ExistingTransactions,
+}
 
 /// Guards and delegates asset hard-deletion across the asset and transaction bounded contexts.
 /// Blocks deletion if any transaction references the asset (preserves history integrity).
@@ -29,7 +37,7 @@ impl DeleteAssetUseCase {
             .has_transactions_for_asset(asset_id)
             .await?
         {
-            bail!("Cannot delete an asset with existing transactions");
+            return Err(DeleteAssetError::ExistingTransactions.into());
         }
         self.asset_service.delete_asset(asset_id).await
     }
@@ -109,7 +117,7 @@ mod tests {
 
     // delete blocked when transactions exist
     #[tokio::test]
-    async fn delete_rejected_when_transactions_exist() {
+    async fn test_delete_asset_rejected_when_transactions_exist() {
         let (svc, asset_id) = setup_asset_service().await;
         let uc = DeleteAssetUseCase::new(
             svc,
@@ -119,14 +127,17 @@ mod tests {
         );
         let err = uc.delete_asset(&asset_id).await.unwrap_err();
         assert!(
-            err.to_string().contains("existing transactions"),
+            matches!(
+                err.downcast_ref::<DeleteAssetError>(),
+                Some(DeleteAssetError::ExistingTransactions)
+            ),
             "got: {err}"
         );
     }
 
     // delete succeeds when no transactions exist
     #[tokio::test]
-    async fn delete_succeeds_when_no_transactions() {
+    async fn test_delete_asset_succeeds_when_no_transactions() {
         let (svc, asset_id) = setup_asset_service().await;
         let uc = DeleteAssetUseCase::new(
             svc,

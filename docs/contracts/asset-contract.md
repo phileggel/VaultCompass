@@ -3,11 +3,12 @@
 > Domain: `asset`
 > Last updated by: `market-price` spec
 
-> **Error model note:** All Tauri commands currently return `Result<T, String>` — errors are
-> `anyhow::Error` converted via `.map_err(|e| e.to_string())`. The Errors column documents the
-> semantic content of those strings. When the structured error type refactor lands (see todo:
-> "Replace string-matching error assertions with structured error types"), error variants here
-> should be replaced with typed enum variants.
+> **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`:
+> - Asset CRUD: `AssetCommandError` — `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel`, `InvalidCurrency`, `Archived`, `NotFound`, `CategoryNotFound`, `Unknown`
+> - Categories: `CategoryCommandError` — `LabelEmpty`, `DuplicateName`, `SystemReadonly`, `SystemProtected`, `Unknown`
+> - `record_asset_price`: `AssetPriceCommandError` — `NotPositive`, `NonFinite`, `DateInFuture`, `Unknown`
+> - `archive_asset`: `ArchiveAssetCommandError` — `ActiveHoldings`, `Unknown`
+> - `delete_asset`: `DeleteAssetCommandError` — `ExistingTransactions`, `Unknown`
 
 ---
 
@@ -41,3 +42,5 @@
 ## Changelog
 
 - 2026-04-26 — Added by `market-price` spec: `record_asset_price`
+- 2026-04-26 — Typed errors: all commands now return domain-specific typed error enums instead of `String`
+- 2026-04-26 — Added `CategoryNotFound` to `AssetCommandError` (raised when asset create/update references a nonexistent category)

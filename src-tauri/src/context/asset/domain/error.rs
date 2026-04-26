@@ -1,0 +1,56 @@
+/// Typed errors for asset domain validation.
+#[derive(Debug, thiserror::Error)]
+pub enum AssetDomainError {
+    /// Asset name is empty or whitespace-only.
+    #[error("Asset name cannot be empty")]
+    NameEmpty,
+    /// Asset reference (ticker/ISIN) is empty or whitespace-only.
+    #[error("Asset reference cannot be empty")]
+    ReferenceEmpty,
+    /// Risk level is outside the 1–5 range.
+    #[error("Risk level must be between 1 and 5 (received: {0})")]
+    InvalidRiskLevel(u8),
+    /// The currency string is not a valid ISO 4217 code.
+    #[error("Invalid currency code: {0}")]
+    InvalidCurrency(String),
+    /// The asset is archived and cannot be edited.
+    #[error("Cannot edit an archived asset")]
+    Archived,
+    /// No asset with the given ID exists.
+    #[error("Asset not found: {0}")]
+    NotFound(String),
+}
+
+/// Typed errors for asset price domain validation.
+#[derive(Debug, thiserror::Error)]
+pub enum AssetPriceDomainError {
+    /// Price must be strictly positive.
+    #[error("Price must be strictly positive")]
+    NotPositive,
+    /// Price value is not a finite floating-point number.
+    #[error("Price must be a finite number")]
+    NonFinite,
+    /// Price date is in the future.
+    #[error("Date cannot be in the future")]
+    DateInFuture,
+}
+
+/// Typed errors for category domain validation.
+#[derive(Debug, thiserror::Error)]
+pub enum CategoryDomainError {
+    /// Category label is empty or whitespace-only.
+    #[error("Category label cannot be empty")]
+    LabelEmpty,
+    /// A category with the same name (case-insensitive) already exists.
+    #[error("A category with this name already exists")]
+    DuplicateName,
+    /// Attempt to rename the system default category.
+    #[error("The system category cannot be renamed")]
+    SystemReadonly,
+    /// Attempt to delete the system default category.
+    #[error("The system category cannot be deleted")]
+    SystemProtected,
+    /// No category with the given ID exists.
+    #[error("Category not found: {0}")]
+    NotFound(String),
+}

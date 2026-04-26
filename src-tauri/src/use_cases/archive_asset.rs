@@ -1,7 +1,15 @@
 use crate::context::account::HoldingRepository;
 use crate::context::asset::AssetService;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::sync::Arc;
+
+/// Typed error for the ArchiveAsset use case.
+#[derive(Debug, thiserror::Error)]
+pub enum ArchiveAssetError {
+    /// Asset still has non-zero holdings in at least one account.
+    #[error("Cannot archive an asset with active holdings")]
+    ActiveHoldings,
+}
 
 /// Guards and delegates asset archiving across the asset and account bounded contexts (OQ-6).
 pub struct ArchiveAssetUseCase {
@@ -25,7 +33,7 @@ impl ArchiveAssetUseCase {
             .has_active_holdings_for_asset(asset_id)
             .await?
         {
-            bail!("Cannot archive an asset with active holdings");
+            return Err(ArchiveAssetError::ActiveHoldings.into());
         }
         self.asset_service.archive_asset(asset_id).await
     }
@@ -99,16 +107,22 @@ mod tests {
 
     // OQ-6 — archive rejected when active holding exists
     #[tokio::test]
-    async fn archive_rejected_when_active_holding() {
+    async fn test_archive_asset_rejected_when_active_holdings() {
         let (svc, asset_id) = setup_asset_service().await;
         let uc = ArchiveAssetUseCase::new(svc, Arc::new(StubHoldingRepo { has_active: true }));
         let err = uc.archive_asset(&asset_id).await.unwrap_err();
-        assert!(err.to_string().contains("active holdings"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<ArchiveAssetError>(),
+                Some(ArchiveAssetError::ActiveHoldings)
+            ),
+            "got: {err}"
+        );
     }
 
     // OQ-6 — archive succeeds when no active holdings
     #[tokio::test]
-    async fn archive_succeeds_when_no_active_holdings() {
+    async fn test_archive_asset_succeeds_when_no_active_holdings() {
         let (svc, asset_id) = setup_asset_service().await;
         let uc = ArchiveAssetUseCase::new(svc, Arc::new(StubHoldingRepo { has_active: false }));
         uc.archive_asset(&asset_id).await.unwrap();

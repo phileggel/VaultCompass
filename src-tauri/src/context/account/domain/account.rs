@@ -1,3 +1,4 @@
+use super::error::AccountDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -52,7 +53,7 @@ impl Account {
     pub fn new(name: String, currency: String, update_frequency: UpdateFrequency) -> Result<Self> {
         let name = name.trim().to_string();
         if name.is_empty() {
-            anyhow::bail!("Account name cannot be empty");
+            return Err(AccountDomainError::NameEmpty.into());
         }
         Self::validate_currency(&currency)?;
         Ok(Self {
@@ -72,7 +73,7 @@ impl Account {
     ) -> Result<Self> {
         let name = name.trim().to_string();
         if name.is_empty() {
-            anyhow::bail!("Account name cannot be empty");
+            return Err(AccountDomainError::NameEmpty.into());
         }
         Self::validate_currency(&currency)?;
         Ok(Self {
@@ -100,7 +101,7 @@ impl Account {
 
     fn validate_currency(currency: &str) -> Result<()> {
         if Currency::from_str(currency).is_err() {
-            anyhow::bail!("Invalid currency code: {}", currency);
+            return Err(AccountDomainError::InvalidCurrency(currency.to_string()).into());
         }
         Ok(())
     }

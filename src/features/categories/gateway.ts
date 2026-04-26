@@ -1,27 +1,22 @@
-import { commands } from "@/bindings";
+import { type AssetCategory, type CategoryCommandError, commands, type Result } from "@/bindings";
 
 export const categoryGateway = {
-  async getCategories() {
-    const res = await commands.getCategories();
-    if (res.status === "error") throw new Error(res.error);
-    return res.data;
+  async getCategories(): Promise<Result<AssetCategory[], CategoryCommandError>> {
+    return commands.getCategories();
   },
 
-  async addCategory(label: string) {
-    const res = await commands.addCategory(label);
-    if (res.status === "error") throw new Error(res.error);
-    return res.data;
+  async addCategory(label: string): Promise<Result<AssetCategory, CategoryCommandError>> {
+    return commands.addCategory(label);
   },
 
-  async updateCategory(id: string, label: string) {
-    const res = await commands.updateCategory(id, label);
-    if (res.status === "error") throw new Error(res.error);
-    return res.data;
+  async updateCategory(
+    id: string,
+    label: string,
+  ): Promise<Result<AssetCategory, CategoryCommandError>> {
+    return commands.updateCategory(id, label);
   },
 
-  async deleteCategory(id: string) {
-    const res = await commands.deleteCategory(id);
-    if (res.status === "error") throw new Error(res.error);
-    return res.data;
+  async deleteCategory(id: string): Promise<Result<null, CategoryCommandError>> {
+    return commands.deleteCategory(id);
   },
 };

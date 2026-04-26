@@ -3,8 +3,12 @@
 > Domain: record_transaction (use case — cross-context: transaction + account + asset)
 > Last updated by: financial-asset-transaction spec, sell-transaction spec, transaction-list spec
 
-> **Note on error types**: all commands return `Result<T, String>` at the Tauri boundary — errors
-> are `anyhow` messages stringified. Named variants below are semantic documentation, not typed enums.
+> **Error model**: all commands return `Result<T, TransactionCommandError>` — errors are typed enums
+> serialized as `{ code: "VariantName" }` (plus `available`/`requested` fields for `Oversell`).
+> Variants: `TransactionNotFound`, `AccountNotFound`, `AssetNotFound`, `InvalidType`, `TypeImmutable`,
+> `ArchivedAssetSell`, `ClosedPosition`, `Oversell { available, requested }`, `CascadingOversell`,
+> `InvalidDate`, `DateInFuture`, `DateTooOld`, `QuantityNotPositive`, `UnitPriceNegative`,
+> `FeesNegative`, `ExchangeRateNotPositive`, `TotalAmountNotPositive`, `Unknown`.
 
 ## Commands
 
@@ -41,3 +45,4 @@ struct CreateTransactionDTO {
 
 - 2026-04-26 — Added by `financial-asset-transaction` + `sell-transaction` + `transaction-list` specs: add_transaction, update_transaction, delete_transaction, get_transactions
 - 2026-04-26 — Fixed: added InvalidTransactionType, ExchangeRateNotPositive, NegativeFees to add_transaction; added full TRX-020 validation errors + ArchivedAssetSell to update_transaction; fixed note field to Option<String>
+- 2026-04-26 — Typed errors: commands now return `TransactionCommandError` discriminated union instead of `String`

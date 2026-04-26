@@ -1,3 +1,4 @@
+use super::error::HoldingDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -91,10 +92,10 @@ impl Holding {
 
     fn validate(quantity: i64, average_price: i64) -> Result<()> {
         if quantity < 0 {
-            anyhow::bail!("Holding quantity cannot be negative");
+            return Err(HoldingDomainError::NegativeQuantity.into());
         }
         if average_price < 0 {
-            anyhow::bail!("Holding average_price cannot be negative");
+            return Err(HoldingDomainError::NegativeAveragePrice.into());
         }
         Ok(())
     }

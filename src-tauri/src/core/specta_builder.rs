@@ -11,15 +11,23 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<asset::Asset>()
         .typ::<asset::AssetCategory>()
         .typ::<asset::AssetClass>()
+        .typ::<asset::AssetCommandError>()
+        .typ::<asset::CategoryCommandError>()
+        .typ::<asset::AssetPriceCommandError>()
+        .typ::<asset::ArchiveAssetCommandError>()
+        .typ::<asset::DeleteAssetCommandError>()
         .typ::<account::Account>()
         .typ::<account::UpdateFrequency>()
         .typ::<account::Holding>()
+        .typ::<account::AccountCommandError>()
         .typ::<transaction::Transaction>()
         .typ::<transaction::TransactionType>()
         .typ::<record_transaction::CreateTransactionDTO>()
+        .typ::<record_transaction::TransactionCommandError>()
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
+        .typ::<account_details::AccountDetailsCommandError>()
         .commands(tauri_specta::collect_commands![
             asset::get_assets,
             asset::get_assets_with_archived,

@@ -16,7 +16,7 @@ export function useAccounts() {
       if (res.status === "ok") {
         return { data: res.data, error: null };
       }
-      return { data: null, error: res.error };
+      return { data: null, error: `error.${res.error.code}` };
     } catch (e) {
       logger.error("Failed to add account", { error: e });
       return { data: null, error: String(e) };
@@ -29,7 +29,7 @@ export function useAccounts() {
       if (res.status === "ok") {
         return { data: res.data, error: null };
       }
-      return { data: null, error: res.error };
+      return { data: null, error: `error.${res.error.code}` };
     } catch (e) {
       logger.error("Failed to update account", { error: e });
       return { data: null, error: String(e) };
@@ -42,7 +42,7 @@ export function useAccounts() {
       if (res.status === "ok") {
         return { error: null };
       }
-      return { error: res.error };
+      return { error: `error.${res.error.code}` };
     } catch (e) {
       logger.error("Failed to delete account", { error: e });
       return { error: String(e) };

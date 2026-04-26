@@ -32,21 +32,19 @@ export function useEditCategoryModal({ category, onClose }: UseEditCategoryModal
     if (!category || !name.trim()) return;
 
     setIsSubmitting(true);
-    try {
-      await updateCategory(category.id, name.trim());
-      onClose();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("duplicate_name")) {
+    const result = await updateCategory(category.id, name.trim());
+    if (result.error) {
+      if (result.error === "error.DuplicateName") {
         setError(t("category.error_duplicate"));
-      } else if (msg.includes("system_readonly")) {
+      } else if (result.error === "error.SystemReadonly") {
         setError(t("category.error_system_readonly"));
       } else {
         setError(t("category.error_generic"));
       }
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      onClose();
     }
+    setIsSubmitting(false);
   };
 
   return { name, error, isSubmitting, handleChange, handleSubmit };

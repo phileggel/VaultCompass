@@ -1,8 +1,9 @@
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { create } from "zustand";
-import { type Account, type Asset, type AssetCategory, commands, events } from "../bindings";
+import { type Account, type Asset, type AssetCategory, events } from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
 import { assetGateway } from "../features/assets/gateway";
+import { categoryGateway } from "../features/categories/gateway";
 import { logger } from "./logger";
 
 interface AppState {
@@ -57,17 +58,17 @@ export const useAppStore = create<AppState>((set, get) => {
       if (result.status === "ok") {
         set({ assets: result.data, isLoadingAssets: false });
       } else {
-        set({ assetsError: result.error, isLoadingAssets: false });
+        set({ assetsError: `error.${result.error.code}`, isLoadingAssets: false });
       }
     },
 
     fetchCategories: async () => {
       set({ isLoadingCategories: true, categoriesError: null });
-      const result = await commands.getCategories();
+      const result = await categoryGateway.getCategories();
       if (result.status === "ok") {
         set({ categories: result.data, isLoadingCategories: false });
       } else {
-        set({ categoriesError: result.error, isLoadingCategories: false });
+        set({ categoriesError: `error.${result.error.code}`, isLoadingCategories: false });
       }
     },
 
@@ -77,7 +78,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (result.status === "ok") {
         set({ accounts: result.data, isLoadingAccounts: false });
       } else {
-        set({ accountsError: result.error, isLoadingAccounts: false });
+        set({ accountsError: `error.${result.error.code}`, isLoadingAccounts: false });
       }
     },
 

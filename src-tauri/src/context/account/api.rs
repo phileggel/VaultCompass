@@ -2,6 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::domain::{Account, UpdateFrequency};
+use crate::context::account::AccountDomainError;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -33,17 +34,50 @@ pub struct UpdateAccountDTO {
     pub update_frequency: UpdateFrequency,
 }
 
+// --- Boundary error ---
+
+/// Typed error returned to the frontend for account commands.
+#[derive(Debug, Serialize, Type, thiserror::Error)]
+#[serde(tag = "code")]
+pub enum AccountCommandError {
+    /// Account name is empty or whitespace-only.
+    #[error("Account name cannot be empty")]
+    NameEmpty,
+    /// An account with the same name already exists.
+    #[error("An account with this name already exists")]
+    NameAlreadyExists,
+    /// The currency string is not a valid ISO 4217 code.
+    #[error("Invalid currency code")]
+    InvalidCurrency,
+    /// An unexpected server-side error occurred.
+    #[error("An unexpected error occurred")]
+    Unknown,
+}
+
+fn to_account_error(e: anyhow::Error) -> AccountCommandError {
+    if let Some(err) = e.downcast_ref::<AccountDomainError>() {
+        match err {
+            AccountDomainError::NameEmpty => AccountCommandError::NameEmpty,
+            AccountDomainError::NameAlreadyExists => AccountCommandError::NameAlreadyExists,
+            AccountDomainError::InvalidCurrency(_) => AccountCommandError::InvalidCurrency,
+        }
+    } else {
+        tracing::error!(err = ?e, "unexpected error in account command");
+        AccountCommandError::Unknown
+    }
+}
+
 // --- Commands ---
 
 /// Retrieves all accounts.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, String> {
+pub async fn get_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, AccountCommandError> {
     state
         .account_service
         .get_all()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(to_account_error)
 }
 
 /// Adds a new account.
@@ -52,12 +86,12 @@ pub async fn get_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, St
 pub async fn add_account(
     state: State<'_, AppState>,
     dto: CreateAccountDTO,
-) -> Result<Account, String> {
+) -> Result<Account, AccountCommandError> {
     state
         .account_service
         .create(dto.name, dto.currency, dto.update_frequency)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(to_account_error)
 }
 
 /// Updates an existing account.
@@ -66,21 +100,24 @@ pub async fn add_account(
 pub async fn update_account(
     state: State<'_, AppState>,
     dto: UpdateAccountDTO,
-) -> Result<Account, String> {
+) -> Result<Account, AccountCommandError> {
     state
         .account_service
         .update(dto.id, dto.name, dto.currency, dto.update_frequency)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(to_account_error)
 }
 
 /// Deletes an account.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_account(state: State<'_, AppState>, id: String) -> Result<(), String> {
+pub async fn delete_account(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), AccountCommandError> {
     state
         .account_service
         .delete(&id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(to_account_error)
 }

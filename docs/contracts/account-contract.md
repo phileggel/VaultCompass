@@ -3,9 +3,8 @@
 > Domain: account
 > Last updated by: account spec
 
-> **Note on error types**: all commands return `Result<T, String>` at the Tauri boundary — errors
-> are `anyhow` messages stringified via `.map_err(|e| e.to_string())`. The named error variants
-> below are semantic documentation, not typed Rust enum discriminants.
+> **Error model**: commands return `Result<T, AccountCommandError>` — errors are typed Rust enums
+> serialized as `{ code: "VariantName" }` (discriminated union, `#[serde(tag = "code")]`).
 
 ## Commands
 
@@ -49,3 +48,4 @@ struct AccountDeletionSummary {
 
 - 2026-04-26 — Added by `account` spec: get_accounts, add_account, update_account, delete_account, get_account_deletion_summary
 - 2026-04-26 — Fixed: added InvalidCurrency error (TRX-021); removed phantom NotFound from delete_account and update_account; clarified error typing note
+- 2026-04-26 — Typed errors: commands now return `AccountCommandError` discriminated union instead of `String`

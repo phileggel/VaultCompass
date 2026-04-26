@@ -2,7 +2,8 @@ use crate::context::account::{AccountRepository, Holding, HoldingRepository};
 use crate::context::asset::AssetRepository;
 use crate::context::transaction::{Transaction, TransactionService, TransactionType};
 use crate::core::logger::BACKEND;
-use anyhow::{bail, Context, Result};
+use crate::use_cases::record_transaction::error::RecordTransactionError;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use sqlx::{Pool, Sqlite};
@@ -72,26 +73,26 @@ impl RecordTransactionUseCase {
         let tx_type = dto
             .transaction_type
             .parse::<TransactionType>()
-            .map_err(|_| anyhow::anyhow!("Unknown transaction_type: {}", dto.transaction_type))?;
+            .map_err(|_| RecordTransactionError::InvalidType)?;
 
         // TRX-020 / SEL-020 — validate asset and account exist
         let asset = self
             .asset_repo
             .get_by_id(&dto.asset_id)
             .await?
-            .with_context(|| format!("Asset {} not found", dto.asset_id))?;
+            .ok_or(RecordTransactionError::AssetNotFound)?;
 
         self.account_repo
             .get_by_id(&dto.account_id)
             .await?
-            .with_context(|| format!("Account {} not found", dto.account_id))?;
+            .ok_or(RecordTransactionError::AccountNotFound)?;
 
         match tx_type {
             TransactionType::Purchase => self.create_purchase(dto, asset.is_archived).await,
             TransactionType::Sell => {
                 // SEL-037 — reject sell on archived asset
                 if asset.is_archived {
-                    bail!("Cannot sell an archived asset");
+                    return Err(RecordTransactionError::ArchivedAssetSell.into());
                 }
                 self.create_sell(dto).await
             }
@@ -191,15 +192,16 @@ impl RecordTransactionUseCase {
         )
         .await?;
         if holding_before.quantity == 0 {
-            bail!("No units available to sell");
+            return Err(RecordTransactionError::ClosedPosition.into());
         }
 
         // SEL-021 — oversell guard
         if dto.quantity > holding_before.quantity {
-            bail!(
-                "Quantity exceeds current holding ({} available)",
-                holding_before.quantity
-            );
+            return Err(RecordTransactionError::Oversell {
+                available: holding_before.quantity,
+                requested: dto.quantity,
+            }
+            .into());
         }
 
         // SEL-023 — sell total formula: floor(floor(qty * price / MICRO) * rate / MICRO) - fees
@@ -285,16 +287,12 @@ impl RecordTransactionUseCase {
             .transaction_service
             .get_by_id(&id)
             .await?
-            .with_context(|| format!("Transaction {} not found", id))?;
+            .ok_or(RecordTransactionError::TransactionNotFound)?;
 
         // SEL-035 — transaction_type immutability
         let existing_type_str = existing_tx.transaction_type.to_string();
         if existing_type_str != dto.transaction_type {
-            bail!(
-                "Cannot change transaction type from {} to {}",
-                existing_type_str,
-                dto.transaction_type
-            );
+            return Err(RecordTransactionError::TypeImmutable.into());
         }
 
         let tx_type = existing_tx.transaction_type;
@@ -306,16 +304,16 @@ impl RecordTransactionUseCase {
             .asset_repo
             .get_by_id(&dto.asset_id)
             .await?
-            .with_context(|| format!("Asset {} not found", dto.asset_id))?;
+            .ok_or(RecordTransactionError::AssetNotFound)?;
 
         self.account_repo
             .get_by_id(&dto.account_id)
             .await?
-            .with_context(|| format!("Account {} not found", dto.account_id))?;
+            .ok_or(RecordTransactionError::AccountNotFound)?;
 
         // SEL-037 / TRX-033 — archived asset guard enforced on update
         if asset.is_archived && tx_type == TransactionType::Sell {
-            bail!("Cannot sell an archived asset");
+            return Err(RecordTransactionError::ArchivedAssetSell.into());
         }
         let needs_unarchive = asset.is_archived && tx_type == TransactionType::Purchase;
 
@@ -485,7 +483,7 @@ impl RecordTransactionUseCase {
             .transaction_service
             .get_by_id(id)
             .await?
-            .with_context(|| format!("Transaction {} not found", id))?;
+            .ok_or(RecordTransactionError::TransactionNotFound)?;
 
         let account_id = existing_tx.account_id.clone();
         let asset_id = existing_tx.asset_id.clone();
@@ -625,10 +623,7 @@ impl RecordTransactionUseCase {
                 TransactionType::Sell => {
                     // SEL-032 — cascading oversell check
                     if t.quantity as i128 > total_quantity {
-                        bail!(
-                            "Sell transaction {} would exceed available quantity at that point",
-                            t.id
-                        );
+                        return Err(RecordTransactionError::CascadingOversell.into());
                     }
                     let vwap_before: i64 = if total_quantity > 0 {
                         (vwap_numerator / total_quantity) as i64
@@ -856,7 +851,13 @@ mod tests {
             .create_transaction(sell_dto(&account_id, &asset_id, 1_000_000))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("No units available"), "got: {err}");
+        assert!(
+            matches!(
+                err.downcast_ref::<RecordTransactionError>(),
+                Some(RecordTransactionError::ClosedPosition)
+            ),
+            "got: {err}"
+        );
     }
 
     // SEL-026 — when full position is sold, holding is retained at quantity=0 with last VWAP preserved
@@ -907,8 +908,10 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            err.to_string().to_lowercase().contains("oversell")
-                || err.to_string().to_lowercase().contains("exceed"),
+            matches!(
+                err.downcast_ref::<RecordTransactionError>(),
+                Some(RecordTransactionError::CascadingOversell)
+            ),
             "got: {err}"
         );
     }
@@ -931,7 +934,10 @@ mod tests {
         sell_edit.transaction_type = "Sell".to_string();
         let err = uc.update_transaction(buy.id, sell_edit).await.unwrap_err();
         assert!(
-            err.to_string().contains("Cannot change transaction type"),
+            matches!(
+                err.downcast_ref::<RecordTransactionError>(),
+                Some(RecordTransactionError::TypeImmutable)
+            ),
             "got: {err}"
         );
     }

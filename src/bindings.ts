@@ -11,7 +11,7 @@ export const commands = {
 /**
  * Fetches all active (non-archived) assets.
  */
-async getAssets() : Promise<Result<Asset[], string>> {
+async getAssets() : Promise<Result<Asset[], AssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_assets") };
 } catch (e) {
@@ -22,7 +22,7 @@ async getAssets() : Promise<Result<Asset[], string>> {
 /**
  * Fetches all assets including archived ones.
  */
-async getAssetsWithArchived() : Promise<Result<Asset[], string>> {
+async getAssetsWithArchived() : Promise<Result<Asset[], AssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_assets_with_archived") };
 } catch (e) {
@@ -33,7 +33,7 @@ async getAssetsWithArchived() : Promise<Result<Asset[], string>> {
 /**
  * Adds a new asset.
  */
-async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, string>> {
+async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, AssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_asset", { dto }) };
 } catch (e) {
@@ -44,7 +44,7 @@ async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, string>> {
 /**
  * Updates an existing asset.
  */
-async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, string>> {
+async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, AssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_asset", { dto }) };
 } catch (e) {
@@ -55,7 +55,7 @@ async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, string>> {
 /**
  * Archives an asset, guarded against active holdings (R6, OQ-6).
  */
-async archiveAsset(id: string) : Promise<Result<null, string>> {
+async archiveAsset(id: string) : Promise<Result<null, ArchiveAssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("archive_asset", { id }) };
 } catch (e) {
@@ -66,7 +66,7 @@ async archiveAsset(id: string) : Promise<Result<null, string>> {
 /**
  * Unarchives an asset (R18).
  */
-async unarchiveAsset(id: string) : Promise<Result<null, string>> {
+async unarchiveAsset(id: string) : Promise<Result<null, AssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("unarchive_asset", { id }) };
 } catch (e) {
@@ -77,7 +77,7 @@ async unarchiveAsset(id: string) : Promise<Result<null, string>> {
 /**
  * Deletes an asset, guarded against existing transactions.
  */
-async deleteAsset(id: string) : Promise<Result<null, string>> {
+async deleteAsset(id: string) : Promise<Result<null, DeleteAssetCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_asset", { id }) };
 } catch (e) {
@@ -88,7 +88,7 @@ async deleteAsset(id: string) : Promise<Result<null, string>> {
 /**
  * Fetches all active categories.
  */
-async getCategories() : Promise<Result<AssetCategory[], string>> {
+async getCategories() : Promise<Result<AssetCategory[], CategoryCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_categories") };
 } catch (e) {
@@ -99,7 +99,7 @@ async getCategories() : Promise<Result<AssetCategory[], string>> {
 /**
  * Creates a new category.
  */
-async addCategory(label: string) : Promise<Result<AssetCategory, string>> {
+async addCategory(label: string) : Promise<Result<AssetCategory, CategoryCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_category", { label }) };
 } catch (e) {
@@ -110,7 +110,7 @@ async addCategory(label: string) : Promise<Result<AssetCategory, string>> {
 /**
  * Updates an existing category.
  */
-async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, string>> {
+async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, CategoryCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_category", { id, label }) };
 } catch (e) {
@@ -121,7 +121,7 @@ async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, 
 /**
  * Deletes a category.
  */
-async deleteCategory(id: string) : Promise<Result<null, string>> {
+async deleteCategory(id: string) : Promise<Result<null, CategoryCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_category", { id }) };
 } catch (e) {
@@ -133,7 +133,7 @@ async deleteCategory(id: string) : Promise<Result<null, string>> {
  * Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
  * price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
  */
-async recordAssetPrice(assetId: string, date: string, price: number) : Promise<Result<null, string>> {
+async recordAssetPrice(assetId: string, date: string, price: number) : Promise<Result<null, AssetPriceCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("record_asset_price", { assetId, date, price }) };
 } catch (e) {
@@ -144,7 +144,7 @@ async recordAssetPrice(assetId: string, date: string, price: number) : Promise<R
 /**
  * Retrieves all accounts.
  */
-async getAccounts() : Promise<Result<Account[], string>> {
+async getAccounts() : Promise<Result<Account[], AccountCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_accounts") };
 } catch (e) {
@@ -155,7 +155,7 @@ async getAccounts() : Promise<Result<Account[], string>> {
 /**
  * Adds a new account.
  */
-async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, string>> {
+async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, AccountCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_account", { dto }) };
 } catch (e) {
@@ -166,7 +166,7 @@ async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, string>> {
 /**
  * Updates an existing account.
  */
-async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, string>> {
+async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, AccountCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_account", { dto }) };
 } catch (e) {
@@ -177,7 +177,7 @@ async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, string>> {
 /**
  * Deletes an account.
  */
-async deleteAccount(id: string) : Promise<Result<null, string>> {
+async deleteAccount(id: string) : Promise<Result<null, AccountCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_account", { id }) };
 } catch (e) {
@@ -241,7 +241,7 @@ async installUpdate() : Promise<Result<null, string>> {
 /**
  * Creates a new purchase transaction and updates the Holding atomically (TRX-027).
  */
-async addTransaction(dto: CreateTransactionDTO) : Promise<Result<Transaction, string>> {
+async addTransaction(dto: CreateTransactionDTO) : Promise<Result<Transaction, TransactionCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_transaction", { dto }) };
 } catch (e) {
@@ -252,7 +252,7 @@ async addTransaction(dto: CreateTransactionDTO) : Promise<Result<Transaction, st
 /**
  * Updates an existing transaction and recalculates the affected Holding(s) (TRX-031, TRX-032).
  */
-async updateTransaction(id: string, dto: CreateTransactionDTO) : Promise<Result<Transaction, string>> {
+async updateTransaction(id: string, dto: CreateTransactionDTO) : Promise<Result<Transaction, TransactionCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_transaction", { id, dto }) };
 } catch (e) {
@@ -263,7 +263,7 @@ async updateTransaction(id: string, dto: CreateTransactionDTO) : Promise<Result<
 /**
  * Deletes a transaction and recalculates (or removes) the associated Holding (TRX-034).
  */
-async deleteTransaction(id: string) : Promise<Result<null, string>> {
+async deleteTransaction(id: string) : Promise<Result<null, TransactionCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_transaction", { id }) };
 } catch (e) {
@@ -274,7 +274,7 @@ async deleteTransaction(id: string) : Promise<Result<null, string>> {
 /**
  * Retrieves all transactions for an account/asset pair.
  */
-async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], string>> {
+async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], TransactionCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_transactions", { accountId, assetId }) };
 } catch (e) {
@@ -296,7 +296,7 @@ async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], string
 /**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
  */
-async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, string>> {
+async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountDetailsCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_account_details", { accountId }) };
 } catch (e) {
@@ -342,6 +342,38 @@ currency: string;
  */
 update_frequency: UpdateFrequency }
 /**
+ * Typed error returned to the frontend for account commands.
+ */
+export type AccountCommandError = 
+/**
+ * Account name is empty or whitespace-only.
+ */
+{ code: "NameEmpty" } | 
+/**
+ * An account with the same name already exists.
+ */
+{ code: "NameAlreadyExists" } | 
+/**
+ * The currency string is not a valid ISO 4217 code.
+ */
+{ code: "InvalidCurrency" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
+ * Typed error returned to the frontend for the get_account_details command.
+ */
+export type AccountDetailsCommandError = 
+/**
+ * No account exists with the requested ID.
+ */
+{ code: "AccountNotFound" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
  * Top-level response for the get_account_details command (ACD spec).
  */
 export type AccountDetailsResponse = { 
@@ -373,6 +405,18 @@ total_realized_pnl: number;
  * Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
  */
 total_unrealized_pnl: number | null }
+/**
+ * Typed error returned to the frontend for the archive_asset command.
+ */
+export type ArchiveAssetCommandError = 
+/**
+ * Asset still has non-zero holdings in at least one account.
+ */
+{ code: "ActiveHoldings" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
 /**
  * A financial instrument or resource held by a user.
  */
@@ -453,6 +497,82 @@ export type AssetClass =
  * Cryptocurrencies or other blockchain-based assets.
  */
 "DigitalAsset"
+/**
+ * Typed error returned to the frontend for asset CRUD commands.
+ */
+export type AssetCommandError = 
+/**
+ * Asset name is empty or whitespace-only.
+ */
+{ code: "NameEmpty" } | 
+/**
+ * Asset reference (ticker/ISIN) is empty.
+ */
+{ code: "ReferenceEmpty" } | 
+/**
+ * Risk level is outside the 1–5 range.
+ */
+{ code: "InvalidRiskLevel" } | 
+/**
+ * Currency string is not a valid ISO 4217 code.
+ */
+{ code: "InvalidCurrency" } | 
+/**
+ * Asset is archived and cannot be edited.
+ */
+{ code: "Archived" } | 
+/**
+ * No asset exists with the requested ID.
+ */
+{ code: "NotFound" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
+ * Typed error returned to the frontend for the record_asset_price command.
+ */
+export type AssetPriceCommandError = 
+/**
+ * Price must be strictly positive.
+ */
+{ code: "NotPositive" } | 
+/**
+ * Price value is not a finite number.
+ */
+{ code: "NonFinite" } | 
+/**
+ * Price date is in the future.
+ */
+{ code: "DateInFuture" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
+ * Typed error returned to the frontend for category commands.
+ */
+export type CategoryCommandError = 
+/**
+ * Category label is empty or whitespace-only.
+ */
+{ code: "LabelEmpty" } | 
+/**
+ * A category with the same name already exists.
+ */
+{ code: "DuplicateName" } | 
+/**
+ * Attempt to rename the system default category.
+ */
+{ code: "SystemReadonly" } | 
+/**
+ * Attempt to delete the system default category.
+ */
+{ code: "SystemProtected" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
 /**
  * Enriched view of a fully-closed position (quantity == 0, ACD-044).
  */
@@ -563,6 +683,18 @@ fees: number;
  * Optional user note.
  */
 note: string | null }
+/**
+ * Typed error returned to the frontend for the delete_asset command.
+ */
+export type DeleteAssetCommandError = 
+/**
+ * At least one transaction references this asset.
+ */
+{ code: "ExistingTransactions" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
 /**
  * All possible side-effect events that can be published across the application.
  * Each variant represents a specific business event that features may need to react to.
@@ -736,6 +868,82 @@ realized_pnl: number | null;
  * ISO 8601 timestamp of record creation — used for same-date tie-breaking (SEL-024).
  */
 created_at: string }
+/**
+ * Typed error returned to the frontend for transaction commands.
+ */
+export type TransactionCommandError = 
+/**
+ * No transaction exists with the requested ID.
+ */
+{ code: "TransactionNotFound" } | 
+/**
+ * No account exists with the requested ID.
+ */
+{ code: "AccountNotFound" } | 
+/**
+ * No asset exists with the requested ID.
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The transaction type string is not a known variant.
+ */
+{ code: "InvalidType" } | 
+/**
+ * Attempt to change the type of an existing transaction.
+ */
+{ code: "TypeImmutable" } | 
+/**
+ * Attempt to sell shares of an archived asset.
+ */
+{ code: "ArchivedAssetSell" } | 
+/**
+ * Sell requested but holding has zero available units.
+ */
+{ code: "ClosedPosition" } | 
+/**
+ * Sell quantity exceeds currently held units.
+ */
+{ code: "Oversell"; available: number; requested: number } | 
+/**
+ * Editing would leave a later transaction with insufficient units.
+ */
+{ code: "CascadingOversell" } | 
+/**
+ * Date string could not be parsed as YYYY-MM-DD.
+ */
+{ code: "InvalidDate" } | 
+/**
+ * Transaction date is in the future.
+ */
+{ code: "DateInFuture" } | 
+/**
+ * Transaction date is before 1900-01-01.
+ */
+{ code: "DateTooOld" } | 
+/**
+ * Quantity is zero or negative.
+ */
+{ code: "QuantityNotPositive" } | 
+/**
+ * Unit price is negative.
+ */
+{ code: "UnitPriceNegative" } | 
+/**
+ * Fees amount is negative.
+ */
+{ code: "FeesNegative" } | 
+/**
+ * Exchange rate is zero or negative.
+ */
+{ code: "ExchangeRateNotPositive" } | 
+/**
+ * Total amount is zero or negative.
+ */
+{ code: "TotalAmountNotPositive" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
 /**
  * Type of financial transaction.
  */
