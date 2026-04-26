@@ -94,7 +94,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-037 — TransactionUpdated event (backend)**: After any successful transaction mutation (create, update, or delete), the `TransactionService` (owned by the `transaction/` bounded context) publishes a `TransactionUpdated` event on the event bus. The use case delegates to the service; the service owns the event publication (B8 compliance). This event is distinct from `AccountUpdated`: `AccountUpdated` signals structural account changes; `TransactionUpdated` signals position-data changes.
 
-**TRX-038 — Holdings refresh on event (frontend)**: Upon receiving a `TransactionUpdated` event, the frontend refreshes the holdings data for the affected account so that the displayed portfolio state reflects the mutation. The implementation mechanism (store slice, local re-fetch, etc.) is left to the feature-planner.
+**TRX-038 — Holdings refresh on event (frontend)**: Upon receiving a `TransactionUpdated` event, the frontend refreshes the holdings data for the affected account so that the displayed portfolio state reflects the mutation. The implementation mechanism (store slice, local re-fetch, etc.) is left to the feature-planner. _(Resolved by ACD-039/040: `useAccountDetails` re-fetches on `TransactionUpdated` directly; no separate store layer needed.)_
 
 ### Lifecycle Management
 

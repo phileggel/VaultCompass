@@ -25,10 +25,9 @@ Status (2026-03-29): `specta rc.23` available, `tauri-specta` still blocked at `
 The Settings button in `Sidebar.tsx` footer is wired via `onSettingsClick?` but `MainLayout` does not yet pass that handler.
 Create the Settings page (feature `settings/`) and pass `onSettingsClick` from `MainLayout`.
 
-## (frontend/transactions) — TRX-038: implement holdings display
+## ~~(frontend/transactions) — TRX-038: implement holdings display~~ ✅ resolved
 
-`useTransactionStore.refreshHoldings()` is a stub: the backend has a `holdings` table (populated by `RecordTransactionUseCase`) but there is no `getHoldings` Tauri command.
-Create `get_holdings(account_id) -> Vec<Holding>` in `use_cases/record_transaction/api.rs` (or `context/account/api.rs`) and use it in `store.ts` to display positions per account.
+TRX-038 (holdings refresh on `TransactionUpdated`) is fully satisfied by ACD-039/040 in `useAccountDetails.ts`. The `useTransactionStore` stub was pre-dating Account Details and never wired to any UI; the entire store was dead code. Removed `store.ts`, its export, and the `TransactionUpdated` handler from `src/lib/store.ts`.
 
 ## ~~(frontend/shell) — Hardcoded strings in shell components~~ ✅ resolved
 

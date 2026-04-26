@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { type Account, type Asset, type AssetCategory, commands, events } from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
 import { assetGateway } from "../features/assets/gateway";
-import { useTransactionStore } from "../features/transactions/store";
 import { logger } from "./logger";
 
 interface AppState {
@@ -113,16 +112,17 @@ export const useAppStore = create<AppState>((set, get) => {
         AssetUpdated: fetchAssets,
         CategoryUpdated: fetchCategories,
         AccountUpdated: fetchAccounts,
-        // TRX-038 — refresh holdings for the currently viewed account on transaction change
-        TransactionUpdated: () => useTransactionStore.getState().refreshHoldings(),
       };
+
+      // Events handled locally by feature hooks (e.g. useAccountDetails) — not global store concerns
+      const locallyHandledEvents = new Set(["TransactionUpdated"]);
 
       // Setup event listeners
       const unlistenPromise = events.event.listen((event) => {
         const handler = eventMap[event.payload.type];
         if (handler) {
           handler();
-        } else {
+        } else if (!locallyHandledEvents.has(event.payload.type)) {
           logger.debug("[store] unhandled event", { type: event.payload.type });
         }
       });
