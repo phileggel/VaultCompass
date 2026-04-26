@@ -4,8 +4,10 @@ import { logger } from "@/lib/logger";
 import { accountDetailsGateway } from "../gateway";
 import {
   type AccountSummaryViewModel,
+  type ClosedHoldingRowViewModel,
   type HoldingRowViewModel,
   toAccountSummary,
+  toClosedHoldingRow,
   toHoldingRow,
 } from "../shared/presenter";
 
@@ -14,6 +16,7 @@ interface UseAccountDetailsResult {
   error: string | null;
   retry: () => void;
   holdings: HoldingRowViewModel[];
+  closedHoldings: ClosedHoldingRowViewModel[];
   summary: AccountSummaryViewModel | null;
 }
 
@@ -57,10 +60,15 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     [data],
   );
 
+  const closedHoldings = useMemo<ClosedHoldingRowViewModel[]>(
+    () => (data ? data.closed_holdings.map(toClosedHoldingRow) : []),
+    [data],
+  );
+
   const summary = useMemo<AccountSummaryViewModel | null>(
     () => (data ? toAccountSummary(data) : null),
     [data],
   );
 
-  return { isLoading, error, retry: fetchDetails, holdings, summary };
+  return { isLoading, error, retry: fetchDetails, holdings, closedHoldings, summary };
 }

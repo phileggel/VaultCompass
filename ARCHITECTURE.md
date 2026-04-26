@@ -63,9 +63,12 @@ Cross-cutting application use cases that span multiple bounded contexts or requi
 
 Orchestrates a cross-context read of account + asset data for the Account Details view (spec: `docs/spec/account-details.md`, ADR-003, ADR-004).
 
-- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>` + `Arc<TransactionService>`; `get_account_details(account_id)` fetches account, all holdings, filters active (qty > 0), enriches with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), attaches `realized_pnl` from `pnl_map` (SEL-038), sorts by asset_name (ACD-033), returns `AccountDetailsResponse`
-- DTOs: `HoldingDetail` (asset_id, asset_name, asset_reference, quantity, average_price, cost_basis, realized_pnl — all i64 micros), `AccountDetailsResponse` (account_name, holdings, total_holding_count, total_cost_basis, total_realized_pnl — SEL-042)
-- `total_realized_pnl` sums `pnl_map.values()` — includes fully-closed positions (qty=0), not just active holdings
+- `orchestrator.rs` — `AccountDetailsUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; `get_account_details(account_id)` fetches account, all holdings, splits into active (qty > 0) and closed (qty = 0 with `last_sold_date` set), enriches both with asset metadata, computes per-holding `cost_basis` via i128 intermediates (ACD-023/024), sorts both lists by asset_name (ACD-033, ACD-046), returns `AccountDetailsResponse`
+- DTOs:
+  - `HoldingDetail` — active position: asset_id, asset_name, asset_reference, quantity, average_price, cost_basis, realized_pnl (all i64 micros)
+  - `ClosedHoldingDetail` — closed position (qty=0): asset_id, asset_name, asset_reference, realized_pnl, last_sold_date: String (ACD-044, ACD-045)
+  - `AccountDetailsResponse` — account_name, holdings, closed_holdings, total_holding_count: i64, total_cost_basis, total_realized_pnl (ACD-047: sum from `Σ holding.total_realized_pnl` across all holdings)
+- `total_realized_pnl` is sourced from `Holding.total_realized_pnl` (persisted by `recalculate_holding`), not from a live transaction query; supersedes SEL-038
 - `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
 
 #### Record Transaction (`use_cases/record_transaction/`)
@@ -76,7 +79,7 @@ Orchestrates transaction creation, update, and deletion (Purchase + Sell) across
   - Atomicity (TRX-027): all DB writes within each operation use `pool.begin()` + `commit()` directly
   - Purchase: VWAP computation (TRX-030, TRX-036), auto-unarchive on purchase of archived asset (TRX-028)
   - Sell: `compute_sell_total` (SEL-023): `floor(floor(qty×price/MICRO)×rate/MICRO) − fees`; closed-position guard (SEL-012); oversell guard (SEL-021); archived-asset guard (SEL-037)
-  - `recalculate_holding`: full chronological replay over all transactions for an (account, asset) pair; computes running VWAP and `realized_pnl` per sell via `compute_realized_pnl` (SEL-024: `total_sell − floor(vwap×qty/MICRO)`); returns `(Holding, HashMap<tx_id, pnl>)`
+  - `recalculate_holding`: full chronological replay over all transactions for an (account, asset) pair; computes running VWAP, `realized_pnl` per sell (SEL-024), `total_realized_pnl` (cumulative sum), and `last_sold_date` (max sell date, ISO string); returns `(Holding, HashMap<tx_id, pnl>)`
   - Sell recalculation cascades on update (SEL-031) and delete (SEL-033) — all sibling sells get updated P&L
   - Event published via `TransactionService.notify_transaction_updated()` after commit (B8)
 - `api.rs` — four Tauri commands: `add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`

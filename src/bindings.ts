@@ -75,7 +75,7 @@ async unarchiveAsset(id: string) : Promise<Result<null, string>> {
 }
 },
 /**
- * Deletes an asset.
+ * Deletes an asset, guarded against existing transactions.
  */
 async deleteAsset(id: string) : Promise<Result<null, string>> {
     try {
@@ -338,9 +338,13 @@ export type AccountDetailsResponse = {
  */
 account_name: string; 
 /**
- * Active holdings sorted by asset_name ascending (ACD-020, ACD-033).
+ * Active holdings (quantity > 0), sorted by asset_name asc (ACD-020, ACD-033).
  */
 holdings: HoldingDetail[]; 
+/**
+ * Closed positions (quantity == 0), sorted by asset_name asc (ACD-044, ACD-046).
+ */
+closed_holdings: ClosedHoldingDetail[]; 
 /**
  * Total holding count regardless of quantity (ACD-034).
  */
@@ -350,7 +354,7 @@ total_holding_count: number;
  */
 total_cost_basis: number; 
 /**
- * Sum of realized_pnl across all holdings (SEL-042).
+ * Sum of total_realized_pnl across ALL holdings (active + closed), 0 if none (ACD-047).
  */
 total_realized_pnl: number }
 /**
@@ -433,6 +437,30 @@ export type AssetClass =
  * Cryptocurrencies or other blockchain-based assets.
  */
 "DigitalAsset"
+/**
+ * Enriched view of a fully-closed position (quantity == 0, ACD-044).
+ */
+export type ClosedHoldingDetail = { 
+/**
+ * ID of the previously held asset.
+ */
+asset_id: string; 
+/**
+ * Display name of the asset.
+ */
+asset_name: string; 
+/**
+ * Ticker or user-defined reference.
+ */
+asset_reference: string; 
+/**
+ * Total realized P&L for this position (micro-units, ACD-045).
+ */
+realized_pnl: number; 
+/**
+ * ISO date of the most recent sell for this position ("YYYY-MM-DD", ACD-043).
+ */
+last_sold_date: string }
 /**
  * Parameters for creating a new account.
  */
@@ -568,9 +596,17 @@ quantity: number;
 /**
  * Volume-weighted average purchase price in account currency (micro-units).
  */
-average_price: number }
+average_price: number; 
 /**
- * Enriched view of a single holding with asset metadata and computed cost basis (ACD spec).
+ * Cumulative realized P&L from all sell transactions (micro-units, ACD-045).
+ */
+total_realized_pnl: number; 
+/**
+ * ISO date of the most recent sell transaction, if any (ACD-043).
+ */
+last_sold_date: string | null }
+/**
+ * Enriched view of a single active holding (quantity > 0) with asset metadata (ACD-020).
  */
 export type HoldingDetail = { 
 /**

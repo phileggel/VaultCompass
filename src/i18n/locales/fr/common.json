@@ -221,6 +221,8 @@
     "empty_all_closed": "Toutes les positions sont clôturées",
     "add_transaction": "Ajouter une transaction",
     "error_load": "Erreur lors du chargement des détails",
-    "loading": "Chargement..."
+    "loading": "Chargement...",
+    "closed_positions_header": "Positions clôturées",
+    "column_last_sold_date": "Dernière vente"
   }
 }

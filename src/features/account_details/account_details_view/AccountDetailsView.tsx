@@ -7,6 +7,7 @@ import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
 import type { ModalTarget, SellTarget } from "../shared/types";
+import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
 import { useAccountDetails } from "./useAccountDetails";
 
@@ -14,7 +15,8 @@ export function AccountDetailsView() {
   const { t } = useTranslation();
   const { accountId } = useParams({ from: "/accounts/$accountId" });
   const navigate = useNavigate();
-  const { isLoading, error, retry, holdings, summary } = useAccountDetails(accountId);
+  const { isLoading, error, retry, holdings, closedHoldings, summary } =
+    useAccountDetails(accountId);
 
   const [buyTarget, setBuyTarget] = useState<ModalTarget | null>(null);
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
@@ -42,6 +44,9 @@ export function AccountDetailsView() {
     setSellTarget(null);
     retry();
   }, [retry]);
+
+  const hasActiveHoldings = holdings.length > 0;
+  const hasClosedHoldings = summary?.hasClosedHoldings ?? false;
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
@@ -118,49 +123,91 @@ export function AccountDetailsView() {
                 {t("account_details.add_transaction")}
               </Button>
             </div>
-          ) : summary?.isAllClosed ? (
-            /* ACD-034 — all positions closed */
-            <div className="flex flex-col items-center justify-center h-full gap-4 py-12">
-              <p className="text-m3-on-surface-variant italic">
-                {t("account_details.empty_all_closed")}
-              </p>
-              {/* ACD-035 — empty (all closed) CTA */}
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Plus size={14} />}
-                onClick={handleAddTransaction}
-              >
-                {t("account_details.add_transaction")}
-              </Button>
-            </div>
           ) : (
-            /* Holdings table */
-            <div className="m3-table-container flex-1">
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 bg-m3-surface-container z-10">
-                  <tr>
-                    <th className="m3-th">{t("account_details.column_asset")}</th>
-                    <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
-                    <th className="m3-th text-right">{t("account_details.column_avg_price")}</th>
-                    <th className="m3-th text-right">{t("account_details.column_cost_basis")}</th>
-                    {/* SEL-042 — Realized P&L column */}
-                    <th className="m3-th text-right">{t("account_details.column_realized_pnl")}</th>
-                    <th className="m3-th">{t("transaction.column_actions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {holdings.map((row) => (
-                    <HoldingRow
-                      key={row.assetId}
-                      row={row}
-                      accountId={accountId}
-                      onBuy={setBuyTarget}
-                      onSell={setSellTarget}
-                    />
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex flex-col">
+              {/* Active holdings table */}
+              {hasActiveHoldings && (
+                <div className="m3-table-container">
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 bg-m3-surface-container z-10">
+                      <tr>
+                        <th className="m3-th">{t("account_details.column_asset")}</th>
+                        <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
+                        <th className="m3-th text-right">
+                          {t("account_details.column_avg_price")}
+                        </th>
+                        <th className="m3-th text-right">
+                          {t("account_details.column_cost_basis")}
+                        </th>
+                        {/* SEL-042 — Realized P&L column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_realized_pnl")}
+                        </th>
+                        <th className="m3-th">{t("transaction.column_actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holdings.map((row) => (
+                        <HoldingRow
+                          key={row.assetId}
+                          row={row}
+                          accountId={accountId}
+                          onBuy={setBuyTarget}
+                          onSell={setSellTarget}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ACD-048 — Closed positions section */}
+              {hasClosedHoldings && (
+                <div className="mt-2">
+                  <div className="px-6 py-3 bg-m3-surface-container-high">
+                    <h3 className="text-sm font-semibold text-m3-on-surface-variant uppercase tracking-wide">
+                      {t("account_details.closed_positions_header")}
+                    </h3>
+                  </div>
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 bg-m3-surface-container z-10">
+                      <tr>
+                        <th className="m3-th">{t("account_details.column_asset")}</th>
+                        {/* ACD-049 — P&L and last sold date */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_realized_pnl")}
+                        </th>
+                        <th className="m3-th text-right">
+                          {t("account_details.column_last_sold_date")}
+                        </th>
+                        <th className="m3-th">{t("transaction.column_actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {closedHoldings.map((row) => (
+                        <ClosedHoldingRow key={row.assetId} row={row} accountId={accountId} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* No active holdings but has closed — show CTA */}
+              {!hasActiveHoldings && (
+                <div className="flex flex-col items-center justify-center gap-4 py-8">
+                  <p className="text-m3-on-surface-variant italic">
+                    {t("account_details.empty_all_closed")}
+                  </p>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Plus size={14} />}
+                    onClick={handleAddTransaction}
+                  >
+                    {t("account_details.add_transaction")}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

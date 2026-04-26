@@ -607,6 +607,8 @@ impl RecordTransactionUseCase {
         let mut vwap_numerator: i128 = 0;
         let mut last_vwap: i64 = 0;
         let mut pnl_map: HashMap<String, i64> = HashMap::new();
+        let mut total_realized_pnl: i64 = 0;
+        let mut last_sold_date: Option<String> = None;
 
         for t in transactions {
             match t.transaction_type {
@@ -633,6 +635,11 @@ impl RecordTransactionUseCase {
                     // SEL-024 — realized P&L
                     let pnl = Self::compute_realized_pnl(t.total_amount, vwap_before, t.quantity);
                     pnl_map.insert(t.id.clone(), pnl);
+                    total_realized_pnl += pnl;
+                    // ACD-043 — track latest sell date (ISO strings sort lexicographically)
+                    if last_sold_date.as_deref() < Some(t.date.as_str()) {
+                        last_sold_date = Some(t.date.clone());
+                    }
                     // SEL-025 — decrease quantity; SEL-027 — VWAP numerator scales with qty
                     let qty = t.quantity as i128;
                     vwap_numerator -= vwap_before as i128 * qty;
@@ -660,19 +667,22 @@ impl RecordTransactionUseCase {
                 asset_id.to_string(),
                 quantity,
                 average_price,
+                total_realized_pnl,
+                last_sold_date,
             )?,
             None => Holding::new(
                 account_id.to_string(),
                 asset_id.to_string(),
                 quantity,
                 average_price,
+                total_realized_pnl,
+                last_sold_date,
             )?,
         };
 
         Ok((holding, pnl_map))
     }
 
-    /// Executes an upsert holding query within an active sqlx transaction.
     #[cfg(test)]
     pub(crate) fn compute_sell_total_pub(
         quantity: i64,
@@ -692,22 +702,27 @@ impl RecordTransactionUseCase {
         Self::compute_realized_pnl(total_sell_amount, vwap_before_sell, sold_quantity)
     }
 
+    /// Executes an upsert holding query within an active sqlx transaction.
     async fn upsert_holding_in_tx(
         &self,
         db_tx: &mut sqlx::Transaction<'_, Sqlite>,
         holding: &Holding,
     ) -> Result<()> {
         sqlx::query!(
-            r#"INSERT INTO holdings (id, account_id, asset_id, quantity, average_price)
-               VALUES (?, ?, ?, ?, ?)
+            r#"INSERT INTO holdings (id, account_id, asset_id, quantity, average_price, total_realized_pnl, last_sold_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(account_id, asset_id) DO UPDATE SET
                    quantity = excluded.quantity,
-                   average_price = excluded.average_price"#,
+                   average_price = excluded.average_price,
+                   total_realized_pnl = excluded.total_realized_pnl,
+                   last_sold_date = excluded.last_sold_date"#,
             holding.id,
             holding.account_id,
             holding.asset_id,
             holding.quantity,
-            holding.average_price
+            holding.average_price,
+            holding.total_realized_pnl,
+            holding.last_sold_date
         )
         .execute(&mut **db_tx)
         .await

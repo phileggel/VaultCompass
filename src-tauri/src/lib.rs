@@ -152,7 +152,6 @@ pub fn run() {
                 let account_details_uc = AccountDetailsUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
-                    Arc::clone(&transaction_service),
                 );
 
                 let holding_repo_for_archive = SqliteHoldingRepository::new(db.pool.clone());

@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components/button/IconButton";
+import { PnlCell } from "../shared/PnlCell";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 
@@ -13,17 +14,6 @@ type HoldingRowProps = {
   onBuy: (target: ModalTarget) => void;
   onSell: (target: SellTarget) => void;
 };
-
-function PnlCell({ value, raw }: { value: string; raw: number }) {
-  const { t } = useTranslation();
-  const colorClass =
-    raw > 0 ? "text-m3-success" : raw < 0 ? "text-m3-error" : "text-m3-on-surface-variant";
-  return (
-    <span className={`tabular-nums ${colorClass}`}>
-      {raw === 0 ? t("account_details.pnl_placeholder") : value}
-    </span>
-  );
-}
 
 export function HoldingRow({ row, accountId, onBuy, onSell }: HoldingRowProps) {
   const { t } = useTranslation();

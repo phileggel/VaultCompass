@@ -1,4 +1,4 @@
-import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
+import type { AccountDetailsResponse, ClosedHoldingDetail, HoldingDetail } from "@/bindings";
 import { microToDecimal } from "@/lib/microUnits";
 
 export interface HoldingRowViewModel {
@@ -16,6 +16,18 @@ export interface HoldingRowViewModel {
   realizedPnlRaw: number;
 }
 
+export interface ClosedHoldingRowViewModel {
+  assetId: string;
+  assetName: string;
+  assetReference: string;
+  /** Formatted realized P&L string (2 decimal places, ACD-049). */
+  realizedPnl: string;
+  /** Raw realized P&L in micro-units — used for sign-based color styling (ACD-049). */
+  realizedPnlRaw: number;
+  /** ISO date of last sell "YYYY-MM-DD" (ACD-049). */
+  lastSoldDate: string;
+}
+
 export interface AccountSummaryViewModel {
   accountName: string;
   totalCostBasis: string;
@@ -26,6 +38,8 @@ export interface AccountSummaryViewModel {
   holdingCount: number;
   isEmpty: boolean;
   isAllClosed: boolean;
+  /** True when there is at least one closed holding to display (ACD-048). */
+  hasClosedHoldings: boolean;
 }
 
 export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
@@ -42,6 +56,17 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
   };
 }
 
+export function toClosedHoldingRow(detail: ClosedHoldingDetail): ClosedHoldingRowViewModel {
+  return {
+    assetId: detail.asset_id,
+    assetName: detail.asset_name,
+    assetReference: detail.asset_reference,
+    realizedPnl: microToDecimal(detail.realized_pnl, 2),
+    realizedPnlRaw: detail.realized_pnl,
+    lastSoldDate: detail.last_sold_date,
+  };
+}
+
 export function toAccountSummary(response: AccountDetailsResponse): AccountSummaryViewModel {
   return {
     accountName: response.account_name,
@@ -51,5 +76,6 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
     holdingCount: response.total_holding_count,
     isEmpty: response.total_holding_count === 0,
     isAllClosed: response.total_holding_count > 0 && response.holdings.length === 0,
+    hasClosedHoldings: response.closed_holdings.length > 0,
   };
 }

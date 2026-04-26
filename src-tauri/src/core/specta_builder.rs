@@ -18,6 +18,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<transaction::TransactionType>()
         .typ::<record_transaction::CreateTransactionDTO>()
         .typ::<account_details::HoldingDetail>()
+        .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
         .commands(tauri_specta::collect_commands![
             asset::get_assets,

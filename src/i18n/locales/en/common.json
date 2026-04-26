@@ -221,6 +221,8 @@
     "empty_all_closed": "All positions are closed",
     "add_transaction": "Add Transaction",
     "error_load": "Failed to load account details",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "closed_positions_header": "Closed Positions",
+    "column_last_sold_date": "Last Sold"
   }
 }

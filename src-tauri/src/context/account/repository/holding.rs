@@ -11,6 +11,8 @@ struct HoldingRow {
     asset_id: String,
     quantity: i64,
     average_price: i64,
+    total_realized_pnl: i64,
+    last_sold_date: Option<String>,
 }
 
 impl From<HoldingRow> for Holding {
@@ -21,6 +23,8 @@ impl From<HoldingRow> for Holding {
             row.asset_id,
             row.quantity,
             row.average_price,
+            row.total_realized_pnl,
+            row.last_sold_date,
         )
     }
 }
@@ -43,7 +47,7 @@ impl HoldingRepository for SqliteHoldingRepository {
     async fn get_by_account(&self, account_id: &str) -> Result<Vec<Holding>> {
         let rows = sqlx::query_as!(
             HoldingRow,
-            r#"SELECT id, account_id, asset_id, quantity, average_price FROM holdings WHERE account_id = ?"#,
+            r#"SELECT id, account_id, asset_id, quantity, average_price, total_realized_pnl, last_sold_date FROM holdings WHERE account_id = ?"#,
             account_id
         )
         .fetch_all(&self.pool)
@@ -60,7 +64,7 @@ impl HoldingRepository for SqliteHoldingRepository {
     ) -> Result<Option<Holding>> {
         let row = sqlx::query_as!(
             HoldingRow,
-            r#"SELECT id, account_id, asset_id, quantity, average_price FROM holdings WHERE account_id = ? AND asset_id = ?"#,
+            r#"SELECT id, account_id, asset_id, quantity, average_price, total_realized_pnl, last_sold_date FROM holdings WHERE account_id = ? AND asset_id = ?"#,
             account_id,
             asset_id
         )
@@ -78,16 +82,20 @@ impl HoldingRepository for SqliteHoldingRepository {
 
     async fn upsert(&self, holding: Holding) -> Result<Holding> {
         sqlx::query!(
-            r#"INSERT INTO holdings (id, account_id, asset_id, quantity, average_price)
-               VALUES (?, ?, ?, ?, ?)
+            r#"INSERT INTO holdings (id, account_id, asset_id, quantity, average_price, total_realized_pnl, last_sold_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(account_id, asset_id) DO UPDATE SET
                    quantity = excluded.quantity,
-                   average_price = excluded.average_price"#,
+                   average_price = excluded.average_price,
+                   total_realized_pnl = excluded.total_realized_pnl,
+                   last_sold_date = excluded.last_sold_date"#,
             holding.id,
             holding.account_id,
             holding.asset_id,
             holding.quantity,
-            holding.average_price
+            holding.average_price,
+            holding.total_realized_pnl,
+            holding.last_sold_date
         )
         .execute(&self.pool)
         .await

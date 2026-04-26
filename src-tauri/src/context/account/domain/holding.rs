@@ -18,6 +18,10 @@ pub struct Holding {
     pub quantity: i64,
     /// Volume-weighted average purchase price in account currency (micro-units).
     pub average_price: i64,
+    /// Cumulative realized P&L from all sell transactions (micro-units, ACD-045).
+    pub total_realized_pnl: i64,
+    /// ISO date of the most recent sell transaction, if any (ACD-043).
+    pub last_sold_date: Option<String>,
 }
 
 impl Holding {
@@ -27,6 +31,8 @@ impl Holding {
         asset_id: String,
         quantity: i64,
         average_price: i64,
+        total_realized_pnl: i64,
+        last_sold_date: Option<String>,
     ) -> Result<Self> {
         Self::validate(quantity, average_price)?;
         Ok(Self {
@@ -35,6 +41,8 @@ impl Holding {
             asset_id,
             quantity,
             average_price,
+            total_realized_pnl,
+            last_sold_date,
         })
     }
 
@@ -45,6 +53,8 @@ impl Holding {
         asset_id: String,
         quantity: i64,
         average_price: i64,
+        total_realized_pnl: i64,
+        last_sold_date: Option<String>,
     ) -> Result<Self> {
         Self::validate(quantity, average_price)?;
         Ok(Self {
@@ -53,6 +63,8 @@ impl Holding {
             asset_id,
             quantity,
             average_price,
+            total_realized_pnl,
+            last_sold_date,
         })
     }
 
@@ -63,6 +75,8 @@ impl Holding {
         asset_id: String,
         quantity: i64,
         average_price: i64,
+        total_realized_pnl: i64,
+        last_sold_date: Option<String>,
     ) -> Self {
         Self {
             id,
@@ -70,6 +84,8 @@ impl Holding {
             asset_id,
             quantity,
             average_price,
+            total_realized_pnl,
+            last_sold_date,
         }
     }
 
