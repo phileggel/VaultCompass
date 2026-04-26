@@ -10,17 +10,9 @@ Added `microToFormatted` to `src/lib/microUnits.ts` using `Intl.NumberFormat(_di
 
 `handleInputChange` now always calls `onChange` — passing the valid ISO string when parseable, `""` otherwise. Parent state stays in sync with display value; submit is correctly disabled during partial or invalid input.
 
-## (settings) — User-facing language override (translations + number format)
+## ~~(settings) — User-facing language override (translations + number format)~~ ✅ resolved
 
-App language auto-detects from `navigator.language` at startup. Add a language selector in Settings so the user can override it explicitly (e.g. force English on a French system, or vice versa).
-
-Requirements:
-- Supported languages: `fr`, `en` (already have full translation files for both)
-- Persisting the choice across restarts (SQLite settings table or `tauri-plugin-store`)
-- Calling `i18n.changeLanguage(lang)` — the `languageChanged` subscription in `i18n/config.ts` already propagates the change to `setDisplayLocale`, so number formatting switches automatically
-- `AmountField` reads `i18n.language` at render time, so it switches without extra wiring
-
-Blocked by: Settings page (see Settings todo below).
+`useSettings.ts` exposes `{ currentChoice, setLanguage }` with a `LanguageChoice` type (`"auto" | "en" | "fr"`). `setLanguage` calls `i18n.changeLanguage`, which triggers the `languageChanged` subscription in `i18n/config.ts` to update `setDisplayLocale` automatically. Choice is persisted via `setLanguageOverride`; "auto" falls back to `resolveBrowserLang()`.
 
 ## (market-price) — Opt-in: use transaction unit_price as market price
 
@@ -68,12 +60,13 @@ TRX-038 (holdings refresh on `TransactionUpdated`) is fully satisfied by ACD-039
 
 `AccountTable.tsx` defines inline arrow functions inside the row `.map()`: `onClick`/`onKeyDown` on `<tr>` and `onClick` on action `IconButton`s. Move these handlers into `useAccountTable` to stabilise references and ease testing. See frontend-reviewer warning (account-page task).
 
-## (backend) — Replace string-matching error assertions with structured error types
+## ~~(backend) — Replace string-matching error assertions with structured error types~~ ✅ resolved
 
-Backend errors are currently `anyhow::Error` strings (e.g. `"Cannot edit an archived asset"`, `"Cannot archive an asset with active holdings"`). Tests assert with `err.to_string().contains(...)` — fragile: wording changes silently break intent, and there is no structural match.
-Introduce a domain error enum (e.g. `AssetError`, `TransactionError`) so tests can match on variants rather than substrings, and callers can handle errors programmatically without parsing strings.
+Typed error enums introduced across all domains using `thiserror`: `AssetDomainError`, `AssetPriceDomainError`, `CategoryDomainError` in `context/asset/domain/error.rs`; `AccountError` in `context/account/domain/error.rs`; `TransactionError` in `context/transaction/domain/error.rs`; `RecordTransactionError` and `AccountDetailsError` in `use_cases/`. Tests can now match on variants rather than substrings.
 
-## (app) — Add proper application icon
+## ~~(app) — Add proper application icon~~ ✅ resolved
+
+Source: `.screenshots/vault-compass.png` (1024×1024 RGB). All sizes generated via `cargo tauri icon` — desktop PNGs, `icon.ico`, `icon.icns`, iOS, Android assets.
 
 ## ~~(frontend) — Save current view between sessions; start on the accounts page by default~~ ✅ resolved
 
