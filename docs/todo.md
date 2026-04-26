@@ -23,7 +23,7 @@ Two possible surfaces (not mutually exclusive):
 1. **Global setting** — a toggle in Settings: "Automatically record transaction price as market price". Applies to all future transactions when enabled.
 2. **Per-transaction opt-in** — a checkbox in the buy/sell form: "Use this price as today's market price". Gives per-transaction control.
 
-Requires the Settings page (see Settings todo) for option 1. Either surface needs a spec update to MKT before implementation.
+Either surface needs a spec update to MKT before implementation.
 
 ## ~~(kit) — Back-fill IPC contracts for all existing domains~~ ✅ resolved
 
@@ -43,10 +43,9 @@ Notable findings from contract-reviewer: `ArchivedAssetSell (SEL-037)` guard is 
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
 Status (2026-03-29): `specta rc.23` available, `tauri-specta` still blocked at `rc.21`.
 
-## (frontend/shell) — Implement Settings page and wire the Settings button in Sidebar
+## ~~(frontend/shell) — Implement Settings page and wire the Settings button in Sidebar~~ ✅ resolved
 
-The Settings button in `Sidebar.tsx` footer is wired via `onSettingsClick?` but `MainLayout` does not yet pass that handler.
-Create the Settings page (feature `settings/`) and pass `onSettingsClick` from `MainLayout`.
+`src/features/settings/` created with `SettingsPage.tsx` and `useSettings.ts`. Route `/settings` registered in `router.tsx`. `Sidebar.tsx` navigates directly to `/settings` via `navigate({ to: "/settings" })` — no `onSettingsClick` prop needed.
 
 ## ~~(frontend/transactions) — TRX-038: implement holdings display~~ ✅ resolved
 
