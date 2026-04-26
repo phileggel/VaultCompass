@@ -101,12 +101,11 @@ export function useDateField(
     setDisplayValue(newDisplayValue);
 
     const isoDate = formatDateForStorage(newDisplayValue);
-    if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
-      onChange?.({
-        ...e,
-        target: { ...e.target, value: isoDate },
-      } as React.ChangeEvent<HTMLInputElement>);
-    }
+    const validIso = isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? isoDate : "";
+    onChange?.({
+      ...e,
+      target: { ...e.target, value: validIso },
+    } as React.ChangeEvent<HTMLInputElement>);
   };
 
   const handleDateSelect = (date: Date) => {

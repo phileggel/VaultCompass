@@ -2,6 +2,16 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (ui) — Locale-aware number formatting in microToDecimal
+
+`microToDecimal` uses `toFixed()` which always outputs a period as the decimal separator, regardless of the user's locale. On a French system, `1500.50` should display as `1 500,50`. Affects all numeric columns app-wide (quantity, price, cost basis, P&L, performance %).
+
+Fix: replace `(micro / 1_000_000).toFixed(decimals)` with `Intl.NumberFormat(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(micro / 1_000_000)`. The `undefined` locale uses the runtime locale — verify that Tauri's WebView correctly inherits the OS locale (may need an explicit locale passed from Rust if not).
+
+## ~~(ui) — DateField silent stale state when user types invalid text~~ ✅ resolved
+
+`handleInputChange` now always calls `onChange` — passing the valid ISO string when parseable, `""` otherwise. Parent state stays in sync with display value; submit is correctly disabled during partial or invalid input.
+
 ## (market-price) — Opt-in: use transaction unit_price as market price
 
 When recording a buy or sell transaction, optionally treat the `unit_price` (excluding fees) as the market price for that date, creating an `AssetPrice` record automatically.
