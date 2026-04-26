@@ -55,9 +55,9 @@ TRX-038 (holdings refresh on `TransactionUpdated`) is fully satisfied by ACD-039
 
 `nav.design_system` key added; `shell.sidebar_collapse/expand/version` keys added. `Header.tsx` back button aria-label now uses `t("action.back")`. Both en + fr JSON updated.
 
-## (frontend/accounts) — Extract row handlers into useAccountTable
+## ~~(frontend/accounts) — Extract row handlers into useAccountTable~~ ✅ resolved
 
-`AccountTable.tsx` defines inline arrow functions inside the row `.map()`: `onClick`/`onKeyDown` on `<tr>` and `onClick` on action `IconButton`s. Move these handlers into `useAccountTable` to stabilise references and ease testing. See frontend-reviewer warning (account-page task).
+All substantive row handlers (`handleRowKeyDown`, `handleEditClick`, `handleDeleteClick`) were already in `useAccountTable`. The direct `onClick={() => onAccountClick(account.id)}` on `<tr>` is the correct pattern — a no-op wrapper would add indirection with no logic. No change needed; item closed.
 
 ## ~~(backend) — Replace string-matching error assertions with structured error types~~ ✅ resolved
 
