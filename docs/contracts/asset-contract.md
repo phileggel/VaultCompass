@@ -4,6 +4,7 @@
 > Last updated by: `market-price` spec
 
 > **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`:
+>
 > - Asset CRUD: `AssetCommandError` — `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel`, `InvalidCurrency`, `Archived`, `NotFound`, `CategoryNotFound`, `Unknown`
 > - Categories: `CategoryCommandError` — `LabelEmpty`, `DuplicateName`, `SystemReadonly`, `SystemProtected`, `Unknown`
 > - `record_asset_price`: `AssetPriceCommandError` — `NotPositive`, `NonFinite`, `DateInFuture`, `Unknown`

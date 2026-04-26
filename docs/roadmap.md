@@ -60,16 +60,16 @@ Spec: `docs/spec/financial-asset-transaction.md`
 
 Display the current state of positions and their performance.
 
-| Operation                     | Status     | Notes                                                                |
-| ----------------------------- | ---------- | -------------------------------------------------------------------- |
-| Holdings computed from buys   | ✅ Done    | Quantity + VWAP average price per (account, asset) pair              |
-| Account Details view          | ✅ Done    | Holdings list + total cost basis per account (ACD spec)              |
-| Holdings reactivity           | ✅ Done    | Re-fetch on `TransactionUpdated` event (ACD-039)                     |
+| Operation                     | Status     | Notes                                                                          |
+| ----------------------------- | ---------- | ------------------------------------------------------------------------------ |
+| Holdings computed from buys   | ✅ Done    | Quantity + VWAP average price per (account, asset) pair                        |
+| Account Details view          | ✅ Done    | Holdings list + total cost basis per account (ACD spec)                        |
+| Holdings reactivity           | ✅ Done    | Re-fetch on `TransactionUpdated` event (ACD-039)                               |
 | Current market price (manual) | ✅ Done    | Manual entry in Account Details holding row; stored as `AssetPrice` (MKT spec) |
 | Current market price (feed)   | 🔲 Future  | Automatic price feed; depends on manual entry being in place                   |
 | Unrealized P&L                | ✅ Done    | `(current_price − average_price) × quantity`; displayed per holding (MKT spec) |
 | Performance %                 | ✅ Done    | `unrealized_pnl / cost_basis × 100`; displayed per holding (MKT spec)          |
-| Portfolio summary / dashboard | 🔲 Planned | Aggregate view across all accounts                                              |
+| Portfolio summary / dashboard | 🔲 Planned | Aggregate view across all accounts                                             |
 
 Specs: `docs/spec/account-details.md`, `docs/spec/market-price.md`
 

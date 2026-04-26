@@ -526,6 +526,10 @@ export type AssetCommandError =
  */
 { code: "NotFound" } | 
 /**
+ * The category referenced in the DTO does not exist.
+ */
+{ code: "CategoryNotFound" } | 
+/**
  * An unexpected server-side error occurred.
  */
 { code: "Unknown" }

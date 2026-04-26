@@ -5,11 +5,11 @@
 
 ## Commands
 
-| Command            | Args | Return               | Errors                                                                                                |
-| ------------------ | ---- | -------------------- | ----------------------------------------------------------------------------------------------------- |
-| `check_for_update` | —    | `Option<UpdateInfo>` | *(none — network/server errors are silent per R21; command returns None)*                             |
-| `download_update`  | —    | `()`                 | *(none — returns immediately (R6, R7); errors emitted as `update:error` event (R23); re-invoke to retry per R24; concurrent calls silently ignored per R10)* |
-| `install_update`   | —    | `()`                 | `NoUpdateReady` *(precondition guard — inferred from R13: install requires a completed download)*     |
+| Command            | Args | Return               | Errors                                                                                                                                                       |
+| ------------------ | ---- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `check_for_update` | —    | `Option<UpdateInfo>` | _(none — network/server errors are silent per R21; command returns None)_                                                                                    |
+| `download_update`  | —    | `()`                 | _(none — returns immediately (R6, R7); errors emitted as `update:error` event (R23); re-invoke to retry per R24; concurrent calls silently ignored per R10)_ |
+| `install_update`   | —    | `()`                 | `NoUpdateReady` _(precondition guard — inferred from R13: install requires a completed download)_                                                            |
 
 ## Shared Types
 
