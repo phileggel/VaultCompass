@@ -144,7 +144,15 @@
     "assets": "Actifs",
     "categories": "Catégories",
     "about": "À propos",
+    "settings": "Paramètres",
     "design_system": "Design System"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language_label": "Langue",
+    "language_auto": "Langue du système",
+    "language_en": "English",
+    "language_fr": "Français"
   },
   "shell": {
     "sidebar_collapse": "Réduire le menu",

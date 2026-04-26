@@ -144,7 +144,15 @@
     "assets": "Assets",
     "categories": "Categories",
     "about": "About",
+    "settings": "Settings",
     "design_system": "Design System"
+  },
+  "settings": {
+    "title": "Settings",
+    "language_label": "Language",
+    "language_auto": "System default",
+    "language_en": "English",
+    "language_fr": "Français"
   },
   "shell": {
     "sidebar_collapse": "Collapse menu",

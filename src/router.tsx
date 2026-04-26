@@ -10,6 +10,7 @@ import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
 import { DesignSystemPage } from "@/features/design-system";
+import { SettingsPage } from "@/features/settings";
 import { AddTransactionPage, TransactionListPage } from "@/features/transactions";
 import { getLastPath } from "@/lib/lastPath";
 import { AppShell } from "./AppShell";
@@ -85,6 +86,12 @@ const designSystemRoute = createRoute({
   component: import.meta.env.DEV ? DesignSystemPage : () => null,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   assetsRoute,
@@ -94,6 +101,7 @@ const routeTree = rootRoute.addChildren([
   addTransactionRoute,
   categoriesRoute,
   designSystemRoute,
+  settingsRoute,
 ]);
 
 export const router = createRouter({

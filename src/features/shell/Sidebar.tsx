@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Info, Menu, TrendingUp, X } from "lucide-react";
+import { Info, Menu, Settings, TrendingUp, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AboutModal } from "@/features/about";
@@ -85,6 +85,22 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
         >
           <Info size={24} />
           {isOpen && <span>{t("nav.about")}</span>}
+        </button>
+      </nav>
+
+      <nav aria-label={t("nav.settings")} className="px-3 pb-2">
+        <button
+          type="button"
+          onClick={() => navigate({ to: "/settings" })}
+          aria-label={t("nav.settings")}
+          className={`
+            w-full m3-navigation-item
+            ${pathname === "/settings" ? "m3-navigation-item-active" : ""}
+            ${!isOpen && "justify-center px-0"}
+          `}
+        >
+          <Settings size={24} />
+          {isOpen && <span>{t("nav.settings")}</span>}
         </button>
       </nav>
 
