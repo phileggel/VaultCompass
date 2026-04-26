@@ -39,13 +39,13 @@ export function AmountField({
   onChange,
   error,
   disabled = false,
-  locale = "fr-FR",
+  locale,
 }: AmountFieldProps) {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
   const { displayValue, placeholder, handleChange, handleBlur, clearAmount } = useAmountField(
     value,
     onChange,
-    locale,
+    locale ?? i18n.language,
   );
 
   return (

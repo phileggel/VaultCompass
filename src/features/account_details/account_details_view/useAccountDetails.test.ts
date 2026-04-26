@@ -81,7 +81,7 @@ describe("useAccountDetails — closed holdings (ACD-044–ACD-050)", () => {
     });
     const { result } = renderHook(() => useAccountDetails("account-1"));
     await act(async () => {});
-    expect(result.current.summary?.totalRealizedPnl).toBe("35.00");
+    expect(result.current.summary?.totalRealizedPnl).toBe("35,00");
     expect(result.current.summary?.totalRealizedPnlRaw).toBe(35_000_000);
   });
 

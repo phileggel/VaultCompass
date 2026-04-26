@@ -4,11 +4,23 @@
 
 ## ~~(ui) — Locale-aware number formatting in microToDecimal~~ ✅ resolved
 
-Added `microToFormatted` to `src/lib/microUnits.ts` using `Intl.NumberFormat(undefined, ...)`. All display-only values in presenters and hook computed totals now use `microToFormatted`. `microToDecimal` (plain `toFixed`) is kept for editable form pre-fill where the browser requires a period decimal separator. Tauri's WebView inherits the OS locale for `Intl` — verify French display in the running app.
+Added `microToFormatted` to `src/lib/microUnits.ts` using `Intl.NumberFormat(_displayLocale, ...)`. `_displayLocale` defaults to `"fr"` and is set at startup from `i18n/config.ts` via `setDisplayLocale(i18n.language)`, with a `languageChanged` subscription for runtime switches. `Intl.NumberFormat(undefined)` cannot be used — WebKitGTK on WSL2 resolves `undefined` to en-US, ignoring the OS locale. All display-only values in presenters and hook computed totals use `microToFormatted`. `microToDecimal` (plain `toFixed`) is kept for editable form pre-fill where the browser requires a period decimal separator.
 
 ## ~~(ui) — DateField silent stale state when user types invalid text~~ ✅ resolved
 
 `handleInputChange` now always calls `onChange` — passing the valid ISO string when parseable, `""` otherwise. Parent state stays in sync with display value; submit is correctly disabled during partial or invalid input.
+
+## (settings) — User-facing language override (translations + number format)
+
+App language auto-detects from `navigator.language` at startup. Add a language selector in Settings so the user can override it explicitly (e.g. force English on a French system, or vice versa).
+
+Requirements:
+- Supported languages: `fr`, `en` (already have full translation files for both)
+- Persisting the choice across restarts (SQLite settings table or `tauri-plugin-store`)
+- Calling `i18n.changeLanguage(lang)` — the `languageChanged` subscription in `i18n/config.ts` already propagates the change to `setDisplayLocale`, so number formatting switches automatically
+- `AmountField` reads `i18n.language` at render time, so it switches without extra wiring
+
+Blocked by: Settings page (see Settings todo below).
 
 ## (market-price) — Opt-in: use transaction unit_price as market price
 

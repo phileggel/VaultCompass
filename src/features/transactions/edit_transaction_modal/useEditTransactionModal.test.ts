@@ -65,7 +65,7 @@ describe("useEditTransactionModal", () => {
     expect(result.current.formData.exchangeRate).toBe("1.000");
     expect(result.current.formData.note).toBe("initial note");
     // totalAmount is derived from micro values, not stored in formData
-    expect(result.current.totalAmountDisplay).toBe("100.000");
+    expect(result.current.totalAmountDisplay).toBe("100,000");
   });
 
   // Submit calls updateTransaction with correct micro-unit values

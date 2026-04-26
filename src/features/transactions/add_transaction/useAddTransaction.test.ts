@@ -63,7 +63,7 @@ describe("useAddTransaction", () => {
     });
 
     // 2 * 100 * 1 + 0 = 200.000
-    expect(result.current.totalAmountDisplay).toBe("200.000");
+    expect(result.current.totalAmountDisplay).toBe("200,000");
   });
 
   // TRX-029 — archived asset triggers confirmation dialog on submit

@@ -45,7 +45,7 @@ describe("useSellTransaction", () => {
     });
 
     // 2 × 50 × 1 − 5 = 95
-    expect(result.current.totalAmountDisplay).toBe("95.000");
+    expect(result.current.totalAmountDisplay).toBe("95,000");
   });
 
   // SEL-022 — oversell guard: quantity > holdingQuantityMicro → form invalid

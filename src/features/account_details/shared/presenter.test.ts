@@ -41,17 +41,17 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
 describe("toHoldingRow", () => {
   it("formats quantity with 6 decimals", () => {
     const row = toHoldingRow(makeHolding({ quantity: 1_500_000 }));
-    expect(row.quantity).toBe("1.500000");
+    expect(row.quantity).toBe("1,500000");
   });
 
   it("formats averagePrice with 2 decimals", () => {
     const row = toHoldingRow(makeHolding({ average_price: 150_000_000 }));
-    expect(row.averagePrice).toBe("150.00");
+    expect(row.averagePrice).toBe("150,00");
   });
 
   it("formats costBasis with 2 decimals", () => {
     const row = toHoldingRow(makeHolding({ cost_basis: 300_000_000 }));
-    expect(row.costBasis).toBe("300.00");
+    expect(row.costBasis).toBe("300,00");
   });
 
   it("maps asset metadata fields correctly", () => {
@@ -63,7 +63,7 @@ describe("toHoldingRow", () => {
 
   it("formats realizedPnl with 2 decimals (SEL-042)", () => {
     const row = toHoldingRow(makeHolding({ realized_pnl: 5_000_000 }));
-    expect(row.realizedPnl).toBe("5.00");
+    expect(row.realizedPnl).toBe("5,00");
     expect(row.realizedPnlRaw).toBe(5_000_000);
   });
 
@@ -76,12 +76,12 @@ describe("toHoldingRow", () => {
 describe("toAccountSummary", () => {
   it("formats totalCostBasis with 2 decimals", () => {
     const summary = toAccountSummary(makeResponse({ total_cost_basis: 250_000_000 }));
-    expect(summary.totalCostBasis).toBe("250.00");
+    expect(summary.totalCostBasis).toBe("250,00");
   });
 
   it("formats totalRealizedPnl with 2 decimals (SEL-042)", () => {
     const summary = toAccountSummary(makeResponse({ total_realized_pnl: 12_500_000 }));
-    expect(summary.totalRealizedPnl).toBe("12.50");
+    expect(summary.totalRealizedPnl).toBe("12,50");
   });
 
   it("isEmpty true when total_holding_count is 0", () => {
@@ -115,7 +115,7 @@ describe("toClosedHoldingRow", () => {
   // ACD-049 — realized P&L formatted to 2 decimal places
   it("formats realizedPnl with 2 decimals (ACD-049)", () => {
     const row = toClosedHoldingRow(makeClosedHolding({ realized_pnl: 15_000_000 }));
-    expect(row.realizedPnl).toBe("15.00");
+    expect(row.realizedPnl).toBe("15,00");
   });
 
   // ACD-049 — raw realized P&L exposed for sign-based colour styling
@@ -138,7 +138,7 @@ describe("toClosedHoldingRow", () => {
         closed_holdings: [makeClosedHolding({ realized_pnl: 25_000_000 })],
       }),
     );
-    expect(summary.totalRealizedPnl).toBe("35.00");
+    expect(summary.totalRealizedPnl).toBe("35,00");
   });
 
   // ACD-050 — empty closed_holdings list → hasClosedHoldings false
@@ -170,7 +170,7 @@ describe("toHoldingRow — market price fields (MKT)", () => {
   // MKT-030 — current price column: formatted price with 2 decimals
   it("MKT-030 — currentPrice is formatted with 2 decimals when current_price is set", () => {
     const row = toHoldingRow(makeHolding({ current_price: 150_500_000 }));
-    expect(row.currentPrice).toBe("150.50");
+    expect(row.currentPrice).toBe("150,50");
   });
 
   // MKT-030 — "—" sentinel when current_price is null
@@ -211,7 +211,7 @@ describe("toHoldingRow — market price fields (MKT)", () => {
   // MKT-034 — currentPrice still formatted on currency mismatch
   it("MKT-034 — currentPrice is formatted even when unrealized_pnl is null (currency mismatch)", () => {
     const row = toHoldingRow(makeHolding({ current_price: 110_000_000, unrealized_pnl: null }));
-    expect(row.currentPrice).toBe("110.00");
+    expect(row.currentPrice).toBe("110,00");
   });
 });
 
@@ -219,7 +219,7 @@ describe("toAccountSummary — market price fields (MKT)", () => {
   // MKT-041 — total_unrealized_pnl formatted with 2 decimals when present
   it("MKT-041 — totalUnrealizedPnl is formatted with 2 decimals when total_unrealized_pnl is set", () => {
     const summary = toAccountSummary(makeResponse({ total_unrealized_pnl: 20_000_000 }));
-    expect(summary.totalUnrealizedPnl).toBe("20.00");
+    expect(summary.totalUnrealizedPnl).toBe("20,00");
   });
 
   // MKT-041 — "—" when total_unrealized_pnl is null

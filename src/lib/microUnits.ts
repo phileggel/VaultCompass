@@ -37,13 +37,21 @@ export function microToDecimal(micros: number, decimals = 3): string {
   return (micros / MICRO).toFixed(decimals);
 }
 
+// Set once at app startup from i18n config — tests may override via setDisplayLocale("en")
+let _displayLocale = "fr";
+
+export function setDisplayLocale(locale: string): void {
+  _displayLocale = locale;
+}
+
 /**
  * Converts an integer micro-unit value to a locale-aware display string.
  * Use for read-only display in tables and labels — never for editable inputs.
- * e.g. 1_500_000 → "1.500" (en-US) or "1,500" (fr-FR) with 3 decimal places
+ * Locale follows i18n.language (set at startup via setDisplayLocale).
+ * e.g. 1_500_000 → "1,500" (fr) or "1.500" (en) with 3 decimal places
  */
 export function microToFormatted(micros: number, decimals = 3): string {
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(_displayLocale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(micros / MICRO);
