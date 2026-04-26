@@ -1,7 +1,7 @@
 ---
 name: reviewer-backend
 description: Rust-specific code reviewer for Tauri 2 projects. Checks Clippy patterns, anyhow error handling, trait-based repositories, async correctness, no unwrap() in production paths, inline test conventions. Use when any .rs file is modified.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write
 model: claude-sonnet-4-6
 ---
 
@@ -84,3 +84,23 @@ If a file has no issues, write `✅ No issues found.`
 
 At the end, output a one-line summary:
 `Review complete: N critical (D decisions), N warnings, N suggestions across N files.`
+
+---
+
+## Save report
+
+After outputting the report to the conversation, save it to disk.
+
+Compute the next available filename:
+
+```bash
+mkdir -p tmp
+DATE=$(date +%Y-%m-%d)
+i=1
+while [ -f "tmp/reviewer-backend-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
+echo "tmp/reviewer-backend-${DATE}-$(printf '%02d' $i).md"
+```
+
+Use the Write tool to save the full report (same content as the conversation output) to that path.
+
+Tell the user: `Report saved to {path}`

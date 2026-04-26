@@ -1,7 +1,7 @@
 ---
 name: contract
 description:
-  Derives or updates an IPC contract (docs/contracts/{domain}.md) from a validated
+  Derives or updates an IPC contract (docs/contracts/{domain}-contract.md) from a validated
   feature spec. Upsert-aware — adds commands to an existing domain contract without overwriting.
   Run after spec-reviewer approves, before contract-reviewer and feature-planner.
 tools: Read, Glob, Write, Edit, AskUserQuestion
@@ -53,13 +53,13 @@ types, no `Option<>`, no derives. Those are implementation details for `feature-
 
 ### 4. Check for existing contract
 
-Run `Glob docs/contracts/{domain}.md`.
+Run `Glob docs/contracts/{domain}-contract.md`.
 
 **If the file does not exist:**
 
 - Compose the full contract (see format below)
 - Show it to the user and ask: "Does this contract look correct? Any changes before I create it?"
-- On approval, write `docs/contracts/{domain}.md`
+- On approval, write `docs/contracts/{domain}-contract.md`
 
 **If the file already exists:**
 
@@ -90,7 +90,7 @@ After writing or patching, append to the `## Changelog` section:
 
 Report:
 
-- Contract path: `docs/contracts/{domain}.md`
+- Contract path: `docs/contracts/{domain}-contract.md`
 - Commands written: list
 - Next step: run `contract-reviewer` agent to validate the contract before proceeding to `feature-planner`
 

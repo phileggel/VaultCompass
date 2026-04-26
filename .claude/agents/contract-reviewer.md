@@ -1,7 +1,7 @@
 ---
 name: contract-reviewer
 description:
-  Reviews a domain contract (docs/contracts/{domain}.md) against its source spec for
+  Reviews a domain contract (docs/contracts/{domain}-contract.md) against its source spec for
   coverage, traceability, error exhaustiveness, and type correctness. Blocks progression to
   feature-planner on critical findings. Run after /contract produces or updates the contract.
 tools: Read, Grep, Glob
@@ -16,7 +16,7 @@ sound enough to anchor test stubs and a Specta-generated TypeScript API.
 
 ## Input
 
-The user passes a contract path (e.g. `docs/contracts/user.md`).
+The user passes a contract path (e.g. `docs/contracts/user-contract.md`).
 If no path is given, list files in `docs/contracts/` and ask which to review.
 
 ---

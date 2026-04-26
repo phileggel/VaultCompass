@@ -22,7 +22,7 @@ _Use for: New features, new business logic, significant UI changes, or complex r
 1. Run **`/spec-writer`** skill → produces `docs/spec/{feature}.md`. [soft gate]
 2. _(Optional)_ Run **`/adr-manager`** skill → produces `docs/adr/{ref}.md`.
 3. Run **`spec-reviewer`** agent → validate spec quality + contractability. [soft gate — hard if 🔴]
-4. Run **`/contract`** skill → produces or updates `docs/contracts/{domain}.md`. [soft gate: human approves shape]
+4. Run **`/contract`** skill → produces or updates `docs/contracts/{domain}-contract.md`. [soft gate: human approves shape]
 5. Run **`contract-reviewer`** agent → validate contract vs spec. [soft gate — hard if 🔴]
 6. Run **`feature-planner`** agent → produces `docs/plan/{feature}-plan.md`. [auto]
 

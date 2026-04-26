@@ -54,7 +54,7 @@ Replace `{task}` with the user's description and `{type}` with the scope argumen
 ### Phase 1 — Spec & Contract & Plan
 - [ ] `/spec-writer` → `docs/spec/{domain}.md`
 - [ ] `spec-reviewer` → validate spec quality [soft gate — hard if 🔴]
-- [ ] `/contract` → `docs/contracts/{domain}.md` [human approves shape]
+- [ ] `/contract` → `docs/contracts/{domain}-contract.md` [human approves shape]
 - [ ] `contract-reviewer` → validate contract vs spec [soft gate — hard if 🔴]
 - [ ] `feature-planner` → `docs/plan/{feature}-plan.md`
 

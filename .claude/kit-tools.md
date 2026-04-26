@@ -62,7 +62,7 @@ Each item lists its **trigger** (when to invoke it) and a one-line description.
 | `dep-audit`    | `/dep-audit`     | Audit npm + Cargo dependencies for outdated versions and CVEs; run before every release                                                                  |
 | `adr-manager`  | `/adr-manager`   | Create, update (supersede), or index Architecture Decision Records in `docs/adr/`                                                                        |
 | `spec-writer`  | `/spec-writer`   | Interactive spec writer: interviews user, reads domain, produces `docs/spec/{feature}.md` with TRIGRAM-NNN rules                                         |
-| `contract`     | `/contract`      | Derives or updates `docs/contracts/{domain}.md` from a validated spec; upsert-aware, human-approved                                                      |
+| `contract`     | `/contract`      | Derives or updates `docs/contracts/{domain}-contract.md` from a validated spec; upsert-aware, human-approved                                             |
 
 ---
 

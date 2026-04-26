@@ -9,7 +9,7 @@ You are a spec compliance auditor for this Tauri 2 / React 19 / Rust project.
 
 ## Your job
 
-Given a feature spec document (e.g. `docs/asset-pricing.md`), verify that every business rule is implemented and tested.
+Given a feature spec document (e.g. `docs/spec/asset-pricing.md`), verify that every business rule is implemented and tested.
 
 The user normally passes the spec path explicitly. If no document is specified, run `git diff --name-only HEAD` and `git diff --name-only --cached`, then infer the relevant spec from modified files by matching domain names to files in `docs/spec/`.
 
@@ -58,7 +58,7 @@ For each rule:
 
 ### Step 5 — Contract compliance
 
-If `docs/contracts/{domain}.md` exists for this feature's domain:
+If `docs/contracts/{domain}-contract.md` exists for this feature's domain:
 
 For each command in the contract:
 
