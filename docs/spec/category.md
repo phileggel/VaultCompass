@@ -8,9 +8,9 @@ A category (`AssetCategory`) is a free-form grouping defined by the user to orga
 
 ## Category field definitions
 
-| Field  | Meaning                                                                                                                |
-| ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `id`   | Unique identifier generated at creation (UUID). The system category has the fixed id `default-uncategorized`.          |
+| Field  | Meaning                                                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`   | Unique identifier generated at creation (UUID). The system category has the fixed id `default-uncategorized`.                    |
 | `name` | User-defined human-readable name (e.g. "US Stocks", "European Real Estate"). Unique across active categories (case-insensitive). |
 
 ---
@@ -29,10 +29,10 @@ A category (`AssetCategory`) is a free-form grouping defined by the user to orga
 
 **CAT-004 (was R4) — Category table — columns (frontend)**: The table displays the following columns, sorted by Name ascending by default:
 
-| Column  | Content                                                                              | Sortable |
-| ------- | ------------------------------------------------------------------------------------ | -------- |
-| Name    | `category.name` + "Default" badge if system category                                 | Yes      |
-| Actions | Edit button (always visible) + Delete button (hidden for the system category)        | No       |
+| Column  | Content                                                                       | Sortable |
+| ------- | ----------------------------------------------------------------------------- | -------- |
+| Name    | `category.name` + "Default" badge if system category                          | Yes      |
+| Actions | Edit button (always visible) + Delete button (hidden for the system category) | No       |
 
 A header displays the title "Categories", the total category count, and a search field filtering by name.
 

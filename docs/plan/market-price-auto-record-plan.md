@@ -431,21 +431,21 @@ Same test patterns as 2.13.1.
 
 ## 3. Rules Coverage
 
-| Rule    | Scope    | Description                                      | Implementation Task                                | Test Phase        |
-| ------- | -------- | ------------------------------------------------ | -------------------------------------------------- | ----------------- |
-| MKT-050 | frontend | Global auto-record toggle in Settings            | 2.9 (useSettings, SettingsPage)                    | test-writer-fe    |
-| MKT-051 | frontend | Per-transaction checkbox in buy/sell forms        | 2.10, 2.11 (hooks + components)                    | test-writer-fe    |
-| MKT-052 | frontend | Checkbox default: toggle on create, OFF on edit  | 2.10 (hooks init logic)                            | test-writer-fe    |
-| MKT-053 | frontend | Snapshot semantics at form open                  | 2.10 (hooks init logic)                            | test-writer-fe    |
-| MKT-054 | both     | Submit payload: record_price bool in DTO         | 2.1 (DTO), 2.10 (hooks), 2.8 (fixup)              | test-writer-be/fe |
-| MKT-055 | backend  | Auto-write inside orchestrator's DB transaction  | 2.4 (orchestrator)                                 | test-writer-be    |
-| MKT-056 | backend  | Atomicity: full rollback if any step fails       | 2.4 (orchestrator)                                 | test-writer-be    |
-| MKT-057 | backend  | AssetPriceUpdated event after commit             | 2.3 (AssetService), 2.4 (orchestrator)             | test-writer-be    |
-| MKT-058 | backend  | Silent overwrite on same-date collision          | 2.4 (orchestrator upsert)                          | test-writer-be    |
-| MKT-059 | backend  | Edit lifecycle: price independence               | 2.4 (update_transaction)                           | test-writer-be    |
-| MKT-060 | backend  | Delete lifecycle: price independence             | no code change (implicit)                          | test-writer-be    |
-| MKT-061 | backend  | Zero unit_price skip                             | 2.4 (conditional check)                            | test-writer-be    |
-| MKT-062 | both     | Auto-record failure surfaces as tx error         | 2.4 (error propagation + rollback, MKT-056)        | test-writer-be    |
+| Rule    | Scope    | Description                                     | Implementation Task                         | Test Phase        |
+| ------- | -------- | ----------------------------------------------- | ------------------------------------------- | ----------------- |
+| MKT-050 | frontend | Global auto-record toggle in Settings           | 2.9 (useSettings, SettingsPage)             | test-writer-fe    |
+| MKT-051 | frontend | Per-transaction checkbox in buy/sell forms      | 2.10, 2.11 (hooks + components)             | test-writer-fe    |
+| MKT-052 | frontend | Checkbox default: toggle on create, OFF on edit | 2.10 (hooks init logic)                     | test-writer-fe    |
+| MKT-053 | frontend | Snapshot semantics at form open                 | 2.10 (hooks init logic)                     | test-writer-fe    |
+| MKT-054 | both     | Submit payload: record_price bool in DTO        | 2.1 (DTO), 2.10 (hooks), 2.8 (fixup)        | test-writer-be/fe |
+| MKT-055 | backend  | Auto-write inside orchestrator's DB transaction | 2.4 (orchestrator)                          | test-writer-be    |
+| MKT-056 | backend  | Atomicity: full rollback if any step fails      | 2.4 (orchestrator)                          | test-writer-be    |
+| MKT-057 | backend  | AssetPriceUpdated event after commit            | 2.3 (AssetService), 2.4 (orchestrator)      | test-writer-be    |
+| MKT-058 | backend  | Silent overwrite on same-date collision         | 2.4 (orchestrator upsert)                   | test-writer-be    |
+| MKT-059 | backend  | Edit lifecycle: price independence              | 2.4 (update_transaction)                    | test-writer-be    |
+| MKT-060 | backend  | Delete lifecycle: price independence            | no code change (implicit)                   | test-writer-be    |
+| MKT-061 | backend  | Zero unit_price skip                            | 2.4 (conditional check)                     | test-writer-be    |
+| MKT-062 | both     | Auto-record failure surfaces as tx error        | 2.4 (error propagation + rollback, MKT-056) | test-writer-be    |
 
 ---
 

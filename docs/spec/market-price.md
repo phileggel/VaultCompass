@@ -134,7 +134,7 @@ This section extends the buy/sell transaction flow defined in `docs/spec/financi
 
 **MKT-058 — Conflict — silent overwrite (backend)**: If an `AssetPrice` record already exists at `(tx.asset_id, tx.date)` when `record_price` is `true`, it is silently overwritten with `tx.unit_price` via the same upsert semantics as MKT-025. No prompt or warning is shown to the user; the form behaves identically whether or not a same-day price already exists.
 
-**MKT-059 — Edit lifecycle — price independence (backend)**: Editing a transaction does not modify or remove any `AssetPrice` record previously written by that transaction. When the user re-saves an edited transaction with `record_price = true`, the upsert (MKT-055) targets the transaction's *current* `tx.date` and *current* `tx.unit_price`. If the user changed the transaction date during the edit, the price record at the prior date is left untouched and remains in storage; the upsert lands at the new date as a separate `(asset_id, date)` row. The same applies if the user changed the unit price: only the row at the current date is overwritten.
+**MKT-059 — Edit lifecycle — price independence (backend)**: Editing a transaction does not modify or remove any `AssetPrice` record previously written by that transaction. When the user re-saves an edited transaction with `record_price = true`, the upsert (MKT-055) targets the transaction's _current_ `tx.date` and _current_ `tx.unit_price`. If the user changed the transaction date during the edit, the price record at the prior date is left untouched and remains in storage; the upsert lands at the new date as a separate `(asset_id, date)` row. The same applies if the user changed the unit price: only the row at the current date is overwritten.
 
 **MKT-060 — Delete lifecycle — price independence (backend)**: Deleting a transaction does not remove any `AssetPrice` record previously written by that transaction. `AssetPrice` records are independent of the transaction lifecycle: once persisted, they are governed solely by MKT rules (currently only MKT-025 upsert; standalone delete is deferred).
 
@@ -244,9 +244,9 @@ A checkbox is added directly above the submit button in:
 - the standalone /transactions/new form (whether the transaction is a buy or a sell),
 - the edit variants of all the above.
 
-| Field             | Default                                                    | Editable |
-| ----------------- | ---------------------------------------------------------- | -------- |
-| Auto-record price | Snapshot of global toggle on create; always OFF on edit    | Yes      |
+| Field             | Default                                                 | Editable |
+| ----------------- | ------------------------------------------------------- | -------- |
+| Auto-record price | Snapshot of global toggle on create; always OFF on edit | Yes      |
 
 The label updates live with the form's date field: "Use this price as the market price for 2026-04-27".
 

@@ -76,16 +76,16 @@ The default value is `Cash`.
 
 **AST-007 (was R7) — Asset table (frontend)**: The table displays the following columns, in this order, sorted by Name ascending by default:
 
-| Column    | Content                                        | Sortable |
-| --------- | ---------------------------------------------- | -------- |
-| Name      | `asset.name`                                   | Yes      |
-| Reference | `asset.reference`                              | Yes      |
-| Class     | `asset.class`                                  | Yes      |
-| Category  | `asset.category.name`                          | Yes      |
-| CCY       | `asset.currency`                               | Yes      |
-| Risk      | `asset.risk_level` — risk badge (AST-011)      | Yes      |
-| Status    | "Archived" badge if `is_archived = true`       | No       |
-| Actions   | See AST-013, AST-019, AST-020                  | No       |
+| Column    | Content                                   | Sortable |
+| --------- | ----------------------------------------- | -------- |
+| Name      | `asset.name`                              | Yes      |
+| Reference | `asset.reference`                         | Yes      |
+| Class     | `asset.class`                             | Yes      |
+| Category  | `asset.category.name`                     | Yes      |
+| CCY       | `asset.currency`                          | Yes      |
+| Risk      | `asset.risk_level` — risk badge (AST-011) | Yes      |
+| Status    | "Archived" badge if `is_archived = true`  | No       |
+| Actions   | See AST-013, AST-019, AST-020             | No       |
 
 The table displays only active assets (`is_archived = false`) by default. A page header shows the title "Assets" and the total active asset count.
 
