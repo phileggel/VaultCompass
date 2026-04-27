@@ -32,7 +32,7 @@ ADRs: ADR-001 (i64 micros), ADR-004 (use cases inject services not repositories)
 - [x] i18n Review (`i18n-checker` -- UI text changed) -- 3 keys × 2 locales, all wired, no orphans
 - [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` -- entries in English)
 - [x] Spec check (`spec-checker`) -- 13/13 implemented, 11/13 fully tested (MKT-056/062 deferred — fault injection seam tracked as separate todo)
-- [ ] Commit: `docs(market-price): update architecture for auto-record feature`
+- [x] Commit: `docs(market-price): close auto-record feature (arch + todo + plan)` (a8b9025)
 
 ---
 
