@@ -1,117 +1,117 @@
-# Règles métier — Gestion des catégories d'assets
+# Business Rules — Asset Category Management
 
-## Contexte
+## Context
 
-Une catégorie (`AssetCategory`) est un regroupement libre défini par l'utilisateur pour organiser ses assets (ex. « Actions US », « Immo Europe », « Obligations court terme »). Ce n'est pas une taxonomie fixe : l'utilisateur crée, renomme et supprime ses propres catégories. Les catégories sont utilisées dans le dashboard de performance pour agréger les valeurs par groupe. Une catégorie système (`default-uncategorized`) existe en permanence comme valeur de repli lorsqu'aucune catégorie n'est choisie.
-
----
-
-## Définition des champs d'une catégorie
-
-| Champ  | Signification                                                                                                                           |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`   | Identifiant unique généré à la création (UUID). La catégorie système a l'id fixe `default-uncategorized`.                               |
-| `name` | Nom lisible défini par l'utilisateur (ex. « Actions US », « Immo Europe »). Unique parmi toutes les catégories actives (casse ignorée). |
+A category (`AssetCategory`) is a free-form grouping defined by the user to organize assets (e.g. "US Stocks", "European Real Estate", "Short-term Bonds"). It is not a fixed taxonomy: the user creates, renames, and deletes their own categories. Categories are used in the performance dashboard to aggregate values per group. A system category (`default-uncategorized`) exists permanently as a fallback when no category is chosen.
 
 ---
 
-## Règles métier
+## Category field definitions
+
+| Field  | Meaning                                                                                                                |
+| ------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `id`   | Unique identifier generated at creation (UUID). The system category has the fixed id `default-uncategorized`.          |
+| `name` | User-defined human-readable name (e.g. "US Stocks", "European Real Estate"). Unique across active categories (case-insensitive). |
+
+---
+
+## Business rules
 
 ### Backend
 
-**R1 — Champs requis (backend)** : Une catégorie est valide si son `name` est non vide et unique parmi toutes les catégories existantes (casse ignorée). Le backend rejette une création ou modification avec un nom déjà utilisé.
+**CAT-001 (was R1) — Required fields (backend)**: A category is valid if its `name` is non-empty and unique among all existing categories (case-insensitive). The backend rejects creation or modification with an already-used name.
 
-**R2 — Catégorie système non supprimable et non renommable (backend)** : La catégorie `default-uncategorized` (id : `default-uncategorized`) est une catégorie système pré-seedée. Elle ne peut pas être supprimée ni renommée. Toute tentative est rejetée par le backend avec une erreur explicite.
+**CAT-002 (was R2) — System category cannot be deleted or renamed (backend)**: The category `default-uncategorized` (id: `default-uncategorized`) is a pre-seeded system category. It cannot be deleted or renamed. Any attempt is rejected by the backend with an explicit error.
 
-**R3 — Suppression avec réassignation atomique (backend)** : La suppression d'une catégorie non système réassigne tous les assets liés vers `default-uncategorized` dans la même transaction SQL. Si la réassignation échoue, la suppression est annulée. La suppression est toujours autorisée (aucun blocage préalable).
+**CAT-003 (was R3) — Deletion with atomic reassignment (backend)**: Deleting a non-system category reassigns all linked assets to `default-uncategorized` within the same SQL transaction. If the reassignment fails, the deletion is rolled back. Deletion is always allowed (no upfront block).
 
 ### Frontend
 
-**R4 — Tableau des catégories — colonnes (frontend)** : Le tableau affiche les colonnes suivantes, trié par défaut par Nom ascendant :
+**CAT-004 (was R4) — Category table — columns (frontend)**: The table displays the following columns, sorted by Name ascending by default:
 
-| Colonne | Contenu                                                                                | Triable |
-| ------- | -------------------------------------------------------------------------------------- | ------- |
-| Nom     | `category.name` + badge « Défaut » si catégorie système                                | Oui     |
-| Actions | Bouton Éditer (toujours visible) + Bouton Supprimer (masqué pour la catégorie système) | Non     |
+| Column  | Content                                                                              | Sortable |
+| ------- | ------------------------------------------------------------------------------------ | -------- |
+| Name    | `category.name` + "Default" badge if system category                                 | Yes      |
+| Actions | Edit button (always visible) + Delete button (hidden for the system category)        | No       |
 
-Un en-tête affiche le titre « Catégories », le nombre total de catégories et un champ de recherche filtrant par nom.
+A header displays the title "Categories", the total category count, and a search field filtering by name.
 
-**R5 — Visibilité de la catégorie système (frontend)** : `default-uncategorized` est visible dans la liste avec un badge traduit (« Défaut » / « Default »). Le bouton Supprimer est visible mais désactivé (disabled). Le bouton Éditer est visible mais désactivé (disabled).
+**CAT-005 (was R5) — System category visibility (frontend)**: `default-uncategorized` is visible in the list with a translated badge ("Defaut" / "Default"). The Delete button is visible but disabled. The Edit button is visible but disabled.
 
-**R6 — Création via FAB (frontend)** : Un FAB flottant en bas à droite ouvre une modal de création avec un unique champ Nom (requis). La soumission est bloquée si le nom est vide. Si le backend retourne une erreur de doublon, un message d'erreur est affiché inline dans la modal.
+**CAT-006 (was R6) — Creation via FAB (frontend)**: A floating FAB at the bottom right opens a creation modal with a single Name field (required). Submission is blocked if the name is empty. If the backend returns a duplicate error, an error message is displayed inline in the modal.
 
-**R7 — Modification (frontend)** : Le bouton Éditer ouvre une modal avec le champ Nom pré-rempli. Après sauvegarde, la modal se ferme et le tableau se rafraîchit. Si le backend retourne une erreur (doublon ou catégorie système), un message d'erreur est affiché inline.
+**CAT-007 (was R7) — Modification (frontend)**: The Edit button opens a modal with the Name field pre-filled. After save, the modal closes and the table refreshes. If the backend returns an error (duplicate or system category), an error message is displayed inline.
 
-**R8 — Suppression (frontend)** : Le bouton Supprimer ouvre une dialog de confirmation indiquant que les assets liés seront déplacés vers « Non catégorisé ». La confirmation déclenche la suppression et la réassignation atomique (R3).
+**CAT-008 (was R8) — Deletion (frontend)**: The Delete button opens a confirmation dialog stating that linked assets will be moved to "Uncategorized". Confirmation triggers the deletion and atomic reassignment (CAT-003).
 
-**R9 — États d'erreur (frontend)** : Tout échec d'appel backend (création, modification, suppression) affiche un message d'erreur inline dans la modal ou dialog active. Le tableau expose un état d'erreur avec bouton Réessayer si le chargement initial échoue.
+**CAT-009 (was R9) — Error states (frontend)**: Any backend call failure (creation, modification, deletion) displays an inline error message in the active modal or dialog. The table exposes an error state with a Retry button if the initial load fails.
 
 ---
 
 ## Workflow
 
 ```
-[Utilisateur ouvre « Catégories »]
-  → Tableau (tri défaut : Nom asc) + FAB
+[User opens "Categories"]
+  → Table (default sort: Name asc) + FAB
           │
-          ├─ [Recherche] → Filtre temps réel par nom
-          ├─ [Clic en-tête Nom] → Tri ascendant/descendant
+          ├─ [Search] → Real-time filter by name
+          ├─ [Click on Name header] → Ascending/descending sort
           │
-          ├─ [FAB] → Modal création (champ Nom)
-          │            → Erreur inline si nom vide ou doublon
-          │            → Catégorie créée → modal fermée → tableau rafraîchi
+          ├─ [FAB] → Creation modal (Name field)
+          │            → Inline error if name empty or duplicate
+          │            → Category created → modal closed → table refreshed
           │
-          ├─ [Éditer] → Modal édition (Nom pré-rempli)
-          │   [disabled si système]
-          │            → Erreur inline si doublon ou système
-          │            → Modification → modal fermée → tableau rafraîchi
+          ├─ [Edit] → Edit modal (Name pre-filled)
+          │   [disabled if system]
+          │            → Inline error if duplicate or system
+          │            → Modification → modal closed → table refreshed
           │
-          └─ [Supprimer] → Dialog (mention réassignation vers défaut)
-          [disabled si système]
-                            → Confirmation → Suppression + réassignation atomique
+          └─ [Delete] → Dialog (mentions reassignment to default)
+          [disabled if system]
+                            → Confirmation → Deletion + atomic reassignment
 ```
 
 ---
 
-## Maquette UX
+## UX Mockup
 
-### Point d'entrée
+### Entry point
 
-**Catégories** — item du drawer de navigation principal.
+**Categories** — item in the main navigation drawer.
 
-### Composant principal
+### Main component
 
-Page avec tableau pleine largeur, trié par défaut par Nom ascendant. FAB flottant en bas à droite. Bouton Éditer et Supprimer sur chaque ligne, tous deux disabled pour la catégorie système.
+Full-width table page, sorted by Name ascending by default. Floating FAB at the bottom right. Edit and Delete buttons on each row, both disabled for the system category.
 
-### États
+### States
 
-- **Vide** : impossible (la catégorie système est toujours présente)
-- **Chargement** : Indicateur de chargement dans le tableau
-- **Erreur de chargement** : Message d'erreur + bouton Réessayer
-- **Erreur doublon** : Message inline dans la modal « Ce nom est déjà utilisé. »
-- **Confirmation suppression** : Dialog « Les assets associés seront déplacés vers "Non catégorisé". »
-- **Erreur backend** : Message d'erreur inline dans la modal ou dialog active
+- **Empty**: impossible (the system category is always present)
+- **Loading**: Loading indicator in the table
+- **Load error**: Error message + Retry button
+- **Duplicate error**: Inline message in the modal "This name is already in use."
+- **Delete confirmation**: Dialog "Linked assets will be moved to 'Uncategorized'."
+- **Backend error**: Inline error message in the active modal or dialog
 
-### Flux utilisateur
+### User flow
 
-1. L'utilisateur ouvre la page Catégories.
-2. La catégorie système apparaît avec badge « Défaut », boutons Éditer et Supprimer tous deux disabled.
-3. Il clique sur le FAB → modal → saisit un nom → soumet → catégorie créée.
-4. Il clique sur Éditer (catégorie custom) → modal pré-remplie → modifie → sauvegarde.
-5. Il clique sur Supprimer → dialog (mention réassignation) → il confirme → suppression + réassignation atomique.
+1. The user opens the Categories page.
+2. The system category appears with a "Default" badge, both Edit and Delete buttons disabled.
+3. They click the FAB → modal → enter a name → submit → category created.
+4. They click Edit (custom category) → pre-filled modal → modify → save.
+5. They click Delete → dialog (mentions reassignment) → confirm → deletion + atomic reassignment.
 
 ---
 
-## Waivers de test
+## Test waivers
 
-**R5, R8, R9 — rendu conditionnel de `CategoryTable` non testé** : Ces règles impliquent uniquement du rendu conditionnel React (badge/disabled/hidden, ouverture de dialog, affichage d'erreur). La logique métier sous-jacente est couverte par les tests existants :
+**CAT-005, CAT-008, CAT-009 — `CategoryTable` conditional rendering not tested**: These rules involve only React conditional rendering (badge/disabled/hidden, dialog opening, error display). The underlying business logic is covered by existing tests:
 
-- R5 : `isSystemCategory()` est une fonction pure testée indirectement via les tests de service backend (R2) ;
-- R8 : l'opération de suppression atomique est couverte par `delete_category_reassigns_assets_to_default` (service.rs) ;
-- R9 : les chemins d'erreur Add/Edit sont couverts par `useAddCategory.test.ts` et `useEditCategoryModal.test.ts`.
+- CAT-005: `isSystemCategory()` is a pure function tested indirectly via backend service tests (CAT-002);
+- CAT-008: the atomic delete operation is covered by `delete_category_reassigns_assets_to_default` (service.rs);
+- CAT-009: Add/Edit error paths are covered by `useAddCategory.test.ts` and `useEditCategoryModal.test.ts`.
 
-Un test de composant RTL complet nécessiterait de mocker le store Zustand et le gateway — coût disproportionné pour vérifier des ternaires JSX sans logique.
+A full RTL component test would require mocking the Zustand store and the gateway — disproportionate cost to verify JSX ternaries with no logic.
 
-## Questions ouvertes
+## Open questions
 
-Aucune — toutes les questions ont été tranchées.
+None — all questions have been resolved.

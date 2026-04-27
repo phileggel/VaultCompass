@@ -8,28 +8,28 @@ ADRs: ADR-001 (i64 micros), ADR-004 (use cases inject services not repositories)
 
 ## 1. Workflow TaskList
 
-- [ ] Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
-- [ ] Database Migration (`just migrate` + `just prepare-sqlx`)
+- [x] Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
+- [x] Database Migration (`just migrate` + `just prepare-sqlx`)
 - [x] Contract (`/contract` -- human approves shape)
 - [x] Contract Review (`contract-reviewer` -- fix issues)
-- [ ] Backend test stubs (`test-writer-backend` -- all stubs written, red confirmed)
-- [ ] Backend Implementation (minimal -- make failing tests pass, green confirmed)
-- [ ] `just format` (rustfmt + clippy --fix)
-- [ ] Backend Review (`reviewer-backend` -- fix issues)
-- [ ] Type Synchronization (`just generate-types`)
-- [ ] Compilation fixup (TypeScript errors from new bindings only -- no UI work)
-- [ ] `just check` -- TypeScript clean
-- [ ] Commit: `feat(asset): implement market price recording backend`
-- [ ] Frontend test stubs (`test-writer-frontend` -- all stubs written, red confirmed)
-- [ ] Frontend Implementation (minimal -- make failing tests pass, green confirmed)
-- [ ] `just format`
-- [ ] Frontend Review (`reviewer-frontend` -- fix issues)
-- [ ] Commit: `feat(account-details): display market price and unrealized P&L`
-- [ ] Cross-cutting Review (`reviewer` always + `reviewer-sql` for migration)
-- [ ] i18n Review (`i18n-checker` -- UI text changed)
-- [ ] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` -- entries in English)
-- [ ] Spec check (`spec-checker`)
-- [ ] Commit: `docs(market-price): update architecture and close spec items`
+- [x] Backend test stubs (`test-writer-backend` -- all stubs written, red confirmed)
+- [x] Backend Implementation (minimal -- make failing tests pass, green confirmed)
+- [x] `just format` (rustfmt + clippy --fix)
+- [x] Backend Review (`reviewer-backend` -- fix issues)
+- [x] Type Synchronization (`just generate-types`)
+- [x] Compilation fixup (TypeScript errors from new bindings only -- no UI work)
+- [x] `just check` -- TypeScript clean
+- [x] Commit: `feat(asset): implement market price recording backend`
+- [x] Frontend test stubs (`test-writer-frontend` -- all stubs written, red confirmed)
+- [x] Frontend Implementation (minimal -- make failing tests pass, green confirmed)
+- [x] `just format`
+- [x] Frontend Review (`reviewer-frontend` -- fix issues)
+- [x] Commit: `feat(account-details): display market price and unrealized P&L`
+- [x] Cross-cutting Review (`reviewer` always + `reviewer-sql` for migration)
+- [x] i18n Review (`i18n-checker` -- UI text changed)
+- [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` -- entries in English)
+- [x] Spec check (`spec-checker`)
+- [x] Commit: `docs(market-price): update architecture and close spec items`
 
 ---
 

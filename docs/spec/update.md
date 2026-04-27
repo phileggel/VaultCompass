@@ -1,166 +1,166 @@
-# Règles métier — Mise à jour de l'application
+# Business Rules — Application Update
 
-## Contexte
+## Context
 
-L'application est distribuée sous forme d'exécutable desktop. Lorsqu'une nouvelle version est publiée, l'utilisateur doit en être informé afin de pouvoir l'installer sans avoir à vérifier manuellement. Cette feature couvre la détection d'une mise à jour disponible, la proposition à l'utilisateur, le téléchargement, l'installation, et les garanties sur les données utilisateur.
+The application is distributed as a desktop executable. When a new version is published, the user must be informed so they can install it without manual checking. This feature covers detecting an available update, proposing it to the user, downloading, installing, and guarantees on user data.
 
 ---
 
-## Règles métier
+## Business rules
 
-### Découverte
+### Discovery
 
-**R1 — Vérification automatique au démarrage (backend)** : À chaque lancement, une vérification est effectuée en arrière-plan pour détecter si une nouvelle version est disponible. Elle démarre une fois l'interface entièrement chargée.
+**UPD-001 (was R1) — Automatic check at startup (backend)**: At each launch, a background check runs to detect whether a new version is available. It starts once the UI is fully loaded.
 
-**R2 — Absence de notification si aucune mise à jour (frontend)** : Si la vérification R1 ne détecte aucune nouvelle version, rien n'est affiché à l'utilisateur et l'application reste dans son état normal.
+**UPD-002 (was R2) — No notification when no update (frontend)**: If the UPD-001 check detects no new version, nothing is shown to the user and the application stays in its normal state.
 
 ### Notification
 
-**R3 — Contenu de la bannière de mise à jour (frontend)** : Si une nouvelle version est détectée, une bannière fixe s'affiche dans le shell de l'application, indiquant le numéro de version disponible et proposant deux actions : « Installer » et « Ignorer ».
+**UPD-003 (was R3) — Update banner content (frontend)**: If a new version is detected, a fixed banner is displayed in the application shell, indicating the available version number and offering two actions: "Install" and "Dismiss".
 
-**R4 — Persistance de la bannière (frontend)** : La bannière est intégrée au layout permanent du shell et reste visible sur toutes les pages de l'application sans interrompre la navigation.
+**UPD-004 (was R4) — Banner persistence (frontend)**: The banner is integrated into the permanent shell layout and remains visible across all application pages without interrupting navigation.
 
-**R5 — Fermeture de la bannière par l'utilisateur (frontend)** : Cliquer sur « Ignorer » ou sur le bouton × ferme la bannière. Cela déclenche le comportement de report décrit en R19.
+**UPD-005 (was R5) — User-initiated banner dismissal (frontend)**: Clicking "Dismiss" or the × button closes the banner. This triggers the postponement behavior described in UPD-019.
 
-### Téléchargement
+### Download
 
-**R6 — Déclenchement du téléchargement (frontend + backend)** : Lorsque l'utilisateur clique sur « Installer », le téléchargement de la mise à jour démarre en arrière-plan.
+**UPD-006 (was R6) — Download trigger (frontend + backend)**: When the user clicks "Install", the update download starts in the background.
 
-**R7 — Non-blocage pendant le téléchargement (frontend)** : Pendant le téléchargement, l'application reste entièrement navigable.
+**UPD-007 (was R7) — Non-blocking during download (frontend)**: During the download, the application remains fully navigable.
 
-**R8 — Progression dans la bannière (frontend)** : Pendant le téléchargement, la bannière indique la progression. Le bouton « Installer » est remplacé par l'indicateur de progression et ne peut pas être re-déclenché.
+**UPD-008 (was R8) — Progress in the banner (frontend)**: During the download, the banner displays progress. The "Install" button is replaced by the progress indicator and cannot be re-triggered.
 
-**R9 — Intégrité du téléchargement (backend)** : Avant d'autoriser l'installation, l'application vérifie l'intégrité du fichier téléchargé par une somme de contrôle. Si la vérification échoue, le fichier est considéré comme corrompu et le flux d'erreur R23 s'applique.
+**UPD-009 (was R9) — Download integrity (backend)**: Before allowing installation, the application verifies the integrity of the downloaded file via a checksum. If verification fails, the file is considered corrupted and the UPD-023 error flow applies.
 
-**R10 — Téléchargement concurrent (backend)** : Si une nouvelle version est publiée alors qu'un téléchargement est déjà en cours, le téléchargement en cours se poursuit sans interruption. La version plus récente sera proposée au prochain lancement conformément à R20.
+**UPD-010 (was R10) — Concurrent download (backend)**: If a newer version is published while a download is already in progress, the in-progress download continues without interruption. The newer version will be offered at the next launch per UPD-020.
 
-### Prêt à installer
+### Ready to install
 
-**R11 — Contenu de la bannière état "Prêt à installer" (frontend)** : Lorsque le téléchargement est terminé et l'intégrité vérifiée, la bannière affiche « Prêt à installer » et un bouton « Redémarrer maintenant ».
+**UPD-011 (was R11) — "Ready to install" banner content (frontend)**: When the download is complete and integrity is verified, the banner displays "Ready to install" and a "Restart now" button.
 
-**R12 — Bannière non-dismissible après téléchargement (frontend)** : Dans l'état "Prêt à installer", la bannière ne propose plus de bouton × ni d'option « Ignorer ». Elle reste visible jusqu'au redémarrage ou à la fermeture de l'application.
+**UPD-012 (was R12) — Banner non-dismissible after download (frontend)**: In the "Ready to install" state, the banner no longer offers a × button or a "Dismiss" option. It remains visible until restart or application close.
 
 ### Installation
 
-**R13 — Redémarrage et installation (frontend + backend)** : Lorsque l'utilisateur clique sur « Redémarrer maintenant », la mise à jour est installée et l'application redémarre automatiquement.
+**UPD-013 (was R13) — Restart and installation (frontend + backend)**: When the user clicks "Restart now", the update is installed and the application restarts automatically.
 
-**R14 — Conservation des données utilisateur (backend)** : La mise à jour remplace uniquement l'exécutable de l'application. Toutes les données utilisateur (assets, comptes, catégories, prix, opérations) sont conservées intégralement après le redémarrage.
+**UPD-014 (was R14) — User data preservation (backend)**: The update only replaces the application executable. All user data (assets, accounts, categories, prices, operations) is preserved intact after restart.
 
-**R15 — Compatibilité descendante (backend)** : Chaque nouvelle version garantit la compatibilité avec les données produites par toute version antérieure. Aucune mise à jour ne peut introduire un changement incompatible avec un schéma ou des données existants. Les migrations R16 ne peuvent qu'étendre ou adapter le schéma, jamais supprimer ou modifier des données de façon destructive.
+**UPD-015 (was R15) — Backward compatibility (backend)**: Each new version guarantees compatibility with data produced by any earlier version. No update may introduce a change incompatible with an existing schema or data. UPD-016 migrations may only extend or adapt the schema, never destructively remove or modify data.
 
-**R16 — Migration automatique du schéma (backend)** : Si la nouvelle version introduit des changements de schéma de base de données, les migrations sont appliquées automatiquement au premier démarrage après la mise à jour, avant que l'interface ne soit accessible. Si plusieurs versions ont été sautées, toutes les migrations intermédiaires sont appliquées dans l'ordre, sans exception.
+**UPD-016 (was R16) — Automatic schema migration (backend)**: If the new version introduces database schema changes, migrations are applied automatically at the first launch after the update, before the UI is accessible. If multiple versions have been skipped, all intermediate migrations are applied in order, without exception.
 
-**R17 — Écran de chargement pendant les migrations (frontend)** : Pendant la phase de migration R16, un écran de chargement est affiché avec un message indiquant que la mise à jour de la base de données est en cours.
+**UPD-017 (was R17) — Loading screen during migrations (frontend)**: During the UPD-016 migration phase, a loading screen is displayed with a message indicating that the database update is in progress.
 
-**R18 — Échec de migration (backend)** : Si une migration échoue au démarrage, l'application affiche un message d'erreur critique et refuse de démarrer afin de protéger l'intégrité des données. L'utilisateur est invité à contacter le support.
+**UPD-018 (was R18) — Migration failure (backend)**: If a migration fails at startup, the application displays a critical error message and refuses to start in order to protect data integrity. The user is invited to contact support.
 
-### Report
+### Postponement
 
-**R19 — Report au prochain lancement (frontend)** : Si l'utilisateur ferme la bannière R3 (par « Ignorer » ou ×), ou ferme l'application depuis l'état R11 sans avoir redémarré, la mise à jour est proposée à nouveau au prochain lancement.
+**UPD-019 (was R19) — Postponement to next launch (frontend)**: If the user closes the UPD-003 banner ("Dismiss" or ×), or closes the application from the UPD-011 state without restarting, the update is offered again at the next launch.
 
-**R20 — Priorité à la version la plus récente (backend)** : Si une version encore plus récente est disponible au moment du prochain lancement, c'est cette version qui est proposée, et non la version précédemment ignorée.
+**UPD-020 (was R20) — Priority to the most recent version (backend)**: If an even more recent version is available at the next launch, that version is offered, not the previously dismissed one.
 
-### Erreurs
+### Errors
 
-**R21 — Erreur de vérification silencieuse (frontend)** : Si la vérification au démarrage échoue (pas de réseau, serveur indisponible), aucune notification n'est affichée et l'application démarre normalement.
+**UPD-021 (was R21) — Silent check failure (frontend)**: If the startup check fails (no network, server unavailable), no notification is displayed and the application starts normally.
 
-**R22 — Log des erreurs de vérification (backend)** : Toute erreur survenant lors de la vérification au démarrage est consignée dans les logs de l'application.
+**UPD-022 (was R22) — Logging check failures (backend)**: Any error during the startup check is logged in the application logs.
 
-**R23 — Affichage de l'erreur de téléchargement (frontend)** : Si le téléchargement échoue (erreur réseau, espace disque insuffisant, ou toute autre cause), ou si le checksum R9 échoue, la bannière affiche un message d'erreur et un bouton « Réessayer ».
+**UPD-023 (was R23) — Download error display (frontend)**: If the download fails (network error, insufficient disk space, or any other cause), or if the UPD-009 checksum fails, the banner displays an error message and a "Retry" button.
 
-**R24 — Action Réessayer (frontend + backend)** : Cliquer sur « Réessayer » relance le téléchargement depuis le début.
+**UPD-024 (was R24) — Retry action (frontend + backend)**: Clicking "Retry" restarts the download from the beginning.
 
-### Vérification manuelle
+### Manual check
 
-**R25 — Point d'entrée de vérification manuelle (frontend)** : La page « À propos » expose le numéro de version actuelle et un bouton « Vérifier les mises à jour ». Lorsque l'utilisateur clique sur ce bouton, une vérification est déclenchée selon le même mécanisme que R1.
+**UPD-025 (was R25) — Manual check entry point (frontend)**: The "About" page exposes the current version number and a "Check for updates" button. When the user clicks this button, a check is triggered using the same mechanism as UPD-001.
 
-**R26 — État de chargement de la vérification manuelle (frontend)** : Pendant la vérification déclenchée par R25, le bouton « Vérifier les mises à jour » est désactivé et affiche un indicateur de chargement afin de prévenir les déclenchements multiples.
+**UPD-026 (was R26) — Manual check loading state (frontend)**: During the check triggered by UPD-025, the "Check for updates" button is disabled and shows a loading indicator to prevent multiple triggers.
 
-**R27 — Résultat de la vérification manuelle (frontend)** : À l'issue de la vérification R25 : si une mise à jour est disponible, la bannière R3 s'affiche ; si aucune mise à jour n'est disponible, un message sur la page « À propos » confirme que l'application est à jour.
+**UPD-027 (was R27) — Manual check result (frontend)**: At the end of the UPD-025 check: if an update is available, the UPD-003 banner is displayed; if no update is available, a message on the "About" page confirms that the application is up to date.
 
 ---
 
 ## Workflow
 
 ```
-[Démarrage de l'app → interface chargée]           [Page À propos → bouton "Vérifier"]
-  → Vérification en arrière-plan (R1)                → Vérification + spinner (R25, R26)
-        │                                                   │ (même suite que R1)
-        ├─ Pas de mise à jour → rien affiché (R2)    ──────┤
-        │                                             └─ À jour → message confirmatif (R27)
-        ├─ Erreur réseau/serveur → log silencieux, rien affiché (R21, R22)
+[App startup → UI loaded]                          [About page → "Check" button]
+  → Background check (UPD-001)                       → Check + spinner (UPD-025, UPD-026)
+        │                                                   │ (same flow as UPD-001)
+        ├─ No update → nothing displayed (UPD-002) ────────┤
+        │                                             └─ Up to date → confirmation message (UPD-027)
+        ├─ Network/server error → silent log, nothing displayed (UPD-021, UPD-022)
         │
-        └─ Nouvelle version disponible
-              → Bannière : "Version X.Y.Z disponible" + [Installer] [Ignorer] (R3, R4)
+        └─ New version available
+              → Banner: "Version X.Y.Z available" + [Install] [Dismiss] (UPD-003, UPD-004)
                     │
-                    ├─ [Ignorer / ×] → bannière disparaît, reproposé au prochain lancement (R5, R19)
+                    ├─ [Dismiss / ×] → banner disappears, re-offered at next launch (UPD-005, UPD-019)
                     │
-                    └─ [Installer] → téléchargement en arrière-plan, app navigable (R6, R7)
-                          → Progression visible dans la bannière (R8)
-                          → Si version plus récente publiée → on continue (R10)
+                    └─ [Install] → background download, app navigable (UPD-006, UPD-007)
+                          → Progress visible in the banner (UPD-008)
+                          → If newer version published → keep going (UPD-010)
                                 │
-                                ├─ Échec → bannière erreur + [Réessayer] (R23)
-                                │          [Réessayer] → repart depuis le début (R24)
+                                ├─ Failure → error banner + [Retry] (UPD-023)
+                                │            [Retry] → restarts from the beginning (UPD-024)
                                 │
-                                └─ Succès → vérification checksum (R9)
+                                └─ Success → checksum verification (UPD-009)
                                         │
-                                        ├─ Checksum KO → bannière erreur + [Réessayer] (R23, R24)
+                                        ├─ Checksum KO → error banner + [Retry] (UPD-023, UPD-024)
                                         │
-                                        └─ Checksum OK → "Prêt à installer" + [Redémarrer] (R11)
-                                                         bannière persistante, non dismissible (R12)
+                                        └─ Checksum OK → "Ready to install" + [Restart] (UPD-011)
+                                                         persistent banner, non-dismissible (UPD-012)
                                                 │
-                                                ├─ [Fermeture de l'app] → reproposé au prochain lancement (R19)
+                                                ├─ [App closed] → re-offered at next launch (UPD-019)
                                                 │
-                                                └─ [Redémarrer maintenant] (R13)
-                                                      → Données conservées (R14)
-                                                      → Migration DB si nécessaire (R16, R17)
-                                                           ├─ Échec → erreur critique, app bloquée (R18)
-                                                           └─ Succès → installation + redémarrage (R13)
+                                                └─ [Restart now] (UPD-013)
+                                                      → Data preserved (UPD-014)
+                                                      → DB migration if needed (UPD-016, UPD-017)
+                                                           ├─ Failure → critical error, app blocked (UPD-018)
+                                                           └─ Success → installation + restart (UPD-013)
 ```
 
 ---
 
-## Maquette UX
+## UX Mockup
 
-### Points d'entrée
+### Entry points
 
-Deux points d'entrée :
+Two entry points:
 
-1. **Automatique** — déclenché au démarrage, une fois l'interface entièrement chargée (R1).
-2. **Manuel** — bouton « Vérifier les mises à jour » sur la page « À propos » (R25).
+1. **Automatic** — triggered at startup, once the UI is fully loaded (UPD-001).
+2. **Manual** — "Check for updates" button on the "About" page (UPD-025).
 
-### Composant principal
+### Main component
 
-Bannière fixe intégrée au shell de l'application (en-tête ou pied de page), visible sur toutes les pages. Elle n'apparaît que lorsqu'une mise à jour est en cours ou disponible, et disparaît une fois l'application redémarrée. Ce n'est pas un dialog ni une notification éphémère : la bannière fait partie du layout permanent.
+Fixed banner integrated into the application shell (header or footer), visible across all pages. It only appears while an update is in progress or available, and disappears once the application has restarted. It is not a dialog or an ephemeral notification: the banner is part of the permanent layout.
 
-### États de la bannière
+### Banner states
 
-- **Absente** : aucune mise à jour détectée — la bannière n'est pas rendue (R2)
-- **Mise à jour disponible** : "Version X.Y.Z disponible" + boutons « Installer » et « Ignorer » (R3)
-- **Téléchargement en cours** : indicateur de progression, bouton « Installer » remplacé (R8)
-- **Prêt à installer** : "Prêt à installer" + bouton « Redémarrer maintenant » — non dismissible (R11, R12)
-- **Erreur de téléchargement** : message d'erreur + bouton « Réessayer » (R23)
-- **Migration en cours** : écran de chargement hors bannière ("Mise à jour de la base de données…") (R17)
-- **Erreur de migration** : message d'erreur critique, application bloquée au démarrage, hors bannière (R18)
-- **À jour** : message contextuel sur la page « À propos », hors bannière (R27)
+- **Absent**: no update detected — banner is not rendered (UPD-002)
+- **Update available**: "Version X.Y.Z available" + "Install" and "Dismiss" buttons (UPD-003)
+- **Download in progress**: progress indicator, "Install" button replaced (UPD-008)
+- **Ready to install**: "Ready to install" + "Restart now" button — non-dismissible (UPD-011, UPD-012)
+- **Download error**: error message + "Retry" button (UPD-023)
+- **Migration in progress**: loading screen outside the banner ("Updating database…") (UPD-017)
+- **Migration error**: critical error message, application blocked at startup, outside the banner (UPD-018)
+- **Up to date**: contextual message on the "About" page, outside the banner (UPD-027)
 
-### Flux utilisateur
+### User flow
 
-1. L'application se lance, l'interface s'affiche, puis une vérification s'effectue en arrière-plan.
-2. Si une version plus récente est disponible, une bannière apparaît avec le numéro de version.
-3. L'utilisateur clique sur « Installer » → téléchargement en arrière-plan, progression visible, navigation libre.
-4. Téléchargement terminé → bannière persistante « Prêt à installer » + bouton « Redémarrer maintenant ».
-5. L'utilisateur clique sur « Redémarrer maintenant » quand il est prêt → migrations éventuelles → installation → redémarrage.
-
----
-
-## Features futures
-
-- **Mises à jour critiques** : certaines versions pourraient être marquées comme critiques (faille de sécurité, corruption de données), imposant une mise à jour obligatoire avant que l'application soit utilisable. Non inclus dans cette version.
-- **Notes de version** : au premier démarrage après une mise à jour, afficher les notes de version (changelog) de la nouvelle version installée. Non inclus dans cette version.
+1. The application launches, the UI is displayed, then a background check runs.
+2. If a newer version is available, a banner appears with the version number.
+3. The user clicks "Install" → background download, progress visible, navigation free.
+4. Download complete → persistent "Ready to install" banner + "Restart now" button.
+5. The user clicks "Restart now" when ready → migrations if any → installation → restart.
 
 ---
 
-## Questions ouvertes
+## Future features
 
-Aucune — toutes les questions ont été tranchées.
+- **Critical updates**: some versions could be marked as critical (security flaw, data corruption), forcing a mandatory update before the application can be used. Not included in this version.
+- **Release notes**: at the first launch after an update, display the release notes (changelog) of the newly installed version. Not included in this version.
+
+---
+
+## Open questions
+
+None — all questions have been resolved.
