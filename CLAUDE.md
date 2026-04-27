@@ -21,6 +21,10 @@ While coding:
 
 See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.md` for the agent/skill reference.
 
+- **At session start**: run `/whats-next` to triage pending work across TODOs, plans, specs, and in-flight git.
+- **At task start**: run `/start [scope]` (`fix`, `chore`, `test`, `feature`, `refactor`) to pick the right workflow.
+- **Revisiting an existing feature**: run `/spec-diff` first to detect drift between the current spec and the last plan, and to flag stale tasks/tests.
+
 **IMPORTANT**: Claude Code will NOT commit, create branches, or create PRs. The user handles all git operations.
 
 ### CRITICAL: Implementation task
@@ -35,9 +39,8 @@ On top of the standard kit workflow, this project requires:
 
 1. **Before implementing**: read `docs/backend-rules.md` (backend changes) and/or `docs/frontend-rules.md` (frontend changes).
 2. **Plan step**: after proposing the TODO plan, immediately create a TaskList (`TaskCreate`) with one task per remaining step. Ask user to validate before implementing.
-3. **Optional UI step**: Stitch mockup for significant new/redesigned UI — see 🎨 Stitch Workflow section below.
-4. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; spec in `docs/` if new business rules.
-5. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
+3. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; for new business rules use `/spec-writer` to author/extend the spec in `docs/spec/` and `/contract` to derive the matching `docs/contracts/{domain}-contract.md`. Use `/adr-manager` to record architectural decisions in `docs/adr/`.
+4. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
 
 ### Task tracking (within a conversation)
 
@@ -49,68 +52,16 @@ On top of the standard kit workflow, this project requires:
 
 ---
 
-## 🎨 Stitch Workflow
-
-### When to use Stitch
-
-Use Stitch when the task involves a **significant new or redesigned UI component** (new page, new modal, major UX change). Not for small fixes or backend-only work. Insert as optional **step 5**, between plan validation and implementation.
-
-### Process
-
-```
-Step 3b-1: Claude generates initial mockup
-           → mcp__stitch__generate_screen_from_text (project: ProjectSF / 7705025027636758446)
-           → device: DESKTOP, model: GEMINI_3_1_PRO
-           Optional: generate variants for design exploration
-           → mcp__stitch__generate_variants (2-5 variants, EXPLORE range)
-           → present variants to user, user picks one
-Step 3b-2: User refines the chosen design on stitch.withgoogle.com
-           Minor corrections can be done by Claude via mcp__stitch__edit_screens
-           (e.g. "move the search field below the section label")
-Step 3b-3: Claude downloads the result
-           → mcp__stitch__list_screens → mcp__stitch__get_screen
-           → curl HTML to docs/stitch/{feature}.stitch  (.stitch = no linting, gitignored, ephemeral)
-Step 3b-4: Claude reads the HTML and extracts structure as implementation reference
-```
-
-### Adapting Stitch output to the codebase
-
-- **Layout/structure** → reimplement in TSX using `ui/components` — never copy-paste Stitch HTML
-- **Colors** → map Stitch tokens to our M3 tokens (same semantic names, our values in `tailwind.css`)
-- **Fonts/shadows/glassmorphism** → only use if already adopted in our design system (see design system alignment)
-- **Stitch HTML is reference only** — it shows intent, not implementation
-
-### UX changes made during Stitch edition
-
-After downloading, Claude identifies UX elements added/changed by the user in Stitch (e.g. new button, new section). These become **complementary todos** — not blocking the current implementation. Implementation follows two phases:
-
-1. **UI structure** — match the Stitch screen layout and visual design
-2. **UX wiring** — implement the behavior behind new UI elements (separate task)
-
-### .stitch file lifecycle
-
-- Created at step 3b-3
-- Used during implementation (step 5) as visual reference
-- **Delete when `reviewer-frontend` passes** on the implemented component — the reference is done
-
-### Design system alignment
-
-When Stitch introduces new design patterns (new tokens, shadows, component styles), create a **dedicated todo** for design system alignment — never block feature implementation on it. After alignment, update the `reviewer-frontend` agent rules to enforce the new patterns. Stitch project design system and our `tailwind.css` stay naturally in sync once T20 is done.
-
-### Design system reference
-
-- Stitch project: `projects/7705025027636758446` — use this single project for all features, never create a new one
-- Design system spec: `docs/stitch/design-system.md` ("The Clinical Atelier") — committed to git
-- Target alignment: indigo/purple M3 palette, Manrope (headlines) + Inter (body), primary-tinted ambient shadows, no structural borders (tonal surfaces instead), gradient primary CTAs, glassmorphism modals
-
 ## 🛠 Commands
 
 - Dev: `./scripts/start-app.sh`
-- Quality: `python3 scripts/check.py` (Full check)
-- Tests: `npm run test` (Frontend) | `cd src-tauri && cargo test` (Backend)
+- Quality: `just check-full` (full check) | `just check` (fast lint+format only)
+- Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-all` (both)
 - Types: `just generate-types` (Sync Rust to TS via Specta)
 - Database schema update: `just clean-db`
-- Release: `python3 scripts/release.py [--dry-run] [--version X.Y.Z] [-y]`
+- Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions)
+- Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
+- After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
 
 ## 🏗 Architecture Summary
 
