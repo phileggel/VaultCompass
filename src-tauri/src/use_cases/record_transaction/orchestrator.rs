@@ -1492,8 +1492,13 @@ mod tests {
     }
 
     // MKT-056 — atomicity: full rollback when any step inside the DB transaction fails.
-    // TODO(MKT-056): atomicity test deferred — requires fault injection at the DB layer
-    // (e.g. a mock repository that errors after the price write but before commit).
-    // The current integration-test style (real SQLite pool) cannot force a mid-transaction
-    // failure without infrastructure-level seams not yet present in this codebase.
+    // MKT-062 — auto-record failure surfaces through the existing add/update_transaction
+    // error contract; same rollback semantics as MKT-056. Both rules share the same path
+    // (the price upsert is a step inside the orchestrator's open DB transaction), so a
+    // single fault-injection test will cover both once the seam exists.
+    // TODO(MKT-056, MKT-062): atomicity test deferred — requires fault injection at the
+    // DB layer (e.g. a mock repository that errors after the price write but before
+    // commit). The current integration-test style (real SQLite pool) cannot force a
+    // mid-transaction failure without infrastructure-level seams not yet present in this
+    // codebase.
 }

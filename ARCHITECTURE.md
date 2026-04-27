@@ -54,7 +54,7 @@ Published on every state change. Frontend listens via a single `events.event.lis
 | `CategoryUpdated`    | `context/asset/`                                                             |
 | `AccountUpdated`     | `context/account/`                                                           |
 | `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()` |
-| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026)                 |
+| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026) **or** via `AssetService.notify_asset_price_updated()` after the auto-record path in `RecordTransactionUseCase` (MKT-057) |
 
 ### Use Cases (`use_cases/`)
 
@@ -75,17 +75,19 @@ Orchestrates a cross-context read of account + asset data for the Account Detail
 
 #### Record Transaction (`use_cases/record_transaction/`)
 
-Orchestrates transaction creation, update, and deletion (Purchase + Sell) across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/sell-transaction.md`).
+Orchestrates transaction creation, update, and deletion (Purchase + Sell) across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/sell-transaction.md`, `docs/spec/market-price.md` MKT-050+).
 
 - `orchestrator.rs` — `RecordTransactionUseCase` with `create_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
-  - Atomicity (TRX-027): all DB writes within each operation use `pool.begin()` + `commit()` directly
+  - Holds `Arc<AssetService>` so it can call `notify_asset_price_updated()` after committing an auto-recorded price (MKT-057, B8)
+  - Atomicity (TRX-027): all DB writes within each operation use `pool.begin()` + `commit()` directly; auto-record `AssetPrice` upsert (when `record_price = true` and `unit_price > 0`) runs in the same DB transaction (MKT-055/056)
   - Purchase: VWAP computation (TRX-030, TRX-036), auto-unarchive on purchase of archived asset (TRX-028)
   - Sell: `compute_sell_total` (SEL-023): `floor(floor(qty×price/MICRO)×rate/MICRO) − fees`; closed-position guard (SEL-012); oversell guard (SEL-021); archived-asset guard (SEL-037)
   - `recalculate_holding`: full chronological replay over all transactions for an (account, asset) pair; computes running VWAP, `realized_pnl` per sell (SEL-024), `total_realized_pnl` (cumulative sum), and `last_sold_date` (max sell date, ISO string); returns `(Holding, HashMap<tx_id, pnl>)`
   - Sell recalculation cascades on update (SEL-031) and delete (SEL-033) — all sibling sells get updated P&L
-  - Event published via `TransactionService.notify_transaction_updated()` after commit (B8)
+  - `auto_record_price` (MKT-055/058/061): private helper that upserts `AssetPrice(asset_id, date, unit_price)` inside the open DB transaction; silently skipped when `record_price = false` or `unit_price = 0` (MKT-061 — gifted assets)
+  - Events published after commit via `TransactionService.notify_transaction_updated()` (B8) and, when a price was actually written, `AssetService.notify_asset_price_updated()` (MKT-057, B8)
 - `api.rs` — four Tauri commands: `add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
-- `CreateTransactionDTO` — serializable DTO struct passed as single command parameter (Specta limit workaround)
+- `CreateTransactionDTO` — serializable DTO struct passed as single command parameter (Specta limit workaround); fields: `account_id`, `asset_id`, `transaction_type`, `date`, `quantity`, `unit_price`, `exchange_rate`, `fees`, `note`, `record_price` (MKT-054 — opt-in auto-record of asset price from this transaction)
 
 #### Update Checker (`use_cases/update_checker/`)
 
@@ -321,6 +323,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
   - `lib/microUnits.ts` — `decimalToMicro`, `microToDecimal`, `computeTotalMicro` (TRX-026), `computeSellTotalMicro` (SEL-023)
   - `shared/presenter.ts` — `toTransactionRow()` → `TransactionRowViewModel` with `realizedPnl: string | null`, `realizedPnlRaw: number | null` for sign-based color rendering
   - `shared/validateTransaction.ts` — `validateTransactionForm()` (base) + `validateSellForm()` (adds oversell guard SEL-022)
+  - `shared/RecordPriceCheckbox.tsx` — MKT-051 auto-record opt-in checkbox, used by buy/sell/add/edit forms; label interpolates the form's current `date`
 - `store.ts` — `useTransactionStore`: `lastFetchedKey`, `refreshHoldings()` (TRX-038 stub)
 - Barrel `index.ts` — shared infrastructure exports (`useTransactions`, `transactionGateway`, stores, modals); buy/sell modals live in `account_details/` (use-case boundary)
 - Entry points: "Add Transaction" button navigates to `/transactions/new` (TRX-010); magnifier `IconButton` per holding row navigates to transaction list (TXL-010)
@@ -360,6 +363,12 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 - `gateway.ts` — shell-level event listeners: `onMigrationError` (listens to `db:migration_error`)
 - `theme_toggle/useThemeToggle.ts` — day/night/auto cycle, localStorage persistence, OS media query listener
 - `theme_toggle/ThemeToggle.tsx` — Sun/Moon/Monitor icon button
+
+#### Settings (`features/settings/`)
+
+- `SettingsPage.tsx` + `useSettings.ts` — reachable from the sidebar; collects user-level preferences
+- Language preference: `LanguageChoice = "auto" | "en" | "fr"` persisted via `i18n/config.ts` localStorage helpers; `i18n.changeLanguage` triggers `setDisplayLocale` for `Intl.NumberFormat`
+- Auto-record price toggle (MKT-050): `autoRecordPrice` boolean persisted via `src/lib/autoRecordPriceStorage.ts` (parallel to `lib/lastPath.ts`); read at hook mount in transaction forms (snapshot — MKT-052/053). Backend stays stateless on the toggle: each `add_transaction` / `update_transaction` call carries an explicit `record_price: bool` (MKT-054)
 
 #### Design System (`features/design-system/`) — **dev only**
 

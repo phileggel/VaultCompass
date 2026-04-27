@@ -14,24 +14,24 @@ ADRs: ADR-001 (i64 micros), ADR-004 (use cases inject services not repositories)
 - [x] Contract (`/contract`) -- `record_transaction-contract.md` + `asset-contract.md` updated
 - [x] Contract Review (`contract-reviewer`) -- 0 critical, 1 doc-comment polish applied
 - [x] Plan -- this document
-- [ ] Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
-- [ ] Backend test stubs (`test-writer-backend` -- all stubs written, red confirmed)
-- [ ] Backend Implementation (minimal -- make failing tests pass, green confirmed)
-- [ ] `just format` (rustfmt + clippy --fix)
-- [ ] Backend Review (`reviewer-backend` -- fix issues)
-- [ ] Type Synchronization (`just generate-types`)
-- [ ] Compilation fixup (TypeScript errors from new bindings only -- no UI work)
-- [ ] `just check` -- TypeScript clean
-- [ ] Commit: `feat(record-transaction): auto-record asset price from transaction`
-- [ ] Frontend test stubs (`test-writer-frontend` -- all stubs written, red confirmed)
-- [ ] Frontend Implementation (minimal -- make failing tests pass, green confirmed)
-- [ ] `just format`
-- [ ] Frontend Review (`reviewer-frontend` -- fix issues)
-- [ ] Commit: `feat(transactions): add auto-record price checkbox and settings toggle`
-- [ ] Cross-cutting Review (`reviewer` always)
-- [ ] i18n Review (`i18n-checker` -- UI text changed)
-- [ ] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` -- entries in English)
-- [ ] Spec check (`spec-checker`)
+- [x] Review Architecture & Rules (`ARCHITECTURE.md`, `backend-rules.md`, `frontend-rules.md`)
+- [x] Backend test stubs (`test-writer-backend` -- all stubs written, red confirmed)
+- [x] Backend Implementation (minimal -- make failing tests pass, green confirmed)
+- [x] `just format` (rustfmt + clippy --fix)
+- [x] Backend Review (`reviewer-backend` -- fix issues)
+- [x] Type Synchronization (`just generate-types`)
+- [x] Compilation fixup (TypeScript errors from new bindings only -- no UI work)
+- [x] `just check` -- TypeScript clean
+- [x] Commit: `feat(record-transaction): auto-record asset price from transaction` (117e618)
+- [x] Frontend test stubs (`test-writer-frontend` -- all stubs written, red confirmed)
+- [x] Frontend Implementation (minimal -- make failing tests pass, green confirmed)
+- [x] `just format`
+- [x] Frontend Review (`reviewer-frontend` -- fix issues)
+- [x] Commit: `feat(transactions): add auto-record price checkbox and settings toggle` (50f21bd)
+- [x] Cross-cutting Review (`reviewer` always) -- 0 issues across 14 files
+- [x] i18n Review (`i18n-checker` -- UI text changed) -- 3 keys × 2 locales, all wired, no orphans
+- [x] Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` -- entries in English)
+- [x] Spec check (`spec-checker`) -- 13/13 implemented, 11/13 fully tested (MKT-056/062 deferred — fault injection seam tracked as separate todo)
 - [ ] Commit: `docs(market-price): update architecture for auto-record feature`
 
 ---

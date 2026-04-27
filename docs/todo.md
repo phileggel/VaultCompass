@@ -14,16 +14,13 @@ Added `microToFormatted` to `src/lib/microUnits.ts` using `Intl.NumberFormat(_di
 
 `useSettings.ts` exposes `{ currentChoice, setLanguage }` with a `LanguageChoice` type (`"auto" | "en" | "fr"`). `setLanguage` calls `i18n.changeLanguage`, which triggers the `languageChanged` subscription in `i18n/config.ts` to update `setDisplayLocale` automatically. Choice is persisted via `setLanguageOverride`; "auto" falls back to `resolveBrowserLang()`.
 
-## (market-price) — Opt-in: use transaction unit_price as market price
+## ~~(market-price) — Opt-in: use transaction unit_price as market price~~ ✅ resolved
 
-When recording a buy or sell transaction, optionally treat the `unit_price` (excluding fees) as the market price for that date, creating an `AssetPrice` record automatically.
+Both surfaces shipped per MKT-050..062:
 
-Two possible surfaces (not mutually exclusive):
-
-1. **Global setting** — a toggle in Settings: "Automatically record transaction price as market price". Applies to all future transactions when enabled.
-2. **Per-transaction opt-in** — a checkbox in the buy/sell form: "Use this price as today's market price". Gives per-transaction control.
-
-Either surface needs a spec update to MKT before implementation.
+- Global toggle in Settings (`features/settings/SettingsPage.tsx`), persisted in `localStorage` via `src/lib/autoRecordPriceStorage.ts`.
+- Per-transaction checkbox (`features/transactions/shared/RecordPriceCheckbox.tsx`) wired into buy, sell, add and edit forms; default snapshots the global toggle on create, hardcoded OFF on edit (MKT-052).
+- Backend stays stateless on the toggle — `record_price: bool` rides on `CreateTransactionDTO` and the orchestrator upserts `AssetPrice(asset_id, tx.date, tx.unit_price)` inside the same DB transaction (MKT-055/056), with silent overwrite on `(asset_id, date)` collision (MKT-058) and skip when `unit_price = 0` (MKT-061). `AssetPriceUpdated` fires after commit via `AssetService::notify_asset_price_updated()`.
 
 ## ~~(kit) — Back-fill IPC contracts for all existing domains~~ ✅ resolved
 
@@ -74,6 +71,10 @@ Source: `.screenshots/vault-compass.png` (1024×1024 RGB). All sizes generated v
 ## ~~(frontend) — Save current view between sessions; start on the accounts page by default~~ ✅ resolved
 
 `lastPath.ts` persists the top-level nav section (`/accounts`, `/assets`, `/categories`) to `localStorage`. `AppShell` saves on every navigation; `indexRoute.beforeLoad` restores on startup. Default is `/accounts`.
+
+## (testing) — Fault injection seam for orchestrator atomicity tests
+
+MKT-056 and MKT-062 (auto-record DB rollback + tx-form error surfacing) are implemented but their dedicated tests are deferred — see TODO at `src-tauri/src/use_cases/record_transaction/orchestrator.rs`. A repository-level mock seam (e.g. trait-injected `AssetPriceRepository` that can be told to fail after the price write but before commit) would unlock both tests in one shot. Same gap applies to TRX-027 atomicity, which is currently exercised only by happy-path coverage. Pre-existing limitation; not specific to this feature.
 
 ## (market-price) — Price-point CRUD page
 
