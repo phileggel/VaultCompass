@@ -75,4 +75,14 @@ Source: `.screenshots/vault-compass.png` (1024×1024 RGB). All sizes generated v
 
 `lastPath.ts` persists the top-level nav section (`/accounts`, `/assets`, `/categories`) to `localStorage`. `AppShell` saves on every navigation; `indexRoute.beforeLoad` restores on startup. Default is `/accounts`.
 
+## (market-price) — Price-point CRUD page
+
+`AssetPrice` records currently support only same-day overwrite via the existing "Enter price" modal (MKT-025) and have no standalone delete (MKT-042). Once auto-record from transactions ships, wrong-date entries (e.g. user backdates a buy and the auto-recorded price lands on the wrong day) become more likely and the user has no way to correct them.
+
+Add a dedicated price-history view per asset or per holding, listing recorded `AssetPrice` rows with edit and delete affordances. Requires:
+
+- Backend: `delete_asset_price(asset_id, date)` command + repository method.
+- Frontend: a "Price history" entry point (likely from the holding row or an asset detail view).
+- Spec update: lift MKT-042's "no standalone delete" stance and add new rules covering the list view, delete, and the resulting `AssetPriceUpdated` events.
+
 ## (backend/frontend) — Add new financial asset metadata directly from the web

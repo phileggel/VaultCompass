@@ -34,9 +34,9 @@
 
 ## Events
 
-| Event               | Payload | Direction                                           |
-| ------------------- | ------- | --------------------------------------------------- |
-| `AssetPriceUpdated` | none    | published — fired after successful upsert (MKT-026) |
+| Event               | Payload | Direction                                                                                                                                                                                                            |
+| ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetPriceUpdated` | none    | published — fired after successful upsert via `record_asset_price` (MKT-026) **or** via the auto-record path on `add_transaction` / `update_transaction` when `record_price = true` and `tx.unit_price > 0` (MKT-057) |
 
 ---
 
@@ -45,3 +45,4 @@
 - 2026-04-26 — Added by `market-price` spec: `record_asset_price`
 - 2026-04-26 — Typed errors: all commands now return domain-specific typed error enums instead of `String`
 - 2026-04-26 — Added `CategoryNotFound` to `AssetCommandError` (raised when asset create/update references a nonexistent category)
+- 2026-04-27 — Updated by `market-price` spec (MKT-050+): `AssetPriceUpdated` event now also fires from the auto-record path on `add_transaction` / `update_transaction`; no new commands
