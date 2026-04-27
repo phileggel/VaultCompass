@@ -106,6 +106,7 @@ export function useEditTransactionModal({
       exchange_rate: microValues.rateMicro,
       fees: microValues.feesMicro,
       note: formData.note || null,
+      record_price: false,
     });
 
     setIsSubmitting(false);

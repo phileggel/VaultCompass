@@ -154,6 +154,7 @@ pub fn run() {
                     Arc::new(holding_repo),
                     Arc::new(asset_repo_for_uc),
                     Arc::new(account_repo_for_uc),
+                    Arc::clone(&asset_service),
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(

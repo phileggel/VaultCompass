@@ -686,7 +686,14 @@ fees: number;
 /**
  * Optional user note.
  */
-note: string | null }
+note: string | null; 
+/**
+ * MKT-054 — when true and unit_price > 0, the orchestrator also upserts
+ * AssetPrice(asset_id, date, unit_price) inside the same DB tx (MKT-055/056)
+ * and publishes AssetPriceUpdated after commit (MKT-057). Existing same-date
+ * price is silently overwritten (MKT-058). Skipped when unit_price = 0 (MKT-061).
+ */
+record_price: boolean }
 /**
  * Typed error returned to the frontend for the delete_asset command.
  */

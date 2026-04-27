@@ -238,6 +238,14 @@ impl AssetService {
     pub async fn get_latest_price(&self, asset_id: &str) -> Result<Option<AssetPrice>> {
         self.price_repo.get_latest(asset_id).await
     }
+
+    /// Publishes AssetPriceUpdated without performing any write.
+    /// Called by the record_transaction use case after an atomic DB commit (MKT-057, B8).
+    pub fn notify_asset_price_updated(&self) {
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetPriceUpdated);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -653,6 +661,27 @@ mod tests {
         let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
         assert_eq!(latest.price, 160_000_000); // 160.0 → micros
         assert_eq!(latest.date, "2026-01-01");
+    }
+
+    // MKT-057 — notify_asset_price_updated publishes AssetPriceUpdated when a bus is configured.
+    // Used by the record_transaction use case after committing an auto-recorded price (B8 — the
+    // orchestrator does not publish events directly).
+    #[tokio::test]
+    async fn notify_asset_price_updated_publishes_event() {
+        let pool = setup_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(bus);
+
+        svc.notify_asset_price_updated();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
     }
 
     // MKT-031 — get_latest_price returns None when no price has been recorded for the asset

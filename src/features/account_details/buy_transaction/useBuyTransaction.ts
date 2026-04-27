@@ -84,6 +84,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
         exchange_rate: microValues.rateMicro,
         fees: microValues.feesMicro,
         note: formData.note || null,
+        record_price: false,
       });
 
       if (result.error) {

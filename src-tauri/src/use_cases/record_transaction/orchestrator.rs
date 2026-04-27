@@ -1,5 +1,5 @@
 use crate::context::account::{AccountRepository, Holding, HoldingRepository};
-use crate::context::asset::AssetRepository;
+use crate::context::asset::{AssetRepository, AssetService};
 use crate::context::transaction::{Transaction, TransactionService, TransactionType};
 use crate::core::logger::BACKEND;
 use crate::use_cases::record_transaction::error::RecordTransactionError;
@@ -9,7 +9,7 @@ use specta::Type;
 use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, info};
 
 /// DTO for creating or updating a transaction.
 /// `total_amount` is intentionally absent — the backend computes it from the other
@@ -34,6 +34,11 @@ pub struct CreateTransactionDTO {
     pub fees: i64,
     /// Optional user note.
     pub note: Option<String>,
+    /// MKT-054 — when true and unit_price > 0, the orchestrator also upserts
+    /// AssetPrice(asset_id, date, unit_price) inside the same DB tx (MKT-055/056)
+    /// and publishes AssetPriceUpdated after commit (MKT-057). Existing same-date
+    /// price is silently overwritten (MKT-058). Skipped when unit_price = 0 (MKT-061).
+    pub record_price: bool,
 }
 
 /// Orchestrates transaction creation, update, and deletion across
@@ -48,6 +53,7 @@ pub struct RecordTransactionUseCase {
     holding_repo: Arc<dyn HoldingRepository>,
     asset_repo: Arc<dyn AssetRepository>,
     account_repo: Arc<dyn AccountRepository>,
+    asset_service: Arc<AssetService>,
 }
 
 impl RecordTransactionUseCase {
@@ -58,6 +64,7 @@ impl RecordTransactionUseCase {
         holding_repo: Arc<dyn HoldingRepository>,
         asset_repo: Arc<dyn AssetRepository>,
         account_repo: Arc<dyn AccountRepository>,
+        asset_service: Arc<AssetService>,
     ) -> Self {
         Self {
             pool,
@@ -65,6 +72,7 @@ impl RecordTransactionUseCase {
             holding_repo,
             asset_repo,
             account_repo,
+            asset_service,
         }
     }
 
@@ -166,11 +174,15 @@ impl RecordTransactionUseCase {
 
         self.upsert_holding_in_tx(&mut db_tx, &holding).await?;
 
+        // MKT-055/061 — auto-record AssetPrice inside the same DB transaction
+        let price_written = Self::auto_record_price(&mut db_tx, &tx, dto.record_price).await?;
+
         db_tx
             .commit()
             .await
             .context("Failed to commit DB transaction")?;
         self.transaction_service.notify_transaction_updated();
+        self.maybe_notify_price_updated(price_written);
         Ok(tx)
     }
 
@@ -269,11 +281,15 @@ impl RecordTransactionUseCase {
 
         self.upsert_holding_in_tx(&mut db_tx, &holding).await?;
 
+        // MKT-055/061 — auto-record AssetPrice inside the same DB transaction
+        let price_written = Self::auto_record_price(&mut db_tx, &tx, dto.record_price).await?;
+
         db_tx
             .commit()
             .await
             .context("Failed to commit DB transaction")?;
         self.transaction_service.notify_transaction_updated();
+        self.maybe_notify_price_updated(price_written);
         Ok(tx)
     }
 
@@ -469,11 +485,16 @@ impl RecordTransactionUseCase {
             }
         }
 
+        // MKT-055/059/061 — auto-record AssetPrice at the (possibly new) tx.date and tx.unit_price
+        let price_written =
+            Self::auto_record_price(&mut db_tx, &updated_tx, dto.record_price).await?;
+
         db_tx
             .commit()
             .await
             .context("Failed to commit DB transaction")?;
         self.transaction_service.notify_transaction_updated();
+        self.maybe_notify_price_updated(price_written);
         Ok(updated_tx)
     }
 
@@ -729,6 +750,49 @@ impl RecordTransactionUseCase {
 
         Ok(())
     }
+
+    /// MKT-055/058/061 — upserts AssetPrice(asset_id, date, unit_price) inside the open
+    /// DB transaction when the user opted in. Returns true if a price was written so the
+    /// caller can publish AssetPriceUpdated after commit (MKT-057). Skipped silently when
+    /// `record_price = false` (MKT-054) or `tx.unit_price = 0` (MKT-061, gifted assets).
+    /// Conflicts on `(asset_id, date)` are silently overwritten via ON CONFLICT.
+    async fn auto_record_price(
+        db_tx: &mut sqlx::Transaction<'_, Sqlite>,
+        tx: &Transaction,
+        record_price: bool,
+    ) -> Result<bool> {
+        // Domain guarantees unit_price >= 0; the `<= 0` guard collapses to MKT-061 (== 0).
+        if !record_price || tx.unit_price <= 0 {
+            return Ok(false);
+        }
+        sqlx::query!(
+            r#"INSERT INTO asset_prices (asset_id, date, price) VALUES (?, ?, ?)
+               ON CONFLICT(asset_id, date) DO UPDATE SET price = excluded.price"#,
+            tx.asset_id,
+            tx.date,
+            tx.unit_price,
+        )
+        .execute(&mut **db_tx)
+        .await
+        .context("Failed to upsert asset price (MKT-055)")?;
+        debug!(
+            target: BACKEND,
+            asset_id = %tx.asset_id,
+            date = %tx.date,
+            "Auto-recorded asset price from transaction (MKT-055)"
+        );
+        Ok(true)
+    }
+
+    /// MKT-057 — publishes AssetPriceUpdated through the asset bounded context after a
+    /// successful commit. No-op when no price was written (record_price = false or skipped
+    /// by MKT-061). Centralises the post-commit notification so each call site stays a
+    /// single line.
+    fn maybe_notify_price_updated(&self, price_written: bool) {
+        if price_written {
+            self.asset_service.notify_asset_price_updated();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -764,12 +828,20 @@ mod tests {
         let tx_service = Arc::new(crate::context::transaction::TransactionService::new(
             Box::new(SqliteTransactionRepository::new(pool.clone())),
         ));
+        let asset_service = Arc::new(crate::context::asset::AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(crate::context::asset::SqliteAssetPriceRepository::new(
+                pool.clone(),
+            )),
+        ));
         RecordTransactionUseCase::new(
             Arc::new(pool.clone()),
             tx_service,
             holding_repo,
             asset_repo,
             account_repo,
+            asset_service,
         )
     }
 
@@ -821,6 +893,7 @@ mod tests {
             exchange_rate: micro,
             fees: 0,
             note: None,
+            record_price: false,
         }
     }
 
@@ -836,6 +909,7 @@ mod tests {
             exchange_rate: micro,
             fees: 0,
             note: None,
+            record_price: false,
         }
     }
 
@@ -1052,4 +1126,374 @@ mod tests {
             RecordTransactionUseCase::compute_realized_pnl_pub(50_000_000, 50_000_000, 1_000_000);
         assert_eq!(result, 0);
     }
+
+    // --- MKT-055 / MKT-054 / MKT-058 / MKT-059 / MKT-060 / MKT-061 ---
+
+    // MKT-055 — create_purchase with record_price=true writes an AssetPrice row
+    #[tokio::test]
+    async fn create_purchase_with_record_price_writes_asset_price() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        let dto = CreateTransactionDTO {
+            record_price: true,
+            ..buy_dto(&account_id, &asset_id, micro)
+        };
+        let expected_price = dto.unit_price;
+        let expected_date = dto.date.clone();
+
+        uc.create_transaction(dto).await.unwrap();
+
+        let rows = sqlx::query!(
+            "SELECT asset_id, date, price FROM asset_prices WHERE asset_id = ?",
+            asset_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1, "expected exactly one AssetPrice row");
+        assert_eq!(rows[0].asset_id, asset_id);
+        assert_eq!(rows[0].date, expected_date);
+        assert_eq!(rows[0].price, expected_price);
+    }
+
+    // MKT-055 — create_sell with record_price=true writes an AssetPrice row at the sell date/price
+    #[tokio::test]
+    async fn create_sell_with_record_price_writes_asset_price() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        // Establish a holding first (record_price: false — no noise in asset_prices)
+        uc.create_transaction(buy_dto(&account_id, &asset_id, 2 * micro))
+            .await
+            .unwrap();
+
+        let sell = CreateTransactionDTO {
+            record_price: true,
+            ..sell_dto(&account_id, &asset_id, micro)
+        };
+        let expected_price = sell.unit_price;
+        let expected_date = sell.date.clone();
+
+        uc.create_transaction(sell).await.unwrap();
+
+        let rows = sqlx::query!(
+            "SELECT asset_id, date, price FROM asset_prices WHERE asset_id = ?",
+            asset_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            rows.len(),
+            1,
+            "expected exactly one AssetPrice row from the sell"
+        );
+        assert_eq!(rows[0].asset_id, asset_id);
+        assert_eq!(rows[0].date, expected_date);
+        assert_eq!(rows[0].price, expected_price);
+    }
+
+    // MKT-055 — update_transaction with record_price=true writes an AssetPrice row
+    #[tokio::test]
+    async fn update_transaction_with_record_price_writes_asset_price() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        // Create purchase with record_price: false — no price written yet
+        let tx = uc
+            .create_transaction(buy_dto(&account_id, &asset_id, micro))
+            .await
+            .unwrap();
+
+        // Update: same transaction, but now record_price: true and different unit_price
+        let new_unit_price = 150 * micro;
+        let update_dto = CreateTransactionDTO {
+            record_price: true,
+            unit_price: new_unit_price,
+            ..buy_dto(&account_id, &asset_id, micro)
+        };
+        let expected_date = update_dto.date.clone();
+
+        uc.update_transaction(tx.id, update_dto).await.unwrap();
+
+        let rows = sqlx::query!(
+            "SELECT asset_id, date, price FROM asset_prices WHERE asset_id = ?",
+            asset_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            rows.len(),
+            1,
+            "expected exactly one AssetPrice row after update"
+        );
+        assert_eq!(rows[0].asset_id, asset_id);
+        assert_eq!(rows[0].date, expected_date);
+        assert_eq!(rows[0].price, new_unit_price);
+    }
+
+    // MKT-054 — record_price=false does NOT write any AssetPrice row
+    #[tokio::test]
+    async fn record_price_false_does_not_write_asset_price() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        // record_price: false (the default in buy_dto)
+        uc.create_transaction(buy_dto(&account_id, &asset_id, micro))
+            .await
+            .unwrap();
+
+        let rows = sqlx::query!(
+            "SELECT asset_id FROM asset_prices WHERE asset_id = ?",
+            asset_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert!(
+            rows.is_empty(),
+            "expected no AssetPrice rows when record_price is false"
+        );
+    }
+
+    // MKT-058 — same-date collision is silently overwritten; exactly one row remains
+    #[tokio::test]
+    async fn same_date_collision_overwrites_silently() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        // Pre-insert an AssetPrice row at the same (asset_id, date) with an old price
+        let old_price = 50 * micro;
+        sqlx::query!(
+            "INSERT INTO asset_prices (asset_id, date, price) VALUES (?, ?, ?)",
+            asset_id,
+            "2024-01-01",
+            old_price
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create a transaction on the same date with record_price: true and a different price
+        let new_unit_price = 100 * micro;
+        let dto = CreateTransactionDTO {
+            record_price: true,
+            unit_price: new_unit_price,
+            ..buy_dto(&account_id, &asset_id, micro)
+        };
+        // buy_dto uses date "2024-01-01" which collides with the pre-inserted row
+        uc.create_transaction(dto).await.unwrap();
+
+        let rows = sqlx::query!(
+            "SELECT price FROM asset_prices WHERE asset_id = ? AND date = ?",
+            asset_id,
+            "2024-01-01"
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            rows.len(),
+            1,
+            "expected exactly one row after collision (no duplicate)"
+        );
+        assert_eq!(
+            rows[0].price, new_unit_price,
+            "old price should be silently overwritten with new unit_price"
+        );
+    }
+
+    // MKT-061 — zero unit_price skips the AssetPrice write; transaction still succeeds
+    #[tokio::test]
+    async fn zero_unit_price_skips_auto_record() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        // unit_price=0 is allowed only when fees > 0 (TRX-020 requires total_amount > 0).
+        // This matches MKT-061's gifted/inherited asset scenario where a recording fee exists.
+        let dto = CreateTransactionDTO {
+            record_price: true,
+            unit_price: 0,
+            fees: micro,
+            ..buy_dto(&account_id, &asset_id, micro)
+        };
+
+        // Transaction must succeed normally
+        let result = uc.create_transaction(dto).await;
+        assert!(
+            result.is_ok(),
+            "transaction with unit_price=0 should succeed: {:?}",
+            result
+        );
+
+        // No AssetPrice row should have been written
+        let rows = sqlx::query!(
+            "SELECT asset_id FROM asset_prices WHERE asset_id = ?",
+            asset_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert!(
+            rows.is_empty(),
+            "expected no AssetPrice row when unit_price is 0 (MKT-061 skip)"
+        );
+    }
+
+    // MKT-059 — editing to a new date leaves the old price row intact and creates a new one
+    #[tokio::test]
+    async fn edit_to_new_date_preserves_old_price_and_creates_new() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        // Create purchase at "2024-01-01" with record_price: true (original price = 100 * micro)
+        let original_unit_price = 100 * micro;
+        let tx = uc
+            .create_transaction(CreateTransactionDTO {
+                record_price: true,
+                unit_price: original_unit_price,
+                ..buy_dto(&account_id, &asset_id, micro)
+            })
+            .await
+            .unwrap();
+
+        // Update: move date to "2024-06-01", new unit_price, record_price: true
+        let new_unit_price = 200 * micro;
+        let update_dto = CreateTransactionDTO {
+            record_price: true,
+            date: "2024-06-01".to_string(),
+            unit_price: new_unit_price,
+            ..buy_dto(&account_id, &asset_id, micro)
+        };
+
+        uc.update_transaction(tx.id, update_dto).await.unwrap();
+
+        // Row at original date must still exist with original price
+        let old_rows = sqlx::query!(
+            "SELECT price FROM asset_prices WHERE asset_id = ? AND date = ?",
+            asset_id,
+            "2024-01-01"
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            old_rows.len(),
+            1,
+            "original AssetPrice row at 2024-01-01 should be untouched after date change"
+        );
+        assert_eq!(
+            old_rows[0].price, original_unit_price,
+            "price at original date should be unchanged"
+        );
+
+        // Row at new date must also exist with the new price
+        let new_rows = sqlx::query!(
+            "SELECT price FROM asset_prices WHERE asset_id = ? AND date = ?",
+            asset_id,
+            "2024-06-01"
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            new_rows.len(),
+            1,
+            "new AssetPrice row at 2024-06-01 should have been created"
+        );
+        assert_eq!(
+            new_rows[0].price, new_unit_price,
+            "price at new date should equal the updated unit_price"
+        );
+    }
+
+    // MKT-060 — deleting a transaction does NOT remove the AssetPrice row written by it
+    #[tokio::test]
+    async fn delete_does_not_cascade_to_asset_price() {
+        let pool = make_pool().await;
+        let uc = setup_uc(&pool).await;
+        let account_id = create_account(&pool).await;
+        let asset_id = create_asset(&pool).await;
+        let micro = 1_000_000i64;
+
+        let dto = CreateTransactionDTO {
+            record_price: true,
+            ..buy_dto(&account_id, &asset_id, micro)
+        };
+        let expected_date = dto.date.clone();
+        let expected_price = dto.unit_price;
+
+        let tx = uc.create_transaction(dto).await.unwrap();
+
+        // Confirm the price row exists before deletion
+        let before = sqlx::query!(
+            "SELECT price FROM asset_prices WHERE asset_id = ? AND date = ?",
+            asset_id,
+            expected_date
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(before.len(), 1, "price row should exist before delete");
+
+        // Delete the transaction
+        uc.delete_transaction(&tx.id).await.unwrap();
+
+        // Price row must still be present after deletion
+        let after = sqlx::query!(
+            "SELECT price FROM asset_prices WHERE asset_id = ? AND date = ?",
+            asset_id,
+            expected_date
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            after.len(),
+            1,
+            "AssetPrice row must survive transaction deletion (MKT-060)"
+        );
+        assert_eq!(
+            after[0].price, expected_price,
+            "price value must be unchanged after transaction deletion"
+        );
+    }
+
+    // MKT-056 — atomicity: full rollback when any step inside the DB transaction fails.
+    // TODO(MKT-056): atomicity test deferred — requires fault injection at the DB layer
+    // (e.g. a mock repository that errors after the price write but before commit).
+    // The current integration-test style (real SQLite pool) cannot force a mid-transaction
+    // failure without infrastructure-level seams not yet present in this codebase.
 }
