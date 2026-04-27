@@ -130,13 +130,8 @@ async fn do_download(app_handle: &AppHandle, state: &UpdateState) -> anyhow::Res
             move |chunk, total| {
                 let current = downloaded.fetch_add(chunk as u64, Ordering::Relaxed) + chunk as u64;
                 let percent = total
-                    .map(|t| {
-                        if t > 0 {
-                            (current * 100 / t).min(100)
-                        } else {
-                            0
-                        }
-                    })
+                    .and_then(|t| (current * 100).checked_div(t))
+                    .map(|p| p.min(100))
                     .unwrap_or(0);
                 let _ = ah.emit("update:progress", percent);
             },
