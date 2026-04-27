@@ -54,6 +54,7 @@ const baseTransaction: Transaction = {
 
 describe("useEditTransactionModal", () => {
   beforeEach(() => {
+    localStorage.clear();
     mockUpdateTransaction.mockReset();
   });
 
@@ -108,5 +109,33 @@ describe("useEditTransactionModal", () => {
 
     expect(result.current.error).toBe("Not found");
     expect(onSubmitSuccess).not.toHaveBeenCalled();
+  });
+
+  // MKT-052 — recordPrice is always false on edit regardless of localStorage
+  it("recordPrice is false on edit mount even when localStorage auto_record_price is true", () => {
+    localStorage.setItem("auto_record_price", "true");
+    const { result } = renderHook(() => useEditTransactionModal({ transaction: baseTransaction }));
+    expect(result.current.recordPrice).toBe(false);
+  });
+
+  // MKT-054 — submit forwards recordPrice to updateTransaction as record_price
+  it("forwards record_price: true to updateTransaction when recordPrice is manually set to true", async () => {
+    mockUpdateTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+    const { result } = renderHook(() => useEditTransactionModal({ transaction: baseTransaction }));
+
+    // Manually set recordPrice to true via the setter exposed by the hook
+    await act(async () => {
+      result.current.setRecordPrice(true);
+    });
+
+    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockUpdateTransaction).toHaveBeenCalledWith(
+      "tx-existing",
+      expect.objectContaining({ record_price: true }),
+    );
   });
 });

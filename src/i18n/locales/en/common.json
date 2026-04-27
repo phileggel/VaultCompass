@@ -152,7 +152,9 @@
     "language_label": "Language",
     "language_auto": "System default",
     "language_en": "English",
-    "language_fr": "Français"
+    "language_fr": "Français",
+    "auto_record_price_label": "Automatically record transaction price as market price",
+    "auto_record_price_description": "When enabled, new transaction forms will have the auto-record checkbox pre-checked."
   },
   "shell": {
     "sidebar_collapse": "Collapse menu",
@@ -181,6 +183,7 @@
     "form_total_amount_label": "Total amount",
     "form_note_label": "Note",
     "form_note_placeholder": "Optional comment…",
+    "auto_record_price_label": "Use this price as the market price for {{date}}",
     "action_buy": "Buy",
     "error_load": "Failed to load transactions.",
     "error_generic": "An error occurred.",

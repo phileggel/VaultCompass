@@ -30,6 +30,7 @@ const BASE_PROPS = {
 
 describe("useSellTransaction", () => {
   beforeEach(() => {
+    localStorage.clear();
     mockAddTransaction.mockReset();
   });
 
@@ -197,5 +198,79 @@ describe("useSellTransaction", () => {
 
     expect(result.current.error).toBeNull();
     expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  // MKT-052 — recordPrice defaults to global toggle value at hook mount
+  it("recordPrice defaults to false when localStorage auto_record_price is absent", () => {
+    localStorage.removeItem("auto_record_price");
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    expect(result.current.recordPrice).toBe(false);
+  });
+
+  // MKT-052 — recordPrice is true at mount when localStorage key is "true"
+  it("recordPrice defaults to true when localStorage auto_record_price is true", () => {
+    localStorage.setItem("auto_record_price", "true");
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    expect(result.current.recordPrice).toBe(true);
+  });
+
+  // MKT-053 — snapshot at mount: mutating localStorage after mount does not change recordPrice
+  it("does not change recordPrice when localStorage is mutated after mount (snapshot semantics)", () => {
+    localStorage.removeItem("auto_record_price");
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    expect(result.current.recordPrice).toBe(false);
+
+    localStorage.setItem("auto_record_price", "true");
+
+    expect(result.current.recordPrice).toBe(false);
+  });
+
+  // MKT-054 — submit forwards record_price: true to addTransaction
+  it("forwards record_price: true to addTransaction when recordPrice is true", async () => {
+    localStorage.setItem("auto_record_price", "true");
+    mockAddTransaction.mockResolvedValue({ data: { id: "tx-sell-1" }, error: null });
+
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "100");
+      result.current.handleChange("exchangeRate", "1");
+      result.current.handleChange("fees", "0");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ record_price: true }),
+    );
+  });
+
+  // MKT-054 — submit forwards record_price: false to addTransaction
+  it("forwards record_price: false to addTransaction when recordPrice is false", async () => {
+    localStorage.removeItem("auto_record_price");
+    mockAddTransaction.mockResolvedValue({ data: { id: "tx-sell-2" }, error: null });
+
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "100");
+      result.current.handleChange("exchangeRate", "1");
+      result.current.handleChange("fees", "0");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ record_price: false }),
+    );
   });
 });

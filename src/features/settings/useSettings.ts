@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getLanguageOverride, resolveBrowserLang, setLanguageOverride } from "@/i18n/config";
+import { getAutoRecordPrice, setAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
 
 export type LanguageChoice = "auto" | "en" | "fr";
 
@@ -10,6 +11,8 @@ export function useSettings() {
   const [currentChoice, setCurrentChoice] = useState<LanguageChoice>(
     () => (getLanguageOverride() as LanguageChoice | null) ?? "auto",
   );
+
+  const [autoRecordPrice, setAutoRecordPriceState] = useState<boolean>(() => getAutoRecordPrice());
 
   const setLanguage = useCallback(
     (choice: LanguageChoice) => {
@@ -25,5 +28,13 @@ export function useSettings() {
     [i18n],
   );
 
-  return { currentChoice, setLanguage };
+  const toggleAutoRecordPrice = useCallback(() => {
+    setAutoRecordPriceState((current) => {
+      const next = !current;
+      setAutoRecordPrice(next);
+      return next;
+    });
+  }, []);
+
+  return { currentChoice, setLanguage, autoRecordPrice, toggleAutoRecordPrice };
 }

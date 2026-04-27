@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { RecordPriceCheckbox } from "@/features/transactions/shared/RecordPriceCheckbox";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { DateField } from "@/ui/components/field/DateField";
@@ -49,6 +50,8 @@ export function SellTransactionModal({
     error,
     isSubmitting,
     isFormValid,
+    recordPrice,
+    setRecordPrice,
     handleChange,
     handleSubmit,
   } = useSellTransaction({ accountId, assetId, holdingQuantityMicro, onSubmitSuccess });
@@ -187,6 +190,9 @@ export function SellTransactionModal({
           onChange={(e) => handleChange("note", e.target.value)}
           placeholder={t("transaction.form_note_placeholder")}
         />
+
+        {/* Auto-record price (MKT-051) */}
+        <RecordPriceCheckbox checked={recordPrice} onChange={setRecordPrice} date={formData.date} />
 
         {/* Inline error */}
         {error && (

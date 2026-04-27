@@ -152,7 +152,9 @@
     "language_label": "Langue",
     "language_auto": "Langue du système",
     "language_en": "English",
-    "language_fr": "Français"
+    "language_fr": "Français",
+    "auto_record_price_label": "Enregistrer automatiquement le prix de transaction comme prix de marché",
+    "auto_record_price_description": "Si activé, la case d'enregistrement automatique sera pré-cochée dans les nouveaux formulaires de transaction."
   },
   "shell": {
     "sidebar_collapse": "Réduire le menu",
@@ -181,6 +183,7 @@
     "form_total_amount_label": "Montant total",
     "form_note_label": "Note",
     "form_note_placeholder": "Commentaire optionnel…",
+    "auto_record_price_label": "Utiliser ce prix comme prix de marché pour le {{date}}",
     "action_buy": "Acheter",
     "error_load": "Erreur lors du chargement des transactions.",
     "error_generic": "Une erreur est survenue.",

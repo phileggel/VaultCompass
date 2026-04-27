@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TransactionFormData } from "@/features/transactions/shared/types";
 import { validateSellForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
+import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
 import { computeSellTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 
@@ -38,6 +39,8 @@ export function useSellTransaction({
   }));
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // MKT-052/053 — snapshot of the global auto-record toggle at hook mount
+  const [recordPrice, setRecordPrice] = useState<boolean>(() => getAutoRecordPrice());
 
   const microValues = useMemo(() => {
     const qtyMicro = decimalToMicro(formData.quantity);
@@ -97,7 +100,7 @@ export function useSellTransaction({
           exchange_rate: microValues.rateMicro,
           fees: microValues.feesMicro,
           note: formData.note || null,
-          record_price: false,
+          record_price: recordPrice,
         });
 
         if (result.error) {
@@ -111,7 +114,16 @@ export function useSellTransaction({
         setIsSubmitting(false);
       }
     },
-    [formData, microValues, holdingQuantityMicro, addTransaction, t, showSnackbar, onSubmitSuccess],
+    [
+      formData,
+      microValues,
+      holdingQuantityMicro,
+      recordPrice,
+      addTransaction,
+      t,
+      showSnackbar,
+      onSubmitSuccess,
+    ],
   );
 
   return {
@@ -123,6 +135,8 @@ export function useSellTransaction({
     error,
     isSubmitting,
     isFormValid,
+    recordPrice,
+    setRecordPrice,
     handleChange,
     handleSubmit,
   };

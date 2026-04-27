@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
 import { computeTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
@@ -46,6 +47,8 @@ export function useAddTransaction({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedConfirm, setShowArchivedConfirm] = useState(false);
+  // MKT-052/053 — snapshot of the global auto-record toggle at hook mount
+  const [recordPrice, setRecordPrice] = useState<boolean>(() => getAutoRecordPrice());
 
   // Derive micro-unit values from form strings — single conversion at the input boundary (ADR-001).
   const microValues = useMemo(() => {
@@ -96,7 +99,7 @@ export function useAddTransaction({
       exchange_rate: microValues.rateMicro,
       fees: microValues.feesMicro,
       note: formData.note || null,
-      record_price: false,
+      record_price: recordPrice,
     });
 
     setIsSubmitting(false);
@@ -116,6 +119,7 @@ export function useAddTransaction({
   }, [
     formData,
     microValues,
+    recordPrice,
     addTransaction,
     t,
     prefillAssetId,
@@ -154,6 +158,8 @@ export function useAddTransaction({
     isSubmitting,
     isFormValid,
     showArchivedConfirm,
+    recordPrice,
+    setRecordPrice,
     handleChange,
     handleSubmit,
     handleConfirmArchived,

@@ -11,6 +11,7 @@ import { TextareaField } from "@/ui/components/field/TextareaField";
 import { TextField } from "@/ui/components/field/TextField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { FormModal } from "@/ui/components/modal/FormModal";
+import { RecordPriceCheckbox } from "../shared/RecordPriceCheckbox";
 import { useEditTransactionModal } from "./useEditTransactionModal";
 
 interface EditTransactionModalProps {
@@ -45,6 +46,8 @@ export function EditTransactionModal({
     isSubmitting,
     isFormValid,
     showArchivedConfirm,
+    recordPrice,
+    setRecordPrice,
     handleChange,
     handleSubmit,
     handleConfirmArchived,
@@ -189,6 +192,13 @@ export function EditTransactionModal({
             value={formData.note}
             onChange={(e) => handleChange("note", e.target.value)}
             placeholder={t("transaction.form_note_placeholder")}
+          />
+
+          {/* Auto-record price (MKT-051) — defaults OFF on edit per MKT-052 */}
+          <RecordPriceCheckbox
+            checked={recordPrice}
+            onChange={setRecordPrice}
+            date={formData.date}
           />
 
           {/* Inline error */}
