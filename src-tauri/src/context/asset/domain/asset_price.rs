@@ -46,6 +46,7 @@ impl AssetPrice {
 }
 
 /// Interface for AssetPrice persistence (upsert by (asset_id, date), MKT-025).
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait AssetPriceRepository: Send + Sync {
     /// Upserts a price record: inserts or overwrites by (asset_id, date) (MKT-025).

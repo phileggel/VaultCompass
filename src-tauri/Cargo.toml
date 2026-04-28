@@ -52,6 +52,7 @@ strum = "0.27.2"
 strum_macros = "0.27.2"
 
 [dev-dependencies]
+mockall = "0.13"
 tempfile = "3"
 
 [profile.release]

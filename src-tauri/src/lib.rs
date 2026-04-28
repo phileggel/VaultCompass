@@ -144,16 +144,10 @@ pub fn run() {
                         .with_event_bus(event_bus.clone()),
                 );
 
-                let holding_repo = SqliteHoldingRepository::new(db.pool.clone());
-                let asset_repo_for_uc = SqliteAssetRepository::new(db.pool.clone());
-                let account_repo_for_uc = SqliteAccountRepository::new(db.pool.clone());
-
                 let record_transaction_uc = RecordTransactionUseCase::new(
                     Arc::new(db.pool.clone()),
                     transaction_service.clone(),
-                    Arc::new(holding_repo),
-                    Arc::new(asset_repo_for_uc),
-                    Arc::new(account_repo_for_uc),
+                    Arc::clone(&account_service),
                     Arc::clone(&asset_service),
                 );
 

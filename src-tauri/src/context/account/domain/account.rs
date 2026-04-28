@@ -108,6 +108,7 @@ impl Account {
 }
 
 /// Interface for account persistence.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait AccountRepository: Send + Sync {
     /// Fetches all accounts.

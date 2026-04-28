@@ -56,6 +56,7 @@ impl AssetCategory {
 }
 
 /// Interface for category persistence.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait AssetCategoryRepository: Send + Sync {
     /// Fetches all active categories.

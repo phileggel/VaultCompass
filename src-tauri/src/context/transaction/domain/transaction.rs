@@ -232,6 +232,7 @@ impl Transaction {
 }
 
 /// Interface for transaction persistence.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait TransactionRepository: Send + Sync {
     /// Fetches a transaction by ID.

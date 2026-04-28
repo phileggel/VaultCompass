@@ -47,6 +47,17 @@ impl AccountService {
         self.holding_repo.get_by_account(account_id).await
     }
 
+    /// Retrieves a single holding by account/asset pair, or None (B19).
+    pub async fn get_holding_by_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<Option<Holding>> {
+        self.holding_repo
+            .get_by_account_asset(account_id, asset_id)
+            .await
+    }
+
     /// Creates a new account.
     pub async fn create(
         &self,

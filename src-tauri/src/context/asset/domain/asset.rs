@@ -172,6 +172,7 @@ impl Asset {
 }
 
 /// Interface for asset persistence.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait AssetRepository: Send + Sync {
     /// Fetches all active (non-archived) assets.

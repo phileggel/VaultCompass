@@ -102,6 +102,7 @@ impl Holding {
 }
 
 /// Interface for holding persistence.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait HoldingRepository: Send + Sync {
     /// Fetches all holdings for a given account.

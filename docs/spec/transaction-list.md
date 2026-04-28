@@ -152,4 +152,4 @@ Actions per row: Edit icon button + Delete icon button.
 
 ## Open Questions
 
-- [ ] **TXL-013 — Backend command ownership**: The new "get asset IDs with transactions for a given account" command queries the `transactions` table only. It likely belongs to `use_cases/record_transaction/api.rs` (consistent with B9 pattern), but could alternatively live in `context/transaction/api.rs` as a single-context read (B5). The feature planner should confirm placement and add the new repository method to `TransactionRepository`.
+- [x] **TXL-013 — Backend command ownership** _(resolved)_: Implemented as a single-context read in `context/transaction/api.rs` (B5 pattern). The repository method lives on `TransactionRepository`.
