@@ -130,7 +130,7 @@ pub async fn get_asset_ids_for_account(
     account_id: String,
 ) -> Result<Vec<String>, AccountCommandError> {
     state
-        .transaction_service
+        .account_service
         .get_asset_ids_for_account(&account_id)
         .await
         .map_err(|e| {

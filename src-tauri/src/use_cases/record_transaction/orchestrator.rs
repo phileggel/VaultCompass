@@ -1,15 +1,12 @@
-use crate::context::account::{AccountService, Holding};
-use crate::context::account::{Transaction, TransactionService, TransactionType};
+use crate::context::account::{AccountService, Transaction, TransactionType};
 use crate::context::asset::AssetService;
 use crate::core::logger::BACKEND;
 use crate::use_cases::record_transaction::error::RecordTransactionError;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use sqlx::{Pool, Sqlite};
-use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::warn;
 
 /// DTO for creating or updating a transaction.
 /// `total_amount` is intentionally absent — the backend computes it from the other
@@ -34,50 +31,36 @@ pub struct CreateTransactionDTO {
     pub fees: i64,
     /// Optional user note.
     pub note: Option<String>,
-    /// MKT-054 — when true and unit_price > 0, the orchestrator also upserts
-    /// AssetPrice(asset_id, date, unit_price) inside the same DB tx (MKT-055/056)
-    /// and publishes AssetPriceUpdated after commit (MKT-057). Existing same-date
-    /// price is silently overwritten (MKT-058). Skipped when unit_price = 0 (MKT-061).
+    /// MKT-054 — when true and unit_price > 0, also upserts AssetPrice(asset_id, date, unit_price)
+    /// as a best-effort separate write after the transaction is saved (MKT-055/056).
+    /// Existing same-date price is silently overwritten (MKT-058). Skipped when unit_price = 0 (MKT-061).
     pub record_price: bool,
 }
 
-/// Orchestrates transaction creation, update, and deletion across
-/// `transaction/`, `account/`, and `asset/` bounded contexts (B6, B10).
-///
-/// Atomicity (TRX-027): all DB writes within each operation are wrapped in a
-/// single sqlx transaction via the pool. Event publication is delegated to
-/// `TransactionService.notify_transaction_updated()` after commit (B8).
+/// Thin orchestrator for transaction create/update/delete.
+/// Cross-BC concerns (asset validation, auto_record_price, unarchive) are handled here;
+/// holding recalculation and atomicity are delegated to AccountService (B21, B4).
 pub struct RecordTransactionUseCase {
-    pool: Arc<Pool<Sqlite>>,
-    transaction_service: Arc<TransactionService>,
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
 }
 
 impl RecordTransactionUseCase {
     /// Creates a new RecordTransactionUseCase.
-    pub fn new(
-        pool: Arc<Pool<Sqlite>>,
-        transaction_service: Arc<TransactionService>,
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
-    ) -> Self {
+    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
         Self {
-            pool,
-            transaction_service,
             account_service,
             asset_service,
         }
     }
 
-    /// Creates a new transaction (Purchase or Sell) and updates the Holding atomically (TRX-027, SEL-028).
+    /// Creates a new Purchase or Sell transaction and updates the Holding (TRX-027, SEL-028).
     pub async fn create_transaction(&self, dto: CreateTransactionDTO) -> Result<Transaction> {
         let tx_type = dto
             .transaction_type
             .parse::<TransactionType>()
             .map_err(|_| RecordTransactionError::InvalidType)?;
 
-        // TRX-020 / SEL-020 — validate asset and account exist
         let asset = self
             .asset_service
             .get_asset_by_id(&dto.asset_id)
@@ -90,468 +73,116 @@ impl RecordTransactionUseCase {
             .ok_or(RecordTransactionError::AccountNotFound)?;
 
         match tx_type {
-            TransactionType::Purchase => self.create_purchase(dto, asset.is_archived).await,
+            TransactionType::Purchase => {
+                let tx = self
+                    .account_service
+                    .buy_holding(
+                        &dto.account_id,
+                        dto.asset_id.clone(),
+                        dto.date,
+                        dto.quantity,
+                        dto.unit_price,
+                        dto.exchange_rate,
+                        dto.fees,
+                        dto.note,
+                    )
+                    .await?;
+                if asset.is_archived {
+                    // TRX-028 — best-effort unarchive after the transaction is saved
+                    if let Err(e) = self.asset_service.unarchive_asset(&dto.asset_id).await {
+                        warn!(target: BACKEND, asset_id = %dto.asset_id, err = %e, "failed to auto-unarchive asset (TRX-028)");
+                    }
+                }
+                self.maybe_record_price(dto.record_price, &tx).await;
+                Ok(tx)
+            }
             TransactionType::Sell => {
                 // SEL-037 — reject sell on archived asset
                 if asset.is_archived {
                     return Err(RecordTransactionError::ArchivedAssetSell.into());
                 }
-                self.create_sell(dto).await
+                let tx = self
+                    .account_service
+                    .sell_holding(
+                        &dto.account_id,
+                        dto.asset_id.clone(),
+                        dto.date,
+                        dto.quantity,
+                        dto.unit_price,
+                        dto.exchange_rate,
+                        dto.fees,
+                        dto.note,
+                    )
+                    .await?;
+                self.maybe_record_price(dto.record_price, &tx).await;
+                Ok(tx)
             }
         }
     }
 
-    async fn create_purchase(
-        &self,
-        dto: CreateTransactionDTO,
-        needs_unarchive: bool,
-    ) -> Result<Transaction> {
-        let total_amount =
-            Self::compute_total(dto.quantity, dto.unit_price, dto.exchange_rate, dto.fees);
-
-        let tx = Transaction::new(
-            dto.account_id.clone(),
-            dto.asset_id.clone(),
-            TransactionType::Purchase,
-            dto.date,
-            dto.quantity,
-            dto.unit_price,
-            dto.exchange_rate,
-            dto.fees,
-            total_amount,
-            dto.note,
-            None,
-        )?;
-
-        let existing = self
-            .transaction_service
-            .get_by_account_asset(&dto.account_id, &dto.asset_id)
-            .await?;
-
-        let all: Vec<&Transaction> = existing.iter().chain(std::iter::once(&tx)).collect();
-        let (holding, _) =
-            Self::recalculate_holding(&dto.account_id, &dto.asset_id, &all, &self.account_service)
-                .await?;
-
-        let tx_type_str = tx.transaction_type.to_string();
-        let mut db_tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin DB transaction")?;
-
-        if needs_unarchive {
-            info!(target: BACKEND, asset_id = %dto.asset_id, "auto-unarchiving asset (TRX-028)");
-            sqlx::query!(
-                r#"UPDATE assets SET is_archived = FALSE WHERE id = ?"#,
-                dto.asset_id
-            )
-            .execute(&mut *db_tx)
-            .await
-            .context("Failed to unarchive asset")?;
-        }
-
-        sqlx::query!(
-            r#"INSERT INTO transactions (id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-            tx.id, tx.account_id, tx.asset_id, tx_type_str,
-            tx.date, tx.quantity, tx.unit_price, tx.exchange_rate,
-            tx.fees, tx.total_amount, tx.note, tx.realized_pnl, tx.created_at
-        )
-        .execute(&mut *db_tx)
-        .await
-        .context("Failed to insert transaction")?;
-
-        self.upsert_holding_in_tx(&mut db_tx, &holding).await?;
-
-        // MKT-055/061 — auto-record AssetPrice inside the same DB transaction
-        let price_written = Self::auto_record_price(&mut db_tx, &tx, dto.record_price).await?;
-
-        db_tx
-            .commit()
-            .await
-            .context("Failed to commit DB transaction")?;
-        self.transaction_service.notify_transaction_updated();
-        self.maybe_notify_price_updated(price_written);
-        Ok(tx)
-    }
-
-    async fn create_sell(&self, dto: CreateTransactionDTO) -> Result<Transaction> {
-        let existing = self
-            .transaction_service
-            .get_by_account_asset(&dto.account_id, &dto.asset_id)
-            .await?;
-
-        // SEL-012 — closed position guard.
-        // Note: recalculate_holding runs before pool.begin(). SQLite WAL serialises all writers
-        // so there is no concurrent-write risk in this single-user desktop app.
-        let existing_refs: Vec<&Transaction> = existing.iter().collect();
-        let (holding_before, _) = Self::recalculate_holding(
-            &dto.account_id,
-            &dto.asset_id,
-            &existing_refs,
-            &self.account_service,
-        )
-        .await?;
-        if holding_before.quantity == 0 {
-            return Err(RecordTransactionError::ClosedPosition.into());
-        }
-
-        // SEL-021 — oversell guard
-        if dto.quantity > holding_before.quantity {
-            return Err(RecordTransactionError::Oversell {
-                available: holding_before.quantity,
-                requested: dto.quantity,
-            }
-            .into());
-        }
-
-        // SEL-023 — sell total formula: floor(floor(qty * price / MICRO) * rate / MICRO) - fees
-        let total_amount =
-            Self::compute_sell_total(dto.quantity, dto.unit_price, dto.exchange_rate, dto.fees);
-
-        let tx = Transaction::new(
-            dto.account_id.clone(),
-            dto.asset_id.clone(),
-            TransactionType::Sell,
-            dto.date,
-            dto.quantity,
-            dto.unit_price,
-            dto.exchange_rate,
-            dto.fees,
-            total_amount,
-            dto.note,
-            None, // realized_pnl computed in recalculate_holding
-        )?;
-
-        let all: Vec<&Transaction> = existing.iter().chain(std::iter::once(&tx)).collect();
-        let (holding, pnl_map) =
-            Self::recalculate_holding(&dto.account_id, &dto.asset_id, &all, &self.account_service)
-                .await?;
-
-        // Attach computed realized_pnl to the new sell transaction
-        let realized_pnl = pnl_map.get(&tx.id).copied();
-        let tx = Transaction::restore(
-            tx.id,
-            tx.account_id,
-            tx.asset_id,
-            tx.transaction_type,
-            tx.date,
-            tx.quantity,
-            tx.unit_price,
-            tx.exchange_rate,
-            tx.fees,
-            tx.total_amount,
-            tx.note,
-            realized_pnl,
-            tx.created_at,
-        );
-
-        let tx_type_str = tx.transaction_type.to_string();
-        let mut db_tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin DB transaction")?;
-
-        sqlx::query!(
-            r#"INSERT INTO transactions (id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-            tx.id, tx.account_id, tx.asset_id, tx_type_str,
-            tx.date, tx.quantity, tx.unit_price, tx.exchange_rate,
-            tx.fees, tx.total_amount, tx.note, tx.realized_pnl, tx.created_at
-        )
-        .execute(&mut *db_tx)
-        .await
-        .context("Failed to insert sell transaction")?;
-
-        self.upsert_holding_in_tx(&mut db_tx, &holding).await?;
-
-        // MKT-055/061 — auto-record AssetPrice inside the same DB transaction
-        let price_written = Self::auto_record_price(&mut db_tx, &tx, dto.record_price).await?;
-
-        db_tx
-            .commit()
-            .await
-            .context("Failed to commit DB transaction")?;
-        self.transaction_service.notify_transaction_updated();
-        self.maybe_notify_price_updated(price_written);
-        Ok(tx)
-    }
-
-    /// Updates an existing transaction and recalculates affected Holdings atomically (TRX-031, SEL-031).
+    /// Updates an existing transaction and recalculates the affected Holding (TRX-031, SEL-031).
     pub async fn update_transaction(
         &self,
         id: String,
         dto: CreateTransactionDTO,
     ) -> Result<Transaction> {
-        let existing_tx = self
-            .transaction_service
-            .get_by_id(&id)
+        let existing = self
+            .account_service
+            .get_transaction_by_id(&id)
             .await?
             .ok_or(RecordTransactionError::TransactionNotFound)?;
 
         // SEL-035 — transaction_type immutability
-        let existing_type_str = existing_tx.transaction_type.to_string();
-        if existing_type_str != dto.transaction_type {
+        if existing.transaction_type.to_string() != dto.transaction_type {
             return Err(RecordTransactionError::TypeImmutable.into());
         }
 
-        let tx_type = existing_tx.transaction_type;
-        let old_account_id = existing_tx.account_id.clone();
-        let old_asset_id = existing_tx.asset_id.clone();
-
-        // SEL-020 / TRX-033 — validate new asset and account exist
         let asset = self
             .asset_service
-            .get_asset_by_id(&dto.asset_id)
+            .get_asset_by_id(&existing.asset_id)
             .await?
             .ok_or(RecordTransactionError::AssetNotFound)?;
 
-        self.account_service
-            .get_by_id(&dto.account_id)
-            .await?
-            .ok_or(RecordTransactionError::AccountNotFound)?;
-
-        // SEL-037 / TRX-033 — archived asset guard enforced on update
-        if asset.is_archived && tx_type == TransactionType::Sell {
+        if asset.is_archived && existing.transaction_type == TransactionType::Sell {
             return Err(RecordTransactionError::ArchivedAssetSell.into());
         }
-        let needs_unarchive = asset.is_archived && tx_type == TransactionType::Purchase;
+        let needs_unarchive =
+            asset.is_archived && existing.transaction_type == TransactionType::Purchase;
 
-        let total_amount = match tx_type {
-            TransactionType::Purchase => {
-                Self::compute_total(dto.quantity, dto.unit_price, dto.exchange_rate, dto.fees)
-            }
-            TransactionType::Sell => {
-                Self::compute_sell_total(dto.quantity, dto.unit_price, dto.exchange_rate, dto.fees)
-            }
-        };
-
-        let updated_tx = Transaction::with_id(
-            id,
-            dto.account_id.clone(),
-            dto.asset_id.clone(),
-            tx_type,
-            dto.date,
-            dto.quantity,
-            dto.unit_price,
-            dto.exchange_rate,
-            dto.fees,
-            total_amount,
-            dto.note,
-            existing_tx.realized_pnl,
-            existing_tx.created_at.clone(),
-        )?;
-
-        // SEL-031 / TRX-031 — full recalculation for new pair
-        let all_for_new_pair = self
-            .transaction_service
-            .get_by_account_asset(&dto.account_id, &dto.asset_id)
-            .await?;
-        let new_pair_txs: Vec<&Transaction> = all_for_new_pair
-            .iter()
-            .filter(|t| t.id != updated_tx.id)
-            .chain(std::iter::once(&updated_tx))
-            .collect();
-
-        let (new_holding, new_pnl_map) = Self::recalculate_holding(
-            &dto.account_id,
-            &dto.asset_id,
-            &new_pair_txs,
-            &self.account_service,
-        )
-        .await?;
-
-        // Reattach computed realized_pnl to the updated tx if it's a Sell
-        let updated_tx = if tx_type == TransactionType::Sell {
-            let realized_pnl = new_pnl_map.get(&updated_tx.id).copied();
-            Transaction::restore(
-                updated_tx.id,
-                updated_tx.account_id,
-                updated_tx.asset_id,
-                updated_tx.transaction_type,
-                updated_tx.date,
-                updated_tx.quantity,
-                updated_tx.unit_price,
-                updated_tx.exchange_rate,
-                updated_tx.fees,
-                updated_tx.total_amount,
-                updated_tx.note,
-                realized_pnl,
-                updated_tx.created_at,
+        // account_id and asset_id are immutable — use the existing tx's values
+        let tx = self
+            .account_service
+            .correct_transaction(
+                &existing.account_id,
+                &id,
+                dto.date,
+                dto.quantity,
+                dto.unit_price,
+                dto.exchange_rate,
+                dto.fees,
+                dto.note,
             )
-        } else {
-            updated_tx
-        };
-
-        // Compute holding for old pair if (account, asset) changed
-        let pair_changed = old_account_id != dto.account_id || old_asset_id != dto.asset_id;
-        let old_holding_opt = if pair_changed {
-            let all_for_old_pair = self
-                .transaction_service
-                .get_by_account_asset(&old_account_id, &old_asset_id)
-                .await?;
-            let old_pair_txs: Vec<&Transaction> = all_for_old_pair
-                .iter()
-                .filter(|t| t.id != updated_tx.id)
-                .collect();
-            Some((
-                old_account_id.clone(),
-                old_asset_id.clone(),
-                old_pair_txs.len(),
-                Self::recalculate_holding(
-                    &old_account_id,
-                    &old_asset_id,
-                    &old_pair_txs,
-                    &self.account_service,
-                )
-                .await?,
-            ))
-        } else {
-            None
-        };
-
-        let tx_type_str = updated_tx.transaction_type.to_string();
-        let mut db_tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin DB transaction")?;
+            .await?;
 
         if needs_unarchive {
-            sqlx::query!(
-                r#"UPDATE assets SET is_archived = FALSE WHERE id = ?"#,
-                dto.asset_id
-            )
-            .execute(&mut *db_tx)
-            .await
-            .context("Failed to unarchive asset")?;
-        }
-
-        sqlx::query!(
-            r#"UPDATE transactions SET account_id = ?, asset_id = ?, transaction_type = ?, date = ?, quantity = ?, unit_price = ?, exchange_rate = ?, fees = ?, total_amount = ?, note = ?, realized_pnl = ? WHERE id = ?"#,
-            updated_tx.account_id, updated_tx.asset_id, tx_type_str,
-            updated_tx.date, updated_tx.quantity, updated_tx.unit_price,
-            updated_tx.exchange_rate, updated_tx.fees, updated_tx.total_amount,
-            updated_tx.note, updated_tx.realized_pnl, updated_tx.id
-        )
-        .execute(&mut *db_tx)
-        .await
-        .context("Failed to update transaction")?;
-
-        // SEL-031 — update realized_pnl for all sells in the recalculated pair
-        for (tx_id, pnl) in &new_pnl_map {
-            if tx_id != &updated_tx.id {
-                sqlx::query!(
-                    r#"UPDATE transactions SET realized_pnl = ? WHERE id = ?"#,
-                    pnl,
-                    tx_id
-                )
-                .execute(&mut *db_tx)
-                .await
-                .with_context(|| format!("Failed to update realized_pnl for {}", tx_id))?;
+            if let Err(e) = self.asset_service.unarchive_asset(&existing.asset_id).await {
+                warn!(target: BACKEND, asset_id = %existing.asset_id, err = %e, "failed to auto-unarchive asset on update");
             }
         }
-
-        self.upsert_holding_in_tx(&mut db_tx, &new_holding).await?;
-
-        if let Some((old_acc, old_ast, remaining_count, (old_holding, _))) = old_holding_opt {
-            if remaining_count == 0 {
-                sqlx::query!(
-                    r#"DELETE FROM holdings WHERE account_id = ? AND asset_id = ?"#,
-                    old_acc,
-                    old_ast
-                )
-                .execute(&mut *db_tx)
-                .await
-                .context("Failed to remove orphan holding")?;
-            } else {
-                self.upsert_holding_in_tx(&mut db_tx, &old_holding).await?;
-            }
-        }
-
-        // MKT-055/059/061 — auto-record AssetPrice at the (possibly new) tx.date and tx.unit_price
-        let price_written =
-            Self::auto_record_price(&mut db_tx, &updated_tx, dto.record_price).await?;
-
-        db_tx
-            .commit()
-            .await
-            .context("Failed to commit DB transaction")?;
-        self.transaction_service.notify_transaction_updated();
-        self.maybe_notify_price_updated(price_written);
-        Ok(updated_tx)
+        self.maybe_record_price(dto.record_price, &tx).await;
+        Ok(tx)
     }
 
-    /// Deletes a transaction and recalculates (or removes) the associated Holding (TRX-034, SEL-033).
+    /// Deletes a transaction and recalculates (or removes) the associated Holding (TRX-034).
     pub async fn delete_transaction(&self, id: &str) -> Result<()> {
-        let existing_tx = self
-            .transaction_service
-            .get_by_id(id)
+        let existing = self
+            .account_service
+            .get_transaction_by_id(id)
             .await?
             .ok_or(RecordTransactionError::TransactionNotFound)?;
-
-        let account_id = existing_tx.account_id.clone();
-        let asset_id = existing_tx.asset_id.clone();
-
-        let all = self
-            .transaction_service
-            .get_by_account_asset(&account_id, &asset_id)
-            .await?;
-        let remaining: Vec<&Transaction> = all.iter().filter(|t| t.id != id).collect();
-
-        let mut db_tx = self
-            .pool
-            .begin()
+        self.account_service
+            .cancel_transaction(&existing.account_id, id)
             .await
-            .context("Failed to begin DB transaction")?;
-
-        sqlx::query!(r#"DELETE FROM transactions WHERE id = ?"#, id)
-            .execute(&mut *db_tx)
-            .await
-            .context("Failed to delete transaction")?;
-
-        if remaining.is_empty() {
-            sqlx::query!(
-                r#"DELETE FROM holdings WHERE account_id = ? AND asset_id = ?"#,
-                account_id,
-                asset_id
-            )
-            .execute(&mut *db_tx)
-            .await
-            .context("Failed to delete orphan holding")?;
-        } else {
-            // SEL-033 — full recalculation updates realized_pnl on remaining sells
-            let (updated_holding, pnl_map) = Self::recalculate_holding(
-                &account_id,
-                &asset_id,
-                &remaining,
-                &self.account_service,
-            )
-            .await?;
-
-            for (tx_id, pnl) in &pnl_map {
-                sqlx::query!(
-                    r#"UPDATE transactions SET realized_pnl = ? WHERE id = ?"#,
-                    pnl,
-                    tx_id
-                )
-                .execute(&mut *db_tx)
-                .await
-                .with_context(|| format!("Failed to update realized_pnl for {}", tx_id))?;
-            }
-
-            self.upsert_holding_in_tx(&mut db_tx, &updated_holding)
-                .await?;
-        }
-
-        db_tx
-            .commit()
-            .await
-            .context("Failed to commit DB transaction")?;
-        self.transaction_service.notify_transaction_updated();
-        Ok(())
     }
 
     /// Returns all transactions for an account/asset pair.
@@ -560,271 +191,34 @@ impl RecordTransactionUseCase {
         account_id: &str,
         asset_id: &str,
     ) -> Result<Vec<Transaction>> {
-        self.transaction_service
-            .get_by_account_asset(account_id, asset_id)
+        self.account_service
+            .get_transactions(account_id, asset_id)
             .await
     }
 
-    // --- Private helpers ---
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
 
-    /// Computes total_amount for a Purchase (TRX-026).
-    /// Formula: floor(floor(qty × price / MICRO) × rate / MICRO) + fees
-    fn compute_total(quantity: i64, unit_price: i64, exchange_rate: i64, fees: i64) -> i64 {
-        const MICRO: i128 = 1_000_000;
-        let qty = quantity as i128;
-        let price = unit_price as i128;
-        let rate = exchange_rate as i128;
-        ((qty * price / MICRO) * rate / MICRO) as i64 + fees
-    }
-
-    /// Computes total_amount for a Sell (SEL-023).
-    /// Formula: floor(floor(qty × price / MICRO) × rate / MICRO) - fees
-    fn compute_sell_total(quantity: i64, unit_price: i64, exchange_rate: i64, fees: i64) -> i64 {
-        const MICRO: i128 = 1_000_000;
-        let qty = quantity as i128;
-        let price = unit_price as i128;
-        let rate = exchange_rate as i128;
-        ((qty * price / MICRO) * rate / MICRO) as i64 - fees
-    }
-
-    /// Computes realized P&L for a sell (SEL-024).
-    /// realized_pnl = total_sell_amount - floor(vwap_before_sell × sold_quantity / MICRO)
-    fn compute_realized_pnl(
-        total_sell_amount: i64,
-        vwap_before_sell: i64,
-        sold_quantity: i64,
-    ) -> i64 {
-        const MICRO: i128 = 1_000_000;
-        let cost_basis = (vwap_before_sell as i128 * sold_quantity as i128 / MICRO) as i64;
-        total_sell_amount - cost_basis
-    }
-
-    /// Full chronological recalculation of Holding state and realized P&L for all transactions
-    /// in the given slice (TRX-030, SEL-024, SEL-025, SEL-026, SEL-027, SEL-032).
-    ///
-    /// Returns: `(updated_holding, sell_tx_id -> realized_pnl)`.
-    /// Errors if any Sell would exceed the running quantity (SEL-032).
-    async fn recalculate_holding(
-        account_id: &str,
-        asset_id: &str,
-        transactions: &[&Transaction],
-        account_service: &AccountService,
-    ) -> Result<(Holding, HashMap<String, i64>)> {
-        const MICRO: i128 = 1_000_000;
-
-        let mut total_quantity: i128 = 0;
-        let mut vwap_numerator: i128 = 0;
-        let mut last_vwap: i64 = 0;
-        let mut pnl_map: HashMap<String, i64> = HashMap::new();
-        let mut total_realized_pnl: i64 = 0;
-        let mut last_sold_date: Option<String> = None;
-
-        for t in transactions {
-            match t.transaction_type {
-                TransactionType::Purchase => {
-                    let qty = t.quantity as i128;
-                    total_quantity += qty;
-                    // VWAP uses total_amount (TRX-030); scale to MICRO² before dividing by qty.
-                    vwap_numerator += t.total_amount as i128 * MICRO;
-                }
-                TransactionType::Sell => {
-                    // SEL-032 — cascading oversell check
-                    if t.quantity as i128 > total_quantity {
-                        return Err(RecordTransactionError::CascadingOversell.into());
-                    }
-                    let vwap_before: i64 = if total_quantity > 0 {
-                        (vwap_numerator / total_quantity) as i64
-                    } else {
-                        0
-                    };
-                    last_vwap = vwap_before;
-                    // SEL-024 — realized P&L
-                    let pnl = Self::compute_realized_pnl(t.total_amount, vwap_before, t.quantity);
-                    pnl_map.insert(t.id.clone(), pnl);
-                    total_realized_pnl += pnl;
-                    // ACD-043 — track latest sell date (ISO strings sort lexicographically)
-                    if last_sold_date.as_deref() < Some(t.date.as_str()) {
-                        last_sold_date = Some(t.date.clone());
-                    }
-                    // SEL-025 — decrease quantity; SEL-027 — VWAP numerator scales with qty
-                    let qty = t.quantity as i128;
-                    vwap_numerator -= vwap_before as i128 * qty;
-                    total_quantity -= qty;
-                }
-            }
-        }
-
-        // SEL-026 / TRX-040 — when qty reaches zero, preserve last known VWAP
-        let average_price: i64 = if total_quantity > 0 {
-            (vwap_numerator / total_quantity) as i64
-        } else {
-            last_vwap
-        };
-        // SEL-026 — retain holding at qty=0
-        let quantity = total_quantity as i64;
-
-        let holding = match account_service
-            .get_holding_by_account_asset(account_id, asset_id)
-            .await?
-        {
-            Some(existing) => Holding::with_id(
-                existing.id,
-                account_id.to_string(),
-                asset_id.to_string(),
-                quantity,
-                average_price,
-                total_realized_pnl,
-                last_sold_date,
-            )?,
-            None => Holding::new(
-                account_id.to_string(),
-                asset_id.to_string(),
-                quantity,
-                average_price,
-                total_realized_pnl,
-                last_sold_date,
-            )?,
-        };
-
-        Ok((holding, pnl_map))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn compute_sell_total_pub(
-        quantity: i64,
-        unit_price: i64,
-        exchange_rate: i64,
-        fees: i64,
-    ) -> i64 {
-        Self::compute_sell_total(quantity, unit_price, exchange_rate, fees)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn compute_realized_pnl_pub(
-        total_sell_amount: i64,
-        vwap_before_sell: i64,
-        sold_quantity: i64,
-    ) -> i64 {
-        Self::compute_realized_pnl(total_sell_amount, vwap_before_sell, sold_quantity)
-    }
-
-    /// Executes an upsert holding query within an active sqlx transaction.
-    async fn upsert_holding_in_tx(
-        &self,
-        db_tx: &mut sqlx::Transaction<'_, Sqlite>,
-        holding: &Holding,
-    ) -> Result<()> {
-        sqlx::query!(
-            r#"INSERT INTO holdings (id, account_id, asset_id, quantity, average_price, total_realized_pnl, last_sold_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(account_id, asset_id) DO UPDATE SET
-                   quantity = excluded.quantity,
-                   average_price = excluded.average_price,
-                   total_realized_pnl = excluded.total_realized_pnl,
-                   last_sold_date = excluded.last_sold_date"#,
-            holding.id,
-            holding.account_id,
-            holding.asset_id,
-            holding.quantity,
-            holding.average_price,
-            holding.total_realized_pnl,
-            holding.last_sold_date
-        )
-        .execute(&mut **db_tx)
-        .await
-        .context("Failed to upsert holding")?;
-
-        Ok(())
-    }
-
-    /// MKT-055/058/061 — upserts AssetPrice(asset_id, date, unit_price) inside the open
-    /// DB transaction when the user opted in. Returns true if a price was written so the
-    /// caller can publish AssetPriceUpdated after commit (MKT-057). Skipped silently when
-    /// `record_price = false` (MKT-054) or `tx.unit_price = 0` (MKT-061, gifted assets).
-    /// Conflicts on `(asset_id, date)` are silently overwritten via ON CONFLICT.
-    async fn auto_record_price(
-        db_tx: &mut sqlx::Transaction<'_, Sqlite>,
-        tx: &Transaction,
-        record_price: bool,
-    ) -> Result<bool> {
-        // Domain guarantees unit_price >= 0; the `<= 0` guard collapses to MKT-061 (== 0).
+    /// MKT-055/061 — best-effort price recording after transaction save.
+    /// Logs on error but never fails the parent operation.
+    async fn maybe_record_price(&self, record_price: bool, tx: &Transaction) {
         if !record_price || tx.unit_price <= 0 {
-            return Ok(false);
+            return;
         }
-        sqlx::query!(
-            r#"INSERT INTO asset_prices (asset_id, date, price) VALUES (?, ?, ?)
-               ON CONFLICT(asset_id, date) DO UPDATE SET price = excluded.price"#,
-            tx.asset_id,
-            tx.date,
-            tx.unit_price,
-        )
-        .execute(&mut **db_tx)
-        .await
-        .context("Failed to upsert asset price (MKT-055)")?;
-        debug!(
-            target: BACKEND,
-            asset_id = %tx.asset_id,
-            date = %tx.date,
-            "Auto-recorded asset price from transaction (MKT-055)"
-        );
-        Ok(true)
-    }
-
-    /// MKT-057 — publishes AssetPriceUpdated through the asset bounded context after a
-    /// successful commit. No-op when no price was written (record_price = false or skipped
-    /// by MKT-061). Centralises the post-commit notification so each call site stays a
-    /// single line.
-    fn maybe_notify_price_updated(&self, price_written: bool) {
-        if price_written {
-            self.asset_service.notify_asset_price_updated();
+        let price_f64 = tx.unit_price as f64 / 1_000_000.0;
+        if let Err(e) = self
+            .asset_service
+            .record_price(&tx.asset_id, &tx.date, price_f64)
+            .await
+        {
+            warn!(
+                target: BACKEND,
+                asset_id = %tx.asset_id,
+                date = %tx.date,
+                err = %e,
+                "failed to auto-record asset price (MKT-055)"
+            );
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // SEL-023 — sell total = floor(floor(qty × price / MICRO) × rate / MICRO) - fees
-    #[test]
-    fn compute_sell_total_subtracts_fees() {
-        // 2 units @ 50.00, rate=1.0, fees=5.00 → 95.00
-        let result = RecordTransactionUseCase::compute_sell_total_pub(
-            2_000_000, 50_000_000, 1_000_000, 5_000_000,
-        );
-        assert_eq!(result, 95_000_000);
-    }
-
-    #[test]
-    fn compute_sell_total_applies_exchange_rate() {
-        // 1 unit @ 100.00, rate=1.5, fees=0 → 150.00
-        let result =
-            RecordTransactionUseCase::compute_sell_total_pub(1_000_000, 100_000_000, 1_500_000, 0);
-        assert_eq!(result, 150_000_000);
-    }
-
-    // SEL-024 — realized_pnl = total_sell - floor(vwap × qty / MICRO)
-    #[test]
-    fn compute_realized_pnl_profit() {
-        // Sell 1 unit for 95.00; cost basis VWAP=80.00 → P&L = +15.00
-        let result =
-            RecordTransactionUseCase::compute_realized_pnl_pub(95_000_000, 80_000_000, 1_000_000);
-        assert_eq!(result, 15_000_000);
-    }
-
-    #[test]
-    fn compute_realized_pnl_loss() {
-        // Sell 1 unit for 60.00; VWAP=80.00 → P&L = -20.00
-        let result =
-            RecordTransactionUseCase::compute_realized_pnl_pub(60_000_000, 80_000_000, 1_000_000);
-        assert_eq!(result, -20_000_000);
-    }
-
-    #[test]
-    fn compute_realized_pnl_zero() {
-        // Sell at exactly VWAP → P&L = 0
-        let result =
-            RecordTransactionUseCase::compute_realized_pnl_pub(50_000_000, 50_000_000, 1_000_000);
-        assert_eq!(result, 0);
     }
 }

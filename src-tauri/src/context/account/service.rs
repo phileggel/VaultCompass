@@ -1,15 +1,17 @@
 use super::domain::{
-    Account, AccountDomainError, AccountRepository, Holding, HoldingRepository, UpdateFrequency,
+    Account, AccountDomainError, AccountRepository, Holding, HoldingRepository, Transaction,
+    TransactionRepository, UpdateFrequency,
 };
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use anyhow::Result;
 use std::sync::Arc;
 use tracing::info;
 
-/// Orchestrates business logic for accounts.
+/// Orchestrates business logic for the Account bounded context.
 pub struct AccountService {
     account_repo: Box<dyn AccountRepository>,
     holding_repo: Box<dyn HoldingRepository>,
+    transaction_repo: Box<dyn TransactionRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
 }
 
@@ -18,10 +20,12 @@ impl AccountService {
     pub fn new(
         account_repo: Box<dyn AccountRepository>,
         holding_repo: Box<dyn HoldingRepository>,
+        transaction_repo: Box<dyn TransactionRepository>,
     ) -> Self {
         Self {
             account_repo,
             holding_repo,
+            transaction_repo,
             event_bus: None,
         }
     }
@@ -32,6 +36,10 @@ impl AccountService {
         self
     }
 
+    // -------------------------------------------------------------------------
+    // Account CRUD
+    // -------------------------------------------------------------------------
+
     /// Retrieves all non-deleted accounts.
     pub async fn get_all(&self) -> Result<Vec<Account>> {
         self.account_repo.get_all().await
@@ -40,22 +48,6 @@ impl AccountService {
     /// Retrieves an account by ID.
     pub async fn get_by_id(&self, id: &str) -> Result<Option<Account>> {
         self.account_repo.get_by_id(id).await
-    }
-
-    /// Retrieves all holdings for a given account (ACD-022, ADR-004).
-    pub async fn get_holdings_for_account(&self, account_id: &str) -> Result<Vec<Holding>> {
-        self.holding_repo.get_by_account(account_id).await
-    }
-
-    /// Retrieves a single holding by account/asset pair, or None (B19).
-    pub async fn get_holding_by_account_asset(
-        &self,
-        account_id: &str,
-        asset_id: &str,
-    ) -> Result<Option<Holding>> {
-        self.holding_repo
-            .get_by_account_asset(account_id, asset_id)
-            .await
     }
 
     /// Creates a new account.
@@ -76,11 +68,7 @@ impl AccountService {
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "creating account");
         let created = self.account_repo.create(account).await?;
-
-        if let Some(bus) = &self.event_bus {
-            bus.publish(Event::AccountUpdated);
-        }
-
+        self.emit_account_updated();
         Ok(created)
     }
 
@@ -100,25 +88,202 @@ impl AccountService {
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "updating account");
         let updated = self.account_repo.update(account).await?;
-
-        if let Some(bus) = &self.event_bus {
-            bus.publish(Event::AccountUpdated);
-        }
-
+        self.emit_account_updated();
         Ok(updated)
     }
 
     /// Permanently deletes an account and cascades to its holdings (R5).
-    /// R6 (transaction cascade) is pending the Transaction feature.
     pub async fn delete(&self, id: &str) -> Result<()> {
         info!(target: BACKEND, account_id = %id, "deleting account");
         self.account_repo.delete(id).await?;
+        self.emit_account_updated();
+        Ok(())
+    }
 
+    // -------------------------------------------------------------------------
+    // Holding reads
+    // -------------------------------------------------------------------------
+
+    /// Retrieves all holdings for a given account (ACD-022, ADR-004).
+    pub async fn get_holdings_for_account(&self, account_id: &str) -> Result<Vec<Holding>> {
+        self.holding_repo.get_by_account(account_id).await
+    }
+
+    /// Retrieves a single holding by account/asset pair, or None (B19).
+    pub async fn get_holding_by_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<Option<Holding>> {
+        self.holding_repo
+            .get_by_account_asset(account_id, asset_id)
+            .await
+    }
+
+    // -------------------------------------------------------------------------
+    // Transaction reads
+    // -------------------------------------------------------------------------
+
+    /// Retrieves a transaction by ID.
+    pub async fn get_transaction_by_id(&self, id: &str) -> Result<Option<Transaction>> {
+        self.transaction_repo.get_by_id(id).await
+    }
+
+    /// Retrieves all transactions for an account/asset pair in chronological order (TRX-036).
+    pub async fn get_transactions(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<Vec<Transaction>> {
+        self.transaction_repo
+            .get_by_account_asset(account_id, asset_id)
+            .await
+    }
+
+    /// Returns distinct asset IDs that have transactions for the given account (TXL-013).
+    pub async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>> {
+        self.transaction_repo
+            .get_asset_ids_for_account(account_id)
+            .await
+    }
+
+    // -------------------------------------------------------------------------
+    // Aggregate operations (B21 — thin orchestrators)
+    // -------------------------------------------------------------------------
+
+    /// Records a purchase of an asset into the account (TRX-020, TRX-026).
+    ///
+    /// Loads the Account aggregate, delegates to `Account::buy_holding`, saves atomically.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn buy_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "buy_holding");
+        let tx = account
+            .buy_holding(
+                asset_id,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                note,
+            )?
+            .clone();
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
+    /// Records a sale of an asset from the account (SEL-012, SEL-021, SEL-023, SEL-024).
+    ///
+    /// Loads the Account aggregate, delegates to `Account::sell_holding`, saves atomically.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn sell_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "sell_holding");
+        let tx = account
+            .sell_holding(
+                asset_id,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                note,
+            )?
+            .clone();
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
+    /// Corrects an existing transaction and recalculates the affected holding (TRX-031, SEL-031).
+    ///
+    /// Loads the Account aggregate, delegates to `Account::correct_transaction`, saves atomically.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn correct_transaction(
+        &self,
+        account_id: &str,
+        tx_id: &str,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+        info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "correct_transaction");
+        let tx = account
+            .correct_transaction(tx_id, date, quantity, unit_price, exchange_rate, fees, note)?
+            .clone();
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
+    /// Deletes a transaction and recalculates (or removes) the associated holding (TRX-034).
+    ///
+    /// Loads the Account aggregate, delegates to `Account::cancel_transaction`, saves atomically.
+    pub async fn cancel_transaction(&self, account_id: &str, tx_id: &str) -> Result<()> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+        info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "cancel_transaction");
+        account.cancel_transaction(tx_id)?;
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    fn emit_account_updated(&self) {
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AccountUpdated);
         }
+    }
 
-        Ok(())
+    fn emit_transaction_updated(&self) {
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::TransactionUpdated);
+        }
     }
 }
 
@@ -127,10 +292,43 @@ mod tests {
     use super::*;
     // Integration tests: use concrete SQLite repos against an in-memory DB to catch
     // real constraint violations (e.g. UNIQUE ON LOWER(name)) that mocks would miss.
-    use crate::context::account::{SqliteAccountRepository, SqliteHoldingRepository};
+    use crate::context::account::{
+        AccountOperationError, SqliteAccountRepository, SqliteHoldingRepository,
+        SqliteTransactionRepository,
+    };
+    use crate::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
     use sqlx::sqlite::SqlitePoolOptions;
 
-    async fn setup_service() -> AccountService {
+    async fn setup(pool: &sqlx::Pool<sqlx::Sqlite>) -> (AccountService, String) {
+        let svc = AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        );
+        let asset_svc = AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        );
+        let asset_id = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "TestAsset".to_string(),
+                reference: "TST".to_string(),
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap()
+            .id;
+        (svc, asset_id)
+    }
+
+    async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect("sqlite::memory:")
@@ -140,9 +338,15 @@ mod tests {
             .run(&pool)
             .await
             .expect("migrations");
+        pool
+    }
+
+    async fn setup_service() -> AccountService {
+        let pool = make_pool().await;
         AccountService::new(
             Box::new(SqliteAccountRepository::new(pool.clone())),
-            Box::new(SqliteHoldingRepository::new(pool)),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool)),
         )
     }
 
@@ -232,5 +436,171 @@ mod tests {
             )
             .await;
         assert!(result.is_ok());
+    }
+
+    fn micro(v: i64) -> i64 {
+        v * 1_000_000
+    }
+
+    // TRX-026 / TRX-030 — buy_holding persists transaction and updates holding VWAP
+    #[tokio::test]
+    async fn buy_holding_persists_transaction_and_holding() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let tx = svc
+            .buy_holding(
+                &account.id,
+                asset_id.clone(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(tx.account_id, account.id);
+        assert_eq!(tx.asset_id, asset_id);
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        assert_eq!(holdings.len(), 1);
+        assert_eq!(holdings[0].quantity, micro(2));
+        assert_eq!(holdings[0].average_price, micro(100));
+    }
+
+    // SEL-021 — sell_holding rejects oversell via AccountOperationError
+    #[tokio::test]
+    async fn sell_holding_rejects_oversell() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(1),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        let err = svc
+            .sell_holding(
+                &account.id,
+                asset_id,
+                "2024-06-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountOperationError>()
+                .map(|e| matches!(e, AccountOperationError::Oversell { .. }))
+                .unwrap_or(false),
+            "expected Oversell, got: {err}"
+        );
+    }
+
+    // TRX-034 — cancel_transaction removes the holding when it was the last transaction
+    #[tokio::test]
+    async fn cancel_transaction_removes_holding_when_last() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let tx = svc
+            .buy_holding(
+                &account.id,
+                asset_id.clone(),
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        svc.cancel_transaction(&account.id, &tx.id).await.unwrap();
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        assert!(
+            holdings.is_empty(),
+            "holding should be removed after cancel"
+        );
+        let txs = svc.get_transactions(&account.id, &asset_id).await.unwrap();
+        assert!(txs.is_empty(), "transaction should be removed after cancel");
+    }
+
+    // TRX-031 — correct_transaction updates the persisted holding
+    #[tokio::test]
+    async fn correct_transaction_updates_holding() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let tx = svc
+            .buy_holding(
+                &account.id,
+                asset_id.clone(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        svc.correct_transaction(
+            &account.id,
+            &tx.id,
+            "2024-01-01".to_string(),
+            micro(2),
+            micro(200),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        assert_eq!(
+            holdings[0].average_price,
+            micro(200),
+            "VWAP should update to 200"
+        );
     }
 }

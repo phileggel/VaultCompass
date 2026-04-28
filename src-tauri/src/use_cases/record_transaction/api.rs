@@ -3,10 +3,7 @@
 
 use super::error::RecordTransactionError;
 use super::orchestrator::{CreateTransactionDTO, RecordTransactionUseCase};
-// TransactionDomainError lives in the transaction bounded context; importing it here is acceptable
-// because this use-case layer sits above that context and aggregates both error sources into one
-// boundary enum — it does not create a circular dependency.
-use crate::context::account::{Transaction, TransactionDomainError};
+use crate::context::account::{AccountOperationError, Transaction, TransactionDomainError};
 use tauri::State;
 
 // --- Boundary error ---
@@ -87,15 +84,23 @@ fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
             RecordTransactionError::InvalidType => TransactionCommandError::InvalidType,
             RecordTransactionError::TypeImmutable => TransactionCommandError::TypeImmutable,
             RecordTransactionError::ArchivedAssetSell => TransactionCommandError::ArchivedAssetSell,
-            RecordTransactionError::ClosedPosition => TransactionCommandError::ClosedPosition,
-            RecordTransactionError::Oversell {
+        };
+    }
+    // Aggregate operation errors bubble up from AccountService (B21)
+    if let Some(err) = e.downcast_ref::<AccountOperationError>() {
+        return match err {
+            AccountOperationError::ClosedPosition => TransactionCommandError::ClosedPosition,
+            AccountOperationError::Oversell {
                 available,
                 requested,
             } => TransactionCommandError::Oversell {
                 available: *available,
                 requested: *requested,
             },
-            RecordTransactionError::CascadingOversell => TransactionCommandError::CascadingOversell,
+            AccountOperationError::CascadingOversell => TransactionCommandError::CascadingOversell,
+            AccountOperationError::TransactionNotFound => {
+                TransactionCommandError::TransactionNotFound
+            }
         };
     }
     if let Some(err) = e.downcast_ref::<TransactionDomainError>() {

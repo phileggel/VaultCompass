@@ -1,9 +1,9 @@
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
 use vault_compass_lib::context::account::{
-    AccountService, SqliteAccountRepository, SqliteHoldingRepository, UpdateFrequency,
+    AccountOperationError, AccountService, SqliteAccountRepository, SqliteHoldingRepository,
+    SqliteTransactionRepository, UpdateFrequency,
 };
-use vault_compass_lib::context::account::{SqliteTransactionRepository, TransactionService};
 use vault_compass_lib::context::asset::{
     AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
     SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
@@ -26,30 +26,24 @@ async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
 }
 
 async fn setup_uc(pool: &sqlx::Pool<sqlx::Sqlite>) -> RecordTransactionUseCase {
-    let tx_service = Arc::new(TransactionService::new(Box::new(
-        SqliteTransactionRepository::new(pool.clone()),
-    )));
     let account_service = Arc::new(AccountService::new(
         Box::new(SqliteAccountRepository::new(pool.clone())),
         Box::new(SqliteHoldingRepository::new(pool.clone())),
+        Box::new(SqliteTransactionRepository::new(pool.clone())),
     ));
     let asset_service = Arc::new(AssetService::new(
         Box::new(SqliteAssetRepository::new(pool.clone())),
         Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
         Box::new(SqliteAssetPriceRepository::new(pool.clone())),
     ));
-    RecordTransactionUseCase::new(
-        Arc::new(pool.clone()),
-        tx_service,
-        account_service,
-        asset_service,
-    )
+    RecordTransactionUseCase::new(account_service, asset_service)
 }
 
 async fn create_account(pool: &sqlx::Pool<sqlx::Sqlite>) -> String {
     AccountService::new(
         Box::new(SqliteAccountRepository::new(pool.clone())),
         Box::new(SqliteHoldingRepository::new(pool.clone())),
+        Box::new(SqliteTransactionRepository::new(pool.clone())),
     )
     .create(
         "Test Account".to_string(),
@@ -112,7 +106,7 @@ fn sell_dto(account_id: &str, asset_id: &str, qty: i64) -> CreateTransactionDTO 
     }
 }
 
-// SEL-012 — selling when holding quantity is 0 is rejected
+// SEL-012 — selling when holding quantity is 0 is rejected (error now from AccountOperationError)
 #[tokio::test]
 async fn sell_rejected_when_no_holding() {
     let pool = make_pool().await;
@@ -125,10 +119,9 @@ async fn sell_rejected_when_no_holding() {
         .await
         .unwrap_err();
     assert!(
-        matches!(
-            err.downcast_ref::<RecordTransactionError>(),
-            Some(RecordTransactionError::ClosedPosition)
-        ),
+        err.downcast_ref::<AccountOperationError>()
+            .map(|e| matches!(e, AccountOperationError::ClosedPosition))
+            .unwrap_or(false),
         "got: {err}"
     );
 }
@@ -152,6 +145,7 @@ async fn full_sell_retains_holding_at_zero_with_last_vwap() {
     let svc = AccountService::new(
         Box::new(SqliteAccountRepository::new(pool.clone())),
         Box::new(SqliteHoldingRepository::new(pool.clone())),
+        Box::new(SqliteTransactionRepository::new(pool.clone())),
     );
     let holdings = svc.get_holdings_for_account(&account_id).await.unwrap();
     let h = holdings.iter().find(|h| h.asset_id == asset_id).unwrap();
@@ -183,10 +177,9 @@ async fn edit_purchase_rejected_when_causes_oversell() {
         .await
         .unwrap_err();
     assert!(
-        matches!(
-            err.downcast_ref::<RecordTransactionError>(),
-            Some(RecordTransactionError::CascadingOversell)
-        ),
+        err.downcast_ref::<AccountOperationError>()
+            .map(|e| matches!(e, AccountOperationError::CascadingOversell))
+            .unwrap_or(false),
         "got: {err}"
     );
 }

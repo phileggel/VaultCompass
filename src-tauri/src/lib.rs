@@ -11,8 +11,9 @@
 #![cfg_attr(not(test), deny(clippy::todo))]
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
-use crate::context::account::{AccountService, SqliteAccountRepository, SqliteHoldingRepository};
-use crate::context::account::{SqliteTransactionRepository, TransactionService};
+use crate::context::account::{
+    AccountService, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+};
 use crate::context::asset::{
     AssetService, SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
@@ -44,10 +45,8 @@ pub struct AppState {
     pub event_bus: Arc<SideEffectEventBus>,
     /// Unified asset management service.
     pub asset_service: Arc<AssetService>,
-    /// Account management service.
+    /// Account management service (owns account, holding, and transaction operations).
     pub account_service: Arc<AccountService>,
-    /// Transaction service.
-    pub transaction_service: Arc<TransactionService>,
 }
 
 /// Update lifecycle state — managed separately so it is accessible without a DB.
@@ -129,24 +128,17 @@ pub fn run() {
 
                 let account_repo = SqliteAccountRepository::new(db.pool.clone());
                 let holding_repo_for_svc = SqliteHoldingRepository::new(db.pool.clone());
+                let transaction_repo_for_svc = SqliteTransactionRepository::new(db.pool.clone());
                 let account_service = Arc::new(
                     AccountService::new(
                         Box::new(account_repo),
                         Box::new(holding_repo_for_svc),
+                        Box::new(transaction_repo_for_svc),
                     )
                     .with_event_bus(event_bus.clone()),
                 );
 
-                let transaction_repo =
-                    SqliteTransactionRepository::new(db.pool.clone());
-                let transaction_service = Arc::new(
-                    TransactionService::new(Box::new(transaction_repo))
-                        .with_event_bus(event_bus.clone()),
-                );
-
                 let record_transaction_uc = RecordTransactionUseCase::new(
-                    Arc::new(db.pool.clone()),
-                    transaction_service.clone(),
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
                 );
@@ -179,7 +171,6 @@ pub fn run() {
                     event_bus,
                     asset_service,
                     account_service,
-                    transaction_service,
                 });
 
                 tracing::info!(target: BACKEND, "Application backend initialized successfully");

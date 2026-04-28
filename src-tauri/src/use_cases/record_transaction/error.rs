@@ -19,18 +19,4 @@ pub enum RecordTransactionError {
     /// Attempt to sell shares of an archived asset.
     #[error("Cannot sell an archived asset")]
     ArchivedAssetSell,
-    /// Sell requested but the holding has zero available units.
-    #[error("No units available to sell")]
-    ClosedPosition,
-    /// Sell quantity exceeds the units currently held.
-    #[error("Quantity ({requested}) exceeds available holding ({available})")]
-    Oversell {
-        /// Units currently held before the sale.
-        available: i64,
-        /// Units the transaction attempts to sell.
-        requested: i64,
-    },
-    /// Editing the transaction would leave a later transaction with insufficient units.
-    #[error("Editing this transaction would create a cascading oversell")]
-    CascadingOversell,
 }

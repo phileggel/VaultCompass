@@ -226,7 +226,7 @@ mod tests {
     use super::*;
     use crate::context::account::{
         AccountService, Holding, HoldingRepository, SqliteAccountRepository,
-        SqliteHoldingRepository, UpdateFrequency,
+        SqliteHoldingRepository, SqliteTransactionRepository, UpdateFrequency,
     };
     use crate::context::asset::AssetService;
     use crate::context::asset::{
@@ -239,6 +239,7 @@ mod tests {
         let account_svc = Arc::new(AccountService::new(
             Box::new(SqliteAccountRepository::new(pool.clone())),
             Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
         ));
         let asset_svc = Arc::new(AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
