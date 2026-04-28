@@ -42,10 +42,15 @@ struct AccountDeletionSummary {
 
 ## Events
 
-_No events — account mutations do not publish domain events._
+| Event            | Payload | Rule    |
+| ---------------- | ------- | ------- |
+| `AccountUpdated` | —       | TRX-037 |
+
+> Holding operation commands (`buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction`) will be added to this contract in Phase 4 of the migration plan — see `record_transaction-contract.md` for their current definition.
 
 ## Changelog
 
 - 2026-04-26 — Added by `account` spec: get_accounts, add_account, update_account, delete_account, get_account_deletion_summary
 - 2026-04-26 — Fixed: added InvalidCurrency error (TRX-021); removed phantom NotFound from delete_account and update_account; clarified error typing note
 - 2026-04-26 — Typed errors: commands now return `AccountCommandError` discriminated union instead of `String`
+- 2026-04-28 — Added `AccountUpdated` event (previously undeclared; owned by Account BC per migration plan)

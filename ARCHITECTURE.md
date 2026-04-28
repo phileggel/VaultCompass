@@ -48,12 +48,12 @@ All Tauri commands are registered here via `tauri_specta::collect_commands![]`. 
 
 Published on every state change. Frontend listens via a single `events.event.listen()` subscription in the global store.
 
-| Event                | Published by                                                                 |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `AssetUpdated`       | `context/asset/`                                                             |
-| `CategoryUpdated`    | `context/asset/`                                                             |
-| `AccountUpdated`     | `context/account/`                                                           |
-| `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()` |
+| Event                | Published by                                                                                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetUpdated`       | `context/asset/`                                                                                                                                                                       |
+| `CategoryUpdated`    | `context/asset/`                                                                                                                                                                       |
+| `AccountUpdated`     | `context/account/`                                                                                                                                                                     |
+| `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()`                                                                                                           |
 | `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026) **or** via `AssetService.notify_asset_price_updated()` after the auto-record path in `RecordTransactionUseCase` (MKT-057) |
 
 ### Use Cases (`use_cases/`)

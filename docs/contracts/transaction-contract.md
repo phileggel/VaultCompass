@@ -36,10 +36,13 @@ enum TransactionType {
 
 ## Events
 
-| Event                | Payload | Rule    |
-| -------------------- | ------- | ------- |
-| `TransactionUpdated` | —       | TRX-037 |
+| Event            | Payload | Owned by   | Rule    |
+| ---------------- | ------- | ---------- | ------- |
+| `AccountUpdated` | —       | Account BC | TRX-037 |
+
+> `TransactionUpdated` renamed to `AccountUpdated` — Transaction merges into Account BC (migration plan Phase 1–4). The event is owned and emitted by `AccountService`.
 
 ## Changelog
 
 - 2026-04-26 — Added by `financial-asset-transaction` + `sell-transaction` + `transaction-list` specs: get_asset_ids_for_account
+- 2026-04-28 — `TransactionUpdated` → `AccountUpdated` (migration plan: Transaction moves into Account BC)

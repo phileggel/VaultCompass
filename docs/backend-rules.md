@@ -1,5 +1,7 @@
 # Backend Rules
 
+> For DDD concept definitions, see [docs/ddd-reference.md](ddd-reference.md).
+
 **AI AGENT SHOULD NEVER UPDATE THIS DOCUMENT**
 
 ## Folder Structure
@@ -13,6 +15,7 @@ src-tauri/src/
 │   ├── logger.rs
 │   ├── specta_types.rs
 │   ├── specta_builder.rs
+│   ├── uow.rs            # TransactionManager trait + SqlxTransactionManager
 │   └── event_bus/
 │       ├── bus.rs
 │       ├── event.rs
@@ -21,8 +24,8 @@ src-tauri/src/
 │   └── {domain}/
 │       ├── domain/       # Entities + repository traits
 │       ├── repository/   # SQLite implementations of repository traits
-│       ├── service.rs    # Domain service — optional, only if it adds domain value beyond CRUD
-│       ├── api.rs        # Tauri command handlers
+│       ├── service.rs    # BC-scoped Application Service — optional, only if it adds value beyond trivial CRUD
+│       ├── api.rs        # Tauri command handlers (thin adapter only — no business logic)
 │       └── mod.rs        # Public re-exports only
 ├── use_cases/        # Cross-context orchestrators (if needed)
 └── lib.rs            # App wiring: state construction + Tauri setup
@@ -36,84 +39,131 @@ src-tauri/src/
 
 ## Domain Object
 
-**B1** — MUST be created with a factory method:
+**B1** — Domain objects MUST be created with a factory method:
 
-- `new()` — validates fields and generates id (use in service)
-- `with_id()` — validates fields, uses provided id (use in api/service)
+- `new()` — validates fields and generates id (use in service or use case)
+- `with_id()` — validates fields, uses provided id (use in service, use case, or api)
 - `restore()` — direct restore from database, no validation (use in repository only)
+
+Exception: internal aggregate entities (e.g. `Holding`, `Transaction` within `Account`) have
+factory methods that are called ONLY from within the Aggregate Root's methods — never from
+services, use cases, or api.rs directly.
+
+Immutable domain concepts with no identity SHOULD be modelled as Value Objects (no ID, no factory method — constructed directly).
+
+## Ubiquitous Language
+
+**B29** — Domain vocabulary (entity names, aggregate method names, event names, domain concepts)
+MUST be defined and validated by the user before use in code, tests, or documentation.
+The agent MUST NOT unilaterally decide on domain terms — it MUST propose and wait for
+explicit confirmation. All confirmed terms MUST be recorded in `docs/ubiquitous-language.md`
+and used consistently everywhere.
+
+## Aggregate
+
+**B2** — The BC's root entity (named after the BC folder, e.g. `Account` in `context/account/`) is the Aggregate Root. External code MUST NOT mutate internal entities directly. Reading internal entities for query purposes is acceptable (CQRS-lite).
+
+**B3** — All mutations to internal entities (e.g. `Holding`, `Transaction` within `Account`) MUST go through the Aggregate Root methods or its BC Application Service. No external code constructs or mutates internal entities directly.
+
+**B4** — One database transaction SHOULD modify at most one aggregate. Cross-aggregate writes require the UnitOfWork pattern (B22).
+
+**B28** — Aggregate Root methods MUST use domain/business vocabulary — they describe what
+happens to the aggregate, not the internal mechanism.
+> ✅ `account.buy_holding(...)` — `account.sell_holding(...)`
+> ❌ `account.create_transaction(...)` — `account.upsert_holding(...)`
 
 ## Bounded Context (`/context`)
 
-**B2** — MUST never import from another context.
+**B5** — MUST never import from another context.
 
-**B3** — MUST share its external API directly through its main `mod.rs`.
+**B6** — MUST share its external API directly through its main `mod.rs`.
 
-- Outside the context, never import `crate::context::patient::domain::::MyDomainObject` — always import `crate::context::patient::MyDomainObject`.
+- Outside the context, never import `crate::context::account::domain::MyDomainObject` — always import `crate::context::account::MyDomainObject`.
 
-**B4** — SHOULD always publish a `{Domain}Updated` event when its state changes (create, update, delete, etc.).
+**B7** — SHOULD always publish a `{Domain}Updated` event when its state changes (create, update, delete, etc.). The BC Application Service (`service.rs`) is responsible for event emission. If no Application Service exists, the `api.rs` handler is responsible.
 
-**B5** — MUST declare its Tauri commands in the `api.rs` file.
+**B8** — `api.rs` is the framework boundary — the only layer that knows Tauri exists.
+Its sole responsibilities are:
+1. **Deserialize** — translate Tauri command arguments into domain types
+2. **Delegate** — make exactly one call to its own BC Application Service
+3. **Serialize** — map the result to `Result<T, String>` for Tauri
 
-## Use Cases (`/use_cases`)
-
-**B6** — MAY import from contexts, MUST NOT import from another use case.
-
-**B7** — MUST share its external API directly through its main `mod.rs`.
-
-**B8** — MUST NOT publish a `{Domain}Updated` event (orchestrators do not own state).
+It MUST only call the Application Service of its own bounded context.
+It MUST NOT call another BC's service, another BC's repository, or a use case.
+Cross-BC coordination belongs in a use case with its own `api.rs` (B13).
 
 **B9** — MUST declare its Tauri commands in the `api.rs` file.
 
-**B10** — SHOULD have an orchestrator as its main entry point (after api) that handles the global logic.
+## Use Cases (`/use_cases`)
+
+**B10** — MAY import from contexts, MUST NOT import from another use case.
+
+**B11** — MUST share its external API directly through its main `mod.rs`.
+
+**B12** — MUST NOT publish a `{Domain}Updated` event directly (orchestrators do not own state).
+For cross-aggregate UoW operations, MUST delegate notification to each BC service's notify
+method after commit — the service owns the event, not the use case.
+
+**B13** — MUST declare its Tauri commands in its own `api.rs` file. This `api.rs` follows
+the same framework boundary role as B8: deserialize → delegate to the use case orchestrator
+→ serialize. It MUST NOT contain coordination logic — that belongs in the orchestrator.
+
+**B14** — SHOULD have an orchestrator as its main entry point (after api) that handles the global logic.
 
 ## Repository
 
-**B11** — MUST use sqlx macros for queries. Use `just clean-db` to reset the database if needed.
+**B15** — MUST use sqlx macros for queries. Use `just clean-db` to reset the database if needed.
 
 ## Logging
 
-**B12** — MUST use `tracing::{info, debug, warn, error}` with structured fields. Never use `println!`.
+**B16** — MUST use `tracing::{info, debug, warn, error}` with structured fields. Never use `println!`.
 
-**B17** - MUST use `target:` field when adding a new backend specific log.
+**B17** — MUST use `target:` field when adding a new backend specific log.
 
-**B16** — When using the `target:` field in tracing calls, MUST use the `BACKEND` or `FRONTEND` constant from `crate::core::logger` instead of string literals:
+**B18** — When using the `target:` field in tracing calls, MUST use the `BACKEND` or `FRONTEND` constant from `crate::core::logger` instead of string literals:
 
 ```rust
 use crate::core::logger::BACKEND;
 tracing::info!(target: BACKEND, field = value, "message");
 ```
 
-## UseCase - Service
+## Application Service & Use Case
 
-**B18** — Use cases MAY depend on any domain abstraction: repository traits, domain entities,
+**B19** — Use cases MAY depend on any domain abstraction: repository traits, domain entities,
 or bounded context services. They MUST NOT depend on infrastructure: concrete repository
 implementations, `sqlx::Pool`, `sqlx::Transaction`, `sqlx::query!`, or any other sqlx type.
 
-**B19** — A bounded context service (`service.rs`) is a Domain Service. It MUST only exist if
-it encapsulates non-trivial domain logic: cross-entity invariants, event emission, or
-coordination that does not belong to a single entity. Trivial CRUD with no added logic does
-not justify a service — the use case should depend on the repository trait directly.
-A service MUST NOT expose repository types or sqlx types in its public signature.
+**B20** — For write operations that must emit an event, use cases SHOULD go through the BC Application Service rather than the repository trait directly to ensure the event is properly fired.
 
-**B20** - If atomic transaction is needed, orchestrator or service MUST use UnitOfWork pattern.
+**B21** — A bounded context service (`service.rs`) is a BC-scoped Application Service. Its role
+is to orchestrate the aggregate: load via repository → call Aggregate Root method → save →
+emit event. It MUST NOT contain domain logic (VWAP, P&L, invariants) — that belongs in the
+Aggregate Root entity. It MUST only exist when this orchestration adds value; trivial CRUD
+with no event or aggregate coordination does not justify a service. A service MUST NOT expose
+repository types or sqlx types in its public signature.
+
+**B22** — For cross-aggregate writes (operations that must write to more than one aggregate
+atomically), the use case orchestrator MUST use the UnitOfWork pattern (`TransactionManager`
+from `core/uow.rs`). Single-aggregate writes do NOT use UoW — `AccountRepository::save()`
+handles atomicity internally. See `docs/adr/adr-001-unit-of-work.md`.
 
 ## General
 
-**B13** — MUST use `anyhow::Result<T>` for error handling.
+**B23** — MUST use `anyhow::Result<T>` for error handling.
 
 - Exception: Tauri command responses use `Result<T, String>`.
 
-**B14** — MAY use `#[allow(clippy::too_many_arguments)]` on domain factory methods.
+**B24** — MAY use `#[allow(clippy::too_many_arguments)]` on domain factory methods.
 
 ## Tests
 
-**B15** — Tests MUST NOT be trivial. A trivial test is one that verifies:
+**B25** — Tests MUST NOT be trivial. A trivial test is one that verifies:
 
 - A constructor does not panic
 - An empty input returns empty output (no logic traversed)
 - A getter returns what was just passed in
 - A test helper disguised as a test
 
-**B21** — Unit tests (mod tests inside src/) MUST mock repository dependencies using mockall-generated mocks. 
+**B26** — Unit tests (mod tests inside src/) MUST mock repository dependencies using mockall-generated mocks.
 
-**B22** — Integration tests (tests/ folder) MUST use real SQLite repos. They test cross-layer behavior end-to-end and MUST NOT use mocks.
+**B27** — Integration tests (tests/ folder) MUST use real SQLite repos. They test cross-layer behavior end-to-end and MUST NOT use mocks.
