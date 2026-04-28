@@ -74,7 +74,7 @@ Source: `.screenshots/vault-compass.png` (1024×1024 RGB). All sizes generated v
 
 ## (testing) — Fault injection seam for orchestrator atomicity tests
 
-MKT-056 and MKT-062 (auto-record DB rollback + tx-form error surfacing) are implemented but their dedicated tests are deferred — see TODO at `src-tauri/src/use_cases/record_transaction/orchestrator.rs`. A repository-level mock seam (e.g. trait-injected `AssetPriceRepository` that can be told to fail after the price write but before commit) would unlock both tests in one shot. Same gap applies to TRX-027 atomicity, which is currently exercised only by happy-path coverage. Pre-existing limitation; not specific to this feature.
+MKT-056 and MKT-062 (auto-record price-record failure + tx-form error surfacing) and TRX-027 (buy/sell atomicity) lack dedicated rollback tests. The record_transaction use case was dissolved into `context/account/` (Phase 7); the gap now lives in `src-tauri/src/context/account/service.rs`. A repository-level mock seam (e.g. trait-injected `AssetPriceRepository` that can be told to fail) would unlock all three in one shot.
 
 ## (market-price) — Price-point CRUD page
 

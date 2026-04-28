@@ -359,7 +359,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 - `SettingsPage.tsx` + `useSettings.ts` — reachable from the sidebar; collects user-level preferences
 - Language preference: `LanguageChoice = "auto" | "en" | "fr"` persisted via `i18n/config.ts` localStorage helpers; `i18n.changeLanguage` triggers `setDisplayLocale` for `Intl.NumberFormat`
-- Auto-record price toggle (MKT-050): `autoRecordPrice` boolean persisted via `src/lib/autoRecordPriceStorage.ts` (parallel to `lib/lastPath.ts`); read at hook mount in transaction forms (snapshot — MKT-052/053). Backend stays stateless on the toggle: each `add_transaction` / `update_transaction` call carries an explicit `record_price: bool` (MKT-054)
+- Auto-record price toggle (MKT-050): `autoRecordPrice` boolean persisted via `src/lib/autoRecordPriceStorage.ts` (parallel to `lib/lastPath.ts`); read at hook mount in transaction forms (snapshot — MKT-052/053). Backend stays stateless on the toggle: each transaction form calls `recordAssetPrice` separately after a successful buy/sell/correct when the toggle is on and price is non-zero (MKT-054/055)
 
 #### Design System (`features/design-system/`) — **dev only**
 
