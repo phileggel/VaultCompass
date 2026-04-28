@@ -1,5 +1,5 @@
 use crate::{
-    context::{account, asset, transaction},
+    context::{account, asset},
     core::{logger, Event},
     use_cases::{account_details, record_transaction, update_checker},
 };
@@ -20,8 +20,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::UpdateFrequency>()
         .typ::<account::Holding>()
         .typ::<account::AccountCommandError>()
-        .typ::<transaction::Transaction>()
-        .typ::<transaction::TransactionType>()
+        .typ::<account::Transaction>()
+        .typ::<account::TransactionType>()
         .typ::<record_transaction::CreateTransactionDTO>()
         .typ::<record_transaction::TransactionCommandError>()
         .typ::<account_details::HoldingDetail>()
@@ -53,7 +53,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             record_transaction::update_transaction,
             record_transaction::delete_transaction,
             record_transaction::get_transactions,
-            transaction::get_asset_ids_for_account,
+            account::get_asset_ids_for_account,
             account_details::get_account_details
         ])
         .events(tauri_specta::collect_events![Event])

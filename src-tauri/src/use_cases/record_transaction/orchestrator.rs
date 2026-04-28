@@ -1,6 +1,6 @@
 use crate::context::account::{AccountService, Holding};
+use crate::context::account::{Transaction, TransactionService, TransactionType};
 use crate::context::asset::AssetService;
-use crate::context::transaction::{Transaction, TransactionService, TransactionType};
 use crate::core::logger::BACKEND;
 use crate::use_cases::record_transaction::error::RecordTransactionError;
 use anyhow::{Context, Result};

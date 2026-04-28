@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
-use crate::context::transaction::domain::{Transaction, TransactionRepository, TransactionType};
+use crate::context::account::domain::{Transaction, TransactionRepository, TransactionType};
 
 #[derive(sqlx::FromRow)]
 struct TransactionRow {

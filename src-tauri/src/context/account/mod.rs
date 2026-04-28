@@ -6,8 +6,11 @@ mod domain;
 mod repository;
 /// Account business logic service.
 mod service;
+/// Transaction service (temporary — to be merged into AccountService in Phase 3).
+mod transaction_service;
 
 pub use api::*;
 pub use domain::*;
 pub use repository::*;
 pub use service::*;
+pub use transaction_service::TransactionService;

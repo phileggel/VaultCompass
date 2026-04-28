@@ -12,10 +12,10 @@
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
 use crate::context::account::{AccountService, SqliteAccountRepository, SqliteHoldingRepository};
+use crate::context::account::{SqliteTransactionRepository, TransactionService};
 use crate::context::asset::{
     AssetService, SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
-use crate::context::transaction::{SqliteTransactionRepository, TransactionService};
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
 use crate::use_cases::account_details::AccountDetailsUseCase;

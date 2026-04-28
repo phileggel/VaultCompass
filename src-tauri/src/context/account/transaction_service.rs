@@ -1,4 +1,4 @@
-use crate::context::transaction::domain::{Transaction, TransactionRepository};
+use crate::context::account::domain::{Transaction, TransactionRepository};
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use anyhow::{Context, Result};
 use std::sync::Arc;

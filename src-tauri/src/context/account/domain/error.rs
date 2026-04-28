@@ -22,3 +22,25 @@ pub enum HoldingDomainError {
     #[error("Holding average_price cannot be negative")]
     NegativeAveragePrice,
 }
+
+/// Typed errors raised by Account aggregate operations (buy/sell/correct/cancel).
+#[derive(Debug, thiserror::Error)]
+pub enum AccountOperationError {
+    /// Attempt to sell an asset with no open position (quantity = 0).
+    #[error("No units available to sell (closed position)")]
+    ClosedPosition,
+    /// Sell quantity exceeds the currently held units.
+    #[error("Oversell: requested {requested} exceeds available {available}")]
+    Oversell {
+        /// Units currently held before the sale.
+        available: i64,
+        /// Units the operation attempts to sell.
+        requested: i64,
+    },
+    /// Correcting a transaction would leave a later sell with insufficient units.
+    #[error("Editing this transaction would create a cascading oversell")]
+    CascadingOversell,
+    /// No transaction with the given ID exists within this account.
+    #[error("Transaction not found")]
+    TransactionNotFound,
+}

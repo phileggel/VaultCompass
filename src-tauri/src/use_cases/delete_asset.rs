@@ -1,5 +1,5 @@
+use crate::context::account::TransactionRepository;
 use crate::context::asset::AssetService;
-use crate::context::transaction::TransactionRepository;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -46,11 +46,11 @@ impl DeleteAssetUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::account::{Transaction, TransactionRepository};
     use crate::context::asset::{
         AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetRepository,
         SYSTEM_CATEGORY_ID,
     };
-    use crate::context::transaction::{Transaction, TransactionRepository};
     use async_trait::async_trait;
     use sqlx::sqlite::SqlitePoolOptions;
 

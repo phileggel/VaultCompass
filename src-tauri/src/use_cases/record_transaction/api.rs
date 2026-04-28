@@ -6,7 +6,7 @@ use super::orchestrator::{CreateTransactionDTO, RecordTransactionUseCase};
 // TransactionDomainError lives in the transaction bounded context; importing it here is acceptable
 // because this use-case layer sits above that context and aggregates both error sources into one
 // boundary enum — it does not create a circular dependency.
-use crate::context::transaction::{Transaction, TransactionDomainError};
+use crate::context::account::{Transaction, TransactionDomainError};
 use tauri::State;
 
 // --- Boundary error ---

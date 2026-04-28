@@ -1,4 +1,4 @@
-use super::error::TransactionDomainError;
+use super::transaction_error::TransactionDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::NaiveDate;

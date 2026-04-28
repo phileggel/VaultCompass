@@ -121,3 +121,20 @@ pub async fn delete_account(
         .await
         .map_err(to_account_error)
 }
+
+/// Returns the distinct asset IDs that have transactions for the given account (TXL-013).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_asset_ids_for_account(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<Vec<String>, AccountCommandError> {
+    state
+        .transaction_service
+        .get_asset_ids_for_account(&account_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(err = ?e, "unexpected error in get_asset_ids_for_account");
+            AccountCommandError::Unknown
+        })
+}

@@ -3,11 +3,11 @@ use std::sync::Arc;
 use vault_compass_lib::context::account::{
     AccountService, SqliteAccountRepository, SqliteHoldingRepository, UpdateFrequency,
 };
+use vault_compass_lib::context::account::{SqliteTransactionRepository, TransactionService};
 use vault_compass_lib::context::asset::{
     AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
     SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
 };
-use vault_compass_lib::context::transaction::{SqliteTransactionRepository, TransactionService};
 use vault_compass_lib::use_cases::record_transaction::{
     CreateTransactionDTO, RecordTransactionError, RecordTransactionUseCase,
 };
