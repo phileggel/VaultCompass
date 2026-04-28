@@ -22,7 +22,6 @@ use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
 use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
-use crate::use_cases::record_transaction::RecordTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
 use std::{fs, path::PathBuf, sync::Arc};
@@ -138,11 +137,6 @@ pub fn run() {
                     .with_event_bus(event_bus.clone()),
                 );
 
-                let record_transaction_uc = RecordTransactionUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
-                );
-
                 let account_details_uc = AccountDetailsUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
@@ -161,7 +155,6 @@ pub fn run() {
                     Arc::new(transaction_repo_for_delete),
                 );
 
-                app_handle.manage(record_transaction_uc);
                 app_handle.manage(account_details_uc);
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);

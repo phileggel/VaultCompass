@@ -558,6 +558,111 @@ mod tests {
         assert!(txs.is_empty(), "transaction should be removed after cancel");
     }
 
+    // SEL-026 — full sell retains holding at quantity=0 with VWAP preserved
+    #[tokio::test]
+    async fn full_sell_retains_holding_at_zero_with_last_vwap() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.sell_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-06-01".to_string(),
+            micro(2),
+            micro(120),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let h = holdings
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding should exist after full sell");
+        assert_eq!(h.quantity, 0, "holding should be retained at qty=0");
+        assert_eq!(h.average_price, micro(100), "VWAP should be preserved");
+    }
+
+    // SEL-032 — correcting a purchase to a lower qty that would cause a cascading oversell is rejected
+    #[tokio::test]
+    async fn correct_purchase_rejected_when_causes_cascading_oversell() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let buy = svc
+            .buy_holding(
+                &account.id,
+                asset_id.clone(),
+                "2024-01-01".to_string(),
+                micro(3),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        svc.sell_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-06-01".to_string(),
+            micro(2),
+            micro(120),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        let err = svc
+            .correct_transaction(
+                &account.id,
+                &buy.id,
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountOperationError>()
+                .map(|e| matches!(e, AccountOperationError::CascadingOversell))
+                .unwrap_or(false),
+            "expected CascadingOversell, got: {err}"
+        );
+    }
+
     // TRX-031 — correct_transaction updates the persisted holding
     #[tokio::test]
     async fn correct_transaction_updates_holding() {

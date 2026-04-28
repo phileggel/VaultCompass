@@ -1,7 +1,7 @@
 use crate::{
     context::{account, asset},
     core::{logger, Event},
-    use_cases::{account_details, record_transaction, update_checker},
+    use_cases::{account_details, update_checker},
 };
 
 /// create the Specta builder for standard and generate_bindings
@@ -22,8 +22,10 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::AccountCommandError>()
         .typ::<account::Transaction>()
         .typ::<account::TransactionType>()
-        .typ::<record_transaction::CreateTransactionDTO>()
-        .typ::<record_transaction::TransactionCommandError>()
+        .typ::<account::BuyHoldingDTO>()
+        .typ::<account::SellHoldingDTO>()
+        .typ::<account::CorrectTransactionDTO>()
+        .typ::<account::TransactionCommandError>()
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
@@ -49,11 +51,12 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             update_checker::check_for_update,
             update_checker::download_update,
             update_checker::install_update,
-            record_transaction::add_transaction,
-            record_transaction::update_transaction,
-            record_transaction::delete_transaction,
-            record_transaction::get_transactions,
             account::get_asset_ids_for_account,
+            account::buy_holding,
+            account::sell_holding,
+            account::correct_transaction,
+            account::cancel_transaction,
+            account::get_transactions,
             account_details::get_account_details
         ])
         .events(tauri_specta::collect_events![Event])
