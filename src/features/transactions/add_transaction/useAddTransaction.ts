@@ -96,42 +96,44 @@ export function useAddTransaction({
     setError(null);
     setIsSubmitting(true);
 
-    const result = await buyHolding({
-      account_id: formData.accountId,
-      asset_id: formData.assetId,
-      date: formData.date,
-      quantity: microValues.qtyMicro,
-      unit_price: microValues.priceMicro,
-      exchange_rate: microValues.rateMicro,
-      fees: microValues.feesMicro,
-      note: formData.note || null,
-    });
+    try {
+      const result = await buyHolding({
+        account_id: formData.accountId,
+        asset_id: formData.assetId,
+        date: formData.date,
+        quantity: microValues.qtyMicro,
+        unit_price: microValues.priceMicro,
+        exchange_rate: microValues.rateMicro,
+        fees: microValues.feesMicro,
+        note: formData.note || null,
+      });
 
-    setIsSubmitting(false);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
 
-    if (result.error) {
-      setError(result.error);
-      return;
+      // MKT-055/061 — record price separately when auto-record is on and price is non-zero (best-effort)
+      if (recordPrice && microValues.priceMicro > 0) {
+        transactionGateway
+          .recordAssetPrice(
+            formData.assetId,
+            formData.date,
+            parseFloat(microToDecimal(microValues.priceMicro)),
+          )
+          .catch((e) => logger.warn("Failed to record asset price after buy", { error: e }));
+      }
+
+      showSnackbar(t("transaction.success_created"), "success");
+      setFormData({
+        ...defaultForm(),
+        assetId: prefillAssetId ?? "",
+        accountId: prefillAccountId ?? "",
+      });
+      onSubmitSuccess?.();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // MKT-055/061 — record price separately when auto-record is on and price is non-zero (best-effort)
-    if (recordPrice && microValues.priceMicro > 0) {
-      transactionGateway
-        .recordAssetPrice(
-          formData.assetId,
-          formData.date,
-          parseFloat(microToDecimal(microValues.priceMicro)),
-        )
-        .catch((e) => logger.warn("Failed to record asset price after buy", { error: e }));
-    }
-
-    showSnackbar(t("transaction.success_created"), "success");
-    setFormData({
-      ...defaultForm(),
-      assetId: prefillAssetId ?? "",
-      accountId: prefillAccountId ?? "",
-    });
-    onSubmitSuccess?.();
   }, [
     formData,
     microValues,

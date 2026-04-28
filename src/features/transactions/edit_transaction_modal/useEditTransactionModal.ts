@@ -101,35 +101,37 @@ export function useEditTransactionModal({
     setError(null);
     setIsSubmitting(true);
 
-    const result = await correctTransaction(transaction.id, transaction.account_id, {
-      date: formData.date,
-      quantity: microValues.qtyMicro,
-      unit_price: microValues.priceMicro,
-      exchange_rate: microValues.rateMicro,
-      fees: microValues.feesMicro,
-      note: formData.note || null,
-    });
+    try {
+      const result = await correctTransaction(transaction.id, transaction.account_id, {
+        date: formData.date,
+        quantity: microValues.qtyMicro,
+        unit_price: microValues.priceMicro,
+        exchange_rate: microValues.rateMicro,
+        fees: microValues.feesMicro,
+        note: formData.note || null,
+      });
 
-    setIsSubmitting(false);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
 
-    if (result.error) {
-      setError(result.error);
-      return;
+      // MKT-055/061 — record price separately when opt-in is on and price is non-zero (best-effort)
+      if (recordPrice && microValues.priceMicro > 0) {
+        transactionGateway
+          .recordAssetPrice(
+            transaction.asset_id,
+            formData.date,
+            parseFloat(microToDecimal(microValues.priceMicro)),
+          )
+          .catch((e) => logger.warn("Failed to record asset price after correction", { error: e }));
+      }
+
+      showSnackbar(t("transaction.success_updated"), "success");
+      onSubmitSuccess?.();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // MKT-055/061 — record price separately when opt-in is on and price is non-zero (best-effort)
-    if (recordPrice && microValues.priceMicro > 0) {
-      transactionGateway
-        .recordAssetPrice(
-          transaction.asset_id,
-          formData.date,
-          parseFloat(microToDecimal(microValues.priceMicro)),
-        )
-        .catch((e) => logger.warn("Failed to record asset price after correction", { error: e }));
-    }
-
-    showSnackbar(t("transaction.success_updated"), "success");
-    onSubmitSuccess?.();
   }, [
     formData,
     microValues,
