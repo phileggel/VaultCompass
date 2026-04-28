@@ -3,15 +3,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transaction } from "@/bindings";
 import { useEditTransactionModal } from "./useEditTransactionModal";
 
-const mockUpdateTransaction = vi.fn();
+const { mockCorrectTransaction, mockRecordAssetPrice } = vi.hoisted(() => ({
+  mockCorrectTransaction: vi.fn(),
+  mockRecordAssetPrice: vi.fn(),
+}));
 
 vi.mock("../useTransactions", () => ({
   useTransactions: () => ({
-    addTransaction: vi.fn(),
-    updateTransaction: mockUpdateTransaction,
-    deleteTransaction: vi.fn(),
+    buyHolding: vi.fn(),
+    sellHolding: vi.fn(),
+    correctTransaction: mockCorrectTransaction,
+    cancelTransaction: vi.fn(),
     getTransactions: vi.fn(),
   }),
+}));
+
+vi.mock("../gateway", () => ({
+  transactionGateway: {
+    recordAssetPrice: mockRecordAssetPrice,
+  },
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -55,7 +65,8 @@ const baseTransaction: Transaction = {
 describe("useEditTransactionModal", () => {
   beforeEach(() => {
     localStorage.clear();
-    mockUpdateTransaction.mockReset();
+    mockCorrectTransaction.mockReset();
+    mockRecordAssetPrice.mockReset();
   });
 
   // Pre-fill: micro-unit values are converted to decimal strings; totalAmount is derived
@@ -69,9 +80,9 @@ describe("useEditTransactionModal", () => {
     expect(result.current.totalAmountDisplay).toBe("100,000");
   });
 
-  // Submit calls updateTransaction with correct micro-unit values
-  it("calls updateTransaction with correct micro-unit args on submit", async () => {
-    mockUpdateTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+  // Submit calls correctTransaction with correct args: (id, accountId, dto)
+  it("calls correctTransaction with correct args on submit", async () => {
+    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
       useEditTransactionModal({ transaction: baseTransaction, onSubmitSuccess }),
@@ -83,8 +94,9 @@ describe("useEditTransactionModal", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockUpdateTransaction).toHaveBeenCalledWith(
+    expect(mockCorrectTransaction).toHaveBeenCalledWith(
       "tx-existing",
+      "account-1",
       expect.objectContaining({
         quantity: 2 * MICRO,
         unit_price: 50 * MICRO,
@@ -96,7 +108,7 @@ describe("useEditTransactionModal", () => {
 
   // Backend error stays modal open
   it("sets error and does not call onSubmitSuccess on backend error", async () => {
-    mockUpdateTransaction.mockResolvedValue({ data: null, error: "Not found" });
+    mockCorrectTransaction.mockResolvedValue({ data: null, error: "Not found" });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
       useEditTransactionModal({ transaction: baseTransaction, onSubmitSuccess }),
@@ -118,12 +130,13 @@ describe("useEditTransactionModal", () => {
     expect(result.current.recordPrice).toBe(false);
   });
 
-  // MKT-054 — submit forwards recordPrice to updateTransaction as record_price
-  it("forwards record_price: true to updateTransaction when recordPrice is manually set to true", async () => {
-    mockUpdateTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+  // MKT-054 — calls recordAssetPrice when recordPrice is manually set to true
+  it("calls recordAssetPrice when recordPrice is manually set to true", async () => {
+    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+    mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
+
     const { result } = renderHook(() => useEditTransactionModal({ transaction: baseTransaction }));
 
-    // Manually set recordPrice to true via the setter exposed by the hook
     await act(async () => {
       result.current.setRecordPrice(true);
     });
@@ -133,9 +146,6 @@ describe("useEditTransactionModal", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockUpdateTransaction).toHaveBeenCalledWith(
-      "tx-existing",
-      expect.objectContaining({ record_price: true }),
-    );
+    expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-01-10", 50);
   });
 });

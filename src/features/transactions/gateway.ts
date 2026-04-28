@@ -1,26 +1,40 @@
-import type { Result, TransactionCommandError } from "../../bindings";
-import { type CreateTransactionDTO, commands, type Transaction } from "../../bindings";
+import type {
+  AccountCommandError,
+  AssetPriceCommandError,
+  BuyHoldingDTO,
+  CorrectTransactionDTO,
+  SellHoldingDTO,
+  Transaction,
+  TransactionCommandError,
+} from "../../bindings";
+import { commands, type Result } from "../../bindings";
 
 /**
  * Gateway for Transaction-related backend communication.
  * Centralizes all Tauri command calls for the Transaction feature.
  */
 export const transactionGateway = {
-  async addTransaction(
-    dto: CreateTransactionDTO,
-  ): Promise<Result<Transaction, TransactionCommandError>> {
-    return await commands.addTransaction(dto);
+  async buyHolding(dto: BuyHoldingDTO): Promise<Result<Transaction, TransactionCommandError>> {
+    return await commands.buyHolding(dto);
   },
 
-  async updateTransaction(
+  async sellHolding(dto: SellHoldingDTO): Promise<Result<Transaction, TransactionCommandError>> {
+    return await commands.sellHolding(dto);
+  },
+
+  async correctTransaction(
     id: string,
-    dto: CreateTransactionDTO,
+    accountId: string,
+    dto: CorrectTransactionDTO,
   ): Promise<Result<Transaction, TransactionCommandError>> {
-    return await commands.updateTransaction(id, dto);
+    return await commands.correctTransaction(id, accountId, dto);
   },
 
-  async deleteTransaction(id: string): Promise<Result<null, TransactionCommandError>> {
-    return await commands.deleteTransaction(id);
+  async cancelTransaction(
+    id: string,
+    accountId: string,
+  ): Promise<Result<null, TransactionCommandError>> {
+    return await commands.cancelTransaction(id, accountId);
   },
 
   async getTransactions(
@@ -30,7 +44,15 @@ export const transactionGateway = {
     return await commands.getTransactions(accountId, assetId);
   },
 
-  async getAssetIdsForAccount(accountId: string): Promise<Result<string[], string>> {
+  async getAssetIdsForAccount(accountId: string): Promise<Result<string[], AccountCommandError>> {
     return await commands.getAssetIdsForAccount(accountId);
+  },
+
+  async recordAssetPrice(
+    assetId: string,
+    date: string,
+    price: number,
+  ): Promise<Result<null, AssetPriceCommandError>> {
+    return await commands.recordAssetPrice(assetId, date, price);
   },
 };

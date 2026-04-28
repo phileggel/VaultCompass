@@ -29,7 +29,7 @@ export function TransactionListPage() {
     logger.info("[TransactionListPage] mounted");
   }, []);
   const showSnackbar = useSnackbar();
-  const { deleteTransaction } = useTransactions();
+  const { cancelTransaction } = useTransactions();
 
   const {
     selectedAccountId,
@@ -86,7 +86,8 @@ export function TransactionListPage() {
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingTransactionId) return;
-    const { error } = await deleteTransaction(deletingTransactionId);
+    const accountId = transactionById.get(deletingTransactionId)?.account_id ?? selectedAccountId;
+    const { error } = await cancelTransaction(deletingTransactionId, accountId);
     setDeletingTransactionId(null);
     if (error) {
       showSnackbar(t("transaction.error_generic"), "error");
@@ -94,7 +95,15 @@ export function TransactionListPage() {
       showSnackbar(t("transaction.success_deleted"), "success");
       await handleDeleteSuccess();
     }
-  }, [deletingTransactionId, deleteTransaction, showSnackbar, t, handleDeleteSuccess]);
+  }, [
+    deletingTransactionId,
+    transactionById,
+    selectedAccountId,
+    cancelTransaction,
+    showSnackbar,
+    t,
+    handleDeleteSuccess,
+  ]);
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">

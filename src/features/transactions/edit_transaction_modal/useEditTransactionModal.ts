@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
+import { logger } from "@/lib/logger";
 import {
   computeSellTotalMicro,
   computeTotalMicro,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import { transactionGateway } from "../gateway";
 import type { TransactionFormData } from "../shared/types";
 import { validateTransactionForm } from "../shared/validateTransaction";
 import { useTransactions } from "../useTransactions";
@@ -21,7 +23,7 @@ interface UseEditTransactionModalProps {
 
 /**
  * Populates the form from an existing Transaction (micro-units → decimal strings)
- * and submits via updateTransaction (TRX-031, TRX-033).
+ * and submits via correctTransaction (TRX-031, TRX-033).
  */
 export function useEditTransactionModal({
   transaction,
@@ -29,7 +31,7 @@ export function useEditTransactionModal({
 }: UseEditTransactionModalProps) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
-  const { updateTransaction } = useTransactions();
+  const { correctTransaction } = useTransactions();
   const assets = useAppStore((state) => state.assets);
 
   const [formData, setFormData] = useState<TransactionFormData>(() => ({
@@ -99,17 +101,13 @@ export function useEditTransactionModal({
     setError(null);
     setIsSubmitting(true);
 
-    const result = await updateTransaction(transaction.id, {
-      account_id: formData.accountId,
-      asset_id: formData.assetId,
-      transaction_type: transaction.transaction_type,
+    const result = await correctTransaction(transaction.id, transaction.account_id, {
       date: formData.date,
       quantity: microValues.qtyMicro,
       unit_price: microValues.priceMicro,
       exchange_rate: microValues.rateMicro,
       fees: microValues.feesMicro,
       note: formData.note || null,
-      record_price: recordPrice,
     });
 
     setIsSubmitting(false);
@@ -119,15 +117,27 @@ export function useEditTransactionModal({
       return;
     }
 
+    // MKT-055/061 — record price separately when opt-in is on and price is non-zero (best-effort)
+    if (recordPrice && microValues.priceMicro > 0) {
+      transactionGateway
+        .recordAssetPrice(
+          transaction.asset_id,
+          formData.date,
+          parseFloat(microToDecimal(microValues.priceMicro)),
+        )
+        .catch((e) => logger.warn("Failed to record asset price after correction", { error: e }));
+    }
+
     showSnackbar(t("transaction.success_updated"), "success");
     onSubmitSuccess?.();
   }, [
     formData,
     microValues,
     recordPrice,
-    updateTransaction,
+    correctTransaction,
     transaction.id,
-    transaction.transaction_type,
+    transaction.account_id,
+    transaction.asset_id,
     t,
     onSubmitSuccess,
     showSnackbar,

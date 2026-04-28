@@ -24,7 +24,7 @@
 1. `create_app_dirs()` — resolves and creates `local_data_dir` + `log_dir`
 2. `initialize_tracing()` — sets up dual-output subscriber: `app.log` (no ANSI) + stderr; `EnvFilter` defaults to `debug` (override with `RUST_LOG`)
 3. `Arc<Database>`, `Arc<SideEffectEventBus>`
-4. Bounded context services: `AssetService`, `AccountService`, `TransactionService`
+4. Bounded context services: `AssetService`, `AccountService`
 5. Event forwarder spawned to bridge `SideEffectEventBus` → Tauri frontend events
 6. `Arc<UpdateState>` — managed separately from `AppState` so it is accessible before the DB is ready
 
@@ -53,8 +53,8 @@ Published on every state change. Frontend listens via a single `events.event.lis
 | `AssetUpdated`       | `context/asset/`                                                                                                                                                                       |
 | `CategoryUpdated`    | `context/asset/`                                                                                                                                                                       |
 | `AccountUpdated`     | `context/account/`                                                                                                                                                                     |
-| `TransactionUpdated` | `context/transaction/` via `TransactionService.notify_transaction_updated()`                                                                                                           |
-| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026) **or** via `AssetService.notify_asset_price_updated()` after the auto-record path in `RecordTransactionUseCase` (MKT-057) |
+| `TransactionUpdated` | `context/account/` via `AccountService` (emitted after every buy/sell/correct/cancel holding operation)                                                                               |
+| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026)                                                                                                                          |
 
 ### Use Cases (`use_cases/`)
 
@@ -73,21 +73,19 @@ Orchestrates a cross-context read of account + asset data for the Account Detail
 - Frontend `useAccountDetails` subscribes to `TransactionUpdated`, `AssetUpdated`, and `AssetPriceUpdated` events to trigger re-fetch (MKT-036)
 - `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
 
-#### Record Transaction (`use_cases/record_transaction/`)
+#### Archive Asset (`use_cases/archive_asset/`)
 
-Orchestrates transaction creation, update, and deletion (Purchase + Sell) across `transaction/`, `account/`, and `asset/` bounded contexts (spec: `docs/spec/financial-asset-transaction.md`, `docs/spec/sell-transaction.md`, `docs/spec/market-price.md` MKT-050+).
+Cross-BC guard: checks active holdings before archiving an asset (OQ-6).
 
-- `orchestrator.rs` — `RecordTransactionUseCase` with `create_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
-  - Holds `Arc<AssetService>` so it can call `notify_asset_price_updated()` after committing an auto-recorded price (MKT-057, B8)
-  - Atomicity (TRX-027): all DB writes within each operation use `pool.begin()` + `commit()` directly; auto-record `AssetPrice` upsert (when `record_price = true` and `unit_price > 0`) runs in the same DB transaction (MKT-055/056)
-  - Purchase: VWAP computation (TRX-030, TRX-036), auto-unarchive on purchase of archived asset (TRX-028)
-  - Sell: `compute_sell_total` (SEL-023): `floor(floor(qty×price/MICRO)×rate/MICRO) − fees`; closed-position guard (SEL-012); oversell guard (SEL-021); archived-asset guard (SEL-037)
-  - `recalculate_holding`: full chronological replay over all transactions for an (account, asset) pair; computes running VWAP, `realized_pnl` per sell (SEL-024), `total_realized_pnl` (cumulative sum), and `last_sold_date` (max sell date, ISO string); returns `(Holding, HashMap<tx_id, pnl>)`
-  - Sell recalculation cascades on update (SEL-031) and delete (SEL-033) — all sibling sells get updated P&L
-  - `auto_record_price` (MKT-055/058/061): private helper that upserts `AssetPrice(asset_id, date, unit_price)` inside the open DB transaction; silently skipped when `record_price = false` or `unit_price = 0` (MKT-061 — gifted assets)
-  - Events published after commit via `TransactionService.notify_transaction_updated()` (B8) and, when a price was actually written, `AssetService.notify_asset_price_updated()` (MKT-057, B8)
-- `api.rs` — four Tauri commands: `add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`
-- `CreateTransactionDTO` — serializable DTO struct passed as single command parameter (Specta limit workaround); fields: `account_id`, `asset_id`, `transaction_type`, `date`, `quantity`, `unit_price`, `exchange_rate`, `fees`, `note`, `record_price` (MKT-054 — opt-in auto-record of asset price from this transaction)
+- `orchestrator.rs` — `ArchiveAssetUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; calls `AccountService.has_active_holdings_for_asset()` then `AssetService.archive()`
+- `api.rs` — `archive_asset(id: String) -> Result<(), ArchiveAssetCommandError>` Tauri command; error variants: `ActiveHoldings`, `NotFound`, `Unknown`
+
+#### Delete Asset (`use_cases/delete_asset/`)
+
+Cross-BC guard: checks transaction history before hard-deleting an asset.
+
+- `orchestrator.rs` — `DeleteAssetUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; calls `AccountService.has_holding_entries_for_asset()` then `AssetService.delete()`
+- `api.rs` — `delete_asset(id: String) -> Result<(), DeleteAssetCommandError>` Tauri command; error variants: `ExistingTransactions`, `NotFound`, `Unknown`
 
 #### Update Checker (`use_cases/update_checker/`)
 
@@ -163,40 +161,11 @@ context/{domain}/
 
 ---
 
-### Transaction (`context/transaction/`)
-
-**Entity: `Transaction`**
-
-- `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`, `realized_pnl: Option<i64>`, `created_at: String`
-- `TransactionType` enum: `Purchase`, `Sell` — parsed via `FromStr`; unknown variants are a hard error (TryFrom)
-- All financial fields in i64 micro-units (ADR-001)
-- Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount` invariant checked for Purchase only (Sell uses subtraction formula)
-- Factory methods: `new()`, `with_id()`, `restore()`; `created_at` is set once in `new()`, immutable on update
-
-**Repository trait: `TransactionRepository`**
-
-- `get_by_id`, `get_by_account_asset(account_id, asset_id) -> Vec<Transaction>` (chronological — TRX-036)
-- `get_asset_ids_for_account(account_id) -> Vec<String>` — distinct asset IDs with transactions for an account (TXL-013)
-- `get_realized_pnl_by_account(account_id) -> Vec<(String, i64)>` — (asset_id, sum_pnl) for all Sell transactions (SEL-038)
-- `create`, `update`, `delete`
-
-**Service: `TransactionService`**
-
-- Read access: `get_by_id`, `get_by_account_asset`, `get_asset_ids_for_account`, `get_realized_pnl_by_account`
-- `notify_transaction_updated()` — publishes `TransactionUpdated` event (B8); called by `RecordTransactionUseCase` after commit
-
-**Tauri commands**
-
-- Write commands (`add_transaction`, `update_transaction`, `delete_transaction`, `get_transactions`) defined in `use_cases/record_transaction/api.rs` (B9 — cross-context use case)
-- `get_asset_ids_for_account` defined in `context/transaction/api.rs` (B5 — single-context read, no orchestration)
-
----
-
 ### Account (`context/account/`)
 
 **Entity: `Account`**
 
-- `id`, `name`, `update_frequency: UpdateFrequency`
+- `id`, `name`, `currency`, `update_frequency: UpdateFrequency`
 - `UpdateFrequency` enum: `Automatic`, `ManualDay`, `ManualWeek`, `ManualMonth`, `ManualYear`
 - Factory methods: `new()` (generates ID + trims + validates), `with_id()` (uses provided ID + trims + validates), `restore()` (no validation, DB reconstruction)
 - Hard-delete: `DELETE FROM accounts WHERE id = ?`; holdings cascade via `ON DELETE CASCADE` on `holdings.account_id`
@@ -205,28 +174,50 @@ context/{domain}/
 
 - Represents the current state of a financial position: an asset held within an account
 - `id`, `account_id`, `asset_id`, `quantity: i64` (micros), `average_price: i64` (micros)
-- Computed from `Transaction` records via VWAP by `RecordTransactionUseCase`
+- Maintained by `Account` aggregate root methods; updated via VWAP recalculation on every buy/sell/correct/cancel
 - Factory methods: `new()`, `with_id()`, `restore()`
 - Hard-delete: removed when no transactions remain for the `(account_id, asset_id)` pair (TRX-034)
 
-**Repository traits: `AccountRepository`, `HoldingRepository`**
+**Entity: `Transaction`** (internal to `Account` aggregate)
 
-- `AccountRepository`: `get_all`, `get_by_id`, `find_by_name`, `create`, `update`, `delete`
-- `HoldingRepository`: `get_by_account`, `get_by_account_asset`, `upsert`, `delete`, `delete_by_account_asset`
+- `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`, `realized_pnl: Option<i64>`, `created_at: String`
+- `TransactionType` enum: `Purchase`, `Sell`
+- All financial fields in i64 micro-units (ADR-001)
+- Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount` invariant checked for Purchase only
+- Factory methods: `new()`, `with_id()`, `restore()`; `created_at` is set once in `new()`, immutable on update
+- Constructed only inside `Account` aggregate root methods — never directly by services, use cases, or api.rs (B3)
+
+**Repository traits: `AccountRepository`, `HoldingRepository`, `TransactionRepository`**
+
+- `AccountRepository`: `get_all`, `get_by_id`, `find_by_name`, `create`, `update`, `delete`, `get_with_holdings_and_transactions`, `save` (atomically persists full aggregate)
+- `HoldingRepository`: `get_by_account`, `get_by_account_asset`, `upsert`, `delete`, `delete_by_account_asset`, `has_active_holdings_for_asset`
+- `TransactionRepository`: `get_by_id`, `get_by_account_asset` (chronological — TRX-036), `get_asset_ids_for_account` (TXL-013), `has_transactions_for_asset`
 
 **Service: `AccountService`**
 
-- CRUD for accounts; exposes `get_holdings_for_account` (delegating to `HoldingRepository`) for use by `AccountDetailsUseCase` (ADR-004)
-- `create`: validates uniqueness via `find_by_name` before insert (R3)
-- `update`: calls `with_id()` for trim+validation; validates uniqueness excluding own ID (R3)
-- Publishes `AccountUpdated` events
+- Account CRUD: `create` (validates name uniqueness, R3), `update` (validates uniqueness excluding own ID, R3), `delete`
+- Holding reads: `get_holdings_for_account`, `get_holding_by_account_asset`
+- Transaction reads: `get_transaction_by_id`, `get_transactions`, `get_asset_ids_for_account`
+- Aggregate operations (thin orchestrators — load → call root method → save → emit event):
+  - `buy_holding(account_id, asset_id, date, quantity, unit_price, exchange_rate, fees, note)` — TRX-020, TRX-026
+  - `sell_holding(...)` — SEL-012, SEL-021, SEL-023, SEL-024
+  - `correct_transaction(account_id, tx_id, ...)` — TRX-031, SEL-031
+  - `cancel_transaction(account_id, tx_id)` — TRX-034
+- Cross-BC guard queries (called by use cases only): `has_active_holdings_for_asset`, `has_holding_entries_for_asset`
+- Publishes `AccountUpdated` (on account mutations) and `TransactionUpdated` (on holding/transaction mutations) events
 
 **Tauri commands (`api.rs`)**
 
 - `get_accounts() -> Vec<Account>`
-- `add_account(name, updateFrequency) -> Account`
-- `update_account(account) -> Account`
+- `add_account(dto) -> Account`
+- `update_account(dto) -> Account`
 - `delete_account(id)`
+- `get_asset_ids_for_account(accountId) -> Vec<String>`
+- `buy_holding(dto: BuyHoldingDTO) -> Transaction`
+- `sell_holding(dto: SellHoldingDTO) -> Transaction`
+- `correct_transaction(id, accountId, dto: CorrectTransactionDTO) -> Transaction`
+- `cancel_transaction(id, accountId)`
+- `get_transactions(accountId, assetId) -> Vec<Transaction>`
 
 ---
 
@@ -312,11 +303,11 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Transactions (`features/transactions/`)
 
-- Gateway: `addTransaction(dto)`, `updateTransaction(id, dto)`, `deleteTransaction(id)`, `getTransactions(accountId, assetId)`, `getAssetIdsForAccount(accountId)`
+- Gateway: `buyHolding(dto)`, `sellHolding(dto)`, `correctTransaction(id, accountId, dto)`, `cancelTransaction(id, accountId)`, `getTransactions(accountId, assetId)`, `getAssetIdsForAccount(accountId)`, `recordAssetPrice(assetId, date, price)` (MKT-055/061 — called after buy/sell/correct when auto-record is on)
 - `useTransactions()` hook: wraps gateway calls with error normalization (`{ data, error }` return shape)
 - Sub-features:
-  - `add_transaction/` — `AddTransactionModal` + `useAddTransaction` hook (TRX-010, TRX-011, TRX-026, TRX-029)
-  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033); uses `computeSellTotalMicro` when `transaction_type === "Sell"`
+  - `add_transaction/` — `AddTransactionModal` + `useAddTransaction` hook (TRX-010, TRX-011, TRX-026, TRX-029); Purchase only — calls `buyHolding`
+  - `edit_transaction_modal/` — `EditTransactionModal` + `useEditTransactionModal` (TRX-031, TRX-033); calls `correctTransaction`; uses `computeSellTotalMicro` when `transaction_type === "Sell"`
   - `transaction_list/` — `TransactionListPage` + `useTransactionList` hook (TXL spec): account/asset filter dropdowns, sortable date column, edit/delete/add row actions, realized P&L column (SEL-041, SEL-043), all UX states
 - Shared:
   - `shared/types.ts` — `TransactionFormData` (decimal strings)
@@ -337,7 +328,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
   - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / magnifier action buttons; `buildTarget()` resolves account+asset metadata for modal props
   - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
   - `buy_transaction/BuyTransactionModal.tsx` + `useBuyTransaction.ts` — buy form opened from holding row (TRX-041); mirrors sell modal; includes archived-asset confirmation dialog (TRX-029)
-  - `sell_transaction/SellTransactionModal.tsx` + `useSellTransaction.ts` — sell form opened from holding row (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional, `transaction_type: "Sell"` DTO
+  - `sell_transaction/SellTransactionModal.tsx` + `useSellTransaction.ts` — sell form opened from holding row (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional; calls `sellHolding`
   - `shared/types.ts` — `ModalTarget` (accountName, assetId, assetName, assetCurrency, showExchangeRate) and `SellTarget` (extends ModalTarget with holdingQuantityMicro)
 - `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number` on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number` on `AccountSummaryViewModel` for sign-based color rendering (SEL-042, SEL-043)
 - Navigation: clicking an `AccountTable` row calls `useNavigate` to `/accounts/$accountId`; `AccountDetailsView` is rendered by its own route, not conditionally by `AccountManager`

@@ -53,7 +53,7 @@ async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, AssetCommandError
 }
 },
 /**
- * Archives an asset, guarded against active holdings (R6, OQ-6).
+ * Archives an asset, guarded against active holdings (OQ-6).
  */
 async archiveAsset(id: string) : Promise<Result<null, ArchiveAssetCommandError>> {
     try {
@@ -239,55 +239,66 @@ async installUpdate() : Promise<Result<null, string>> {
 }
 },
 /**
- * Creates a new purchase transaction and updates the Holding atomically (TRX-027).
+ * Returns the distinct asset IDs that have transactions for the given account (TXL-013).
  */
-async addTransaction(dto: CreateTransactionDTO) : Promise<Result<Transaction, TransactionCommandError>> {
+async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], AccountCommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("add_transaction", { dto }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_asset_ids_for_account", { accountId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
 /**
- * Updates an existing transaction and recalculates the affected Holding(s) (TRX-031, TRX-032).
+ * Records a purchase of an asset into an account (TRX-027).
  */
-async updateTransaction(id: string, dto: CreateTransactionDTO) : Promise<Result<Transaction, TransactionCommandError>> {
+async buyHolding(dto: BuyHoldingDTO) : Promise<Result<Transaction, TransactionCommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("update_transaction", { id, dto }) };
+    return { status: "ok", data: await TAURI_INVOKE("buy_holding", { dto }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
 /**
- * Deletes a transaction and recalculates (or removes) the associated Holding (TRX-034).
+ * Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
  */
-async deleteTransaction(id: string) : Promise<Result<null, TransactionCommandError>> {
+async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, TransactionCommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_transaction", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("sell_holding", { dto }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
 /**
- * Retrieves all transactions for an account/asset pair.
+ * Corrects an existing transaction and recalculates the affected holding (TRX-031).
+ */
+async correctTransaction(id: string, accountId: string, dto: CorrectTransactionDTO) : Promise<Result<Transaction, TransactionCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("correct_transaction", { id, accountId, dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
+ */
+async cancelTransaction(id: string, accountId: string) : Promise<Result<null, TransactionCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_transaction", { id, accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Retrieves all transactions for an account/asset pair (TRX-036).
  */
 async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], TransactionCommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_transactions", { accountId, assetId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns the distinct asset IDs that have transactions for the given account (TXL-013).
- */
-async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_asset_ids_for_account", { accountId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -322,7 +333,12 @@ event: "event"
 /** user-defined types **/
 
 /**
- * Represents a financial account.
+ * Represents a financial account — the Aggregate Root of the Account bounded context.
+ * Owns all holdings and transactions for this account.
+ * 
+ * The `holdings`, `transactions`, and `pending_changes` fields are populated only
+ * when the aggregate is loaded for mutation via `AccountRepository::get_with_holdings_and_transactions`.
+ * They are excluded from Tauri serialization and TypeScript bindings.
  */
 export type Account = { 
 /**
@@ -413,6 +429,10 @@ export type ArchiveAssetCommandError =
  * Asset still has non-zero holdings in at least one account.
  */
 { code: "ActiveHoldings" } | 
+/**
+ * No asset exists with the requested ID.
+ */
+{ code: "NotFound" } | 
 /**
  * An unexpected server-side error occurred.
  */
@@ -554,6 +574,42 @@ export type AssetPriceCommandError =
  */
 { code: "Unknown" }
 /**
+ * Parameters for recording a purchase of an asset into an account.
+ */
+export type BuyHoldingDTO = { 
+/**
+ * Account where the purchase is recorded.
+ */
+account_id: string; 
+/**
+ * Financial asset being purchased.
+ */
+asset_id: string; 
+/**
+ * Transaction date (YYYY-MM-DD).
+ */
+date: string; 
+/**
+ * Quantity in micro-units.
+ */
+quantity: number; 
+/**
+ * Unit price in asset currency (micro-units).
+ */
+unit_price: number; 
+/**
+ * Exchange rate asset→account currency (micro-units).
+ */
+exchange_rate: number; 
+/**
+ * Fees in account currency (micro-units).
+ */
+fees: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
  * Typed error returned to the frontend for category commands.
  */
 export type CategoryCommandError = 
@@ -602,6 +658,35 @@ realized_pnl: number;
  */
 last_sold_date: string }
 /**
+ * Parameters for correcting an existing transaction.
+ * `account_id` and `asset_id` are immutable — taken from the existing transaction.
+ */
+export type CorrectTransactionDTO = { 
+/**
+ * Corrected transaction date (YYYY-MM-DD).
+ */
+date: string; 
+/**
+ * Corrected quantity in micro-units.
+ */
+quantity: number; 
+/**
+ * Corrected unit price in asset currency (micro-units).
+ */
+unit_price: number; 
+/**
+ * Corrected exchange rate asset→account currency (micro-units).
+ */
+exchange_rate: number; 
+/**
+ * Corrected fees in account currency (micro-units).
+ */
+fees: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
  * Parameters for creating a new account.
  */
 export type CreateAccountDTO = { 
@@ -646,55 +731,6 @@ risk_level: number;
  */
 category_id: string }
 /**
- * DTO for creating or updating a transaction.
- * `total_amount` is intentionally absent — the backend computes it from the other
- * fields (TRX-026) so the frontend never sends a derived value over the wire.
- */
-export type CreateTransactionDTO = { 
-/**
- * Account where the transaction occurs.
- */
-account_id: string; 
-/**
- * Financial asset involved.
- */
-asset_id: string; 
-/**
- * Transaction type: "Purchase" or "Sell".
- */
-transaction_type: string; 
-/**
- * Transaction date (YYYY-MM-DD).
- */
-date: string; 
-/**
- * Quantity in micro-units.
- */
-quantity: number; 
-/**
- * Unit price in asset currency (micro-units).
- */
-unit_price: number; 
-/**
- * Exchange rate asset→account currency (micro-units).
- */
-exchange_rate: number; 
-/**
- * Fees in account currency (micro-units).
- */
-fees: number; 
-/**
- * Optional user note.
- */
-note: string | null; 
-/**
- * MKT-054 — when true and unit_price > 0, the orchestrator also upserts
- * AssetPrice(asset_id, date, unit_price) inside the same DB tx (MKT-055/056)
- * and publishes AssetPriceUpdated after commit (MKT-057). Existing same-date
- * price is silently overwritten (MKT-058). Skipped when unit_price = 0 (MKT-061).
- */
-record_price: boolean }
-/**
  * Typed error returned to the frontend for the delete_asset command.
  */
 export type DeleteAssetCommandError = 
@@ -702,6 +738,10 @@ export type DeleteAssetCommandError =
  * At least one transaction references this asset.
  */
 { code: "ExistingTransactions" } | 
+/**
+ * No asset exists with the requested ID.
+ */
+{ code: "NotFound" } | 
 /**
  * An unexpected server-side error occurred.
  */
@@ -823,6 +863,42 @@ unrealized_pnl: number | null;
  */
 performance_pct: number | null }
 /**
+ * Parameters for recording a sale of an asset from an account.
+ */
+export type SellHoldingDTO = { 
+/**
+ * Account where the sale is recorded.
+ */
+account_id: string; 
+/**
+ * Financial asset being sold.
+ */
+asset_id: string; 
+/**
+ * Transaction date (YYYY-MM-DD).
+ */
+date: string; 
+/**
+ * Quantity in micro-units.
+ */
+quantity: number; 
+/**
+ * Unit price in asset currency (micro-units).
+ */
+unit_price: number; 
+/**
+ * Exchange rate asset→account currency (micro-units).
+ */
+exchange_rate: number; 
+/**
+ * Fees in account currency (micro-units).
+ */
+fees: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
  */
@@ -880,33 +956,13 @@ realized_pnl: number | null;
  */
 created_at: string }
 /**
- * Typed error returned to the frontend for transaction commands.
+ * Typed error returned to the frontend for holding operation commands.
  */
 export type TransactionCommandError = 
 /**
  * No transaction exists with the requested ID.
  */
 { code: "TransactionNotFound" } | 
-/**
- * No account exists with the requested ID.
- */
-{ code: "AccountNotFound" } | 
-/**
- * No asset exists with the requested ID.
- */
-{ code: "AssetNotFound" } | 
-/**
- * The transaction type string is not a known variant.
- */
-{ code: "InvalidType" } | 
-/**
- * Attempt to change the type of an existing transaction.
- */
-{ code: "TypeImmutable" } | 
-/**
- * Attempt to sell shares of an archived asset.
- */
-{ code: "ArchivedAssetSell" } | 
 /**
  * Sell requested but holding has zero available units.
  */

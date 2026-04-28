@@ -34,7 +34,7 @@ export function useTransactionList() {
       if (res.status === "ok") {
         setAssetIdsForAccount(res.data);
       } else {
-        setAssetListError(res.error);
+        setAssetListError(`error.${res.error.code}`);
         setAssetIdsForAccount([]);
       }
     } catch (e) {

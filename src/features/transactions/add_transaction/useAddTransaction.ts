@@ -1,9 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
-import { computeTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
+import { logger } from "@/lib/logger";
+import {
+  computeTotalMicro,
+  decimalToMicro,
+  microToDecimal,
+  microToFormatted,
+} from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import { transactionGateway } from "../gateway";
 import type { TransactionFormData } from "../shared/types";
 import { validateTransactionForm } from "../shared/validateTransaction";
 import { useTransactions } from "../useTransactions";
@@ -36,7 +43,7 @@ export function useAddTransaction({
 }: UseAddTransactionProps = {}) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
-  const { addTransaction } = useTransactions();
+  const { buyHolding } = useTransactions();
   const assets = useAppStore((state) => state.assets);
 
   const [formData, setFormData] = useState<TransactionFormData>(() => ({
@@ -89,17 +96,15 @@ export function useAddTransaction({
     setError(null);
     setIsSubmitting(true);
 
-    const result = await addTransaction({
+    const result = await buyHolding({
       account_id: formData.accountId,
       asset_id: formData.assetId,
-      transaction_type: "Purchase",
       date: formData.date,
       quantity: microValues.qtyMicro,
       unit_price: microValues.priceMicro,
       exchange_rate: microValues.rateMicro,
       fees: microValues.feesMicro,
       note: formData.note || null,
-      record_price: recordPrice,
     });
 
     setIsSubmitting(false);
@@ -107,6 +112,17 @@ export function useAddTransaction({
     if (result.error) {
       setError(result.error);
       return;
+    }
+
+    // MKT-055/061 — record price separately when auto-record is on and price is non-zero (best-effort)
+    if (recordPrice && microValues.priceMicro > 0) {
+      transactionGateway
+        .recordAssetPrice(
+          formData.assetId,
+          formData.date,
+          parseFloat(microToDecimal(microValues.priceMicro)),
+        )
+        .catch((e) => logger.warn("Failed to record asset price after buy", { error: e }));
     }
 
     showSnackbar(t("transaction.success_created"), "success");
@@ -120,7 +136,7 @@ export function useAddTransaction({
     formData,
     microValues,
     recordPrice,
-    addTransaction,
+    buyHolding,
     t,
     prefillAssetId,
     prefillAccountId,

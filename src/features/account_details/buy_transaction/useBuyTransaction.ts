@@ -4,9 +4,16 @@ import type { TransactionFormData } from "@/features/transactions/shared/types";
 import { validateTransactionForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
 import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
-import { computeTotalMicro, decimalToMicro, microToFormatted } from "@/lib/microUnits";
+import { logger } from "@/lib/logger";
+import {
+  computeTotalMicro,
+  decimalToMicro,
+  microToDecimal,
+  microToFormatted,
+} from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import { accountDetailsGateway } from "../gateway";
 
 interface UseBuyTransactionProps {
   accountId: string;
@@ -19,7 +26,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBuyTransactionProps) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
-  const { addTransaction } = useTransactions();
+  const { buyHolding } = useTransactions();
   const assets = useAppStore((state) => state.assets);
 
   const [formData, setFormData] = useState<TransactionFormData>(() => ({
@@ -77,17 +84,15 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
     setIsSubmitting(true);
 
     try {
-      const result = await addTransaction({
+      const result = await buyHolding({
         account_id: formData.accountId,
         asset_id: formData.assetId,
-        transaction_type: "Purchase",
         date: formData.date,
         quantity: microValues.qtyMicro,
         unit_price: microValues.priceMicro,
         exchange_rate: microValues.rateMicro,
         fees: microValues.feesMicro,
         note: formData.note || null,
-        record_price: recordPrice,
       });
 
       if (result.error) {
@@ -95,12 +100,23 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
         return;
       }
 
+      // MKT-055/061 — record price separately when auto-record is on and price is non-zero (best-effort)
+      if (recordPrice && microValues.priceMicro > 0) {
+        accountDetailsGateway
+          .recordAssetPrice(
+            formData.assetId,
+            formData.date,
+            parseFloat(microToDecimal(microValues.priceMicro)),
+          )
+          .catch((e) => logger.warn("Failed to record asset price after buy", { error: e }));
+      }
+
       showSnackbar(t("transaction.success_created"), "success");
       onSubmitSuccess?.();
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, microValues, recordPrice, addTransaction, t, showSnackbar, onSubmitSuccess]);
+  }, [formData, microValues, recordPrice, buyHolding, t, showSnackbar, onSubmitSuccess]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {

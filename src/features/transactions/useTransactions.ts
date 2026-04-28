@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { CreateTransactionDTO, Transaction } from "@/bindings";
+import type { BuyHoldingDTO, CorrectTransactionDTO, SellHoldingDTO, Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { transactionGateway } from "./gateway";
 
@@ -8,41 +8,57 @@ import { transactionGateway } from "./gateway";
  * Does not hold domain state — holdings are managed via the transaction store.
  */
 export function useTransactions() {
-  const addTransaction = useCallback(async (dto: CreateTransactionDTO) => {
+  const buyHolding = useCallback(async (dto: BuyHoldingDTO) => {
     try {
-      const res = await transactionGateway.addTransaction(dto);
+      const res = await transactionGateway.buyHolding(dto);
       if (res.status === "ok") {
         return { data: res.data, error: null };
       }
       return { data: null, error: `error.${res.error.code}` };
     } catch (e) {
-      logger.error("Failed to add transaction", { error: e });
+      logger.error("Failed to buy holding", { error: e });
       return { data: null, error: String(e) };
     }
   }, []);
 
-  const updateTransaction = useCallback(async (id: string, dto: CreateTransactionDTO) => {
+  const sellHolding = useCallback(async (dto: SellHoldingDTO) => {
     try {
-      const res = await transactionGateway.updateTransaction(id, dto);
+      const res = await transactionGateway.sellHolding(dto);
       if (res.status === "ok") {
         return { data: res.data, error: null };
       }
       return { data: null, error: `error.${res.error.code}` };
     } catch (e) {
-      logger.error("Failed to update transaction", { error: e });
+      logger.error("Failed to sell holding", { error: e });
       return { data: null, error: String(e) };
     }
   }, []);
 
-  const deleteTransaction = useCallback(async (id: string) => {
+  const correctTransaction = useCallback(
+    async (id: string, accountId: string, dto: CorrectTransactionDTO) => {
+      try {
+        const res = await transactionGateway.correctTransaction(id, accountId, dto);
+        if (res.status === "ok") {
+          return { data: res.data, error: null };
+        }
+        return { data: null, error: `error.${res.error.code}` };
+      } catch (e) {
+        logger.error("Failed to correct transaction", { error: e });
+        return { data: null, error: String(e) };
+      }
+    },
+    [],
+  );
+
+  const cancelTransaction = useCallback(async (id: string, accountId: string) => {
     try {
-      const res = await transactionGateway.deleteTransaction(id);
+      const res = await transactionGateway.cancelTransaction(id, accountId);
       if (res.status === "ok") {
         return { error: null };
       }
       return { error: `error.${res.error.code}` };
     } catch (e) {
-      logger.error("Failed to delete transaction", { error: e });
+      logger.error("Failed to cancel transaction", { error: e });
       return { error: String(e) };
     }
   }, []);
@@ -65,9 +81,10 @@ export function useTransactions() {
   );
 
   return {
-    addTransaction,
-    updateTransaction,
-    deleteTransaction,
+    buyHolding,
+    sellHolding,
+    correctTransaction,
+    cancelTransaction,
     getTransactions,
   };
 }

@@ -316,10 +316,6 @@ mod tests {
         AccountOperationError, SqliteAccountRepository, SqliteHoldingRepository,
         SqliteTransactionRepository,
     };
-    use crate::context::asset::{
-        AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
-        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
-    };
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup(pool: &sqlx::Pool<sqlx::Sqlite>) -> (AccountService, String) {
@@ -328,23 +324,21 @@ mod tests {
             Box::new(SqliteHoldingRepository::new(pool.clone())),
             Box::new(SqliteTransactionRepository::new(pool.clone())),
         );
-        let asset_svc = AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
-        );
-        let asset_id = asset_svc
-            .create_asset(CreateAssetDTO {
-                name: "TestAsset".to_string(),
-                reference: "TST".to_string(),
-                class: AssetClass::Stocks,
-                currency: "USD".to_string(),
-                risk_level: 1,
-                category_id: SYSTEM_CATEGORY_ID.to_string(),
-            })
-            .await
-            .unwrap()
-            .id;
+        let asset_id = "test-asset-id".to_string();
+        sqlx::query(
+            "INSERT INTO assets (id, name, reference, asset_class, category_id, currency, risk_level)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&asset_id)
+        .bind("TestAsset")
+        .bind("TST")
+        .bind("Stocks")
+        .bind("default-uncategorized")
+        .bind("USD")
+        .bind(1_i64)
+        .execute(pool)
+        .await
+        .unwrap();
         (svc, asset_id)
     }
 

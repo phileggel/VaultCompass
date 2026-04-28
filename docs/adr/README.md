@@ -7,3 +7,4 @@
 | [ADR-003](003-cross-context-use-case-orchestration.md)       | Cross-Context Use Case Orchestration via Sequential Service Calls | Accepted — amended by ADR-005 |
 | [ADR-004](004-use-cases-inject-services-not-repositories.md) | Use Cases Inject Services, Not Repositories                       | Accepted                      |
 | [ADR-005](005-account-details-inject-transaction-service.md) | Inject TransactionService into account_details for Realized P&L   | Accepted — amends ADR-003     |
+| [ADR-006](006-unit-of-work.md)                               | Unit of Work Pattern for Cross-Aggregate Atomicity                 | Accepted                      |

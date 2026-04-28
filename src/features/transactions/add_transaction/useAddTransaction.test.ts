@@ -2,15 +2,25 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAddTransaction } from "./useAddTransaction";
 
-const mockAddTransaction = vi.fn();
+const { mockBuyHolding, mockRecordAssetPrice } = vi.hoisted(() => ({
+  mockBuyHolding: vi.fn(),
+  mockRecordAssetPrice: vi.fn(),
+}));
 
 vi.mock("../useTransactions", () => ({
   useTransactions: () => ({
-    addTransaction: mockAddTransaction,
-    updateTransaction: vi.fn(),
-    deleteTransaction: vi.fn(),
+    buyHolding: mockBuyHolding,
+    sellHolding: vi.fn(),
+    correctTransaction: vi.fn(),
+    cancelTransaction: vi.fn(),
     getTransactions: vi.fn(),
   }),
+}));
+
+vi.mock("../gateway", () => ({
+  transactionGateway: {
+    recordAssetPrice: mockRecordAssetPrice,
+  },
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -37,7 +47,8 @@ const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
 describe("useAddTransaction", () => {
   beforeEach(() => {
     localStorage.clear();
-    mockAddTransaction.mockReset();
+    mockBuyHolding.mockReset();
+    mockRecordAssetPrice.mockReset();
   });
 
   // TRX-011 — pre-fill assetId from props
@@ -100,7 +111,7 @@ describe("useAddTransaction", () => {
     });
 
     expect(result.current.showArchivedConfirm).toBe(false);
-    expect(mockAddTransaction).not.toHaveBeenCalled();
+    expect(mockBuyHolding).not.toHaveBeenCalled();
   });
 
   // TRX-020 — validation: empty accountId blocks submit
@@ -120,13 +131,13 @@ describe("useAddTransaction", () => {
     });
 
     expect(result.current.error).not.toBeNull();
-    expect(mockAddTransaction).not.toHaveBeenCalled();
+    expect(mockBuyHolding).not.toHaveBeenCalled();
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
   // Backend error keeps modal open and exposes error
   it("sets error and does not call onSubmitSuccess on backend error", async () => {
-    mockAddTransaction.mockResolvedValue({ data: null, error: "Invariant mismatch" });
+    mockBuyHolding.mockResolvedValue({ data: null, error: "Invariant mismatch" });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
       useAddTransaction({
@@ -154,7 +165,7 @@ describe("useAddTransaction", () => {
 
   // Success calls onSubmitSuccess
   it("calls onSubmitSuccess on success", async () => {
-    mockAddTransaction.mockResolvedValue({
+    mockBuyHolding.mockResolvedValue({
       data: { id: "tx-1" },
       error: null,
     });
@@ -183,7 +194,7 @@ describe("useAddTransaction", () => {
     expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
   });
 
-  // handleSubmit with archived asset → does not call addTransaction (waits for confirmation)
+  // handleSubmit with archived asset → does not call buyHolding (waits for confirmation)
   it("handleSubmit with archived asset does not submit immediately", async () => {
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
@@ -198,7 +209,7 @@ describe("useAddTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).not.toHaveBeenCalled();
+    expect(mockBuyHolding).not.toHaveBeenCalled();
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
@@ -226,10 +237,11 @@ describe("useAddTransaction", () => {
     expect(result.current.recordPrice).toBe(false);
   });
 
-  // MKT-054 — submit forwards record_price: true to addTransaction
-  it("forwards record_price: true to addTransaction when recordPrice is true", async () => {
+  // MKT-054 — calls recordAssetPrice when recordPrice is true and price is non-zero
+  it("calls recordAssetPrice when recordPrice is true and price is non-zero", async () => {
     localStorage.setItem("auto_record_price", "true");
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-add-1" }, error: null });
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-add-1" }, error: null });
+    mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
 
     const { result } = renderHook(() =>
       useAddTransaction({ prefillAccountId: "account-1", prefillAssetId: "asset-1" }),
@@ -247,14 +259,12 @@ describe("useAddTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ record_price: true }),
-    );
+    expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-06-01", 100);
   });
 
-  // MKT-054 — submit forwards record_price: false to addTransaction
-  it("forwards record_price: false to addTransaction when recordPrice is false", async () => {
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-add-2" }, error: null });
+  // MKT-054 — does not call recordAssetPrice when recordPrice is false
+  it("does not call recordAssetPrice when recordPrice is false", async () => {
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-add-2" }, error: null });
 
     const { result } = renderHook(() =>
       useAddTransaction({ prefillAccountId: "account-1", prefillAssetId: "asset-1" }),
@@ -272,8 +282,6 @@ describe("useAddTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ record_price: false }),
-    );
+    expect(mockRecordAssetPrice).not.toHaveBeenCalled();
   });
 });

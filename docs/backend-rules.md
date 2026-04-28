@@ -145,7 +145,7 @@ repository types or sqlx types in its public signature.
 **B22** — For cross-aggregate writes (operations that must write to more than one aggregate
 atomically), the use case orchestrator MUST use the UnitOfWork pattern (`TransactionManager`
 from `core/uow.rs`). Single-aggregate writes do NOT use UoW — `AccountRepository::save()`
-handles atomicity internally. See `docs/adr/adr-001-unit-of-work.md`.
+handles atomicity internally. See `docs/adr/006-unit-of-work.md`.
 
 ## General
 

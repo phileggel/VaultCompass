@@ -162,4 +162,4 @@ If a future operation requires cross-aggregate atomicity:
 - Inject `TransactionManager` into that use case only
 - Load aggregate outside UoW (read) → call aggregate method (pure domain) → inside UoW: `uow.save_account()` + `uow.other_repo_write()` → commit → delegate event notification to each BC service
 
-See `docs/adr/adr-001-unit-of-work.md` for the full architectural decision.
+See `docs/adr/006-unit-of-work.md` for the full architectural decision.

@@ -1,4 +1,4 @@
-# ADR-001: Unit of Work Pattern for Cross-Aggregate Atomicity
+# ADR-006: Unit of Work Pattern for Cross-Aggregate Atomicity
 
 ## Status
 Accepted

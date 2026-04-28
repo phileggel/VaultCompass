@@ -4,15 +4,25 @@ import { useBuyTransaction } from "./useBuyTransaction";
 
 const AUTO_RECORD_PRICE_KEY = "auto_record_price";
 
-const mockAddTransaction = vi.fn();
+const { mockBuyHolding, mockRecordAssetPrice } = vi.hoisted(() => ({
+  mockBuyHolding: vi.fn(),
+  mockRecordAssetPrice: vi.fn(),
+}));
 
 vi.mock("@/features/transactions/useTransactions", () => ({
   useTransactions: () => ({
-    addTransaction: mockAddTransaction,
-    updateTransaction: vi.fn(),
-    deleteTransaction: vi.fn(),
+    buyHolding: mockBuyHolding,
+    sellHolding: vi.fn(),
+    correctTransaction: vi.fn(),
+    cancelTransaction: vi.fn(),
     getTransactions: vi.fn(),
   }),
+}));
+
+vi.mock("../gateway", () => ({
+  accountDetailsGateway: {
+    recordAssetPrice: mockRecordAssetPrice,
+  },
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -41,7 +51,8 @@ const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
 describe("useBuyTransaction", () => {
   beforeEach(() => {
     localStorage.clear();
-    mockAddTransaction.mockReset();
+    mockBuyHolding.mockReset();
+    mockRecordAssetPrice.mockReset();
   });
 
   // MKT-052 — recordPrice defaults to the global toggle value at hook mount (create mode)
@@ -71,10 +82,11 @@ describe("useBuyTransaction", () => {
     expect(result.current.recordPrice).toBe(false);
   });
 
-  // MKT-054 — submit forwards recordPrice=true to addTransaction as record_price: true
-  it("forwards record_price: true to addTransaction when recordPrice is true", async () => {
+  // MKT-054 — calls recordAssetPrice when recordPrice is true and price is non-zero
+  it("calls recordAssetPrice when recordPrice is true and price is non-zero", async () => {
     localStorage.setItem(AUTO_RECORD_PRICE_KEY, "true");
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-1" }, error: null });
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-1" }, error: null });
+    mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
 
     const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
 
@@ -90,15 +102,13 @@ describe("useBuyTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ record_price: true }),
-    );
+    expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-06-01", 100);
   });
 
-  // MKT-054 — submit forwards recordPrice=false to addTransaction as record_price: false
-  it("forwards record_price: false to addTransaction when recordPrice is false", async () => {
+  // MKT-054 — does not call recordAssetPrice when recordPrice is false
+  it("does not call recordAssetPrice when recordPrice is false", async () => {
     localStorage.removeItem(AUTO_RECORD_PRICE_KEY);
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-2" }, error: null });
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-2" }, error: null });
 
     const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
 
@@ -114,8 +124,6 @@ describe("useBuyTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ record_price: false }),
-    );
+    expect(mockRecordAssetPrice).not.toHaveBeenCalled();
   });
 });

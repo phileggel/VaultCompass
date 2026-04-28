@@ -2,15 +2,25 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSellTransaction } from "./useSellTransaction";
 
-const mockAddTransaction = vi.fn();
+const { mockSellHolding, mockRecordAssetPrice } = vi.hoisted(() => ({
+  mockSellHolding: vi.fn(),
+  mockRecordAssetPrice: vi.fn(),
+}));
 
 vi.mock("@/features/transactions/useTransactions", () => ({
   useTransactions: () => ({
-    addTransaction: mockAddTransaction,
-    updateTransaction: vi.fn(),
-    deleteTransaction: vi.fn(),
+    buyHolding: vi.fn(),
+    sellHolding: mockSellHolding,
+    correctTransaction: vi.fn(),
+    cancelTransaction: vi.fn(),
     getTransactions: vi.fn(),
   }),
+}));
+
+vi.mock("../gateway", () => ({
+  accountDetailsGateway: {
+    recordAssetPrice: mockRecordAssetPrice,
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -31,7 +41,8 @@ const BASE_PROPS = {
 describe("useSellTransaction", () => {
   beforeEach(() => {
     localStorage.clear();
-    mockAddTransaction.mockReset();
+    mockSellHolding.mockReset();
+    mockRecordAssetPrice.mockReset();
   });
 
   // SEL-023 — sell total = floor(floor(qty × price / MICRO) × rate / MICRO) − fees
@@ -90,13 +101,13 @@ describe("useSellTransaction", () => {
     });
 
     expect(result.current.error).toContain("transaction.error_validation_oversell");
-    expect(mockAddTransaction).not.toHaveBeenCalled();
+    expect(mockSellHolding).not.toHaveBeenCalled();
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
-  // Submit DTO uses transaction_type: "Sell"
-  it("submits DTO with transaction_type Sell", async () => {
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-1" }, error: null });
+  // Submit calls sellHolding (not addTransaction with transaction_type)
+  it("submits via sellHolding with correct DTO fields", async () => {
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-1" }, error: null });
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
 
     await act(async () => {
@@ -111,14 +122,19 @@ describe("useSellTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ transaction_type: "Sell" }),
+    expect(mockSellHolding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account_id: "account-1",
+        asset_id: "asset-1",
+        quantity: 1_000_000,
+        unit_price: 100_000_000,
+      }),
     );
   });
 
   // Backend error keeps modal open, sets error, does not call onSubmitSuccess
   it("sets error on backend failure and does not call onSubmitSuccess", async () => {
-    mockAddTransaction.mockResolvedValue({ data: null, error: "backend error" });
+    mockSellHolding.mockResolvedValue({ data: null, error: "backend error" });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useSellTransaction({ ...BASE_PROPS, onSubmitSuccess }));
 
@@ -158,7 +174,7 @@ describe("useSellTransaction", () => {
 
   // SEL-036 — when exchange rate field is hidden (currencies match), default 1.000000 is submitted
   it("submits exchangeRate=1000000 micro when using default (SEL-036)", async () => {
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-3" }, error: null });
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-3" }, error: null });
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
 
     await act(async () => {
@@ -173,14 +189,14 @@ describe("useSellTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
+    expect(mockSellHolding).toHaveBeenCalledWith(
       expect.objectContaining({ exchange_rate: 1_000_000 }),
     );
   });
 
   // Success calls onSubmitSuccess
   it("calls onSubmitSuccess on successful submit", async () => {
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-2" }, error: null });
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-2" }, error: null });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useSellTransaction({ ...BASE_PROPS, onSubmitSuccess }));
 
@@ -226,10 +242,11 @@ describe("useSellTransaction", () => {
     expect(result.current.recordPrice).toBe(false);
   });
 
-  // MKT-054 — submit forwards record_price: true to addTransaction
-  it("forwards record_price: true to addTransaction when recordPrice is true", async () => {
+  // MKT-054 — calls recordAssetPrice when recordPrice is true and price is non-zero
+  it("calls recordAssetPrice when recordPrice is true and price is non-zero", async () => {
     localStorage.setItem("auto_record_price", "true");
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-sell-1" }, error: null });
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-sell-1" }, error: null });
+    mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
 
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
 
@@ -245,15 +262,13 @@ describe("useSellTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ record_price: true }),
-    );
+    expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-06-01", 100);
   });
 
-  // MKT-054 — submit forwards record_price: false to addTransaction
-  it("forwards record_price: false to addTransaction when recordPrice is false", async () => {
+  // MKT-054 — does not call recordAssetPrice when recordPrice is false
+  it("does not call recordAssetPrice when recordPrice is false", async () => {
     localStorage.removeItem("auto_record_price");
-    mockAddTransaction.mockResolvedValue({ data: { id: "tx-sell-2" }, error: null });
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-sell-2" }, error: null });
 
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
 
@@ -269,8 +284,6 @@ describe("useSellTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(mockAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ record_price: false }),
-    );
+    expect(mockRecordAssetPrice).not.toHaveBeenCalled();
   });
 });
