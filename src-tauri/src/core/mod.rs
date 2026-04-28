@@ -1,5 +1,9 @@
 //! Core system utilities and shared components.
 
+/// Unit of Work infrastructure for atomic cross-aggregate writes.
+pub mod uow;
+pub use uow::{SqlxTransactionManager, TransactionManager, UoWFuture};
+
 /// Application-wide event system.
 pub mod event_bus;
 pub use event_bus::{Event, SideEffectEventBus};
