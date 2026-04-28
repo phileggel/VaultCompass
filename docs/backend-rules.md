@@ -21,7 +21,7 @@ src-tauri/src/
 │   └── {domain}/
 │       ├── domain/       # Entities + repository traits
 │       ├── repository/   # SQLite implementations of repository traits
-│       ├── service.rs    # Business logic
+│       ├── service.rs    # Domain service — optional, only if it adds domain value beyond CRUD
 │       ├── api.rs        # Tauri command handlers
 │       └── mod.rs        # Public re-exports only
 ├── use_cases/        # Cross-context orchestrators (if needed)
@@ -85,14 +85,15 @@ tracing::info!(target: BACKEND, field = value, "message");
 
 ## UseCase - Service
 
-**B18** — Use cases MUST depend only on bounded context services. 
-They MUST NOT depend on repositories, domain entities' persistence concerns, or
-infrastructure types (sqlx::Pool, sqlx::Transaction, sqlx::query!, etc.).
-Reaching into a context's data goes through that context's service.
+**B18** — Use cases MAY depend on any domain abstraction: repository traits, domain entities,
+or bounded context services. They MUST NOT depend on infrastructure: concrete repository
+implementations, `sqlx::Pool`, `sqlx::Transaction`, `sqlx::query!`, or any other sqlx type.
 
-**B19** — Bounded context services MAY expose thin pass-through methods that
-delegate to a repository (e.g., existence checks). 
-They MUST NOT expose repository types or sqlx types in their public signature.
+**B19** — A bounded context service (`service.rs`) is a Domain Service. It MUST only exist if
+it encapsulates non-trivial domain logic: cross-entity invariants, event emission, or
+coordination that does not belong to a single entity. Trivial CRUD with no added logic does
+not justify a service — the use case should depend on the repository trait directly.
+A service MUST NOT expose repository types or sqlx types in its public signature.
 
 **B20** - If atomic transaction is needed, orchestrator or service MUST use UnitOfWork pattern.
 
