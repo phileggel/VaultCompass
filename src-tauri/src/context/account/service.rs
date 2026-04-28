@@ -271,6 +271,26 @@ impl AccountService {
     }
 
     // -------------------------------------------------------------------------
+    // Cross-BC guard queries (called by use cases)
+    // -------------------------------------------------------------------------
+
+    /// Returns true if any account holds a non-zero quantity of the given asset.
+    /// Used by the archive_asset use case to enforce OQ-6.
+    pub async fn has_active_holdings_for_asset(&self, asset_id: &str) -> Result<bool> {
+        self.holding_repo
+            .has_active_holdings_for_asset(asset_id)
+            .await
+    }
+
+    /// Returns true if any transaction references the given asset.
+    /// Used by the delete_asset use case to block hard-deletion when history exists.
+    pub async fn has_holding_entries_for_asset(&self, asset_id: &str) -> Result<bool> {
+        self.transaction_repo
+            .has_transactions_for_asset(asset_id)
+            .await
+    }
+
+    // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 

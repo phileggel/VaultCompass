@@ -89,7 +89,7 @@ consequence, invisible at the aggregate surface.
 
 ### Phase 6 — Collapse remaining use cases
 
-- `archive_asset/` → single `AssetService` call, collapse into `context/asset/api.rs`
+- `archive_asset/` → cross-BC guard: `AccountService.has_active_holdings_for_asset()` + `AssetService.archive()`. Keep as thin `use_cases/archive_asset/` orchestrator (B8: no cross-BC from api.rs). OQ-6 guard is preserved — archive is blocked if any account holds an active position.
 - `delete_asset/` → cross-BC guard: `AccountService.has_holding_entries_for_asset()` + `AssetService.delete()`. Keep as thin `use_cases/delete_asset/` orchestrator (B8: no cross-BC from api.rs)
 - `use_cases/account_details/` survives as legitimate cross-BC read use case
 

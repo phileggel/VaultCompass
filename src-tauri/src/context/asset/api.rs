@@ -4,8 +4,6 @@
 use crate::context::asset::domain::error::{
     AssetDomainError, AssetPriceDomainError, CategoryDomainError,
 };
-use crate::use_cases::archive_asset::{ArchiveAssetError, ArchiveAssetUseCase};
-use crate::use_cases::delete_asset::{DeleteAssetError, DeleteAssetUseCase};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -178,52 +176,6 @@ fn to_asset_price_error(e: anyhow::Error) -> AssetPriceCommandError {
     }
 }
 
-/// Typed error returned to the frontend for the archive_asset command.
-#[derive(Debug, Serialize, Type, thiserror::Error)]
-#[serde(tag = "code")]
-pub enum ArchiveAssetCommandError {
-    /// Asset still has non-zero holdings in at least one account.
-    #[error("Cannot archive an asset with active holdings")]
-    ActiveHoldings,
-    /// An unexpected server-side error occurred.
-    #[error("An unexpected error occurred")]
-    Unknown,
-}
-
-fn to_archive_error(e: anyhow::Error) -> ArchiveAssetCommandError {
-    if let Some(err) = e.downcast_ref::<ArchiveAssetError>() {
-        match err {
-            ArchiveAssetError::ActiveHoldings => ArchiveAssetCommandError::ActiveHoldings,
-        }
-    } else {
-        tracing::error!(err = ?e, "unexpected error in archive_asset command");
-        ArchiveAssetCommandError::Unknown
-    }
-}
-
-/// Typed error returned to the frontend for the delete_asset command.
-#[derive(Debug, Serialize, Type, thiserror::Error)]
-#[serde(tag = "code")]
-pub enum DeleteAssetCommandError {
-    /// At least one transaction references this asset.
-    #[error("Cannot delete an asset with existing transactions")]
-    ExistingTransactions,
-    /// An unexpected server-side error occurred.
-    #[error("An unexpected error occurred")]
-    Unknown,
-}
-
-fn to_delete_error(e: anyhow::Error) -> DeleteAssetCommandError {
-    if let Some(err) = e.downcast_ref::<DeleteAssetError>() {
-        match err {
-            DeleteAssetError::ExistingTransactions => DeleteAssetCommandError::ExistingTransactions,
-        }
-    } else {
-        tracing::error!(err = ?e, "unexpected error in delete_asset command");
-        DeleteAssetCommandError::Unknown
-    }
-}
-
 // --- Assets ---
 
 /// Fetches all active (non-archived) assets.
@@ -278,16 +230,6 @@ pub async fn update_asset(
         .map_err(to_asset_error)
 }
 
-/// Archives an asset, guarded against active holdings (R6, OQ-6).
-#[tauri::command]
-#[specta::specta]
-pub async fn archive_asset(
-    uc: State<'_, ArchiveAssetUseCase>,
-    id: String,
-) -> Result<(), ArchiveAssetCommandError> {
-    uc.archive_asset(&id).await.map_err(to_archive_error)
-}
-
 /// Unarchives an asset (R18).
 #[tauri::command]
 #[specta::specta]
@@ -300,16 +242,6 @@ pub async fn unarchive_asset(
         .unarchive_asset(&id)
         .await
         .map_err(to_asset_error)
-}
-
-/// Deletes an asset, guarded against existing transactions.
-#[tauri::command]
-#[specta::specta]
-pub async fn delete_asset(
-    uc: State<'_, DeleteAssetUseCase>,
-    id: String,
-) -> Result<(), DeleteAssetCommandError> {
-    uc.delete_asset(&id).await.map_err(to_delete_error)
 }
 
 // --- Categories ---

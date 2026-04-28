@@ -146,17 +146,14 @@ pub fn run() {
                     Arc::clone(&asset_service),
                 );
 
-                let holding_repo_for_archive = SqliteHoldingRepository::new(db.pool.clone());
                 let archive_asset_uc = ArchiveAssetUseCase::new(
+                    Arc::clone(&account_service),
                     Arc::clone(&asset_service),
-                    Arc::new(holding_repo_for_archive),
                 );
 
-                let transaction_repo_for_delete =
-                    SqliteTransactionRepository::new(db.pool.clone());
                 let delete_asset_uc = DeleteAssetUseCase::new(
+                    Arc::clone(&account_service),
                     Arc::clone(&asset_service),
-                    Arc::new(transaction_repo_for_delete),
                 );
 
                 app_handle.manage(account_details_uc);

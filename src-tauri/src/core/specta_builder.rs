@@ -1,7 +1,7 @@
 use crate::{
     context::{account, asset},
     core::{logger, Event},
-    use_cases::{account_details, update_checker},
+    use_cases::{account_details, archive_asset, delete_asset, update_checker},
 };
 
 /// create the Specta builder for standard and generate_bindings
@@ -14,8 +14,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<asset::AssetCommandError>()
         .typ::<asset::CategoryCommandError>()
         .typ::<asset::AssetPriceCommandError>()
-        .typ::<asset::ArchiveAssetCommandError>()
-        .typ::<asset::DeleteAssetCommandError>()
+        .typ::<archive_asset::ArchiveAssetCommandError>()
+        .typ::<delete_asset::DeleteAssetCommandError>()
         .typ::<account::Account>()
         .typ::<account::UpdateFrequency>()
         .typ::<account::Holding>()
@@ -35,9 +35,9 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset::get_assets_with_archived,
             asset::add_asset,
             asset::update_asset,
-            asset::archive_asset,
+            archive_asset::archive_asset,
             asset::unarchive_asset,
-            asset::delete_asset,
+            delete_asset::delete_asset,
             asset::get_categories,
             asset::add_category,
             asset::update_category,
