@@ -290,6 +290,15 @@ impl AccountService {
             .await
     }
 
+    /// Returns the count of active holdings and total transactions for an account (ACC-020).
+    pub async fn get_deletion_summary(&self, account_id: &str) -> Result<(u32, u32)> {
+        let (holding_count, transaction_count) = tokio::try_join!(
+            self.holding_repo.count_active_for_account(account_id),
+            self.transaction_repo.count_by_account(account_id),
+        )?;
+        Ok((holding_count, transaction_count))
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

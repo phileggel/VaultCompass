@@ -210,4 +210,16 @@ impl TransactionRepository for SqliteTransactionRepository {
 
         Ok(count > 0)
     }
+
+    async fn count_by_account(&self, account_id: &str) -> Result<u32> {
+        let count = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) as "count: i64" FROM transactions WHERE account_id = ?"#,
+            account_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .with_context(|| format!("Failed to count transactions for account {}", account_id))?;
+
+        Ok(count as u32)
+    }
 }

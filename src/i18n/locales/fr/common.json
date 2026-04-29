@@ -88,6 +88,7 @@
     "form_frequency_label": "Fréquence de mise à jour",
     "delete_confirm_title": "Supprimer le compte",
     "delete_confirm_message": "Supprimer le compte « {{name}} » ? Toutes ses positions et transactions associées seront définitivement supprimées.",
+    "delete_confirm_message_non_empty": "Le compte « {{name}} » contient {{holdingCount}} position(s) active(s) et {{transactionCount}} transaction(s). Toutes les données seront définitivement supprimées.",
     "frequency_automatic": "Automatique",
     "frequency_manual_day": "Quotidien",
     "frequency_manual_week": "Hebdomadaire",

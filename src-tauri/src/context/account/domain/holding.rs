@@ -121,4 +121,6 @@ pub trait HoldingRepository: Send + Sync {
     async fn delete_by_account_asset(&self, account_id: &str, asset_id: &str) -> Result<()>;
     /// Returns true if any holding for the given asset has quantity > 0 (OQ-6).
     async fn has_active_holdings_for_asset(&self, asset_id: &str) -> Result<bool>;
+    /// Counts holdings with quantity > 0 for a given account (ACC-020).
+    async fn count_active_for_account(&self, account_id: &str) -> Result<u32>;
 }

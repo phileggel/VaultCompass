@@ -21,6 +21,7 @@ use crate::core::event_bus::Event;
 use crate::core::{
     create_specta_builder, Database, SideEffectEventBus, SqlxTransactionManager, BACKEND,
 };
+use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
@@ -156,9 +157,13 @@ pub fn run() {
                     Arc::clone(&asset_service),
                 );
 
+                let account_deletion_uc =
+                    AccountDeletionUseCase::new(Arc::clone(&account_service));
+
                 app_handle.manage(account_details_uc);
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
+                app_handle.manage(account_deletion_uc);
 
                 let transaction_manager =
                     Arc::new(SqlxTransactionManager::new(db.pool.clone()));

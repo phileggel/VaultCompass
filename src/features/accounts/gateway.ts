@@ -1,6 +1,8 @@
 import {
   type Account,
   type AccountCommandError,
+  type AccountDeletionCommandError,
+  type AccountDeletionSummary,
   type CreateAccountDTO,
   commands,
   type Result,
@@ -26,5 +28,11 @@ export const accountGateway = {
 
   async deleteAccount(id: string): Promise<Result<null, AccountCommandError>> {
     return await commands.deleteAccount(id);
+  },
+
+  async getAccountDeletionSummary(
+    accountId: string,
+  ): Promise<Result<AccountDeletionSummary, AccountDeletionCommandError>> {
+    return await commands.getAccountDeletionSummary(accountId);
   },
 };

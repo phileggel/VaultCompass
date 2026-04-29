@@ -49,6 +49,19 @@ export function useAccounts() {
     }
   }, []);
 
+  const getAccountDeletionSummary = useCallback(async (id: string) => {
+    try {
+      const res = await accountGateway.getAccountDeletionSummary(id);
+      if (res.status === "ok") {
+        return { data: res.data, error: null };
+      }
+      return { data: null, error: `error.${res.error.code}` };
+    } catch (e) {
+      logger.error("Failed to fetch account deletion summary", { error: e });
+      return { data: null, error: String(e) };
+    }
+  }, []);
+
   return {
     accounts,
     loading,
@@ -57,5 +70,6 @@ export function useAccounts() {
     addAccount,
     updateAccount,
     deleteAccount,
+    getAccountDeletionSummary,
   };
 }

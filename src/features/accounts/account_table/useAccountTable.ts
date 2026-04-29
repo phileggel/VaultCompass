@@ -1,6 +1,6 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
-import type { Account } from "@/bindings";
+import type { Account, AccountDeletionSummary } from "@/bindings";
 import { FREQUENCY_ORDER } from "../shared/presenter";
 
 export type SortConfig = {
@@ -12,10 +12,15 @@ export function useAccountTable(
   accounts: Account[],
   searchTerm: string,
   deleteAccount: (id: string) => Promise<{ error: string | null }>,
+  getAccountDeletionSummary: (
+    id: string,
+  ) => Promise<{ data: AccountDeletionSummary | null; error: string | null }>,
   onAccountClick: (accountId: string) => void,
 ) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "name", direction: "asc" });
   const [deleteData, setDeleteData] = useState<{ id: string; name: string } | null>(null);
+  const [deleteSummary, setDeleteSummary] = useState<AccountDeletionSummary | null>(null);
+  const [fetchingSummaryFor, setFetchingSummaryFor] = useState<string | null>(null);
   const [editData, setEditData] = useState<Account | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -63,12 +68,31 @@ export function useAccountTable(
 
   const handleEditClose = useCallback(() => setEditData(null), []);
 
-  const handleDeleteClick = useCallback((e: MouseEvent, id: string, name: string) => {
-    e.stopPropagation();
-    setDeleteData({ id, name });
-  }, []);
+  const handleDeleteClick = useCallback(
+    async (e: MouseEvent, id: string, name: string) => {
+      e.stopPropagation();
+      setFetchingSummaryFor(id);
+      setActionError(null);
+      const result = await getAccountDeletionSummary(id);
+      setFetchingSummaryFor(null);
+      if (result.error) {
+        setActionError(result.error);
+        return;
+      }
+      if (!result.data) {
+        setActionError("error.Unknown");
+        return;
+      }
+      setDeleteSummary(result.data);
+      setDeleteData({ id, name });
+    },
+    [getAccountDeletionSummary],
+  );
 
-  const handleDeleteCancel = useCallback(() => setDeleteData(null), []);
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteData(null);
+    setDeleteSummary(null);
+  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteData) return;
@@ -78,6 +102,7 @@ export function useAccountTable(
       setActionError(result.error);
     } else {
       setDeleteData(null);
+      setDeleteSummary(null);
     }
   }, [deleteData, deleteAccount]);
 
@@ -118,7 +143,8 @@ export function useAccountTable(
     isEmpty,
     hasNoSearchResults,
     deleteData,
-    setDeleteData,
+    deleteSummary,
+    fetchingSummaryFor,
     editData,
     actionError,
     setActionError,

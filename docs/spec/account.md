@@ -154,7 +154,7 @@ Full-width table, default sort by Name ascending. Floating action button (bottom
 
 ## Open Questions
 
-**OQ-1 — ACC-020 implementation scope**: The `get_account_deletion_summary` command crosses `account/` and `transaction/` bounded contexts. Should this be a new use case under `use_cases/account_deletion/`, or is a lighter-weight approach (e.g., two separate context queries composed on the frontend) acceptable? Resolution needed before implementing ACC-019/ACC-020.
+**~~OQ-1~~ — ACC-020 implementation scope** _(resolved)_: New use case under `use_cases/account_deletion/` per ADR-003/ADR-004. After Phase 7, both holdings and transactions live in `context/account/` — `AccountService` is the only service injected. The use case is a thin read-only orchestrator that counts active holdings and transactions, then returns `AccountDeletionSummary`.
 
 ---
 

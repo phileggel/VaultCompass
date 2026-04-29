@@ -255,6 +255,8 @@ pub trait TransactionRepository: Send + Sync {
     async fn delete(&self, id: &str) -> Result<()>;
     /// Returns true if any transaction references this asset (across all accounts).
     async fn has_transactions_for_asset(&self, asset_id: &str) -> Result<bool>;
+    /// Counts all transactions for a given account (ACC-020).
+    async fn count_by_account(&self, account_id: &str) -> Result<u32>;
 }
 
 #[cfg(test)]

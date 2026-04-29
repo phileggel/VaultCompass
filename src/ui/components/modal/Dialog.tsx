@@ -114,13 +114,7 @@ export function ConfirmationDialog({
       <Button variant="ghost" onClick={onCancel}>
         {cancelLabel}
       </Button>
-      <Button
-        variant={variant === "danger" ? "danger" : "primary"}
-        onClick={() => {
-          onConfirm();
-          onCancel();
-        }}
-      >
+      <Button variant={variant === "danger" ? "danger" : "primary"} onClick={onConfirm}>
         {confirmLabel}
       </Button>
     </div>

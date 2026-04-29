@@ -19,7 +19,8 @@ interface AccountTableProps {
 
 export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) {
   const { t } = useTranslation();
-  const { accounts, loading, fetchError, fetchAccounts, deleteAccount } = useAccounts();
+  const { accounts, loading, fetchError, fetchAccounts, deleteAccount, getAccountDeletionSummary } =
+    useAccounts();
 
   useEffect(() => {
     logger.info("[AccountTable] mounted");
@@ -39,11 +40,19 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     isEmpty,
     hasNoSearchResults,
     deleteData,
+    deleteSummary,
+    fetchingSummaryFor,
     editData,
     actionError,
     setActionError,
     handleDeleteConfirm,
-  } = useAccountTable(accounts, searchTerm, deleteAccount, onAccountClick);
+  } = useAccountTable(
+    accounts,
+    searchTerm,
+    deleteAccount,
+    getAccountDeletionSummary,
+    onAccountClick,
+  );
 
   return (
     <div className="m3-table-container flex-1">
@@ -186,6 +195,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       icon={<Trash2 size={16} />}
                       variant="danger"
                       aria-label={t("action.delete")}
+                      disabled={fetchingSummaryFor === account.id}
                       onClick={(e) => handleDeleteClick(e, account.id, account.name)}
                     />
                   </div>
@@ -198,13 +208,28 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
 
       <EditAccountModal isOpen={!!editData} onClose={handleEditClose} account={editData} />
 
-      {/* R16 — standard confirmation dialog for delete */}
+      {/* ACC-018 — standard confirmation dialog for accounts with no holdings */}
       <ConfirmationDialog
-        isOpen={!!deleteData}
+        isOpen={!!deleteData && (deleteSummary?.holding_count ?? 0) === 0}
         onCancel={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title={t("account.delete_confirm_title")}
         message={t("account.delete_confirm_message", { name: deleteData?.name ?? "" })}
+        confirmLabel={t("action.delete")}
+        cancelLabel={t("action.cancel")}
+        variant="danger"
+      />
+      {/* ACC-019 — reinforced confirmation dialog for accounts with active holdings */}
+      <ConfirmationDialog
+        isOpen={!!deleteData && (deleteSummary?.holding_count ?? 0) > 0}
+        onCancel={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title={t("account.delete_confirm_title")}
+        message={t("account.delete_confirm_message_non_empty", {
+          name: deleteData?.name ?? "",
+          holdingCount: deleteSummary?.holding_count ?? 0,
+          transactionCount: deleteSummary?.transaction_count ?? 0,
+        })}
         confirmLabel={t("action.delete")}
         cancelLabel={t("action.cancel")}
         variant="danger"

@@ -14,7 +14,7 @@
 | `add_account`                  | `CreateAccountDTO { name: String, currency: String, update_frequency: UpdateFrequency }`             | `Account`                | `NameEmpty (ACC-002)`, `NameAlreadyExists (ACC-003)`, `InvalidCurrency (TRX-021)`                                           |
 | `update_account`               | `UpdateAccountDTO { id: String, name: String, currency: String, update_frequency: UpdateFrequency }` | `Account`                | `NameEmpty (ACC-002)`, `NameAlreadyExists (ACC-003)`, `InvalidCurrency (TRX-021)`                                           |
 | `delete_account`               | `id: String`                                                                                         | `()`                     | `DbError (ACC-005, ACC-006)` _(no NotFound — plain DELETE, silent on missing row)_                                          |
-| `get_account_deletion_summary` | `account_id: String`                                                                                 | `AccountDeletionSummary` | `NotFound (ACC-020)` _(not yet implemented — ACC-020 is planned, see spec OQ-1; must live in `use_cases/` per ADR-003/004)_ |
+| `get_account_deletion_summary` | `account_id: String`                                                                                 | `AccountDeletionSummary` | `Unknown` _(read-only; counts are 0 if account has no data — no NotFound raised)_                                           |
 
 ## Shared Types
 

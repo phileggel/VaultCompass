@@ -88,6 +88,7 @@
     "form_frequency_label": "Update frequency",
     "delete_confirm_title": "Delete account",
     "delete_confirm_message": "Delete account \"{{name}}\"? All associated holdings and transactions will be permanently deleted.",
+    "delete_confirm_message_non_empty": "Account \"{{name}}\" contains {{holdingCount}} active holding(s) and {{transactionCount}} transaction(s). All data will be permanently deleted.",
     "frequency_automatic": "Automatic",
     "frequency_manual_day": "Daily",
     "frequency_manual_week": "Weekly",

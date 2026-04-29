@@ -3,6 +3,8 @@
 //! Cross-cutting application use cases that orchestrate multiple bounded
 //! contexts or platform capabilities.
 
+/// Account Deletion: pre-deletion summary of holdings and transactions (ACC-020).
+pub mod account_deletion;
 /// Account Details: cross-context read of holdings + asset metadata (ACD feature).
 pub mod account_details;
 /// Archive asset: guards archiving against active holdings across bounded contexts (OQ-6).

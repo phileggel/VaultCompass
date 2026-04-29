@@ -1,7 +1,7 @@
 use crate::{
     context::{account, asset},
     core::{logger, Event},
-    use_cases::{account_details, archive_asset, delete_asset, update_checker},
+    use_cases::{account_deletion, account_details, archive_asset, delete_asset, update_checker},
 };
 
 /// create the Specta builder for standard and generate_bindings
@@ -30,6 +30,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
         .typ::<account_details::AccountDetailsCommandError>()
+        .typ::<account_deletion::AccountDeletionSummary>()
+        .typ::<account_deletion::AccountDeletionCommandError>()
         .commands(tauri_specta::collect_commands![
             asset::get_assets,
             asset::get_assets_with_archived,
@@ -57,7 +59,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::correct_transaction,
             account::cancel_transaction,
             account::get_transactions,
-            account_details::get_account_details
+            account_details::get_account_details,
+            account_deletion::get_account_deletion_summary
         ])
         .events(tauri_specta::collect_events![Event])
 }

@@ -314,6 +314,20 @@ async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsRespon
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Returns the number of active holdings and transactions for an account (ACC-020).
+ * 
+ * Used by the frontend to decide whether to show the standard or reinforced
+ * delete confirmation dialog (ACC-018 vs ACC-019).
+ */
+async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDeletionSummary, AccountDeletionCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_account_deletion_summary", { accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -377,6 +391,26 @@ export type AccountCommandError =
  * An unexpected server-side error occurred.
  */
 { code: "Unknown" }
+/**
+ * Typed error returned to the frontend for the get_account_deletion_summary command.
+ */
+export type AccountDeletionCommandError = 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
+ * Pre-deletion counts for an account (ACC-020).
+ */
+export type AccountDeletionSummary = { 
+/**
+ * Number of active holdings (quantity > 0) in the account.
+ */
+holding_count: number; 
+/**
+ * Total number of transactions associated with the account.
+ */
+transaction_count: number }
 /**
  * Typed error returned to the frontend for the get_account_details command.
  */

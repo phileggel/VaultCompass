@@ -73,6 +73,14 @@ Orchestrates a cross-context read of account + asset data for the Account Detail
 - Frontend `useAccountDetails` subscribes to `TransactionUpdated`, `AssetUpdated`, and `AssetPriceUpdated` events to trigger re-fetch (MKT-036)
 - `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
 
+#### Account Deletion (`use_cases/account_deletion/`)
+
+Pre-deletion read: returns holding and transaction counts for an account (ACC-020).
+
+- `orchestrator.rs` — `AccountDeletionUseCase` injects `Arc<AccountService>`; `get_summary(account_id)` calls `AccountService.get_deletion_summary()` and returns `AccountDeletionSummary { holding_count: u32, transaction_count: u32 }`
+- `api.rs` — `get_account_deletion_summary(account_id: String) -> Result<AccountDeletionSummary, AccountDeletionCommandError>` Tauri command; error variants: `Unknown`
+- Used by the frontend to branch between ACC-018 (standard dialog, no holdings) and ACC-019 (reinforced dialog with counts)
+
 #### Archive Asset (`use_cases/archive_asset/`)
 
 Cross-BC guard: checks active holdings before archiving an asset (OQ-6).
@@ -295,11 +303,11 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Accounts (`features/accounts/`)
 
-- Gateway: `get_accounts`, `add_account`, `update_account`, `delete_account`
+- Gateway: `get_accounts`, `add_account`, `update_account`, `delete_account`, `getAccountDeletionSummary(accountId)` (ACC-020 — pre-deletion holding+tx counts)
 - Sub-features: `account_table/` (`AccountTable`, `useAccountTable` — sort/filter/isEmpty/hasNoSearchResults), `add_account/` (`AddAccountModal`, `useAddAccount` — FAB modal pattern), `edit_account_modal/` (`EditAccountModal`, `useEditAccountModal`)
 - Shared: `shared/presenter.ts` — `FREQUENCY_ORDER` (logical enum sort order), `FREQUENCY_I18N_KEYS`; `shared/validateAccount.ts` — `validateAccountName()`
-- UX: FAB triggers `AddAccountModal`; table rows show Edit/Delete `IconButton`s; inline errors on backend rejection; loading/error/retry states; empty vs no-search-results states distinct
-- Spec: `docs/account.md` (R1–R16; R17 deferred pending Holding feature; R6 deferred pending Transaction feature)
+- UX: FAB triggers `AddAccountModal`; table rows show Edit/Delete `IconButton`s; inline errors on backend rejection; loading/error/retry states; empty vs no-search-results states distinct. Delete button fetches `AccountDeletionSummary` on click: empty account → standard dialog (ACC-018); account with holdings → reinforced dialog with counts (ACC-019)
+- Spec: `docs/spec/account.md` (ACC-001–ACC-020)
 
 #### Transactions (`features/transactions/`)
 
