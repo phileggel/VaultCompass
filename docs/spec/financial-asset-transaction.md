@@ -182,6 +182,6 @@ _`transaction_type` is not shown in the form. It is hardcoded to `Purchase` unti
 
 **OQ-5 — ~~Archived asset behaviour~~** _(resolved)_: Auto-unarchive with user confirmation. Converted to TRX-028 (backend atomicity) and TRX-029 (frontend confirmation dialog).
 
-**OQ-6 — Asset archiving eligibility rule** _(deferred — asset spec)_: An asset should only be archivable if its `Holding.quantity` is zero across all accounts. Out of scope for this spec; requires a new rule in the asset spec (`docs/asset.md`) once the `Holding` entity is available.
+**~~OQ-6~~ — Asset archiving eligibility rule** _(resolved)_: Implemented in `use_cases/archive_asset/orchestrator.rs` — `ArchiveAssetUseCase` calls `AccountService.has_active_holdings_for_asset()` and returns `ArchiveAssetError::ActiveHoldings` if any active holding exists. Backend rule enforced and covered by `archive_rejected_when_active_holdings` test.
 
 **OQ-7 — ~~Edit/delete workflow diagrams~~** _(deferred)_: Diagrams for the edit and delete paths are out of scope for the initial implementation. To be added in a future spec update alongside the `Sell` transaction type.

@@ -224,11 +224,11 @@ UPDATE holdings SET
 
 ## Open Questions
 
-**OQ-ACD-003 — last_sold_date display format**: The `last_sold_date` ISO string from the backend should be formatted as a locale-aware short date in the frontend presenter (e.g. "25 Apr 2026"). The exact format is left to the presenter implementation; consistency with other date displays in the app is required.
+**~~OQ-ACD-003~~ — last_sold_date display format** _(resolved)_: Implemented via `formatIsoDate()` in `ClosedHoldingRow.tsx` — uses `toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })`, consistent with other date displays in the app.
 
-**OQ-ACD-004 — CTA in "all closed + closed section visible" state**: ACD-035 governs the CTA when there are no active holdings. When `closed_holdings` is non-empty and active holdings are empty, ACD-035 still fires (the "Add Transaction" button appears). ACD-050 confirms the closed section renders. No ambiguity — ACD-035 and ACD-050 compose correctly without conflict.
+**~~OQ-ACD-004~~ — CTA in "all closed + closed section visible" state** _(resolved)_: ACD-035 governs the CTA when there are no active holdings. When `closed_holdings` is non-empty and active holdings are empty, ACD-035 still fires (the "Add Transaction" button appears). ACD-050 confirms the closed section renders. No ambiguity — ACD-035 and ACD-050 compose correctly without conflict.
 
-**OQ-ACD-005 — ARCHITECTURE.md update required**: `ARCHITECTURE.md` currently describes the old `pnl_map`/`TransactionService` orchestration path, omits `ClosedHoldingDetail`, and omits `closed_holdings` from `AccountDetailsResponse`. It must be updated as part of implementation (workflow step 10) to reflect ACD-043–ACD-050.
+**~~OQ-ACD-005~~ — ARCHITECTURE.md update required** _(resolved)_: `ARCHITECTURE.md` updated — `ClosedHoldingDetail` and `closed_holdings` documented at lines 70–71; `pnl_map`/`TransactionService` references removed.
 
 **~~ADR-REQUIRED~~ — Multi-context read orchestration** _(resolved)_: Orchestration strategy and dependency injection boundary are both decided.
 
