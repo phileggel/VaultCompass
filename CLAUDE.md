@@ -57,9 +57,10 @@ On top of the standard kit workflow, this project requires:
 - Dev: `./scripts/start-app.sh`
 - Quality: `just check-full` (full check) | `just check` (fast lint+format only)
 - Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-all` (both)
-- Types: `just generate-types` (Sync Rust to TS via Specta)
-- Database schema update: `just clean-db`
+- Types: `just generate-types` (Sync Rust to TS via Specta) | `just prepare-sqlx` (after schema/query changes)
+- Database: `just migrate` (run migrations) | `just clean-db` (⚠️ destructive reset)
 - Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions)
+- Code audit: `/prune` (dead code, verbose patterns, KISS review)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
 - After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
 

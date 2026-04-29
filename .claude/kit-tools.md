@@ -17,11 +17,11 @@ tauri
 Absent file = generic agents only — not an error. Python CLIs, Lua mods, and other stacks
 use the generic layer and manage quality agents locally.
 
-| Profile | Agents | Scripts              | Justfile   | Status         |
-| ------- | ------ | -------------------- | ---------- | -------------- |
-| `tauri` | 7      | check.py, release.py | tauri.just | ✅ complete    |
-| `web`   | 7      | check.py, release.py | web.just   | 🚧 planned     |
-| (none)  | —      | —                    | —          | ✅ first-class |
+| Profile | Stack                        | Agents | Scripts              | Justfile   | Status         |
+| ------- | ---------------------------- | ------ | -------------------- | ---------- | -------------- |
+| `tauri` | Tauri 2 + React 19 + Rust    | 7      | check.py, release.py | tauri.just | ✅ complete    |
+| `web`   | Axum + React 19 + PostgreSQL | 7      | check.py, release.py | web.just   | ✅ complete    |
+| (none)  | any                          | —      | —                    | —          | ✅ first-class |
 
 ---
 
@@ -98,6 +98,7 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 | `spec-diff`    | `/spec-diff`     | Diffs a spec against an earlier git ref (default: last commit touching the matching plan file); flags stale plan tasks and code/test references          |
 | `contract`     | `/contract`      | Derives or updates `docs/contracts/{domain}-contract.md` from a validated spec; upsert-aware, human-approved                                             |
 | `kit-discover` | `/kit-discover`  | Cross-references CLAUDE.md against `kit-tools.md` and `kit-version.md`; surfaces drift, gaps, and redundancies and proposes a patch (never auto-applied) |
+| `prune`        | `/prune [path]`  | Audit the project for dead code, pass-through methods, verbose patterns, and duplicate definitions; coverage report mandatory, read-only output          |
 
 ---
 
@@ -121,7 +122,33 @@ Activate with: `git config core.hooksPath .githooks`
 
 ---
 
+## Web Profile Agents (`web` profile only)
+
+### Code Review Agents
+
+| Agent                  | Trigger                                                               | Description                                                                                                                                               | Status      |
+| ---------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `reviewer`             | Any `.rs`, `.ts`, or `.tsx` modified                                  | Architecture reviewer: handler/service layering, API gateway encapsulation, data flow direction, dead code, English-only                                  | ✅ complete |
+| `reviewer-backend`     | Any `.rs` modified                                                    | Rust/Axum quality: anyhow error handling, no `unwrap()` in handlers, Clippy, Axum extractors, `IntoResponse`, async correctness, `sqlx::test` conventions | ✅ complete |
+| `reviewer-frontend`    | Any `.ts` / `.tsx` modified                                           | React/TS quality + UX: API gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, UX completeness, accessibility   | ✅ complete |
+| `reviewer-sql`         | Any `server/migrations/` file modified or added                       | SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, PostgreSQL type conventions, primary key convention, NOT NULL                 | ✅ complete |
+| `test-writer-backend`  | After contract-reviewer, before backend impl                          | Writes all failing Rust tests from the domain contract using `#[sqlx::test]` + `PgPool`; confirms red via cargo test                                      | ✅ complete |
+| `test-writer-frontend` | After backend commit, before frontend impl                            | Writes all failing Vitest tests from the domain contract; mocks the API module; confirms red via vitest                                                   | ✅ complete |
+| `maintainer`           | Any workflow, config, or docker-compose file modified; before release | CI/config/compose correctness, security, version sync; delegates dependency audit to `/dep-audit`                                                         | ✅ complete |
+
+---
+
 ## Scripts (`tauri` profile)
+
+| Script            | Command                           | Description                                                     |
+| ----------------- | --------------------------------- | --------------------------------------------------------------- |
+| `check.py`        | `python3 scripts/check.py`        | Full quality check: lint, format, tests, build                  |
+| `check.py --fast` | `python3 scripts/check.py --fast` | Fast check: lint + format only (used by pre-commit hook)        |
+| `release.py`      | `python3 scripts/release.py`      | Interactive release manager: bumps version, tags, and publishes |
+
+---
+
+## Scripts (`web` profile)
 
 | Script            | Command                           | Description                                                     |
 | ----------------- | --------------------------------- | --------------------------------------------------------------- |
@@ -153,3 +180,11 @@ Activate with: `git config core.hooksPath .githooks`
 | `generate-types` | `just generate-types` | Regenerate Specta TypeScript bindings after adding or changing Tauri commands (project-configurable) |
 | `prepare-sqlx`   | `just prepare-sqlx`   | Regenerate SQLx offline query cache after schema or query changes                                    |
 | `clean-db`       | `just clean-db`       | **Destructive** — deletes local database and recreates schema                                        |
+
+### Web profile recipes (`web.just`)
+
+| Recipe         | Command             | Description                                                       |
+| -------------- | ------------------- | ----------------------------------------------------------------- |
+| `migrate`      | `just migrate`      | Run pending SQLx database migrations                              |
+| `db-reset`     | `just db-reset`     | **Destructive** — drop and recreate the local database            |
+| `prepare-sqlx` | `just prepare-sqlx` | Regenerate SQLx offline query cache after schema or query changes |

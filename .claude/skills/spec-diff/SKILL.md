@@ -35,15 +35,12 @@ Not a commit-time tool. At edit time you remember what you changed; this skill e
 
 The saved compact summary IS the deliverable — compute its path before reading any spec:
 
-```bash
-mkdir -p tmp
-DATE=$(date +%Y-%m-%d)
-i=1
-while [ -f "tmp/spec-diff-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
-echo "tmp/spec-diff-${DATE}-$(printf '%02d' $i).md"
-```
+1. Run `mkdir -p tmp` (Bash — single simple command).
+2. Run `date +%Y-%m-%d` (Bash) to get DATE.
+3. Use `Glob("tmp/spec-diff-*.md")` to list existing reports; find the highest `{DATE}-NN` index for today in-context and increment it, or use `01` if none exist for today.
+4. Set `REPORT_PATH = tmp/spec-diff-{DATE}-{NN}.md`.
 
-Remember the printed path as `REPORT_PATH`.
+Remember the derived path as `REPORT_PATH`.
 
 ### Step 2 — Locate the target spec
 
@@ -61,10 +58,12 @@ Argument resolution:
 
 - If the user passed a ref (commit SHA, tag, branch) → use it.
 - Else, derive the default from the matching plan file:
-  ```bash
-  PLAN_FILE=$(ls docs/plan/*-plan.md 2>/dev/null | grep -F "$(basename {SPEC_PATH} .md)" | head -1)
-  REF=$(git log -1 --format=%H -- "$PLAN_FILE" 2>/dev/null)
-  ```
+  - Use `Glob("docs/plan/*-plan.md")` to list plan files; in-context, select the one whose basename contains the spec's stem (e.g. if `SPEC_PATH` is `docs/spec/refund.md`, find the plan file containing `refund`). Set this as `PLAN_FILE`.
+  - If a match is found, run:
+    ```bash
+    git log -1 --format=%H -- {PLAN_FILE}
+    ```
+    to get `REF`.
 - If no plan file matches OR the plan file has no git history → fall back to `HEAD` and note the fallback in the report header.
 
 ### Step 4 — Extract TRIGRAM-NNN rules from both versions

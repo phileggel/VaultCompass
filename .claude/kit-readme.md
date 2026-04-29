@@ -16,11 +16,11 @@ Declare your stack in `.claude/kit-profile` (plain text, one line):
 tauri
 ```
 
-| Profile | What you get                                                                              |
-| ------- | ----------------------------------------------------------------------------------------- |
-| `tauri` | Generic layer + 7 Tauri quality agents + `check.py` / `release.py` + `tauri.just` recipes |
-| `web`   | 🚧 planned — generic layer + Axum/React/PostgreSQL agents                                 |
-| (none)  | Generic layer only — process agents, skills, hooks. Manage quality agents locally.        |
+| Profile | Stack                        | What you get                                                                        |
+| ------- | ---------------------------- | ----------------------------------------------------------------------------------- |
+| `tauri` | Tauri 2 + React 19 + Rust    | Generic layer + 7 quality agents + `check.py` / `release.py` + `tauri.just` recipes |
+| `web`   | Axum + React 19 + PostgreSQL | Generic layer + 7 quality agents + `check.py` / `release.py` + `web.just` recipes   |
+| (none)  | any                          | Generic layer only — process agents, skills, hooks. Manage quality agents locally.  |
 
 **No profile is not an error.** Lua mods, Python CLIs, and any stack the kit doesn't cover yet use the generic layer and add their own local quality agents in `.claude/agents/`.
 
@@ -66,10 +66,8 @@ _Use for: New features, new business logic, significant UI changes, or complex r
 3. Implement backend — minimal: make failing tests pass, confirm green.
 4. Run `just format` (rustfmt + clippy --fix).
 5. Run **`reviewer-backend`** agent → fix issues.
-6. Run `just generate-types` → updates `src/bindings.ts`.
-7. Fix TypeScript compilation errors from new bindings only (no UI work).
-8. Run `just check` → TypeScript clean.
-9. **`/smart-commit`**: backend layer. [HARD GATE]
+6. _(Tauri only)_ Run `just generate-types` → updates `src/bindings.ts`. Fix TypeScript compilation errors from new bindings only (no UI work). Run `just check` → TypeScript clean.
+7. **`/smart-commit`**: backend layer. [HARD GATE]
 
 **Phase 3: Frontend layer**
 
@@ -79,7 +77,7 @@ _Use for: New features, new business logic, significant UI changes, or complex r
 4. Run **`reviewer-frontend`** agent → fix issues.
 5. **`/smart-commit`**: frontend layer. [HARD GATE]
 
-**Phase 4: Review & Closure** _(Tauri profile agents)_
+**Phase 4: Review & Closure**
 
 1. Run **`reviewer`** agent (always) + **`reviewer-sql`** (if migrations) + **`maintainer`** (if project config files changed).
 2. Run **`i18n-checker`** if UI text changed.

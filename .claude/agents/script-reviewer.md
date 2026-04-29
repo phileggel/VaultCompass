@@ -14,14 +14,10 @@ You are a senior Bash and Python scripting expert reviewing developer tooling sc
    - If invoked for a general audit: scan all files in `scripts/` and `.githooks/`
 
 2. **Compute REPORT_PATH** (mandatory — the saved compact summary IS the deliverable):
-
-   ```bash
-   mkdir -p tmp
-   DATE=$(date +%Y-%m-%d)
-   i=1
-   while [ -f "tmp/script-reviewer-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
-   echo "tmp/script-reviewer-${DATE}-$(printf '%02d' $i).md"
-   ```
+   1. Run `mkdir -p tmp` (Bash — single simple command).
+   2. Run `date +%Y-%m-%d` (Bash) to get DATE.
+   3. Use `Glob("tmp/script-reviewer-*.md")` to list existing reports; find the highest `{DATE}-NN` index for today in-context and increment it, or use `01` if none exist for today.
+   4. Set `REPORT_PATH = tmp/script-reviewer-{DATE}-{NN}.md`.
 
    Remember the printed path as `REPORT_PATH`.
 

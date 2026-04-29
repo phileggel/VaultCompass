@@ -21,13 +21,10 @@ The user normally passes the spec path explicitly. If no document is specified, 
 
 The saved compact summary IS the deliverable — compute its path before reading the spec:
 
-```bash
-mkdir -p tmp
-DATE=$(date +%Y-%m-%d)
-i=1
-while [ -f "tmp/spec-checker-${DATE}-$(printf '%02d' $i).md" ]; do i=$((i+1)); done
-echo "tmp/spec-checker-${DATE}-$(printf '%02d' $i).md"
-```
+1. Run `mkdir -p tmp` (Bash — single simple command).
+2. Run `date +%Y-%m-%d` (Bash) to get DATE.
+3. Use `Glob("tmp/spec-checker-*.md")` to list existing reports; find the highest `{DATE}-NN` index for today in-context and increment it, or use `01` if none exist for today.
+4. Set `REPORT_PATH = tmp/spec-checker-{DATE}-{NN}.md`.
 
 Remember the printed path as `REPORT_PATH`.
 
