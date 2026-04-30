@@ -2,6 +2,7 @@
 
 > **For Claude Code** — kept up to date after each implementation (workflow step 10).
 > Rules: [docs/backend-rules.md](docs/backend-rules.md) | [docs/frontend-rules.md](docs/frontend-rules.md)
+> Ubiquitous Language: [docs/ubiquitous-language.md](docs/ubiquitous-language.md) — canonical terms; verify usage in identifiers, comments, and error messages.
 > Feature specs: [docs/](docs/)
 
 ---
