@@ -2,10 +2,12 @@ use super::error::AssetPriceDomainError;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// A manually recorded market price for a financial asset on a specific date.
 /// Owned by the `asset` bounded context (MKT spec).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct AssetPrice {
     /// ID of the asset whose market price this record describes.
     pub asset_id: String,
@@ -16,6 +18,9 @@ pub struct AssetPrice {
 }
 
 impl AssetPrice {
+    // `with_id()` is not applicable: AssetPrice has no surrogate ID.
+    // Its identity is the composite natural key (asset_id, date).
+
     /// Creates a new AssetPrice after validating price > 0 (MKT-021) and
     /// date is well-formed ISO 8601 and not in the future (MKT-022).
     pub fn new(asset_id: String, date: String, price: i64) -> Result<Self> {
@@ -53,6 +58,20 @@ pub trait AssetPriceRepository: Send + Sync {
     async fn upsert(&self, price: AssetPrice) -> Result<()>;
     /// Returns the most recently dated price for the given asset, or None (MKT-031).
     async fn get_latest(&self, asset_id: &str) -> Result<Option<AssetPrice>>;
+    /// Returns all recorded prices for the given asset, ordered by date descending (MKT-072).
+    async fn get_all_for_asset(&self, asset_id: &str) -> Result<Vec<AssetPrice>>;
+    /// Returns the price record for the given (asset_id, date) pair, or None (MKT-083).
+    async fn get_by_asset_and_date(&self, asset_id: &str, date: &str)
+        -> Result<Option<AssetPrice>>;
+    /// Deletes the price record for the given (asset_id, date) pair; no-op if absent (MKT-090).
+    async fn delete(&self, asset_id: &str, date: &str) -> Result<()>;
+    /// Atomically deletes the record at `original_date` and upserts `new_price` (MKT-084).
+    async fn replace_atomic(
+        &self,
+        asset_id: &str,
+        original_date: &str,
+        new_price: AssetPrice,
+    ) -> Result<()>;
 }
 
 #[cfg(test)]

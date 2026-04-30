@@ -28,11 +28,15 @@ pub enum AssetPriceDomainError {
     #[error("Price must be strictly positive")]
     NotPositive,
     /// Price value is not a finite floating-point number.
+    /// Emitted by the service boundary before micro conversion; `AssetPrice::new()` never produces this.
     #[error("Price must be a finite number")]
     NonFinite,
     /// Price date is in the future.
     #[error("Date cannot be in the future")]
     DateInFuture,
+    /// No price record exists for the given (asset_id, date) pair.
+    #[error("Asset price not found")]
+    NotFound,
 }
 
 /// Typed errors for category domain validation.

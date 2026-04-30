@@ -6,6 +6,7 @@ import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
+import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
@@ -23,6 +24,7 @@ export function AccountDetailsView() {
   const [buyTarget, setBuyTarget] = useState<ModalTarget | null>(null);
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
   const [priceTarget, setPriceTarget] = useState<HoldingDetail | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<HoldingDetail | null>(null);
 
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
@@ -38,6 +40,7 @@ export function AccountDetailsView() {
   const handleBuyClose = useCallback(() => setBuyTarget(null), []);
   const handleSellClose = useCallback(() => setSellTarget(null), []);
   const handlePriceClose = useCallback(() => setPriceTarget(null), []);
+  const handleHistoryClose = useCallback(() => setHistoryTarget(null), []);
 
   const handleBuySuccess = useCallback(() => {
     setBuyTarget(null);
@@ -59,6 +62,15 @@ export function AccountDetailsView() {
     (assetId: string) => {
       const holding = holdingDetails.find((h) => h.asset_id === assetId);
       if (holding) setPriceTarget(holding);
+    },
+    [holdingDetails],
+  );
+
+  // MKT-072 — open price history modal for a holding
+  const handlePriceHistory = useCallback(
+    (assetId: string) => {
+      const holding = holdingDetails.find((h) => h.asset_id === assetId);
+      if (holding) setHistoryTarget(holding);
     },
     [holdingDetails],
   );
@@ -194,6 +206,7 @@ export function AccountDetailsView() {
                           onBuy={setBuyTarget}
                           onSell={setSellTarget}
                           onEnterPrice={handleEnterPrice}
+                          onPriceHistory={handlePriceHistory}
                         />
                       ))}
                     </tbody>
@@ -292,6 +305,11 @@ export function AccountDetailsView() {
           holding={priceTarget}
           onSubmitSuccess={handlePriceSuccess}
         />
+      )}
+
+      {/* MKT-072 — Price history modal */}
+      {historyTarget && (
+        <PriceHistoryModal isOpen onClose={handleHistoryClose} holding={historyTarget} />
       )}
     </div>
   );

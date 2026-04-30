@@ -13,7 +13,10 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<asset::AssetClass>()
         .typ::<asset::AssetCommandError>()
         .typ::<asset::CategoryCommandError>()
+        .typ::<asset::AssetPrice>()
         .typ::<asset::AssetPriceCommandError>()
+        .typ::<asset::UpdateAssetPriceCommandError>()
+        .typ::<asset::DeleteAssetPriceCommandError>()
         .typ::<archive_asset::ArchiveAssetCommandError>()
         .typ::<delete_asset::DeleteAssetCommandError>()
         .typ::<account::Account>()
@@ -45,6 +48,9 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset::update_category,
             asset::delete_category,
             asset::record_asset_price,
+            asset::get_asset_prices,
+            asset::update_asset_price,
+            asset::delete_asset_price,
             account::get_accounts,
             account::add_account,
             account::update_account,

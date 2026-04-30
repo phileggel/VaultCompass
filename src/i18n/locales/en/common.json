@@ -247,7 +247,26 @@
     "column_performance_pct": "Performance",
     "total_unrealized_pnl": "Total Unrealized P&L",
     "price_as_of": "as of {{date}}",
-    "action_enter_price": "Enter price"
+    "action_enter_price": "Enter price",
+    "action_price_history": "Price history"
+  },
+  "price_history": {
+    "title": "Price History",
+    "empty": "No prices recorded",
+    "column_date": "Date",
+    "column_price": "Price",
+    "column_actions": "Actions",
+    "action_edit": "Edit price",
+    "action_delete": "Delete price",
+    "edit_title": "Edit Price",
+    "delete_confirm_title": "Delete Price",
+    "delete_confirm_message": "Delete the price recorded on {{date}}? This action cannot be undone.",
+    "save": "Save",
+    "add_price": "Add price",
+    "edit_success": "Price updated",
+    "delete_success": "Price removed",
+    "fetch_error": "Failed to load price history",
+    "delete_error": "Failed to delete price"
   },
   "price_modal": {
     "title": "Enter Market Price",

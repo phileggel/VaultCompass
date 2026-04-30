@@ -142,6 +142,39 @@ async recordAssetPrice(assetId: string, date: string, price: number) : Promise<R
 }
 },
 /**
+ * Returns all recorded prices for the given asset, sorted date descending (MKT-072).
+ */
+async getAssetPrices(assetId: string) : Promise<Result<AssetPrice[], AssetPriceCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_asset_prices", { assetId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Updates the date and/or price of an existing price record (MKT-083/084).
+ */
+async updateAssetPrice(assetId: string, originalDate: string, newDate: string, newPrice: number) : Promise<Result<null, UpdateAssetPriceCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_asset_price", { assetId, originalDate, newDate, newPrice }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes a specific price record by (asset_id, date) (MKT-090).
+ */
+async deleteAssetPrice(assetId: string, date: string) : Promise<Result<null, DeleteAssetPriceCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_asset_price", { assetId, date }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Retrieves all accounts.
  */
 async getAccounts() : Promise<Result<Account[], AccountCommandError>> {
@@ -588,9 +621,30 @@ export type AssetCommandError =
  */
 { code: "Unknown" }
 /**
+ * A manually recorded market price for a financial asset on a specific date.
+ * Owned by the `asset` bounded context (MKT spec).
+ */
+export type AssetPrice = { 
+/**
+ * ID of the asset whose market price this record describes.
+ */
+asset_id: string; 
+/**
+ * ISO 8601 calendar date of the price observation (e.g. "2026-04-26").
+ */
+date: string; 
+/**
+ * Market price per unit in the asset's native currency (i64 micro-units, ADR-001).
+ */
+price: number }
+/**
  * Typed error returned to the frontend for the record_asset_price command.
  */
 export type AssetPriceCommandError = 
+/**
+ * The asset referenced in the command does not exist (MKT-043).
+ */
+{ code: "AssetNotFound" } | 
 /**
  * Price must be strictly positive.
  */
@@ -774,6 +828,18 @@ export type DeleteAssetCommandError =
 { code: "ExistingTransactions" } | 
 /**
  * No asset exists with the requested ID.
+ */
+{ code: "NotFound" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
+ * Typed error returned to the frontend for the delete_asset_price command.
+ */
+export type DeleteAssetPriceCommandError = 
+/**
+ * No price record exists for the given (asset_id, date) (MKT-090).
  */
 { code: "NotFound" } | 
 /**
@@ -1109,6 +1175,30 @@ risk_level: number;
  * New category link.
  */
 category_id: string }
+/**
+ * Typed error returned to the frontend for the update_asset_price command.
+ */
+export type UpdateAssetPriceCommandError = 
+/**
+ * No price record exists for the given (asset_id, original_date) (MKT-083).
+ */
+{ code: "NotFound" } | 
+/**
+ * Price must be strictly positive.
+ */
+{ code: "NotPositive" } | 
+/**
+ * Price value is not a finite number.
+ */
+{ code: "NonFinite" } | 
+/**
+ * Price date is in the future.
+ */
+{ code: "DateInFuture" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
 /**
  * Defines how often an account's data should be updated.
  */

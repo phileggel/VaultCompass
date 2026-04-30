@@ -209,6 +209,12 @@ impl AssetService {
 
     // --- Market Price Methods ---
 
+    /// Converts a decimal f64 price to i64 micro-units at the IPC boundary (ADR-001 / MKT-024).
+    /// Caller must have already checked `price_f64.is_finite()`.
+    fn f64_to_micros(price_f64: f64) -> i64 {
+        (price_f64 * 1_000_000.0).round() as i64
+    }
+
     /// Records (or overwrites) a market price for an asset on a given date (MKT-025).
     /// Validates asset exists (MKT-043), price > 0 (MKT-021), date not in future (MKT-022).
     /// Publishes AssetPriceUpdated on success (MKT-026).
@@ -221,7 +227,7 @@ impl AssetService {
         if !price_f64.is_finite() {
             return Err(AssetPriceDomainError::NonFinite.into());
         }
-        let price_micros = (price_f64 * 1_000_000.0).round() as i64;
+        let price_micros = Self::f64_to_micros(price_f64);
         // MKT-021, MKT-022 — validate via domain entity factory
         let price = AssetPrice::new(asset_id.to_string(), date.to_string(), price_micros)?;
         // MKT-025 — upsert
@@ -235,8 +241,81 @@ impl AssetService {
     }
 
     /// Returns the most recently dated market price for the given asset, or None (MKT-031).
+    /// No asset-existence check: MKT-031 is a read-only display fallback; an unknown asset
+    /// simply returns None, which is indistinguishable from "no price recorded yet".
     pub async fn get_latest_price(&self, asset_id: &str) -> Result<Option<AssetPrice>> {
         self.price_repo.get_latest(asset_id).await
+    }
+
+    /// Returns all recorded market prices for the given asset, sorted date descending (MKT-072).
+    /// Rejects with AssetNotFound if the asset does not exist.
+    pub async fn get_asset_prices(&self, asset_id: &str) -> Result<Vec<AssetPrice>> {
+        if self.asset_repo.get_by_id(asset_id).await?.is_none() {
+            return Err(AssetDomainError::NotFound(asset_id.to_string()).into());
+        }
+        self.price_repo.get_all_for_asset(asset_id).await
+    }
+
+    /// Updates the date and/or price of an existing price record (MKT-083/084).
+    /// Same-date: in-place upsert. Different-date: atomic delete-old + upsert-new (MKT-084).
+    /// Publishes AssetPriceUpdated on success (MKT-085).
+    pub async fn update_asset_price(
+        &self,
+        asset_id: &str,
+        original_date: &str,
+        new_date: &str,
+        price_f64: f64,
+    ) -> Result<()> {
+        // Input validation runs before the DB existence check (fail-fast on bad inputs, MKT-082).
+        // MKT-082 — finite check before micro conversion
+        if !price_f64.is_finite() {
+            return Err(AssetPriceDomainError::NonFinite.into());
+        }
+        let price_micros = Self::f64_to_micros(price_f64);
+        // MKT-082 — validate via domain factory (NotPositive, DateInFuture)
+        let new_price = AssetPrice::new(asset_id.to_string(), new_date.to_string(), price_micros)?;
+        // MKT-083 — reject if original record absent
+        if self
+            .price_repo
+            .get_by_asset_and_date(asset_id, original_date)
+            .await?
+            .is_none()
+        {
+            return Err(AssetPriceDomainError::NotFound.into());
+        }
+        if original_date == new_date {
+            // Same date: in-place upsert is atomic by primary key; replace_atomic not needed.
+            self.price_repo.upsert(new_price).await?;
+        } else {
+            self.price_repo
+                .replace_atomic(asset_id, original_date, new_price)
+                .await?;
+        }
+        tracing::info!(target: BACKEND, asset_id = %asset_id, from = %original_date, to = %new_date, "Asset price updated");
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetPriceUpdated);
+        }
+        Ok(())
+    }
+
+    /// Deletes a specific price record by (asset_id, date) (MKT-090).
+    /// Returns NotFound if the record does not exist.
+    /// Publishes AssetPriceUpdated on success (MKT-091).
+    pub async fn delete_asset_price(&self, asset_id: &str, date: &str) -> Result<()> {
+        if self
+            .price_repo
+            .get_by_asset_and_date(asset_id, date)
+            .await?
+            .is_none()
+        {
+            return Err(AssetPriceDomainError::NotFound.into());
+        }
+        self.price_repo.delete(asset_id, date).await?;
+        tracing::info!(target: BACKEND, asset_id = %asset_id, date = %date, "Asset price deleted");
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetPriceUpdated);
+        }
+        Ok(())
     }
 
     /// Publishes AssetPriceUpdated without performing any write.
@@ -712,4 +791,351 @@ mod tests {
         assert_eq!(latest.date, "2026-01-03");
         assert_eq!(latest.price, 120_000_000);
     }
+
+    // -------------------------------------------------------------------------
+    // get_asset_prices (MKT-072)
+    // -------------------------------------------------------------------------
+
+    // MKT-072 — get_asset_prices returns AssetNotFound for a nonexistent asset_id
+    #[tokio::test]
+    async fn get_asset_prices_rejects_unknown_asset() {
+        let svc = setup_service().await;
+        let err = svc.get_asset_prices("nonexistent-id").await.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::NotFound(_))
+            ),
+            "got: {err}"
+        );
+    }
+
+    // MKT-072 — get_asset_prices returns an empty list when the asset exists but has no prices
+    #[tokio::test]
+    async fn get_asset_prices_returns_empty_list_when_no_prices() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        assert!(prices.is_empty());
+    }
+
+    // MKT-072 — get_asset_prices returns all records sorted by date descending
+    #[tokio::test]
+    async fn get_asset_prices_returns_all_records_sorted_date_descending() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset.id, "2026-01-03", 130.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset.id, "2026-01-02", 120.0)
+            .await
+            .unwrap();
+
+        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        assert_eq!(prices.len(), 3);
+        // Must be date-descending: 03, 02, 01
+        assert_eq!(prices[0].date, "2026-01-03");
+        assert_eq!(prices[1].date, "2026-01-02");
+        assert_eq!(prices[2].date, "2026-01-01");
+        // Prices match the recorded values in micros
+        assert_eq!(prices[0].price, 130_000_000);
+        assert_eq!(prices[1].price, 120_000_000);
+        assert_eq!(prices[2].price, 100_000_000);
+    }
+
+    // MKT-072 — get_asset_prices only returns records for the requested asset
+    #[tokio::test]
+    async fn get_asset_prices_scoped_to_requested_asset() {
+        let svc = setup_service().await;
+        let asset_a = svc
+            .create_asset(CreateAssetDTO {
+                reference: "AAPL".to_string(),
+                ..base_dto("Apple")
+            })
+            .await
+            .unwrap();
+        let asset_b = svc
+            .create_asset(CreateAssetDTO {
+                reference: "GOOG".to_string(),
+                ..base_dto("Google")
+            })
+            .await
+            .unwrap();
+        svc.record_price(&asset_a.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset_b.id, "2026-01-01", 200.0)
+            .await
+            .unwrap();
+
+        let prices = svc.get_asset_prices(&asset_a.id).await.unwrap();
+        assert_eq!(prices.len(), 1);
+        assert_eq!(prices[0].asset_id, asset_a.id);
+    }
+
+    // -------------------------------------------------------------------------
+    // update_asset_price (MKT-082, MKT-083, MKT-084, MKT-085)
+    // -------------------------------------------------------------------------
+
+    // MKT-082 — update_asset_price rejects non-positive price (price == 0)
+    #[tokio::test]
+    async fn update_asset_price_rejects_non_positive_price() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        let err = svc
+            .update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 0.0)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NotPositive)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // MKT-082 — update_asset_price rejects a non-finite price (NaN)
+    #[tokio::test]
+    async fn update_asset_price_rejects_non_finite_price() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        let err = svc
+            .update_asset_price(&asset.id, "2026-01-01", "2026-01-01", f64::NAN)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NonFinite)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // MKT-082 — update_asset_price rejects a future new_date
+    #[tokio::test]
+    async fn update_asset_price_rejects_future_date() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        let err = svc
+            .update_asset_price(&asset.id, "2026-01-01", "2099-12-31", 150.0)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::DateInFuture)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // MKT-083 — update_asset_price returns NotFound when record at original_date does not exist
+    #[tokio::test]
+    async fn update_asset_price_returns_not_found_for_missing_record() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        // No price has been recorded for this asset yet
+
+        let err = svc
+            .update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 100.0)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NotFound)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // MKT-083 — same-date update: in-place price change only
+    #[tokio::test]
+    async fn update_asset_price_same_date_updates_price_in_place() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 150.0)
+            .await
+            .unwrap();
+
+        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        assert_eq!(
+            prices.len(),
+            1,
+            "still exactly one record after same-date update"
+        );
+        assert_eq!(prices[0].date, "2026-01-01");
+        assert_eq!(prices[0].price, 150_000_000);
+    }
+
+    // MKT-084 — date-change update: old record deleted, new one upserted
+    #[tokio::test]
+    async fn update_asset_price_date_change_deletes_old_and_upserts_new() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+
+        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-02", 110.0)
+            .await
+            .unwrap();
+
+        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        assert_eq!(prices.len(), 1, "old record must be removed");
+        assert_eq!(prices[0].date, "2026-01-02");
+        assert_eq!(prices[0].price, 110_000_000);
+    }
+
+    // MKT-084 — date-change update overwrites existing record at new date (silent overwrite)
+    #[tokio::test]
+    async fn update_asset_price_date_change_overwrites_existing_target_date() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        // Pre-existing records at both source and target dates
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset.id, "2026-01-02", 105.0)
+            .await
+            .unwrap();
+
+        // Move 2026-01-01 to 2026-01-02 — must overwrite the 105.0 record
+        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-02", 200.0)
+            .await
+            .unwrap();
+
+        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        assert_eq!(prices.len(), 1, "only the 2026-01-02 record should remain");
+        assert_eq!(prices[0].date, "2026-01-02");
+        assert_eq!(prices[0].price, 200_000_000);
+    }
+
+    // MKT-085 — update_asset_price publishes AssetPriceUpdated on success
+    #[tokio::test]
+    async fn update_asset_price_publishes_asset_price_updated_event() {
+        let pool = setup_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(bus);
+
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        // Drain the record_price event
+        rx.changed().await.unwrap();
+
+        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 150.0)
+            .await
+            .unwrap();
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
+    }
+
+    // -------------------------------------------------------------------------
+    // delete_asset_price (MKT-090, MKT-091)
+    // -------------------------------------------------------------------------
+
+    // MKT-090 — delete_asset_price returns NotFound when the record does not exist
+    #[tokio::test]
+    async fn delete_asset_price_returns_not_found_for_missing_record() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+
+        let err = svc
+            .delete_asset_price(&asset.id, "2026-01-01")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetPriceDomainError>(),
+                Some(AssetPriceDomainError::NotFound)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // MKT-090 — delete_asset_price removes the record on success
+    #[tokio::test]
+    async fn delete_asset_price_removes_the_record() {
+        let svc = setup_service().await;
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        svc.record_price(&asset.id, "2026-01-02", 110.0)
+            .await
+            .unwrap();
+
+        svc.delete_asset_price(&asset.id, "2026-01-01")
+            .await
+            .unwrap();
+
+        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        assert_eq!(prices.len(), 1);
+        assert_eq!(prices[0].date, "2026-01-02");
+    }
+
+    // MKT-091 — delete_asset_price publishes AssetPriceUpdated on success
+    #[tokio::test]
+    async fn delete_asset_price_publishes_asset_price_updated_event() {
+        let pool = setup_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(bus);
+
+        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        svc.record_price(&asset.id, "2026-01-01", 100.0)
+            .await
+            .unwrap();
+        // Drain the record_price event
+        rx.changed().await.unwrap();
+
+        svc.delete_asset_price(&asset.id, "2026-01-01")
+            .await
+            .unwrap();
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
+    }
+
+    // -------------------------------------------------------------------------
+    // record_asset_price — MKT-043 retro rule (AssetNotFound at the command layer)
+    // -------------------------------------------------------------------------
+
+    // MKT-043 — record_asset_price command returns AssetNotFound for an unknown asset_id.
+    // This is covered by the existing record_price_rejects_unknown_asset service test above.
+    // The command-layer mapping is exercised by the api.rs tests below that verify
+    // to_asset_price_error maps AssetDomainError::NotFound → AssetPriceCommandError::AssetNotFound.
 }

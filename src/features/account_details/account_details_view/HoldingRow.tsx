@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { DollarSign, Minus, Plus, Search } from "lucide-react";
+import { DollarSign, History, Minus, Plus, Search } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
@@ -15,9 +15,17 @@ type HoldingRowProps = {
   onBuy: (target: ModalTarget) => void;
   onSell: (target: SellTarget) => void;
   onEnterPrice: (assetId: string) => void;
+  onPriceHistory: (assetId: string) => void;
 };
 
-export function HoldingRow({ row, accountId, onBuy, onSell, onEnterPrice }: HoldingRowProps) {
+export function HoldingRow({
+  row,
+  accountId,
+  onBuy,
+  onSell,
+  onEnterPrice,
+  onPriceHistory,
+}: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const assets = useAppStore((state) => state.assets);
@@ -54,6 +62,10 @@ export function HoldingRow({ row, accountId, onBuy, onSell, onEnterPrice }: Hold
   const handleEnterPrice = useCallback(() => {
     onEnterPrice(row.assetId);
   }, [onEnterPrice, row.assetId]);
+
+  const handlePriceHistory = useCallback(() => {
+    onPriceHistory(row.assetId);
+  }, [onPriceHistory, row.assetId]);
 
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
@@ -140,6 +152,15 @@ export function HoldingRow({ row, accountId, onBuy, onSell, onEnterPrice }: Hold
               size="sm"
               aria-label={t("account_details.action_enter_price")}
               onClick={handleEnterPrice}
+            />
+          )}
+          {/* MKT-070 — Price history button (active holdings only) */}
+          {row.canEnterPrice && (
+            <IconButton
+              icon={<History size={16} />}
+              size="sm"
+              aria-label={t("account_details.action_price_history")}
+              onClick={handlePriceHistory}
             />
           )}
           <IconButton

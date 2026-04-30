@@ -247,7 +247,26 @@
     "column_performance_pct": "Performance",
     "total_unrealized_pnl": "P&L latent total",
     "price_as_of": "au {{date}}",
-    "action_enter_price": "Saisir le prix"
+    "action_enter_price": "Saisir le prix",
+    "action_price_history": "Historique des prix"
+  },
+  "price_history": {
+    "title": "Historique des prix",
+    "empty": "Aucun prix enregistré",
+    "column_date": "Date",
+    "column_price": "Prix",
+    "column_actions": "Actions",
+    "action_edit": "Modifier le prix",
+    "action_delete": "Supprimer le prix",
+    "edit_title": "Modifier le prix",
+    "delete_confirm_title": "Supprimer le prix",
+    "delete_confirm_message": "Supprimer le prix enregistré le {{date}} ? Cette action est irréversible.",
+    "save": "Enregistrer",
+    "add_price": "Ajouter un prix",
+    "edit_success": "Prix mis à jour",
+    "delete_success": "Prix supprimé",
+    "fetch_error": "Erreur lors du chargement de l'historique",
+    "delete_error": "Erreur lors de la suppression du prix"
   },
   "price_modal": {
     "title": "Saisir le cours de marché",
