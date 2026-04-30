@@ -207,7 +207,7 @@ impl AssetService {
         Ok(())
     }
 
-    // --- Market Price Methods ---
+    // --- AssetPrice Methods ---
 
     /// Converts a decimal f64 price to i64 micro-units at the IPC boundary (ADR-001 / MKT-024).
     /// Caller must have already checked `price_f64.is_finite()`.
@@ -218,7 +218,12 @@ impl AssetService {
     /// Records (or overwrites) a market price for an asset on a given date (MKT-025).
     /// Validates asset exists (MKT-043), price > 0 (MKT-021), date not in future (MKT-022).
     /// Publishes AssetPriceUpdated on success (MKT-026).
-    pub async fn record_price(&self, asset_id: &str, date: &str, price_f64: f64) -> Result<()> {
+    pub async fn record_asset_price(
+        &self,
+        asset_id: &str,
+        date: &str,
+        price_f64: f64,
+    ) -> Result<()> {
         // MKT-043 — reject unknown asset
         if self.asset_repo.get_by_id(asset_id).await?.is_none() {
             return Err(AssetDomainError::NotFound(asset_id.to_string()).into());
@@ -659,12 +664,12 @@ mod tests {
         assert_eq!(updated.category.id, SYSTEM_CATEGORY_ID);
     }
 
-    // MKT-043 — record_price rejects unknown asset
+    // MKT-043 — record_asset_price rejects unknown asset
     #[tokio::test]
-    async fn record_price_rejects_unknown_asset() {
+    async fn record_asset_price_rejects_unknown_asset() {
         let svc = setup_service().await;
         let err = svc
-            .record_price("nonexistent-id", "2026-01-01", 100.0)
+            .record_asset_price("nonexistent-id", "2026-01-01", 100.0)
             .await
             .unwrap_err();
         assert!(
@@ -676,13 +681,13 @@ mod tests {
         );
     }
 
-    // MKT-021 — record_price rejects price <= 0
+    // MKT-021 — record_asset_price rejects price <= 0
     #[tokio::test]
-    async fn record_price_rejects_non_positive_price() {
+    async fn record_asset_price_rejects_non_positive_price() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
         let err = svc
-            .record_price(&asset.id, "2026-01-01", 0.0)
+            .record_asset_price(&asset.id, "2026-01-01", 0.0)
             .await
             .unwrap_err();
         assert!(
@@ -694,13 +699,13 @@ mod tests {
         );
     }
 
-    // MKT-022 — record_price rejects a future date
+    // MKT-022 — record_asset_price rejects a future date
     #[tokio::test]
-    async fn record_price_rejects_future_date() {
+    async fn record_asset_price_rejects_future_date() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
         let err = svc
-            .record_price(&asset.id, "2099-12-31", 100.0)
+            .record_asset_price(&asset.id, "2099-12-31", 100.0)
             .await
             .unwrap_err();
         assert!(
@@ -712,9 +717,9 @@ mod tests {
         );
     }
 
-    // MKT-025, MKT-026 — record_price upserts the price and publishes AssetPriceUpdated on success
+    // MKT-025, MKT-026 — record_asset_price upserts the price and publishes AssetPriceUpdated on success
     #[tokio::test]
-    async fn record_price_upserts_and_publishes_event_on_success() {
+    async fn record_asset_price_upserts_and_publishes_event_on_success() {
         let pool = setup_pool().await;
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
@@ -727,14 +732,14 @@ mod tests {
 
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
         // First record — insert
-        svc.record_price(&asset.id, "2026-01-01", 150.5)
+        svc.record_asset_price(&asset.id, "2026-01-01", 150.5)
             .await
             .unwrap();
         rx.changed().await.unwrap();
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
 
         // Second record for same date — should overwrite (MKT-025)
-        svc.record_price(&asset.id, "2026-01-01", 160.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 160.0)
             .await
             .unwrap();
         let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
@@ -777,13 +782,13 @@ mod tests {
     async fn get_latest_price_returns_latest_price_when_one_exists() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        svc.record_price(&asset.id, "2026-01-03", 120.0)
+        svc.record_asset_price(&asset.id, "2026-01-03", 120.0)
             .await
             .unwrap();
-        svc.record_price(&asset.id, "2026-01-02", 110.0)
+        svc.record_asset_price(&asset.id, "2026-01-02", 110.0)
             .await
             .unwrap();
         let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
@@ -824,13 +829,13 @@ mod tests {
     async fn get_asset_prices_returns_all_records_sorted_date_descending() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        svc.record_price(&asset.id, "2026-01-03", 130.0)
+        svc.record_asset_price(&asset.id, "2026-01-03", 130.0)
             .await
             .unwrap();
-        svc.record_price(&asset.id, "2026-01-02", 120.0)
+        svc.record_asset_price(&asset.id, "2026-01-02", 120.0)
             .await
             .unwrap();
 
@@ -864,10 +869,10 @@ mod tests {
             })
             .await
             .unwrap();
-        svc.record_price(&asset_a.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset_a.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        svc.record_price(&asset_b.id, "2026-01-01", 200.0)
+        svc.record_asset_price(&asset_b.id, "2026-01-01", 200.0)
             .await
             .unwrap();
 
@@ -885,7 +890,7 @@ mod tests {
     async fn update_asset_price_rejects_non_positive_price() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -907,7 +912,7 @@ mod tests {
     async fn update_asset_price_rejects_non_finite_price() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -929,7 +934,7 @@ mod tests {
     async fn update_asset_price_rejects_future_date() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -971,7 +976,7 @@ mod tests {
     async fn update_asset_price_same_date_updates_price_in_place() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -994,7 +999,7 @@ mod tests {
     async fn update_asset_price_date_change_deletes_old_and_upserts_new() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -1014,10 +1019,10 @@ mod tests {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
         // Pre-existing records at both source and target dates
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        svc.record_price(&asset.id, "2026-01-02", 105.0)
+        svc.record_asset_price(&asset.id, "2026-01-02", 105.0)
             .await
             .unwrap();
 
@@ -1046,10 +1051,10 @@ mod tests {
         .with_event_bus(bus);
 
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        // Drain the record_price event
+        // Drain the record_asset_price event
         rx.changed().await.unwrap();
 
         svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 150.0)
@@ -1087,10 +1092,10 @@ mod tests {
     async fn delete_asset_price_removes_the_record() {
         let svc = setup_service().await;
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        svc.record_price(&asset.id, "2026-01-02", 110.0)
+        svc.record_asset_price(&asset.id, "2026-01-02", 110.0)
             .await
             .unwrap();
 
@@ -1117,10 +1122,10 @@ mod tests {
         .with_event_bus(bus);
 
         let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_price(&asset.id, "2026-01-01", 100.0)
+        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
-        // Drain the record_price event
+        // Drain the record_asset_price event
         rx.changed().await.unwrap();
 
         svc.delete_asset_price(&asset.id, "2026-01-01")
@@ -1135,7 +1140,7 @@ mod tests {
     // -------------------------------------------------------------------------
 
     // MKT-043 — record_asset_price command returns AssetNotFound for an unknown asset_id.
-    // This is covered by the existing record_price_rejects_unknown_asset service test above.
+    // This is covered by the existing record_asset_price_rejects_unknown_asset service test above.
     // The command-layer mapping is exercised by the api.rs tests below that verify
     // to_asset_price_error maps AssetDomainError::NotFound → AssetPriceCommandError::AssetNotFound.
 }

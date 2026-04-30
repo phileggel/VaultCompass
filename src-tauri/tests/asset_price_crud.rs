@@ -64,16 +64,16 @@ async fn get_asset_prices_returns_all_sorted_descending_and_scoped() {
         .expect("create asset b")
         .id;
 
-    svc.record_price(&asset_a, "2026-01-01", 100.0)
+    svc.record_asset_price(&asset_a, "2026-01-01", 100.0)
         .await
         .unwrap();
-    svc.record_price(&asset_a, "2026-01-03", 130.0)
+    svc.record_asset_price(&asset_a, "2026-01-03", 130.0)
         .await
         .unwrap();
-    svc.record_price(&asset_a, "2026-01-02", 120.0)
+    svc.record_asset_price(&asset_a, "2026-01-02", 120.0)
         .await
         .unwrap();
-    svc.record_price(&asset_b, "2026-01-01", 500.0)
+    svc.record_asset_price(&asset_b, "2026-01-01", 500.0)
         .await
         .unwrap();
 
@@ -98,14 +98,14 @@ async fn update_asset_price_date_change_is_atomic_end_to_end() {
     let mut rx = bus.subscribe();
     let asset_id = create_asset(&svc).await;
 
-    svc.record_price(&asset_id, "2026-01-01", 100.0)
+    svc.record_asset_price(&asset_id, "2026-01-01", 100.0)
         .await
         .unwrap();
-    // Drain the record_price event
+    // Drain the record_asset_price event
     rx.changed().await.unwrap();
 
     // Pre-existing record at the target date — must be silently overwritten (MKT-084)
-    svc.record_price(&asset_id, "2026-01-02", 105.0)
+    svc.record_asset_price(&asset_id, "2026-01-02", 105.0)
         .await
         .unwrap();
     rx.changed().await.unwrap();
@@ -133,11 +133,11 @@ async fn delete_asset_price_removes_record_leaves_others_and_publishes_event() {
     let mut rx = bus.subscribe();
     let asset_id = create_asset(&svc).await;
 
-    svc.record_price(&asset_id, "2026-01-01", 100.0)
+    svc.record_asset_price(&asset_id, "2026-01-01", 100.0)
         .await
         .unwrap();
     rx.changed().await.unwrap();
-    svc.record_price(&asset_id, "2026-01-02", 110.0)
+    svc.record_asset_price(&asset_id, "2026-01-02", 110.0)
         .await
         .unwrap();
     rx.changed().await.unwrap();

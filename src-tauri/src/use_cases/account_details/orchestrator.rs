@@ -963,7 +963,7 @@ mod tests {
             .unwrap();
         // current_price = 110.00 → unrealized_pnl = (110 - 100) * 2 = 20.00
         asset_svc
-            .record_price(&asset.id, "2026-01-01", 110.0)
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
             .await
             .unwrap();
 
@@ -1011,7 +1011,7 @@ mod tests {
             .await
             .unwrap();
         asset_svc
-            .record_price(&asset.id, "2026-01-01", 110.0)
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
             .await
             .unwrap();
 
@@ -1055,7 +1055,7 @@ mod tests {
             .await
             .unwrap();
         asset_svc
-            .record_price(&asset.id, "2026-01-01", 50.0)
+            .record_asset_price(&asset.id, "2026-01-01", 50.0)
             .await
             .unwrap();
 
@@ -1105,7 +1105,7 @@ mod tests {
             .unwrap();
         // current_price = 110.00 → unrealized = 20.00 → perf = 20/200 = 10% = 10_000_000 micros
         asset_svc
-            .record_price(&asset.id, "2026-01-01", 110.0)
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
             .await
             .unwrap();
 
@@ -1155,7 +1155,7 @@ mod tests {
             .unwrap();
         // current_price == average_price → unrealized_pnl = 0
         asset_svc
-            .record_price(&asset.id, "2026-01-01", 100.0)
+            .record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -1205,7 +1205,7 @@ mod tests {
             .unwrap();
         // current_price == average_price → unrealized_pnl = 0 → perf = 0%
         asset_svc
-            .record_price(&asset.id, "2026-01-01", 100.0)
+            .record_asset_price(&asset.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 
@@ -1275,7 +1275,7 @@ mod tests {
             .await
             .unwrap();
         asset_svc
-            .record_price(&asset1.id, "2026-01-01", 110.0)
+            .record_asset_price(&asset1.id, "2026-01-01", 110.0)
             .await
             .unwrap();
 
@@ -1306,7 +1306,7 @@ mod tests {
             .await
             .unwrap();
         asset_svc
-            .record_price(&asset2.id, "2026-01-01", 100.0)
+            .record_asset_price(&asset2.id, "2026-01-01", 100.0)
             .await
             .unwrap();
 

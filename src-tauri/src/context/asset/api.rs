@@ -369,7 +369,7 @@ pub async fn delete_category(
         .map_err(to_category_error)
 }
 
-// --- Market Price ---
+// --- AssetPrice ---
 
 /// Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
 /// price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
@@ -383,7 +383,7 @@ pub async fn record_asset_price(
 ) -> Result<(), AssetPriceCommandError> {
     state
         .asset_service
-        .record_price(&asset_id, &date, price)
+        .record_asset_price(&asset_id, &date, price)
         .await
         .map_err(to_asset_price_error)
 }
