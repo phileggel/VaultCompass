@@ -61,6 +61,7 @@ On top of the standard kit workflow, this project requires:
 - Code audit: `/prune` (dead code, verbose patterns, KISS review)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
 - PR: `/create-pr` (push branch + open GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI)
+- Merge branch: `just merge` (fast-forward current branch into main, then delete it)
 - After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
 
 ## 📖 Ubiquitous Language
