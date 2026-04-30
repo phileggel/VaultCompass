@@ -25,32 +25,43 @@ DDD defines three layers inside every bounded context. Outer layers depend on in
 The core of the BC. No infrastructure dependencies — no sqlx, no HTTP, no file I/O.
 
 ### Entity
+
 Has a unique identity (ID). Mutable over time. Two entities with the same ID are the same object regardless of attribute values.
+
 > Examples: `Account`, `Asset`, `Transaction`
 
 ### Value Object
+
 No identity. Defined entirely by its attributes. Immutable — replace, never mutate.
+
 > Examples: `Money`, `DateRange`, `Currency`
 
 ### Aggregate
+
 A cluster of entities and value objects treated as a single unit. Has one **Aggregate Root**.
+
 - External code MUST NOT mutate internal entities directly — all mutations go through the root.
 - External code MAY read internal entities for query purposes (CQRS-lite).
 - One transaction = one aggregate (the consistency boundary).
 - Aggregate root methods use domain/business vocabulary — they describe what happens to the
   aggregate, not the internal mechanism. e.g. `account.buy_holding()` not `account.create_transaction()`.
-> Example: `Account` (root) + `Holding` (internal) + `Transaction` (internal)
+  > Example: `Account` (root) + `Holding` (internal) + `Transaction` (internal)
 
 ### Domain Service
+
 Stateless. No repository dependencies. Handles domain logic that spans multiple aggregates and cannot live in any single one.
+
 > Example: a `PnlCalculator` that reads two aggregates and computes a result.
 > These are rare — most logic belongs in an entity or aggregate.
 
 ### Repository Interface
+
 Declares persistence operations. Lives in the domain layer — only the interface, never the implementation.
 
 ### Domain Event
+
 A record of something that happened. Raised by aggregates after a state change. Immutable.
+
 > Example: `AccountUpdated`, `TransactionRecorded`
 
 ---
@@ -60,6 +71,7 @@ A record of something that happened. Raised by aggregates after a state change. 
 Orchestrates domain objects to fulfill use cases that belong entirely to one BC. Contains no business rules — it delegates all logic to the domain.
 
 ### Application Service (`service.rs`)
+
 - Orchestrates the aggregate: load via repository → call Aggregate Root method → save → emit event
 - Contains no domain logic — all invariants, rules, and calculations live in the Aggregate Root
 - MAY enforce cross-aggregate invariants that require persistence (e.g. uniqueness checks across the BC)
@@ -74,6 +86,7 @@ Orchestrates domain objects to fulfill use cases that belong entirely to one BC.
 Contains all external concerns. Depends on the domain layer (implements its interfaces).
 
 ### Repository Implementation
+
 Concrete persistence (SQLite, HTTP, etc.) of a repository interface declared in the domain layer.
 
 ---
@@ -105,21 +118,25 @@ A pattern for cross-aggregate atomicity. Used when a single operation must write
 aggregates in one DB transaction.
 
 ### TransactionManager
+
 A shared application infrastructure trait (lives in `core/`). Wraps the DB pool and provides
 a closure-based API: `run(|uow| { ... })` — begins a transaction, executes the closure, commits
 on success, rolls back on failure.
 
 ### AppUnitOfWork
+
 A use-case-specific super-trait combining the repository traits needed for one atomic operation.
 e.g. `AppUnitOfWork: AccountRepository + AssetPriceRepository`. Lives in the use case folder.
 Implemented by `SqlxUnitOfWork` in infrastructure (holds a shared `sqlx::Transaction`).
 
 ### When to use
+
 Only when a single business operation must write to more than one aggregate atomically and
 eventual consistency is not acceptable. Single-aggregate writes do NOT use UoW — the
 aggregate's own repository handles atomicity internally via its `save()` method.
 
 ### Event emission with UoW
+
 After `tx_manager.run()` returns `Ok`, the use case delegates notification to each BC
 service's notify method — it does not publish events directly (use cases do not own state).
 
@@ -127,11 +144,11 @@ service's notify method — it does not publish events directly (use cases do no
 
 ## Dependency Rule (summary)
 
-| Layer | May depend on |
-|---|---|
-| Infrastructure | Application, Domain |
-| Application Service (BC) | Domain only |
-| Cross-cutting Use Case | Domain abstractions from any BC |
-| Domain | Nothing |
+| Layer                    | May depend on                   |
+| ------------------------ | ------------------------------- |
+| Infrastructure           | Application, Domain             |
+| Application Service (BC) | Domain only                     |
+| Cross-cutting Use Case   | Domain abstractions from any BC |
+| Domain                   | Nothing                         |
 
 Infrastructure types (`sqlx::Pool`, concrete repos) must never appear in Application or Domain layers.

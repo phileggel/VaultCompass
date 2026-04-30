@@ -1,6 +1,7 @@
 # ADR-006: Unit of Work Pattern for Cross-Aggregate Atomicity
 
 ## Status
+
 Accepted
 
 ## Context
@@ -103,12 +104,14 @@ combination it needs.
 ## Consequences
 
 **Positive:**
+
 - Use cases have no sqlx dependency — fully testable with `MockTransactionManager`
 - Atomicity failure can be simulated in tests via fault injection
 - `TransactionManager` is reusable across any future cross-aggregate use case
 - Commit/rollback logic centralized in one place
 
 **Negative:**
+
 - HRTB lifetime bound (`for<'a> FnOnce(...)`) adds Rust complexity
 - Each cross-aggregate use case must define its own `AppUnitOfWork` super-trait
 - `SqlxUnitOfWork` must implement all combined repo traits — SQL may be duplicated

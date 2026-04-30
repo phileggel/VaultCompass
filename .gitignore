@@ -37,3 +37,4 @@ env/
 venv/
 ENV/
 .venv
+tmp/

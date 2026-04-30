@@ -69,6 +69,7 @@ and used consistently everywhere.
 
 **B28** — Aggregate Root methods MUST use domain/business vocabulary — they describe what
 happens to the aggregate, not the internal mechanism.
+
 > ✅ `account.buy_holding(...)` — `account.sell_holding(...)`
 > ❌ `account.create_transaction(...)` — `account.upsert_holding(...)`
 
@@ -84,6 +85,7 @@ happens to the aggregate, not the internal mechanism.
 
 **B8** — `api.rs` is the framework boundary — the only layer that knows Tauri exists.
 Its sole responsibilities are:
+
 1. **Deserialize** — translate Tauri command arguments into domain types
 2. **Delegate** — make exactly one call to its own BC Application Service
 3. **Serialize** — map the result to `Result<T, String>` for Tauri

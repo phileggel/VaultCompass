@@ -1,4 +1,4 @@
-## 
+##
 
 Use Case (Application) : C'est le chef d'orchestre. Il définit les étapes d'une action utilisateur (ex: "S'inscrire"). Il ne connaît pas SQL, mais il décide où commence et où finit la transaction. Il est spécifique à une action de ton application.
 
@@ -14,17 +14,17 @@ Infrastructure (SQLx) : C'est la main-d'œuvre. Elle implémente les traits du d
 
 src/
 ├── domain/
-│   ├── models.rs       (User, Badge)
-│   └── repositories.rs (Traits UserRepository, BadgeRepository)
+│ ├── models.rs (User, Badge)
+│ └── repositories.rs (Traits UserRepository, BadgeRepository)
 ├── application/
-│   ├── ports.rs        (Trait TransactionManager, Trait AppUnitOfWork)
-│   └── use_cases/
-│       └── register.rs (Struct RegisterUserUseCase { tx_manager: Arc<dyn TransactionManager> })
+│ ├── ports.rs (Trait TransactionManager, Trait AppUnitOfWork)
+│ └── use_cases/
+│ └── register.rs (Struct RegisterUserUseCase { tx_manager: Arc<dyn TransactionManager> })
 ├── infrastructure/
-│   └── db/
-│       ├── postgres.rs (Struct PostgresTxManager, Struct SqlxUnitOfWork)
-│       └── repos_impl/ (Implémentations concrètes)
-└── main.rs             (Initialisation et injection)
+│ └── db/
+│ ├── postgres.rs (Struct PostgresTxManager, Struct SqlxUnitOfWork)
+│ └── repos_impl/ (Implémentations concrètes)
+└── main.rs (Initialisation et injection)
 
 use async_trait::async_trait;
 use std::future::Future;
@@ -39,12 +39,12 @@ pub struct Badge { pub label: String }
 
 #[async_trait]
 pub trait UserRepository: Send {
-    async fn save(&mut self, email: String) -> Result<User, String>;
+async fn save(&mut self, email: String) -> Result<User, String>;
 }
 
 #[async_trait]
 pub trait BadgeRepository: Send {
-    async fn assign_welcome_badge(&mut self, user_id: i32) -> Result<(), String>;
+async fn assign_welcome_badge(&mut self, user_id: i32) -> Result<(), String>;
 }
 
 // Le super-trait qui regroupe tout pour la transaction
@@ -53,10 +53,10 @@ pub trait AppUnitOfWork: UserRepository + BadgeRepository + Send {}
 // Service de Domaine : Logique métier complexe
 pub struct RegistrationDomainService;
 impl RegistrationDomainService {
-    pub fn validate_email(&self, email: &str) -> Result<(), String> {
-        if !email.contains('@') { return Err("Email invalide".into()); }
-        Ok(())
-    }
+pub fn validate_email(&self, email: &str) -> Result<(), String> {
+if !email.contains('@') { return Err("Email invalide".into()); }
+Ok(())
+}
 }
 
 // ==========================================
@@ -67,19 +67,19 @@ pub type UoWFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, String>> + Sen
 
 #[async_trait]
 pub trait TransactionManager: Send + Sync {
-    async fn run<T, F>(&self, operation: F) -> Result<T, String>
-    where F: for<'a> FnOnce(&'a mut dyn AppUnitOfWork) -> UoWFuture<'a, T> + Send;
+async fn run<T, F>(&self, operation: F) -> Result<T, String>
+where F: for<'a> FnOnce(&'a mut dyn AppUnitOfWork) -> UoWFuture<'a, T> + Send;
 }
 
 pub struct RegisterUserUseCase<'a> {
-    tx_manager: &'a dyn TransactionManager,
-    domain_service: RegistrationDomainService, // Injecté ou instancié
+tx_manager: &'a dyn TransactionManager,
+domain_service: RegistrationDomainService, // Injecté ou instancié
 }
 
 impl<'a> RegisterUserUseCase<'a> {
-    pub fn new(tx_manager: &'a dyn TransactionManager) -> Self {
-        Self { tx_manager, domain_service: RegistrationDomainService }
-    }
+pub fn new(tx_manager: &'a dyn TransactionManager) -> Self {
+Self { tx_manager, domain_service: RegistrationDomainService }
+}
 
     pub async fn execute(&self, email: String) -> Result<User, String> {
         // Règle métier simple avant de lancer la machine lourde
@@ -96,6 +96,7 @@ impl<'a> RegisterUserUseCase<'a> {
             Ok(user)
         })).await
     }
+
 }
 
 // ==========================================
@@ -103,25 +104,25 @@ impl<'a> RegisterUserUseCase<'a> {
 // ==========================================
 
 pub struct SqlxUnitOfWork<'a> {
-    tx: sqlx::Transaction<'a, sqlx::Postgres>,
+tx: sqlx::Transaction<'a, sqlx::Postgres>,
 }
 
 #[async_trait]
 impl<'a> UserRepository for SqlxUnitOfWork<'a> {
-    async fn save(&mut self, email: String) -> Result<User, String> {
-        let row = sqlx::query!("INSERT INTO users (email) VALUES ($1) RETURNING id", email)
-            .fetch_one(&mut *self.tx).await.map_err(|e| e.to_string())?;
-        Ok(User { id: row.id, email })
-    }
+async fn save(&mut self, email: String) -> Result<User, String> {
+let row = sqlx::query!("INSERT INTO users (email) VALUES ($1) RETURNING id", email)
+.fetch_one(&mut \*self.tx).await.map_err(|e| e.to_string())?;
+Ok(User { id: row.id, email })
+}
 }
 
 #[async_trait]
 impl<'a> BadgeRepository for SqlxUnitOfWork<'a> {
-    async fn assign_welcome_badge(&mut self, user_id: i32) -> Result<(), String> {
-        sqlx::query!("INSERT INTO badges (user_id, label) VALUES ($1, $2)", user_id, "Welcome")
-            .execute(&mut *self.tx).await.map_err(|e| e.to_string())?;
-        Ok(())
-    }
+async fn assign_welcome_badge(&mut self, user_id: i32) -> Result<(), String> {
+sqlx::query!("INSERT INTO badges (user_id, label) VALUES ($1, $2)", user_id, "Welcome")
+.execute(&mut \*self.tx).await.map_err(|e| e.to_string())?;
+Ok(())
+}
 }
 
 impl<'a> AppUnitOfWork for SqlxUnitOfWork<'a> {}
@@ -130,12 +131,12 @@ pub struct PostgresTxManager { pub pool: sqlx::PgPool }
 
 #[async_trait]
 impl TransactionManager for PostgresTxManager {
-    async fn run<T, F>(&self, operation: F) -> Result<T, String>
-    where F: for<'a> FnOnce(&'a mut dyn AppUnitOfWork) -> UoWFuture<'a, T> + Send
-    {
-        let tx = self.pool.begin().await.map_err(|e| e.to_string())?;
-        let mut uow = SqlxUnitOfWork { tx };
-        
+async fn run<T, F>(&self, operation: F) -> Result<T, String>
+where F: for<'a> FnOnce(&'a mut dyn AppUnitOfWork) -> UoWFuture<'a, T> + Send
+{
+let tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+let mut uow = SqlxUnitOfWork { tx };
+
         let result = operation(&mut uow).await;
 
         if result.is_ok() {
@@ -145,4 +146,5 @@ impl TransactionManager for PostgresTxManager {
         }
         result
     }
+
 }

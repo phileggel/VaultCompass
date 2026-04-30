@@ -26,7 +26,7 @@ Represents a manually recorded market price for a financial asset on a specific 
 | `date`     | The calendar date this price observation applies to (ISO 8601, e.g. `2026-04-26`). |
 | `price`    | Market price per unit in the asset's native currency (i64 micros, ADR-001).        |
 
-> The combination `(asset_id, date)` is unique: only one price per asset per day. Recording a second price for the same `(asset_id, date)` pair overwrites the first (MKT-025). No standalone edit or delete command is provided in this phase; correction is done by re-recording (MKT-042).
+> The combination `(asset_id, date)` is unique: only one price per asset per day. Recording a second price for the same `(asset_id, date)` pair overwrites the first (MKT-025). Correction by re-recording remains valid. Standalone edit and delete of individual entries are also supported via the price history view (MKT-070+).
 
 ### HoldingDetail (extended)
 
@@ -108,13 +108,13 @@ The `AccountDetailsResponse` DTO gains one new field.
 
 **MKT-041 — Total unrealized P&L display (frontend)**: The Account Details summary row displays `total_unrealized_pnl`. When the value is `None`, the summary shows "—". When the value is a number (including zero), it is displayed as-is; per-row "—" placeholders already communicate which individual holdings were excluded from the sum.
 
-**MKT-042 — No delete or standalone edit in this phase (backend)**: `AssetPrice` records cannot be deleted or updated individually via a dedicated command in this phase. Correction is done by re-recording a price for the same `(asset_id, date)`, which overwrites the existing entry (MKT-025).
+**MKT-042 — Correction by re-recording (backend)**: An `AssetPrice` record can be corrected by re-recording a price for the same `(asset_id, date)`, which overwrites the existing entry (MKT-025). Standalone edit (MKT-083, MKT-084) and delete (MKT-090) via the price history view are also supported.
 
 **MKT-043 — Unknown asset rejection (backend)**: The backend rejects `record_asset_price` with a specific error if `asset_id` does not refer to a known asset. In normal use the asset is always selected from active holdings, making this case unreachable from the UI; the guard exists for API-level correctness.
 
 ### Auto-record from Transactions (050–069)
 
-This section extends the buy/sell transaction flow defined in `docs/spec/financial-asset-transaction.md` (TRX) and `docs/spec/sell-transaction.md` (SEL). When the user opts in, recording a buy or sell transaction also writes an `AssetPrice` record so the transacted unit price becomes the asset's market price for the transaction date. Standalone edit and delete of `AssetPrice` records remain out of scope (see MKT-042 and project todo).
+This section extends the buy/sell transaction flow defined in `docs/spec/financial-asset-transaction.md` (TRX) and `docs/spec/sell-transaction.md` (SEL). When the user opts in, recording a buy or sell transaction also writes an `AssetPrice` record so the transacted unit price becomes the asset's market price for the transaction date. Standalone edit and delete of `AssetPrice` records are now supported via the price history view (MKT-070+).
 
 **MKT-050 — Global auto-record toggle (frontend)**: The Settings page exposes a toggle "Automatically record transaction price as market price". The toggle defaults to OFF. The user's choice persists across sessions on the current device. The toggle controls only the default state of the per-transaction checkbox (MKT-052); it never bypasses or replaces that checkbox.
 
@@ -130,17 +130,67 @@ This section extends the buy/sell transaction flow defined in `docs/spec/financi
 
 **MKT-056 — Atomicity (backend)**: The transaction insert/update, the holding recomputation (TRX-027 / SEL-025), and the auto-record `AssetPrice` upsert all commit in a single database transaction. If any step fails, the entire operation is rolled back; no partial state is persisted. This matches the pre-existing TRX-027 atomicity guarantee, extended to include the price write when `record_price = true`.
 
-**MKT-057 — AssetPriceUpdated event on auto-record (backend)**: After the orchestrator's DB transaction commits successfully and `record_price` was `true` and a price was actually written (i.e. MKT-061 did not skip), the orchestrator invokes the `asset` bounded context's notification entry-point (mirroring how `TransactionService.notify_transaction_updated()` is invoked after commit per B8) to publish the `AssetPriceUpdated` event defined in MKT-026. This is in addition to the `TransactionUpdated` event published by the transaction context. The two events are independent signals; their relative publication order is unspecified and is irrelevant to consumers because each subscriber refetches idempotently. When `record_price` is `false` or MKT-061 skipped the write, no `AssetPriceUpdated` event is published; behaviour is identical to the pre-feature add/update transaction flow.
+**MKT-057 — AssetPriceUpdated event on auto-record (backend)**: After the orchestrator's DB transaction commits successfully and `record_price` was `true` and a price was actually written (i.e. MKT-061 did not skip), the orchestrator invokes `AssetService::notify_asset_price_updated()` (consistent with B12 and the pattern of `AccountService::notify_transaction_updated()`) to publish the `AssetPriceUpdated` event defined in MKT-026. This is in addition to the `TransactionUpdated` event published by the transaction context. The two events are independent signals; their relative publication order is unspecified and is irrelevant to consumers because each subscriber refetches idempotently. When `record_price` is `false` or MKT-061 skipped the write, no `AssetPriceUpdated` event is published; behaviour is identical to the pre-feature add/update transaction flow.
 
 **MKT-058 — Conflict — silent overwrite (backend)**: If an `AssetPrice` record already exists at `(tx.asset_id, tx.date)` when `record_price` is `true`, it is silently overwritten with `tx.unit_price` via the same upsert semantics as MKT-025. No prompt or warning is shown to the user; the form behaves identically whether or not a same-day price already exists.
 
 **MKT-059 — Edit lifecycle — price independence (backend)**: Editing a transaction does not modify or remove any `AssetPrice` record previously written by that transaction. When the user re-saves an edited transaction with `record_price = true`, the upsert (MKT-055) targets the transaction's _current_ `tx.date` and _current_ `tx.unit_price`. If the user changed the transaction date during the edit, the price record at the prior date is left untouched and remains in storage; the upsert lands at the new date as a separate `(asset_id, date)` row. The same applies if the user changed the unit price: only the row at the current date is overwritten.
 
-**MKT-060 — Delete lifecycle — price independence (backend)**: Deleting a transaction does not remove any `AssetPrice` record previously written by that transaction. `AssetPrice` records are independent of the transaction lifecycle: once persisted, they are governed solely by MKT rules (currently only MKT-025 upsert; standalone delete is deferred).
+**MKT-060 — Delete lifecycle — price independence (backend)**: Deleting a transaction does not remove any `AssetPrice` record previously written by that transaction. `AssetPrice` records are independent of the transaction lifecycle: once persisted, they are governed solely by MKT rules (upsert via MKT-025; standalone delete via MKT-090).
 
 **MKT-061 — Zero unit_price skip (backend)**: If `record_price` is `true` and `tx.unit_price` is `0` (a valid transaction per TRX-020 / SEL-020 — gifted or inherited assets), the orchestrator silently skips the `AssetPrice` write. The transaction itself proceeds normally and commits per its own validation rules; no `AssetPriceUpdated` event is published; no error is surfaced to the user. Rationale: a zero market price would conflict with MKT-021 (price > 0) and is not a meaningful signal of the asset's market value.
 
 **MKT-062 — Auto-record failure surfaces as transaction error (backend + frontend)**: A persistence failure of the auto-record `AssetPrice` write triggers rollback of the entire orchestrator DB transaction (per MKT-056). The error is returned to the frontend through the existing `add_transaction` / `update_transaction` error contract (the same `RecordTransactionError` channel used for other backend errors in the form). The frontend displays it inline using the existing transaction-form error states from the TRX / SEL specs; no new dedicated error path or UI element is introduced. The user can correct the input or untick the auto-record checkbox and retry.
+
+### Price History CRUD (070–092)
+
+**MKT-070 — Price history entry point (frontend)**: A "Price history" action is available on each active holding row in Account Details, alongside the existing Buy, Sell, and "Enter price" actions. It is not shown on closed holdings.
+
+**MKT-071 — Price history list contents (frontend)**: The price history view lists all `AssetPrice` records for the selected asset, sorted by date descending (most recent first). Each row displays the date and the price formatted in the asset's native currency. Edit and Delete affordances are shown on each row. `AssetPrice` is per asset (not per holding), so the history shows all recorded prices regardless of which account the entry point was reached from.
+
+**MKT-072 — Backend query for price history (backend)**: The `asset` bounded context exposes a `get_asset_prices(asset_id)` command that returns all `AssetPrice` records for a given `asset_id`, ordered by date descending. The returned list includes all historical entries, not only the most recent. The command returns a specific error if `asset_id` does not refer to a known asset; a successful response with an empty list is returned when the asset exists but has no recorded prices.
+
+**MKT-073 — Empty state (frontend)**: When no `AssetPrice` records exist for the asset, the price history view displays a message indicating no prices have been recorded yet, and offers an affordance to add the first price.
+
+**MKT-074 — Loading and error states (frontend)**: While price records are being fetched, the price history view displays a loading indicator. A fetch failure surfaces an inline error with a retry affordance; the view remains open rather than closing.
+
+**MKT-075 — In-view "Add price" affordance (frontend)**: The price history view includes an action to add a new price entry, opening the same recording form governed by MKT-020–MKT-029 (same validation, same upsert semantics, same `AssetPriceUpdated` publication). After a successful add, the history list refreshes to include the new entry.
+
+**MKT-076 — View reactivity after mutations (frontend)**: After a successful add (MKT-075), edit (MKT-086), or delete (MKT-092), the price history view re-fetches its list via MKT-072. The `AssetPriceUpdated` event emitted by the backend (MKT-026, MKT-085, MKT-091) independently causes the Account Details view to re-fetch, keeping the current-price column and derived values in sync without any additional coordination by the price history view.
+
+**MKT-080 — Edit action (frontend)**: Each row in the price history list has an Edit action that opens an edit form pre-filled with that row's date and price.
+
+**MKT-081 — Edit form fields (frontend)**: The edit form displays the asset name as a read-only label, an editable date field, and an editable price field, both pre-filled with the current values of the selected entry. The asset's currency code is shown as a read-only label next to the price field, consistent with MKT-023.
+
+**MKT-082 — Edit validation (frontend + backend)**: The edit form applies the same validation as price recording: price must be strictly greater than zero (MKT-021) and date must be a well-formed ISO 8601 calendar date not in the future (MKT-022). The backend rejects invalid values with the same specific errors. The frontend validates inline and disables the submit button until all fields are valid.
+
+**MKT-083 — Edit semantics — same date (backend)**: The `asset` bounded context exposes an `update_asset_price(asset_id, original_date, new_date, new_price)` command that returns `()` on success. When `original_date` equals `new_date`, the backend updates the price in place at the existing `(asset_id, date)` row; a single-row in-place update is inherently atomic. The command returns `NotFound` if the record at `(asset_id, original_date)` does not exist, or `Unknown` for any other failure.
+
+**MKT-084 — Edit semantics — date changed (backend)**: When `original_date` differs from `new_date` in an `update_asset_price` call (MKT-083), the backend deletes the record at `(asset_id, original_date)` and upserts a new record at `(asset_id, new_date)`. If a record already exists at the new date, it is silently overwritten, consistent with MKT-025. The deletion and the upsert are atomic within a single database transaction; a failure in either step rolls back the entire operation.
+
+**MKT-085 — AssetPriceUpdated after successful edit (backend)**: After a successful edit (MKT-083 or MKT-084), the backend publishes an `AssetPriceUpdated` event consistent with MKT-026. No event is published if the edit fails.
+
+**MKT-086 — Edit success feedback (frontend)**: On a successful edit, the edit form closes, the price history list refreshes (MKT-076), and a snackbar confirms the price was updated.
+
+**MKT-087 — Edit error feedback (frontend)**: On a validation failure or backend rejection, the edit form remains open. An inline error message is shown adjacent to the invalid field. The user can correct and resubmit without reopening the form.
+
+**MKT-094 — Edit in-flight state (frontend)**: While the edit submit request is in progress, the submit button is disabled and displays a spinner to prevent double-submission, consistent with MKT-027.
+
+**MKT-095 — asset_id is immutable on edit (backend)**: The `update_asset_price` command (MKT-083) does not accept a new `asset_id`. The asset an `AssetPrice` belongs to cannot be changed after creation; only the date and price are modifiable.
+
+**MKT-088 — Delete action (frontend)**: Each row in the price history list has a Delete action.
+
+**MKT-089 — Delete confirmation dialog (frontend)**: Triggering the Delete action opens a confirmation dialog that identifies the date and price of the record to be removed. The user must explicitly confirm before deletion proceeds.
+
+**MKT-090 — Delete command (backend)**: The `asset` bounded context exposes a `delete_asset_price(asset_id, date)` command that returns `()` on success. If no record exists at `(asset_id, date)`, the command returns `NotFound`. Any other failure returns `Unknown`.
+
+**MKT-091 — AssetPriceUpdated after deletion (backend)**: After a successful deletion, the backend publishes an `AssetPriceUpdated` event consistent with MKT-026. The Account Details view re-fetches via MKT-036; if the deleted entry was the most recently dated price for the asset, the holding row falls back to the next most recent price or shows "—" if no records remain.
+
+**MKT-092 — Delete success feedback (frontend)**: On a successful deletion, the price history list refreshes (MKT-076) and a snackbar confirms the price record was removed.
+
+**MKT-093 — In-flight state for delete (frontend)**: While the delete request is in progress (after the user confirms in MKT-089), the Delete action for the targeted row is disabled to prevent double-submission.
+
+**MKT-096 — Delete error feedback (frontend)**: If the delete request fails, an error banner is shown at the top of the price history list. The view remains open and the targeted entry is not removed from the list. The user may retry.
 
 ---
 
@@ -160,6 +210,34 @@ Account Details (active holding row)
         → modal closes + snackbar
         → Account Details re-fetches on AssetPriceUpdated
         → holding row: current price, unrealized P&L, performance % updated
+```
+
+### Workflow — Price history CRUD (MKT-070+)
+
+```
+Account Details (active holding row)
+    → "Price history" button (MKT-070)
+    → PriceHistoryView opens; list fetched via MKT-072
+        → sorted date descending; Edit + Delete per row
+        → "Add price" action → same flow as "Enter price" (MKT-020–029)
+
+Edit row:
+    → Edit form opens pre-filled with (date, price)
+    → user changes date and/or price
+    → submit
+        same date → in-place update (MKT-083)
+        new date  → delete old + upsert at new date (MKT-084)
+        on failure → rollback, form stays open (MKT-087)
+    → success: form closes + snackbar + list refreshes + AssetPriceUpdated (MKT-085, MKT-086)
+    → Account Details re-fetches on AssetPriceUpdated (MKT-076)
+
+Delete row:
+    → confirmation dialog identifies (date, price) (MKT-089)
+    → user confirms
+        backend: delete_asset_price(asset_id, date) (MKT-090)
+        backend: publish AssetPriceUpdated (MKT-091)
+    → list refreshes; Account Details re-fetches (MKT-076)
+    → if deleted entry was most recent price: holding row shows "—" or next price
 ```
 
 ### Workflow — Auto-record from a buy/sell transaction (MKT-050+)
@@ -272,8 +350,54 @@ The label updates live with the form's date field: "Use this price as the market
 3. User ticks the auto-record checkbox manually before submitting.
 4. User submits; the price is recorded for this transaction only. The next form opens with the box unchecked again.
 
+### UX Draft — Price History CRUD (MKT-070+)
+
+#### Entry Point
+
+"Price history" icon button on each active holding row in Account Details, in the actions column alongside Buy, Sell, and "Enter price". Not shown on closed holdings.
+
+#### Main Component
+
+Modal or side panel listing all recorded `AssetPrice` entries for the selected asset (per asset, not per account).
+
+#### States
+
+- **Loading**: spinner while prices are fetched on open (MKT-074).
+- **Empty**: "No prices recorded yet" message with an "Add price" button (MKT-073).
+- **Populated**: date-descending list; each row shows date, price (in asset currency), Edit button, Delete button.
+- **Edit form** (inline within modal, or nested modal): date + price fields, pre-filled; same inline error feedback as "Enter price" form (MKT-087).
+- **In-flight (edit)**: Submit button disabled + spinner while the edit request is in progress (MKT-094).
+- **Delete confirmation** (standard ConfirmationDialog): identifies date + price of the record to be removed (MKT-089).
+- **In-flight (delete)**: Delete button for the targeted row is disabled while the request is in progress (MKT-093).
+- **Delete error**: error banner at the top of the list; entry remains visible (MKT-096).
+- **Fetch error**: inline error with retry (MKT-074).
+
+#### User Flow — View and delete a stale price
+
+1. User views Account Details and notices a price in the current-price column that looks wrong.
+2. User clicks "Price history" on that holding row.
+3. Modal opens; list is fetched and displayed date-descending.
+4. User locates the stale entry, clicks Delete.
+5. Confirmation dialog appears identifying the date and price.
+6. User confirms.
+7. Backend deletes the record, publishes `AssetPriceUpdated`.
+8. History list refreshes; Account Details re-fetches — holding row now shows the next most recent price or "—".
+
+#### User Flow — Correct a price with a wrong date
+
+1. User opens "Price history" for a holding.
+2. User finds an entry recorded on the wrong date (e.g. recorded on 2026-04-28 but should be 2026-04-27).
+3. User clicks Edit on that row.
+4. Edit form opens pre-filled with the wrong date and the price.
+5. User changes the date to 2026-04-27.
+6. User submits.
+7. Backend deletes the 2026-04-28 record and upserts at 2026-04-27 (MKT-084).
+8. Edit form closes; history list refreshes; snackbar confirms (MKT-086).
+
 ---
 
 ## Open Questions
+
+- [x] **OQ-1** — Should the standalone "Enter price" action on the holding row (MKT-010) be removed? **Decision: keep both.** MKT-010 remains as a fast path for the common case (record today's price without opening history). MKT-070 adds a second "Price history" action for review and corrections. The holding row will have five actions: Buy, Sell, Enter price, Price history, and the transaction magnifier.
 
 None — all questions have been resolved.

@@ -48,13 +48,13 @@ All Tauri commands are registered here via `tauri_specta::collect_commands![]`. 
 
 Published on every state change. Frontend listens via a single `events.event.listen()` subscription in the global store.
 
-| Event                | Published by                                                                                                                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AssetUpdated`       | `context/asset/`                                                                                                                                                                       |
-| `CategoryUpdated`    | `context/asset/`                                                                                                                                                                       |
-| `AccountUpdated`     | `context/account/`                                                                                                                                                                     |
-| `TransactionUpdated` | `context/account/` via `AccountService` (emitted after every buy/sell/correct/cancel holding operation)                                                                               |
-| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026)                                                                                                                          |
+| Event                | Published by                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetUpdated`       | `context/asset/`                                                                                                                 |
+| `CategoryUpdated`    | `context/asset/`                                                                                                                 |
+| `AccountUpdated`     | `context/account/`                                                                                                               |
+| `TransactionUpdated` | `context/account/` via `AccountService` (emitted after every buy/sell/correct/cancel holding operation)                          |
+| `AssetPriceUpdated`  | `context/asset/` via `AssetService.record_price()` (MKT-026), `update_asset_price()` (MKT-085), `delete_asset_price()` (MKT-091) |
 
 ### Use Cases (`use_cases/`)
 
@@ -148,11 +148,20 @@ context/{domain}/
 - `archive(id)`, `unarchive(id)` — toggle `is_archived` flag
 - `AssetCategoryRepository` extras: `find_by_name` (case-insensitive), `reassign_assets_and_delete` (atomic transaction)
 
+**Entity: `AssetPrice`**
+
+- Composite key: `(asset_id, date)` — one record per asset per calendar day
+- `asset_id: String`, `date: String` (ISO 8601), `price: i64` (micros, ADR-001)
+- Repository trait: `AssetPriceRepository` — `upsert`, `get_latest_for_asset`, `get_all_for_asset` (date DESC), `get_by_asset_and_date`, `delete`, `replace_atomic` (atomic DELETE + INSERT for date-change edits)
+- `replace_atomic` wraps both SQL statements in a single SQLite transaction (MKT-084)
+
 **Service: `AssetService`**
 
 - CRUD for assets and categories
 - `update_asset` rejects archived assets with `error.asset.archived_readonly`
 - Publishes `AssetUpdated` and `CategoryUpdated` events
+- Price methods: `record_price(asset_id, date, price_f64)`, `get_asset_prices(asset_id) -> Vec<AssetPrice>` (returns `AssetDomainError::NotFound` when asset does not exist), `update_asset_price(asset_id, original_date, new_date, price_f64)`, `delete_asset_price(asset_id, date)` — all publish `AssetPriceUpdated` on success
+- Input validation (MKT-082): price must be finite and positive; date must not be in the future; validated before DB existence checks (fail-fast on bad inputs)
 
 **Tauri commands (`api.rs`)**
 
@@ -166,6 +175,11 @@ context/{domain}/
 - `add_category(label) -> AssetCategory`
 - `update_category(id, label) -> AssetCategory`
 - `delete_category(id)`
+- `record_asset_price(assetId, date, price) -> Result<(), AssetPriceCommandError>` (MKT-025)
+- `get_asset_prices(assetId) -> Result<Vec<AssetPrice>, AssetPriceCommandError>` (MKT-072)
+- `update_asset_price(assetId, originalDate, newDate, newPrice) -> Result<(), UpdateAssetPriceCommandError>` (MKT-083)
+- `delete_asset_price(assetId, date) -> Result<(), DeleteAssetPriceCommandError>` (MKT-090)
+- Error enums: `AssetPriceCommandError` (`NotPositive`, `NonFinite`, `DateInFuture`, `AssetNotFound`, `Unknown`), `UpdateAssetPriceCommandError` (`NotFound`, `NotPositive`, `NonFinite`, `DateInFuture`, `Unknown`), `DeleteAssetPriceCommandError` (`NotFound`, `Unknown`)
 
 ---
 
@@ -330,17 +344,22 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Account Details (`features/account_details/`)
 
-- Gateway: `getAccountDetails(accountId)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
+- Gateway: `getAccountDetails(accountId)`, `recordAssetPrice(assetId, date, price)`, `getAssetPrices(assetId)`, `updateAssetPrice(assetId, originalDate, newDate, newPrice)`, `deleteAssetPrice(assetId, date)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
 - Sub-features (use-case boundary: buy/sell modals live here, not in `transactions/`):
   - `account_details_view/AccountDetailsView.tsx` — renders header (total cost basis + realized P&L), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty CTA)
-  - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / magnifier action buttons; `buildTarget()` resolves account+asset metadata for modal props
+  - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / Enter Price / History / magnifier action buttons; `buildTarget()` resolves account+asset metadata for modal props
   - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
   - `buy_transaction/BuyTransactionModal.tsx` + `useBuyTransaction.ts` — buy form opened from holding row (TRX-041); mirrors sell modal; includes archived-asset confirmation dialog (TRX-029)
   - `sell_transaction/SellTransactionModal.tsx` + `useSellTransaction.ts` — sell form opened from holding row (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional; calls `sellHolding`
+  - `price_history/PriceHistoryModal.tsx` — list modal showing all recorded prices for an asset (date DESC); each row has Edit (pencil) and Delete (trash) actions; transitions to `EditPriceForm` on edit, shows `ConfirmationDialog` on delete (MKT-072–MKT-096)
+  - `price_history/EditPriceForm.tsx` — edit form pre-filled with the target price (micros → decimal via `microToDecimal`); calls `updateAssetPrice`; on success refetches the list (MKT-083–MKT-087)
+  - `price_history/usePriceHistory.ts` — loads prices on mount; `refetch()` re-calls gateway; `confirmDelete(assetId, date)` tracks `deletingDate` lifecycle (MKT-093)
+  - `price_history/useEditPrice.ts` — pre-fills form state from `AssetPrice` target; validates via `shared/validatePriceForm.ts`; `handleSubmit()` calls `updateAssetPrice`
   - `shared/types.ts` — `ModalTarget` (accountName, assetId, assetName, assetCurrency, showExchangeRate) and `SellTarget` (extends ModalTarget with holdingQuantityMicro)
+  - `shared/validatePriceForm.ts` — `isPriceValid(price: string)`, `isDateValid(date: string)` — pure validation helpers shared by price entry and edit forms
 - `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number` on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number` on `AccountSummaryViewModel` for sign-based color rendering (SEL-042, SEL-043)
 - Navigation: clicking an `AccountTable` row calls `useNavigate` to `/accounts/$accountId`; `AccountDetailsView` is rendered by its own route, not conditionally by `AccountManager`
-- Spec: `docs/spec/account-details.md` (ACD-010–ACD-041)
+- Spec: `docs/spec/account-details.md` (ACD-010–ACD-041), `docs/spec/market-price.md` (MKT-072–MKT-096)
 
 #### Update (`features/update/`)
 
