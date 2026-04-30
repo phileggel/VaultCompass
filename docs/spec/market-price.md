@@ -126,11 +126,11 @@ This section extends the buy/sell transaction flow defined in `docs/spec/financi
 
 **MKT-054 — Submit payload (frontend + backend)**: The frontend forwards the checkbox state as a `record_price: bool` field added to the existing `CreateTransactionDTO` already used by `add_transaction` and `update_transaction` (per the project's Specta single-DTO convention). The backend never reads the global toggle directly — the per-call flag carried in the DTO is the only signal that determines whether a price is recorded.
 
-**MKT-055 — Auto-write inside the orchestrator's DB transaction (backend)**: When `record_price` is `true` and `tx.unit_price > 0` (see MKT-061 for the zero-price exception), the `record_transaction` orchestrator writes an `AssetPrice` row directly inside the same DB transaction it has already opened for the transaction insert/update and the holding recomputation. The write targets `(asset_id = tx.asset_id, date = tx.date, price = tx.unit_price)` and uses the same upsert semantics as MKT-025 (insert on absence, replace on `(asset_id, date)` collision). The price is taken in the asset's native currency; `tx.unit_price` already excludes fees per the TRX domain definition, so no fee adjustment is applied. Validation rules MKT-021 (price > 0) and MKT-022 (date not in future) hold by construction here: TRX-020 enforces `tx.date` not in the future, and the `tx.unit_price > 0` precondition is enforced by MKT-061.
+**MKT-055 — Auto-write as a separate frontend call (frontend)**: When `record_price` is `true` and `tx.unit_price > 0` (see MKT-061 for the zero-price exception), the frontend calls `record_asset_price(asset_id, tx.date, tx.unit_price)` as a separate Tauri command **after** the transaction command (`add_transaction` / `update_transaction`) has returned successfully. The write targets `(asset_id = tx.asset_id, date = tx.date, price = tx.unit_price)` and uses the same upsert semantics as MKT-025 (insert on absence, replace on `(asset_id, date)` collision). The price is taken in the asset's native currency; `tx.unit_price` already excludes fees per the TRX domain definition, so no fee adjustment is applied. Validation rules MKT-021 (price > 0) and MKT-022 (date not in future) hold by construction: TRX-020 enforces `tx.date` not in the future, and the `tx.unit_price > 0` precondition is enforced by MKT-061.
 
-**MKT-056 — Atomicity (backend)**: The transaction insert/update, the holding recomputation (TRX-027 / SEL-025), and the auto-record `AssetPrice` upsert all commit in a single database transaction. If any step fails, the entire operation is rolled back; no partial state is persisted. This matches the pre-existing TRX-027 atomicity guarantee, extended to include the price write when `record_price = true`.
+**MKT-056 — No atomicity between transaction and price write (frontend)**: The transaction insert/update and holding recomputation (TRX-027 / SEL-025) are committed atomically by the backend command. The `record_asset_price` call (MKT-055) is a separate, independent command issued by the frontend after the transaction commits. There is no shared database transaction between the two operations. If the transaction succeeds and the price write subsequently fails, the transaction remains committed; no rollback occurs. This is a deliberate trade-off documented in ADR-006.
 
-**MKT-057 — AssetPriceUpdated event on auto-record (backend)**: After the orchestrator's DB transaction commits successfully and `record_price` was `true` and a price was actually written (i.e. MKT-061 did not skip), the orchestrator invokes `AssetService::notify_asset_price_updated()` (consistent with B12 and the pattern of `AccountService::notify_transaction_updated()`) to publish the `AssetPriceUpdated` event defined in MKT-026. This is in addition to the `TransactionUpdated` event published by the transaction context. The two events are independent signals; their relative publication order is unspecified and is irrelevant to consumers because each subscriber refetches idempotently. When `record_price` is `false` or MKT-061 skipped the write, no `AssetPriceUpdated` event is published; behaviour is identical to the pre-feature add/update transaction flow.
+**MKT-057 — AssetPriceUpdated event on auto-record (backend)**: After `record_asset_price` commits successfully (i.e. MKT-061 did not skip the call), the backend publishes the `AssetPriceUpdated` event defined in MKT-026 via `AssetService::notify_asset_price_updated()`. This event is in addition to the `TransactionUpdated` event published by the transaction command. The two events are independent signals; their relative order is unspecified and irrelevant because subscribers refetch idempotently. When `record_price` is `false` or MKT-061 skipped the call, no `AssetPriceUpdated` event is published.
 
 **MKT-058 — Conflict — silent overwrite (backend)**: If an `AssetPrice` record already exists at `(tx.asset_id, tx.date)` when `record_price` is `true`, it is silently overwritten with `tx.unit_price` via the same upsert semantics as MKT-025. No prompt or warning is shown to the user; the form behaves identically whether or not a same-day price already exists.
 
@@ -140,7 +140,7 @@ This section extends the buy/sell transaction flow defined in `docs/spec/financi
 
 **MKT-061 — Zero unit_price skip (backend)**: If `record_price` is `true` and `tx.unit_price` is `0` (a valid transaction per TRX-020 / SEL-020 — gifted or inherited assets), the orchestrator silently skips the `AssetPrice` write. The transaction itself proceeds normally and commits per its own validation rules; no `AssetPriceUpdated` event is published; no error is surfaced to the user. Rationale: a zero market price would conflict with MKT-021 (price > 0) and is not a meaningful signal of the asset's market value.
 
-**MKT-062 — Auto-record failure surfaces as transaction error (backend + frontend)**: A persistence failure of the auto-record `AssetPrice` write triggers rollback of the entire orchestrator DB transaction (per MKT-056). The error is returned to the frontend through the existing `add_transaction` / `update_transaction` error contract (the same `RecordTransactionError` channel used for other backend errors in the form). The frontend displays it inline using the existing transaction-form error states from the TRX / SEL specs; no new dedicated error path or UI element is introduced. The user can correct the input or untick the auto-record checkbox and retry.
+**MKT-062 — Auto-record failure is best-effort (frontend)**: A failure of the `record_asset_price` call (MKT-055) does not surface an error to the user. The transaction is already committed (MKT-056) and the frontend treats the price write as fire-and-forget: failures are logged as warnings and silently dropped. No inline error, snackbar, or retry affordance is shown specifically for the price write. The user may still record the price manually via the price history modal (MKT-070+).
 
 ### Price History CRUD (070–092)
 
@@ -253,17 +253,16 @@ Buy/Sell transaction form (create or edit)
         edit mode   → default = OFF (MKT-052)
     → user submits
         frontend: record_price: bool added to CreateTransactionDTO (MKT-054)
-        backend orchestrator (single DB transaction, MKT-056):
+        backend (atomic DB transaction):
             ├─ insert/update Transaction
-            ├─ recompute Holding (TRX-027 / SEL-025)
-            └─ if record_price && tx.unit_price > 0:                       (MKT-061 skip-on-zero)
-                 upsert AssetPrice(tx.asset_id, tx.date, tx.unit_price)    (MKT-055, MKT-058)
-        → commit; on any failure rollback the whole DB transaction        (MKT-056, MKT-062)
-        → after commit:
+            └─ recompute Holding (TRX-027 / SEL-025)
+        → commit; on any failure rollback the transaction DB operation
             transaction context publishes TransactionUpdated              (B8)
-            if a price was actually written:
-                asset context publishes AssetPriceUpdated                 (MKT-057, B8)
-        → Account Details re-fetches via AssetPriceUpdated                 (MKT-036)
+        → if record_price && tx.unit_price > 0 (MKT-055, MKT-061):
+            frontend calls record_asset_price(asset_id, date, price)     (separate command, best-effort)
+            on success: asset context publishes AssetPriceUpdated         (MKT-057, B8)
+            on failure: logged as warning, silently dropped               (MKT-056, MKT-062)
+        → Account Details re-fetches via AssetPriceUpdated                (MKT-036)
 ```
 
 ---
@@ -332,7 +331,8 @@ The label updates live with the form's date field: "Use this price as the market
 
 - **Checkbox unchecked**: no behaviour change; the form behaves exactly as before this feature.
 - **Checkbox checked + submit success**: the standard transaction success path (snackbar, modal close, list refresh) is unchanged. The new `AssetPriceUpdated` event causes Account Details to refresh its market-price columns transparently.
-- **Submit failure with checkbox checked**: the form remains open with the standard inline transaction error feedback (MKT-062). No price is written (atomicity, MKT-056). The user can untick the checkbox or correct the inputs and retry.
+- **Submit failure with checkbox checked**: the form remains open with the standard inline transaction error feedback. No price is written because the transaction did not commit. The user can untick the checkbox or correct the inputs and retry.
+- **Price write failure after successful transaction**: the transaction is committed and the modal closes normally. The price write failure is silent (MKT-062); the user can record the price manually via the price history modal (MKT-070+).
 - **Same-day price already recorded**: no warning shown; the existing entry is silently overwritten on submit (MKT-058).
 - **Zero `unit_price`**: when the buy/sell unit price is `0` (gifted asset, TRX-020), the auto-record step is silently skipped per MKT-061. The transaction itself succeeds normally; the checkbox state has no observable effect in this case.
 
