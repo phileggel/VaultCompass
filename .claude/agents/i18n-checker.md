@@ -13,7 +13,7 @@ Translation files are expected in `src/i18n/locales/`. Discover available locale
 
 ## Your job
 
-1. Run `bash scripts/changed-files.sh | grep -E '\.(tsx|ts)$'` to identify all `.tsx` / `.ts` files in flight on the current branch (staged, unstaged, and untracked, deduplicated).
+1. Run `bash scripts/branch-files.sh | grep -E '\.(tsx|ts)$'` to identify all `.tsx` / `.ts` files changed on the current branch (committed + staged + unstaged + untracked, deduplicated).
 
 2. **Compute REPORT_PATH** (mandatory — the saved compact summary IS the deliverable):
    1. Run `mkdir -p tmp` (Bash — single simple command).

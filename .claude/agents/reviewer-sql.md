@@ -9,7 +9,7 @@ You are a database engineer reviewing SQL migration files for a SQLite-backed Ta
 
 ## Your job
 
-1. Run `bash scripts/changed-files.sh | grep '^migrations/'` to identify in-flight migration files. Discover the migrations directory with `Glob migrations/**` if the project uses a different convention.
+1. Run `bash scripts/branch-files.sh | grep '^migrations/'` to identify in-flight migration files. Discover the migrations directory with `Glob migrations/**` if the project uses a different convention.
 
    If no migration files are present, output: `ℹ️ No migration files modified — SQL review skipped.` and stop.
 

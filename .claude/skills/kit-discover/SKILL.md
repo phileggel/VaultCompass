@@ -158,4 +158,4 @@ Kit version: <…>
 
 The catalog in `kit-tools.md` is the kit's self-description; `kit-version.md` provides the temporal context (what changed since the project's previous sync). Read both before forming any judgment about CLAUDE.md drift — a section that looks stale may simply have been updated by the most recent kit version.
 
-This skill complements `/whats-next` (which surveys _project_ backlog) and `/spec-diff` (which surveys _spec_ drift). All three are revisit-time tools for catching what edit-time memory has forgotten.
+This skill complements `/whats-next` (which surveys _project_ backlog). Both are revisit-time tools for catching what edit-time memory has forgotten.

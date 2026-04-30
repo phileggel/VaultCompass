@@ -1,7 +1,7 @@
 # Kit Tools Reference
 
 Thematic index of all agents, skills, scripts, git hooks, and justfile recipes
-provided by **tauri-claude-kit**. Use this file to discover what is available
+provided by **claude-kit**. Use this file to discover what is available
 without reading each agent definition individually.
 
 ---
@@ -61,11 +61,9 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 
 ### Quality & Process Agents
 
-| Agent                | Trigger                                                        | Description                                                                                                      |
-| -------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `i18n-checker`       | Any `.ts` / `.tsx` or translation JSON modified                | Hardcoded strings, missing/unused translation keys, cross-locale mismatches                                      |
-| `workflow-validator` | Before committing a feature implementation                     | Reads `docs/plan/*-plan.md` Workflow TaskList; produces ✅/❌ table; blocks commit if required steps are missing |
-| `script-reviewer`    | Any `.sh`, `.py` (in `scripts/`) or `.githooks/` file modified | Script quality: `set -euo pipefail`, shebang, quoting, portability, security                                     |
+| Agent          | Trigger                                         | Description                                                                 |
+| -------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
+| `i18n-checker` | Any `.ts` / `.tsx` or translation JSON modified | Hardcoded strings, missing/unused translation keys, cross-locale mismatches |
 
 ---
 
@@ -75,13 +73,13 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 
 | Agent                  | Trigger                                                               | Description                                                                                                                                                                                           | Status      |
 | ---------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `reviewer`             | Any `.rs`, `.ts`, or `.tsx` modified                                  | DDD architecture: bounded context isolation, gateway pattern, factory methods, data flow direction, dead code, English-only                                                                           | ✅ complete |
+| `reviewer-arch`        | Any `.rs`, `.ts`, or `.tsx` modified                                  | DDD architecture: bounded context isolation, gateway pattern, factory methods, data flow direction, dead code, English-only                                                                           | ✅ complete |
 | `reviewer-backend`     | Any `.rs` modified                                                    | Rust quality: anyhow error handling, no `unwrap()` in production, Clippy, trait-based repositories, async correctness, inline tests                                                                   | ✅ complete |
 | `reviewer-frontend`    | Any `.ts` / `.tsx` modified                                           | React/TS quality + UX/M3: gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, M3 design tokens, UX completeness (empty/loading/error states), accessibility | ✅ complete |
 | `reviewer-sql`         | Any `migrations/` file modified or added                              | SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, SQLite type affinity, primary key convention, NOT NULL                                                                    | ✅ complete |
 | `test-writer-backend`  | After contract-reviewer, before backend impl                          | Writes all failing Rust test stubs from the domain contract; confirms red via cargo test                                                                                                              | ✅ complete |
 | `test-writer-frontend` | After backend commit, before frontend impl                            | Writes all failing Vitest stubs from the domain contract; reads fresh bindings.ts; confirms red via vitest                                                                                            | ✅ complete |
-| `maintainer`           | Any workflow, config, or capabilities file modified; before a release | CI/config/capability correctness, security, consistency; delegates dependency audit to `/dep-audit`                                                                                                   | ✅ complete |
+| `reviewer-infra`       | Any workflow, config, or capabilities file modified; before a release | CI/config/capability correctness, security, consistency; delegates dependency audit to `/dep-audit`                                                                                                   | ✅ complete |
 
 ---
 
@@ -95,7 +93,7 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 | `dep-audit`    | `/dep-audit`     | Audit npm + Cargo dependencies for outdated versions and CVEs; run before every release                                                                  |
 | `adr-manager`  | `/adr-manager`   | Create, update (supersede), or index Architecture Decision Records in `docs/adr/`                                                                        |
 | `spec-writer`  | `/spec-writer`   | Interactive spec writer: interviews user, reads domain, produces `docs/spec/{feature}.md` with TRIGRAM-NNN rules                                         |
-| `spec-diff`    | `/spec-diff`     | Diffs a spec against an earlier git ref (default: last commit touching the matching plan file); flags stale plan tasks and code/test references          |
+| `create-pr`    | `/create-pr`     | Push the current feature branch and open a GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI                                   |
 | `contract`     | `/contract`      | Derives or updates `docs/contracts/{domain}-contract.md` from a validated spec; upsert-aware, human-approved                                             |
 | `kit-discover` | `/kit-discover`  | Cross-references CLAUDE.md against `kit-tools.md` and `kit-version.md`; surfaces drift, gaps, and redundancies and proposes a patch (never auto-applied) |
 | `prune`        | `/prune [path]`  | Audit the project for dead code, pass-through methods, verbose patterns, and duplicate definitions; coverage report mandatory, read-only output          |
@@ -104,11 +102,12 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 
 ## Git Hooks (`.githooks/`)
 
-| Hook         | Runs on      | Behaviour                                                                                           |
-| ------------ | ------------ | --------------------------------------------------------------------------------------------------- |
-| `pre-commit` | `git commit` | Runs `python3 scripts/check.py --fast` (lint + format); rejects commit on failure                   |
-| `commit-msg` | `git commit` | Enforces conventional format (`type: description`), valid types, ≤72-char title, no co-author lines |
-| `pre-push`   | `git push`   | Runs `python3 scripts/check.py` (full suite: tests + build + lint); blocks push on failure          |
+| Hook               | Runs on      | Behaviour                                                                                                          |
+| ------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `pre-commit`       | `git commit` | Blocks direct commits to `main`; runs `python3 scripts/check.py --fast` (lint + format); rejects commit on failure |
+| `commit-msg`       | `git commit` | Enforces conventional format (`type: description`), valid types, ≤72-char title, no co-author lines                |
+| `pre-push`         | `git push`   | Runs `python3 scripts/check.py` (full suite: tests + build + lint); blocks push on failure                         |
+| `pre-merge-commit` | `git merge`  | Blocks non-fast-forward merge commits to enforce linear history; does not affect `--ff-only` or `--squash`         |
 
 Activate with: `git config core.hooksPath .githooks`
 
@@ -118,7 +117,8 @@ Activate with: `git config core.hooksPath .githooks`
 
 | Script             | Command                         | Description                                                                                                                |
 | ------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `changed-files.sh` | `bash scripts/changed-files.sh` | Print sort-unique union of changed-vs-HEAD, staged, and untracked files. Used by review agents to discover in-flight files |
+| `changed-files.sh` | `bash scripts/changed-files.sh` | Print sort-unique union of changed-vs-HEAD, staged, and untracked files. Use for pre-commit / uncommitted-work context     |
+| `branch-files.sh`  | `bash scripts/branch-files.sh`  | Print sort-unique union of all files changed on the current branch vs main, plus uncommitted changes. Use in review agents |
 
 ---
 
@@ -128,13 +128,13 @@ Activate with: `git config core.hooksPath .githooks`
 
 | Agent                  | Trigger                                                               | Description                                                                                                                                               | Status      |
 | ---------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `reviewer`             | Any `.rs`, `.ts`, or `.tsx` modified                                  | Architecture reviewer: handler/service layering, API gateway encapsulation, data flow direction, dead code, English-only                                  | ✅ complete |
+| `reviewer-arch`        | Any `.rs`, `.ts`, or `.tsx` modified                                  | Architecture reviewer: handler/service layering, API gateway encapsulation, data flow direction, dead code, English-only                                  | ✅ complete |
 | `reviewer-backend`     | Any `.rs` modified                                                    | Rust/Axum quality: anyhow error handling, no `unwrap()` in handlers, Clippy, Axum extractors, `IntoResponse`, async correctness, `sqlx::test` conventions | ✅ complete |
 | `reviewer-frontend`    | Any `.ts` / `.tsx` modified                                           | React/TS quality + UX: API gateway encapsulation, hook colocation, presenter layer, `useCallback`/`useMemo` correctness, UX completeness, accessibility   | ✅ complete |
 | `reviewer-sql`         | Any `server/migrations/` file modified or added                       | SQL migrations: atomicity, idempotency, destructive DDL guards, FK indexes, PostgreSQL type conventions, primary key convention, NOT NULL                 | ✅ complete |
 | `test-writer-backend`  | After contract-reviewer, before backend impl                          | Writes all failing Rust tests from the domain contract using `#[sqlx::test]` + `PgPool`; confirms red via cargo test                                      | ✅ complete |
 | `test-writer-frontend` | After backend commit, before frontend impl                            | Writes all failing Vitest tests from the domain contract; mocks the API module; confirms red via vitest                                                   | ✅ complete |
-| `maintainer`           | Any workflow, config, or docker-compose file modified; before release | CI/config/compose correctness, security, version sync; delegates dependency audit to `/dep-audit`                                                         | ✅ complete |
+| `reviewer-infra`       | Any workflow, config, or docker-compose file modified; before release | CI/config/compose correctness, security, version sync; delegates dependency audit to `/dep-audit`                                                         | ✅ complete |
 
 ---
 

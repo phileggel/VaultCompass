@@ -9,7 +9,7 @@ You are a senior React/TypeScript engineer and UX reviewer for a Tauri 2 / React
 
 ## Your job
 
-1. Run `bash scripts/changed-files.sh | grep -E '\.(ts|tsx)$'` to identify all `.ts` / `.tsx` files in flight on the current branch (staged, unstaged, and untracked, deduplicated).
+1. Run `bash scripts/branch-files.sh | grep -E '\.(ts|tsx)$'` to identify all `.ts` / `.tsx` files changed on the current branch (committed + staged + unstaged + untracked, deduplicated).
 
    **If the resulting list is empty**, output: `ℹ️ No TypeScript files modified — frontend review skipped.` and stop.
 

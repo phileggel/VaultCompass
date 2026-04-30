@@ -23,9 +23,8 @@ See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.m
 
 - **At session start**: run `/whats-next` to triage pending work across TODOs, plans, specs, and in-flight git.
 - **At task start**: run `/start [scope]` (`fix`, `chore`, `test`, `feature`, `refactor`) to pick the right workflow.
-- **Revisiting an existing feature**: run `/spec-diff` first to detect drift between the current spec and the last plan, and to flag stale tasks/tests.
 
-**IMPORTANT**: Claude Code will NOT commit, create branches, or create PRs. The user handles all git operations.
+**IMPORTANT**: Claude Code will NOT commit, create branches, or create PRs autonomously. Use `/create-pr` to push the current branch and open a GitHub PR (requires `gh` CLI). The user handles all git operations.
 
 ### CRITICAL: Implementation task
 
@@ -46,9 +45,8 @@ On top of the standard kit workflow, this project requires:
 
 **MANDATORY** for every implementation task — use `TaskCreate` / `TaskUpdate`:
 
-- Create tasks before implementing anything — do NOT create a task for `workflow-validator` (it runs outside the TaskList)
+- Create tasks before implementing anything
 - Mark each task `in_progress` when starting, `completed` when done
-- The `workflow-validator` reads this TaskList — missing or incomplete tasks = blocked commit
 
 ---
 
@@ -62,7 +60,16 @@ On top of the standard kit workflow, this project requires:
 - Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions)
 - Code audit: `/prune` (dead code, verbose patterns, KISS review)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
+- PR: `/create-pr` (push branch + open GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI)
 - After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
+
+## 📖 Ubiquitous Language
+
+`docs/ubiquitous-language.md` is the authoritative dictionary of domain terms.
+
+- New code MUST use confirmed UL terms in identifiers, comments, and log messages.
+- Do not extend usage of a discrepant term — fix it or flag it before adding more callsites.
+- When spawning reviewer, spec-writer, or feature-planner agents, include the UL doc in the prompt so they can check term consistency.
 
 ## 🏗 Architecture Summary
 

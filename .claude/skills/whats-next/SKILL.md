@@ -182,7 +182,7 @@ Replace `{date}-{N}` with the values used in `REPORT_PATH`. Omit any section who
 
 ## Notes
 
-This skill complements `/start` (which selects a workflow when you already know the task) and `/spec-diff` (which diagnoses spec drift on a specific feature). The natural session flow when returning to a project after a gap:
+This skill complements `/start` (which selects a workflow when you already know the task). The natural session flow when returning to a project after a gap:
 
 1. `/whats-next` → pick the task
 2. `/start` → set up the workflow for that task

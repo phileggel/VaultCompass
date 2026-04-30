@@ -9,7 +9,7 @@ You are a senior Rust engineer reviewing backend code quality for a Tauri 2 proj
 
 ## Your job
 
-1. Run `bash scripts/changed-files.sh | grep -E '\.rs$'` to identify all `.rs` files in flight on the current branch (staged, unstaged, and untracked, deduplicated).
+1. Run `bash scripts/branch-files.sh | grep -E '\.rs$'` to identify all `.rs` files changed on the current branch (committed + staged + unstaged + untracked, deduplicated).
 
    If no `.rs` files are present, output: `ℹ️ No Rust files modified — backend review skipped.` and stop.
 
