@@ -22,6 +22,8 @@ While coding:
 See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.md` for the agent/skill reference.
 
 - **At session start**: run `/whats-next` to triage pending work across TODOs, plans, specs, and in-flight git.
+  - When `/whats-next` identifies a ⚠️ likely-done item, immediately clean up the source doc (remove/cross off the entry in `docs/todo.md`, close open questions in specs, update the plan file, etc.) — do not just list it as a cleanup candidate.
+- **After completing any action**: immediately update the source doc that tracked it — remove or tick off the entry in `docs/todo.md`, close the open question in the spec, tick the plan step, etc. Do not wait for the next `/whats-next` run.
 - **At task start**: run `/start [scope]` (`fix`, `chore`, `test`, `feature`, `refactor`) to pick the right workflow.
 
 **IMPORTANT**: Claude Code will NOT commit, create branches, or create PRs autonomously. Use `/create-pr` to push the current branch and open a GitHub PR (requires `gh` CLI). The user handles all git operations.

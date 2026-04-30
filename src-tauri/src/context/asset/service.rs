@@ -336,32 +336,39 @@ impl AssetService {
 mod tests {
     use super::*;
     use crate::context::asset::{
-        AssetClass, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetPriceRepository,
-        SqliteAssetRepository,
+        AssetClass, CreateAssetDTO, MockAssetCategoryRepository, MockAssetPriceRepository,
+        MockAssetRepository,
     };
-    use crate::core::SideEffectEventBus;
-    use sqlx::sqlite::SqlitePoolOptions;
+    use std::sync::Arc;
+    use std::time::Duration;
 
-    async fn setup_pool() -> sqlx::Pool<sqlx::Sqlite> {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("test pool");
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await
-            .expect("migrations");
-        pool
+    fn make_svc(
+        ar: MockAssetRepository,
+        cr: MockAssetCategoryRepository,
+        pr: MockAssetPriceRepository,
+    ) -> AssetService {
+        AssetService::new(Box::new(ar), Box::new(cr), Box::new(pr))
     }
 
-    async fn setup_service() -> AssetService {
-        let pool = setup_pool().await;
-        AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool)),
+    fn make_asset(id: &str, archived: bool) -> Asset {
+        Asset::restore(
+            id.to_string(),
+            "Test Asset".to_string(),
+            AssetClass::Cash,
+            make_category(),
+            "USD".to_string(),
+            1,
+            "REF".to_string(),
+            archived,
         )
+    }
+
+    fn make_category() -> AssetCategory {
+        AssetCategory::default()
+    }
+
+    fn make_price(asset_id: &str, date: &str, price: i64) -> AssetPrice {
+        AssetPrice::restore(asset_id.to_string(), date.to_string(), price)
     }
 
     fn base_dto(name: &str) -> CreateAssetDTO {
@@ -378,7 +385,15 @@ mod tests {
     // R1 — empty name is rejected
     #[tokio::test]
     async fn create_asset_rejects_empty_name() {
-        let svc = setup_service().await;
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
             .create_asset(CreateAssetDTO {
                 name: "".to_string(),
@@ -398,7 +413,15 @@ mod tests {
     // R1 — empty reference is rejected
     #[tokio::test]
     async fn create_asset_rejects_empty_reference() {
-        let svc = setup_service().await;
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
             .create_asset(CreateAssetDTO {
                 reference: "".to_string(),
@@ -418,7 +441,15 @@ mod tests {
     // R1 — invalid currency is rejected
     #[tokio::test]
     async fn create_asset_rejects_invalid_currency() {
-        let svc = setup_service().await;
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
             .create_asset(CreateAssetDTO {
                 currency: "INVALID".to_string(),
@@ -438,7 +469,15 @@ mod tests {
     // R1 — risk level out of range is rejected
     #[tokio::test]
     async fn create_asset_rejects_invalid_risk_level() {
-        let svc = setup_service().await;
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
             .create_asset(CreateAssetDTO {
                 risk_level: 6,
@@ -455,10 +494,19 @@ mod tests {
         );
     }
 
-    // R4 — reference is normalized to uppercase
+    // R4 — service normalizes reference to uppercase before passing to asset_repo.create
     #[tokio::test]
     async fn create_asset_normalizes_reference_to_uppercase() {
-        let svc = setup_service().await;
+        let mut ar = MockAssetRepository::new();
+        ar.expect_create()
+            .withf(|a| a.reference == "AAPL")
+            .times(1)
+            .return_once(Ok);
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(ar, cr, MockAssetPriceRepository::new());
         let asset = svc
             .create_asset(CreateAssetDTO {
                 reference: "aapl".to_string(),
@@ -469,10 +517,19 @@ mod tests {
         assert_eq!(asset.reference, "AAPL");
     }
 
-    // R4 — reference leading/trailing spaces are trimmed
+    // R4 — service trims reference spaces before passing to asset_repo.create
     #[tokio::test]
     async fn create_asset_normalizes_reference_trims_spaces() {
-        let svc = setup_service().await;
+        let mut ar = MockAssetRepository::new();
+        ar.expect_create()
+            .withf(|a| a.reference == "AAPL")
+            .times(1)
+            .return_once(Ok);
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(ar, cr, MockAssetPriceRepository::new());
         let asset = svc
             .create_asset(CreateAssetDTO {
                 reference: "  AAPL  ".to_string(),
@@ -486,12 +543,18 @@ mod tests {
     // R5/R6 — updating an archived asset is rejected
     #[tokio::test]
     async fn update_archived_asset_is_rejected() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.archive_asset(&asset.id).await.unwrap();
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-id", true))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
-            .update_asset(crate::context::asset::UpdateAssetDTO {
-                asset_id: asset.id.clone(),
+            .update_asset(UpdateAssetDTO {
+                asset_id: "asset-id".to_string(),
                 name: "Apple Updated".to_string(),
                 reference: "AAPL".to_string(),
                 class: AssetClass::Stocks,
@@ -510,70 +573,91 @@ mod tests {
         );
     }
 
-    // R6 — archiving sets is_archived = true
+    // R6 — service calls asset_repo.archive with the correct id
     #[tokio::test]
     async fn archive_asset_sets_flag() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.archive_asset(&asset.id).await.unwrap();
-        let all = svc.get_all_assets_with_archived().await.unwrap();
-        let found = all.iter().find(|a| a.id == asset.id).unwrap();
-        assert!(found.is_archived);
+        let mut ar = MockAssetRepository::new();
+        ar.expect_archive()
+            .withf(|id| id == "asset-id")
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        svc.archive_asset("asset-id").await.unwrap();
     }
 
-    // R18 — unarchiving clears is_archived
+    // R18 — service calls asset_repo.unarchive with the correct id
     #[tokio::test]
     async fn unarchive_asset_clears_flag() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.archive_asset(&asset.id).await.unwrap();
-        svc.unarchive_asset(&asset.id).await.unwrap();
-        let all = svc.get_all_assets().await.unwrap();
-        let found = all.iter().find(|a| a.id == asset.id).unwrap();
-        assert!(!found.is_archived);
+        let mut ar = MockAssetRepository::new();
+        ar.expect_unarchive()
+            .withf(|id| id == "asset-id")
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        svc.unarchive_asset("asset-id").await.unwrap();
     }
 
-    // R7 — get_all excludes archived assets
+    // R7 — get_all_assets delegates to asset_repo.get_all (not get_all_including_archived)
     #[tokio::test]
     async fn get_all_assets_excludes_archived() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.archive_asset(&asset.id).await.unwrap();
-        let active = svc.get_all_assets().await.unwrap();
-        assert!(!active.iter().any(|a| a.id == asset.id));
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_all()
+            .times(1)
+            .return_once(|| Ok(vec![make_asset("active-id", false)]));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let result = svc.get_all_assets().await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "active-id");
     }
 
-    // R19 — get_all_with_archived includes both active and archived
+    // R19 — get_all_assets_with_archived delegates to asset_repo.get_all_including_archived
     #[tokio::test]
     async fn get_all_assets_with_archived_includes_both() {
-        let svc = setup_service().await;
-        let active = svc
-            .create_asset(CreateAssetDTO {
-                reference: "ACT".to_string(),
-                ..base_dto("Active Asset")
-            })
-            .await
-            .unwrap();
-        let archived = svc
-            .create_asset(CreateAssetDTO {
-                reference: "ARC".to_string(),
-                ..base_dto("Archived Asset")
-            })
-            .await
-            .unwrap();
-        svc.archive_asset(&archived.id).await.unwrap();
+        let active = make_asset("active-id", false);
+        let archived = make_asset("archived-id", true);
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_all_including_archived()
+            .times(1)
+            .return_once(move || Ok(vec![active, archived]));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let all = svc.get_all_assets_with_archived().await.unwrap();
-        assert!(all.iter().any(|a| a.id == active.id));
-        assert!(all.iter().any(|a| a.id == archived.id));
+        assert!(all.iter().any(|a| a.id == "active-id"));
+        assert!(all.iter().any(|a| a.id == "archived-id"));
     }
 
     // Category tests
 
-    // R1 — duplicate name, same case
+    // R1 — duplicate name, same case: service checks find_by_name before creating
     #[tokio::test]
     async fn create_category_rejects_duplicate_same_case() {
-        let svc = setup_service().await;
-        svc.create_category("Bonds").await.unwrap();
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_find_by_name().times(1).return_once(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "existing-id".to_string(),
+                "Bonds".to_string(),
+            )))
+        });
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
         let err = svc.create_category("Bonds").await.unwrap_err();
         assert!(
             matches!(
@@ -584,11 +668,21 @@ mod tests {
         );
     }
 
-    // R1 — duplicate name, different case
+    // R1 — duplicate name, different case: service checks find_by_name (case-insensitive lookup is the repo's concern)
     #[tokio::test]
     async fn create_category_rejects_duplicate_different_case() {
-        let svc = setup_service().await;
-        svc.create_category("Bonds").await.unwrap();
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_find_by_name().times(1).return_once(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "existing-id".to_string(),
+                "Bonds".to_string(),
+            )))
+        });
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
         let err = svc.create_category("bonds").await.unwrap_err();
         assert!(
             matches!(
@@ -599,10 +693,14 @@ mod tests {
         );
     }
 
-    // R2 — system category cannot be renamed
+    // R2 — system category cannot be renamed (pure id check, no repo call)
     #[tokio::test]
     async fn update_category_rejects_system_category() {
-        let svc = setup_service().await;
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
             .update_category(SYSTEM_CATEGORY_ID, "Renamed")
             .await
@@ -616,13 +714,22 @@ mod tests {
         );
     }
 
-    // R1 — update with name already taken by another category
+    // R1 — update with name already taken by a different category
     #[tokio::test]
     async fn update_category_rejects_duplicate_name() {
-        let svc = setup_service().await;
-        svc.create_category("Bonds").await.unwrap();
-        let cat2 = svc.create_category("Equities").await.unwrap();
-        let err = svc.update_category(&cat2.id, "bonds").await.unwrap_err();
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_find_by_name().times(1).return_once(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "other-id".to_string(),
+                "Bonds".to_string(),
+            )))
+        });
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
+        let err = svc.update_category("cat2-id", "bonds").await.unwrap_err();
         assert!(
             matches!(
                 err.downcast_ref::<CategoryDomainError>(),
@@ -632,10 +739,14 @@ mod tests {
         );
     }
 
-    // R2 — system category cannot be deleted
+    // R2 — system category cannot be deleted (pure id check, no repo call)
     #[tokio::test]
     async fn delete_category_rejects_system_category() {
-        let svc = setup_service().await;
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc.delete_category(SYSTEM_CATEGORY_ID).await.unwrap_err();
         assert!(
             matches!(
@@ -646,28 +757,32 @@ mod tests {
         );
     }
 
-    // R3 — deleting a category reassigns its assets to the default category
+    // R3 — service calls reassign_assets_and_delete with the category id and system fallback
     #[tokio::test]
     async fn delete_category_reassigns_assets_to_default() {
-        let svc = setup_service().await;
-        let cat = svc.create_category("Bonds").await.unwrap();
-        let asset = svc
-            .create_asset(CreateAssetDTO {
-                category_id: cat.id.clone(),
-                ..base_dto("Test Bond")
-            })
-            .await
-            .unwrap();
-        svc.delete_category(&cat.id).await.unwrap();
-        let assets = svc.get_all_assets().await.unwrap();
-        let updated = assets.iter().find(|a| a.id == asset.id).unwrap();
-        assert_eq!(updated.category.id, SYSTEM_CATEGORY_ID);
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_reassign_assets_and_delete()
+            .withf(|cat_id, fallback_id| cat_id == "bonds-id" && fallback_id == SYSTEM_CATEGORY_ID)
+            .times(1)
+            .return_once(|_, _| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
+        svc.delete_category("bonds-id").await.unwrap();
     }
 
     // MKT-043 — record_asset_price rejects unknown asset
     #[tokio::test]
     async fn record_asset_price_rejects_unknown_asset() {
-        let svc = setup_service().await;
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id().times(1).return_once(|_| Ok(None));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
             .record_asset_price("nonexistent-id", "2026-01-01", 100.0)
             .await
@@ -684,10 +799,17 @@ mod tests {
     // MKT-021 — record_asset_price rejects price <= 0
     #[tokio::test]
     async fn record_asset_price_rejects_non_positive_price() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
-            .record_asset_price(&asset.id, "2026-01-01", 0.0)
+            .record_asset_price("asset-id", "2026-01-01", 0.0)
             .await
             .unwrap_err();
         assert!(
@@ -702,10 +824,17 @@ mod tests {
     // MKT-022 — record_asset_price rejects a future date
     #[tokio::test]
     async fn record_asset_price_rejects_future_date() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
-            .record_asset_price(&asset.id, "2099-12-31", 100.0)
+            .record_asset_price("asset-id", "2099-12-31", 100.0)
             .await
             .unwrap_err();
         assert!(
@@ -717,82 +846,77 @@ mod tests {
         );
     }
 
-    // MKT-025, MKT-026 — record_asset_price upserts the price and publishes AssetPriceUpdated on success
+    // MKT-025, MKT-026 — record_asset_price calls upsert with correct micros and publishes event
     #[tokio::test]
     async fn record_asset_price_upserts_and_publishes_event_on_success() {
-        let pool = setup_pool().await;
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
-        let svc = AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
-        )
-        .with_event_bus(bus);
-
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        // First record — insert
-        svc.record_asset_price(&asset.id, "2026-01-01", 150.5)
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_upsert()
+            .withf(|p| p.asset_id == "asset-id" && p.date == "2026-01-01" && p.price == 150_500_000)
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_svc(ar, MockAssetCategoryRepository::new(), pr).with_event_bus(bus);
+        svc.record_asset_price("asset-id", "2026-01-01", 150.5)
             .await
             .unwrap();
-        rx.changed().await.unwrap();
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("event not received within 200ms")
+            .unwrap();
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
-
-        // Second record for same date — should overwrite (MKT-025)
-        svc.record_asset_price(&asset.id, "2026-01-01", 160.0)
-            .await
-            .unwrap();
-        let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
-        assert_eq!(latest.price, 160_000_000); // 160.0 → micros
-        assert_eq!(latest.date, "2026-01-01");
     }
 
-    // MKT-057 — notify_asset_price_updated publishes AssetPriceUpdated when a bus is configured.
-    // Used by the record_transaction use case after committing an auto-recorded price (B8 — the
-    // orchestrator does not publish events directly).
+    // MKT-057 — notify_asset_price_updated publishes AssetPriceUpdated when a bus is configured
     #[tokio::test]
     async fn notify_asset_price_updated_publishes_event() {
-        let pool = setup_pool().await;
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
-        let svc = AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
         )
         .with_event_bus(bus);
-
         svc.notify_asset_price_updated();
-
-        rx.changed().await.unwrap();
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("event not received within 200ms")
+            .unwrap();
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
     }
 
-    // MKT-031 — get_latest_price returns None when no price has been recorded for the asset
+    // MKT-031 — get_latest_price returns None when no price has been recorded
     #[tokio::test]
     async fn get_latest_price_returns_none_when_no_price_recorded() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        let result = svc.get_latest_price(&asset.id).await.unwrap();
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_latest().times(1).return_once(|_| Ok(None));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        let result = svc.get_latest_price("asset-id").await.unwrap();
         assert!(result.is_none());
     }
 
-    // MKT-031 — get_latest_price returns the most recently dated price when multiple exist
+    // MKT-031 — get_latest_price delegates to price_repo.get_latest and returns its result
     #[tokio::test]
     async fn get_latest_price_returns_latest_price_when_one_exists() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-03", 120.0)
-            .await
-            .unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-02", 110.0)
-            .await
-            .unwrap();
-        let latest = svc.get_latest_price(&asset.id).await.unwrap().unwrap();
-        // Most recent by date is 2026-01-03
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_latest()
+            .times(1)
+            .return_once(|_| Ok(Some(make_price("asset-id", "2026-01-03", 120_000_000))));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        let latest = svc.get_latest_price("asset-id").await.unwrap().unwrap();
         assert_eq!(latest.date, "2026-01-03");
         assert_eq!(latest.price, 120_000_000);
     }
@@ -804,7 +928,13 @@ mod tests {
     // MKT-072 — get_asset_prices returns AssetNotFound for a nonexistent asset_id
     #[tokio::test]
     async fn get_asset_prices_rejects_unknown_asset() {
-        let svc = setup_service().await;
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id().times(1).return_once(|_| Ok(None));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc.get_asset_prices("nonexistent-id").await.unwrap_err();
         assert!(
             matches!(
@@ -818,84 +948,78 @@ mod tests {
     // MKT-072 — get_asset_prices returns an empty list when the asset exists but has no prices
     #[tokio::test]
     async fn get_asset_prices_returns_empty_list_when_no_prices() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset()
+            .times(1)
+            .return_once(|_| Ok(vec![]));
+        let svc = make_svc(ar, MockAssetCategoryRepository::new(), pr);
+        let prices = svc.get_asset_prices("asset-id").await.unwrap();
         assert!(prices.is_empty());
     }
 
-    // MKT-072 — get_asset_prices returns all records sorted by date descending
+    // MKT-072 — get_asset_prices passes through whatever order price_repo returns
     #[tokio::test]
     async fn get_asset_prices_returns_all_records_sorted_date_descending() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-03", 130.0)
-            .await
-            .unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-02", 120.0)
-            .await
-            .unwrap();
-
-        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset().times(1).return_once(|_| {
+            Ok(vec![
+                make_price("asset-id", "2026-01-03", 130_000_000),
+                make_price("asset-id", "2026-01-02", 120_000_000),
+                make_price("asset-id", "2026-01-01", 100_000_000),
+            ])
+        });
+        let svc = make_svc(ar, MockAssetCategoryRepository::new(), pr);
+        let prices = svc.get_asset_prices("asset-id").await.unwrap();
         assert_eq!(prices.len(), 3);
-        // Must be date-descending: 03, 02, 01
         assert_eq!(prices[0].date, "2026-01-03");
         assert_eq!(prices[1].date, "2026-01-02");
         assert_eq!(prices[2].date, "2026-01-01");
-        // Prices match the recorded values in micros
         assert_eq!(prices[0].price, 130_000_000);
         assert_eq!(prices[1].price, 120_000_000);
         assert_eq!(prices[2].price, 100_000_000);
     }
 
-    // MKT-072 — get_asset_prices only returns records for the requested asset
+    // MKT-072 — get_asset_prices calls price_repo with the requested asset_id
     #[tokio::test]
     async fn get_asset_prices_scoped_to_requested_asset() {
-        let svc = setup_service().await;
-        let asset_a = svc
-            .create_asset(CreateAssetDTO {
-                reference: "AAPL".to_string(),
-                ..base_dto("Apple")
-            })
-            .await
-            .unwrap();
-        let asset_b = svc
-            .create_asset(CreateAssetDTO {
-                reference: "GOOG".to_string(),
-                ..base_dto("Google")
-            })
-            .await
-            .unwrap();
-        svc.record_asset_price(&asset_a.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-        svc.record_asset_price(&asset_b.id, "2026-01-01", 200.0)
-            .await
-            .unwrap();
-
-        let prices = svc.get_asset_prices(&asset_a.id).await.unwrap();
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .withf(|id| id == "asset-a-id")
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("asset-a-id", false))));
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset()
+            .withf(|id| id == "asset-a-id")
+            .times(1)
+            .return_once(|_| Ok(vec![make_price("asset-a-id", "2026-01-01", 100_000_000)]));
+        let svc = make_svc(ar, MockAssetCategoryRepository::new(), pr);
+        let prices = svc.get_asset_prices("asset-a-id").await.unwrap();
         assert_eq!(prices.len(), 1);
-        assert_eq!(prices[0].asset_id, asset_a.id);
+        assert_eq!(prices[0].asset_id, "asset-a-id");
     }
 
     // -------------------------------------------------------------------------
     // update_asset_price (MKT-082, MKT-083, MKT-084, MKT-085)
     // -------------------------------------------------------------------------
 
-    // MKT-082 — update_asset_price rejects non-positive price (price == 0)
+    // MKT-082 — validation runs before any repo call; no mock expectations needed
     #[tokio::test]
     async fn update_asset_price_rejects_non_positive_price() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
-            .update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 0.0)
+            .update_asset_price("asset-id", "2026-01-01", "2026-01-01", 0.0)
             .await
             .unwrap_err();
         assert!(
@@ -907,17 +1031,16 @@ mod tests {
         );
     }
 
-    // MKT-082 — update_asset_price rejects a non-finite price (NaN)
+    // MKT-082 — non-finite check runs before micro conversion; no repo calls
     #[tokio::test]
     async fn update_asset_price_rejects_non_finite_price() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
-            .update_asset_price(&asset.id, "2026-01-01", "2026-01-01", f64::NAN)
+            .update_asset_price("asset-id", "2026-01-01", "2026-01-01", f64::NAN)
             .await
             .unwrap_err();
         assert!(
@@ -929,17 +1052,16 @@ mod tests {
         );
     }
 
-    // MKT-082 — update_asset_price rejects a future new_date
+    // MKT-082 — future new_date rejected by AssetPrice::new before DB lookup
     #[tokio::test]
     async fn update_asset_price_rejects_future_date() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
         let err = svc
-            .update_asset_price(&asset.id, "2026-01-01", "2099-12-31", 150.0)
+            .update_asset_price("asset-id", "2026-01-01", "2099-12-31", 150.0)
             .await
             .unwrap_err();
         assert!(
@@ -951,15 +1073,20 @@ mod tests {
         );
     }
 
-    // MKT-083 — update_asset_price returns NotFound when record at original_date does not exist
+    // MKT-083 — returns NotFound when get_by_asset_and_date returns None
     #[tokio::test]
     async fn update_asset_price_returns_not_found_for_missing_record() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        // No price has been recorded for this asset yet
-
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(None));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
         let err = svc
-            .update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 100.0)
+            .update_asset_price("asset-id", "2026-01-01", "2026-01-01", 100.0)
             .await
             .unwrap_err();
         assert!(
@@ -971,96 +1098,102 @@ mod tests {
         );
     }
 
-    // MKT-083 — same-date update: in-place price change only
+    // MKT-083 — same original_date and new_date: service calls upsert (not replace_atomic)
     #[tokio::test]
     async fn update_asset_price_same_date_updates_price_in_place() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
-            .await
-            .unwrap();
-
-        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 150.0)
-            .await
-            .unwrap();
-
-        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
-        assert_eq!(
-            prices.len(),
-            1,
-            "still exactly one record after same-date update"
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
+        pr.expect_upsert()
+            .withf(|p| p.date == "2026-01-01" && p.price == 150_000_000)
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
         );
-        assert_eq!(prices[0].date, "2026-01-01");
-        assert_eq!(prices[0].price, 150_000_000);
+        svc.update_asset_price("asset-id", "2026-01-01", "2026-01-01", 150.0)
+            .await
+            .unwrap();
     }
 
-    // MKT-084 — date-change update: old record deleted, new one upserted
+    // MKT-084 — different dates: service calls replace_atomic with original_date and new price
     #[tokio::test]
     async fn update_asset_price_date_change_deletes_old_and_upserts_new() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
+        pr.expect_replace_atomic()
+            .withf(|id, orig, new_p| {
+                id == "asset-id"
+                    && orig == "2026-01-01"
+                    && new_p.date == "2026-01-02"
+                    && new_p.price == 110_000_000
+            })
+            .times(1)
+            .return_once(|_, _, _| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        svc.update_asset_price("asset-id", "2026-01-01", "2026-01-02", 110.0)
             .await
             .unwrap();
-
-        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-02", 110.0)
-            .await
-            .unwrap();
-
-        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
-        assert_eq!(prices.len(), 1, "old record must be removed");
-        assert_eq!(prices[0].date, "2026-01-02");
-        assert_eq!(prices[0].price, 110_000_000);
     }
 
-    // MKT-084 — date-change update overwrites existing record at new date (silent overwrite)
+    // MKT-084 — date change always calls replace_atomic regardless of whether target date exists
     #[tokio::test]
     async fn update_asset_price_date_change_overwrites_existing_target_date() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        // Pre-existing records at both source and target dates
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
+        pr.expect_replace_atomic()
+            .withf(|id, orig, new_p| {
+                id == "asset-id"
+                    && orig == "2026-01-01"
+                    && new_p.date == "2026-01-02"
+                    && new_p.price == 200_000_000
+            })
+            .times(1)
+            .return_once(|_, _, _| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        svc.update_asset_price("asset-id", "2026-01-01", "2026-01-02", 200.0)
             .await
             .unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-02", 105.0)
-            .await
-            .unwrap();
-
-        // Move 2026-01-01 to 2026-01-02 — must overwrite the 105.0 record
-        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-02", 200.0)
-            .await
-            .unwrap();
-
-        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
-        assert_eq!(prices.len(), 1, "only the 2026-01-02 record should remain");
-        assert_eq!(prices[0].date, "2026-01-02");
-        assert_eq!(prices[0].price, 200_000_000);
     }
 
-    // MKT-085 — update_asset_price publishes AssetPriceUpdated on success
+    // MKT-085 — publishes AssetPriceUpdated after a successful update
     #[tokio::test]
     async fn update_asset_price_publishes_asset_price_updated_event() {
-        let pool = setup_pool().await;
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
-        let svc = AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
+        pr.expect_upsert().times(1).return_once(|_| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
         )
         .with_event_bus(bus);
-
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
+        svc.update_asset_price("asset-id", "2026-01-01", "2026-01-01", 150.0)
             .await
             .unwrap();
-        // Drain the record_asset_price event
-        rx.changed().await.unwrap();
-
-        svc.update_asset_price(&asset.id, "2026-01-01", "2026-01-01", 150.0)
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
             .await
+            .expect("event not received within 200ms")
             .unwrap();
-        rx.changed().await.unwrap();
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
     }
 
@@ -1068,14 +1201,20 @@ mod tests {
     // delete_asset_price (MKT-090, MKT-091)
     // -------------------------------------------------------------------------
 
-    // MKT-090 — delete_asset_price returns NotFound when the record does not exist
+    // MKT-090 — returns NotFound when get_by_asset_and_date returns None
     #[tokio::test]
     async fn delete_asset_price_returns_not_found_for_missing_record() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(None));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
         let err = svc
-            .delete_asset_price(&asset.id, "2026-01-01")
+            .delete_asset_price("asset-id", "2026-01-01")
             .await
             .unwrap_err();
         assert!(
@@ -1087,57 +1226,52 @@ mod tests {
         );
     }
 
-    // MKT-090 — delete_asset_price removes the record on success
+    // MKT-090 — calls price_repo.delete with the correct (asset_id, date) after existence check
     #[tokio::test]
     async fn delete_asset_price_removes_the_record() {
-        let svc = setup_service().await;
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
+        pr.expect_delete()
+            .withf(|id, date| id == "asset-id" && date == "2026-01-01")
+            .times(1)
+            .return_once(|_, _| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        svc.delete_asset_price("asset-id", "2026-01-01")
             .await
             .unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-02", 110.0)
-            .await
-            .unwrap();
-
-        svc.delete_asset_price(&asset.id, "2026-01-01")
-            .await
-            .unwrap();
-
-        let prices = svc.get_asset_prices(&asset.id).await.unwrap();
-        assert_eq!(prices.len(), 1);
-        assert_eq!(prices[0].date, "2026-01-02");
     }
 
-    // MKT-091 — delete_asset_price publishes AssetPriceUpdated on success
+    // MKT-091 — publishes AssetPriceUpdated after a successful delete
     #[tokio::test]
     async fn delete_asset_price_publishes_asset_price_updated_event() {
-        let pool = setup_pool().await;
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
-        let svc = AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_by_asset_and_date()
+            .times(1)
+            .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
+        pr.expect_delete().times(1).return_once(|_, _| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
         )
         .with_event_bus(bus);
-
-        let asset = svc.create_asset(base_dto("Apple")).await.unwrap();
-        svc.record_asset_price(&asset.id, "2026-01-01", 100.0)
+        svc.delete_asset_price("asset-id", "2026-01-01")
             .await
             .unwrap();
-        // Drain the record_asset_price event
-        rx.changed().await.unwrap();
-
-        svc.delete_asset_price(&asset.id, "2026-01-01")
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
             .await
+            .expect("event not received within 200ms")
             .unwrap();
-        rx.changed().await.unwrap();
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
     }
-
-    // -------------------------------------------------------------------------
-    // record_asset_price — MKT-043 retro rule (AssetNotFound at the command layer)
-    // -------------------------------------------------------------------------
 
     // MKT-043 — record_asset_price command returns AssetNotFound for an unknown asset_id.
     // This is covered by the existing record_asset_price_rejects_unknown_asset service test above.

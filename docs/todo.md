@@ -88,10 +88,6 @@ Shipped per MKT-072–MKT-096 (2026-04-29):
 
 `AssetNotFound` added to `AssetPriceCommandError` in `asset-contract.md` (2026-04-29). The backend implementation of `record_asset_price`, `get_asset_prices`, and `update_asset_price` must add this variant to `AssetPriceDomainError` and map it in `to_asset_price_error`.
 
-## (spec) — MKT-055/056 describe backend-atomic auto-record but implementation is frontend-sequential
-
-ADR-006 Note states: "the frontend now calls the two commands independently." ARCHITECTURE.md confirms this. MKT-055 ("orchestrator writes AssetPrice inside the same DB transaction") and MKT-056 ("single database transaction") describe a model that was removed before shipping. The rules should be rewritten to describe the actual frontend-sequential flow (frontend calls `record_asset_price` after a successful buy/sell/correct when `recordPrice` is true and `priceMicro > 0`). Flagged during spec-reviewer pass on the price history CRUD feature (2026-04-29).
-
 ## (testing) — Refactor AssetService tests to use MockAssetPriceRepository
 
 `src-tauri/src/context/asset/service.rs` has 24 inline service tests that use real `SqliteAssetRepository`, `SqliteAssetCategoryRepository`, and `SqliteAssetPriceRepository` against an in-memory SQLite database. They test service-layer logic but go all the way down to real SQL, which duplicates coverage already provided by the repository tests and makes failure diagnosis harder (a SQL regression can fail a service test with no useful signal about where the fault is).
