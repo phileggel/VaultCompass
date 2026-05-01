@@ -102,12 +102,14 @@ export function AssetManager() {
         table={tableWithToggle}
       />
       <FAB onClick={() => setIsAddModalOpen(true)} label={t("asset.fab_label")} />
-      <WebLookupModal
-        isOpen={isAddModalOpen}
-        prefillName={createNew}
-        onSuccess={handleAddAssetSuccess}
-        onClose={() => setIsAddModalOpen(false)}
-      />
+      {isAddModalOpen && (
+        <WebLookupModal
+          isOpen={true}
+          prefillName={createNew}
+          onSuccess={handleAddAssetSuccess}
+          onClose={() => setIsAddModalOpen(false)}
+        />
+      )}
     </>
   );
 }
