@@ -115,7 +115,7 @@ Implements the application auto-update lifecycle (spec: `docs/update.md`).
 Searches OpenFIGI to pre-fill the Add Asset form (spec: `docs/spec/asset-web-lookup.md`).
 
 - `orchestrator.rs` — `AssetWebLookupUseCase` + `OpenFigiClient` trait + `ReqwestOpenFigiClient`; `AssetLookupResult` value object (transient, never persisted)
-- `api.rs` — one Tauri command: `search_asset_web(query: String) -> Vec<AssetLookupResult>`
+- `api.rs` — one Tauri command: `lookup_asset(query: String) -> Vec<AssetLookupResult>`
 - Routing: 12-char alphanumeric queries → ISIN mapping endpoint; all others → keyword search endpoint
 - No DB dependency; no events emitted
 

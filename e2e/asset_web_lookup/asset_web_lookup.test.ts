@@ -1,5 +1,5 @@
 /**
- * E2E tests — Asset Web Lookup (search_asset_web)
+ * E2E tests — Asset Web Lookup (lookup_asset)
  *
  * Contract: docs/contracts/asset_web_lookup-contract.md
  * Spec:     docs/spec/web-asset-lookup.md

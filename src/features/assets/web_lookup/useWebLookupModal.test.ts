@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssetLookupResult } from "@/bindings";
 import { useWebLookupModal } from "./useWebLookupModal";
 
-const mockSearchAssetWeb = vi.fn();
+const mockLookupAsset = vi.fn();
 
 vi.mock("../gateway", () => ({
   assetGateway: {
-    searchAssetWeb: (...args: unknown[]) => mockSearchAssetWeb(...args),
+    lookupAsset: (...args: unknown[]) => mockLookupAsset(...args),
   },
 }));
 
@@ -27,7 +27,7 @@ const etfResult: AssetLookupResult = {
 
 describe("useWebLookupModal", () => {
   beforeEach(() => {
-    mockSearchAssetWeb.mockReset();
+    mockLookupAsset.mockReset();
   });
 
   // Initial state
@@ -38,7 +38,7 @@ describe("useWebLookupModal", () => {
 
   // WEB-040 — selecting a result transitions to form-prefilled
   it("selectResult transitions from search to form-prefilled with the selected result", async () => {
-    mockSearchAssetWeb.mockResolvedValue({ status: "ok", data: [appleResult] });
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [appleResult] });
 
     const { result } = renderHook(() => useWebLookupModal());
 
@@ -73,7 +73,7 @@ describe("useWebLookupModal", () => {
 
   // WEB-047 — back from form-prefilled restores search state (query + results retained)
   it("back from form-prefilled returns to search step with previous results retained", async () => {
-    mockSearchAssetWeb.mockResolvedValue({ status: "ok", data: [appleResult, etfResult] });
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [appleResult, etfResult] });
 
     const { result } = renderHook(() => useWebLookupModal());
 
@@ -119,7 +119,7 @@ describe("useWebLookupModal", () => {
 
   // WEB-047 — back IS available from form-prefilled
   it("canGoBack is true when in form-prefilled step", async () => {
-    mockSearchAssetWeb.mockResolvedValue({ status: "ok", data: [appleResult] });
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [appleResult] });
 
     const { result } = renderHook(() => useWebLookupModal());
 
@@ -140,7 +140,7 @@ describe("useWebLookupModal", () => {
 
   // WEB-040 — selecting a different result replaces the previous selection
   it("selecting a different result replaces all pre-filled values", async () => {
-    mockSearchAssetWeb.mockResolvedValue({ status: "ok", data: [appleResult, etfResult] });
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [appleResult, etfResult] });
 
     const { result } = renderHook(() => useWebLookupModal());
 

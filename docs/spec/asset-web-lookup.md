@@ -35,11 +35,11 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 **WEB-013 — Fill manually bypass (frontend)**: A "Fill manually" action is always visible in the lookup step. Activating it skips the web lookup entirely and opens the blank Add Asset form, preserving the pre-existing creation path.
 
-**WEB-014 — Query routing (backend)**: When `search_asset_web` receives a query, it applies the following routing rule: if the trimmed query is exactly 12 alphanumeric characters it is sent to the OpenFIGI ISIN mapping endpoint; all other queries — including queries that contain non-alphanumeric characters or are shorter or longer than 12 characters — are sent to the OpenFIGI keyword search endpoint.
+**WEB-014 — Query routing (backend)**: When `lookup_asset` receives a query, it applies the following routing rule: if the trimmed query is exactly 12 alphanumeric characters it is sent to the OpenFIGI ISIN mapping endpoint; all other queries — including queries that contain non-alphanumeric characters or are shorter or longer than 12 characters — are sent to the OpenFIGI keyword search endpoint.
 
 ### Lookup Command (020–029)
 
-**WEB-020 — Backend command (backend)**: A new Tauri command `search_asset_web(query: String) -> Result<Vec<AssetLookupResult>, WebLookupError>` issues an HTTP request to the OpenFIGI API using the routing logic defined in WEB-014. The command returns a (possibly empty) ordered list of results on success.
+**WEB-020 — Backend command (backend)**: A new Tauri command `lookup_asset(query: String) -> Result<Vec<AssetLookupResult>, WebLookupError>` issues an HTTP request to the OpenFIGI API using the routing logic defined in WEB-014. The command returns a (possibly empty) ordered list of results on success.
 
 **WEB-021 — No API key required (backend)**: The OpenFIGI API is accessed without authentication. No credential is stored or transmitted.
 
@@ -53,7 +53,7 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 ### Search UX (030–039)
 
-**WEB-030 — Loading state (frontend)**: While `search_asset_web` is in progress, a loading indicator is shown and the search action is disabled to prevent duplicate requests.
+**WEB-030 — Loading state (frontend)**: While `lookup_asset` is in progress, a loading indicator is shown and the search action is disabled to prevent duplicate requests.
 
 **WEB-031 — Results display (frontend)**: Each `AssetLookupResult` in the response is shown as a selectable row displaying the instrument name, reference (if present), asset class (if present), and currency (if present).
 

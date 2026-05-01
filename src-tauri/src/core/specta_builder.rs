@@ -72,7 +72,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::get_transactions,
             account_details::get_account_details,
             account_deletion::get_account_deletion_summary,
-            asset_web_lookup::search_asset_web
+            asset_web_lookup::lookup_asset
         ])
         .events(tauri_specta::collect_events![Event])
 }

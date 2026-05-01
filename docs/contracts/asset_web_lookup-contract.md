@@ -7,7 +7,7 @@
 
 | Command            | Args            | Return                   | Errors         |
 | ------------------ | --------------- | ------------------------ | -------------- |
-| `search_asset_web` | `query: String` | `Vec<AssetLookupResult>` | `NetworkError` |
+| `lookup_asset` | `query: String` | `Vec<AssetLookupResult>` | `NetworkError` |
 
 ## Shared Types
 
@@ -28,4 +28,4 @@ None — this use case produces no new events. The downstream `add_asset` comman
 
 ## Changelog
 
-- 2026-05-01 — Added by `asset-web-lookup` spec: `search_asset_web`
+- 2026-05-01 — Added by `asset-web-lookup` spec: `lookup_asset`

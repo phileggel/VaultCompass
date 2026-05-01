@@ -81,6 +81,32 @@ An internal entity of `Asset`. A price observation for an asset on a given date.
 
 ---
 
+## Asset Web Lookup
+
+### OpenFIGI Lookup
+
+The outbound HTTP search that, given a name, ticker, or ISIN, queries the OpenFIGI API and
+returns up to 10 candidate `AssetLookupResult` values. 12-character alphanumeric inputs route
+to the ISIN mapping endpoint; all others route to the keyword search endpoint.
+
+> Status: pending
+
+### AssetLookupResult
+
+A transient value object returned by the OpenFIGI lookup. Never persisted. Carries the name,
+reference (ISIN or ticker), currency, and asset class of a candidate instrument — used solely
+to pre-fill the Add Asset form.
+
+> Status: pending
+
+## Asset Web Lookup Command
+
+| Name               | Intent                                                                                                                          | Status  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `lookup_asset` | Query OpenFIGI with a name, ticker, or ISIN and return up to 10 `AssetLookupResult` values. Errors: `NetworkError` | pending |
+
+---
+
 ## Asset Price Service Operations
 
 | Name                 | Intent                                                                                                                                                                                | Status    |

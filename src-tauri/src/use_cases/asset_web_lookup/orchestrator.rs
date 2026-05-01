@@ -44,7 +44,7 @@ pub trait OpenFigiClient: Send + Sync {
 // AssetLookupResult value object
 // ---------------------------------------------------------------------------
 
-/// Transient value object returned by `search_asset_web`.  Never persisted
+/// Transient value object returned by `lookup_asset`.  Never persisted
 /// (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046.
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct AssetLookupResult {

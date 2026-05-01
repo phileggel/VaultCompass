@@ -44,7 +44,7 @@ export const assetGateway = {
     return await commands.deleteAsset(id);
   },
 
-  async searchAssetWeb(query: string): Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
-    return await commands.searchAssetWeb(query);
+  async lookupAsset(query: string): Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
+    return await commands.lookupAsset(query);
   },
 };

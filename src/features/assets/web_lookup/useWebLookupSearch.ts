@@ -23,7 +23,7 @@ export function useWebLookupSearch(): UseWebLookupSearchReturn {
 
   const runSearch = useCallback(async (q: string) => {
     setState({ status: "loading" });
-    const result = await assetGateway.searchAssetWeb(q);
+    const result = await assetGateway.lookupAsset(q);
     if (result.status === "error") {
       setState({ status: "error" });
     } else if (result.data.length === 0) {

@@ -3,17 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssetLookupResult } from "@/bindings";
 import { useWebLookupSearch } from "./useWebLookupSearch";
 
-const mockSearchAssetWeb = vi.fn();
+const mockLookupAsset = vi.fn();
 
 vi.mock("../gateway", () => ({
   assetGateway: {
-    searchAssetWeb: (...args: unknown[]) => mockSearchAssetWeb(...args),
+    lookupAsset: (...args: unknown[]) => mockLookupAsset(...args),
   },
 }));
 
 describe("useWebLookupSearch", () => {
   beforeEach(() => {
-    mockSearchAssetWeb.mockReset();
+    mockLookupAsset.mockReset();
   });
 
   // WEB-011 — empty query submit is a no-op: state stays idle
@@ -27,7 +27,7 @@ describe("useWebLookupSearch", () => {
       result.current.submit();
     });
 
-    expect(mockSearchAssetWeb).not.toHaveBeenCalled();
+    expect(mockLookupAsset).not.toHaveBeenCalled();
     expect(result.current.state.status).toBe("idle");
   });
 
@@ -36,7 +36,7 @@ describe("useWebLookupSearch", () => {
     const results: AssetLookupResult[] = [
       { name: "Apple Inc.", reference: "AAPL", currency: "USD", asset_class: "Stocks" },
     ];
-    mockSearchAssetWeb.mockResolvedValue({ status: "ok", data: results });
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: results });
 
     const { result } = renderHook(() => useWebLookupSearch());
 
@@ -54,7 +54,7 @@ describe("useWebLookupSearch", () => {
       await submitPromise;
     });
 
-    expect(mockSearchAssetWeb).toHaveBeenCalledWith("AAPL");
+    expect(mockLookupAsset).toHaveBeenCalledWith("AAPL");
     expect(result.current.state.status).toBe("results");
     if (result.current.state.status === "results") {
       expect(result.current.state.results).toEqual(results);
@@ -63,7 +63,7 @@ describe("useWebLookupSearch", () => {
 
   // WEB-032 — empty result list transitions to empty state
   it("transitions to empty state when gateway returns no results", async () => {
-    mockSearchAssetWeb.mockResolvedValue({ status: "ok", data: [] });
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
 
     const { result } = renderHook(() => useWebLookupSearch());
 
@@ -80,7 +80,7 @@ describe("useWebLookupSearch", () => {
 
   // WEB-033 — NetworkError transitions to error state
   it("transitions to error state when gateway returns NetworkError", async () => {
-    mockSearchAssetWeb.mockResolvedValue({
+    mockLookupAsset.mockResolvedValue({
       status: "error",
       error: { code: "NetworkError" },
     });
@@ -100,7 +100,7 @@ describe("useWebLookupSearch", () => {
 
   // WEB-033 — retry re-issues the last query
   it("retry re-issues the last query after an error", async () => {
-    mockSearchAssetWeb
+    mockLookupAsset
       .mockResolvedValueOnce({ status: "error", error: { code: "NetworkError" } })
       .mockResolvedValueOnce({
         status: "ok",
@@ -123,8 +123,8 @@ describe("useWebLookupSearch", () => {
       result.current.retry();
     });
 
-    expect(mockSearchAssetWeb).toHaveBeenCalledTimes(2);
-    expect(mockSearchAssetWeb).toHaveBeenNthCalledWith(2, "AAPL");
+    expect(mockLookupAsset).toHaveBeenCalledTimes(2);
+    expect(mockLookupAsset).toHaveBeenNthCalledWith(2, "AAPL");
     expect(result.current.state.status).toBe("results");
   });
 
@@ -134,7 +134,7 @@ describe("useWebLookupSearch", () => {
     const firstCall = new Promise((resolve) => {
       resolveFirst = resolve;
     });
-    mockSearchAssetWeb.mockReturnValueOnce(firstCall);
+    mockLookupAsset.mockReturnValueOnce(firstCall);
 
     const { result } = renderHook(() => useWebLookupSearch());
 
@@ -158,6 +158,6 @@ describe("useWebLookupSearch", () => {
     });
 
     // Gateway should have been called only once
-    expect(mockSearchAssetWeb).toHaveBeenCalledTimes(1);
+    expect(mockLookupAsset).toHaveBeenCalledTimes(1);
   });
 });

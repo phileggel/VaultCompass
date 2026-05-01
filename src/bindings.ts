@@ -371,9 +371,9 @@ async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDelet
  * (WEB-014).  Any network or HTTP failure is returned as
  * `WebLookupCommandError::NetworkError` (WEB-025).
  */
-async searchAssetWeb(query: string) : Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
+async lookupAsset(query: string) : Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("search_asset_web", { query }) };
+    return { status: "ok", data: await TAURI_INVOKE("lookup_asset", { query }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -638,7 +638,7 @@ export type AssetCommandError =
  */
 { code: "Unknown" }
 /**
- * Transient value object returned by `search_asset_web`.  Never persisted
+ * Transient value object returned by `lookup_asset`.  Never persisted
  * (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046.
  */
 export type AssetLookupResult = { 
@@ -1270,7 +1270,7 @@ export type UpdateInfo = {
  */
 version: string }
 /**
- * Typed error for `search_asset_web` (WEB-025).
+ * Typed error for `lookup_asset` (WEB-025).
  * 
  * Single variant — covers all failure modes: network unreachable, connection
  * timeout, and any non-2xx HTTP status (including rate-limiting responses).

@@ -8,7 +8,7 @@ use specta::Type;
 use super::orchestrator::{AssetLookupResult, AssetWebLookupUseCase};
 use crate::core::logger::BACKEND;
 
-/// Typed error for `search_asset_web` (WEB-025).
+/// Typed error for `lookup_asset` (WEB-025).
 ///
 /// Single variant — covers all failure modes: network unreachable, connection
 /// timeout, and any non-2xx HTTP status (including rate-limiting responses).
@@ -29,12 +29,12 @@ pub enum WebLookupCommandError {
 /// `WebLookupCommandError::NetworkError` (WEB-025).
 #[tauri::command]
 #[specta::specta]
-pub async fn search_asset_web(
+pub async fn lookup_asset(
     uc: tauri::State<'_, AssetWebLookupUseCase>,
     query: String,
 ) -> Result<Vec<AssetLookupResult>, WebLookupCommandError> {
     uc.search(query).await.map_err(|e| {
-        tracing::warn!(target: BACKEND, error = %e, "search_asset_web failed (WEB-025)");
+        tracing::warn!(target: BACKEND, error = %e, "lookup_asset failed (WEB-025)");
         WebLookupCommandError::NetworkError
     })
 }
