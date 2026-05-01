@@ -8,28 +8,28 @@
 
 ## 1. Workflow TaskList
 
-- [ ] Review architecture and rules: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/frontend-rules.md`, `docs/e2e-rules.md`, `docs/ubiquitous-language.md`
-- [ ] Database migration — **N/A** (no schema change; `AssetLookupResult` is a transient value object per WEB-020 / contract)
-- [ ] Backend test stubs (`test-writer-backend` — all stubs written, red confirmed)
-- [ ] Backend implementation (minimal — make failing tests pass, green confirmed; **implement only what is required to make the failing tests pass — no additional methods, no defensive code, no anticipation of future rules**)
-- [ ] `just format` (rustfmt + clippy --fix)
-- [ ] Backend review (`reviewer-backend` then fix issues)
-- [ ] Type synchronization: `just generate-types` (Tauri profile)
-- [ ] Compilation fixup — TypeScript errors from the new bindings only (no UI work yet)
-- [ ] `just check` — TypeScript clean
-- [ ] Commit (backend layer): `feat(asset-web-lookup): add search_asset_web command and OpenFIGI client`
-- [ ] Frontend test stubs (`test-writer-frontend` — all stubs written, red confirmed)
-- [ ] Frontend implementation (minimal — make failing tests pass, green confirmed; **implement only what is required to make the failing tests pass — no additional methods, no defensive code, no anticipation of future rules**)
-- [ ] `just format`
-- [ ] Frontend review (`reviewer-frontend` then fix issues)
-- [ ] Commit (frontend layer): `feat(asset-web-lookup): add web lookup dialog before Add Asset form`
-- [ ] E2E tests (`test-writer-e2e`; `/setup-e2e` first if not initialized; tests written, red confirmed; iterate selectors per `docs/e2e-rules.md` until green)
-- [ ] Commit (E2E): `test(asset-web-lookup): add E2E coverage for web lookup flow`
-- [ ] Cross-cutting review (`reviewer-arch` always; `reviewer-sql` skipped — no migrations; `reviewer-infra` if any config / script / hook / workflow file changed — likely no, unless `Cargo.toml` is touched to add an HTTP client)
-- [ ] i18n review (`i18n-checker` — UI text added)
-- [ ] Documentation update: `ARCHITECTURE.md` (new use case `asset_web_lookup`), `docs/todo.md` if new tech debt or resolved items (entries in English)
-- [ ] Spec check (`spec-checker`)
-- [ ] Commit (tests & docs): `docs(asset-web-lookup): record use case and update architecture`
+- [x] Review architecture and rules: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/frontend-rules.md`, `docs/e2e-rules.md`, `docs/ubiquitous-language.md`
+- [x] Database migration — **N/A** (no schema change; `AssetLookupResult` is a transient value object per WEB-020 / contract)
+- [x] Backend test stubs (`test-writer-backend` — all stubs written, red confirmed)
+- [x] Backend implementation (minimal — make failing tests pass, green confirmed; **implement only what is required to make the failing tests pass — no additional methods, no defensive code, no anticipation of future rules**)
+- [x] `just format` (rustfmt + clippy --fix)
+- [x] Backend review (`reviewer-backend` then fix issues)
+- [x] Type synchronization: `just generate-types` (Tauri profile)
+- [x] Compilation fixup — TypeScript errors from the new bindings only (no UI work yet)
+- [x] `just check` — TypeScript clean
+- [x] Commit (backend layer): `feat(asset-web-lookup): add search_asset_web command and OpenFIGI client`
+- [x] Frontend test stubs (`test-writer-frontend` — all stubs written, red confirmed)
+- [x] Frontend implementation (minimal — make failing tests pass, green confirmed; **implement only what is required to make the failing tests pass — no additional methods, no defensive code, no anticipation of future rules**)
+- [x] `just format`
+- [x] Frontend review (`reviewer-frontend` then fix issues)
+- [x] Commit (frontend layer): `feat(asset-web-lookup): add web lookup dialog before Add Asset form`
+- [x] E2E tests (`test-writer-e2e`; `/setup-e2e` first if not initialized; tests written, red confirmed; iterate selectors per `docs/e2e-rules.md` until green)
+- [x] Commit (E2E): `test(asset-web-lookup): add E2E coverage for web lookup flow`
+- [x] Cross-cutting review (`reviewer-arch` always; `reviewer-sql` skipped — no migrations; `reviewer-infra` if any config / script / hook / workflow file changed — likely no, unless `Cargo.toml` is touched to add an HTTP client)
+- [x] i18n review (`i18n-checker` — UI text added)
+- [x] Documentation update: `ARCHITECTURE.md` (new use case `asset_web_lookup`), `docs/todo.md` if new tech debt or resolved items (entries in English)
+- [x] Spec check (`spec-checker`)
+- [x] Confirm UL entries for `AssetLookupResult` and `OpenFIGI lookup` (confirmed in `docs/ubiquitous-language.md`)
 
 ---
 

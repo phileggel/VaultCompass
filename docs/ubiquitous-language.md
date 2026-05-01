@@ -89,7 +89,7 @@ The outbound HTTP search that, given a name, ticker, or ISIN, queries the OpenFI
 returns up to 10 candidate `AssetLookupResult` values. 12-character alphanumeric inputs route
 to the ISIN mapping endpoint; all others route to the keyword search endpoint.
 
-> Status: pending
+> Status: confirmed
 
 ### AssetLookupResult
 
@@ -97,13 +97,13 @@ A transient value object returned by the OpenFIGI lookup. Never persisted. Carri
 reference (ISIN or ticker), currency, and asset class of a candidate instrument — used solely
 to pre-fill the Add Asset form.
 
-> Status: pending
+> Status: confirmed
 
 ## Asset Web Lookup Command
 
 | Name               | Intent                                                                                                                          | Status  |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `lookup_asset` | Query OpenFIGI with a name, ticker, or ISIN and return up to 10 `AssetLookupResult` values. Errors: `NetworkError` | pending |
+| `lookup_asset` | Query OpenFIGI with a name, ticker, or ISIN and return up to 10 `AssetLookupResult` values. Errors: `NetworkError` | confirmed |
 
 ---
 
