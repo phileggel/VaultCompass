@@ -130,8 +130,15 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                 </span>
               </td>
             </tr>
+          ) : isEmpty ? (
+            // R11 — empty state distinct from no-search-results
+            <tr>
+              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+                {t("account.empty")}
+              </td>
+            </tr>
           ) : fetchError ? (
-            // R12 — error state with retry
+            // R12 — error state with retry (only shown when accounts exist but failed to reload)
             <tr>
               <td colSpan={3} className="m3-td text-center py-12">
                 <div className="flex flex-col items-center gap-3">
@@ -140,13 +147,6 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                     {t("action.retry")}
                   </Button>
                 </div>
-              </td>
-            </tr>
-          ) : isEmpty ? (
-            // R11 — empty state distinct from no-search-results
-            <tr>
-              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
-                {t("account.empty")}
               </td>
             </tr>
           ) : hasNoSearchResults ? (

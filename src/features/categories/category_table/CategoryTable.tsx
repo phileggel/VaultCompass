@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, Edit2, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AssetCategory } from "@/bindings";
+import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { Dialog } from "@/ui/components/modal/Dialog";
@@ -35,6 +36,10 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editData, setEditData] = useState<AssetCategory | null>(null);
 
+  useEffect(() => {
+    logger.info("[CategoryTable] mounted");
+  }, []);
+
   const handleDeleteConfirm = async () => {
     if (!deleteData) return;
     setIsDeleting(true);
@@ -51,21 +56,6 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
     }
     setIsDeleting(false);
   };
-
-  if (loadError) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4 text-m3-on-surface-variant">
-        <p className="text-sm">{t("category.error_load")}</p>
-        <button
-          type="button"
-          onClick={fetchCategories}
-          className="m3-button-outlined text-sm px-4 py-2"
-        >
-          {t("action.retry")}
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="m3-table-container flex-1">
@@ -93,6 +83,25 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
                 <span className="text-m3-on-surface-variant animate-pulse">
                   {t("category.loading")}
                 </span>
+              </td>
+            </tr>
+          ) : categories.length === 0 ? (
+            <tr>
+              <td colSpan={2} className="m3-td text-center py-12 text-m3-on-surface-variant">
+                {t("category.empty")}
+              </td>
+            </tr>
+          ) : loadError ? (
+            <tr>
+              <td colSpan={2} className="m3-td text-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <p role="alert" className="text-sm text-m3-error">
+                    {t("category.error_load")}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={fetchCategories}>
+                    {t("action.retry")}
+                  </Button>
+                </div>
               </td>
             </tr>
           ) : sortedAndFilteredCategories.length === 0 ? (

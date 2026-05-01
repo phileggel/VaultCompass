@@ -70,7 +70,10 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
   return (
     <div className="m3-table-container flex-1">
       {actionError && (
-        <div className="mb-3 flex items-center justify-between gap-2 text-sm text-m3-error px-2">
+        <div
+          role="alert"
+          className="mb-3 flex items-center justify-between gap-2 text-sm text-m3-error px-2"
+        >
           <span>{actionError}</span>
           <IconButton
             icon={<X size={14} />}
@@ -139,6 +142,12 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                 <span className="text-m3-on-surface-variant animate-pulse">
                   {t("asset.loading")}
                 </span>
+              </td>
+            </tr>
+          ) : assets.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+                {t("asset.empty")}
               </td>
             </tr>
           ) : fetchError ? (
