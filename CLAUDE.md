@@ -38,10 +38,11 @@ See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.m
 
 On top of the standard kit workflow, this project requires:
 
-1. **Before implementing**: read `docs/backend-rules.md` (backend changes) and/or `docs/frontend-rules.md` (frontend changes).
+1. **Before implementing**: read `docs/backend-rules.md` (backend changes), `docs/frontend-rules.md` (frontend changes), and/or `docs/e2e-rules.md` (E2E test changes).
 2. **Plan step**: after proposing the TODO plan, immediately create a TaskList (`TaskCreate`) with one task per remaining step. Ask user to validate before implementing.
 3. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; for new business rules use `/spec-writer` to author/extend the spec in `docs/spec/` and `/contract` to derive the matching `docs/contracts/{domain}-contract.md`. Use `/adr-manager` to record architectural decisions in `docs/adr/`.
-4. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
+4. **E2E tests** (after frontend impl, before release): run `test-writer-e2e` agent with the domain contract to write failing WebDriver tests against the live app. Run `/setup-e2e` once first if not yet initialized.
+5. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
 
 ### Task tracking (within a conversation)
 
@@ -59,6 +60,8 @@ On top of the standard kit workflow, this project requires:
 - Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-all` (both)
 - Types: `just generate-types` (Sync Rust to TS via Specta) | `just prepare-sqlx` (after schema/query changes)
 - Database: `just migrate` (run migrations) | `just clean-db` (⚠️ destructive reset)
+- E2E setup (once): `/setup-e2e` (installs WebDriver deps + generates `wdio.conf.ts`)
+- E2E tests: `npm run test:e2e` (local) | `npm run test:e2e:ci` (headless)
 - Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions)
 - Code audit: `/prune` (dead code, verbose patterns, KISS review)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
