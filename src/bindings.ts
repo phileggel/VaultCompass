@@ -361,6 +361,23 @@ async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDelet
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Searches OpenFIGI for instruments matching the query and returns up to 10
+ * results (WEB-020, WEB-022).
+ * 
+ * Routing is transparent to the caller: 12-char alphanumeric queries are sent
+ * to the ISIN mapping endpoint; all others to the keyword search endpoint
+ * (WEB-014).  Any network or HTTP failure is returned as
+ * `WebLookupCommandError::NetworkError` (WEB-025).
+ */
+async searchAssetWeb(query: string) : Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search_asset_web", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -620,6 +637,27 @@ export type AssetCommandError =
  * An unexpected server-side error occurred.
  */
 { code: "Unknown" }
+/**
+ * Transient value object returned by `search_asset_web`.  Never persisted
+ * (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046.
+ */
+export type AssetLookupResult = { 
+/**
+ * Full name of the financial instrument.
+ */
+name: string; 
+/**
+ * ISIN (on the ISIN path) or ticker (on the keyword path), if available (WEB-046).
+ */
+reference: string | null; 
+/**
+ * ISO 4217 trading currency, if returned by OpenFIGI (WEB-024).
+ */
+currency: string | null; 
+/**
+ * Mapped asset class, if the `securityType` is recognised (WEB-023).
+ */
+asset_class: AssetClass | null }
 /**
  * A manually recorded market price for a financial asset on a specific date.
  * Owned by the `asset` bounded context (MKT spec).
@@ -1231,6 +1269,17 @@ export type UpdateInfo = {
  * Semantic version string of the available update (e.g. "1.2.3").
  */
 version: string }
+/**
+ * Typed error for `search_asset_web` (WEB-025).
+ * 
+ * Single variant — covers all failure modes: network unreachable, connection
+ * timeout, and any non-2xx HTTP status (including rate-limiting responses).
+ */
+export type WebLookupCommandError = 
+/**
+ * All network or HTTP-level failures.
+ */
+{ code: "NetworkError" }
 
 /** tauri-specta globals **/
 
