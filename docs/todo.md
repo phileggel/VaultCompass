@@ -96,4 +96,9 @@ Shipped per MKT-072–MKT-096 (2026-04-29):
 
 All 24 inline service tests in `src-tauri/src/context/asset/service.rs` converted from real SQLite fixtures to `MockAssetRepository`, `MockAssetCategoryRepository`, and `MockAssetPriceRepository` (mockall). Every mock expectation now carries `.times(1)` to prevent silent no-call regressions; event-bus tests use `tokio::time::timeout` to prevent hangs. Repository tests retain real SQLite as the integration layer; end-to-end confidence via `src-tauri/tests/asset_price_crud.rs`.
 
-## (backend/frontend) — Add new financial asset metadata directly from the web
+## ~~(backend/frontend) — Add new financial asset metadata directly from the web~~ ✅ resolved
+
+Shipped per WEB-010..047 (2026-05-01):
+
+- Backend: `search_asset_web(query: String) -> Vec<AssetLookupResult>` command in `use_cases/asset_web_lookup/`. Routes 12-char alphanumeric queries to OpenFIGI `/v3/mapping` (ISIN path) and all others to `/v3/search` (keyword path). Maps `securityType` → `AssetClass`. Single error variant `NetworkError` covering all HTTP failures.
+- Frontend: `WebLookupModal` replaces the FAB-triggered `AddAssetModal`. Two-step flow: search panel → pre-filled Add Asset form. Back navigation retains search results (WEB-047). "Fill manually" bypass available at all times. URL `createNew` param shortcut preserved.

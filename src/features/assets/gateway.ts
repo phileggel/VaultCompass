@@ -2,11 +2,13 @@ import {
   type ArchiveAssetCommandError,
   type Asset,
   type AssetCommandError,
+  type AssetLookupResult,
   type CreateAssetDTO,
   commands,
   type DeleteAssetCommandError,
   type Result,
   type UpdateAssetDTO,
+  type WebLookupCommandError,
 } from "../../bindings";
 
 /**
@@ -40,5 +42,9 @@ export const assetGateway = {
 
   async deleteAsset(id: string): Promise<Result<null, DeleteAssetCommandError>> {
     return await commands.deleteAsset(id);
+  },
+
+  async searchAssetWeb(query: string): Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
+    return await commands.searchAssetWeb(query);
   },
 };

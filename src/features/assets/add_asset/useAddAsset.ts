@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { AssetClass } from "@/bindings";
+import { useMemo, useState } from "react";
+import type { AssetClass, AssetLookupResult } from "@/bindings";
 import { useAppStore } from "@/lib/store";
 import { DEFAULT_RISK_BY_CLASS, SYSTEM_CATEGORY_ID } from "../shared/constants";
 import { hasDuplicateReference } from "../shared/validateAsset";
@@ -7,29 +7,25 @@ import { useAssets } from "../useAssets";
 
 interface UseAddAssetProps {
   onSubmitSuccess?: (assetId: string) => void;
-  prefillName?: string;
+  prefill?: AssetLookupResult;
 }
 
-export function useAddAsset({ onSubmitSuccess, prefillName }: UseAddAssetProps = {}) {
+export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {}) {
   const { addAsset, assets } = useAssets();
   const categories = useAppStore((s) => s.categories);
 
   const [formData, setFormData] = useState({
-    name: prefillName ?? "",
-    reference: "",
-    class: "Cash" as AssetClass,
-    currency: "EUR",
-    risk_level: DEFAULT_RISK_BY_CLASS.Cash,
+    name: prefill?.name ?? "",
+    reference: prefill?.reference ?? "",
+    class: (prefill?.asset_class ?? "Cash") as AssetClass,
+    currency: prefill?.currency ?? "EUR",
+    risk_level: prefill?.asset_class
+      ? DEFAULT_RISK_BY_CLASS[prefill.asset_class as AssetClass]
+      : DEFAULT_RISK_BY_CLASS.Cash,
     category_id: SYSTEM_CATEGORY_ID,
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (prefillName !== undefined) {
-      setFormData((prev) => ({ ...prev, name: prefillName }));
-    }
-  }, [prefillName]);
 
   // Duplicate reference warning — R9 (includes archived assets)
   const duplicateWarning = useMemo(

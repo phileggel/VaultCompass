@@ -4,9 +4,9 @@ import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { FAB } from "@/ui/components/fab/FAB";
 import { ManagerLayout } from "@/ui/components/layout/ManagerLayout";
-import { AddAssetModal } from "./add_asset/AddAsset";
 import { AssetTable } from "./asset_table/AssetTable";
 import { useAssets } from "./useAssets";
+import { WebLookupModal } from "./web_lookup";
 
 type ReturnNavTarget =
   | { type: "txList"; accountId: string; assetId: string }
@@ -102,7 +102,7 @@ export function AssetManager() {
         table={tableWithToggle}
       />
       <FAB onClick={() => setIsAddModalOpen(true)} label={t("asset.fab_label")} />
-      <AddAssetModal
+      <WebLookupModal
         isOpen={isAddModalOpen}
         prefillName={createNew}
         onSuccess={handleAddAssetSuccess}

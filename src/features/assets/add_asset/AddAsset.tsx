@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import type { AssetLookupResult } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { Dialog } from "@/ui/components/modal/Dialog";
@@ -9,11 +10,12 @@ import { useAddAsset } from "./useAddAsset";
 interface AddAssetModalProps {
   isOpen: boolean;
   onClose: () => void;
-  prefillName?: string;
+  prefill?: AssetLookupResult;
+  onBack?: () => void;
   onSuccess?: (assetId: string) => void;
 }
 
-export function AddAssetModal({ isOpen, onClose, prefillName, onSuccess }: AddAssetModalProps) {
+export function AddAssetModal({ isOpen, onClose, prefill, onBack, onSuccess }: AddAssetModalProps) {
   const { t } = useTranslation();
   const {
     formData,
@@ -25,7 +27,7 @@ export function AddAssetModal({ isOpen, onClose, prefillName, onSuccess }: AddAs
     handleSubmit,
     categories,
   } = useAddAsset({
-    prefillName,
+    prefill,
     onSubmitSuccess: (assetId) => {
       onSuccess?.(assetId);
       onClose();
@@ -41,6 +43,16 @@ export function AddAssetModal({ isOpen, onClose, prefillName, onSuccess }: AddAs
 
   const actions = (
     <>
+      {onBack && (
+        <Button
+          variant="ghost"
+          aria-label={t("asset.web_lookup.action_back")}
+          onClick={onBack}
+          className="mr-auto"
+        >
+          {t("asset.web_lookup.action_back")}
+        </Button>
+      )}
       <Button variant="secondary" onClick={onClose}>
         {t("action.cancel")}
       </Button>
@@ -73,7 +85,11 @@ export function AddAssetModal({ isOpen, onClose, prefillName, onSuccess }: AddAs
           duplicateWarning={duplicateWarning}
           idPrefix="add-asset"
         />
-        {error && <p className="mt-3 text-sm text-m3-error">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-m3-error">
+            {error}
+          </p>
+        )}
       </form>
     </Dialog>
   );

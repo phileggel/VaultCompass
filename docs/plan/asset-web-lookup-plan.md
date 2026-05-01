@@ -113,6 +113,7 @@
 
 - `#![allow(clippy::unreachable)]` (Tauri/specta macros).
 - **Typed error** `WebLookupCommandError` (B23 exception for Tauri responses):
+
   ```rust
   #[derive(Debug, Serialize, Type, thiserror::Error)]
   #[serde(tag = "code")]
@@ -123,7 +124,9 @@
   ```
 
   - Single variant, per WEB-025 / contract.
+
 - **Tauri command** `search_asset_web` (B8/B9/B13):
+
   ```rust
   #[tauri::command]
   #[specta::specta]
@@ -135,6 +138,7 @@
 
   - Body: `uc.search(query).await.map_err(|e| { tracing::warn!(target: BACKEND, error = %e, "search_asset_web failed (WEB-025)"); WebLookupCommandError::NetworkError })`.
   - Logging via `tracing` with `target: BACKEND` (B16/B17/B18).
+
 - No inline tests in `api.rs` (thin adapter — covered by orchestrator tests + E2E).
 
 #### File: `src-tauri/src/use_cases/mod.rs`
@@ -159,6 +163,7 @@
 
 - Add use: `use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};`
 - In the async setup block, after the existing use-case wiring:
+
   ```rust
   let openfigi_client = Arc::new(ReqwestOpenFigiClient::new());
   let asset_web_lookup_uc = AssetWebLookupUseCase::new(openfigi_client);

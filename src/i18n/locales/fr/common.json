@@ -62,7 +62,21 @@
     "success_archived": "Actif archivé.",
     "success_unarchived": "Actif désarchivé.",
     "success_deleted": "Actif supprimé.",
-    "create_new": "+ Nouvel actif"
+    "create_new": "+ Nouvel actif",
+    "web_lookup": {
+      "title": "Rechercher un instrument",
+      "idle_hint": "Saisissez un nom, un ticker ou un ISIN pour rechercher.",
+      "query_label": "Recherche",
+      "query_placeholder": "AAPL, US0378331005, Apple…",
+      "action_search": "Rechercher",
+      "action_retry": "Réessayer",
+      "action_back": "Retour",
+      "action_fill_manually": "Saisir manuellement",
+      "select_result": "Sélectionner {{name}}",
+      "no_results": "Aucun instrument trouvé.",
+      "error_network": "Impossible de joindre le service de recherche. Réessayez ou saisissez manuellement.",
+      "loading": "Recherche en cours…"
+    }
   },
   "account": {
     "title": "Comptes",

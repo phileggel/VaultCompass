@@ -110,6 +110,15 @@ Implements the application auto-update lifecycle (spec: `docs/update.md`).
   - `db:migration_error` — emitted by `core/db.rs` if a migration fails at startup
 - Business invariants: concurrent downloads blocked via `AtomicBool`; downloaded bytes stored in `Mutex<Option<Vec<u8>>>` between download and install commands; no breaking schema changes allowed (R15)
 
+#### Asset Web Lookup (`use_cases/asset_web_lookup/`)
+
+Searches OpenFIGI to pre-fill the Add Asset form (spec: `docs/spec/asset-web-lookup.md`).
+
+- `orchestrator.rs` — `AssetWebLookupUseCase` + `OpenFigiClient` trait + `ReqwestOpenFigiClient`; `AssetLookupResult` value object (transient, never persisted)
+- `api.rs` — one Tauri command: `search_asset_web(query: String) -> Vec<AssetLookupResult>`
+- Routing: 12-char alphanumeric queries → ISIN mapping endpoint; all others → keyword search endpoint
+- No DB dependency; no events emitted
+
 ---
 
 ## Bounded Contexts (`context/`)
