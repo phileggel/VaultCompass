@@ -53,10 +53,13 @@ export const config: Options.Testrunner = {
   // --no-bundle: skip installer packaging, just produce the binary.
   // --debug: debug profile (faster compile, includes debug symbols).
   onPrepare: () => {
-    spawnSync("npx", ["tauri", "build", "--debug", "--no-bundle"], {
+    const result = spawnSync("npx", ["tauri", "build", "--debug", "--no-bundle"], {
       cwd: resolve(__dirname),
       stdio: "inherit",
     });
+    if (result.status !== 0) {
+      throw new Error(`tauri build failed with exit code ${result.status}`);
+    }
   },
 
   // Start tauri-driver just before the WebDriver session is created.
