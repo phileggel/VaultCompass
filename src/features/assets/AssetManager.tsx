@@ -5,7 +5,6 @@ import { logger } from "@/lib/logger";
 import { FAB } from "@/ui/components/fab/FAB";
 import { ManagerLayout } from "@/ui/components/layout/ManagerLayout";
 import { AssetTable } from "./asset_table/AssetTable";
-import { useAssets } from "./useAssets";
 import { WebLookupModal } from "./web_lookup";
 
 type ReturnNavTarget =
@@ -29,7 +28,6 @@ function resolveReturnNav(returnPath: string | undefined): ReturnNavTarget {
 
 export function AssetManager() {
   const { t } = useTranslation();
-  const { activeCount } = useAssets();
   const navigate = useNavigate();
   const { createNew, returnPath } = useSearch({ from: "/assets" });
 
@@ -71,35 +69,27 @@ export function AssetManager() {
     [navigate, returnPath],
   );
 
-  const tableWithToggle = (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-end px-4 py-2 bg-m3-surface-container-low">
-        <label className="flex items-center gap-2 text-sm text-m3-on-surface-variant cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="accent-m3-primary"
-          />
-          {t("asset.toggle_show_archived")}
-        </label>
-      </div>
-      <div className="flex-1 overflow-auto">
-        <AssetTable searchTerm={query} showArchived={showArchived} />
-      </div>
-    </div>
+  const archivedToggle = (
+    <label className="flex items-center gap-2 text-sm text-m3-on-surface-variant cursor-pointer select-none shrink-0">
+      <input
+        type="checkbox"
+        checked={showArchived}
+        onChange={(e) => setShowArchived(e.target.checked)}
+        className="accent-m3-primary"
+      />
+      {t("asset.toggle_show_archived")}
+    </label>
   );
 
   return (
     <>
       <ManagerLayout
         searchId="asset-search"
-        title={t("asset.title")}
-        count={activeCount}
         searchTerm={query}
         onSearchChange={setQuery}
         searchPlaceholder={t("asset.search_placeholder")}
-        table={tableWithToggle}
+        searchExtra={archivedToggle}
+        table={<AssetTable searchTerm={query} showArchived={showArchived} />}
       />
       <FAB onClick={() => setIsAddModalOpen(true)} label={t("asset.fab_label")} />
       {isAddModalOpen && (

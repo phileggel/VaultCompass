@@ -4,11 +4,10 @@ import { ManagerHeader } from "./ManagerHeader";
 interface ManagerLayoutProps {
   // Left panel (list)
   searchId: string;
-  title?: string;
-  count?: number;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
+  searchExtra?: ReactNode;
   table: ReactNode;
 
   // Right panel (action form) — optional
@@ -20,11 +19,10 @@ interface ManagerLayoutProps {
 
 export function ManagerLayout({
   searchId,
-  title,
-  count,
   searchTerm,
   onSearchChange,
   searchPlaceholder,
+  searchExtra,
   table,
   sidePanelTitle,
   sidePanelIcon,
@@ -39,11 +37,10 @@ export function ManagerLayout({
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
         <ManagerHeader
           searchId={searchId}
-          title={title}
-          count={count}
           searchTerm={searchTerm}
           onSearchChange={onSearchChange}
           searchPlaceholder={searchPlaceholder}
+          searchExtra={searchExtra}
         />
         <div className="flex-1 overflow-auto">{table}</div>
       </div>
