@@ -5,8 +5,8 @@
 
 ## Commands
 
-| Command            | Args            | Return                   | Errors         |
-| ------------------ | --------------- | ------------------------ | -------------- |
+| Command        | Args            | Return                   | Errors         |
+| -------------- | --------------- | ------------------------ | -------------- |
 | `lookup_asset` | `query: String` | `Vec<AssetLookupResult>` | `NetworkError` |
 
 ## Shared Types

@@ -101,8 +101,8 @@ to pre-fill the Add Asset form.
 
 ## Asset Web Lookup Command
 
-| Name               | Intent                                                                                                                          | Status  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Name           | Intent                                                                                                             | Status    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ | --------- |
 | `lookup_asset` | Query OpenFIGI with a name, ticker, or ISIN and return up to 10 `AssetLookupResult` values. Errors: `NetworkError` | confirmed |
 
 ---
