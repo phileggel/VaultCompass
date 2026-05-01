@@ -24,6 +24,7 @@ use crate::core::{
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
+use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
@@ -164,6 +165,8 @@ pub fn run() {
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
                 app_handle.manage(account_deletion_uc);
+
+                app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 
                 let transaction_manager =
                     Arc::new(SqlxTransactionManager::new(db.pool.clone()));

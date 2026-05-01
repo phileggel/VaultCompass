@@ -11,6 +11,7 @@
 | AST     | Asset                       | Asset CRUD, archival, and listing                              | active |
 | CAT     | Category                    | User-defined asset category management                         | active |
 | UPD     | Application Update          | Auto-update detection, download, and install                   | active |
+| WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                 | active |
 
 ---
 
