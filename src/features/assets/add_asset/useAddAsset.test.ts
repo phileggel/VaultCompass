@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Asset } from "@/bindings";
-import { SYSTEM_CATEGORY_ID } from "../shared/constants";
+import type { Asset, AssetLookupResult } from "@/bindings";
+import { DEFAULT_RISK_BY_CLASS, SYSTEM_CATEGORY_ID } from "../shared/constants";
 import { useAddAsset } from "./useAddAsset";
 
 const mockAddAsset = vi.fn();
@@ -128,5 +128,114 @@ describe("useAddAsset", () => {
 
     expect(result.current.error).toBeNull();
     expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  // WEB-041 — prefill seeds name, reference, currency, and asset class from AssetLookupResult
+  it("seeds name, reference, currency, and class from prefill prop", () => {
+    const prefill: AssetLookupResult = {
+      name: "Apple Inc.",
+      reference: "AAPL",
+      currency: "USD",
+      asset_class: "Stocks",
+    };
+
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+
+    expect(result.current.formData.name).toBe("Apple Inc.");
+    expect(result.current.formData.reference).toBe("AAPL");
+    expect(result.current.formData.currency).toBe("USD");
+    expect(result.current.formData.class).toBe("Stocks");
+  });
+
+  // WEB-042 — prefilling class auto-sets risk_level via DEFAULT_RISK_BY_CLASS
+  it("auto-sets risk_level to class default when class is prefilled", () => {
+    const prefill: AssetLookupResult = {
+      name: "iShares Core S&P 500",
+      reference: "IVV",
+      currency: "USD",
+      asset_class: "ETF",
+    };
+
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+
+    expect(result.current.formData.class).toBe("ETF");
+    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.ETF);
+  });
+
+  // WEB-042 — when asset_class is absent in prefill, risk_level stays at form default
+  it("leaves risk_level at form default when prefill has no asset_class", () => {
+    const prefill: AssetLookupResult = {
+      name: "Obscure Fund",
+      reference: null,
+      currency: null,
+      asset_class: null,
+    };
+
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+
+    // risk_level should remain the Cash default (initial form default)
+    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.Cash);
+  });
+
+  // WEB-043 — all prefilled fields remain editable
+  it("allows editing prefilled name after prefill", () => {
+    const prefill: AssetLookupResult = {
+      name: "Apple Inc.",
+      reference: "AAPL",
+      currency: "USD",
+      asset_class: "Stocks",
+    };
+
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Apple Edited" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+
+    expect(result.current.formData.name).toBe("Apple Edited");
+  });
+
+  // WEB-043 — prefilled class remains changeable via handleClassChange
+  it("allows changing prefilled class via handleClassChange", () => {
+    const prefill: AssetLookupResult = {
+      name: "Apple Inc.",
+      reference: "AAPL",
+      currency: "USD",
+      asset_class: "Stocks",
+    };
+
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+
+    act(() => {
+      result.current.handleClassChange("ETF");
+    });
+
+    expect(result.current.formData.class).toBe("ETF");
+  });
+
+  // WEB-044 — category_id always defaults to SYSTEM_CATEGORY_ID even when prefill is provided
+  it("always defaults category_id to SYSTEM_CATEGORY_ID regardless of prefill", () => {
+    const prefill: AssetLookupResult = {
+      name: "Apple Inc.",
+      reference: "AAPL",
+      currency: "USD",
+      asset_class: "Stocks",
+    };
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+    expect(result.current.formData.category_id).toBe(SYSTEM_CATEGORY_ID);
+  });
+
+  // Regression — no prefill keeps existing defaults (Cash / EUR / risk 1)
+  it("uses form defaults when no prefill is provided", () => {
+    const { result } = renderHook(() => useAddAsset());
+
+    expect(result.current.formData.name).toBe("");
+    expect(result.current.formData.reference).toBe("");
+    expect(result.current.formData.currency).toBe("EUR");
+    expect(result.current.formData.class).toBe("Cash");
+    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.Cash);
+    expect(result.current.formData.category_id).toBe(SYSTEM_CATEGORY_ID);
   });
 });

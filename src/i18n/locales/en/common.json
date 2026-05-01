@@ -62,7 +62,21 @@
     "success_archived": "Asset archived.",
     "success_unarchived": "Asset unarchived.",
     "success_deleted": "Asset deleted.",
-    "create_new": "+ New asset"
+    "create_new": "+ New asset",
+    "web_lookup": {
+      "title": "Search for an instrument",
+      "idle_hint": "Enter a name, ticker or ISIN to search.",
+      "query_label": "Search",
+      "query_placeholder": "AAPL, US0378331005, Apple…",
+      "action_search": "Search",
+      "action_retry": "Retry",
+      "action_back": "Back",
+      "action_fill_manually": "Fill manually",
+      "select_result": "Select {{name}}",
+      "no_results": "No instruments found.",
+      "error_network": "Could not reach the lookup service. Try again or fill manually.",
+      "loading": "Searching…"
+    }
   },
   "account": {
     "title": "Accounts",
