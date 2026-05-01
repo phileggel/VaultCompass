@@ -21,7 +21,7 @@
     }
   },
   "productName": "VaultCompass",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "identifier": "com.phileggel.vault-compass",
   "plugins": {
     "updater": {
