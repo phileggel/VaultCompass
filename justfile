@@ -15,6 +15,10 @@ install:
 dev *ARGS:
     ./scripts/start-app.sh {{ARGS}}
 
+# Start the application using Wayland backend (use when window doesn't appear with just dev)
+dev-wayland *ARGS:
+    GDK_BACKEND=wayland ./scripts/start-app.sh {{ARGS}}
+
 # Run frontend tests
 test:
     npm test

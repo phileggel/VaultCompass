@@ -72,7 +72,7 @@ fi
 
 echo -e "${BLUE}🔧 Starting server...${NC}"
 export RUST_LOG="$LOG_LEVEL"
-export GDK_BACKEND="x11"
+export GDK_BACKEND="${GDK_BACKEND:-x11}"
 export RESET_DATABASE="false"
 [[ "$RESET_DB" == true ]] && export RESET_DATABASE="true"
 

@@ -1,6 +1,6 @@
 ---
 name: whats-next
-description: Surveys pending work across TODOs, planning docs, unfinished feature plans, open spec questions, and in-flight git work, then returns a value/effort table with a recommended next action. Use at session start to triage what to work on, especially after a gap when context has faded.
+description: Surveys pending work across TODOs, planning docs, unfinished feature plans, open spec questions, roadmap planned items, and in-flight git work, then returns a value/effort table with a recommended next action. Use at session start to triage what to work on, especially after a gap when context has faded.
 tools: Bash, Read, Grep, Glob, Write
 ---
 
@@ -35,7 +35,7 @@ Not needed when you already know what you're working on — use `/start` instead
 
 Run `bash scripts/report-path.sh whats-next` and remember the output as `REPORT_PATH`.
 
-### Step 2 — Survey the five sources
+### Step 2 — Survey the six sources
 
 Run each scan independently. Skip sources whose files do not exist (no error).
 
@@ -47,7 +47,9 @@ Run each scan independently. Skip sources whose files do not exist (no error).
 
 **d) Open spec questions** — `docs/spec/*.md`. Use `Glob("docs/spec/*.md")`; then for each file use `Grep` for `[ ]` to find unchecked items under `## Open Questions`.
 
-**e) In-flight git work** — run each as a separate Bash call:
+**e) Roadmap planned items** — `docs/roadmap.md`. Read the file and extract every row whose Status cell contains `🔲` (Planned or Future). Each such row is a candidate item. Rows marked `✅ Done` or `✅ Specced` are not candidates.
+
+**f) In-flight git work** — run each as a separate Bash call:
 
 ```bash
 bash scripts/changed-files.sh
@@ -134,7 +136,7 @@ If nothing is pending:
 
 ```
 ## What's Next — {date}
-✅ No pending items found across TODOs, plans, specs, or in-flight git work.
+✅ No pending items found across TODOs, plans, specs, roadmap, or in-flight git work.
 ```
 
 ---
