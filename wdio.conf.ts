@@ -9,7 +9,7 @@
 //
 // Run:
 //   npm run test:e2e          # local (headed window)
-//   npm run test:e2e:ci       # Linux CI (xvfb virtual display)
+//   npm run test:e2e:xvfb     # Linux with virtual framebuffer (no display)
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import { resolve } from "node:path";
@@ -23,7 +23,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 // plain cargo build produces a binary that connects to the Vite dev server (devUrl).
 // Only the Tauri CLI build embeds the frontend dist into the binary.
 const BINARY_NAME = "tauri-app";
-const BINARY_PATH = resolve(`./src-tauri/target/debug/${BINARY_NAME}`);
+const BINARY_PATH = resolve(__dirname, "src-tauri/target/debug", BINARY_NAME);
 
 let tauriDriver: ChildProcess;
 let exit = false;
@@ -56,7 +56,6 @@ export const config: Options.Testrunner = {
     spawnSync("npx", ["tauri", "build", "--debug", "--no-bundle"], {
       cwd: resolve(__dirname),
       stdio: "inherit",
-      shell: true,
     });
   },
 
@@ -86,7 +85,9 @@ export const config: Options.Testrunner = {
   },
 };
 
-// Ensure tauri-driver is killed even on unexpected process exit (Ctrl+C, SIGTERM, etc.)
+// Ensure tauri-driver is killed on unexpected process exit (Ctrl+C, SIGTERM, etc.)
+// Only SIGINT/SIGTERM/SIGHUP are registered — not "exit", which fires after these
+// handlers already call process.exit() and would invoke cleanup a second time.
 function onShutdown(fn: () => void) {
   const cleanup = () => {
     try {
@@ -95,7 +96,6 @@ function onShutdown(fn: () => void) {
       process.exit();
     }
   };
-  process.on("exit", cleanup);
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
   process.on("SIGHUP", cleanup);
