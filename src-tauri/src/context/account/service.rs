@@ -322,7 +322,8 @@ mod tests {
     // Integration tests: use concrete SQLite repos against an in-memory DB to catch
     // real constraint violations (e.g. UNIQUE ON LOWER(name)) that mocks would miss.
     use crate::context::account::{
-        AccountOperationError, SqliteAccountRepository, SqliteHoldingRepository,
+        AccountOperationError, MockAccountRepository, MockHoldingRepository,
+        MockTransactionRepository, SqliteAccountRepository, SqliteHoldingRepository,
         SqliteTransactionRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
@@ -683,6 +684,57 @@ mod tests {
                 .map(|e| matches!(e, AccountOperationError::CascadingOversell))
                 .unwrap_or(false),
             "expected CascadingOversell, got: {err}"
+        );
+    }
+
+    // TRX-027 — buy_holding propagates save failure so no partial state is committed
+    #[tokio::test]
+    async fn buy_holding_returns_error_when_save_fails() {
+        let mut mock_ar = MockAccountRepository::new();
+        mock_ar
+            .expect_get_with_holdings_and_transactions()
+            .once()
+            .returning(|_| {
+                Ok(Some(
+                    Account::new(
+                        "Test".to_string(),
+                        "EUR".to_string(),
+                        UpdateFrequency::ManualMonth,
+                    )
+                    .unwrap(),
+                ))
+            });
+        mock_ar
+            .expect_save()
+            .once()
+            .returning(|_| Err(anyhow::anyhow!("simulated DB failure")));
+
+        let svc = AccountService::new(
+            Box::new(mock_ar),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(MockTransactionRepository::new()),
+        );
+
+        let result = svc
+            .buy_holding(
+                "any-account-id",
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+                micro(1),
+                0,
+                None,
+            )
+            .await;
+
+        assert!(result.is_err(), "buy_holding must propagate save errors");
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("simulated DB failure"),
+            "error message should propagate unchanged"
         );
     }
 

@@ -62,6 +62,15 @@ const baseTransaction: Transaction = {
   created_at: "2024-01-10T00:00:00Z",
 };
 
+// unit_price=0, fees=5 → totalMicro=5*MICRO > 0, passes validation; used for MKT-061
+const zeroUnitPriceTransaction: Transaction = {
+  ...baseTransaction,
+  id: "tx-zero-price",
+  unit_price: 0,
+  fees: 5 * MICRO,
+  total_amount: 5 * MICRO,
+};
+
 describe("useEditTransactionModal", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -147,5 +156,53 @@ describe("useEditTransactionModal", () => {
     });
 
     expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-01-10", 50);
+  });
+
+  // MKT-061 — skip recordAssetPrice when recordPrice is true but unit_price is 0
+  it("does not call recordAssetPrice when recordPrice is true but unit_price is 0", async () => {
+    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-zero-price" }, error: null });
+
+    const { result } = renderHook(() =>
+      useEditTransactionModal({ transaction: zeroUnitPriceTransaction }),
+    );
+
+    await act(async () => {
+      result.current.setRecordPrice(true);
+    });
+
+    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockCorrectTransaction).toHaveBeenCalledWith(
+      "tx-zero-price",
+      "account-1",
+      expect.objectContaining({ unit_price: 0 }),
+    );
+    expect(mockRecordAssetPrice).not.toHaveBeenCalled();
+  });
+
+  // MKT-062 — recordAssetPrice failure is silent; edit commits and onSubmitSuccess fires
+  it("swallows recordAssetPrice rejection and still calls onSubmitSuccess", async () => {
+    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+    mockRecordAssetPrice.mockRejectedValue(new Error("network error"));
+
+    const onSubmitSuccess = vi.fn();
+    const { result } = renderHook(() =>
+      useEditTransactionModal({ transaction: baseTransaction, onSubmitSuccess }),
+    );
+
+    await act(async () => {
+      result.current.setRecordPrice(true);
+    });
+
+    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
   });
 });

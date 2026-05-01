@@ -284,4 +284,61 @@ describe("useAddTransaction", () => {
 
     expect(mockRecordAssetPrice).not.toHaveBeenCalled();
   });
+
+  // MKT-061 — skip recordAssetPrice when recordPrice is true but unit_price is 0
+  it("does not call recordAssetPrice when recordPrice is true but unit_price is 0", async () => {
+    localStorage.setItem("auto_record_price", "true");
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-zero-price" }, error: null });
+    // mockRecordAssetPrice intentionally not set — it must not be called
+
+    const { result } = renderHook(() =>
+      useAddTransaction({ prefillAccountId: "account-1", prefillAssetId: "asset-1" }),
+    );
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "0");
+      result.current.handleChange("exchangeRate", "1");
+      result.current.handleChange("fees", "5"); // fees > 0 so totalMicro > 0, passes validation
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockBuyHolding).toHaveBeenCalled();
+    expect(mockRecordAssetPrice).not.toHaveBeenCalled();
+  });
+
+  // MKT-062 — recordAssetPrice failure is silent; transaction commits and onSubmitSuccess fires
+  it("swallows recordAssetPrice rejection and still calls onSubmitSuccess", async () => {
+    localStorage.setItem("auto_record_price", "true");
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-price-fail" }, error: null });
+    mockRecordAssetPrice.mockRejectedValue(new Error("network error"));
+
+    const onSubmitSuccess = vi.fn();
+    const { result } = renderHook(() =>
+      useAddTransaction({
+        prefillAccountId: "account-1",
+        prefillAssetId: "asset-1",
+        onSubmitSuccess,
+      }),
+    );
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "100");
+      result.current.handleChange("exchangeRate", "1");
+      result.current.handleChange("fees", "0");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
+  });
 });

@@ -72,9 +72,13 @@ Source: `.screenshots/vault-compass.png` (1024×1024 RGB). All sizes generated v
 
 `lastPath.ts` persists the top-level nav section (`/accounts`, `/assets`, `/categories`) to `localStorage`. `AppShell` saves on every navigation; `indexRoute.beforeLoad` restores on startup. Default is `/accounts`.
 
-## (testing) — Fault injection seam for orchestrator atomicity tests
+## ~~(testing) — Fault injection seam for orchestrator atomicity tests~~ ✅ resolved
 
-MKT-056 and MKT-062 (auto-record price-record failure + tx-form error surfacing) and TRX-027 (buy/sell atomicity) lack dedicated rollback tests. The record_transaction use case was dissolved into `context/account/` (Phase 7); the gap now lives in `src-tauri/src/context/account/service.rs`. A repository-level mock seam (e.g. trait-injected `AssetPriceRepository` that can be told to fail) would unlock all three in one shot.
+MKT-056/061/062 and TRX-027 covered. Phase 4 moved the auto-record price write to the frontend as a separate best-effort call, so no backend seam was needed for MKT-056/062. Tests added:
+
+- `useAddTransaction.test.ts`: MKT-061 (skip when unit_price=0), MKT-062 (silent rejection does not block onSubmitSuccess)
+- `useEditTransactionModal.test.ts`: same two rules for the edit path
+- `service.rs`: TRX-027 — `buy_holding_returns_error_when_save_fails` using `MockAccountRepository` (already had `#[cfg_attr(test, mockall::automock)]`)
 
 ## ~~(market-price) — Price-point CRUD page~~ ✅ resolved
 
