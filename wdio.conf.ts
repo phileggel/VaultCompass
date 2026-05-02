@@ -82,6 +82,11 @@ export const config: Options.Testrunner = {
   // intermediary and must be alive when the worker creates the session.
   beforeSession: () => {
     process.env.RUST_LOG = "warn";
+    // Force English locale so that all translated aria-labels and text content
+    // match the selectors in the test files regardless of the system locale.
+    process.env.LANG = "en_US.UTF-8";
+    process.env.LANGUAGE = "en";
+    process.env.LC_ALL = "en_US.UTF-8";
     // Ephemeral DB: wipe any leftover from a previous interrupted run, then
     // create a fresh dir and expose it to the binary via env var.
     if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });

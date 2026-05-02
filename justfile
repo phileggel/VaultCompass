@@ -35,6 +35,14 @@ test-coverage:
 test-rust-coverage:
     cd src-tauri && cargo tarpaulin --out Json --output-dir ../coverage --tests --exclude-files "build.rs"
 
+# Run E2E tests against the built binary (opens a window)
+test-e2e:
+    npm run test:e2e
+
+# Run E2E tests headlessly via Xvfb (Linux / CI, no display required)
+test-e2e-headless:
+    npm run test:e2e:xvfb
+
 # Run all tests
 test-all: test test-rust
 

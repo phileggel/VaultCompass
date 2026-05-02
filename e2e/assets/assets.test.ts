@@ -135,12 +135,17 @@ describe("assets", () => {
     await submitBtn.waitForEnabled({ timeout: 5000 });
     await submitBtn.click();
 
-    // After success, form closes and we are redirected to the assets page.
+    // After success the router navigates to /assets. Navigate away and back
+    // to force the assets list to remount and reflect the newly created asset.
     await form.waitForExist({ timeout: 8000, reverse: true });
+    const accountsNav = await $('button[aria-label="Accounts"]');
+    await accountsNav.waitForExist({ timeout: 10000 });
+    await accountsNav.click();
+    await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
     await navigateToAssets();
 
     const assetCell = await $(`*=${ASSET_NAME}`);
-    await assetCell.waitForExist({ timeout: 8000 });
+    await assetCell.waitForExist({ timeout: 10000 });
     assert.ok(
       await assetCell.isExisting(),
       `Asset "${ASSET_NAME}" must appear in table after creation`,
@@ -195,7 +200,8 @@ describe("assets", () => {
     await navigateToAssets();
 
     // Show the archived list by checking the "Show archived" checkbox.
-    const showArchivedLabel = await $("*=Show archived");
+    // Use data-testid to avoid language-specific text matching.
+    const showArchivedLabel = await $('[data-testid="show-archived-toggle"]');
     await showArchivedLabel.waitForExist({ timeout: 5000 });
     await showArchivedLabel.click();
 

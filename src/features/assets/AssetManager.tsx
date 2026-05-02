@@ -70,7 +70,10 @@ export function AssetManager() {
   );
 
   const archivedToggle = (
-    <label className="flex items-center gap-2 text-sm text-m3-on-surface-variant cursor-pointer select-none shrink-0">
+    <label
+      data-testid="show-archived-toggle"
+      className="flex items-center gap-2 text-sm text-m3-on-surface-variant cursor-pointer select-none shrink-0"
+    >
       <input
         type="checkbox"
         checked={showArchived}

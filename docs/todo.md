@@ -5,6 +5,7 @@
 ## (e2e) — Review ProjectSF combobox ADRs for applicability to VaultCompass
 
 ProjectSF has two ADRs on combobox handling in tests:
+
 - `\\wsl.localhost\Ubuntu\home\phil\projects\ProjectSF\docs\adr\004-e2e-rtl-test-boundary-combobox.md`
 - `\\wsl.localhost\Ubuntu\home\phil\projects\ProjectSF\docs\adr\005-combobox-feasibility-investigation.md`
 

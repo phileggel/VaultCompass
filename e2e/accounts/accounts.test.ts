@@ -51,7 +51,7 @@ async function seedAccount(name: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Navigation
+// Navigation helpers
 // ---------------------------------------------------------------------------
 
 async function navigateToAccounts(): Promise<void> {
@@ -60,6 +60,23 @@ async function navigateToAccounts(): Promise<void> {
   await nav.click();
   const fab = await $('button[aria-label="Add account"]');
   await fab.waitForExist({ timeout: 10000 });
+}
+
+// Navigate away (to Assets) then back to Accounts, forcing the accounts
+// component to remount and re-fetch from the store. Use this after IPC
+// seeding when the accounts page is already mounted.
+async function forceRefreshToAccounts(): Promise<void> {
+  const assetsNav = await $('button[aria-label="Assets"]');
+  await assetsNav.waitForExist({ timeout: 15000 });
+  await assetsNav.click();
+  await $('button[aria-label="Add asset"]').waitForExist({ timeout: 10000 });
+  await navigateToAccounts();
+}
+
+// Language-invariant selector: finds the account row button by the account
+// name text content rather than the translated aria-label.
+async function findAccountButton(accountName: string) {
+  return $(`//button[contains(., "${accountName}")]`);
 }
 
 // ---------------------------------------------------------------------------
@@ -97,8 +114,12 @@ describe("accounts", () => {
 
     await form.waitForExist({ timeout: 8000, reverse: true });
 
-    const accountBtn = await $(`button[aria-label="Open account ${ACCOUNT_NAME}"]`);
-    await accountBtn.waitForExist({ timeout: 8000 });
+    // After creation the app navigates to the new account's detail page.
+    // Navigate back to the accounts list to verify the entry is there.
+    await navigateToAccounts();
+
+    const accountBtn = await findAccountButton(ACCOUNT_NAME);
+    await accountBtn.waitForExist({ timeout: 10000 });
     assert.ok(
       await accountBtn.isExisting(),
       `Account "${ACCOUNT_NAME}" must appear in list after creation`,
@@ -113,7 +134,10 @@ describe("accounts", () => {
     const UPDATED_NAME = "E2E ACC-002 Updated";
 
     await seedAccount(ORIGINAL_NAME);
-    await navigateToAccounts();
+
+    // Navigate away and back to force the accounts list to remount and pick
+    // up the IPC-seeded account from the store.
+    await forceRefreshToAccounts();
 
     const editBtn = await $('button[aria-label="Edit"]');
     await editBtn.waitForExist({ timeout: 8000 });
@@ -130,8 +154,8 @@ describe("accounts", () => {
 
     await form.waitForExist({ timeout: 8000, reverse: true });
 
-    const updatedBtn = await $(`button[aria-label="Open account ${UPDATED_NAME}"]`);
-    await updatedBtn.waitForExist({ timeout: 8000 });
+    const updatedBtn = await findAccountButton(UPDATED_NAME);
+    await updatedBtn.waitForExist({ timeout: 10000 });
     assert.ok(
       await updatedBtn.isExisting(),
       `Updated account "${UPDATED_NAME}" must appear in list`,
@@ -145,9 +169,11 @@ describe("accounts", () => {
     const ACCOUNT_NAME = "E2E ACC-003 Delete";
 
     await seedAccount(ACCOUNT_NAME);
-    await navigateToAccounts();
 
-    const accountBtn = await $(`button[aria-label="Open account ${ACCOUNT_NAME}"]`);
+    // Force remount so the seeded account appears in the list.
+    await forceRefreshToAccounts();
+
+    const accountBtn = await findAccountButton(ACCOUNT_NAME);
     await accountBtn.waitForExist({ timeout: 8000 });
 
     const deleteBtn = await $('button[aria-label="Delete"]');
@@ -173,7 +199,7 @@ describe("accounts", () => {
     const DUPLICATE_NAME = "E2E ACC-004 Duplicate";
 
     await seedAccount(DUPLICATE_NAME);
-    await navigateToAccounts();
+    await forceRefreshToAccounts();
 
     const fab = await $('button[aria-label="Add account"]');
     await fab.click();

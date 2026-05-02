@@ -133,10 +133,20 @@ async function seedBuy(
 // ---------------------------------------------------------------------------
 
 async function navigateToAccountDetails(accountName: string): Promise<void> {
-  const nav = await $('button[aria-label="Accounts"]');
-  await nav.waitForExist({ timeout: 15000 });
-  await nav.click();
-  const accountBtn = await $(`button[aria-label="Open account ${accountName}"]`);
+  // Navigate to Assets first so the Accounts component unmounts.
+  // On the way back the component remounts and re-fetches, picking up any
+  // IPC-seeded accounts that were added after the initial page load.
+  const assetsNav = await $('button[aria-label="Assets"]');
+  await assetsNav.waitForExist({ timeout: 15000 });
+  await assetsNav.click();
+  await $('button[aria-label="Add asset"]').waitForExist({ timeout: 10000 });
+
+  const accountsNav = await $('button[aria-label="Accounts"]');
+  await accountsNav.click();
+
+  // Use text-content XPath so the selector is language-invariant: the account
+  // name is user data and never translated.
+  const accountBtn = await $(`//button[contains(., "${accountName}")]`);
   await accountBtn.waitForExist({ timeout: 10000 });
   await accountBtn.click();
 }
