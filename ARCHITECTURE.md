@@ -220,7 +220,7 @@ context/{domain}/
 **Entity: `Transaction`** (internal to `Account` aggregate)
 
 - `id`, `account_id`, `asset_id`, `transaction_type: TransactionType`, `date`, `quantity: i64`, `unit_price: i64`, `exchange_rate: i64`, `fees: i64`, `total_amount: i64`, `note: Option<String>`, `realized_pnl: Option<i64>`, `created_at: String`
-- `TransactionType` enum: `Purchase`, `Sell`
+- `TransactionType` enum: `Purchase`, `Sell`, `OpeningBalance`
 - All financial fields in i64 micro-units (ADR-001)
 - Validation (TRX-020, TRX-026): date in range, qty > 0, exchange_rate > 0, `total_amount` invariant checked for Purchase only
 - Factory methods: `new()`, `with_id()`, `restore()`; `created_at` is set once in `new()`, immutable on update
@@ -361,7 +361,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Account Details (`features/account_details/`)
 
-- Gateway: `getAccountDetails(accountId)`, `recordAssetPrice(assetId, date, price)`, `getAssetPrices(assetId)`, `updateAssetPrice(assetId, originalDate, newDate, newPrice)`, `deleteAssetPrice(assetId, date)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
+- Gateway: `getAccountDetails(accountId)`, `openHolding(dto: OpenHoldingDTO)`, `recordAssetPrice(assetId, date, price)`, `getAssetPrices(assetId)`, `updateAssetPrice(assetId, originalDate, newDate, newPrice)`, `deleteAssetPrice(assetId, date)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
 - Sub-features (use-case boundary: buy/sell modals live here, not in `transactions/`):
   - `account_details_view/AccountDetailsView.tsx` — renders header (total cost basis + realized P&L), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty CTA)
   - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / Enter Price / History / magnifier action buttons; `buildTarget()` resolves account+asset metadata for modal props
@@ -372,6 +372,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
   - `price_history/EditPriceForm.tsx` — edit form pre-filled with the target price (micros → decimal via `microToDecimal`); calls `updateAssetPrice`; on success refetches the list (MKT-083–MKT-087)
   - `price_history/usePriceHistory.ts` — loads prices on mount; `refetch()` re-calls gateway; `confirmDelete(assetId, date)` tracks `deletingDate` lifecycle (MKT-093)
   - `price_history/useEditPrice.ts` — pre-fills form state from `AssetPrice` target; validates via `shared/validatePriceForm.ts`; `handleSubmit()` calls `updateAssetPrice`
+  - `open_balance/OpenBalanceModal.tsx` + `useOpenBalance.ts` — opening balance form; `assetId` prop non-empty → read-only asset display; empty → combobox for asset selection (TRX-055); date capped at today (TRX-046); calls `openHolding`; future-date and form completeness guard in `isFormValid`
   - `shared/types.ts` — `ModalTarget` (accountName, assetId, assetName, assetCurrency, showExchangeRate) and `SellTarget` (extends ModalTarget with holdingQuantityMicro)
   - `shared/validatePriceForm.ts` — `isPriceValid(price: string)`, `isDateValid(date: string)` — pure validation helpers shared by price entry and edit forms
 - `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number` on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number` on `AccountSummaryViewModel` for sign-based color rendering (SEL-042, SEL-043)

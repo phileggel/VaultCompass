@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OpenBalanceModal } from "./OpenBalanceModal";
@@ -177,16 +177,15 @@ describe("OpenBalanceModal", () => {
     expect(handleChange).toHaveBeenCalledWith("totalCost", expect.any(String));
   });
 
-  // Submitting the form calls handleSubmit
-  it("calls handleSubmit when form is submitted", async () => {
+  // Submitting the form calls handleSubmit (use fireEvent.submit — userEvent.click does not
+  // propagate to form.onSubmit in happy-dom; fireEvent.submit fires the event directly on the form)
+  it("calls handleSubmit when form is submitted", () => {
     const handleSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
     mockUseOpenBalance.mockReturnValue(makeHookReturn({ isFormValid: true, handleSubmit }));
-    render(<OpenBalanceModal {...BASE_PROPS} />);
+    const { container } = render(<OpenBalanceModal {...BASE_PROPS} />);
 
-    const submitButton = screen.getByRole("button", {
-      name: /open_balance\.action_submit/i,
-    });
-    await userEvent.click(submitButton);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    fireEvent.submit(container.querySelector("#ob-form")!);
 
     expect(handleSubmit).toHaveBeenCalled();
   });

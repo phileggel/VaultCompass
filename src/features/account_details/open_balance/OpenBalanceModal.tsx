@@ -1,4 +1,3 @@
-import type React from "react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -49,7 +48,7 @@ export function OpenBalanceModal({
       title={t("open_balance.modal_title")}
       maxWidth="max-w-md"
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form id="ob-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Account (read-only, TRX-011) */}
         <TextField
           id="ob-account"
@@ -127,18 +126,16 @@ export function OpenBalanceModal({
           </p>
         )}
 
-        {/* Footer buttons inside form so submit wiring works in all environments */}
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button variant="secondary" type="button" onClick={onClose} disabled={isSubmitting}>
             {t("action.cancel")}
           </Button>
-          {/* type="button" + onClick: happy-dom does not fire form.onSubmit on click (F13 workaround) */}
           <Button
-            type="button"
+            type="submit"
+            form="ob-form"
             variant="primary"
             loading={isSubmitting}
             disabled={isSubmitting || !isFormValid}
-            onClick={handleSubmit as React.MouseEventHandler}
           >
             {t("open_balance.action_submit")}
           </Button>
