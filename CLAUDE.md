@@ -41,7 +41,7 @@ On top of the standard kit workflow, this project requires:
 1. **Before implementing**: read `docs/backend-rules.md` (backend changes), `docs/frontend-rules.md` (frontend changes), and/or `docs/e2e-rules.md` (E2E test changes).
 2. **Plan step**: after proposing the TODO plan, immediately create a TaskList (`TaskCreate`) with one task per remaining step. Ask user to validate before implementing.
 3. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; for new business rules use `/spec-writer` to author/extend the spec in `docs/spec/` and `/contract` to derive the matching `docs/contracts/{domain}-contract.md`. Use `/adr-manager` to record architectural decisions in `docs/adr/`.
-4. **E2E tests** (after frontend impl, before release): run `test-writer-e2e` agent with the domain contract to write failing WebDriver tests against the live app. Run `/setup-e2e` once first if not yet initialized.
+4. **E2E tests** (after frontend impl, before release): run `test-writer-e2e` agent with the domain contract to write passing WebDriver E2E tests against the live app (verifies green before finishing). Run `/setup-e2e` once first if not yet initialized.
 5. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
 
 ### Task tracking (within a conversation)
@@ -56,7 +56,7 @@ On top of the standard kit workflow, this project requires:
 ## 🛠 Commands
 
 - Dev: `./scripts/start-app.sh`
-- Quality: `just check-full` (full check) | `just check` (fast lint+format only)
+- Quality: `just check-full` (full check) | `just check` (fast lint+format only) | `just format` (auto-fix formatting)
 - Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-all` (both)
 - Types: `just generate-types` (Sync Rust to TS via Specta) | `just prepare-sqlx` (after schema/query changes)
 - Database: `just migrate` (run migrations) | `just clean-db` (⚠️ destructive reset)
