@@ -52,7 +52,7 @@ All other fields (`id`, `account_id`, `asset_id`, `transaction_type`, `date`, `q
 
 **SEL-026 — Zero quantity retention (backend)**: When `Holding.quantity` reaches zero after a sell, the `Holding` record is retained in the database with `quantity = 0` and `average_price` preserved at its last value (per TRX-040). Exclusion of zero-quantity holdings from the active holdings display is already enforced by ACD-020 and requires no action from this use case.
 
-**SEL-027 — VWAP unchanged by sells (backend)**: Sell transactions do not modify `Holding.average_price`. VWAP recalculation (TRX-030) includes only `Purchase` transactions; `Sell` transactions are excluded from the cost basis computation.
+**SEL-027 — VWAP unchanged by sells (backend)**: Sell transactions do not modify `Holding.average_price`. VWAP recalculation (TRX-030) includes only `Purchase` and `OpeningBalance` transactions (TRX-048); `Sell` transactions are excluded from the cost basis computation.
 
 **SEL-028 — Atomicity (backend)**: The transaction insert, `Holding.quantity` update, and `realized_pnl` computation are performed within a single database transaction. A failure in any step rolls back the entire operation.
 

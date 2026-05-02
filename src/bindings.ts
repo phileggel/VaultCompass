@@ -338,6 +338,17 @@ async getTransactions(accountId: string, assetId: string) : Promise<Result<Trans
 }
 },
 /**
+ * Seeds a holding directly from a known quantity and total cost (TRX-042, TRX-047).
+ */
+async openHolding(dto: OpenHoldingDTO) : Promise<Result<Transaction, OpenHoldingCommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_holding", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
  */
 async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountDetailsCommandError>> {
@@ -1001,6 +1012,70 @@ unrealized_pnl: number | null;
  */
 performance_pct: number | null }
 /**
+ * Typed error returned to the frontend for the open_holding command.
+ */
+export type OpenHoldingCommandError = 
+/**
+ * No account exists with the requested ID.
+ */
+{ code: "AccountNotFound" } | 
+/**
+ * No asset exists with the requested ID.
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * Asset is archived — cannot open a holding (TRX-050).
+ */
+{ code: "ArchivedAsset" } | 
+/**
+ * Total cost is zero or negative (TRX-045).
+ */
+{ code: "InvalidTotalCost" } | 
+/**
+ * Quantity is zero or negative (TRX-044).
+ */
+{ code: "QuantityNotPositive" } | 
+/**
+ * Date string could not be parsed as YYYY-MM-DD.
+ */
+{ code: "InvalidDate" } | 
+/**
+ * Transaction date is in the future.
+ */
+{ code: "DateInFuture" } | 
+/**
+ * Transaction date is before 1900-01-01.
+ */
+{ code: "DateTooOld" } | 
+/**
+ * An unexpected server-side error occurred.
+ */
+{ code: "Unknown" }
+/**
+ * Parameters for recording an opening balance for an asset in an account (TRX-042).
+ */
+export type OpenHoldingDTO = { 
+/**
+ * Account where the opening balance is recorded.
+ */
+account_id: string; 
+/**
+ * Financial asset being seeded.
+ */
+asset_id: string; 
+/**
+ * Date of the opening balance (YYYY-MM-DD).
+ */
+date: string; 
+/**
+ * Quantity in micro-units; strictly positive (TRX-044).
+ */
+quantity: number; 
+/**
+ * Total cost paid in account currency (micro-units); strictly positive (TRX-045).
+ */
+total_cost: number }
+/**
  * Parameters for recording a sale of an asset from an account.
  */
 export type SellHoldingDTO = { 
@@ -1102,6 +1177,10 @@ export type TransactionCommandError =
  */
 { code: "TransactionNotFound" } | 
 /**
+ * No account exists with the requested ID.
+ */
+{ code: "AccountNotFound" } | 
+/**
  * Sell requested but holding has zero available units.
  */
 { code: "ClosedPosition" } | 
@@ -1160,7 +1239,11 @@ export type TransactionType =
 /**
  * A sale of a previously purchased asset.
  */
-"Sell"
+"Sell" | 
+/**
+ * Seeds a holding directly from a known quantity and total cost, without full transaction history (TRX-042).
+ */
+"OpeningBalance"
 /**
  * Parameters for updating an existing account.
  */

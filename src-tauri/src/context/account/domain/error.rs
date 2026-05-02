@@ -23,6 +23,20 @@ pub enum HoldingDomainError {
     NegativeAveragePrice,
 }
 
+/// Typed errors raised by the open_holding operation (TRX-042 through TRX-056).
+#[derive(Debug, thiserror::Error)]
+pub enum OpeningBalanceDomainError {
+    /// total_cost was zero or negative (TRX-045).
+    #[error("Total cost must be strictly positive")]
+    InvalidTotalCost,
+    /// No asset with the given ID exists (TRX-056).
+    #[error("Asset not found")]
+    AssetNotFound,
+    /// The target asset is archived — no auto-unarchive (TRX-050).
+    #[error("Cannot open a holding for an archived asset")]
+    ArchivedAsset,
+}
+
 /// Typed errors raised by Account aggregate operations (buy/sell/correct/cancel).
 #[derive(Debug, thiserror::Error)]
 pub enum AccountOperationError {

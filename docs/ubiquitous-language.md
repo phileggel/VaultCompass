@@ -66,6 +66,15 @@ An internal entity of `Asset`. A price observation for an asset on a given date.
 | `sell_holding`        | Record a sale of an asset from the account                                                              | confirmed |
 | `correct_transaction` | Correct the fields of an existing transaction (cascades VWAP/P&L recalculation on the affected holding) | confirmed |
 | `cancel_transaction`  | Delete an existing transaction (cascades VWAP/P&L recalculation or holding removal)                     | confirmed |
+| `open_holding`        | Seed an existing position with a quantity and total cost at a given date, without full purchase history | pending   |
+
+## Transaction Types
+
+| Name             | Intent                                                                               | Status    |
+| ---------------- | ------------------------------------------------------------------------------------ | --------- |
+| `Purchase`       | A regular buy transaction — quantity, unit price, exchange rate, fees                | confirmed |
+| `Sell`           | A regular sell transaction — quantity, unit price, exchange rate, fees, realized P&L | confirmed |
+| `OpeningBalance` | A position seed entry — quantity and total cost paid directly, no fee breakdown      | pending   |
 
 ---
 

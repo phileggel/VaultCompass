@@ -18,19 +18,19 @@ The `Holding` entity represents the current state of a financial position: an as
 
 Represents a single purchase (or sale) event for an asset in an account.
 
-| Field              | Business meaning                                                           |
-| ------------------ | -------------------------------------------------------------------------- |
-| `id`               | Unique identifier of the transaction.                                      |
-| `account_id`       | The account where the transaction occurred.                                |
-| `asset_id`         | The financial asset involved in the transaction.                           |
-| `transaction_type` | Type of transaction: `Purchase` or `Sell`. Immutable once saved (SEL-035). |
-| `date`             | Date when the transaction was executed.                                    |
-| `quantity`         | Number of units acquired (positive, stored in micros: value \* 10^6).      |
-| `unit_price`       | Price per unit in asset's currency (stored in micros: value \* 10^6).      |
-| `exchange_rate`    | Exchange rate between asset currency and account currency (micros).        |
-| `fees`             | Transaction fees in the account's currency (stored in micros).             |
-| `total_amount`     | Total cost in account's currency (incl. fees, stored in micros).           |
-| `note`             | Optional user comment.                                                     |
+| Field              | Business meaning                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `id`               | Unique identifier of the transaction.                                                         |
+| `account_id`       | The account where the transaction occurred.                                                   |
+| `asset_id`         | The financial asset involved in the transaction.                                              |
+| `transaction_type` | Type of transaction: `Purchase`, `Sell`, or `OpeningBalance`. Immutable once saved (SEL-035). |
+| `date`             | Date when the transaction was executed.                                                       |
+| `quantity`         | Number of units acquired (positive, stored in micros: value \* 10^6).                         |
+| `unit_price`       | Price per unit in asset's currency (stored in micros: value \* 10^6).                         |
+| `exchange_rate`    | Exchange rate between asset currency and account currency (micros).                           |
+| `fees`             | Transaction fees in the account's currency (stored in micros).                                |
+| `total_amount`     | Total cost in account's currency (incl. fees, stored in micros).                              |
+| `note`             | Optional user comment.                                                                        |
 
 ### Holding
 
@@ -78,7 +78,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 ### Update and Deletion
 
-**TRX-030 — VWAP Calculation (backend)**: Average purchase price for a `Holding` is calculated using the Volume Weighted Average Price (VWAP) method: `average_price = Sum(total_amount_i) / Total Quantity`, where `total_amount_i` is computed per TRX-026 (fees included). This ensures the displayed transaction cost and the cost basis use the same value. Only purchase transactions are included. This rule applies on creation (TRX-025) and on recalculation triggered by modification or deletion.
+**TRX-030 — VWAP Calculation (backend)**: Average purchase price for a `Holding` is calculated using the Volume Weighted Average Price (VWAP) method: `average_price = Sum(total_amount_i) / Total Quantity`, where `total_amount_i` is computed per TRX-026 (fees included). This ensures the displayed transaction cost and the cost basis use the same value. Only `Purchase` transactions are included. _(Extended by TRX-048 to include `OpeningBalance` transactions.)_ This rule applies on creation (TRX-025) and on recalculation triggered by modification or deletion.
 
 **TRX-031 — Transaction modification (backend)**: Modifying a transaction triggers a full recalculation of the `Holding` cost basis and quantity for the `(account_id, asset_id)` pair, processing all associated transactions in chronological order (TRX-036).
 
@@ -101,6 +101,42 @@ Represents the current state of a position (asset held within an account). Compu
 **TRX-040 — Zero quantity handling (backend)**: If a `Holding.quantity` reaches zero due to `Sell` transactions, the `Holding` entity remains in the database to accommodate potential future purchase transactions. The `average_price` is maintained at its last known value until the next purchase transaction initiates a new VWAP calculation. _(Activated by the SEL spec.)_
 
 **TRX-041 — Buy-from-holding-row modal (frontend)**: When a purchase is initiated from a holding row (TRX-010 entry point 3), the form opens as a `BuyTransactionModal`. Account and asset are pre-filled from the holding row context and are read-only (TRX-011). Default values follow TRX-023 (date=today, exchange_rate=1.0, fees=0). The exchange rate field is visible only when the asset currency differs from the account currency (consistent with SEL-036). On success the modal closes and a success snackbar is shown; the holdings view refreshes via the existing `TransactionUpdated` event (TRX-038).
+
+### Opening Balance (042–059)
+
+**TRX-042 — Opening balance transaction type (backend)**: A `TransactionType::OpeningBalance` variant allows users to seed an existing position — recording the quantity held and total cost paid before they began tracking in VaultCompass — without re-entering the full purchase history. An `OpeningBalance` transaction is stored and processed alongside regular `Purchase` and `Sell` transactions in chronological recalculation.
+
+**TRX-043 — Opening balance form fields (frontend)**: The opening balance form collects four fields: the target asset (selectable from all active assets), a date, a quantity (units held), and a total cost (total amount paid, in the account's currency). No fees field and no exchange rate field are shown.
+
+**TRX-044 — Opening balance quantity validation (frontend + backend)**: Quantity must be greater than zero. The submit action is disabled while quantity is zero or empty.
+
+**TRX-045 — Opening balance total cost validation (frontend + backend)**: Total cost must be greater than zero. The submit action is disabled while total cost is zero or empty.
+
+**TRX-046 — Opening balance date validation (frontend + backend)**: Date is required and must not be in the future, consistent with TRX-020. The submit action is disabled while the date is empty, invalid, or in the future.
+
+**TRX-047 — Opening balance stored fields (backend)**: An `OpeningBalance` transaction is persisted with `total_amount` = user-entered total cost (micro-units), `unit_price` = `floor(total_cost / quantity)` (micro-units, consistent with TRX-026 floor notation), `fees = 0`, `exchange_rate = 1_000_000`. The total amount formula defined in TRX-026 does not apply — `total_amount` is set directly from user input, both on creation and on edit.
+
+**TRX-048 — Opening balance VWAP participation (backend)**: `OpeningBalance` transactions participate in VWAP recalculation identically to `Purchase` transactions: their `total_amount` and `quantity` are included in the Σ of TRX-030. This extends TRX-030 to cover both `Purchase` and `OpeningBalance` types.
+
+**TRX-049 — Multiple opening balances allowed (backend)**: Multiple `OpeningBalance` transactions may exist for the same (account, asset) pair, and may coexist with `Purchase` and `Sell` transactions for the same pair. Each participates in chronological recalculation (TRX-036) in date order alongside regular transactions.
+
+**TRX-050 — Opening balance archived asset guard (backend)**: If the target asset is archived when an opening balance is submitted, the backend rejects with `ArchivedAsset`. No auto-unarchive occurs. The asset selector (TRX-043) lists only active assets, so this guard is reached only via a race condition (asset archived between form load and submission); the frontend displays the error inline (TRX-028). The TRX-029 confirmation dialog does not apply to opening balance.
+
+**TRX-051 — Opening balance edit form (frontend)**: When editing an `OpeningBalance` transaction, the edit form shows date, quantity, and total cost — no fees field, no exchange rate field. The `correct_transaction` mechanism (TRX-031) is used. TRX-047 applies on edit: `total_amount` is set directly from the entered total cost; TRX-026 does not apply.
+
+**TRX-052 — Transaction list label (frontend)**: `OpeningBalance` entries are shown in the Transaction List with the label "Opening Balance", distinct from "Buy" and "Sell".
+
+**TRX-053 — Opening balance amounts display (frontend)**: In the Transaction List, the unit price column for an `OpeningBalance` row displays the `unit_price` field stored by TRX-047. The total amount column shows the `total_amount` field (the entered total cost).
+
+**TRX-054 — No realized P&L for opening balance (frontend)**: The realized P&L column is empty for `OpeningBalance` rows, as no gain or loss is crystallized at entry time.
+
+**TRX-055 — Opening balance entry point (frontend)**: The opening balance form is accessible via a dedicated button in the Account Details page header, alongside the existing "Add Transaction" button. It is not available as a holding row action. The account is pre-filled from the current Account Details context; the user selects the asset in the form.
+
+**TRX-056 — Opening balance error variants (backend)**: The opening balance command exposes the following error variants: `QuantityNotPositive` (quantity ≤ 0), `InvalidTotalCost` (total cost ≤ 0, new variant), `DateInFuture` (date is in the future), `DateTooOld` (date before 1900-01-01, consistent with TRX-020/TRX-046), `AccountNotFound`, `AssetNotFound`, `ArchivedAsset` (asset archived — race condition per TRX-050; displayed as inline error). `DbError` covers unexpected persistence failures.
+
+**TRX-057 — Opening balance loading state (frontend)**: While the submission is in progress, the submit button is disabled and shows a loading indicator.
+
+**TRX-058 — Opening balance success feedback (frontend)**: On success, the modal closes and a success snackbar is shown. The Account Details holdings view refreshes via the existing `TransactionUpdated` event (TRX-038).
 
 ---
 
@@ -185,3 +221,5 @@ _`transaction_type` is not shown in the form. It is hardcoded to `Purchase` unti
 **~~OQ-6~~ — Asset archiving eligibility rule** _(resolved)_: Implemented in `use_cases/archive_asset/orchestrator.rs` — `ArchiveAssetUseCase` calls `AccountService.has_active_holdings_for_asset()` and returns `ArchiveAssetError::ActiveHoldings` if any active holding exists. Backend rule enforced and covered by `archive_rejected_when_active_holdings` test.
 
 **OQ-7 — ~~Edit/delete workflow diagrams~~** _(deferred)_: Diagrams for the edit and delete paths are out of scope for the initial implementation. To be added in a future spec update alongside the `Sell` transaction type.
+
+**OQ-8 — ~~Opening balance entry point~~** _(resolved)_: Page-level button in the Account Details header only (Option A). No holding row action — opening balance is a one-time migration step and adding it to the row would clutter the UI for an uncommon operation. Converted to TRX-055.

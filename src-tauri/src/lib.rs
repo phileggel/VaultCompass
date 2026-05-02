@@ -26,6 +26,7 @@ use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
+use crate::use_cases::open_holding::OpenHoldingUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
 use std::{fs, path::PathBuf, sync::Arc};
@@ -171,10 +172,16 @@ pub fn run() {
                 let account_deletion_uc =
                     AccountDeletionUseCase::new(Arc::clone(&account_service));
 
+                let open_holding_uc = OpenHoldingUseCase::new(
+                    Arc::clone(&account_service),
+                    Arc::clone(&asset_service),
+                );
+
                 app_handle.manage(account_details_uc);
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
                 app_handle.manage(account_deletion_uc);
+                app_handle.manage(open_holding_uc);
 
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 

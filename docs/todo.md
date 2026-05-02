@@ -35,6 +35,16 @@ All domain contracts written and reviewed:
 
 Notable findings from contract-reviewer: `ArchivedAssetSell (SEL-037)` guard is missing from `update_transaction` in the orchestrator — the spec mandates it via TRX-033 but the implementation never enforces it on edits. ✅ Guard was already present; two tests added (`create_sell_rejected_when_asset_archived`, `update_sell_rejected_when_asset_archived`) in `use_cases/record_transaction/orchestrator.rs`.
 
+## (account) — Consolidate account domain contracts into account-contract.md
+
+Convention: one contract file per bounded context domain (not per service or use case). Three files currently cover the account domain and must be merged into `docs/contracts/account-contract.md`:
+
+- `docs/contracts/record_transaction-contract.md` — buy/sell/open_holding/correct/cancel commands
+- `docs/contracts/transaction-contract.md` — `get_asset_ids_for_account`
+- `docs/contracts/account-contract.md` — CRUD + deletion summary (keep this one, merge the others in)
+
+After merging: delete the two source files and update all references (plan docs, reviewer reports, ARCHITECTURE.md).
+
 ## (deps) — Update specta to rc.23
 
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.

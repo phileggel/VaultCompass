@@ -270,6 +270,32 @@ impl AccountService {
         Ok(())
     }
 
+    /// Seeds a holding directly from a quantity and total cost (TRX-042, TRX-047).
+    ///
+    /// Asset existence and archived-status checks are the caller's responsibility
+    /// (handled by OpenHoldingUseCase — TRX-050, TRX-056).
+    pub async fn open_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        total_cost: i64,
+    ) -> Result<Transaction> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "open_holding");
+        let tx = account
+            .open_holding(asset_id, date, quantity, total_cost)?
+            .clone();
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
     // -------------------------------------------------------------------------
     // Cross-BC guard queries (called by use cases)
     // -------------------------------------------------------------------------
@@ -370,7 +396,7 @@ mod tests {
         AccountService::new(
             Box::new(SqliteAccountRepository::new(pool.clone())),
             Box::new(SqliteHoldingRepository::new(pool.clone())),
-            Box::new(SqliteTransactionRepository::new(pool)),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
         )
     }
 
@@ -736,6 +762,233 @@ mod tests {
                 .contains("simulated DB failure"),
             "error message should propagate unchanged"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // open_holding service tests (TRX-042 through TRX-056)
+    // -------------------------------------------------------------------------
+
+    // TRX-056 — open_holding returns AccountNotFound when account does not exist
+    #[tokio::test]
+    async fn open_holding_returns_account_not_found() {
+        let svc = setup_service().await;
+        let err = svc
+            .open_holding(
+                "nonexistent-account-id",
+                "some-asset-id".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .await
+            .unwrap_err();
+        // Service propagates the anyhow error as "account not found"
+        assert!(
+            err.to_string().contains("account not found")
+                || err.to_string().contains("AccountNotFound"),
+            "expected account-not-found error, got: {err}"
+        );
+    }
+
+    // TRX-044 — open_holding propagates QuantityNotPositive through the service
+    #[tokio::test]
+    async fn open_holding_propagates_quantity_not_positive() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .open_holding(
+                &account.id,
+                asset_id,
+                "2024-01-01".to_string(),
+                0, // quantity ≤ 0
+                micro(100),
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::TransactionDomainError;
+        assert!(
+            err.downcast_ref::<TransactionDomainError>()
+                .map(|e| matches!(e, TransactionDomainError::QuantityNotPositive))
+                .unwrap_or(false),
+            "expected QuantityNotPositive, got: {err}"
+        );
+    }
+
+    // TRX-045 — open_holding propagates InvalidTotalCost through the service
+    #[tokio::test]
+    async fn open_holding_propagates_invalid_total_cost() {
+        use crate::context::account::OpeningBalanceDomainError;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .open_holding(
+                &account.id,
+                asset_id,
+                "2024-01-01".to_string(),
+                micro(1),
+                0, // total_cost ≤ 0
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            err.downcast_ref::<OpeningBalanceDomainError>()
+                .map(|e| matches!(e, OpeningBalanceDomainError::InvalidTotalCost))
+                .unwrap_or(false),
+            "expected InvalidTotalCost, got: {err}"
+        );
+    }
+
+    // TRX-047 — open_holding persists transaction and holding with correct fields
+    #[tokio::test]
+    async fn open_holding_persists_transaction_and_holding() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let tx = svc
+            .open_holding(
+                &account.id,
+                asset_id.clone(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(200),
+            )
+            .await
+            .unwrap();
+
+        use crate::context::account::TransactionType;
+        assert_eq!(tx.transaction_type, TransactionType::OpeningBalance);
+        assert_eq!(tx.total_amount, micro(200), "total_amount = total_cost");
+        assert_eq!(tx.fees, 0, "fees = 0");
+        assert_eq!(tx.exchange_rate, 1_000_000, "exchange_rate = 1.0");
+        // unit_price = floor(200_000_000 * 1_000_000 / 2_000_000) = 100_000_000
+        assert_eq!(
+            tx.unit_price,
+            micro(100),
+            "unit_price = total_cost / quantity"
+        );
+
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        assert_eq!(holdings.len(), 1);
+        assert_eq!(holdings[0].quantity, micro(2));
+        assert_eq!(holdings[0].average_price, micro(100));
+    }
+
+    // TRX-048 — open_holding participates in VWAP alongside Purchase
+    #[tokio::test]
+    async fn open_holding_participates_in_vwap_alongside_purchase() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        // OpeningBalance: 2 units, total_cost = 200
+        svc.open_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(2),
+            micro(200),
+        )
+        .await
+        .unwrap();
+
+        // Purchase: 2 units @ 100 → total = 200
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-02-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let h = holdings.iter().find(|h| h.asset_id == asset_id).unwrap();
+        // VWAP = (200 + 200) / 4 = 100
+        assert_eq!(h.quantity, micro(4));
+        assert_eq!(
+            h.average_price,
+            micro(100),
+            "VWAP must include OpeningBalance totals"
+        );
+    }
+
+    // TRX-049 — multiple open_holding entries for same pair are all persisted
+    #[tokio::test]
+    async fn open_holding_allows_multiple_for_same_pair() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        svc.open_holding(
+            &account.id,
+            asset_id.clone(),
+            "2023-01-01".to_string(),
+            micro(1),
+            micro(100),
+        )
+        .await
+        .unwrap();
+        svc.open_holding(
+            &account.id,
+            asset_id.clone(),
+            "2023-06-01".to_string(),
+            micro(2),
+            micro(200),
+        )
+        .await
+        .unwrap();
+
+        let txs = svc.get_transactions(&account.id, &asset_id).await.unwrap();
+        assert_eq!(txs.len(), 2, "both opening balance rows must be persisted");
+
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        assert_eq!(holdings[0].quantity, micro(3), "quantities must accumulate");
     }
 
     // TRX-031 — correct_transaction updates the persisted holding

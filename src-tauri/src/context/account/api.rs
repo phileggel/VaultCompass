@@ -217,6 +217,9 @@ pub enum TransactionCommandError {
     /// No transaction exists with the requested ID.
     #[error("Transaction not found")]
     TransactionNotFound,
+    /// No account exists with the requested ID.
+    #[error("Account not found")]
+    AccountNotFound,
     /// Sell requested but holding has zero available units.
     #[error("No units available to sell")]
     ClosedPosition,
@@ -294,6 +297,10 @@ fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
                 TransactionCommandError::TotalAmountNotPositive
             }
         };
+    }
+    // "account not found" is surfaced as a plain anyhow error from the service
+    if e.to_string().contains("account not found") {
+        return TransactionCommandError::AccountNotFound;
     }
     tracing::error!(target: BACKEND, err = ?e, "unexpected error in transaction command");
     TransactionCommandError::Unknown

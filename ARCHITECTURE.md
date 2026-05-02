@@ -96,6 +96,13 @@ Cross-BC guard: checks transaction history before hard-deleting an asset.
 - `orchestrator.rs` — `DeleteAssetUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; calls `AccountService.has_holding_entries_for_asset()` then `AssetService.delete()`
 - `api.rs` — `delete_asset(id: String) -> Result<(), DeleteAssetCommandError>` Tauri command; error variants: `ExistingTransactions`, `NotFound`, `Unknown`
 
+#### Open Holding (`use_cases/open_holding/`)
+
+Cross-BC guard: validates asset existence and archived status before seeding an opening balance (TRX-050, TRX-056).
+
+- `orchestrator.rs` — `OpenHoldingUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; calls `AssetService.get_asset_by_id()` then `AccountService.open_holding()`
+- `api.rs` — `open_holding(dto: OpenHoldingDTO) -> Result<Transaction, OpenHoldingCommandError>` Tauri command; error variants: `AccountNotFound`, `AssetNotFound`, `ArchivedAsset`, `InvalidTotalCost`, `QuantityNotPositive`, `InvalidDate`, `DateInFuture`, `DateTooOld`, `Unknown`
+
 #### Update Checker (`use_cases/update_checker/`)
 
 Implements the application auto-update lifecycle (spec: `docs/update.md`).

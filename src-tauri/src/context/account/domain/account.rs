@@ -1,6 +1,7 @@
-use super::error::{AccountDomainError, AccountOperationError};
+use super::error::{AccountDomainError, AccountOperationError, OpeningBalanceDomainError};
 use super::holding::Holding;
 use super::transaction::{Transaction, TransactionType};
+use super::transaction_error::TransactionDomainError;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -335,6 +336,9 @@ impl Account {
             TransactionType::Sell => {
                 Self::compute_sell_total(quantity, unit_price, exchange_rate, fees)
             }
+            TransactionType::OpeningBalance => {
+                Self::compute_opening_balance_total(quantity, unit_price)
+            }
         };
 
         let updated_tx = Transaction::with_id(
@@ -467,6 +471,64 @@ impl Account {
         Ok(())
     }
 
+    /// Seeds a holding directly from a quantity and total cost, without full transaction history
+    /// (TRX-042, TRX-047, TRX-048).
+    ///
+    /// `total_amount = total_cost` (direct). `unit_price = floor(total_cost * MICRO / quantity)`.
+    /// `fees = 0`, `exchange_rate = 1_000_000`. TRX-026 formula does not apply.
+    /// OpeningBalance rows participate in VWAP identically to Purchase (TRX-048).
+    pub fn open_holding(
+        &mut self,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        total_cost: i64,
+    ) -> Result<&Transaction> {
+        if quantity <= 0 {
+            return Err(TransactionDomainError::QuantityNotPositive.into());
+        }
+        if total_cost <= 0 {
+            return Err(OpeningBalanceDomainError::InvalidTotalCost.into());
+        }
+        const MICRO: i128 = 1_000_000;
+        let unit_price = (total_cost as i128 * MICRO / quantity as i128) as i64;
+        let tx = Transaction::new(
+            self.id.clone(),
+            asset_id.clone(),
+            TransactionType::OpeningBalance,
+            date,
+            quantity,
+            unit_price,
+            1_000_000, // exchange_rate = 1.0 (TRX-047)
+            0,         // fees = 0 (TRX-047)
+            total_cost,
+            None, // no note (TRX-043)
+            None, // realized_pnl not applicable
+        )?;
+        self.transactions.push(tx);
+        let tx_ref = self
+            .transactions
+            .last()
+            .ok_or_else(|| anyhow!("BUG: tx list empty after push in account {}", self.id))?;
+
+        let pair_txs: Vec<&Transaction> = self
+            .transactions
+            .iter()
+            .filter(|t| t.asset_id == asset_id)
+            .collect();
+        let (holding, _) = self.recalculate_holding(&asset_id, &pair_txs)?;
+
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx_ref.clone()));
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+
+        self.transactions
+            .last()
+            .ok_or_else(|| anyhow!("BUG: tx list empty after push in account {}", self.id))
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -515,7 +577,7 @@ impl Account {
 
         for t in transactions {
             match t.transaction_type {
-                TransactionType::Purchase => {
+                TransactionType::Purchase | TransactionType::OpeningBalance => {
                     let qty = t.quantity as i128;
                     total_quantity += qty;
                     vwap_numerator += t.total_amount as i128 * MICRO;
@@ -597,6 +659,13 @@ impl Account {
         let price = unit_price as i128;
         let rate = exchange_rate as i128;
         ((qty * price / MICRO) * rate / MICRO) as i64 - fees
+    }
+
+    /// Computes total_amount for an OpeningBalance correction (TRX-051).
+    /// Formula: floor(qty × unit_price / MICRO) — no exchange_rate factor.
+    fn compute_opening_balance_total(quantity: i64, unit_price: i64) -> i64 {
+        const MICRO: i128 = 1_000_000;
+        (quantity as i128 * unit_price as i128 / MICRO) as i64
     }
 
     /// Computes realized P&L for a sell (SEL-024).
@@ -901,6 +970,349 @@ mod tests {
             "holding should be removed"
         );
         assert!(acc.transactions.is_empty(), "transaction should be removed");
+    }
+
+    // -------------------------------------------------------------------------
+    // Opening balance tests (TRX-042 through TRX-051)
+    // -------------------------------------------------------------------------
+
+    // TRX-044 — open_holding rejects quantity ≤ 0
+    // TransactionDomainError::QuantityNotPositive is checked via error message;
+    // the exact variant will be confirmed by the downcast once the impl imports it.
+    #[test]
+    fn open_holding_rejects_zero_quantity() {
+        let mut acc = base_account();
+        let err = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                0,
+                micro(100),
+            )
+            .unwrap_err();
+        // Check via error message — TransactionDomainError::QuantityNotPositive message:
+        // "Quantity must be strictly positive"
+        assert!(
+            err.to_string().contains("positive"),
+            "expected QuantityNotPositive error, got: {err}"
+        );
+    }
+
+    // TRX-044 — open_holding rejects negative quantity
+    #[test]
+    fn open_holding_rejects_negative_quantity() {
+        let mut acc = base_account();
+        let err = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                -micro(1),
+                micro(100),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("positive"),
+            "expected QuantityNotPositive error, got: {err}"
+        );
+    }
+
+    // TRX-045 — open_holding rejects total_cost ≤ 0
+    #[test]
+    fn open_holding_rejects_zero_total_cost() {
+        let mut acc = base_account();
+        let err = acc
+            .open_holding("asset-1".to_string(), "2024-01-01".to_string(), micro(1), 0)
+            .unwrap_err();
+        // OpeningBalanceDomainError is in scope via `use super::*` once implemented
+        assert!(
+            err.downcast_ref::<OpeningBalanceDomainError>()
+                .map(|e| matches!(e, OpeningBalanceDomainError::InvalidTotalCost))
+                .unwrap_or(false),
+            "expected InvalidTotalCost, got: {err}"
+        );
+    }
+
+    // TRX-045 — open_holding rejects negative total_cost
+    #[test]
+    fn open_holding_rejects_negative_total_cost() {
+        let mut acc = base_account();
+        let err = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                -micro(1),
+            )
+            .unwrap_err();
+        // OpeningBalanceDomainError is in scope via `use super::*` once implemented
+        assert!(
+            err.downcast_ref::<OpeningBalanceDomainError>()
+                .map(|e| matches!(e, OpeningBalanceDomainError::InvalidTotalCost))
+                .unwrap_or(false),
+            "expected InvalidTotalCost, got: {err}"
+        );
+    }
+
+    // TRX-046 — open_holding rejects future date
+    #[test]
+    fn open_holding_rejects_future_date() {
+        let mut acc = base_account();
+        let err = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2099-12-31".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .unwrap_err();
+        // TransactionDomainError::DateInFuture message: "Transaction date cannot be in the future"
+        assert!(
+            err.to_string().contains("future"),
+            "expected DateInFuture error, got: {err}"
+        );
+    }
+
+    // TRX-046 — open_holding rejects date before 1900-01-01
+    #[test]
+    fn open_holding_rejects_date_too_old() {
+        let mut acc = base_account();
+        let err = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "1899-12-31".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .unwrap_err();
+        // TransactionDomainError::DateTooOld message: "Transaction date cannot be before 1900-01-01"
+        assert!(
+            err.to_string().contains("1900-01-01"),
+            "expected DateTooOld error, got: {err}"
+        );
+    }
+
+    // TRX-047 — open_holding stores total_amount = total_cost directly
+    #[test]
+    fn open_holding_sets_total_amount_equal_to_total_cost() {
+        let mut acc = base_account();
+        let total_cost = micro(500); // 500.000000 in account currency
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                total_cost,
+            )
+            .unwrap();
+        assert_eq!(
+            tx.total_amount, total_cost,
+            "total_amount must equal total_cost"
+        );
+    }
+
+    // TRX-047 — open_holding sets fees = 0
+    #[test]
+    fn open_holding_sets_fees_to_zero() {
+        let mut acc = base_account();
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(500),
+            )
+            .unwrap();
+        assert_eq!(tx.fees, 0, "fees must be 0 for OpeningBalance");
+    }
+
+    // TRX-047 — open_holding sets exchange_rate = 1_000_000
+    #[test]
+    fn open_holding_sets_exchange_rate_to_one() {
+        let mut acc = base_account();
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(500),
+            )
+            .unwrap();
+        assert_eq!(
+            tx.exchange_rate, 1_000_000,
+            "exchange_rate must be 1.0 (1_000_000 micro)"
+        );
+    }
+
+    // TRX-047 — open_holding computes unit_price = floor(total_cost * MICRO / quantity)
+    #[test]
+    fn open_holding_computes_unit_price_as_floor_of_cost_over_qty() {
+        let mut acc = base_account();
+        // quantity = 3_000_000 (3.0), total_cost = 10_000_000 (10.0)
+        // unit_price = floor(10_000_000 * 1_000_000 / 3_000_000) = floor(3_333_333.33) = 3_333_333
+        let quantity = 3 * 1_000_000i64;
+        let total_cost = 10 * 1_000_000i64;
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                quantity,
+                total_cost,
+            )
+            .unwrap();
+        let expected_unit_price = (total_cost as i128 * 1_000_000 / quantity as i128) as i64;
+        assert_eq!(
+            tx.unit_price, expected_unit_price,
+            "unit_price must be floor(total_cost*MICRO/qty)"
+        );
+    }
+
+    // TRX-047 — open_holding sets transaction_type = OpeningBalance
+    #[test]
+    fn open_holding_sets_transaction_type_to_opening_balance() {
+        let mut acc = base_account();
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .unwrap();
+        assert_eq!(tx.transaction_type, TransactionType::OpeningBalance);
+    }
+
+    // TRX-048 — OpeningBalance participates in VWAP identically to Purchase
+    // 1 OpeningBalance of 2 units @ total 200 + 1 Purchase of 2 units @ 200
+    // VWAP = (200 + 200) / 4 = 100
+    #[test]
+    fn open_holding_participates_in_vwap_identically_to_purchase() {
+        let mut acc = base_account();
+        // OpeningBalance: 2 units, total_cost = 200
+        acc.open_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(2),
+            micro(200),
+        )
+        .unwrap();
+        // Purchase: 2 units @ 100 each → total = 200
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-02-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        let h = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-1")
+            .unwrap();
+        // VWAP = (200 + 200) / (2 + 2) = 100
+        assert_eq!(h.quantity, micro(4), "total quantity must accumulate");
+        assert_eq!(
+            h.average_price,
+            micro(100),
+            "VWAP must include OpeningBalance"
+        );
+    }
+
+    // TRX-049 — multiple OpeningBalance entries allowed for same (account, asset) pair
+    #[test]
+    fn open_holding_allows_multiple_for_same_pair() {
+        let mut acc = base_account();
+        let r1 = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2023-01-01".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .cloned();
+        let r2 = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2023-06-01".to_string(),
+                micro(2),
+                micro(200),
+            )
+            .cloned();
+        assert!(r1.is_ok(), "first open_holding must succeed");
+        assert!(r2.is_ok(), "second open_holding must succeed for same pair");
+        let h = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-1")
+            .unwrap();
+        assert_eq!(
+            h.quantity,
+            micro(3),
+            "quantities must accumulate across multiple openings"
+        );
+    }
+
+    // TRX-051 (backend) — correct_transaction on an OpeningBalance row recomputes
+    // total_amount = quantity * unit_price / MICRO (not TRX-026 purchase formula)
+    #[test]
+    fn correct_transaction_on_opening_balance_recomputes_total_from_qty_and_price() {
+        let mut acc = base_account();
+        // Create an opening balance: 2 units, total_cost = 200 → unit_price = 100_000_000
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(200),
+            )
+            .unwrap()
+            .clone();
+
+        // Correct it: change quantity to 3, keep unit_price from original (100_000_000 micro = 100)
+        // For OpeningBalance correction: total_amount = floor(3_000_000 * 100_000_000 / 1_000_000)
+        //   = 300_000_000 (300.0)
+        // NOT the TRX-026 purchase formula with exchange_rate
+        let corrected = acc
+            .correct_transaction(
+                &tx.id,
+                "2024-01-01".to_string(),
+                micro(3),      // new quantity
+                tx.unit_price, // keep same unit_price
+                1_000_000,     // exchange_rate (must be 1 for OpeningBalance)
+                0,             // fees (must be 0 for OpeningBalance)
+                None,
+            )
+            .unwrap();
+
+        // total_amount should be floor(qty * unit_price / MICRO) — not using exchange_rate
+        let expected = (micro(3) as i128 * tx.unit_price as i128 / 1_000_000) as i64;
+        assert_eq!(
+            corrected.total_amount, expected,
+            "corrected OpeningBalance total_amount must use qty*unit_price/MICRO formula"
+        );
+    }
+
+    // TRX-047 — open_holding does NOT apply TRX-026 formula (no exchange_rate factor)
+    #[test]
+    fn open_holding_total_amount_ignores_exchange_rate() {
+        let mut acc = base_account();
+        // total_cost = 1_000_000 (1.0 unit), quantity = 1_000_000 (1.0)
+        // TRX-026 would multiply by exchange_rate — but open_holding must not
+        let tx = acc
+            .open_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(1),
+            )
+            .unwrap();
+        // total_amount must be exactly total_cost — regardless of any implied exchange_rate
+        assert_eq!(tx.total_amount, micro(1));
+        // exchange_rate is always 1_000_000 (1.0) per TRX-047
+        assert_eq!(tx.exchange_rate, 1_000_000);
     }
 
     // SEL-026 — cancel_transaction retains holding at qty=0 when other transactions remain

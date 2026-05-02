@@ -26,6 +26,8 @@ pub enum TransactionType {
     Purchase,
     /// A sale of a previously purchased asset.
     Sell,
+    /// Seeds a holding directly from a known quantity and total cost, without full transaction history (TRX-042).
+    OpeningBalance,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -358,5 +360,30 @@ mod tests {
         let micro = 1_000_000i64;
         let result = make_transaction(micro, micro, micro, -1, micro);
         assert!(result.is_err());
+    }
+
+    // TRX-042 — OpeningBalance variant exists in the enum
+    #[test]
+    fn opening_balance_variant_exists() {
+        let tx_type = TransactionType::OpeningBalance;
+        assert_eq!(tx_type, TransactionType::OpeningBalance);
+    }
+
+    // TRX-042 — OpeningBalance round-trips through strum Display → from_str
+    #[test]
+    fn opening_balance_round_trips_through_strum() {
+        use std::str::FromStr;
+        let original = TransactionType::OpeningBalance;
+        let as_str = original.to_string();
+        let parsed = TransactionType::from_str(&as_str).expect("strum parse");
+        assert_eq!(parsed, TransactionType::OpeningBalance);
+    }
+
+    // TRX-042 — all three variants are distinct
+    #[test]
+    fn transaction_type_variants_are_distinct() {
+        assert_ne!(TransactionType::Purchase, TransactionType::Sell);
+        assert_ne!(TransactionType::Purchase, TransactionType::OpeningBalance);
+        assert_ne!(TransactionType::Sell, TransactionType::OpeningBalance);
     }
 }

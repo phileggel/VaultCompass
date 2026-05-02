@@ -3,7 +3,7 @@ use crate::{
     core::{logger, Event},
     use_cases::{
         account_deletion, account_details, archive_asset, asset_web_lookup, delete_asset,
-        update_checker,
+        open_holding, update_checker,
     },
 };
 
@@ -31,6 +31,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::BuyHoldingDTO>()
         .typ::<account::SellHoldingDTO>()
         .typ::<account::CorrectTransactionDTO>()
+        .typ::<open_holding::OpenHoldingDTO>()
+        .typ::<open_holding::OpenHoldingCommandError>()
         .typ::<account::TransactionCommandError>()
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
@@ -70,6 +72,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::correct_transaction,
             account::cancel_transaction,
             account::get_transactions,
+            open_holding::open_holding,
             account_details::get_account_details,
             account_deletion::get_account_deletion_summary,
             asset_web_lookup::lookup_asset
