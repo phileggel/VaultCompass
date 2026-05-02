@@ -26,28 +26,28 @@
 
 ## Workflow TaskList (mandatory quality gates)
 
-- [ ] Review architecture & rules (`ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/frontend-rules.md`, `docs/e2e-rules.md`, ADR-001, ADR-002)
-- [ ] No DB migration required (the existing `transactions.transaction_type TEXT` column accepts the new `"OpeningBalance"` string; no schema change)
-- [ ] Backend test stubs (`test-writer-backend` — all stubs written, red confirmed)
-- [ ] Backend implementation (minimal — make failing tests pass; no methods, defensive code, or features beyond what the stubs demand)
-- [ ] `just format` (rustfmt + clippy --fix)
-- [ ] Backend review (`reviewer-backend` → fix issues)
-- [ ] Type synchronization (`just generate-types` — emits `OpenHoldingDTO`, `OpeningBalance` enum variant, `OpenHoldingCommandError` into `src/bindings.ts`)
-- [ ] Compilation fixup (resolve TypeScript errors in the existing transactions feature caused by the new `TransactionType` variant — exhaustive match arms, presenter type label, edit-modal type checks; **no new UI work**)
-- [ ] `just check` — TypeScript clean
-- [ ] Commit — backend layer. Suggested title: `feat(opening-balance): add open_holding command and OpeningBalance type`
-- [ ] Frontend test stubs (`test-writer-frontend` — all stubs written, red confirmed)
-- [ ] Frontend implementation (minimal — make failing tests pass)
-- [ ] `just format`
-- [ ] Frontend review (`reviewer-frontend` → fix issues)
-- [ ] Commit — frontend layer. Suggested title: `feat(opening-balance): add OpenHoldingModal and Account Details entry point`
-- [ ] E2E tests (`test-writer-e2e` — open balance flow against live app; run `/setup-e2e` first if not yet initialized; iterate on selectors per `docs/e2e-rules.md` until green)
-- [ ] Commit — E2E. Suggested title: `test(opening-balance): add e2e flow for opening balance`
-- [ ] Cross-cutting review (`reviewer-arch`; no SQL migration → `reviewer-sql` skipped; `reviewer-infra` only if config/scripts changed)
-- [ ] i18n review (`i18n-checker` — verify new keys present in both `fr` and `en` locales)
-- [ ] Documentation update (`ARCHITECTURE.md` — Account BC service method list + new use case if OQ-A goes that way; `docs/todo.md` — record any deferred follow-ups in English; `docs/ubiquitous-language.md` — flip `open_holding` and `OpeningBalance` from `pending` to `confirmed` only after explicit user approval)
-- [ ] Spec check (`spec-checker` — confirm every TRX-042…TRX-058 maps to code/tests)
-- [ ] Commit — tests & docs. Suggested title: `docs(opening-balance): update architecture and ubiquitous language`
+- [x] Review architecture & rules (`ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/frontend-rules.md`, `docs/e2e-rules.md`, ADR-001, ADR-002)
+- [x] No DB migration required (the existing `transactions.transaction_type TEXT` column accepts the new `"OpeningBalance"` string; no schema change)
+- [x] Backend test stubs (`test-writer-backend` — all stubs written, red confirmed)
+- [x] Backend implementation (minimal — make failing tests pass; no methods, defensive code, or features beyond what the stubs demand)
+- [x] `just format` (rustfmt + clippy --fix)
+- [x] Backend review (`reviewer-backend` → fix issues)
+- [x] Type synchronization (`just generate-types` — emits `OpenHoldingDTO`, `OpeningBalance` enum variant, `OpenHoldingCommandError` into `src/bindings.ts`)
+- [x] Compilation fixup (resolve TypeScript errors in the existing transactions feature caused by the new `TransactionType` variant — exhaustive match arms, presenter type label, edit-modal type checks; **no new UI work**)
+- [x] `just check` — TypeScript clean
+- [x] Commit — backend layer (`e977466 feat(account): implement opening-balance transaction type`)
+- [x] Frontend test stubs (`test-writer-frontend` — all stubs written, red confirmed)
+- [x] Frontend implementation (minimal — make failing tests pass)
+- [x] `just format`
+- [x] Frontend review (`reviewer-frontend` → fix issues)
+- [x] Commit — frontend layer (`e40b1b2 feat(opening-balance): implement frontend for TRX-042–058`)
+- [x] E2E tests — test file written (`e2e/open_balance/open_balance.test.ts`); not run against live app (skipped by user)
+- [x] Commit — E2E + compliance (`3e75006`, `7e4b82f`)
+- [x] Cross-cutting review (`reviewer-arch` — 4 findings resolved)
+- [x] i18n review (`i18n-checker` — 2 placeholder keys added; all other keys clean)
+- [x] Documentation update (`ARCHITECTURE.md` updated; `docs/todo.md` 2 tech-debt items added; `docs/ubiquitous-language.md` `open_holding`/`OpeningBalance` confirmed)
+- [x] Spec check (`spec-checker` — 15/17 rules fully covered; TRX-055/046/058 gaps fixed in review pass)
+- [ ] Commit — tests & docs (pending)
 
 ---
 

@@ -115,7 +115,7 @@ export function useEditTransactionModal({
       // TRX-051: for OpeningBalance, compute unit_price = total_cost / quantity (TRX-047 formula)
       const unitPriceMicro =
         isOpeningBalance && microValues.qtyMicro > 0
-          ? Math.round((microValues.priceMicro * 1_000_000) / microValues.qtyMicro)
+          ? Math.floor((microValues.priceMicro * 1_000_000) / microValues.qtyMicro)
           : microValues.priceMicro;
 
       const result = await correctTransaction(transaction.id, transaction.account_id, {

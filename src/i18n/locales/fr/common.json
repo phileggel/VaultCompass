@@ -269,6 +269,8 @@
   "open_balance": {
     "modal_title": "Ouvrir une position",
     "form_total_cost_label": "Coût total",
+    "form_quantity_placeholder": "0,000000",
+    "form_total_cost_placeholder": "0,000",
     "action_submit": "Ouvrir",
     "success_created": "Solde d'ouverture enregistré avec succès."
   },

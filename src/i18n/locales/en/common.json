@@ -269,6 +269,8 @@
   "open_balance": {
     "modal_title": "Open Balance Position",
     "form_total_cost_label": "Total Cost",
+    "form_quantity_placeholder": "0.000000",
+    "form_total_cost_placeholder": "0.000",
     "action_submit": "Open Balance",
     "success_created": "Opening balance recorded successfully."
   },

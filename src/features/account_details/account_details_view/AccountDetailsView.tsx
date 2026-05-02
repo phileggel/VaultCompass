@@ -122,12 +122,13 @@ export function AccountDetailsView() {
                   </p>
                 )}
               </div>
-              {/* ACD-036 — non-empty state CTA + TRX-055 — open balance */}
-              {!summary.isEmpty && !summary.isAllClosed && (
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={handleOpenBalanceOpen}>
-                    {t("account_details.action_open_balance")}
-                  </Button>
+              {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
+              {/* ACD-036 — add transaction only when active holdings exist */}
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={handleOpenBalanceOpen}>
+                  {t("account_details.action_open_balance")}
+                </Button>
+                {!summary.isEmpty && !summary.isAllClosed && (
                   <Button
                     variant="tonal"
                     size="sm"
@@ -136,8 +137,8 @@ export function AccountDetailsView() {
                   >
                     {t("account_details.add_transaction")}
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ) : null}
         </div>

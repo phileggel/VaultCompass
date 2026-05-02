@@ -18,8 +18,12 @@ vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
+const { mockShowSnackbar } = vi.hoisted(() => ({
+  mockShowSnackbar: vi.fn(),
+}));
+
 vi.mock("@/lib/snackbarStore", () => ({
-  useSnackbar: () => vi.fn(),
+  useSnackbar: () => mockShowSnackbar,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -56,6 +60,7 @@ const makeTransaction = () => ({
 describe("useOpenBalance", () => {
   beforeEach(() => {
     mockOpenHolding.mockReset();
+    mockShowSnackbar.mockReset();
   });
 
   // ── Initial state ─────────────────────────────────────────────────────────
@@ -310,6 +315,26 @@ describe("useOpenBalance", () => {
 
     expect(result.current.error).toBeTruthy();
     expect(onSubmitSuccess).not.toHaveBeenCalled();
+  });
+
+  // TRX-058 — on success: snackbar fires with success_created key + onSubmitSuccess is called
+  it("TRX-058: calls showSnackbar with success key and calls onSubmitSuccess on success", async () => {
+    mockOpenHolding.mockResolvedValue({ status: "ok", data: makeTransaction() });
+    const onSubmitSuccess = vi.fn();
+    const { result } = renderHook(() => useOpenBalance({ ...BASE_PROPS, onSubmitSuccess }));
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-01-15");
+      result.current.handleChange("quantity", "5");
+      result.current.handleChange("totalCost", "500");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockShowSnackbar).toHaveBeenCalledWith("open_balance.success_created", "success");
+    expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
   });
 
   // isSubmitting is true while gateway call is in-flight

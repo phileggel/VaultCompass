@@ -2,6 +2,14 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (backend) — String-sentinel "account not found" pattern in open_holding/api.rs
+
+`open_holding/api.rs:89` (and `context/account/api.rs:302`) maps `AccountService::open_holding` errors by matching the string `"account not found"`. This is fragile. Fix: introduce a typed `AccountNotFoundError` in the service layer and downcast it in `to_open_holding_error` as is done for the other variants.
+
+## (i18n) — Hardcoded numeric placeholders in buy/sell transaction modals
+
+`BuyTransactionModal.tsx` and `SellTransactionModal.tsx` use hardcoded `"0.000000"` / `"0.000"` placeholder strings instead of i18n keys. Fixed in `OpenBalanceModal` (keys `open_balance.form_quantity_placeholder` / `open_balance.form_total_cost_placeholder`). Buy and sell modals should be updated consistently.
+
 ## ~~(ui) — Locale-aware number formatting in microToDecimal~~ ✅ resolved
 
 Added `microToFormatted` to `src/lib/microUnits.ts` using `Intl.NumberFormat(_displayLocale, ...)`. `_displayLocale` defaults to `"fr"` and is set at startup from `i18n/config.ts` via `setDisplayLocale(i18n.language)`, with a `languageChanged` subscription for runtime switches. `Intl.NumberFormat(undefined)` cannot be used — WebKitGTK on WSL2 resolves `undefined` to en-US, ignoring the OS locale. All display-only values in presenters and hook computed totals use `microToFormatted`. `microToDecimal` (plain `toFixed`) is kept for editable form pre-fill where the browser requires a period decimal separator.

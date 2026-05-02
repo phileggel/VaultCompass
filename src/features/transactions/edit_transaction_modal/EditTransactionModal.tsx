@@ -115,12 +115,13 @@ export function EditTransactionModal({
             createLabel={onCreateNewAsset ? t("asset.create_new") : undefined}
           />
 
-          {/* Date */}
+          {/* Date — TRX-046: cap at today for OpeningBalance */}
           <DateField
             id="edit-trx-date"
             label={t("transaction.form_date_label")}
             value={formData.date}
             onChange={(e) => handleChange("date", e.target.value)}
+            max={isOpeningBalance ? new Date().toISOString().slice(0, 10) : undefined}
             required
           />
 

@@ -7,7 +7,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const mockInvoke = vi.mocked(invoke);
 
 // Import after mock is registered so bindings.ts picks up the mock
-const { accountDetailsGateway } = await import("../gateway");
+const { accountDetailsGateway } = await import("./gateway");
 
 describe("accountDetailsGateway — openHolding", () => {
   beforeEach(() => {

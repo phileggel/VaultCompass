@@ -51,6 +51,7 @@ Record a purchase that opens or increases a position in an account.
 | Transaction list view         | ✅ Done | Per-account/asset filter, sort, edit/delete actions (TXL spec)                                   |
 | Account currency field        | ✅ Done | Exchange rate visibility now compares asset vs account currency (TRX-021, SEL-036)               |
 | Buy from holding row          | ✅ Done | `BuyTransactionModal` opened from holding row in Account Details, mirrors sell pattern (TRX-041) |
+| Opening balance entry         | ✅ Done | Seed a position with quantity + total cost from Account Details header; no fee breakdown; participates in VWAP (TRX-042–TRX-058) |
 
 Spec: `docs/spec/financial-asset-transaction.md`
 

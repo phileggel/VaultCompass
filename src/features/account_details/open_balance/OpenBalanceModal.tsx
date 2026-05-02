@@ -1,6 +1,4 @@
-import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
@@ -32,10 +30,6 @@ export function OpenBalanceModal({
 }: OpenBalanceModalProps) {
   const { t } = useTranslation();
   const assets = useAppStore((state) => state.assets);
-
-  useEffect(() => {
-    logger.info("[OpenBalanceModal] mounted");
-  }, []);
 
   const { formData, error, isSubmitting, isFormValid, handleChange, handleSubmit } = useOpenBalance(
     { accountId, assetId, onSubmitSuccess },
@@ -102,7 +96,7 @@ export function OpenBalanceModal({
           step="0.000001"
           value={formData.quantity}
           onChange={(e) => handleChange("quantity", e.target.value)}
-          placeholder="0.000000"
+          placeholder={t("open_balance.form_quantity_placeholder")}
           required
         />
 
@@ -115,7 +109,7 @@ export function OpenBalanceModal({
           step="0.000001"
           value={formData.totalCost}
           onChange={(e) => handleChange("totalCost", e.target.value)}
-          placeholder="0.000"
+          placeholder={t("open_balance.form_total_cost_placeholder")}
           required
         />
 
