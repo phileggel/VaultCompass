@@ -24,31 +24,31 @@ Pattern: real `sqlite::memory:` pool, `sqlx::migrate!`, `AccountService` via pub
 
 Tests to write (each references the spec rule it protects):
 
-| Test function | What it proves |
-|---|---|
-| `create_account_rejects_name_already_exists` | `create()` returns `NameAlreadyExists` when name collides |
-| `get_all_returns_created_accounts` | `get_all()` returns all non-deleted rows |
-| `get_by_id_returns_none_for_missing` | `get_by_id()` returns `Ok(None)` on unknown id |
-| `delete_account_removes_it_from_get_all` | `delete()` makes the account disappear |
+| Test function                                           | What it proves                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `create_account_rejects_name_already_exists`            | `create()` returns `NameAlreadyExists` when name collides                 |
+| `get_all_returns_created_accounts`                      | `get_all()` returns all non-deleted rows                                  |
+| `get_by_id_returns_none_for_missing`                    | `get_by_id()` returns `Ok(None)` on unknown id                            |
+| `delete_account_removes_it_from_get_all`                | `delete()` makes the account disappear                                    |
 | `get_deletion_summary_counts_holdings_and_transactions` | `get_deletion_summary()` returns correct `(holding_count, tx_count)` pair |
-| `get_holdings_for_account_returns_empty_before_any_buy` | `get_holdings_for_account()` returns empty vec before any transaction |
-| `get_transactions_returns_chronological_order` | `get_transactions()` orders by date ascending |
-| `get_asset_ids_for_account_deduplicates` | `get_asset_ids_for_account()` returns unique asset IDs |
+| `get_holdings_for_account_returns_empty_before_any_buy` | `get_holdings_for_account()` returns empty vec before any transaction     |
+| `get_transactions_returns_chronological_order`          | `get_transactions()` orders by date ascending                             |
+| `get_asset_ids_for_account_deduplicates`                | `get_asset_ids_for_account()` returns unique asset IDs                    |
 
 New file: `src-tauri/tests/asset_service_crud.rs`
 Pattern: same pool setup, `AssetService` with `SideEffectEventBus`, `AssetCategory` pre-seeded.
 
-| Test function | What it proves |
-|---|---|
-| `create_category_and_retrieve_it` | `create_category()` + `get_category_by_id()` roundtrip |
-| `update_category_changes_label` | `update_category()` persists new label |
-| `delete_category_removes_it` | `delete_category()` makes it disappear from `get_all_categories()` |
-| `update_asset_rejected_when_archived` | `update_asset()` returns `Archived` error |
-| `update_asset_rejected_when_category_not_found` | `update_asset()` returns category `NotFound` error |
-| `delete_asset_publishes_asset_updated_event` | `delete_asset()` fires `AssetUpdated` on the event bus |
-| `archive_asset_publishes_asset_updated_event` | `archive_asset()` fires `AssetUpdated` |
-| `unarchive_asset_publishes_asset_updated_event` | `unarchive_asset()` fires `AssetUpdated` |
-| `create_asset_publishes_asset_updated_event` | `create_asset()` fires `AssetUpdated` |
+| Test function                                   | What it proves                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| `create_category_and_retrieve_it`               | `create_category()` + `get_category_by_id()` roundtrip             |
+| `update_category_changes_label`                 | `update_category()` persists new label                             |
+| `delete_category_removes_it`                    | `delete_category()` makes it disappear from `get_all_categories()` |
+| `update_asset_rejected_when_archived`           | `update_asset()` returns `Archived` error                          |
+| `update_asset_rejected_when_category_not_found` | `update_asset()` returns category `NotFound` error                 |
+| `delete_asset_publishes_asset_updated_event`    | `delete_asset()` fires `AssetUpdated` on the event bus             |
+| `archive_asset_publishes_asset_updated_event`   | `archive_asset()` fires `AssetUpdated`                             |
+| `unarchive_asset_publishes_asset_updated_event` | `unarchive_asset()` fires `AssetUpdated`                           |
+| `create_asset_publishes_asset_updated_event`    | `create_asset()` fires `AssetUpdated`                              |
 
 ---
 
@@ -60,16 +60,16 @@ Missing coverage: lines 97–100 (`delete`), 108–120 (holding reads), 128–14
 
 Add to existing `mod tests` block using mockall mocks (B26):
 
-| Test function | Missing line(s) covered |
-|---|---|
-| `delete_delegates_to_repo_and_emits_event` | 97–100 |
-| `get_all_delegates_to_repo` | 44–46 |
-| `get_by_id_delegates_to_repo` | 49–51 |
-| `get_holdings_for_account_delegates_to_repo` | 108–110 |
-| `get_holding_by_account_asset_delegates_to_repo` | 113–121 |
-| `get_transaction_by_id_delegates_to_repo` | 128–130 |
-| `get_transactions_delegates_to_repo` | 133–141 |
-| `get_asset_ids_for_account_delegates_to_repo` | 144–148 |
+| Test function                                    | Missing line(s) covered |
+| ------------------------------------------------ | ----------------------- |
+| `delete_delegates_to_repo_and_emits_event`       | 97–100                  |
+| `get_all_delegates_to_repo`                      | 44–46                   |
+| `get_by_id_delegates_to_repo`                    | 49–51                   |
+| `get_holdings_for_account_delegates_to_repo`     | 108–110                 |
+| `get_holding_by_account_asset_delegates_to_repo` | 113–121                 |
+| `get_transaction_by_id_delegates_to_repo`        | 128–130                 |
+| `get_transactions_delegates_to_repo`             | 133–141                 |
+| `get_asset_ids_for_account_delegates_to_repo`    | 144–148                 |
 
 All use `MockAccountRepository` / `MockHoldingRepository` / `MockTransactionRepository` (already declared in mockall derives in the domain files).
 
@@ -79,17 +79,17 @@ Missing coverage: `update_asset()` error paths (archived guard, category not fou
 
 Add to existing `mod tests` block:
 
-| Test function | Missing line(s) covered |
-|---|---|
-| `update_asset_returns_archived_error` | 97–100 |
-| `update_asset_returns_category_not_found` | 103–107 |
-| `archive_asset_emits_event_when_bus_present` | 128–132 |
-| `unarchive_asset_emits_event_when_bus_present` | 138–142 |
-| `delete_asset_emits_event_when_bus_present` | 148–151 |
-| `create_category_emits_event_when_bus_present` | 170–175 |
-| `update_category_emits_event_when_bus_present` | 188–193 |
-| `delete_category_emits_event_when_bus_present` | 205 |
-| `record_asset_price_emits_event_when_bus_present` | 233 |
+| Test function                                     | Missing line(s) covered |
+| ------------------------------------------------- | ----------------------- |
+| `update_asset_returns_archived_error`             | 97–100                  |
+| `update_asset_returns_category_not_found`         | 103–107                 |
+| `archive_asset_emits_event_when_bus_present`      | 128–132                 |
+| `unarchive_asset_emits_event_when_bus_present`    | 138–142                 |
+| `delete_asset_emits_event_when_bus_present`       | 148–151                 |
+| `create_category_emits_event_when_bus_present`    | 170–175                 |
+| `update_category_emits_event_when_bus_present`    | 188–193                 |
+| `delete_category_emits_event_when_bus_present`    | 205                     |
+| `record_asset_price_emits_event_when_bus_present` | 233                     |
 
 ---
 
@@ -115,6 +115,7 @@ Rule F3: gateways are the only files that call `commands.*`. Test them by mockin
 New file: `src/features/transactions/gateway.test.ts`
 
 Methods to cover:
+
 - `getTransactions(accountId, assetId)` — success path, propagates error
 - `buyHolding(...)` — success path, propagates error
 - `sellHolding(...)` — success path, propagates error
@@ -128,6 +129,7 @@ Methods to cover:
 File: `src/features/account_details/gateway.test.ts` (already exists — extend it)
 
 Uncovered methods:
+
 - `getHoldingByAccountAsset(accountId, assetId)` — success + returns null
 - `getAccountById(id)` — success path
 - `subscribeToAccountEvents(handler)` — verify listener is registered and returns unlisten function
@@ -161,14 +163,14 @@ Follow the established pattern: `vi.hoisted` for spy references, `vi.mock` for g
 
 New file: `src/features/categories/useCategories.test.ts`
 
-| Test | What it covers |
-|---|---|
-| `addCategory success calls gateway and shows snackbar` | happy path |
-| `addCategory error logs and shows error snackbar` | error path |
-| `updateCategory success calls gateway and shows snackbar` | happy path |
-| `updateCategory error shows error snackbar` | error path |
-| `deleteCategory success calls gateway and shows snackbar` | happy path |
-| `deleteCategory error shows error snackbar` | error path |
+| Test                                                      | What it covers |
+| --------------------------------------------------------- | -------------- |
+| `addCategory success calls gateway and shows snackbar`    | happy path     |
+| `addCategory error logs and shows error snackbar`         | error path     |
+| `updateCategory success calls gateway and shows snackbar` | happy path     |
+| `updateCategory error shows error snackbar`               | error path     |
+| `deleteCategory success calls gateway and shows snackbar` | happy path     |
+| `deleteCategory error shows error snackbar`               | error path     |
 
 Mocks needed: `categoryGateway`, `useSnackbar`, `logger`, `react-i18next`.
 
@@ -176,15 +178,15 @@ Mocks needed: `categoryGateway`, `useSnackbar`, `logger`, `react-i18next`.
 
 New file: `src/features/assets/useAssets.test.ts`
 
-| Test | What it covers |
-|---|---|
-| `addAsset success calls gateway` | happy path |
-| `addAsset error shows error snackbar` | error path |
-| `updateAsset success calls gateway` | happy path |
-| `archiveAsset success calls gateway` | happy path |
-| `unarchiveAsset success calls gateway` | happy path |
-| `deleteAsset success calls gateway` | happy path |
-| `activeCount excludes archived assets` | memo logic |
+| Test                                   | What it covers |
+| -------------------------------------- | -------------- |
+| `addAsset success calls gateway`       | happy path     |
+| `addAsset error shows error snackbar`  | error path     |
+| `updateAsset success calls gateway`    | happy path     |
+| `archiveAsset success calls gateway`   | happy path     |
+| `unarchiveAsset success calls gateway` | happy path     |
+| `deleteAsset success calls gateway`    | happy path     |
+| `activeCount excludes archived assets` | memo logic     |
 
 Mocks needed: `assetGateway`, `useSnackbar`, `useAppStore`, `logger`, `react-i18next`.
 
@@ -194,28 +196,28 @@ File: extend existing `useAccounts.test.ts` (if exists) or create `src/features/
 
 Uncovered paths — missing tests for:
 
-| Test | What it covers |
-|---|---|
-| `deleteAccount success calls gateway` | `deleteAccount()` happy path |
-| `deleteAccount error shows error snackbar` | error path |
-| `getDeletionSummary success returns summary` | `getDeletionSummary()` |
-| `getDeletionSummary propagates error` | error path |
-| `addAccount NameAlreadyExists shows inline error` | error code branch |
-| `updateAccount NameAlreadyExists shows inline error` | error code branch |
+| Test                                                 | What it covers               |
+| ---------------------------------------------------- | ---------------------------- |
+| `deleteAccount success calls gateway`                | `deleteAccount()` happy path |
+| `deleteAccount error shows error snackbar`           | error path                   |
+| `getDeletionSummary success returns summary`         | `getDeletionSummary()`       |
+| `getDeletionSummary propagates error`                | error path                   |
+| `addAccount NameAlreadyExists shows inline error`    | error code branch            |
+| `updateAccount NameAlreadyExists shows inline error` | error code branch            |
 
 #### `src/features/transactions/useTransactions.ts` (0%)
 
 New file: `src/features/transactions/useTransactions.test.ts`
 
-| Test | What it covers |
-|---|---|
-| `buyHolding success calls gateway` | happy path |
-| `buyHolding error shows error snackbar` | error path |
-| `sellHolding success calls gateway` | happy path |
-| `sellHolding error shows error snackbar` | error path |
-| `correctTransaction success calls gateway` | happy path |
-| `cancelTransaction success calls gateway` | happy path |
-| `getTransactions returns list` | read path |
+| Test                                       | What it covers |
+| ------------------------------------------ | -------------- |
+| `buyHolding success calls gateway`         | happy path     |
+| `buyHolding error shows error snackbar`    | error path     |
+| `sellHolding success calls gateway`        | happy path     |
+| `sellHolding error shows error snackbar`   | error path     |
+| `correctTransaction success calls gateway` | happy path     |
+| `cancelTransaction success calls gateway`  | happy path     |
+| `getTransactions returns list`             | read path      |
 
 Mocks needed: `transactionGateway`, `useSnackbar`, `logger`, `react-i18next`.
 
@@ -225,12 +227,12 @@ File: `src/features/shell/useHeaderConfig.test.ts`
 
 Uncovered: route matching for account detail path, asset-detail path, top-level nav fallback.
 
-| Test | What it covers |
-|---|---|
-| `returns account name for /accounts/:id route` | account detail path match |
-| `returns asset name for /accounts/:id/transactions/:assetId` | nested route match |
-| `returns nav item label for top-level route` | navItems lookup |
-| `returns undefined for unknown route` | fallback |
+| Test                                                         | What it covers            |
+| ------------------------------------------------------------ | ------------------------- |
+| `returns account name for /accounts/:id route`               | account detail path match |
+| `returns asset name for /accounts/:id/transactions/:assetId` | nested route match        |
+| `returns nav item label for top-level route`                 | navItems lookup           |
+| `returns undefined for unknown route`                        | fallback                  |
 
 Mocks needed: `useLocation` (tanstack router), `useAppStore`, `react-i18next`.
 
@@ -274,12 +276,12 @@ Principle: only test flows where the full request→render chain cannot be valid
 
 Justification: CRUD account is the entry point to the entire app. No existing E2E coverage.
 
-| Test | Spec rule |
-|---|---|
-| Create account → appears in account list | ACC-001 |
-| Edit account name → list reflects update | ACC-002 |
-| Delete account → removed from list | ACC-003 |
-| Create duplicate name → inline error shown | ACC-004 |
+| Test                                       | Spec rule |
+| ------------------------------------------ | --------- |
+| Create account → appears in account list   | ACC-001   |
+| Edit account name → list reflects update   | ACC-002   |
+| Delete account → removed from list         | ACC-003   |
+| Create duplicate name → inline error shown | ACC-004   |
 
 Selectors needed: form `id="add-account-form"`, field `id="add-account-name"`, `id="add-account-currency"`, submit `button[type="submit"][form="add-account-form"]`, error `[role="alert"]`.
 
@@ -287,21 +289,21 @@ Selectors needed: form `id="add-account-form"`, field `id="add-account-name"`, `
 
 Justification: asset lifecycle (create → archive → unarchive → delete) is critical path; no existing E2E coverage beyond web lookup.
 
-| Test | What it covers |
-|---|---|
-| Create asset → appears in asset table | create happy path |
-| Archive asset → moves to archived state | archive flow |
-| Unarchive asset → returns to active | unarchive flow |
+| Test                                    | What it covers    |
+| --------------------------------------- | ----------------- |
+| Create asset → appears in asset table   | create happy path |
+| Archive asset → moves to archived state | archive flow      |
+| Unarchive asset → returns to active     | unarchive flow    |
 
 #### `e2e/account_details/buy_sell.test.ts` — Buy + Sell transaction
 
 Justification: core portfolio flow — filling a buy + a sell and verifying holding update is the primary user journey. Cannot be tested without real DB + real Tauri commands.
 
-| Test | Spec rule |
-|---|---|
-| Buy holding → holding appears in account details | TRX-010 |
-| Sell holding → quantity decremented | TRX-020 |
-| Sell more than held → error shown | TRX-030 |
+| Test                                             | Spec rule |
+| ------------------------------------------------ | --------- |
+| Buy holding → holding appears in account details | TRX-010   |
+| Sell holding → quantity decremented              | TRX-020   |
+| Sell more than held → error shown                | TRX-030   |
 
 ### Deferred
 
@@ -315,14 +317,14 @@ Justification: core portfolio flow — filling a buy + a sell and verifying hold
 
 ## Estimated effort
 
-| Phase | Work | Est. hours |
-|---|---|---|
-| 1.1 Integration tests (2 new files) | 17 tests | 4h |
-| 1.2 Unit tests (2 existing files extended) | 17 tests | 3h |
-| 2.1 Gateway tests (5 files) | ~25 tests | 3h |
-| 2.2 Hook tests (6 files) | ~35 tests | 8h |
-| 2.3 Utility tests (3 files) | ~8 tests | 1h |
-| 3 E2E (3 new files) | ~10 tests | 4h |
-| **Total** | **~112 tests** | **~23h** |
+| Phase                                      | Work           | Est. hours |
+| ------------------------------------------ | -------------- | ---------- |
+| 1.1 Integration tests (2 new files)        | 17 tests       | 4h         |
+| 1.2 Unit tests (2 existing files extended) | 17 tests       | 3h         |
+| 2.1 Gateway tests (5 files)                | ~25 tests      | 3h         |
+| 2.2 Hook tests (6 files)                   | ~35 tests      | 8h         |
+| 2.3 Utility tests (3 files)                | ~8 tests       | 1h         |
+| 3 E2E (3 new files)                        | ~10 tests      | 4h         |
+| **Total**                                  | **~112 tests** | **~23h**   |
 
 Expected coverage after completion: **~75% frontend · ~78% backend**.

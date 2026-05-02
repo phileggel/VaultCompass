@@ -37,20 +37,20 @@ Spec: `docs/spec/asset.md`
 
 Record a purchase that opens or increases a position in an account.
 
-| Operation                     | Status  | Notes                                                                                            |
-| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| Add purchase transaction      | ✅ Done | Quantity, unit price, exchange rate, fees, note                                                  |
-| Total amount auto-computation | ✅ Done | Backend formula: `floor(qty×price/M)×rate/M + fees` (TRX-026)                                    |
-| Multi-currency support        | ✅ Done | Exchange rate stored per transaction (TRX-021)                                                   |
-| VWAP cost basis update        | ✅ Done | `avg_price = Σ total_amount / Σ quantity` (TRX-030)                                              |
-| Atomic holding update         | ✅ Done | Transaction + holding in one DB transaction (TRX-027)                                            |
-| Archived asset auto-unarchive | ✅ Done | With frontend confirmation dialog (TRX-028, TRX-029)                                             |
-| Edit purchase transaction     | ✅ Done | Full recalculation of holding on save (TRX-031)                                                  |
-| Delete transaction            | ✅ Done | Full flow: backend + confirmation dialog + snackbar (TRX-035)                                    |
-| Delete confirmation dialog    | ✅ Done | ConfirmationDialog in TransactionListPage (TRX-035)                                              |
-| Transaction list view         | ✅ Done | Per-account/asset filter, sort, edit/delete actions (TXL spec)                                   |
-| Account currency field        | ✅ Done | Exchange rate visibility now compares asset vs account currency (TRX-021, SEL-036)               |
-| Buy from holding row          | ✅ Done | `BuyTransactionModal` opened from holding row in Account Details, mirrors sell pattern (TRX-041) |
+| Operation                     | Status  | Notes                                                                                                                            |
+| ----------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Add purchase transaction      | ✅ Done | Quantity, unit price, exchange rate, fees, note                                                                                  |
+| Total amount auto-computation | ✅ Done | Backend formula: `floor(qty×price/M)×rate/M + fees` (TRX-026)                                                                    |
+| Multi-currency support        | ✅ Done | Exchange rate stored per transaction (TRX-021)                                                                                   |
+| VWAP cost basis update        | ✅ Done | `avg_price = Σ total_amount / Σ quantity` (TRX-030)                                                                              |
+| Atomic holding update         | ✅ Done | Transaction + holding in one DB transaction (TRX-027)                                                                            |
+| Archived asset auto-unarchive | ✅ Done | With frontend confirmation dialog (TRX-028, TRX-029)                                                                             |
+| Edit purchase transaction     | ✅ Done | Full recalculation of holding on save (TRX-031)                                                                                  |
+| Delete transaction            | ✅ Done | Full flow: backend + confirmation dialog + snackbar (TRX-035)                                                                    |
+| Delete confirmation dialog    | ✅ Done | ConfirmationDialog in TransactionListPage (TRX-035)                                                                              |
+| Transaction list view         | ✅ Done | Per-account/asset filter, sort, edit/delete actions (TXL spec)                                                                   |
+| Account currency field        | ✅ Done | Exchange rate visibility now compares asset vs account currency (TRX-021, SEL-036)                                               |
+| Buy from holding row          | ✅ Done | `BuyTransactionModal` opened from holding row in Account Details, mirrors sell pattern (TRX-041)                                 |
 | Opening balance entry         | ✅ Done | Seed a position with quantity + total cost from Account Details header; no fee breakdown; participates in VWAP (TRX-042–TRX-058) |
 
 Spec: `docs/spec/financial-asset-transaction.md`
