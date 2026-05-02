@@ -222,6 +222,7 @@
     "column_actions": "Actions",
     "type_purchase": "Purchase",
     "type_sell": "Sell",
+    "type_openingbalance": "Opening Balance",
     "action_sell": "Sell",
     "buy_modal_title": "Buy position",
     "sell_modal_title": "Sell position",
@@ -262,7 +263,14 @@
     "total_unrealized_pnl": "Total Unrealized P&L",
     "price_as_of": "as of {{date}}",
     "action_enter_price": "Enter price",
-    "action_price_history": "Price history"
+    "action_price_history": "Price history",
+    "action_open_balance": "Open Balance"
+  },
+  "open_balance": {
+    "modal_title": "Open Balance Position",
+    "form_total_cost_label": "Total Cost",
+    "action_submit": "Open Balance",
+    "success_created": "Opening balance recorded successfully."
   },
   "price_history": {
     "title": "Price History",
@@ -327,6 +335,8 @@
     "UnitPriceNegative": "Unit price cannot be negative.",
     "FeesNegative": "Fees cannot be negative.",
     "ExchangeRateNotPositive": "Exchange rate must be strictly positive.",
-    "TotalAmountNotPositive": "Total amount must be strictly positive."
+    "TotalAmountNotPositive": "Total amount must be strictly positive.",
+    "ArchivedAsset": "Cannot open a balance for an archived asset.",
+    "InvalidTotalCost": "Total cost must be strictly positive."
   }
 }

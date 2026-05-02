@@ -4,7 +4,10 @@ import type {
   AssetPrice,
   AssetPriceCommandError,
   DeleteAssetPriceCommandError,
+  OpenHoldingCommandError,
+  OpenHoldingDTO,
   Result,
+  Transaction,
   UpdateAssetPriceCommandError,
 } from "@/bindings";
 import { commands, events } from "@/bindings";
@@ -42,6 +45,10 @@ export const accountDetailsGateway = {
     date: string,
   ): Promise<Result<null, DeleteAssetPriceCommandError>> {
     return commands.deleteAssetPrice(assetId, date);
+  },
+
+  async openHolding(dto: OpenHoldingDTO): Promise<Result<Transaction, OpenHoldingCommandError>> {
+    return commands.openHolding(dto);
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

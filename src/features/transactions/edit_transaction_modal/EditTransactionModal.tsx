@@ -54,10 +54,12 @@ export function EditTransactionModal({
     handleCancelArchived,
   } = useEditTransactionModal({ transaction, onSubmitSuccess: onSuccess ?? onClose });
 
+  const isOpeningBalance = transaction.transaction_type === "OpeningBalance";
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
   const selectedAccount = accounts.find((a) => a.id === formData.accountId);
   const showExchangeRate =
-    selectedAsset && selectedAccount ? selectedAsset.currency !== selectedAccount.currency : true;
+    !isOpeningBalance &&
+    (selectedAsset && selectedAccount ? selectedAsset.currency !== selectedAccount.currency : true);
 
   const accountOptions = accounts.map((a) => ({ label: a.name, value: a.id }));
 
@@ -122,7 +124,7 @@ export function EditTransactionModal({
             required
           />
 
-          {/* Quantity + Unit Price */}
+          {/* Quantity + Unit Price (or Total Cost for OpeningBalance — TRX-051) */}
           <div className="grid grid-cols-2 gap-4">
             <TextField
               id="edit-trx-quantity"
@@ -136,8 +138,12 @@ export function EditTransactionModal({
               required
             />
             <TextField
-              id="edit-trx-unit-price"
-              label={`${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`}
+              id={isOpeningBalance ? "edit-trx-total-cost" : "edit-trx-unit-price"}
+              label={
+                isOpeningBalance
+                  ? t("open_balance.form_total_cost_label")
+                  : `${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`
+              }
               type="number"
               min="0"
               step="0.000001"
@@ -148,7 +154,7 @@ export function EditTransactionModal({
             />
           </div>
 
-          {/* Exchange Rate */}
+          {/* Exchange Rate — hidden for OpeningBalance (TRX-051) */}
           {showExchangeRate && (
             <TextField
               id="edit-trx-exchange-rate"
@@ -162,44 +168,50 @@ export function EditTransactionModal({
             />
           )}
 
-          {/* Fees + Total Amount */}
-          <div className="grid grid-cols-2 gap-4">
-            <TextField
-              id="edit-trx-fees"
-              label={t("transaction.form_fees_label")}
-              type="number"
-              min="0"
-              step="0.000001"
-              value={formData.fees}
-              onChange={(e) => handleChange("fees", e.target.value)}
-              placeholder="0.000"
-            />
-            <TextField
-              id="edit-trx-total"
-              label={t("transaction.form_total_amount_label")}
-              type="text"
-              value={totalAmountDisplay}
-              readOnly
-              aria-readonly="true"
-            />
-          </div>
+          {/* Fees + Total Amount (fees hidden for OpeningBalance — TRX-051) */}
+          {!isOpeningBalance && (
+            <div className="grid grid-cols-2 gap-4">
+              <TextField
+                id="edit-trx-fees"
+                label={t("transaction.form_fees_label")}
+                type="number"
+                min="0"
+                step="0.000001"
+                value={formData.fees}
+                onChange={(e) => handleChange("fees", e.target.value)}
+                placeholder="0.000"
+              />
+              <TextField
+                id="edit-trx-total"
+                label={t("transaction.form_total_amount_label")}
+                type="text"
+                value={totalAmountDisplay}
+                readOnly
+                aria-readonly="true"
+              />
+            </div>
+          )}
 
-          {/* Note */}
-          <TextareaField
-            id="edit-trx-note"
-            label={t("transaction.form_note_label")}
-            rows={2}
-            value={formData.note}
-            onChange={(e) => handleChange("note", e.target.value)}
-            placeholder={t("transaction.form_note_placeholder")}
-          />
+          {/* Note — not shown for OpeningBalance (TRX-043) */}
+          {!isOpeningBalance && (
+            <TextareaField
+              id="edit-trx-note"
+              label={t("transaction.form_note_label")}
+              rows={2}
+              value={formData.note}
+              onChange={(e) => handleChange("note", e.target.value)}
+              placeholder={t("transaction.form_note_placeholder")}
+            />
+          )}
 
-          {/* Auto-record price (MKT-051) — defaults OFF on edit per MKT-052 */}
-          <RecordPriceCheckbox
-            checked={recordPrice}
-            onChange={setRecordPrice}
-            date={formData.date}
-          />
+          {/* Auto-record price (MKT-051) — not applicable for OpeningBalance */}
+          {!isOpeningBalance && (
+            <RecordPriceCheckbox
+              checked={recordPrice}
+              onChange={setRecordPrice}
+              date={formData.date}
+            />
+          )}
 
           {/* Inline error */}
           {error && (

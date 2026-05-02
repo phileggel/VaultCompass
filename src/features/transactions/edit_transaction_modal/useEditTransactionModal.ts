@@ -34,12 +34,17 @@ export function useEditTransactionModal({
   const { correctTransaction } = useTransactions();
   const assets = useAppStore((state) => state.assets);
 
+  const isOpeningBalance = transaction.transaction_type === "OpeningBalance";
+
   const [formData, setFormData] = useState<TransactionFormData>(() => ({
     accountId: transaction.account_id,
     assetId: transaction.asset_id,
     date: transaction.date,
+    // TRX-051: for OpeningBalance, unitPrice field is repurposed to hold the total cost
     quantity: microToDecimal(transaction.quantity),
-    unitPrice: microToDecimal(transaction.unit_price),
+    unitPrice: isOpeningBalance
+      ? microToDecimal(transaction.total_amount)
+      : microToDecimal(transaction.unit_price),
     exchangeRate: microToDecimal(transaction.exchange_rate),
     fees: microToDecimal(transaction.fees),
     note: transaction.note ?? "",
@@ -53,10 +58,14 @@ export function useEditTransactionModal({
   const [recordPrice, setRecordPrice] = useState<boolean>(false);
 
   // Derive micro-unit values from form strings — single conversion at the input boundary (ADR-001).
+  // TRX-051: for OpeningBalance, priceMicro holds total cost; totalMicro = priceMicro directly.
   // Use sell formula when editing a Sell transaction (SEL-023).
   const microValues = useMemo(() => {
     const qtyMicro = decimalToMicro(formData.quantity);
     const priceMicro = decimalToMicro(formData.unitPrice);
+    if (isOpeningBalance) {
+      return { qtyMicro, priceMicro, rateMicro: 1_000_000, feesMicro: 0, totalMicro: priceMicro };
+    }
     const rateMicro = decimalToMicro(formData.exchangeRate);
     const feesMicro = decimalToMicro(formData.fees);
     const totalMicro =
@@ -69,6 +78,7 @@ export function useEditTransactionModal({
     formData.unitPrice,
     formData.exchangeRate,
     formData.fees,
+    isOpeningBalance,
     transaction.transaction_type,
   ]);
 
@@ -102,13 +112,19 @@ export function useEditTransactionModal({
     setIsSubmitting(true);
 
     try {
+      // TRX-051: for OpeningBalance, compute unit_price = total_cost / quantity (TRX-047 formula)
+      const unitPriceMicro =
+        isOpeningBalance && microValues.qtyMicro > 0
+          ? Math.round((microValues.priceMicro * 1_000_000) / microValues.qtyMicro)
+          : microValues.priceMicro;
+
       const result = await correctTransaction(transaction.id, transaction.account_id, {
         date: formData.date,
         quantity: microValues.qtyMicro,
-        unit_price: microValues.priceMicro,
+        unit_price: unitPriceMicro,
         exchange_rate: microValues.rateMicro,
         fees: microValues.feesMicro,
-        note: formData.note || null,
+        note: isOpeningBalance ? null : formData.note || null,
       });
 
       if (result.error) {
@@ -136,6 +152,7 @@ export function useEditTransactionModal({
     formData,
     microValues,
     recordPrice,
+    isOpeningBalance,
     correctTransaction,
     transaction.id,
     transaction.account_id,
@@ -169,7 +186,7 @@ export function useEditTransactionModal({
 
   return {
     formData,
-    /** Total amount in micro-units formatted for display (read-only, derived). */
+    /** Total amount formatted for display. For OpeningBalance, equals total cost (TRX-051). */
     totalAmountDisplay: microToFormatted(microValues.totalMicro),
     error,
     isSubmitting,

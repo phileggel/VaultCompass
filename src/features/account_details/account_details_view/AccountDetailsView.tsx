@@ -6,6 +6,7 @@ import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
+import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
 import type { ModalTarget, SellTarget } from "../shared/types";
@@ -25,6 +26,7 @@ export function AccountDetailsView() {
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
   const [priceTarget, setPriceTarget] = useState<HoldingDetail | null>(null);
   const [historyTarget, setHistoryTarget] = useState<HoldingDetail | null>(null);
+  const [openBalanceOpen, setOpenBalanceOpen] = useState(false);
 
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
@@ -41,6 +43,12 @@ export function AccountDetailsView() {
   const handleSellClose = useCallback(() => setSellTarget(null), []);
   const handlePriceClose = useCallback(() => setPriceTarget(null), []);
   const handleHistoryClose = useCallback(() => setHistoryTarget(null), []);
+  const handleOpenBalanceOpen = useCallback(() => setOpenBalanceOpen(true), []);
+  const handleOpenBalanceClose = useCallback(() => setOpenBalanceOpen(false), []);
+  const handleOpenBalanceSuccess = useCallback(() => {
+    setOpenBalanceOpen(false);
+    retry();
+  }, [retry]);
 
   const handleBuySuccess = useCallback(() => {
     setBuyTarget(null);
@@ -114,16 +122,21 @@ export function AccountDetailsView() {
                   </p>
                 )}
               </div>
-              {/* ACD-036 — non-empty state CTA */}
+              {/* ACD-036 — non-empty state CTA + TRX-055 — open balance */}
               {!summary.isEmpty && !summary.isAllClosed && (
-                <Button
-                  variant="tonal"
-                  size="sm"
-                  icon={<Plus size={14} />}
-                  onClick={handleAddTransaction}
-                >
-                  {t("account_details.add_transaction")}
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" onClick={handleOpenBalanceOpen}>
+                    {t("account_details.action_open_balance")}
+                  </Button>
+                  <Button
+                    variant="tonal"
+                    size="sm"
+                    icon={<Plus size={14} />}
+                    onClick={handleAddTransaction}
+                  >
+                    {t("account_details.add_transaction")}
+                  </Button>
+                </div>
               )}
             </div>
           ) : null}
@@ -311,6 +324,17 @@ export function AccountDetailsView() {
       {historyTarget && (
         <PriceHistoryModal isOpen onClose={handleHistoryClose} holding={historyTarget} />
       )}
+
+      {/* TRX-055 — Open balance modal (account pre-filled, user picks asset inside) */}
+      <OpenBalanceModal
+        isOpen={openBalanceOpen}
+        onClose={handleOpenBalanceClose}
+        accountId={accountId}
+        accountName={summary?.accountName ?? ""}
+        assetId=""
+        assetName=""
+        onSubmitSuccess={handleOpenBalanceSuccess}
+      />
     </div>
   );
 }

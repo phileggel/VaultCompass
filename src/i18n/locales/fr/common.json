@@ -222,6 +222,7 @@
     "column_actions": "Actions",
     "type_purchase": "Achat",
     "type_sell": "Vente",
+    "type_openingbalance": "Solde d'ouverture",
     "action_sell": "Vendre",
     "buy_modal_title": "Acheter la position",
     "sell_modal_title": "Vendre la position",
@@ -262,7 +263,14 @@
     "total_unrealized_pnl": "P&L latent total",
     "price_as_of": "au {{date}}",
     "action_enter_price": "Saisir le prix",
-    "action_price_history": "Historique des prix"
+    "action_price_history": "Historique des prix",
+    "action_open_balance": "Ouvrir un solde"
+  },
+  "open_balance": {
+    "modal_title": "Ouvrir une position",
+    "form_total_cost_label": "Coût total",
+    "action_submit": "Ouvrir",
+    "success_created": "Solde d'ouverture enregistré avec succès."
   },
   "price_history": {
     "title": "Historique des prix",
@@ -327,6 +335,8 @@
     "UnitPriceNegative": "Le prix unitaire ne peut pas être négatif.",
     "FeesNegative": "Les frais ne peuvent pas être négatifs.",
     "ExchangeRateNotPositive": "Le taux de change doit être strictement positif.",
-    "TotalAmountNotPositive": "Le montant total doit être strictement positif."
+    "TotalAmountNotPositive": "Le montant total doit être strictement positif.",
+    "ArchivedAsset": "Impossible d'ouvrir un solde pour un actif archivé.",
+    "InvalidTotalCost": "Le coût total doit être strictement positif."
   }
 }

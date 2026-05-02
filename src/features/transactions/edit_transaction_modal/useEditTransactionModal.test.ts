@@ -71,6 +71,17 @@ const zeroUnitPriceTransaction: Transaction = {
   total_amount: 5 * MICRO,
 };
 
+// TRX-051: 2 units @ total_cost=100 → stored unit_price=50 (computed by backend, TRX-047)
+const openingBalanceTransaction: Transaction = {
+  ...baseTransaction,
+  id: "tx-ob",
+  transaction_type: "OpeningBalance",
+  unit_price: 50 * MICRO,
+  total_amount: 100 * MICRO,
+  fees: 0,
+  note: null,
+};
+
 describe("useEditTransactionModal", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -181,6 +192,38 @@ describe("useEditTransactionModal", () => {
       expect.objectContaining({ unit_price: 0 }),
     );
     expect(mockRecordAssetPrice).not.toHaveBeenCalled();
+  });
+
+  // TRX-051: OpeningBalance pre-fill uses total_amount (not unit_price) as the "Total Cost" field
+  it("TRX-051: pre-fills unitPrice from total_amount for OpeningBalance", () => {
+    const { result } = renderHook(() =>
+      useEditTransactionModal({ transaction: openingBalanceTransaction }),
+    );
+    expect(result.current.formData.unitPrice).toBe("100.000");
+  });
+
+  // TRX-051: submit recomputes unit_price = round(total_cost * 1M / quantity); fees=0, rate=1M, note=null
+  it("TRX-051: submit sends computed unit_price, zero fees, unit exchange_rate, null note", async () => {
+    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-ob" }, error: null });
+    const { result } = renderHook(() =>
+      useEditTransactionModal({ transaction: openingBalanceTransaction }),
+    );
+
+    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockCorrectTransaction).toHaveBeenCalledWith(
+      "tx-ob",
+      "account-1",
+      expect.objectContaining({
+        unit_price: 50 * MICRO, // round(100M * 1M / 2M) = 50M
+        exchange_rate: 1 * MICRO,
+        fees: 0,
+        note: null,
+      }),
+    );
   });
 
   // MKT-062 — recordAssetPrice failure is silent; edit commits and onSubmitSuccess fires

@@ -106,6 +106,10 @@ Shipped per MKT-072–MKT-096 (2026-04-29):
 
 All 24 inline service tests in `src-tauri/src/context/asset/service.rs` converted from real SQLite fixtures to `MockAssetRepository`, `MockAssetCategoryRepository`, and `MockAssetPriceRepository` (mockall). Every mock expectation now carries `.times(1)` to prevent silent no-call regressions; event-bus tests use `tokio::time::timeout` to prevent hangs. Repository tests retain real SQLite as the integration layer; end-to-end confidence via `src-tauri/tests/asset_price_crud.rs`.
 
+## ~~(testing/opening-balance) — Fill test gaps identified by spec-checker~~ ✅ resolved
+
+TRX-051: two tests added to `useEditTransactionModal.test.ts` — pre-fill from `total_amount` and submit recomputes `unit_price`. TRX-052/053/054: new `presenter.test.ts` with three tests covering type label, unit price display, and null realized P&L for OpeningBalance rows.
+
 ## ~~(backend/frontend) — Add new financial asset metadata directly from the web~~ ✅ resolved
 
 Shipped per WEB-010..047 (2026-05-01):

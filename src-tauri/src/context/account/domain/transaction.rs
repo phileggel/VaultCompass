@@ -40,7 +40,7 @@ pub struct Transaction {
     pub account_id: String,
     /// The financial asset involved.
     pub asset_id: String,
-    /// Type of transaction: Purchase or Sell.
+    /// Type of transaction: Purchase, Sell, or OpeningBalance.
     pub transaction_type: TransactionType,
     /// Date when the transaction was executed (ISO 8601, "YYYY-MM-DD").
     pub date: String,
