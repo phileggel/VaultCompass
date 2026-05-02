@@ -1036,4 +1036,148 @@ mod tests {
             "VWAP should update to 200"
         );
     }
+
+    // ── Mock-based unit tests for delegate methods ────────────────────────────
+    //
+    // These use mockall mocks (B26) to isolate AccountService from the database
+    // and verify that each public method delegates correctly.
+
+    fn make_mock_svc(
+        account_repo: MockAccountRepository,
+        holding_repo: MockHoldingRepository,
+        tx_repo: MockTransactionRepository,
+    ) -> AccountService {
+        AccountService::new(
+            Box::new(account_repo),
+            Box::new(holding_repo),
+            Box::new(tx_repo),
+        )
+    }
+
+    #[tokio::test]
+    async fn get_all_delegates_to_account_repo() {
+        let mut ar = MockAccountRepository::new();
+        ar.expect_get_all().times(1).return_once(|| Ok(vec![]));
+        let svc = make_mock_svc(
+            ar,
+            MockHoldingRepository::new(),
+            MockTransactionRepository::new(),
+        );
+        let result = svc.get_all().await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_by_id_delegates_to_account_repo() {
+        let mut ar = MockAccountRepository::new();
+        ar.expect_get_by_id()
+            .withf(|id| id == "target-id")
+            .times(1)
+            .return_once(|_| Ok(None));
+        let svc = make_mock_svc(
+            ar,
+            MockHoldingRepository::new(),
+            MockTransactionRepository::new(),
+        );
+        let result = svc.get_by_id("target-id").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_delegates_to_account_repo() {
+        let mut ar = MockAccountRepository::new();
+        ar.expect_delete()
+            .withf(|id| id == "del-id")
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_mock_svc(
+            ar,
+            MockHoldingRepository::new(),
+            MockTransactionRepository::new(),
+        );
+        svc.delete("del-id").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_holdings_for_account_delegates_to_holding_repo() {
+        let mut hr = MockHoldingRepository::new();
+        hr.expect_get_by_account()
+            .withf(|id| id == "acc-id")
+            .times(1)
+            .return_once(|_| Ok(vec![]));
+        let svc = make_mock_svc(
+            MockAccountRepository::new(),
+            hr,
+            MockTransactionRepository::new(),
+        );
+        let result = svc.get_holdings_for_account("acc-id").await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_holding_by_account_asset_delegates_to_holding_repo() {
+        let mut hr = MockHoldingRepository::new();
+        hr.expect_get_by_account_asset()
+            .withf(|acc, asset| acc == "acc-1" && asset == "asset-1")
+            .times(1)
+            .return_once(|_, _| Ok(None));
+        let svc = make_mock_svc(
+            MockAccountRepository::new(),
+            hr,
+            MockTransactionRepository::new(),
+        );
+        let result = svc
+            .get_holding_by_account_asset("acc-1", "asset-1")
+            .await
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_transaction_by_id_delegates_to_tx_repo() {
+        let mut tr = MockTransactionRepository::new();
+        tr.expect_get_by_id()
+            .withf(|id| id == "tx-id")
+            .times(1)
+            .return_once(|_| Ok(None));
+        let svc = make_mock_svc(
+            MockAccountRepository::new(),
+            MockHoldingRepository::new(),
+            tr,
+        );
+        let result = svc.get_transaction_by_id("tx-id").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_transactions_delegates_to_tx_repo() {
+        let mut tr = MockTransactionRepository::new();
+        tr.expect_get_by_account_asset()
+            .withf(|acc, asset| acc == "acc-1" && asset == "asset-1")
+            .times(1)
+            .return_once(|_, _| Ok(vec![]));
+        let svc = make_mock_svc(
+            MockAccountRepository::new(),
+            MockHoldingRepository::new(),
+            tr,
+        );
+        let result = svc.get_transactions("acc-1", "asset-1").await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_asset_ids_for_account_delegates_to_tx_repo() {
+        let mut tr = MockTransactionRepository::new();
+        tr.expect_get_asset_ids_for_account()
+            .withf(|acc| acc == "acc-1")
+            .times(1)
+            .return_once(|_| Ok(vec![]));
+        let svc = make_mock_svc(
+            MockAccountRepository::new(),
+            MockHoldingRepository::new(),
+            tr,
+        );
+        let result = svc.get_asset_ids_for_account("acc-1").await.unwrap();
+        assert!(result.is_empty());
+    }
 }

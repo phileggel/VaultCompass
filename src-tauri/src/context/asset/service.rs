@@ -1277,4 +1277,189 @@ mod tests {
     // This is covered by the existing record_asset_price_rejects_unknown_asset service test above.
     // The command-layer mapping is exercised by the api.rs tests below that verify
     // to_asset_price_error maps AssetDomainError::NotFound → AssetPriceCommandError::AssetNotFound.
+
+    // ── Mock-based unit tests for event bus branches and error paths ──────────
+
+    #[tokio::test]
+    async fn update_asset_returns_archived_error() {
+        let archived_asset = make_asset("a-id", true);
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(move |_| Ok(Some(archived_asset)));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+
+        let err = svc
+            .update_asset(UpdateAssetDTO {
+                asset_id: "a-id".to_string(),
+                name: "New".to_string(),
+                reference: "REF".to_string(),
+                class: AssetClass::Cash,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::Archived)
+            ),
+            "expected Archived, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_asset_returns_category_not_found() {
+        let active_asset = make_asset("a-id", false);
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(move |_| Ok(Some(active_asset)));
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id().return_once(|_| Ok(None));
+        let svc = make_svc(ar, cr, MockAssetPriceRepository::new());
+
+        let err = svc
+            .update_asset(UpdateAssetDTO {
+                asset_id: "a-id".to_string(),
+                name: "New".to_string(),
+                reference: "REF".to_string(),
+                class: AssetClass::Cash,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: "missing-cat".to_string(),
+            })
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(
+                err.downcast_ref::<CategoryDomainError>(),
+                Some(CategoryDomainError::NotFound(_))
+            ),
+            "expected CategoryNotFound, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn archive_asset_emits_event_when_bus_present() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_archive().return_once(|_| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.archive_asset("a-id").await.unwrap();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetUpdated);
+    }
+
+    #[tokio::test]
+    async fn unarchive_asset_emits_event_when_bus_present() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_unarchive().return_once(|_| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.unarchive_asset("a-id").await.unwrap();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetUpdated);
+    }
+
+    #[tokio::test]
+    async fn delete_asset_emits_event_when_bus_present() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_delete().return_once(|_| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.delete_asset("a-id").await.unwrap();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::AssetUpdated);
+    }
+
+    #[tokio::test]
+    async fn create_category_emits_event_when_bus_present() {
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_find_by_name().return_once(|_| Ok(None));
+        cr.expect_create().return_once(Ok);
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.create_category("NewCat").await.unwrap();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::CategoryUpdated);
+    }
+
+    #[tokio::test]
+    async fn update_category_emits_event_when_bus_present() {
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_find_by_name().return_once(|_| Ok(None));
+        cr.expect_update().return_once(Ok);
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.update_category("some-id", "Updated").await.unwrap();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::CategoryUpdated);
+    }
+
+    #[tokio::test]
+    async fn delete_category_emits_event_when_bus_present() {
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_reassign_assets_and_delete()
+            .return_once(|_, _| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.delete_category("some-cat-id").await.unwrap();
+
+        rx.changed().await.unwrap();
+        assert_eq!(*rx.borrow(), Event::CategoryUpdated);
+    }
 }

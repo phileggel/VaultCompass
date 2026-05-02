@@ -27,6 +27,14 @@ test:
 test-rust:
     cd src-tauri && cargo test
 
+# Run frontend tests with lcov coverage (output: coverage/lcov.info)
+test-coverage:
+    npm run test:coverage
+
+# Run backend tests with coverage (output: tarpaulin-report.json); requires: cargo install cargo-tarpaulin
+test-rust-coverage:
+    cd src-tauri && cargo tarpaulin --out Json --output-dir ../coverage --tests --exclude-files "build.rs"
+
 # Run all tests
 test-all: test test-rust
 
