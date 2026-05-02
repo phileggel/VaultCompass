@@ -218,9 +218,15 @@ struct AppDirectories {
 fn create_app_dirs(app: &tauri::AppHandle) -> anyhow::Result<AppDirectories> {
     let path_resolver = app.path();
 
-    let local_data_dir = path_resolver
-        .app_local_data_dir()
-        .with_context(|| "Failed to get app local data directory")?;
+    // Allow E2E tests to inject an isolated data directory via env var so
+    // each test run starts with a clean database and leaves no residue.
+    let local_data_dir = if let Ok(e2e_dir) = std::env::var("VAULT_COMPASS_E2E_DATA_DIR") {
+        PathBuf::from(e2e_dir)
+    } else {
+        path_resolver
+            .app_local_data_dir()
+            .with_context(|| "Failed to get app local data directory")?
+    };
     fs::create_dir_all(&local_data_dir).with_context(|| "Failed to create data directory")?;
 
     let log_dir = path_resolver

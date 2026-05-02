@@ -1129,7 +1129,7 @@ account_id: string;
  */
 asset_id: string; 
 /**
- * Type of transaction: Purchase or Sell.
+ * Type of transaction: Purchase, Sell, or OpeningBalance.
  */
 transaction_type: TransactionType; 
 /**

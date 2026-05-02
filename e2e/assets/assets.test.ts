@@ -105,7 +105,7 @@ describe("assets", () => {
   // -------------------------------------------------------------------------
   it("creates an asset manually and it appears in the asset table", async () => {
     const ASSET_NAME = "E2E Asset Create";
-    const categoryId = await seedCategory("E2E Cat Create");
+    await seedCategory("E2E Cat Create");
 
     const fab = await $('button[aria-label="Add asset"]');
     await fab.click();

@@ -11,7 +11,7 @@
 //   npm run test:e2e          # local (headed window)
 //   npm run test:e2e:xvfb     # Linux with virtual framebuffer (no display)
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-// import { existsSync, rmSync } from "node:fs";  // OPTIONAL — uncomment for DB isolation (§3)
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,11 +26,10 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const BINARY_NAME = "tauri-app";
 const BINARY_PATH = resolve(__dirname, "src-tauri/target/debug", BINARY_NAME);
 
-// OPTIONAL — Ephemeral DB isolation:
-// If the app reads a custom DB path from an env var (e.g. set in main.rs / lib.rs),
-// uncomment these lines to give each E2E run a clean, isolated database.
-// Replace MY_APP_E2E_DB with the actual env var name your binary reads.
-// const E2E_DB_PATH = resolve(os.tmpdir(), `${BINARY_NAME}_e2e.db`);
+// Ephemeral DB isolation: the Rust binary reads VAULT_COMPASS_E2E_DATA_DIR and
+// uses it as the data directory instead of the default Tauri app data dir.
+// Each run gets a fresh temp dir → clean database, no leftover E2E rows.
+const E2E_DATA_DIR = resolve(os.tmpdir(), `${BINARY_NAME}_e2e_data`);
 
 // tauri-driver uses two ports that must stay in sync:
 //   TAURI_DRIVER_PORT  — WebdriverIO connects to tauri-driver on this port (config.port below)
@@ -83,9 +82,11 @@ export const config: Options.Testrunner = {
   // intermediary and must be alive when the worker creates the session.
   beforeSession: () => {
     process.env.RUST_LOG = "warn";
-    // OPTIONAL — Ephemeral DB isolation (uncomment if using E2E_DB_PATH above):
-    // if (existsSync(E2E_DB_PATH)) rmSync(E2E_DB_PATH);  // clean up leftover from interrupted run
-    // process.env.MY_APP_E2E_DB = E2E_DB_PATH;           // expose path to the binary via env var
+    // Ephemeral DB: wipe any leftover from a previous interrupted run, then
+    // create a fresh dir and expose it to the binary via env var.
+    if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
+    mkdirSync(E2E_DATA_DIR, { recursive: true });
+    process.env.VAULT_COMPASS_E2E_DATA_DIR = E2E_DATA_DIR;
     tauriDriver = spawn(
       resolve(os.homedir(), ".cargo", "bin", "tauri-driver"),
       ["--port", String(TAURI_DRIVER_PORT), "--native-port", String(TAURI_NATIVE_PORT)],
@@ -106,8 +107,7 @@ export const config: Options.Testrunner = {
   // Kill tauri-driver cleanly after the session ends.
   afterSession: () => {
     exit = true;
-    // OPTIONAL — Ephemeral DB isolation (uncomment if using E2E_DB_PATH above):
-    // if (existsSync(E2E_DB_PATH)) rmSync(E2E_DB_PATH);
+    if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
     tauriDriver?.kill();
   },
 };
@@ -130,7 +130,6 @@ function onShutdown(fn: () => void) {
 
 onShutdown(() => {
   exit = true;
-  // OPTIONAL — Ephemeral DB isolation (uncomment if using E2E_DB_PATH above):
-  // if (existsSync(E2E_DB_PATH)) rmSync(E2E_DB_PATH);
+  if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
   tauriDriver?.kill();
 });
