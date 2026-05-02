@@ -47,7 +47,7 @@
 - [x] i18n review (`i18n-checker` — 2 placeholder keys added; all other keys clean)
 - [x] Documentation update (`ARCHITECTURE.md` updated; `docs/todo.md` 2 tech-debt items added; `docs/ubiquitous-language.md` `open_holding`/`OpeningBalance` confirmed)
 - [x] Spec check (`spec-checker` — 15/17 rules fully covered; TRX-055/046/058 gaps fixed in review pass)
-- [ ] Commit — tests & docs (pending)
+- [x] Commit — tests & docs (`a3996a5 fix(opening-balance): apply reviewer findings and update docs`)
 
 ---
 
