@@ -1,10 +1,13 @@
 # Contract — Account
 
 > Domain: account
-> Last updated by: account spec, financial-asset-transaction spec, sell-transaction spec, transaction-list spec
+> Last updated by: account spec, financial-asset-transaction spec, sell-transaction spec, transaction-list spec, account-details spec
 
 > **Error model (account CRUD)**: commands return `Result<T, AccountCommandError>` — errors are typed Rust enums
 > serialized as `{ code: "VariantName" }` (discriminated union, `#[serde(tag = "code")]`).
+
+> **Error model (account details)**: `get_account_details` returns `Result<AccountDetailsResponse, AccountDetailsCommandError>` —
+> serialized as `{ code: "AccountNotFound" | "Unknown" }`; price lookup failures silently degrade to `None` (MKT-031).
 
 > **Error model (holding operations)**: commands return `Result<T, TransactionCommandError>` — errors are typed enums
 > serialized as `{ code: "VariantName" }` (plus `available`/`requested` fields for `Oversell`).
@@ -24,6 +27,15 @@
 | `update_account`               | `UpdateAccountDTO { id: String, name: String, currency: String, update_frequency: UpdateFrequency }` | `Account`                | `NameEmpty (ACC-002)`, `NameAlreadyExists (ACC-003)`, `InvalidCurrency (TRX-021)`  |
 | `delete_account`               | `id: String`                                                                                         | `()`                     | `DbError (ACC-005, ACC-006)` _(no NotFound — plain DELETE, silent on missing row)_ |
 | `get_account_deletion_summary` | `account_id: String`                                                                                 | `AccountDeletionSummary` | `Unknown` _(read-only; counts are 0 if account has no data — no NotFound raised)_  |
+
+### Account Details
+
+> `get_account_details` is implemented in `use_cases/account_details/` — it reads from both the
+> account and asset BCs but mutates neither; owned here as the account aggregate is the primary subject.
+
+| Command               | Args                 | Return                   | Errors                                                                                                                           |
+| --------------------- | -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `get_account_details` | `account_id: String` | `AccountDetailsResponse` | `AccountNotFound (ACD-012)`, `Unknown` (DB/service failure, ACD-038); price lookup failures silently degrade to `None` (MKT-031) |
 
 ### Holdings & Transactions
 
@@ -140,11 +152,59 @@ struct Transaction {
 }
 ```
 
+```rust
+// Active position — quantity > 0 (ACD-020)
+struct HoldingDetail {
+    asset_id: String,
+    asset_name: String,
+    asset_reference: String,
+    quantity: i64,                      // micros, always > 0
+    average_price: i64,                 // micros, VWAP
+    cost_basis: i64,                    // micros, quantity × average_price (ACD-023)
+    realized_pnl: i64,                  // micros, cumulative from partial sells; 0 if none (SEL-042)
+    asset_currency: String,             // ISO 4217 code of the asset's native currency (MKT-023)
+    current_price: Option<i64>,         // micros in asset currency; None when no price ever recorded (MKT-031)
+    current_price_date: Option<String>, // ISO date of the price observation; None when current_price is None (MKT-031)
+    unrealized_pnl: Option<i64>,        // micros in account currency; None on currency mismatch or no price; 0 (not None) when price == avg_price (MKT-033/034)
+    performance_pct: Option<i64>,       // micros (5.25% = 5_250_000); None when unrealized_pnl is None or cost_basis = 0; 0 (not None) when unrealized_pnl is 0 (MKT-035)
+}
+
+// Closed position — quantity = 0 (ACD-044)
+struct ClosedHoldingDetail {
+    asset_id: String,
+    asset_name: String,
+    asset_reference: String,
+    realized_pnl: i64,      // micros, total gain/loss for this position (ACD-045)
+    last_sold_date: String, // ISO date "YYYY-MM-DD"; non-optional in this DTO (ACD-043)
+}
+
+// Top-level response for get_account_details
+struct AccountDetailsResponse {
+    account_name: String,
+    holdings: Vec<HoldingDetail>,              // active (quantity > 0), includes archived assets (ACD-020, ACD-021), sorted by asset_name asc (ACD-033)
+    closed_holdings: Vec<ClosedHoldingDetail>, // closed, sorted by asset_name asc (ACD-046); empty list when none
+    total_holding_count: i64,                  // all holdings regardless of quantity (ACD-034)
+    total_cost_basis: i64,                     // micros, sum of cost_basis across active holdings (ACD-031)
+    total_realized_pnl: i64,                   // micros, sum of total_realized_pnl across all holdings (ACD-045)
+    total_unrealized_pnl: Option<i64>,         // micros; sum across same-currency priced active holdings; None when none qualify (MKT-040)
+}
+```
+
 ## Events
+
+### Published
 
 | Event            | Payload | Rule    |
 | ---------------- | ------- | ------- |
 | `AccountUpdated` | —       | TRX-037 |
+
+### Subscribed (frontend re-fetch triggers)
+
+| Event               | Payload | Rule    |
+| ------------------- | ------- | ------- |
+| `AccountUpdated`    | —       | ACD-039 |
+| `AssetUpdated`      | —       | ACD-040 |
+| `AssetPriceUpdated` | —       | MKT-036 |
 
 ## Changelog
 
@@ -153,3 +213,4 @@ struct Transaction {
 - 2026-04-26 — Typed errors: commands now return `AccountCommandError` discriminated union instead of `String`
 - 2026-04-28 — Added `AccountUpdated` event (previously undeclared; owned by Account BC per migration plan)
 - 2026-05-03 — Merged from `record_transaction-contract.md` and `transaction-contract.md`: get_asset_ids_for_account, buy_holding, sell_holding, correct_transaction, cancel_transaction, get_transactions, open_holding; Transaction struct reconciled (added created_at, added OpeningBalance variant)
+- 2026-05-03 — Merged from `account_details-contract.md`: get_account_details; added AccountDetailsCommandError error model, HoldingDetail, ClosedHoldingDetail, AccountDetailsResponse shared types, subscribed events section; updated stale TransactionUpdated → AccountUpdated

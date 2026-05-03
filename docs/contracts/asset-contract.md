@@ -1,9 +1,9 @@
 # Contract — Asset
 
 > Domain: `asset`
-> Last updated by: `market-price` spec
+> Last updated by: `market-price` spec, `asset-web-lookup` spec
 
-> **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`:
+> **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`; `lookup_asset` returns `Result<Vec<AssetLookupResult>, NetworkError>`:
 >
 > - Asset CRUD: `AssetCommandError` — `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel`, `InvalidCurrency`, `Archived`, `NotFound`, `CategoryNotFound`, `Unknown`
 > - Categories: `CategoryCommandError` — `LabelEmpty`, `DuplicateName`, `SystemReadonly`, `SystemProtected`, `Unknown`
@@ -18,6 +18,18 @@
 
 ## Commands
 
+### Web Lookup
+
+> `lookup_asset` is implemented in `use_cases/asset_web_lookup/` — it reads from an external web
+> API and returns transient value objects; it does not persist anything. Owned here as the asset
+> aggregate is the primary subject.
+
+| Command        | Args            | Return                   | Errors         |
+| -------------- | --------------- | ------------------------ | -------------- |
+| `lookup_asset` | `query: String` | `Vec<AssetLookupResult>` | `NetworkError` |
+
+### Asset Prices
+
 | Command              | Args                                                                        | Return            | Errors                                                                                                         |
 | -------------------- | --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------- |
 | `record_asset_price` | `asset_id: String, date: String, price: f64`                                | `()`              | `AssetNotFound` (MKT-043), `NotPositive` (MKT-021), `NonFinite` (MKT-021), `DateInFuture` (MKT-022), `Unknown` |
@@ -28,6 +40,17 @@
 ---
 
 ## Shared Types
+
+```rust
+// Transient value object — not persisted (WEB-020)
+// Fields marked "optional" may be absent per spec rules
+struct AssetLookupResult {
+    name: String,
+    reference: Option<String>,       // absent for keyword results with no ticker (WEB-046)
+    currency: Option<String>,        // absent when OpenFIGI returns no currency (WEB-024)
+    asset_class: Option<AssetClass>, // absent when securityType unrecognised (WEB-023)
+}
+```
 
 ```rust
 // Input prices are transmitted as f64 decimal; backend converts to i64 micros at the IPC boundary (MKT-024).
@@ -58,3 +81,4 @@ struct AssetPrice {
 - 2026-04-26 — Added `CategoryNotFound` to `AssetCommandError` (raised when asset create/update references a nonexistent category)
 - 2026-04-27 — Updated by `market-price` spec (MKT-050+): `AssetPriceUpdated` event now also fires from the auto-record path on `add_transaction` / `update_transaction`; no new commands
 - 2026-04-29 — Added by `market-price` spec (MKT-070+): `get_asset_prices`, `update_asset_price`, `delete_asset_price`; `AssetPrice` shared type; error model extended with `UpdateAssetPriceCommandError`, `DeleteAssetPriceCommandError`
+- 2026-05-03 — Merged from `asset_web_lookup-contract.md`: `lookup_asset`; added `AssetLookupResult` shared type
