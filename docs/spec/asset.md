@@ -54,13 +54,14 @@ Indicates whether the asset is archived (removed from active lists). An archived
 | -------------- | -------------- |
 | `Cash`         | 1              |
 | `Bonds`        | 2              |
+| `RealEstate`   | 2              |
 | `MutualFunds`  | 3              |
 | `ETF`          | 3              |
 | `Stocks`       | 4              |
-| `RealEstate`   | 2              |
 | `DigitalAsset` | 5              |
+| `Derivatives`  | 5              |
 
-The default value is `Cash`.
+The default value is `Cash`. `Derivatives` covers leveraged or contingent instruments derived from an underlying asset: warrants, options, futures, and rights. The specific `securityType` values that map to this class from the OpenFIGI API are defined in WEB-023.
 
 **AST-004 (was R4) — Reference normalization (backend)**: The reference is normalized at receipt: leading and trailing whitespace stripped, converted to uppercase (internal whitespace preserved).
 

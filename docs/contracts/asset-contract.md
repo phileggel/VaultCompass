@@ -3,7 +3,7 @@
 > Domain: `asset`
 > Last updated by: `market-price` spec, `asset-web-lookup` spec
 
-> **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`; `lookup_asset` returns `Result<Vec<AssetLookupResult>, NetworkError>`:
+> **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`; `lookup_asset` returns `Result<Vec<AssetLookupResult>, WebLookupCommandError>` (single variant: `NetworkError`):
 >
 > - Asset CRUD: `AssetCommandError` — `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel`, `InvalidCurrency`, `Archived`, `NotFound`, `CategoryNotFound`, `Unknown`
 > - Categories: `CategoryCommandError` — `LabelEmpty`, `DuplicateName`, `SystemReadonly`, `SystemProtected`, `Unknown`
@@ -49,7 +49,15 @@ struct AssetLookupResult {
     reference: Option<String>,       // absent for keyword results with no ticker (WEB-046)
     currency: Option<String>,        // absent when OpenFIGI returns no currency (WEB-024)
     asset_class: Option<AssetClass>, // absent when securityType unrecognised (WEB-023)
+    exchange: Option<String>,        // human-readable market name from exchCode; absent when OpenFIGI returns none (WEB-049)
 }
+```
+
+```rust
+// AssetClass variants (AST-003) — Derivatives added
+enum AssetClass { Cash, Bonds, RealEstate, MutualFunds, ETF, Stocks, DigitalAsset, Derivatives }
+// Derivatives maps from securityType: "Warrant" | "Option" | "Future" | "Rights" (WEB-023)
+// default_risk for Derivatives = 5 (AST-003)
 ```
 
 ```rust
@@ -82,3 +90,4 @@ struct AssetPrice {
 - 2026-04-27 — Updated by `market-price` spec (MKT-050+): `AssetPriceUpdated` event now also fires from the auto-record path on `add_transaction` / `update_transaction`; no new commands
 - 2026-04-29 — Added by `market-price` spec (MKT-070+): `get_asset_prices`, `update_asset_price`, `delete_asset_price`; `AssetPrice` shared type; error model extended with `UpdateAssetPriceCommandError`, `DeleteAssetPriceCommandError`
 - 2026-05-03 — Merged from `asset_web_lookup-contract.md`: `lookup_asset`; added `AssetLookupResult` shared type
+- 2026-05-03 — WEB-048/049: added `exchange` field to `AssetLookupResult`; added `Derivatives` AssetClass variant (AST-003); WEB-023 extended to map Warrant/Option/Future/Rights → Derivatives

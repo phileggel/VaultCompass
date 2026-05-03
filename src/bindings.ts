@@ -611,7 +611,11 @@ export type AssetClass =
 /**
  * Cryptocurrencies or other blockchain-based assets.
  */
-"DigitalAsset"
+"DigitalAsset" | 
+/**
+ * Leveraged or contingent instruments derived from an underlying asset (warrants, options, futures, rights).
+ */
+"Derivatives"
 /**
  * Typed error returned to the frontend for asset CRUD commands.
  */
@@ -650,7 +654,7 @@ export type AssetCommandError =
 { code: "Unknown" }
 /**
  * Transient value object returned by `lookup_asset`.  Never persisted
- * (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046.
+ * (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046, WEB-049.
  */
 export type AssetLookupResult = { 
 /**
@@ -668,7 +672,11 @@ currency: string | null;
 /**
  * Mapped asset class, if the `securityType` is recognised (WEB-023).
  */
-asset_class: AssetClass | null }
+asset_class: AssetClass | null; 
+/**
+ * Human-readable exchange name resolved from `exchCode` (WEB-049). Absent if OpenFIGI returns no exchange code.
+ */
+exchange: string | null }
 /**
  * A manually recorded market price for a financial asset on a specific date.
  * Owned by the `asset` bounded context (MKT spec).

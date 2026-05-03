@@ -38,7 +38,7 @@ export function WebLookupModal({ isOpen, onClose, prefillName, onSuccess }: WebL
   const namePrefill = useMemo<AssetLookupResult | undefined>(
     () =>
       prefillName
-        ? { name: prefillName, reference: null, currency: null, asset_class: null }
+        ? { name: prefillName, reference: null, currency: null, asset_class: null, exchange: null }
         : undefined,
     [prefillName],
   );

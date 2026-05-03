@@ -38,6 +38,8 @@ pub enum AssetClass {
     MutualFunds,
     /// Cryptocurrencies or other blockchain-based assets.
     DigitalAsset,
+    /// Leveraged or contingent instruments derived from an underlying asset (warrants, options, futures, rights).
+    Derivatives,
 }
 
 impl AssetClass {
@@ -51,6 +53,7 @@ impl AssetClass {
             AssetClass::ETF => 3,
             AssetClass::Stocks => 4,
             AssetClass::DigitalAsset => 5,
+            AssetClass::Derivatives => 5,
         }
     }
 }

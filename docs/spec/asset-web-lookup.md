@@ -14,12 +14,13 @@ This is a **feature spec** extending the asset creation flow. The new Tauri comm
 
 A transient value object returned by the OpenFIGI API. Not persisted; used only to pre-fill the Add Asset form.
 
-| Field         | Business meaning                                                                                                                                |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | Full name of the financial instrument (e.g. "Apple Inc.").                                                                                      |
-| `reference`   | ISIN or ticker symbol; pre-fills the Add Asset `reference` field. Absent when the keyword search path finds no ticker for the result (WEB-046). |
-| `currency`    | ISO 4217 trading currency of the instrument (e.g. "USD"). Absent if OpenFIGI does not return one for the result.                                |
-| `asset_class` | Classification of the instrument mapped from the OpenFIGI `securityType`. Absent if the type is unrecognised (WEB-023).                         |
+| Field         | Business meaning                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Full name of the financial instrument (e.g. "Apple Inc.").                                                                                              |
+| `reference`   | ISIN or ticker symbol; pre-fills the Add Asset `reference` field. Absent when the keyword search path finds no ticker for the result (WEB-046).         |
+| `currency`    | ISO 4217 trading currency of the instrument (e.g. "USD"). Absent if OpenFIGI does not return one for the result.                                        |
+| `asset_class` | Classification of the instrument mapped from the OpenFIGI `securityType`. Absent if the type is unrecognised (WEB-023).                                 |
+| `exchange`    | Human-readable market name derived from the OpenFIGI `exchCode` (e.g. "Euronext Paris", "NYSE"). Absent if OpenFIGI returns no exchange code (WEB-049). |
 
 ---
 
@@ -39,23 +40,23 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 ### Lookup Command (020–029)
 
-**WEB-020 — Backend command (backend)**: A new Tauri command `lookup_asset(query: String) -> Result<Vec<AssetLookupResult>, WebLookupError>` issues an HTTP request to the OpenFIGI API using the routing logic defined in WEB-014. The command returns a (possibly empty) ordered list of results on success.
+**WEB-020 — Backend command (backend)**: A new Tauri command `lookup_asset(query: String) -> Result<Vec<AssetLookupResult>, WebLookupCommandError>` issues an HTTP request to the OpenFIGI API using the routing logic defined in WEB-014. The command returns a (possibly empty) ordered list of results on success.
 
 **WEB-021 — No API key required (backend)**: The OpenFIGI API is accessed without authentication. No credential is stored or transmitted.
 
 **WEB-022 — Result limit (backend)**: The command returns at most 10 results. If the OpenFIGI response contains more, only the first 10 are forwarded.
 
-**WEB-023 — Asset class mapping (backend)**: The OpenFIGI `securityType` field is mapped to `AssetClass` as follows: `"Common Stock"` → `Stocks`; `"ETF"` → `ETF`; `"Mutual Fund"` → `MutualFunds`; `"Corporate Bond"` / `"Government Bond"` → `Bonds`; `"Cryptocurrency"` / `"Digital Currency"` → `DigitalAsset`; `"REIT"` / `"Real Estate Investment Trust"` → `RealEstate`; `"Cash"` → `Cash`. Any unrecognised `securityType` results in `asset_class` being absent from the result.
+**WEB-023 — Asset class mapping (backend)**: The OpenFIGI `securityType` field is mapped to `AssetClass` as follows: `"Common Stock"` → `Stocks`; `"ETF"` → `ETF`; `"Mutual Fund"` → `MutualFunds`; `"Corporate Bond"` / `"Government Bond"` → `Bonds`; `"Cryptocurrency"` / `"Digital Currency"` → `DigitalAsset`; `"REIT"` / `"Real Estate Investment Trust"` → `RealEstate`; `"Cash"` → `Cash`; `"Warrant"` / `"Option"` / `"Future"` / `"Rights"` → `Derivatives`. Any unrecognised `securityType` (including `"Structured Product"`, `"Certificate"`, and others) results in `asset_class` being absent from the result.
 
 **WEB-024 — Currency passthrough (backend)**: The ISO 4217 currency code returned by OpenFIGI is forwarded unchanged. If OpenFIGI does not return a currency for a result, the `currency` field is absent.
 
-**WEB-025 — Error handling (backend)**: `WebLookupError` has a single variant: `NetworkError`. It covers all failure modes: network unreachable, connection timeout, and any non-2xx HTTP status returned by OpenFIGI (including rate-limiting responses). No partial result list is returned on error.
+**WEB-025 — Error handling (backend)**: `WebLookupCommandError` has a single variant: `NetworkError`. It covers all failure modes: network unreachable, connection timeout, and any non-2xx HTTP status returned by OpenFIGI (including rate-limiting responses). No partial result list is returned on error. The enum is intentionally closed; rate-limiting is not surfaced as a distinct variant — the client receives `NetworkError` in all failure cases.
 
 ### Search UX (030–039)
 
 **WEB-030 — Loading state (frontend)**: While `lookup_asset` is in progress, a loading indicator is shown and the search action is disabled to prevent duplicate requests.
 
-**WEB-031 — Results display (frontend)**: Each `AssetLookupResult` in the response is shown as a selectable row displaying the instrument name, reference (if present), asset class (if present), and currency (if present).
+**WEB-031 — Results display (frontend)**: Each `AssetLookupResult` is shown as a two-line selectable row. First line: reference code (if present, displayed as a muted prefix) followed by the instrument name. Second line: the asset class label if present, otherwise a localised "unknown type" fallback label; if `exchange` is also present it is shown alongside, separated by a visual separator. When `exchange` is absent the second line shows only the type label (or the fallback). When both `asset_class` and `exchange` are absent the second line shows only the fallback label. The currency field is not shown in the results list; it is pre-filled silently into the form on selection (WEB-041).
 
 **WEB-032 — Empty results state (frontend)**: When the command returns an empty list, a message indicates no instruments were found. The user can modify the query and search again, or use the "Fill manually" bypass (WEB-013).
 
@@ -67,7 +68,7 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 **WEB-041 — Pre-filled fields (frontend)**: The following Add Asset form fields are pre-filled from the selected result: `name` ← `AssetLookupResult.name`; `reference` ← `AssetLookupResult.reference` (blank if absent); `currency` ← `AssetLookupResult.currency` (blank if absent); `asset_class` ← `AssetLookupResult.asset_class` (no selection if absent).
 
-**WEB-042 — Risk level default from asset class (frontend)**: When `asset_class` is pre-filled, `risk_level` is automatically set to the class default, consistent with the `AssetClass::default_risk()` behaviour defined in the AST spec. When `asset_class` is absent, `risk_level` is left at its form default.
+**WEB-042 — Risk level default from asset class (frontend)**: When opening the Add Asset form from the web lookup path (creation only), if `asset_class` is pre-filled, `risk_level` is automatically set to the class default, consistent with the `AssetClass::default_risk()` behaviour defined in AST-010. When `asset_class` is absent, `risk_level` is left at its form default. This rule applies exclusively to the creation flow; it does not affect the edit form.
 
 **WEB-043 — All pre-filled fields are editable (frontend)**: Every pre-filled field in the Add Asset form can be changed by the user before saving. The lookup result is a suggestion, not a locked value.
 
@@ -78,6 +79,10 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 **WEB-046 — Reference field source (backend)**: When the lookup path is ISIN (WEB-014), `AssetLookupResult.reference` is the ISIN string from the query. When the lookup path is keyword search, `reference` is the ticker symbol returned by OpenFIGI when available; when OpenFIGI does not return a ticker for a result, `reference` is absent.
 
 **WEB-047 — Back navigation from form to search results (frontend)**: When the form is in the pre-filled state (WEB-040), a back action is available that returns the user to the search step. The previous query and results list are retained in memory; the user does not need to retype the query. Selecting a different result replaces all pre-filled values.
+
+**WEB-048 — Result ordering (backend)**: Results are sorted by instrument type priority before the 10-item truncation (WEB-022). Priority is determined by the resolved `asset_class` value (WEB-023): Priority 1 (top) — `asset_class` ∈ {`Stocks`, `ETF`, `MutualFunds`, `Bonds`, `DigitalAsset`, `RealEstate`, `Cash`}; Priority 2 — `asset_class` = `Derivatives`; Priority 3 — `asset_class` absent (unrecognised `securityType`, including structured products and certificates). Within each priority group, the original OpenFIGI response order is preserved.
+
+**WEB-049 — Exchange field (backend)**: The OpenFIGI `exchCode` field is resolved to a human-readable market name via a static, hardcoded in-code lookup table (e.g. `"PA"` → `"Euronext Paris"`, `"UN"` → `"NYSE"`, `"UW"` → `"NASDAQ"`). Unknown codes fall back to the raw `exchCode` string. The resolved name is forwarded as `exchange` in `AssetLookupResult`. If OpenFIGI returns no `exchCode`, `exchange` is absent.
 
 ---
 
@@ -127,7 +132,7 @@ A dialog or modal with two sequential states:
 
 - **Idle**: Empty query input, search button disabled (WEB-011). "Fill manually" visible.
 - **Loading**: Spinner shown, search action disabled (WEB-030).
-- **Results**: Up to 10 selectable rows (WEB-031): name, reference, asset class, currency.
+- **Results**: Up to 10 selectable rows (WEB-031), ordered by type priority (WEB-048). Each row: reference code + name (first line); type label + exchange (second line).
 - **Empty**: "No instruments found" message; retry or fill manually (WEB-032).
 - **Error**: Inline error banner with retry; fill manually always accessible (WEB-033).
 - **Form (pre-filled)**: Add Asset form fields populated from selected result; all editable (WEB-041–WEB-043). Back action returns to search results (WEB-047).
@@ -149,5 +154,5 @@ A dialog or modal with two sequential states:
 ## Open Questions
 
 - [x] **OQ-1** — After the form is pre-filled (WEB-040), can the user navigate back to the search step to change their selection? **Decision: yes.** A back action returns to the search step; query and results are retained (WEB-047).
-
-None — all questions have been resolved.
+- [x] **OQ-2** — How is the exchange code lookup table maintained? **Decision:** hardcoded in-code constant in `use_cases/asset_web_lookup/orchestrator.rs`, updated manually by a developer when new exchange codes are encountered. Unknown codes fall back to the raw string (WEB-049). No external config or database entry is needed.
+- [x] **OQ-3** — What is shown on the second result row line when `exchange` is absent, or when both `asset_class` and `exchange` are absent? **Decision:** (a) class present, exchange absent → show class label only, no separator; (b) both absent → show the localised "unknown type" fallback label only. (WEB-031).

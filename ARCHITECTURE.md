@@ -149,8 +149,8 @@ context/{domain}/
 
 - `id`, `name`, `class: AssetClass`, `category: AssetCategory`, `currency` (ISO 4217), `risk_level` (1–5), `reference` (mandatory — ticker/ISIN), `is_archived: bool`
 - Factory methods: `new()` (generates ID + validates), `with_id()` (uses provided ID + validates), `restore()` (no validation — from storage)
-- `AssetClass` enum: `RealEstate`, `Cash`, `Stocks`, `Bonds`, `ETF`, `MutualFunds`, `DigitalAsset`
-- `AssetClass::default_risk()` — returns default risk level per class (Cash→1, Bonds/RE→2, MF/ETF→3, Stocks→4, Digital→5)
+- `AssetClass` enum: `RealEstate`, `Cash`, `Stocks`, `Bonds`, `ETF`, `MutualFunds`, `DigitalAsset`, `Derivatives`
+- `AssetClass::default_risk()` — returns default risk level per class (Cash→1, Bonds/RE→2, MF/ETF→3, Stocks→4, Digital/Derivatives→5)
 - Archive is reversible soft-flag (`is_archived`). Soft-delete (`is_deleted`) is permanent and separate.
 
 **Entity: `AssetCategory`**

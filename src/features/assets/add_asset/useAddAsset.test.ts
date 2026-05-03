@@ -137,6 +137,7 @@ describe("useAddAsset", () => {
       reference: "AAPL",
       currency: "USD",
       asset_class: "Stocks",
+      exchange: null,
     };
 
     const { result } = renderHook(() => useAddAsset({ prefill }));
@@ -154,6 +155,7 @@ describe("useAddAsset", () => {
       reference: "IVV",
       currency: "USD",
       asset_class: "ETF",
+      exchange: null,
     };
 
     const { result } = renderHook(() => useAddAsset({ prefill }));
@@ -169,6 +171,7 @@ describe("useAddAsset", () => {
       reference: null,
       currency: null,
       asset_class: null,
+      exchange: null,
     };
 
     const { result } = renderHook(() => useAddAsset({ prefill }));
@@ -184,6 +187,7 @@ describe("useAddAsset", () => {
       reference: "AAPL",
       currency: "USD",
       asset_class: "Stocks",
+      exchange: null,
     };
 
     const { result } = renderHook(() => useAddAsset({ prefill }));
@@ -204,6 +208,7 @@ describe("useAddAsset", () => {
       reference: "AAPL",
       currency: "USD",
       asset_class: "Stocks",
+      exchange: null,
     };
 
     const { result } = renderHook(() => useAddAsset({ prefill }));
@@ -222,6 +227,7 @@ describe("useAddAsset", () => {
       reference: "AAPL",
       currency: "USD",
       asset_class: "Stocks",
+      exchange: null,
     };
     const { result } = renderHook(() => useAddAsset({ prefill }));
     expect(result.current.formData.category_id).toBe(SYSTEM_CATEGORY_ID);

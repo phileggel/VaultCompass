@@ -1,5 +1,5 @@
 //! Asset Web Lookup orchestrator — routes queries to OpenFIGI and maps results
-//! to `AssetLookupResult` value objects (WEB-014, WEB-022, WEB-023, WEB-024, WEB-046).
+//! to `AssetLookupResult` value objects (WEB-014, WEB-022, WEB-023, WEB-024, WEB-046, WEB-048, WEB-049).
 
 use crate::context::asset::AssetClass;
 use anyhow::{Context, Result};
@@ -23,6 +23,8 @@ pub struct RawFigiHit {
     pub security_type: Option<String>,
     /// ISO 4217 currency, if present.
     pub currency: Option<String>,
+    /// Exchange code (`exchCode`) as returned by OpenFIGI, if present.
+    pub exch_code: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +47,7 @@ pub trait OpenFigiClient: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Transient value object returned by `lookup_asset`.  Never persisted
-/// (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046.
+/// (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046, WEB-049.
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct AssetLookupResult {
     /// Full name of the financial instrument.
@@ -56,6 +58,8 @@ pub struct AssetLookupResult {
     pub currency: Option<String>,
     /// Mapped asset class, if the `securityType` is recognised (WEB-023).
     pub asset_class: Option<AssetClass>,
+    /// Human-readable exchange name resolved from `exchCode` (WEB-049). Absent if OpenFIGI returns no exchange code.
+    pub exchange: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -82,32 +86,38 @@ impl AssetWebLookupUseCase {
     /// Results are truncated to 10 (WEB-022).  Any client error is surfaced as
     /// `anyhow::Err` (WEB-025).
     pub async fn search(&self, query: String) -> Result<Vec<AssetLookupResult>> {
-        let trimmed = query.trim().to_string();
+        let trimmed = query.trim();
         let is_isin = trimmed.len() == 12 && trimmed.chars().all(|c| c.is_ascii_alphanumeric());
 
         let raw_hits = if is_isin {
-            self.client.map_isin(&trimmed).await?
+            self.client.map_isin(trimmed).await?
         } else {
-            self.client.search_keyword(&trimmed).await?
+            self.client.search_keyword(trimmed).await?
         };
 
-        let results = raw_hits
+        // Map all hits first, then sort by priority (WEB-048), then truncate (WEB-022).
+        let mut results: Vec<AssetLookupResult> = raw_hits
             .into_iter()
-            .take(10)
             .map(|hit| {
                 let reference = if is_isin {
-                    Some(trimmed.clone())
+                    Some(trimmed.to_string())
                 } else {
                     hit.ticker.filter(|t| !t.is_empty())
                 };
+                let asset_class = hit.security_type.as_deref().and_then(map_security_type);
+                let exchange = hit.exch_code.map(|c| map_exchange_code(&c));
                 AssetLookupResult {
                     name: hit.name,
                     reference,
                     currency: hit.currency,
-                    asset_class: hit.security_type.as_deref().and_then(map_security_type),
+                    asset_class,
+                    exchange,
                 }
             })
             .collect();
+
+        results.sort_by_key(|r| sort_priority(&r.asset_class));
+        results.truncate(10);
 
         Ok(results)
     }
@@ -118,7 +128,7 @@ impl AssetWebLookupUseCase {
 // ---------------------------------------------------------------------------
 
 /// Maps an OpenFIGI `securityType` string to an `AssetClass` variant (WEB-023).
-/// Returns `None` for unrecognised types.
+/// Returns `None` for unrecognised types (e.g. "Structured Product", "Certificate").
 fn map_security_type(s: &str) -> Option<AssetClass> {
     match s {
         "Common Stock" => Some(AssetClass::Stocks),
@@ -128,8 +138,48 @@ fn map_security_type(s: &str) -> Option<AssetClass> {
         "Cryptocurrency" | "Digital Currency" => Some(AssetClass::DigitalAsset),
         "REIT" | "Real Estate Investment Trust" => Some(AssetClass::RealEstate),
         "Cash" => Some(AssetClass::Cash),
+        "Warrant" | "Option" | "Future" | "Rights" => Some(AssetClass::Derivatives),
         _ => None,
     }
+}
+
+/// Sort key for WEB-048 priority ordering.
+/// 0 = known non-Derivative class, 1 = Derivatives, 2 = absent (unknown type).
+fn sort_priority(asset_class: &Option<AssetClass>) -> u8 {
+    match asset_class {
+        Some(AssetClass::Derivatives) => 1,
+        Some(_) => 0,
+        None => 2,
+    }
+}
+
+/// Resolves an OpenFIGI `exchCode` to a human-readable market name (WEB-049).
+/// Falls back to the raw code string for unknown exchanges.
+fn map_exchange_code(code: &str) -> String {
+    let resolved = match code {
+        "PA" => "Euronext Paris",
+        "UN" => "NYSE",
+        "UW" => "NASDAQ",
+        "UA" => "NYSE MKT",
+        "UP" => "OTC Pink Sheets",
+        "LN" => "London Stock Exchange",
+        "GY" => "Deutsche Börse XETRA",
+        "SW" => "SIX Swiss Exchange",
+        "FP" => "Euronext Paris", // same venue as "PA" — Bloomberg ticker suffix vs. OpenFIGI exchCode
+        "NA" => "Euronext Amsterdam",
+        "BB" => "Euronext Brussels",
+        "ID" => "Euronext Dublin",
+        "LS" => "Euronext Lisbon",
+        "IM" => "Borsa Italiana",
+        "SM" => "Bolsa de Madrid",
+        "HK" => "Hong Kong Stock Exchange",
+        "JP" => "Tokyo Stock Exchange",
+        "AU" => "Australian Securities Exchange",
+        "CN" => "Canadian Securities Exchange",
+        "TO" => "Toronto Stock Exchange",
+        _ => code,
+    };
+    resolved.to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +193,8 @@ struct OpenFigiHit {
     #[serde(rename = "securityType")]
     security_type: Option<String>,
     currency: Option<String>,
+    #[serde(rename = "exchCode")]
+    exch_code: Option<String>,
 }
 
 /// One item in the `/v3/mapping` response array.
@@ -239,6 +291,7 @@ fn hit_to_raw(h: OpenFigiHit) -> RawFigiHit {
         ticker: h.ticker,
         security_type: h.security_type,
         currency: h.currency,
+        exch_code: h.exch_code,
     }
 }
 
@@ -263,6 +316,7 @@ mod tests {
             ticker: None,
             security_type: None,
             currency: None,
+            exch_code: None,
         }
     }
 
@@ -277,6 +331,21 @@ mod tests {
             ticker: ticker.map(str::to_string),
             security_type: security_type.map(str::to_string),
             currency: currency.map(str::to_string),
+            exch_code: None,
+        }
+    }
+
+    fn raw_hit_with_exchange(
+        name: &str,
+        security_type: Option<&str>,
+        exch_code: Option<&str>,
+    ) -> RawFigiHit {
+        RawFigiHit {
+            name: name.to_string(),
+            ticker: None,
+            security_type: security_type.map(str::to_string),
+            currency: None,
+            exch_code: exch_code.map(str::to_string),
         }
     }
 
@@ -673,5 +742,147 @@ mod tests {
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
         let result = uc.search("AAPL".to_string()).await;
         assert!(result.is_err(), "expected Err, got Ok");
+    }
+
+    // ------------------------------------------------------------------
+    // WEB-023 — Derivatives mapping
+    // ------------------------------------------------------------------
+
+    /// "Warrant" maps to `AssetClass::Derivatives` (WEB-023).
+    #[tokio::test]
+    async fn maps_security_type_warrant_to_derivatives() {
+        let hit = raw_hit_full(
+            "Air Liquide Warrant",
+            Some("AWRNT"),
+            Some("Warrant"),
+            Some("EUR"),
+        );
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .times(1)
+            .returning(move |_| Ok(vec![hit.clone()]));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc.search("air liquide".to_string()).await.unwrap();
+        assert_eq!(results[0].asset_class, Some(AssetClass::Derivatives));
+    }
+
+    /// "Option", "Future", and "Rights" also map to `AssetClass::Derivatives` (WEB-023).
+    #[tokio::test]
+    async fn maps_option_future_rights_to_derivatives() {
+        assert_eq!(map_security_type("Option"), Some(AssetClass::Derivatives));
+        assert_eq!(map_security_type("Future"), Some(AssetClass::Derivatives));
+        assert_eq!(map_security_type("Rights"), Some(AssetClass::Derivatives));
+    }
+
+    // ------------------------------------------------------------------
+    // WEB-048 — sort by priority before truncation
+    // ------------------------------------------------------------------
+
+    /// Results are sorted: known non-Derivative classes first (priority 0),
+    /// Derivatives second (priority 1), unknown/absent last (priority 2) (WEB-048).
+    /// The sort happens before the 10-item truncation so high-priority results
+    /// survive the cut.
+    #[tokio::test]
+    async fn sorts_results_by_priority_before_truncation() {
+        // Build 15 hits: 5 unknown, 5 Derivatives, 5 Stocks — expect Stocks first
+        let mut hits: Vec<RawFigiHit> = Vec::new();
+        for i in 0..5 {
+            hits.push(raw_hit_full(
+                &format!("Unknown {i}"),
+                None,
+                Some("Structured Product"),
+                None,
+            ));
+        }
+        for i in 0..5 {
+            hits.push(raw_hit_full(
+                &format!("Warrant {i}"),
+                None,
+                Some("Warrant"),
+                None,
+            ));
+        }
+        for i in 0..5 {
+            hits.push(raw_hit_full(
+                &format!("Stock {i}"),
+                Some(&format!("STK{i}")),
+                Some("Common Stock"),
+                Some("EUR"),
+            ));
+        }
+
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .times(1)
+            .returning(move |_| Ok(hits.clone()));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc.search("test".to_string()).await.unwrap();
+        assert_eq!(results.len(), 10);
+        // First 5 should be Stocks (priority 0)
+        for r in &results[..5] {
+            assert_eq!(
+                r.asset_class,
+                Some(AssetClass::Stocks),
+                "expected Stocks in top 5, got {:?}",
+                r.asset_class
+            );
+        }
+        // Next 5 should be Derivatives (priority 1)
+        for r in &results[5..] {
+            assert_eq!(
+                r.asset_class,
+                Some(AssetClass::Derivatives),
+                "expected Derivatives in slots 6–10, got {:?}",
+                r.asset_class
+            );
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // WEB-049 — exchange code resolution
+    // ------------------------------------------------------------------
+
+    /// Known exchange codes are resolved to human-readable names (WEB-049).
+    #[tokio::test]
+    async fn resolves_known_exchange_code_to_readable_name() {
+        let hit = raw_hit_with_exchange("Air Liquide", Some("Common Stock"), Some("PA"));
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .times(1)
+            .returning(move |_| Ok(vec![hit.clone()]));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc.search("air liquide".to_string()).await.unwrap();
+        assert_eq!(results[0].exchange, Some("Euronext Paris".to_string()));
+    }
+
+    /// Unknown exchange codes fall back to the raw code string (WEB-049).
+    #[tokio::test]
+    async fn falls_back_to_raw_code_for_unknown_exchange() {
+        let hit = raw_hit_with_exchange("Mystery Corp", Some("Common Stock"), Some("XY"));
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .times(1)
+            .returning(move |_| Ok(vec![hit.clone()]));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc.search("mystery".to_string()).await.unwrap();
+        assert_eq!(results[0].exchange, Some("XY".to_string()));
+    }
+
+    /// When OpenFIGI returns no `exchCode`, `exchange` is `None` (WEB-049).
+    #[tokio::test]
+    async fn exchange_absent_when_no_exch_code() {
+        let hit = raw_hit_with_exchange("No Exchange Corp", Some("Common Stock"), None);
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .times(1)
+            .returning(move |_| Ok(vec![hit.clone()]));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc.search("test".to_string()).await.unwrap();
+        assert_eq!(results[0].exchange, None);
     }
 }

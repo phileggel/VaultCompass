@@ -75,7 +75,8 @@
       "select_result": "Select {{name}}",
       "no_results": "No instruments found.",
       "error_network": "Could not reach the lookup service. Try again or fill manually.",
-      "loading": "Searching…"
+      "loading": "Searching…",
+      "type_unknown": "Unknown type"
     }
   },
   "account": {
