@@ -38,11 +38,12 @@ See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.m
 
 On top of the standard kit workflow, this project requires:
 
-1. **Before implementing**: read `docs/backend-rules.md` (backend changes), `docs/frontend-rules.md` (frontend changes), and/or `docs/e2e-rules.md` (E2E test changes).
+1. **Before implementing**: read `docs/backend-rules.md` (backend changes), `docs/frontend-rules.md` (frontend changes), and/or `docs/e2e-rules.md` (E2E test changes). For frontend changes also read `docs/frontend-pr-rules.md` — capture a "before" screenshot before touching any code.
 2. **Plan step**: after proposing the TODO plan, immediately create a TaskList (`TaskCreate`) with one task per remaining step. Ask user to validate before implementing.
 3. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; for new business rules use `/spec-writer` to author/extend the spec in `docs/spec/` and `/contract` to derive the matching `docs/contracts/{domain}-contract.md`. Use `/adr-manager` to record architectural decisions in `docs/adr/`.
 4. **E2E tests** (after frontend impl, before release): run `test-writer-e2e` agent with the domain contract to write passing WebDriver E2E tests against the live app (verifies green before finishing). Run `/setup-e2e` once first if not yet initialized.
-5. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
+5. **Visual proof** (frontend changes only): generate "after" screenshots per `docs/frontend-pr-rules.md`, commit them to `docs/screenshots/`, then embed in the PR body before opening it.
+6. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
 
 ### Task tracking (within a conversation)
 
