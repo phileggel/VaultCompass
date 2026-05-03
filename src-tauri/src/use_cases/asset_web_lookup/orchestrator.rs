@@ -23,8 +23,9 @@ pub struct RawFigiHit {
     pub security_type: Option<String>,
     /// ISO 4217 currency, if present.
     pub currency: Option<String>,
-    /// Exchange code (`exchCode`) as returned by OpenFIGI, if present.
-    pub exch_code: Option<String>,
+    /// Short exchange identifier returned by OpenFIGI (`exchCode` field, e.g. "UW" = NASDAQ, "PA" = Euronext Paris).
+    /// Resolved to a human-readable name by `map_exchange_code` before being exposed as `AssetLookupResult::exchange`.
+    pub exchange_code: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +106,7 @@ impl AssetWebLookupUseCase {
                     hit.ticker.filter(|t| !t.is_empty())
                 };
                 let asset_class = hit.security_type.as_deref().and_then(map_security_type);
-                let exchange = hit.exch_code.map(|c| map_exchange_code(&c));
+                let exchange = hit.exchange_code.map(|c| map_exchange_code(&c));
                 AssetLookupResult {
                     name: hit.name,
                     reference,
@@ -194,7 +195,7 @@ struct OpenFigiHit {
     security_type: Option<String>,
     currency: Option<String>,
     #[serde(rename = "exchCode")]
-    exch_code: Option<String>,
+    exchange_code: Option<String>,
 }
 
 /// One item in the `/v3/mapping` response array.
@@ -291,7 +292,7 @@ fn hit_to_raw(h: OpenFigiHit) -> RawFigiHit {
         ticker: h.ticker,
         security_type: h.security_type,
         currency: h.currency,
-        exch_code: h.exch_code,
+        exchange_code: h.exchange_code,
     }
 }
 
@@ -316,7 +317,7 @@ mod tests {
             ticker: None,
             security_type: None,
             currency: None,
-            exch_code: None,
+            exchange_code: None,
         }
     }
 
@@ -331,21 +332,21 @@ mod tests {
             ticker: ticker.map(str::to_string),
             security_type: security_type.map(str::to_string),
             currency: currency.map(str::to_string),
-            exch_code: None,
+            exchange_code: None,
         }
     }
 
     fn raw_hit_with_exchange(
         name: &str,
         security_type: Option<&str>,
-        exch_code: Option<&str>,
+        exchange_code: Option<&str>,
     ) -> RawFigiHit {
         RawFigiHit {
             name: name.to_string(),
             ticker: None,
             security_type: security_type.map(str::to_string),
             currency: None,
-            exch_code: exch_code.map(str::to_string),
+            exchange_code: exchange_code.map(str::to_string),
         }
     }
 
@@ -874,7 +875,7 @@ mod tests {
 
     /// When OpenFIGI returns no `exchCode`, `exchange` is `None` (WEB-049).
     #[tokio::test]
-    async fn exchange_absent_when_no_exch_code() {
+    async fn exchange_absent_when_no_exchange_code() {
         let hit = raw_hit_with_exchange("No Exchange Corp", Some("Common Stock"), None);
         let mut mock = MockOpenFigiClient::new();
         mock.expect_search_keyword()
