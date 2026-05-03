@@ -16,6 +16,7 @@ const appleResult: AssetLookupResult = {
   reference: "AAPL",
   currency: "USD",
   asset_class: "Stocks",
+  exchange: null,
 };
 
 const etfResult: AssetLookupResult = {
@@ -23,6 +24,7 @@ const etfResult: AssetLookupResult = {
   reference: "IVV",
   currency: "USD",
   asset_class: "ETF",
+  exchange: null,
 };
 
 describe("useWebLookupModal", () => {

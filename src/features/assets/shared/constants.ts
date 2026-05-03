@@ -10,6 +10,7 @@ export const ASSET_CLASSES: AssetClass[] = [
   "ETF",
   "MutualFunds",
   "DigitalAsset",
+  "Derivatives",
 ];
 
 export const RISK_LEVELS = [1, 2, 3, 4, 5];
@@ -23,4 +24,5 @@ export const DEFAULT_RISK_BY_CLASS: Record<AssetClass, number> = {
   ETF: 3,
   Stocks: 4,
   DigitalAsset: 5,
+  Derivatives: 5,
 };

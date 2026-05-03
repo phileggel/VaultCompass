@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { AssetLookupResult } from "@/bindings";
+import { formatAssetClass } from "@/features/assets/shared/presenter";
 import { Button } from "@/ui/components/button/Button";
 import { TextField } from "@/ui/components/field/TextField";
 import type { WebLookupSearchState } from "./useWebLookupSearch";
@@ -86,23 +87,34 @@ export function SearchPanel({
 
         {state.status === "results" && (
           <ul className="flex flex-col gap-1">
-            {state.results.map((result) => (
-              <li key={`${result.name}-${result.reference ?? "no-ref"}`}>
-                <button
-                  type="button"
-                  aria-label={t("asset.web_lookup.select_result", { name: result.name })}
-                  onClick={() => onSelect(result)}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-m3-surface-variant/40 transition-colors"
-                >
-                  <span className="font-medium text-m3-on-surface text-sm">{result.name}</span>
-                  <span className="text-xs text-m3-on-surface-variant ml-2">
-                    {[result.reference, result.asset_class, result.currency]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {state.results.map((result, index) => {
+              const typeLabel = result.asset_class
+                ? formatAssetClass(result.asset_class)
+                : t("asset.web_lookup.type_unknown");
+              const secondLine = result.exchange ? `${typeLabel} · ${result.exchange}` : typeLabel;
+              return (
+                <li key={`${result.name}-${result.reference ?? result.exchange ?? index}`}>
+                  <button
+                    type="button"
+                    aria-label={t("asset.web_lookup.select_result", { name: result.name })}
+                    onClick={() => onSelect(result)}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-m3-surface-variant/40 transition-colors"
+                  >
+                    <div className="flex items-baseline gap-1.5">
+                      {result.reference && (
+                        <span className="text-xs font-mono text-m3-on-surface-variant shrink-0">
+                          {result.reference}
+                        </span>
+                      )}
+                      <span className="font-medium text-m3-on-surface text-sm truncate">
+                        {result.name}
+                      </span>
+                    </div>
+                    <div className="text-xs text-m3-on-surface-variant mt-0.5">{secondLine}</div>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

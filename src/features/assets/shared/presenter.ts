@@ -23,3 +23,25 @@ export function getRiskBadgeClasses(riskLevel: number): string {
 export function getDefaultRisk(assetClass: AssetClass): number {
   return DEFAULT_RISK_BY_CLASS[assetClass];
 }
+
+/** Returns a human-readable label for an asset class — WEB-031. */
+export function formatAssetClass(assetClass: AssetClass): string {
+  switch (assetClass) {
+    case "Cash":
+      return "Cash";
+    case "Bonds":
+      return "Bonds";
+    case "RealEstate":
+      return "Real Estate";
+    case "MutualFunds":
+      return "Mutual Funds";
+    case "ETF":
+      return "ETF";
+    case "Stocks":
+      return "Stocks";
+    case "DigitalAsset":
+      return "Digital Asset";
+    case "Derivatives":
+      return "Derivatives";
+  }
+}

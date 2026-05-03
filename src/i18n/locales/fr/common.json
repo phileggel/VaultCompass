@@ -75,7 +75,8 @@
       "select_result": "Sélectionner {{name}}",
       "no_results": "Aucun instrument trouvé.",
       "error_network": "Impossible de joindre le service de recherche. Réessayez ou saisissez manuellement.",
-      "loading": "Recherche en cours…"
+      "loading": "Recherche en cours…",
+      "type_unknown": "Type inconnu"
     }
   },
   "account": {

@@ -17,8 +17,20 @@ describe("asset gateway — lookupAsset", () => {
   // WEB-020 — success path returns AssetLookupResult[]
   it("lookupAsset returns result list on success", async () => {
     const results: AssetLookupResult[] = [
-      { name: "Apple Inc.", reference: "AAPL", currency: "USD", asset_class: "Stocks" },
-      { name: "iShares Core S&P 500", reference: "IVV", currency: "USD", asset_class: "ETF" },
+      {
+        name: "Apple Inc.",
+        reference: "AAPL",
+        currency: "USD",
+        asset_class: "Stocks",
+        exchange: null,
+      },
+      {
+        name: "iShares Core S&P 500",
+        reference: "IVV",
+        currency: "USD",
+        asset_class: "ETF",
+        exchange: null,
+      },
     ];
     // bindings.ts wraps the TAURI_INVOKE result in { status: "ok", data: ... }
     mockInvoke.mockResolvedValue(results);
@@ -32,7 +44,13 @@ describe("asset gateway — lookupAsset", () => {
   // WEB-020 — ISIN query (12 alphanumeric chars) is forwarded as-is
   it("lookupAsset forwards 12-char ISIN query verbatim", async () => {
     const results: AssetLookupResult[] = [
-      { name: "Apple Inc.", reference: "US0378331005", currency: "USD", asset_class: "Stocks" },
+      {
+        name: "Apple Inc.",
+        reference: "US0378331005",
+        currency: "USD",
+        asset_class: "Stocks",
+        exchange: null,
+      },
     ];
     mockInvoke.mockResolvedValue(results);
 
@@ -69,7 +87,7 @@ describe("asset gateway — lookupAsset", () => {
   // WEB-023/WEB-024/WEB-046 — optional fields may be null
   it("lookupAsset preserves null optional fields from result", async () => {
     const results: AssetLookupResult[] = [
-      { name: "Obscure Fund", reference: null, currency: null, asset_class: null },
+      { name: "Obscure Fund", reference: null, currency: null, asset_class: null, exchange: null },
     ];
     mockInvoke.mockResolvedValue(results);
 

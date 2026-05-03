@@ -34,7 +34,13 @@ describe("useWebLookupSearch", () => {
   // WEB-030 — transitions through loading and lands on results (WEB-031)
   it("transitions idle → loading → results on successful search", async () => {
     const results: AssetLookupResult[] = [
-      { name: "Apple Inc.", reference: "AAPL", currency: "USD", asset_class: "Stocks" },
+      {
+        name: "Apple Inc.",
+        reference: "AAPL",
+        currency: "USD",
+        asset_class: "Stocks",
+        exchange: null,
+      },
     ];
     mockLookupAsset.mockResolvedValue({ status: "ok", data: results });
 
@@ -104,7 +110,15 @@ describe("useWebLookupSearch", () => {
       .mockResolvedValueOnce({ status: "error", error: { code: "NetworkError" } })
       .mockResolvedValueOnce({
         status: "ok",
-        data: [{ name: "Apple Inc.", reference: "AAPL", currency: "USD", asset_class: "Stocks" }],
+        data: [
+          {
+            name: "Apple Inc.",
+            reference: "AAPL",
+            currency: "USD",
+            asset_class: "Stocks",
+            exchange: null,
+          },
+        ],
       });
 
     const { result } = renderHook(() => useWebLookupSearch());
