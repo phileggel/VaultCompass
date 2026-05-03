@@ -21,13 +21,6 @@ Straightforward batch rename, no behavioural changes.
 
 `vitest run --coverage` always exits 0 — no regression floor is enforced. Add a `thresholds` block (e.g. `lines: 60, functions: 60`) once a stable baseline has been measured on `main`. Increment thresholds incrementally rather than setting a tight target immediately.
 
-## (e2e) — wdio.conf.ts E2E_DATA_DIR collides on concurrent runs
-
-`E2E_DATA_DIR` resolves to a fixed path (`os.tmpdir()/tauri-app_e2e_data`). Two runners sharing a machine would overwrite each other's database. Fix: append a unique suffix, e.g. `` `${BINARY_NAME}_e2e_data_${Date.now()}` ``.
-
-## (e2e) — wdio.conf.ts beforeSession mkdirSync not wrapped in try/catch
-
-`mkdirSync(E2E_DATA_DIR, { recursive: true })` in `beforeSession` crashes the WDIO worker with a generic exception on permission errors. Wrap in try/catch and re-throw with the path in the error message.
 
 ## (e2e) — accounts.test.ts confirm-delete button selector too broad
 
@@ -54,9 +47,6 @@ The `buy_sell.test.ts` E2E test uses `setReactInputValue` on `#buy-trx-asset` (a
 
 `setReactInputValue`, `isoToDisplayDate`, and IPC seed helpers (`seedCategory`, `seedAccount`, `seedAsset`, `seedBuy`) are copy-pasted verbatim across every spec file (`accounts`, `assets`, `buy_sell`, `open_balance`, `asset_web_lookup`). Extract to `e2e/helpers/` (e.g. `react.ts`, `seed.ts`, `date.ts`) and import from there. Reduces duplication and keeps cross-cutting fixes in one place.
 
-## (e2e) — Align `note` field in `buy_sell.test.ts` seedBuy with open_balance workaround
-
-`open_balance.test.ts` uses `note: ""` with an explicit comment: "empty string avoids Tauri 2 null-deserialization issue for `Option<String>`". `buy_sell.test.ts`'s `seedBuy` still passes `note: null`. If Tauri 2 changes its null-handling or a new command reuses the DTO pattern, this will silently fail. Change `note: null` → `note: ""` for consistency.
 
 ## (backend) — String-sentinel "account not found" pattern in open_holding/api.rs
 
@@ -83,10 +73,6 @@ After merging: delete the two source files and update all references (plan docs,
 ## (backend/test) — Extract `fn micro` test helper to avoid duplication
 
 `fn micro(v: i64) -> i64` is defined verbatim in both `src-tauri/src/context/account/service.rs` (inside `#[cfg(test)]`) and `src-tauri/tests/account_service_crud.rs`. Extract to a shared test utility module (e.g. `tests/helpers.rs`) and import from both sites.
-
-## (e2e) — wdio.conf.ts `exit` variable shadows built-in `process.exit` name
-
-`let exit = false` at line 42 shadows the global `process.exit` function name within the module scope. Rename to `cleanShutdown` or `driverExitClean` to remove the ambiguity.
 
 
 ## (deps) — Update specta to rc.23

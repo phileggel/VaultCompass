@@ -29,7 +29,7 @@ const BINARY_PATH = resolve(__dirname, "src-tauri/target/debug", BINARY_NAME);
 // Ephemeral DB isolation: the Rust binary reads VAULT_COMPASS_E2E_DATA_DIR and
 // uses it as the data directory instead of the default Tauri app data dir.
 // Each run gets a fresh temp dir → clean database, no leftover E2E rows.
-const E2E_DATA_DIR = resolve(os.tmpdir(), `${BINARY_NAME}_e2e_data`);
+const E2E_DATA_DIR = resolve(os.tmpdir(), `${BINARY_NAME}_e2e_data_${Date.now()}`);
 
 // tauri-driver uses two ports that must stay in sync:
 //   TAURI_DRIVER_PORT  — WebdriverIO connects to tauri-driver on this port (config.port below)
@@ -40,7 +40,7 @@ const TAURI_DRIVER_PORT = 4444;
 const TAURI_NATIVE_PORT = 4445;
 
 let tauriDriver: ChildProcess;
-let exit = false;
+let cleanShutdown = false;
 
 export const config: Options.Testrunner = {
   // tauri-driver runs on port 4444 by default.
@@ -91,7 +91,11 @@ export const config: Options.Testrunner = {
     // Ephemeral DB: wipe any leftover from a previous interrupted run, then
     // create a fresh dir and expose it to the binary via env var.
     if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
-    mkdirSync(E2E_DATA_DIR, { recursive: true });
+    try {
+      mkdirSync(E2E_DATA_DIR, { recursive: true });
+    } catch (err) {
+      throw new Error(`Failed to create E2E data dir ${E2E_DATA_DIR}: ${err}`);
+    }
     process.env.VAULT_COMPASS_E2E_DATA_DIR = E2E_DATA_DIR;
     tauriDriver = spawn(
       resolve(os.homedir(), ".cargo", "bin", "tauri-driver"),
@@ -103,7 +107,7 @@ export const config: Options.Testrunner = {
       process.exit(1);
     });
     tauriDriver.on("exit", (code) => {
-      if (!exit) {
+      if (!cleanShutdown) {
         console.error("tauri-driver exited unexpectedly with code:", code);
         process.exit(1);
       }
@@ -112,7 +116,7 @@ export const config: Options.Testrunner = {
 
   // Kill tauri-driver cleanly after the session ends.
   afterSession: () => {
-    exit = true;
+    cleanShutdown = true;
     if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
     tauriDriver?.kill();
   },

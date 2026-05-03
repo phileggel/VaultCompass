@@ -114,7 +114,7 @@ async function seedBuy(
             unit_price: 100_000_000,
             exchange_rate: 1_000_000,
             fees: 0,
-            note: null,
+            note: "",
           },
         })
         .then(done)
