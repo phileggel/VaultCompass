@@ -89,7 +89,7 @@ export function SearchPanel({
           <ul className="flex flex-col gap-1">
             {state.results.map((result, index) => {
               const typeLabel = result.asset_class
-                ? formatAssetClass(result.asset_class)
+                ? formatAssetClass(result.asset_class, t)
                 : t("asset.web_lookup.type_unknown");
               const secondLine = result.exchange ? `${typeLabel} · ${result.exchange}` : typeLabel;
               return (

@@ -77,6 +77,16 @@
       "error_network": "Could not reach the lookup service. Try again or fill manually.",
       "loading": "Searching…",
       "type_unknown": "Unknown type"
+    },
+    "class": {
+      "Cash": "Cash",
+      "Bonds": "Bonds",
+      "RealEstate": "Real Estate",
+      "MutualFunds": "Mutual Funds",
+      "ETF": "ETF",
+      "Stocks": "Stocks",
+      "DigitalAsset": "Digital Asset",
+      "Derivatives": "Derivatives"
     }
   },
   "account": {

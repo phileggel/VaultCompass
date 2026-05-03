@@ -4,12 +4,24 @@ import type { AssetLookupResult } from "@/bindings";
 import { SearchPanel } from "./SearchPanel";
 import type { WebLookupSearchState } from "./useWebLookupSearch";
 
-// Mock returns opts.name when present (covers the select_result interpolation),
-// otherwise returns the key string. Any other opts object falls back to the key,
-// which is the intended passthrough — tests relying on other interpolations would
-// need to extend this mock.
+// Translate asset.class.* keys to English labels so result-row assertions read
+// naturally. opts.name covers the select_result interpolation. Everything else
+// passes through as the key (sufficient for all other assertions in this file).
+const CLASS_LABELS: Record<string, string> = {
+  "asset.class.Cash": "Cash",
+  "asset.class.Bonds": "Bonds",
+  "asset.class.RealEstate": "Real Estate",
+  "asset.class.MutualFunds": "Mutual Funds",
+  "asset.class.ETF": "ETF",
+  "asset.class.Stocks": "Stocks",
+  "asset.class.DigitalAsset": "Digital Asset",
+  "asset.class.Derivatives": "Derivatives",
+};
+
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string, opts?: Record<string, string>) => opts?.name ?? key }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, string>) => opts?.name ?? CLASS_LABELS[key] ?? key,
+  }),
 }));
 
 const noop = () => {};

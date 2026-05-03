@@ -77,6 +77,16 @@
       "error_network": "Impossible de joindre le service de recherche. Réessayez ou saisissez manuellement.",
       "loading": "Recherche en cours…",
       "type_unknown": "Type inconnu"
+    },
+    "class": {
+      "Cash": "Liquidités",
+      "Bonds": "Obligations",
+      "RealEstate": "Immobilier",
+      "MutualFunds": "Fonds communs",
+      "ETF": "ETF",
+      "Stocks": "Actions",
+      "DigitalAsset": "Actifs numériques",
+      "Derivatives": "Produits dérivés"
     }
   },
   "account": {

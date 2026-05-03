@@ -28,24 +28,27 @@ describe("getRiskBadgeClasses", () => {
 });
 
 describe("formatAssetClass", () => {
-  // WEB-031 — multi-word class names are split into readable labels
-  it("splits compound class names into readable labels", () => {
-    expect(formatAssetClass("RealEstate")).toBe("Real Estate");
-    expect(formatAssetClass("MutualFunds")).toBe("Mutual Funds");
-    expect(formatAssetClass("DigitalAsset")).toBe("Digital Asset");
+  // Identity t — lets us verify which i18n key is dispatched without a real i18n setup
+  const t = (key: string) => key;
+
+  // WEB-031 — compound class names map to their i18n keys
+  it("maps compound class names to their i18n keys", () => {
+    expect(formatAssetClass("RealEstate", t)).toBe("asset.class.RealEstate");
+    expect(formatAssetClass("MutualFunds", t)).toBe("asset.class.MutualFunds");
+    expect(formatAssetClass("DigitalAsset", t)).toBe("asset.class.DigitalAsset");
   });
 
-  // WEB-031 — single-word and abbreviation classes pass through unchanged
-  it("returns single-word and abbreviation classes unchanged", () => {
-    expect(formatAssetClass("Cash")).toBe("Cash");
-    expect(formatAssetClass("Bonds")).toBe("Bonds");
-    expect(formatAssetClass("ETF")).toBe("ETF");
-    expect(formatAssetClass("Stocks")).toBe("Stocks");
-    expect(formatAssetClass("Derivatives")).toBe("Derivatives");
+  // WEB-031 — single-word and abbreviation classes map to their i18n keys
+  it("maps single-word and abbreviation classes to their i18n keys", () => {
+    expect(formatAssetClass("Cash", t)).toBe("asset.class.Cash");
+    expect(formatAssetClass("Bonds", t)).toBe("asset.class.Bonds");
+    expect(formatAssetClass("ETF", t)).toBe("asset.class.ETF");
+    expect(formatAssetClass("Stocks", t)).toBe("asset.class.Stocks");
+    expect(formatAssetClass("Derivatives", t)).toBe("asset.class.Derivatives");
   });
 
-  // Exhaustiveness — all 8 AssetClass variants are handled
-  it("covers all 8 AssetClass variants with distinct non-empty labels", () => {
+  // Exhaustiveness — all 8 AssetClass variants dispatch to distinct non-empty keys
+  it("covers all 8 AssetClass variants with distinct non-empty keys", () => {
     const all = [
       "Cash",
       "Bonds",
@@ -56,8 +59,8 @@ describe("formatAssetClass", () => {
       "DigitalAsset",
       "Derivatives",
     ] as const;
-    const labels = all.map(formatAssetClass);
-    expect(labels.every((l) => l.trim().length > 0)).toBe(true);
-    expect(new Set(labels).size).toBe(8);
+    const keys = all.map((c) => formatAssetClass(c, t));
+    expect(keys.every((k) => k.trim().length > 0)).toBe(true);
+    expect(new Set(keys).size).toBe(8);
   });
 });

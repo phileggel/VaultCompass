@@ -24,24 +24,25 @@ export function getDefaultRisk(assetClass: AssetClass): number {
   return DEFAULT_RISK_BY_CLASS[assetClass];
 }
 
-/** Returns a human-readable label for an asset class — WEB-031. */
-export function formatAssetClass(assetClass: AssetClass): string {
+/** Returns a localised label for an asset class — WEB-031.
+ *  Exhaustive switch ensures new variants are caught at compile time. */
+export function formatAssetClass(assetClass: AssetClass, t: (key: string) => string): string {
   switch (assetClass) {
     case "Cash":
-      return "Cash";
+      return t("asset.class.Cash");
     case "Bonds":
-      return "Bonds";
+      return t("asset.class.Bonds");
     case "RealEstate":
-      return "Real Estate";
+      return t("asset.class.RealEstate");
     case "MutualFunds":
-      return "Mutual Funds";
+      return t("asset.class.MutualFunds");
     case "ETF":
-      return "ETF";
+      return t("asset.class.ETF");
     case "Stocks":
-      return "Stocks";
+      return t("asset.class.Stocks");
     case "DigitalAsset":
-      return "Digital Asset";
+      return t("asset.class.DigitalAsset");
     case "Derivatives":
-      return "Derivatives";
+      return t("asset.class.Derivatives");
   }
 }
