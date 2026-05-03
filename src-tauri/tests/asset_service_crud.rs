@@ -51,7 +51,7 @@ fn base_create_dto(name: &str) -> CreateAssetDTO {
 
 /// create_category() persists and get_category_by_id() retrieves it.
 #[tokio::test]
-async fn create_category_and_retrieve_by_id() {
+async fn test_create_category_and_retrieve_by_id() {
     let (svc, _bus) = setup().await;
 
     let cat = svc.create_category("Bonds").await.expect("seed category");
@@ -67,7 +67,7 @@ async fn create_category_and_retrieve_by_id() {
 
 /// update_category() persists the new label.
 #[tokio::test]
-async fn update_category_changes_label() {
+async fn test_update_category_changes_label() {
     let (svc, _bus) = setup().await;
 
     let cat = svc.create_category("OldLabel").await.unwrap();
@@ -84,7 +84,7 @@ async fn update_category_changes_label() {
 
 /// delete_category() removes it from get_all_categories().
 #[tokio::test]
-async fn delete_category_removes_it() {
+async fn test_delete_category_removes_it() {
     let (svc, _bus) = setup().await;
 
     let cat = svc
@@ -101,7 +101,7 @@ async fn delete_category_removes_it() {
 
 /// update_asset() returns Archived error when the asset is archived.
 #[tokio::test]
-async fn update_asset_rejected_when_archived() {
+async fn test_update_asset_rejected_when_archived() {
     let (svc, _bus) = setup().await;
 
     let asset = svc
@@ -135,7 +135,7 @@ async fn update_asset_rejected_when_archived() {
 
 /// update_asset() returns CategoryNotFound when the given category_id does not exist.
 #[tokio::test]
-async fn update_asset_rejected_when_category_not_found() {
+async fn test_update_asset_rejected_when_category_not_found() {
     let (svc, _bus) = setup().await;
 
     let asset = svc.create_asset(base_create_dto("CatCheck")).await.unwrap();
@@ -167,7 +167,7 @@ async fn update_asset_rejected_when_category_not_found() {
 
 /// create_asset() fires AssetUpdated on the event bus.
 #[tokio::test]
-async fn create_asset_publishes_asset_updated_event() {
+async fn test_create_asset_publishes_asset_updated_event() {
     let (svc, bus) = setup().await;
     let mut rx = bus.subscribe();
 
@@ -184,7 +184,7 @@ async fn create_asset_publishes_asset_updated_event() {
 
 /// archive_asset() fires AssetUpdated on the event bus.
 #[tokio::test]
-async fn archive_asset_publishes_asset_updated_event() {
+async fn test_archive_asset_publishes_asset_updated_event() {
     let (svc, bus) = setup().await;
 
     let asset = svc
@@ -204,7 +204,7 @@ async fn archive_asset_publishes_asset_updated_event() {
 
 /// unarchive_asset() fires AssetUpdated on the event bus.
 #[tokio::test]
-async fn unarchive_asset_publishes_asset_updated_event() {
+async fn test_unarchive_asset_publishes_asset_updated_event() {
     let (svc, bus) = setup().await;
 
     let asset = svc
@@ -225,7 +225,7 @@ async fn unarchive_asset_publishes_asset_updated_event() {
 
 /// delete_asset() fires AssetUpdated on the event bus.
 #[tokio::test]
-async fn delete_asset_publishes_asset_updated_event() {
+async fn test_delete_asset_publishes_asset_updated_event() {
     let (svc, bus) = setup().await;
 
     let asset = svc.create_asset(base_create_dto("ToDelete")).await.unwrap();
@@ -242,7 +242,7 @@ async fn delete_asset_publishes_asset_updated_event() {
 
 /// create_category() fires CategoryUpdated on the event bus.
 #[tokio::test]
-async fn create_category_publishes_category_updated_event() {
+async fn test_create_category_publishes_category_updated_event() {
     let (svc, bus) = setup().await;
     let mut rx = bus.subscribe();
 

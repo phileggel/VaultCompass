@@ -387,7 +387,7 @@ mod tests {
 
     // R1 — empty name is rejected
     #[tokio::test]
-    async fn create_asset_rejects_empty_name() {
+    async fn test_create_asset_rejects_empty_name() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_get_by_id()
             .times(1)
@@ -415,7 +415,7 @@ mod tests {
 
     // R1 — empty reference is rejected
     #[tokio::test]
-    async fn create_asset_rejects_empty_reference() {
+    async fn test_create_asset_rejects_empty_reference() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_get_by_id()
             .times(1)
@@ -443,7 +443,7 @@ mod tests {
 
     // R1 — invalid currency is rejected
     #[tokio::test]
-    async fn create_asset_rejects_invalid_currency() {
+    async fn test_create_asset_rejects_invalid_currency() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_get_by_id()
             .times(1)
@@ -471,7 +471,7 @@ mod tests {
 
     // R1 — risk level out of range is rejected
     #[tokio::test]
-    async fn create_asset_rejects_invalid_risk_level() {
+    async fn test_create_asset_rejects_invalid_risk_level() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_get_by_id()
             .times(1)
@@ -499,7 +499,7 @@ mod tests {
 
     // R4 — service normalizes reference to uppercase before passing to asset_repo.create
     #[tokio::test]
-    async fn create_asset_normalizes_reference_to_uppercase() {
+    async fn test_create_asset_normalizes_reference_to_uppercase() {
         let mut ar = MockAssetRepository::new();
         ar.expect_create()
             .withf(|a| a.reference == "AAPL")
@@ -522,7 +522,7 @@ mod tests {
 
     // R4 — service trims reference spaces before passing to asset_repo.create
     #[tokio::test]
-    async fn create_asset_normalizes_reference_trims_spaces() {
+    async fn test_create_asset_normalizes_reference_trims_spaces() {
         let mut ar = MockAssetRepository::new();
         ar.expect_create()
             .withf(|a| a.reference == "AAPL")
@@ -545,7 +545,7 @@ mod tests {
 
     // R5/R6 — updating an archived asset is rejected
     #[tokio::test]
-    async fn update_archived_asset_is_rejected() {
+    async fn test_update_archived_asset_is_rejected() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id()
             .times(1)
@@ -578,7 +578,7 @@ mod tests {
 
     // R6 — service calls asset_repo.archive with the correct id
     #[tokio::test]
-    async fn archive_asset_sets_flag() {
+    async fn test_archive_asset_delegates_to_repo() {
         let mut ar = MockAssetRepository::new();
         ar.expect_archive()
             .withf(|id| id == "asset-id")
@@ -594,7 +594,7 @@ mod tests {
 
     // R18 — service calls asset_repo.unarchive with the correct id
     #[tokio::test]
-    async fn unarchive_asset_clears_flag() {
+    async fn test_unarchive_asset_delegates_to_repo() {
         let mut ar = MockAssetRepository::new();
         ar.expect_unarchive()
             .withf(|id| id == "asset-id")
@@ -610,7 +610,7 @@ mod tests {
 
     // R7 — get_all_assets delegates to asset_repo.get_all (not get_all_including_archived)
     #[tokio::test]
-    async fn get_all_assets_excludes_archived() {
+    async fn test_get_all_assets_excludes_archived() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_all()
             .times(1)
@@ -627,7 +627,7 @@ mod tests {
 
     // R19 — get_all_assets_with_archived delegates to asset_repo.get_all_including_archived
     #[tokio::test]
-    async fn get_all_assets_with_archived_includes_both() {
+    async fn test_get_all_assets_with_archived_includes_both() {
         let active = make_asset("active-id", false);
         let archived = make_asset("archived-id", true);
         let mut ar = MockAssetRepository::new();
@@ -648,7 +648,7 @@ mod tests {
 
     // R1 — duplicate name, same case: service checks find_by_name before creating
     #[tokio::test]
-    async fn create_category_rejects_duplicate_same_case() {
+    async fn test_create_category_rejects_duplicate_same_case() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_find_by_name().times(1).return_once(|_| {
             Ok(Some(AssetCategory::from_storage(
@@ -673,7 +673,7 @@ mod tests {
 
     // R1 — duplicate name, different case: service checks find_by_name (case-insensitive lookup is the repo's concern)
     #[tokio::test]
-    async fn create_category_rejects_duplicate_different_case() {
+    async fn test_create_category_rejects_duplicate_different_case() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_find_by_name().times(1).return_once(|_| {
             Ok(Some(AssetCategory::from_storage(
@@ -698,7 +698,7 @@ mod tests {
 
     // R2 — system category cannot be renamed (pure id check, no repo call)
     #[tokio::test]
-    async fn update_category_rejects_system_category() {
+    async fn test_update_category_rejects_system_category() {
         let svc = make_svc(
             MockAssetRepository::new(),
             MockAssetCategoryRepository::new(),
@@ -719,7 +719,7 @@ mod tests {
 
     // R1 — update with name already taken by a different category
     #[tokio::test]
-    async fn update_category_rejects_duplicate_name() {
+    async fn test_update_category_rejects_duplicate_name() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_find_by_name().times(1).return_once(|_| {
             Ok(Some(AssetCategory::from_storage(
@@ -744,7 +744,7 @@ mod tests {
 
     // R2 — system category cannot be deleted (pure id check, no repo call)
     #[tokio::test]
-    async fn delete_category_rejects_system_category() {
+    async fn test_delete_category_rejects_system_category() {
         let svc = make_svc(
             MockAssetRepository::new(),
             MockAssetCategoryRepository::new(),
@@ -762,7 +762,7 @@ mod tests {
 
     // R3 — service calls reassign_assets_and_delete with the category id and system fallback
     #[tokio::test]
-    async fn delete_category_reassigns_assets_to_default() {
+    async fn test_delete_category_reassigns_assets_to_default() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_reassign_assets_and_delete()
             .withf(|cat_id, fallback_id| cat_id == "bonds-id" && fallback_id == SYSTEM_CATEGORY_ID)
@@ -778,7 +778,7 @@ mod tests {
 
     // MKT-043 — record_asset_price rejects unknown asset
     #[tokio::test]
-    async fn record_asset_price_rejects_unknown_asset() {
+    async fn test_record_asset_price_rejects_unknown_asset() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id().times(1).return_once(|_| Ok(None));
         let svc = make_svc(
@@ -801,7 +801,7 @@ mod tests {
 
     // MKT-021 — record_asset_price rejects price <= 0
     #[tokio::test]
-    async fn record_asset_price_rejects_non_positive_price() {
+    async fn test_record_asset_price_rejects_non_positive_price() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id()
             .times(1)
@@ -826,7 +826,7 @@ mod tests {
 
     // MKT-022 — record_asset_price rejects a future date
     #[tokio::test]
-    async fn record_asset_price_rejects_future_date() {
+    async fn test_record_asset_price_rejects_future_date() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id()
             .times(1)
@@ -851,7 +851,7 @@ mod tests {
 
     // MKT-025, MKT-026 — record_asset_price calls upsert with correct micros and publishes event
     #[tokio::test]
-    async fn record_asset_price_upserts_and_publishes_event_on_success() {
+    async fn test_record_asset_price_upserts_and_publishes_event_on_success() {
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let mut ar = MockAssetRepository::new();
@@ -930,7 +930,7 @@ mod tests {
 
     // MKT-072 — get_asset_prices returns AssetNotFound for a nonexistent asset_id
     #[tokio::test]
-    async fn get_asset_prices_rejects_unknown_asset() {
+    async fn test_get_asset_prices_rejects_unknown_asset() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id().times(1).return_once(|_| Ok(None));
         let svc = make_svc(
@@ -950,7 +950,7 @@ mod tests {
 
     // MKT-072 — get_asset_prices returns an empty list when the asset exists but has no prices
     #[tokio::test]
-    async fn get_asset_prices_returns_empty_list_when_no_prices() {
+    async fn test_get_asset_prices_returns_empty_list_when_no_prices() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id()
             .times(1)
@@ -966,7 +966,7 @@ mod tests {
 
     // MKT-072 — get_asset_prices passes through whatever order price_repo returns
     #[tokio::test]
-    async fn get_asset_prices_returns_all_records_sorted_date_descending() {
+    async fn test_get_asset_prices_returns_all_records_sorted_date_descending() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id()
             .times(1)
@@ -992,7 +992,7 @@ mod tests {
 
     // MKT-072 — get_asset_prices calls price_repo with the requested asset_id
     #[tokio::test]
-    async fn get_asset_prices_scoped_to_requested_asset() {
+    async fn test_get_asset_prices_scoped_to_requested_asset() {
         let mut ar = MockAssetRepository::new();
         ar.expect_get_by_id()
             .withf(|id| id == "asset-a-id")
@@ -1015,7 +1015,7 @@ mod tests {
 
     // MKT-082 — validation runs before any repo call; no mock expectations needed
     #[tokio::test]
-    async fn update_asset_price_rejects_non_positive_price() {
+    async fn test_update_asset_price_rejects_non_positive_price() {
         let svc = make_svc(
             MockAssetRepository::new(),
             MockAssetCategoryRepository::new(),
@@ -1036,7 +1036,7 @@ mod tests {
 
     // MKT-082 — non-finite check runs before micro conversion; no repo calls
     #[tokio::test]
-    async fn update_asset_price_rejects_non_finite_price() {
+    async fn test_update_asset_price_rejects_non_finite_price() {
         let svc = make_svc(
             MockAssetRepository::new(),
             MockAssetCategoryRepository::new(),
@@ -1057,7 +1057,7 @@ mod tests {
 
     // MKT-082 — future new_date rejected by AssetPrice::new before DB lookup
     #[tokio::test]
-    async fn update_asset_price_rejects_future_date() {
+    async fn test_update_asset_price_rejects_future_date() {
         let svc = make_svc(
             MockAssetRepository::new(),
             MockAssetCategoryRepository::new(),
@@ -1078,7 +1078,7 @@ mod tests {
 
     // MKT-083 — returns NotFound when get_by_asset_and_date returns None
     #[tokio::test]
-    async fn update_asset_price_returns_not_found_for_missing_record() {
+    async fn test_update_asset_price_returns_not_found_for_missing_record() {
         let mut pr = MockAssetPriceRepository::new();
         pr.expect_get_by_asset_and_date()
             .times(1)
@@ -1103,7 +1103,7 @@ mod tests {
 
     // MKT-083 — same original_date and new_date: service calls upsert (not replace_atomic)
     #[tokio::test]
-    async fn update_asset_price_same_date_updates_price_in_place() {
+    async fn test_update_asset_price_same_date_updates_price_in_place() {
         let mut pr = MockAssetPriceRepository::new();
         pr.expect_get_by_asset_and_date()
             .times(1)
@@ -1124,7 +1124,7 @@ mod tests {
 
     // MKT-084 — different dates: service calls replace_atomic with original_date and new price
     #[tokio::test]
-    async fn update_asset_price_date_change_deletes_old_and_upserts_new() {
+    async fn test_update_asset_price_date_change_deletes_old_and_upserts_new() {
         let mut pr = MockAssetPriceRepository::new();
         pr.expect_get_by_asset_and_date()
             .times(1)
@@ -1150,7 +1150,7 @@ mod tests {
 
     // MKT-084 — date change always calls replace_atomic regardless of whether target date exists
     #[tokio::test]
-    async fn update_asset_price_date_change_overwrites_existing_target_date() {
+    async fn test_update_asset_price_date_change_overwrites_existing_target_date() {
         let mut pr = MockAssetPriceRepository::new();
         pr.expect_get_by_asset_and_date()
             .times(1)
@@ -1176,7 +1176,7 @@ mod tests {
 
     // MKT-085 — publishes AssetPriceUpdated after a successful update
     #[tokio::test]
-    async fn update_asset_price_publishes_asset_price_updated_event() {
+    async fn test_update_asset_price_publishes_asset_price_updated_event() {
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let mut pr = MockAssetPriceRepository::new();
@@ -1350,7 +1350,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn archive_asset_emits_event_when_bus_present() {
+    async fn test_archive_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
         ar.expect_archive().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
@@ -1371,7 +1371,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unarchive_asset_emits_event_when_bus_present() {
+    async fn test_unarchive_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
         ar.expect_unarchive().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
@@ -1392,7 +1392,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_asset_emits_event_when_bus_present() {
+    async fn test_delete_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
         ar.expect_delete().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
@@ -1413,7 +1413,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_category_emits_event_when_bus_present() {
+    async fn test_create_category_emits_event_when_bus_present() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_find_by_name().times(1).return_once(|_| Ok(None));
         cr.expect_create().times(1).return_once(Ok);
@@ -1435,7 +1435,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_category_emits_event_when_bus_present() {
+    async fn test_update_category_emits_event_when_bus_present() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_find_by_name().times(1).return_once(|_| Ok(None));
         cr.expect_update().times(1).return_once(Ok);
@@ -1457,7 +1457,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_category_emits_event_when_bus_present() {
+    async fn test_delete_category_emits_event_when_bus_present() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_reassign_assets_and_delete()
             .times(1)

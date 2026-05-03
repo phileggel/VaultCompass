@@ -403,7 +403,7 @@ mod tests {
 
     // R3 — duplicate name (case-insensitive) is rejected at creation
     #[tokio::test]
-    async fn create_rejects_duplicate_name_case_insensitive() {
+    async fn test_create_rejects_duplicate_name_case_insensitive() {
         let svc = setup_service().await;
         svc.create(
             "Alpha".to_string(),
@@ -431,7 +431,7 @@ mod tests {
 
     // R3 — updating an account to a name used by another account is rejected
     #[tokio::test]
-    async fn update_rejects_name_collision_with_other_account() {
+    async fn test_update_rejects_name_collision_with_other_account() {
         let svc = setup_service().await;
         svc.create(
             "Alpha".to_string(),
@@ -468,7 +468,7 @@ mod tests {
 
     // R3 — updating an account with its own name (same case) must succeed
     #[tokio::test]
-    async fn update_allows_same_name_on_same_account() {
+    async fn test_update_allows_same_name_on_same_account() {
         let svc = setup_service().await;
         let account = svc
             .create(
@@ -495,7 +495,7 @@ mod tests {
 
     // TRX-026 / TRX-030 — buy_holding persists transaction and updates holding VWAP
     #[tokio::test]
-    async fn buy_holding_persists_transaction_and_holding() {
+    async fn test_buy_holding_persists_transaction_and_holding() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -529,7 +529,7 @@ mod tests {
 
     // SEL-021 — sell_holding rejects oversell via AccountOperationError
     #[tokio::test]
-    async fn sell_holding_rejects_oversell() {
+    async fn test_sell_holding_rejects_oversell() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -575,7 +575,7 @@ mod tests {
 
     // TRX-034 — cancel_transaction removes the holding when it was the last transaction
     #[tokio::test]
-    async fn cancel_transaction_removes_holding_when_last() {
+    async fn test_cancel_transaction_removes_holding_when_last() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -611,7 +611,7 @@ mod tests {
 
     // SEL-026 — full sell retains holding at quantity=0 with VWAP preserved
     #[tokio::test]
-    async fn full_sell_retains_holding_at_zero_with_last_vwap() {
+    async fn test_full_sell_retains_holding_at_zero_with_last_vwap() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -657,7 +657,7 @@ mod tests {
 
     // SEL-032 — correcting a purchase to a lower qty that would cause a cascading oversell is rejected
     #[tokio::test]
-    async fn correct_purchase_rejected_when_causes_cascading_oversell() {
+    async fn test_correct_purchase_rejected_when_causes_cascading_oversell() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -716,7 +716,7 @@ mod tests {
 
     // TRX-027 — buy_holding propagates save failure so no partial state is committed
     #[tokio::test]
-    async fn buy_holding_returns_error_when_save_fails() {
+    async fn test_buy_holding_returns_error_when_save_fails() {
         let mut mock_ar = MockAccountRepository::new();
         mock_ar
             .expect_get_with_holdings_and_transactions()
@@ -771,7 +771,7 @@ mod tests {
 
     // TRX-056 — open_holding returns AccountNotFound when account does not exist
     #[tokio::test]
-    async fn open_holding_returns_account_not_found() {
+    async fn test_open_holding_returns_account_not_found() {
         let svc = setup_service().await;
         let err = svc
             .open_holding(
@@ -793,7 +793,7 @@ mod tests {
 
     // TRX-044 — open_holding propagates QuantityNotPositive through the service
     #[tokio::test]
-    async fn open_holding_propagates_quantity_not_positive() {
+    async fn test_open_holding_propagates_quantity_not_positive() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -827,7 +827,7 @@ mod tests {
 
     // TRX-045 — open_holding propagates InvalidTotalCost through the service
     #[tokio::test]
-    async fn open_holding_propagates_invalid_total_cost() {
+    async fn test_open_holding_propagates_invalid_total_cost() {
         use crate::context::account::OpeningBalanceDomainError;
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
@@ -861,7 +861,7 @@ mod tests {
 
     // TRX-047 — open_holding persists transaction and holding with correct fields
     #[tokio::test]
-    async fn open_holding_persists_transaction_and_holding() {
+    async fn test_open_holding_persists_transaction_and_holding() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -904,7 +904,7 @@ mod tests {
 
     // TRX-048 — open_holding participates in VWAP alongside Purchase
     #[tokio::test]
-    async fn open_holding_participates_in_vwap_alongside_purchase() {
+    async fn test_open_holding_participates_in_vwap_alongside_purchase() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -957,7 +957,7 @@ mod tests {
 
     // TRX-049 — multiple open_holding entries for same pair are all persisted
     #[tokio::test]
-    async fn open_holding_allows_multiple_for_same_pair() {
+    async fn test_open_holding_allows_multiple_for_same_pair() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -997,7 +997,7 @@ mod tests {
 
     // TRX-031 — correct_transaction updates the persisted holding
     #[tokio::test]
-    async fn correct_transaction_updates_holding() {
+    async fn test_correct_transaction_updates_holding() {
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
         let account = svc
@@ -1059,7 +1059,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_all_delegates_to_account_repo() {
+    async fn test_get_all_delegates_to_account_repo() {
         let mut ar = MockAccountRepository::new();
         ar.expect_get_all().times(1).return_once(|| Ok(vec![]));
         let svc = make_mock_svc(
@@ -1075,7 +1075,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_by_id_delegates_to_account_repo() {
+    async fn test_get_by_id_delegates_to_account_repo() {
         let mut ar = MockAccountRepository::new();
         ar.expect_get_by_id()
             .withf(|id| id == "target-id")
@@ -1094,7 +1094,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_delegates_to_account_repo() {
+    async fn test_delete_delegates_to_account_repo() {
         let mut ar = MockAccountRepository::new();
         ar.expect_delete()
             .withf(|id| id == "del-id")
@@ -1111,7 +1111,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_holdings_for_account_delegates_to_holding_repo() {
+    async fn test_get_holdings_for_account_delegates_to_holding_repo() {
         let mut hr = MockHoldingRepository::new();
         hr.expect_get_by_account()
             .withf(|id| id == "acc-id")
@@ -1130,7 +1130,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_holding_by_account_asset_delegates_to_holding_repo() {
+    async fn test_get_holding_by_account_asset_delegates_to_holding_repo() {
         let mut hr = MockHoldingRepository::new();
         hr.expect_get_by_account_asset()
             .withf(|acc, asset| acc == "acc-1" && asset == "asset-1")
@@ -1149,7 +1149,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_transaction_by_id_delegates_to_tx_repo() {
+    async fn test_get_transaction_by_id_delegates_to_tx_repo() {
         let mut tr = MockTransactionRepository::new();
         tr.expect_get_by_id()
             .withf(|id| id == "tx-id")
@@ -1168,7 +1168,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_transactions_delegates_to_tx_repo() {
+    async fn test_get_transactions_delegates_to_tx_repo() {
         let mut tr = MockTransactionRepository::new();
         tr.expect_get_by_account_asset()
             .withf(|acc, asset| acc == "acc-1" && asset == "asset-1")
@@ -1187,7 +1187,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_asset_ids_for_account_delegates_to_tx_repo() {
+    async fn test_get_asset_ids_for_account_delegates_to_tx_repo() {
         let mut tr = MockTransactionRepository::new();
         tr.expect_get_asset_ids_for_account()
             .withf(|acc| acc == "acc-1")

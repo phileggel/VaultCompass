@@ -2,16 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (backend/test) — Rename existing Rust test functions to follow test\_ prefix convention
-
-`docs/test_convention.md` now requires all test function names to start with `test_`. The following files have pre-existing names that need renaming (no logic change). Also batch-rename `archive_asset_sets_flag` / `unarchive_asset_clears_flag` in `asset/service.rs` — these names claim to verify a flag but only assert delegation; rename to `archive_asset_delegates_to_repo` / `unarchive_asset_delegates_to_repo` or add flag assertions:
-
-- `src-tauri/src/context/account/service.rs` — ~8 mock-based tests in `mod tests`
-- `src-tauri/src/context/asset/service.rs` — ~8 mock-based tests in `mod tests`
-- `src-tauri/tests/account_service_crud.rs` — ~8 integration tests
-- `src-tauri/tests/asset_service_crud.rs` — ~8 integration tests
-
-Straightforward batch rename, no behavioural changes.
 
 ## (backend/test) — Review account service delegation tests for B33 compliance
 
@@ -21,7 +11,6 @@ Straightforward batch rename, no behavioural changes.
 
 `vitest run --coverage` always exits 0 — no regression floor is enforced. Add a `thresholds` block (e.g. `lines: 60, functions: 60`) once a stable baseline has been measured on `main`. Increment thresholds incrementally rather than setting a tight target immediately.
 
-
 ## (e2e) — accounts.test.ts confirm-delete button selector too broad
 
 `$('//button[normalize-space()="Delete"]')` at line 184 matches any visible Delete button. Scope to the dialog: `$('[role="dialog"] .//button[normalize-space()="Delete"]')` to prevent matching the wrong element if other Delete buttons exist in the DOM simultaneously.
@@ -30,9 +19,6 @@ Straightforward batch rename, no behavioural changes.
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.
 
-## (backend) — Default tracing log level is "debug" in lib.rs
-
-`initialize_tracing` falls back to `EnvFilter::new("debug")` on any parse error. This floods logs during normal debug runs. Change default to `"info"`; keep `"debug"` opt-in via `RUST_LOG=debug`.
 
 ## (e2e) — Review ProjectSF combobox ADRs for applicability to VaultCompass
 
@@ -46,7 +32,6 @@ The `buy_sell.test.ts` E2E test uses `setReactInputValue` on `#buy-trx-asset` (a
 ## (e2e) — Extract shared E2E helpers to a common module
 
 `setReactInputValue`, `isoToDisplayDate`, and IPC seed helpers (`seedCategory`, `seedAccount`, `seedAsset`, `seedBuy`) are copy-pasted verbatim across every spec file (`accounts`, `assets`, `buy_sell`, `open_balance`, `asset_web_lookup`). Extract to `e2e/helpers/` (e.g. `react.ts`, `seed.ts`, `date.ts`) and import from there. Reduces duplication and keeps cross-cutting fixes in one place.
-
 
 ## (backend) — String-sentinel "account not found" pattern in open_holding/api.rs
 
@@ -69,10 +54,6 @@ After merging: delete the two source files and update all references (plan docs,
 ## (e2e) — assets.test.ts Archive/Unarchive button selectors not scoped to row
 
 `$('button[aria-label="Archive"]')` and `$('button[aria-label="Unarchive"]')` match the first matching button in the table regardless of which asset row is targeted. If multiple archive buttons are visible simultaneously (e.g. after seeding several assets), the selector will act on the wrong row. Scope to the asset row by its name or position, similarly to the fix needed for the confirm-delete button in `accounts.test.ts`.
-
-## (backend/test) — Extract `fn micro` test helper to avoid duplication
-
-`fn micro(v: i64) -> i64` is defined verbatim in both `src-tauri/src/context/account/service.rs` (inside `#[cfg(test)]`) and `src-tauri/tests/account_service_crud.rs`. Extract to a shared test utility module (e.g. `tests/helpers.rs`) and import from both sites.
 
 
 ## (deps) — Update specta to rc.23

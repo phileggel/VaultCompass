@@ -5,15 +5,14 @@
 /// get_asset_ids_for_account, get_deletion_summary.
 ///
 /// Uses real SQLite repos against an in-memory DB (B27).
+mod common;
+
+use common::micro;
 use sqlx::sqlite::SqlitePoolOptions;
 use vault_compass_lib::context::account::AccountService;
 use vault_compass_lib::context::account::{
     SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository, UpdateFrequency,
 };
-
-fn micro(v: i64) -> i64 {
-    v * 1_000_000
-}
 
 async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
     let pool = SqlitePoolOptions::new()
@@ -57,7 +56,7 @@ async fn seed_asset(pool: &sqlx::Pool<sqlx::Sqlite>) -> String {
 
 /// delete() removes the account so it no longer appears in get_all().
 #[tokio::test]
-async fn delete_account_removes_it_from_get_all() {
+async fn test_delete_account_removes_it_from_get_all() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
 
@@ -78,7 +77,7 @@ async fn delete_account_removes_it_from_get_all() {
 
 /// get_all() returns all created accounts.
 #[tokio::test]
-async fn get_all_returns_created_accounts() {
+async fn test_get_all_returns_created_accounts() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
 
@@ -107,7 +106,7 @@ async fn get_all_returns_created_accounts() {
 
 /// get_by_id() returns Some for an existing account and None for an unknown id.
 #[tokio::test]
-async fn get_by_id_returns_some_or_none() {
+async fn test_get_by_id_returns_some_or_none() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
 
@@ -130,7 +129,7 @@ async fn get_by_id_returns_some_or_none() {
 
 /// get_holdings_for_account() returns an empty vec when no transactions exist.
 #[tokio::test]
-async fn get_holdings_for_account_returns_empty_before_any_transaction() {
+async fn test_get_holdings_for_account_returns_empty_before_any_transaction() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
 
@@ -149,7 +148,7 @@ async fn get_holdings_for_account_returns_empty_before_any_transaction() {
 
 /// get_holding_by_account_asset() returns None before any buy and Some after a buy.
 #[tokio::test]
-async fn get_holding_by_account_asset_returns_none_then_some() {
+async fn test_get_holding_by_account_asset_returns_none_then_some() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
     let asset_id = seed_asset(&pool).await;
@@ -191,7 +190,7 @@ async fn get_holding_by_account_asset_returns_none_then_some() {
 
 /// get_transactions() returns transactions in chronological order.
 #[tokio::test]
-async fn get_transactions_returns_chronological_order() {
+async fn test_get_transactions_returns_chronological_order() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
     let asset_id = seed_asset(&pool).await;
@@ -250,7 +249,7 @@ async fn get_transactions_returns_chronological_order() {
 
 /// get_asset_ids_for_account() returns distinct asset IDs that have transactions.
 #[tokio::test]
-async fn get_asset_ids_for_account_deduplicates() {
+async fn test_get_asset_ids_for_account_deduplicates() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
     let asset_id = seed_asset(&pool).await;
@@ -297,7 +296,7 @@ async fn get_asset_ids_for_account_deduplicates() {
 
 /// get_deletion_summary() counts active holdings and total transactions correctly.
 #[tokio::test]
-async fn get_deletion_summary_counts_holdings_and_transactions() {
+async fn test_get_deletion_summary_counts_holdings_and_transactions() {
     let pool = make_pool().await;
     let svc = make_service(&pool).await;
     let asset_id = seed_asset(&pool).await;
