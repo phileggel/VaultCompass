@@ -1,6 +1,8 @@
 # VaultCompass
 
 [![codecov](https://codecov.io/gh/phileggel/VaultCompass/graph/badge.svg?token=6fe57a91-153a-41ab-97ab-ae9f7e39d8f0)](https://codecov.io/gh/phileggel/VaultCompass)
+[![frontend](https://codecov.io/gh/phileggel/VaultCompass/graph/badge.svg?token=6fe57a91-153a-41ab-97ab-ae9f7e39d8f0&flag=frontend)](https://codecov.io/gh/phileggel/VaultCompass?flags=frontend)
+[![backend](https://codecov.io/gh/phileggel/VaultCompass/graph/badge.svg?token=6fe57a91-153a-41ab-97ab-ae9f7e39d8f0&flag=backend)](https://codecov.io/gh/phileggel/VaultCompass?flags=backend)
 
 Personal portfolio manager for desktop — track your financial assets across multiple accounts, record purchases, monitor positions, and follow your cost basis over time. All data is stored locally on your device.
 
