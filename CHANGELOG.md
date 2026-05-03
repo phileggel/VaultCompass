@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-03
+
+### Added
+
+- isolate E2E tests with an ephemeral SQLite database
+- implement frontend for TRX-042–058
+  OpenBalanceModal + useOpenBalance hook; openHolding in gateway;
+  Open Balance button in AccountDetailsView (TRX-055);
+  OpeningBalance edit support in EditTransactionModal (TRX-051);
+  i18n en+fr; TRX-046 future-date guard; presenter + edit modal
+  unit tests (TRX-051–054)
+- implement opening-balance transaction type
+
+### Fixed
+
+- change default tracing log level from debug to info
+- harden wdio.conf.ts and align buy_sell note field
+- Append Date.now() suffix to E2E_DATA_DIR to prevent collision on concurrent runs
+- Wrap mkdirSync in try/catch with actionable error message
+- Rename `exit` variable to `cleanShutdown` to avoid shadowing process.exit
+- Change note: null to note: "" in seedBuy for Tauri 2 null-deserialization safety
+- apply reviewer findings across frontend and backend
+- apply reviewer findings and update docs
+  Reviewer findings: Math.floor (TRX-047), TRX-055 button always visible,
+  TRX-046 edit date guard, TRX-058 snackbar test, mount log removed,
+  gateway.test.ts moved to feature root, i18n placeholder keys.
+  Docs: plan ticked, roadmap row, todo tech-debt items, UL confirmed.
+- use platform native root CAs for OpenFIGI HTTPS on Windows
+- resolve error.undefined on account creation and window visibility
+
 ## [0.8.1] - 2026-05-01
 
 ### Fixed

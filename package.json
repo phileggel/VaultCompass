@@ -3,7 +3,7 @@
   "author": "Philippe Eggel",
   "license": "MIT",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
