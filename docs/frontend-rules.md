@@ -1,10 +1,11 @@
 # Frontend Rules
 
 ⚠️ **AI AGENT MUST NEVER UPDATE THIS DOCUMENT**
+**Rules numbering are indicative and not stable from version to version**
 
 ## Feature Structure
 
-**F1** — SHOULD follow the gold layout (bank-transfer):
+**F1** — SHOULD follow the gold layout:
 
 ```
 feature/
@@ -18,7 +19,7 @@ feature/
 **F2** — Each sub-feature MUST live in its own subfolder named in snake_case.
 
 - Component file, its hook, and its tests are colocated in that folder.
-- Example: `add_fund_panel/AddFundPanel.tsx` + `useAddFundPanel.ts` + `useAddFundPanel.test.ts`
+- Example: `add_item_panel/AddItemPanel.tsx` + `useAddItemPanel.ts` + `useAddItemPanel.test.ts`
 
 **F3** — `gateway.ts` or `store.ts` are the ONLY files allowed to call `commands.*`. Sub-features with a dedicated use case may have their own `gateway.ts` (e.g. `manual_match/gateway.ts`).
 
@@ -98,7 +99,7 @@ feature/
 
 ## Navigation
 
-**F22** — Inter-feature navigation MUST go through the router
+**F22** — Inter-feature navigation MUST go through the router.
 
 Features are bounded contexts: a feature MUST NOT import components, hooks, or utilities directly from another
 feature. Cross-feature navigation is handled exclusively via useNavigate / route paths.

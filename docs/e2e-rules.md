@@ -4,6 +4,7 @@ Defines what makes a component reliably driveable from the Tauri WebDriver E2E s
 Read together with `docs/frontend-rules.md` and `docs/test_convention.md`.
 
 ⚠️ **AI AGENT MUST NEVER UPDATE THIS DOCUMENT**
+**Rules numbering are indicative and not stable from version to version**
 
 ---
 

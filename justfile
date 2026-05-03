@@ -33,7 +33,7 @@ coverage-fe:
 
 # Run backend tests with coverage (output: coverage/rust/lcov.info + tarpaulin-report.html); requires: cargo install cargo-tarpaulin
 coverage-be:
-    cd src-tauri && SQLX_OFFLINE=true cargo tarpaulin --out Lcov Html --output-dir ../coverage/rust --tests --exclude-files "build.rs" --exclude-files "src/bin/generate_bindings.rs"
+    cd src-tauri && SQLX_OFFLINE=true cargo tarpaulin --out Lcov Html --output-dir ../coverage/rust --lib --exclude-files "build.rs" --exclude-files "src/bin/generate_bindings.rs"
 
 # Run E2E tests against the built binary (opens a window)
 test-e2e:
@@ -62,6 +62,10 @@ lint:
 # Clean build artifacts
 clean:
     rm -rf dist src-tauri/target
+
+# Sync convention docs from tauri-conventions repo
+sync-conventions:
+    ./scripts/sync-conventions.sh
 
 # ⚠️  Destructive: resets database and restarts app in dev mode
 reset-db:

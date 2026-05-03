@@ -1,6 +1,6 @@
 # DDD Reference
 
-A concise reference for Domain-Driven Design concepts as applied in this project.
+A concise reference for Domain-Driven Design concepts as applied in a Tauri 2 / Rust / React stack.
 
 ---
 
@@ -28,7 +28,7 @@ The core of the BC. No infrastructure dependencies — no sqlx, no HTTP, no file
 
 Has a unique identity (ID). Mutable over time. Two entities with the same ID are the same object regardless of attribute values.
 
-> Examples: `Account`, `Asset`, `Transaction`
+> Examples: `Order`, `Customer`, `Product`
 
 ### Value Object
 
@@ -44,14 +44,14 @@ A cluster of entities and value objects treated as a single unit. Has one **Aggr
 - External code MAY read internal entities for query purposes (CQRS-lite).
 - One transaction = one aggregate (the consistency boundary).
 - Aggregate root methods use domain/business vocabulary — they describe what happens to the
-  aggregate, not the internal mechanism. e.g. `account.buy_holding()` not `account.create_transaction()`.
-  > Example: `Account` (root) + `Holding` (internal) + `Transaction` (internal)
+  aggregate, not the internal mechanism. e.g. `root.perform_action()` not `root.set_status()`.
+  > Example: `Order` (root) + `OrderLine` (internal) + `Payment` (internal)
 
 ### Domain Service
 
 Stateless. No repository dependencies. Handles domain logic that spans multiple aggregates and cannot live in any single one.
 
-> Example: a `PnlCalculator` that reads two aggregates and computes a result.
+> Example: a `PriceCalculator` that reads two aggregates and computes a result.
 > These are rare — most logic belongs in an entity or aggregate.
 
 ### Repository Interface
@@ -62,7 +62,7 @@ Declares persistence operations. Lives in the domain layer — only the interfac
 
 A record of something that happened. Raised by aggregates after a state change. Immutable.
 
-> Example: `AccountUpdated`, `TransactionRecorded`
+> Examples: `OrderPlaced`, `PaymentRecorded`
 
 ---
 
@@ -126,7 +126,7 @@ on success, rolls back on failure.
 ### AppUnitOfWork
 
 A use-case-specific super-trait combining the repository traits needed for one atomic operation.
-e.g. `AppUnitOfWork: AccountRepository + AssetPriceRepository`. Lives in the use case folder.
+e.g. `AppUnitOfWork: OrderRepository + InventoryRepository`. Lives in the use case folder.
 Implemented by `SqlxUnitOfWork` in infrastructure (holds a shared `sqlx::Transaction`).
 
 ### When to use
