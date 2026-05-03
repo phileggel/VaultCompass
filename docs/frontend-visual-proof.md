@@ -1,10 +1,11 @@
-# Frontend PR Visual Proof Rules
+# Frontend Visual Proof Rules
 
 > ⚠️ **AI AGENT MUST NEVER UPDATE THIS DOCUMENT**
 
-Any PR that touches a `.tsx`, `.css`, or visual asset file **MUST** include at least one screenshot
-in its description. A PR opened without visual proof is incomplete — do not open it; explain why
-in the chat instead.
+Any change that touches a `.tsx`, `.css`, or visual asset file **MUST** include a committed
+screenshot in `screenshots/` before merging — whether the branch is merged via `just merge` or a
+PR is opened. If a PR is opened, also embed the screenshot in the description. If you cannot
+produce a screenshot, explain why in the chat instead.
 
 ---
 
