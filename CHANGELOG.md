@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-05-03
+
+### Fixed
+
+- use constant default for created_at ALTER TABLE
+  SQLite rejects non-constant expressions (e.g. datetime('now')) in
+  ALTER TABLE ADD COLUMN. This caused all app launches to fail with
+  "Database initialization failed" since 2026-04-26.
+
+Existing rows get the epoch sentinel '1970-01-01T00:00:00Z', which
+sorts before any real timestamp and is correct for ORDER BY date, created_at.
+
 ## [0.9.0] - 2026-05-03
 
 ### Added
