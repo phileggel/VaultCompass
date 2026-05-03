@@ -33,7 +33,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         # Pinned to full SHA for v5.4.3 — mutable tags are a supply-chain risk
-        uses: codecov/codecov-action@84a73ee6c4c5dcf5f1c8a2ea7a68bae9fca6c074
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
