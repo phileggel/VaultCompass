@@ -51,6 +51,7 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (migrations) — Add missing FK indexes across migrations
 
 SQL reviewer flagged FK columns without standalone indexes in several migrations:
+
 - `init.sql`: `asset_accounts.account_id/asset_id`, `assets.category_id`
 - `202604120001`: `holdings.account_id/asset_id`
 - `202604120002`: `transactions.account_id/asset_id` (composite index exists but not standalone)
@@ -59,6 +60,17 @@ SQL reviewer flagged FK columns without standalone indexes in several migrations
 Also: `202604040001` `CREATE UNIQUE INDEX` missing `IF NOT EXISTS`; `202604250002` DDL + multi-DML should have an explicit SQLx transaction comment.
 
 Not a correctness issue today (single-user, SQLite). Address as a dedicated `chore(migrations): add FK indexes` migration before the schema grows further.
+
+## (ci) — Release workflow warnings from infra reviewer
+
+Flagged in `release-windows.yml` and `release-manual.yml` (not introduced by coverage CI work):
+
+- **`prefix-key` embeds lock-file hash** — both workflows use `prefix-key: *-rust-${{ hashFiles('Cargo.lock') }}`. This defeats `Swatinem/rust-cache`'s partial-match restore because a changed lock file creates a brand-new prefix bucket with no fallback. Change to a static prefix (e.g. `windows-rust-`) and let the action handle lock-file hashing internally.
+- **`releaseDraft: true` + live updater endpoint** — `tauri.conf.json` endpoints point to `/releases/latest/download/latest.json`, which GitHub only serves from *published* (non-draft) releases. Until a draft is manually published, the auto-updater 404s for all users. Either set `releaseDraft: false` or change the updater endpoint to a tag-specific URL.
+- **`gh cache delete --all` blast radius** — both release workflows delete *all* repo caches on failure, including caches from the coverage workflow. Scope to the key created by the run (e.g. `gh cache delete --pattern "windows-rust-"`).
+- **Fragile `sleep 10` in asset verification** — replace with a short retry loop (3 attempts, 10 s apart) so the check survives slow GitHub asset uploads.
+- **`release-manual.yml` missing "tag is on main" guard** — unlike `release-windows.yml`, the manual workflow does not verify the tag is an ancestor of `main`. Add the same `git merge-base --is-ancestor` check.
+- **`release-manual.yml` three-way ternary duplication** — `runs-on`, `targets`, and `tauri-action args` all repeat the same platform→value mapping. Extract to a prior step output to keep changes in one place.
 
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
