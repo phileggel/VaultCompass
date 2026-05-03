@@ -57,7 +57,7 @@ describe("formatAssetClass", () => {
       "Derivatives",
     ] as const;
     const labels = all.map(formatAssetClass);
-    expect(labels.every((l) => l.length > 0)).toBe(true);
+    expect(labels.every((l) => l.trim().length > 0)).toBe(true);
     expect(new Set(labels).size).toBe(8);
   });
 });

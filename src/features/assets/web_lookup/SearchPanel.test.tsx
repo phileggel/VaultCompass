@@ -4,6 +4,10 @@ import type { AssetLookupResult } from "@/bindings";
 import { SearchPanel } from "./SearchPanel";
 import type { WebLookupSearchState } from "./useWebLookupSearch";
 
+// Mock returns opts.name when present (covers the select_result interpolation),
+// otherwise returns the key string. Any other opts object falls back to the key,
+// which is the intended passthrough — tests relying on other interpolations would
+// need to extend this mock.
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string, opts?: Record<string, string>) => opts?.name ?? key }),
 }));
@@ -32,40 +36,55 @@ describe("SearchPanel — status states", () => {
   // WEB-011 — idle hint shown when no search has been made
   it("shows idle hint in idle state", () => {
     renderPanel({ status: "idle" });
-    expect(screen.getByText("asset.web_lookup.idle_hint")).toBeTruthy();
+    expect(screen.getByText("asset.web_lookup.idle_hint")).toBeInTheDocument();
   });
 
   // WEB-030 — loading indicator shown while search is in progress
   it("shows loading indicator in loading state", () => {
     renderPanel({ status: "loading" });
-    expect(screen.getByText("asset.web_lookup.loading")).toBeTruthy();
+    expect(screen.getByText("asset.web_lookup.loading")).toBeInTheDocument();
   });
 
   // WEB-032 — empty state shown when no results returned
   it("shows no-results message in empty state", () => {
     renderPanel({ status: "empty" });
-    expect(screen.getByText("asset.web_lookup.no_results")).toBeTruthy();
+    expect(screen.getByText("asset.web_lookup.no_results")).toBeInTheDocument();
   });
 
-  // WEB-033 — error state shows inline error message
-  it("shows error message in error state", () => {
-    renderPanel({ status: "error" });
-    expect(screen.getByRole("alert")).toBeTruthy();
-    expect(screen.getByText("asset.web_lookup.error_network")).toBeTruthy();
+  // WEB-033 — error state shows inline error message and retry button
+  it("shows error message and retry button in error state", () => {
+    const retry = vi.fn();
+    render(
+      <SearchPanel
+        query=""
+        setQuery={noop}
+        state={{ status: "error" }}
+        submit={noop}
+        retry={retry}
+        onSelect={noop}
+        onFillManually={noop}
+      />,
+    );
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("asset.web_lookup.error_network")).toBeInTheDocument();
+    const retryBtn = screen.getByRole("button", { name: "asset.web_lookup.action_retry" });
+    expect(retryBtn).toBeInTheDocument();
+    fireEvent.click(retryBtn);
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   // WEB-011 — search button disabled when query is empty
   it("disables search button when query is empty", () => {
     renderPanel({ status: "idle" }, noop, "");
-    const btn = screen.getByRole("button", { name: "asset.web_lookup.action_search" });
-    expect(btn).toBeDisabled();
+    expect(screen.getByRole("button", { name: "asset.web_lookup.action_search" })).toBeDisabled();
   });
 
   // WEB-011 — search button enabled when query is non-empty
   it("enables search button when query is non-empty", () => {
     renderPanel({ status: "idle" }, noop, "AAPL");
-    const btn = screen.getByRole("button", { name: "asset.web_lookup.action_search" });
-    expect(btn).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "asset.web_lookup.action_search" }),
+    ).not.toBeDisabled();
   });
 });
 
@@ -85,14 +104,14 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
   // WEB-031 — first line shows reference code and instrument name
   it("shows reference code and name on the first line", () => {
     renderPanel({ status: "results", results: [stockResult] });
-    expect(screen.getByText("AAPL")).toBeTruthy();
-    expect(screen.getByText("Apple Inc.")).toBeTruthy();
+    expect(screen.getByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
   });
 
-  // WEB-031 — second line shows formatted class label and exchange separated by ·
+  // WEB-031 — second line shows formatted class label and exchange separated by · (U+00B7 middle dot)
   it("shows class label · exchange on the second line when both present", () => {
     renderPanel({ status: "results", results: [stockResult] });
-    expect(screen.getByText("Stocks · NYSE")).toBeTruthy();
+    expect(screen.getByText("Stocks · NYSE")).toBeInTheDocument();
   });
 
   // WEB-031 — multi-word class names are human-readable on the second line
@@ -105,7 +124,7 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
       exchange: null,
     };
     renderPanel({ status: "results", results: [fund] });
-    expect(screen.getByText("Mutual Funds")).toBeTruthy();
+    expect(screen.getByText("Mutual Funds")).toBeInTheDocument();
   });
 
   // WEB-031 — when exchange absent, second line shows type label only (no separator)
@@ -118,12 +137,27 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
       exchange: null,
     };
     renderPanel({ status: "results", results: [noExchange] });
-    expect(screen.getByText("ETF")).toBeTruthy();
+    expect(screen.getByText("ETF")).toBeInTheDocument();
     expect(screen.queryByText(/·/)).toBeNull();
   });
 
-  // WEB-031 — unknown type fallback shown when asset_class is null
-  it("shows type_unknown fallback when asset_class is absent", () => {
+  // WEB-031 — when asset_class absent but exchange present, shows fallback · exchange
+  it("shows type_unknown fallback · exchange when asset_class is absent but exchange is present", () => {
+    const noClass: AssetLookupResult = {
+      name: "Structured Product X",
+      reference: null,
+      currency: null,
+      asset_class: null,
+      exchange: "London Stock Exchange",
+    };
+    renderPanel({ status: "results", results: [noClass] });
+    expect(
+      screen.getByText("asset.web_lookup.type_unknown · London Stock Exchange"),
+    ).toBeInTheDocument();
+  });
+
+  // WEB-031 — when both asset_class and exchange absent, shows fallback label only
+  it("shows type_unknown fallback only when both asset_class and exchange are absent", () => {
     const unknown: AssetLookupResult = {
       name: "Mystery Instrument",
       reference: null,
@@ -132,7 +166,8 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
       exchange: null,
     };
     renderPanel({ status: "results", results: [unknown] });
-    expect(screen.getByText("asset.web_lookup.type_unknown")).toBeTruthy();
+    expect(screen.getByText("asset.web_lookup.type_unknown")).toBeInTheDocument();
+    expect(screen.queryByText(/·/)).toBeNull();
   });
 
   // WEB-046 — reference prefix omitted when reference is absent
@@ -144,10 +179,10 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
       asset_class: "MutualFunds",
       exchange: null,
     };
-    const { container } = renderPanel({ status: "results", results: [noRef] });
-    // The mono-span for the reference code should not exist
-    const monoSpans = container.querySelectorAll("span.font-mono");
-    expect(monoSpans.length).toBe(0);
+    renderPanel({ status: "results", results: [noRef] });
+    // The instrument name is rendered; no reference code text should appear
+    expect(screen.getByText("No Reference Fund")).toBeInTheDocument();
+    expect(screen.queryByText("null")).toBeNull();
   });
 
   // WEB-040 — clicking a result calls onSelect with the result
@@ -164,17 +199,17 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
 // ---------------------------------------------------------------------------
 
 describe("SearchPanel — fill manually bypass (WEB-013)", () => {
-  it("fill manually button is always visible", () => {
+  it("fill manually button is always visible in idle state", () => {
     renderPanel({ status: "idle" });
     expect(
       screen.getByRole("button", { name: "asset.web_lookup.action_fill_manually" }),
-    ).toBeTruthy();
+    ).toBeInTheDocument();
   });
 
   it("fill manually button is visible even in error state", () => {
     renderPanel({ status: "error" });
     expect(
       screen.getByRole("button", { name: "asset.web_lookup.action_fill_manually" }),
-    ).toBeTruthy();
+    ).toBeInTheDocument();
   });
 });
