@@ -51,7 +51,7 @@ describe("categoryGateway", () => {
   // ── updateCategory ────────────────────────────────────────────────────────────
 
   it("updateCategory returns updated category on success", async () => {
-    const updated = { ...makeCategory(), label: "Fixed Income" };
+    const updated = { ...makeCategory(), name: "Fixed Income" };
     mockInvoke.mockResolvedValue(updated);
     const result = await categoryGateway.updateCategory("cat-1", "Fixed Income");
     expect(result).toEqual({ status: "ok", data: updated });

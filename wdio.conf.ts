@@ -71,6 +71,7 @@ export const config: Options.Testrunner = {
     const result = spawnSync("npx", ["tauri", "build", "--debug", "--no-bundle"], {
       cwd: resolve(__dirname),
       stdio: "inherit",
+      env: { ...process.env, SQLX_OFFLINE: "true" },
     });
     if (result.status !== 0) {
       throw new Error(`tauri build failed with exit code ${result.status}`);

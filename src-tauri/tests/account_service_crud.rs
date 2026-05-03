@@ -51,7 +51,7 @@ async fn seed_asset(pool: &sqlx::Pool<sqlx::Sqlite>) -> String {
     .bind(2_i64)
     .execute(pool)
     .await
-    .unwrap();
+    .expect("seed test asset");
     asset_id
 }
 
@@ -122,7 +122,7 @@ async fn get_by_id_returns_some_or_none() {
 
     let found = svc.get_by_id(&account.id).await.unwrap();
     assert!(found.is_some());
-    assert_eq!(found.unwrap().id, account.id);
+    assert_eq!(found.expect("account should exist").id, account.id);
 
     let missing = svc.get_by_id("nonexistent-id").await.unwrap();
     assert!(missing.is_none());

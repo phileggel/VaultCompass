@@ -4,6 +4,7 @@
 /// Uses real SQLite repos against an in-memory DB (B27).
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
+use std::time::Duration;
 use vault_compass_lib::context::asset::{
     AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
     SqliteAssetPriceRepository, SqliteAssetRepository, UpdateAssetDTO, SYSTEM_CATEGORY_ID,
@@ -53,12 +54,15 @@ fn base_create_dto(name: &str) -> CreateAssetDTO {
 async fn create_category_and_retrieve_by_id() {
     let (svc, _bus) = setup().await;
 
-    let cat = svc.create_category("Bonds").await.unwrap();
+    let cat = svc.create_category("Bonds").await.expect("seed category");
     assert_eq!(cat.name, "Bonds");
 
     let found = svc.get_category_by_id(&cat.id).await.unwrap();
     assert!(found.is_some());
-    assert_eq!(found.unwrap().name, "Bonds");
+    assert_eq!(
+        found.expect("category should exist after create").name,
+        "Bonds"
+    );
 }
 
 /// update_category() persists the new label.
@@ -70,7 +74,11 @@ async fn update_category_changes_label() {
     let updated = svc.update_category(&cat.id, "NewLabel").await.unwrap();
     assert_eq!(updated.name, "NewLabel");
 
-    let found = svc.get_category_by_id(&cat.id).await.unwrap().unwrap();
+    let found = svc
+        .get_category_by_id(&cat.id)
+        .await
+        .expect("DB read should succeed")
+        .expect("category should exist after update");
     assert_eq!(found.name, "NewLabel");
 }
 
@@ -79,7 +87,10 @@ async fn update_category_changes_label() {
 async fn delete_category_removes_it() {
     let (svc, _bus) = setup().await;
 
-    let cat = svc.create_category("ToRemove").await.unwrap();
+    let cat = svc
+        .create_category("ToRemove")
+        .await
+        .expect("seed category");
     svc.delete_category(&cat.id).await.unwrap();
 
     let all = svc.get_all_categories().await.unwrap();
@@ -96,7 +107,7 @@ async fn update_asset_rejected_when_archived() {
     let asset = svc
         .create_asset(base_create_dto("ArchiveMe"))
         .await
-        .unwrap();
+        .expect("seed asset");
     svc.archive_asset(&asset.id).await.unwrap();
 
     let err = svc
@@ -164,7 +175,10 @@ async fn create_asset_publishes_asset_updated_event() {
         .await
         .unwrap();
 
-    rx.changed().await.unwrap();
+    tokio::time::timeout(Duration::from_millis(200), rx.changed())
+        .await
+        .expect("event not received within 200ms")
+        .expect("watch sender dropped before event fired");
     assert_eq!(*rx.borrow(), Event::AssetUpdated);
 }
 
@@ -181,7 +195,10 @@ async fn archive_asset_publishes_asset_updated_event() {
 
     svc.archive_asset(&asset.id).await.unwrap();
 
-    rx.changed().await.unwrap();
+    tokio::time::timeout(Duration::from_millis(200), rx.changed())
+        .await
+        .expect("event not received within 200ms")
+        .expect("watch sender dropped before event fired");
     assert_eq!(*rx.borrow(), Event::AssetUpdated);
 }
 
@@ -199,7 +216,10 @@ async fn unarchive_asset_publishes_asset_updated_event() {
 
     svc.unarchive_asset(&asset.id).await.unwrap();
 
-    rx.changed().await.unwrap();
+    tokio::time::timeout(Duration::from_millis(200), rx.changed())
+        .await
+        .expect("event not received within 200ms")
+        .expect("watch sender dropped before event fired");
     assert_eq!(*rx.borrow(), Event::AssetUpdated);
 }
 
@@ -213,7 +233,10 @@ async fn delete_asset_publishes_asset_updated_event() {
 
     svc.delete_asset(&asset.id).await.unwrap();
 
-    rx.changed().await.unwrap();
+    tokio::time::timeout(Duration::from_millis(200), rx.changed())
+        .await
+        .expect("event not received within 200ms")
+        .expect("watch sender dropped before event fired");
     assert_eq!(*rx.borrow(), Event::AssetUpdated);
 }
 
@@ -225,6 +248,9 @@ async fn create_category_publishes_category_updated_event() {
 
     svc.create_category("EventCat").await.unwrap();
 
-    rx.changed().await.unwrap();
+    tokio::time::timeout(Duration::from_millis(200), rx.changed())
+        .await
+        .expect("event not received within 200ms")
+        .expect("watch sender dropped before event fired");
     assert_eq!(*rx.borrow(), Event::CategoryUpdated);
 }

@@ -364,7 +364,10 @@ mod tests {
     }
 
     fn make_category() -> AssetCategory {
-        AssetCategory::default()
+        AssetCategory::from_storage(
+            SYSTEM_CATEGORY_ID.to_string(),
+            "generic.uncategorized".to_string(),
+        )
     }
 
     fn make_price(asset_id: &str, date: &str, price: i64) -> AssetPrice {
@@ -867,7 +870,7 @@ mod tests {
         tokio::time::timeout(Duration::from_millis(200), rx.changed())
             .await
             .expect("event not received within 200ms")
-            .unwrap();
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
     }
 
@@ -886,7 +889,7 @@ mod tests {
         tokio::time::timeout(Duration::from_millis(200), rx.changed())
             .await
             .expect("event not received within 200ms")
-            .unwrap();
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
     }
 
@@ -1349,7 +1352,7 @@ mod tests {
     #[tokio::test]
     async fn archive_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
-        ar.expect_archive().return_once(|_| Ok(()));
+        ar.expect_archive().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let svc = make_svc(
@@ -1361,14 +1364,16 @@ mod tests {
 
         svc.archive_asset("a-id").await.unwrap();
 
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::AssetUpdated);
     }
 
     #[tokio::test]
     async fn unarchive_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
-        ar.expect_unarchive().return_once(|_| Ok(()));
+        ar.expect_unarchive().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let svc = make_svc(
@@ -1380,14 +1385,16 @@ mod tests {
 
         svc.unarchive_asset("a-id").await.unwrap();
 
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::AssetUpdated);
     }
 
     #[tokio::test]
     async fn delete_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
-        ar.expect_delete().return_once(|_| Ok(()));
+        ar.expect_delete().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let svc = make_svc(
@@ -1399,15 +1406,17 @@ mod tests {
 
         svc.delete_asset("a-id").await.unwrap();
 
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::AssetUpdated);
     }
 
     #[tokio::test]
     async fn create_category_emits_event_when_bus_present() {
         let mut cr = MockAssetCategoryRepository::new();
-        cr.expect_find_by_name().return_once(|_| Ok(None));
-        cr.expect_create().return_once(Ok);
+        cr.expect_find_by_name().times(1).return_once(|_| Ok(None));
+        cr.expect_create().times(1).return_once(Ok);
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let svc = make_svc(
@@ -1419,15 +1428,17 @@ mod tests {
 
         svc.create_category("NewCat").await.unwrap();
 
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::CategoryUpdated);
     }
 
     #[tokio::test]
     async fn update_category_emits_event_when_bus_present() {
         let mut cr = MockAssetCategoryRepository::new();
-        cr.expect_find_by_name().return_once(|_| Ok(None));
-        cr.expect_update().return_once(Ok);
+        cr.expect_find_by_name().times(1).return_once(|_| Ok(None));
+        cr.expect_update().times(1).return_once(Ok);
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
         let svc = make_svc(
@@ -1439,7 +1450,9 @@ mod tests {
 
         svc.update_category("some-id", "Updated").await.unwrap();
 
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::CategoryUpdated);
     }
 
@@ -1447,6 +1460,7 @@ mod tests {
     async fn delete_category_emits_event_when_bus_present() {
         let mut cr = MockAssetCategoryRepository::new();
         cr.expect_reassign_assets_and_delete()
+            .times(1)
             .return_once(|_, _| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
@@ -1459,7 +1473,9 @@ mod tests {
 
         svc.delete_category("some-cat-id").await.unwrap();
 
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::CategoryUpdated);
     }
 }

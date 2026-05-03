@@ -1,7 +1,7 @@
 # E2E Testability Rules
 
 Defines what makes a component reliably driveable from the Tauri WebDriver E2E suite.
-Read together with `docs/frontend-rules.md` and `docs/testing.md`.
+Read together with `docs/frontend-rules.md` and `docs/test_convention.md`.
 
 ⚠️ **AI AGENT MUST NEVER UPDATE THIS DOCUMENT**
 

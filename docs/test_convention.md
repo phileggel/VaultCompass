@@ -178,7 +178,17 @@ expect(gateway.updateDirectTransfer).not.toHaveBeenCalled();
 
 ### Structure
 
-Tests live inline at the bottom of the file under test, inside `#[cfg(test)] mod tests`:
+Tests live inline at the bottom of the file under test, inside `#[cfg(test)] mod tests`.
+
+**Naming** — Test function names MUST follow `test_<subject>_<condition>_<outcome>`:
+
+- `<subject>` — method or behavior under test (e.g. `create_asset`, `update_category`)
+- `<condition>` — optional; the triggering state (e.g. `when_archived`, `when_category_not_found`)
+- `<outcome>` — what is asserted (e.g. `returns_error`, `emits_event`, `delegates_to_repo`)
+
+Omit `<condition>` on the happy path when subject + outcome are self-explanatory. The same convention applies to integration tests in `tests/`.
+
+Example:
 
 ```rust
 #[cfg(test)]

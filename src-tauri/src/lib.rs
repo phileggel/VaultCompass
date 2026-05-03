@@ -220,9 +220,21 @@ fn create_app_dirs(app: &tauri::AppHandle) -> anyhow::Result<AppDirectories> {
 
     // Allow E2E tests to inject an isolated data directory via env var so
     // each test run starts with a clean database and leaves no residue.
-    let local_data_dir = if let Ok(e2e_dir) = std::env::var("VAULT_COMPASS_E2E_DATA_DIR") {
-        PathBuf::from(e2e_dir)
-    } else {
+    // Gated to debug builds only — production binaries never honor this override.
+    #[cfg(debug_assertions)]
+    if let Ok(e2e_dir) = std::env::var("VAULT_COMPASS_E2E_DATA_DIR") {
+        let local_data_dir = PathBuf::from(e2e_dir);
+        fs::create_dir_all(&local_data_dir)
+            .with_context(|| "Failed to create E2E data directory")?;
+        let log_dir = path_resolver
+            .app_log_dir()
+            .with_context(|| "Failed to get app log directory")?;
+        return Ok(AppDirectories {
+            local_data_dir,
+            log_dir,
+        });
+    }
+    let local_data_dir = {
         path_resolver
             .app_local_data_dir()
             .with_context(|| "Failed to get app local data directory")?

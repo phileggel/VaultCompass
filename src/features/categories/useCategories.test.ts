@@ -2,9 +2,11 @@ import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockAddCategory = vi.fn();
-const mockUpdateCategory = vi.fn();
-const mockDeleteCategory = vi.fn();
+const { mockAddCategory, mockUpdateCategory, mockDeleteCategory } = vi.hoisted(() => ({
+  mockAddCategory: vi.fn(),
+  mockUpdateCategory: vi.fn(),
+  mockDeleteCategory: vi.fn(),
+}));
 
 vi.mock("./gateway", () => ({
   categoryGateway: {
@@ -15,7 +17,7 @@ vi.mock("./gateway", () => ({
   },
 }));
 
-vi.mock("../../lib/store", () => ({
+vi.mock("@/lib/store", () => ({
   useAppStore: vi.fn((selector) =>
     selector({
       categories: [],

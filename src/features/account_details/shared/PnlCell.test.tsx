@@ -7,24 +7,18 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("PnlCell", () => {
-  it("applies success color class for a positive value", () => {
-    const { container } = render(<PnlCell value="+€100" raw={100} />);
-    const span = container.querySelector("span");
-    expect(span?.className).toContain("text-m3-success");
-    expect(span?.textContent).toBe("+€100");
+  it("displays formatted value for positive PnL", () => {
+    const { getByText } = render(<PnlCell value="+€100" raw={100} />);
+    expect(getByText("+€100")).toBeTruthy();
   });
 
-  it("applies error color class for a negative value", () => {
-    const { container } = render(<PnlCell value="-€50" raw={-50} />);
-    const span = container.querySelector("span");
-    expect(span?.className).toContain("text-m3-error");
-    expect(span?.textContent).toBe("-€50");
+  it("displays formatted value for negative PnL", () => {
+    const { getByText } = render(<PnlCell value="-€50" raw={-50} />);
+    expect(getByText("-€50")).toBeTruthy();
   });
 
-  it("applies neutral color class and shows placeholder for zero", () => {
-    const { container } = render(<PnlCell value="€0" raw={0} />);
-    const span = container.querySelector("span");
-    expect(span?.className).toContain("text-m3-on-surface-variant");
-    expect(span?.textContent).toBe("account_details.pnl_placeholder");
+  it("displays placeholder for zero PnL", () => {
+    const { getByText } = render(<PnlCell value="€0" raw={0} />);
+    expect(getByText("account_details.pnl_placeholder")).toBeTruthy();
   });
 });

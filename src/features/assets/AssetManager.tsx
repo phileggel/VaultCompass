@@ -26,6 +26,30 @@ function resolveReturnNav(returnPath: string | undefined): ReturnNavTarget {
   return { type: "assets" };
 }
 
+function ArchivedToggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <label
+      data-testid="show-archived-toggle"
+      className="flex items-center gap-2 text-sm text-m3-on-surface-variant cursor-pointer select-none shrink-0"
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-m3-primary"
+      />
+      {t("asset.toggle_show_archived")}
+    </label>
+  );
+}
+
 export function AssetManager() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -69,20 +93,7 @@ export function AssetManager() {
     [navigate, returnPath],
   );
 
-  const archivedToggle = (
-    <label
-      data-testid="show-archived-toggle"
-      className="flex items-center gap-2 text-sm text-m3-on-surface-variant cursor-pointer select-none shrink-0"
-    >
-      <input
-        type="checkbox"
-        checked={showArchived}
-        onChange={(e) => setShowArchived(e.target.checked)}
-        className="accent-m3-primary"
-      />
-      {t("asset.toggle_show_archived")}
-    </label>
-  );
+  const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
 
   return (
     <>
@@ -91,10 +102,10 @@ export function AssetManager() {
         searchTerm={query}
         onSearchChange={setQuery}
         searchPlaceholder={t("asset.search_placeholder")}
-        searchExtra={archivedToggle}
+        searchExtra={<ArchivedToggle checked={showArchived} onChange={setShowArchived} />}
         table={<AssetTable searchTerm={query} showArchived={showArchived} />}
       />
-      <FAB onClick={() => setIsAddModalOpen(true)} label={t("asset.fab_label")} />
+      <FAB onClick={handleOpenAddModal} label={t("asset.fab_label")} />
       {isAddModalOpen && (
         <WebLookupModal
           isOpen={true}

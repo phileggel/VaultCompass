@@ -2,6 +2,45 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (backend/test) — Rename existing Rust test functions to follow test\_ prefix convention
+
+`docs/test_convention.md` now requires all test function names to start with `test_`. The following files have pre-existing names that need renaming (no logic change). Also batch-rename `archive_asset_sets_flag` / `unarchive_asset_clears_flag` in `asset/service.rs` — these names claim to verify a flag but only assert delegation; rename to `archive_asset_delegates_to_repo` / `unarchive_asset_delegates_to_repo` or add flag assertions:
+
+- `src-tauri/src/context/account/service.rs` — ~8 mock-based tests in `mod tests`
+- `src-tauri/src/context/asset/service.rs` — ~8 mock-based tests in `mod tests`
+- `src-tauri/tests/account_service_crud.rs` — ~8 integration tests
+- `src-tauri/tests/asset_service_crud.rs` — ~8 integration tests
+
+Straightforward batch rename, no behavioural changes.
+
+## (backend/test) — Review account service delegation tests for B33 compliance
+
+8 mock-based tests added to `src-tauri/src/context/account/service.rs` verify one-line passthrough methods (e.g. `get_all`, `get_by_id`, `delete`). B33 flags tests that only verify "a getter returns what was just passed in". Evaluate whether these should be enriched with assertion content or replaced by the existing integration tests in `tests/account_service_crud.rs` that already cover the same methods end-to-end.
+
+## (test) — Add coverage thresholds to vitest.config.ts
+
+`vitest run --coverage` always exits 0 — no regression floor is enforced. Add a `thresholds` block (e.g. `lines: 60, functions: 60`) once a stable baseline has been measured on `main`. Increment thresholds incrementally rather than setting a tight target immediately.
+
+## (e2e) — wdio.conf.ts E2E_DATA_DIR collides on concurrent runs
+
+`E2E_DATA_DIR` resolves to a fixed path (`os.tmpdir()/tauri-app_e2e_data`). Two runners sharing a machine would overwrite each other's database. Fix: append a unique suffix, e.g. `` `${BINARY_NAME}_e2e_data_${Date.now()}` ``.
+
+## (e2e) — wdio.conf.ts beforeSession mkdirSync not wrapped in try/catch
+
+`mkdirSync(E2E_DATA_DIR, { recursive: true })` in `beforeSession` crashes the WDIO worker with a generic exception on permission errors. Wrap in try/catch and re-throw with the path in the error message.
+
+## (e2e) — accounts.test.ts confirm-delete button selector too broad
+
+`$('//button[normalize-space()="Delete"]')` at line 184 matches any visible Delete button. Scope to the dialog: `$('[role="dialog"] .//button[normalize-space()="Delete"]')` to prevent matching the wrong element if other Delete buttons exist in the DOM simultaneously.
+
+## (backend) — Introduce dependency injection container for service wiring
+
+`lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.
+
+## (backend) — Default tracing log level is "debug" in lib.rs
+
+`initialize_tracing` falls back to `EnvFilter::new("debug")` on any parse error. This floods logs during normal debug runs. Change default to `"info"`; keep `"debug"` opt-in via `RUST_LOG=debug`.
+
 ## (e2e) — Review ProjectSF combobox ADRs for applicability to VaultCompass
 
 ProjectSF has two ADRs on combobox handling in tests:
@@ -36,6 +75,30 @@ Convention: one contract file per bounded context domain (not per service or use
 - `docs/contracts/account-contract.md` — CRUD + deletion summary (keep this one, merge the others in)
 
 After merging: delete the two source files and update all references (plan docs, reviewer reports, ARCHITECTURE.md).
+
+## (e2e) — assets.test.ts Archive/Unarchive button selectors not scoped to row
+
+`$('button[aria-label="Archive"]')` and `$('button[aria-label="Unarchive"]')` match the first matching button in the table regardless of which asset row is targeted. If multiple archive buttons are visible simultaneously (e.g. after seeding several assets), the selector will act on the wrong row. Scope to the asset row by its name or position, similarly to the fix needed for the confirm-delete button in `accounts.test.ts`.
+
+## (backend/test) — Extract `fn micro` test helper to avoid duplication
+
+`fn micro(v: i64) -> i64` is defined verbatim in both `src-tauri/src/context/account/service.rs` (inside `#[cfg(test)]`) and `src-tauri/tests/account_service_crud.rs`. Extract to a shared test utility module (e.g. `tests/helpers.rs`) and import from both sites.
+
+## (e2e) — wdio.conf.ts `exit` variable shadows built-in `process.exit` name
+
+`let exit = false` at line 42 shadows the global `process.exit` function name within the module scope. Rename to `cleanShutdown` or `driverExitClean` to remove the ambiguity.
+
+## (infra) — common.just `generate-types` recipe lacks SQLX_OFFLINE=true
+
+`generate-types` runs `cargo test export_bindings` without `SQLX_OFFLINE=true`. On a fresh checkout without a live database the command fails because SQLx macro checks require the offline cache. Add `SQLX_OFFLINE=true` to the recipe inline env, consistent with `test-rust`.
+
+## (infra) — scripts/check.py Clippy step missing SQLX_OFFLINE
+
+`scripts/check.py` runs `cargo clippy --all-targets` without `SQLX_OFFLINE=true` (it uses `SQLX_OFFLINE: "1"` for Rust tests but omits it for the Clippy step). On a fresh checkout without a live DB, Clippy fails because SQLx macros attempt to connect. Add `SQLX_OFFLINE: "1"` to the `env_update` dict of the Clippy `run_step` call in `check.py`.
+
+## (infra) — biome.json coverage exclude pattern is ambiguous
+
+`"!**/coverage"` matches any path segment named `coverage` but does not explicitly cover files inside the root-level `coverage/` directory. Replace with `"!coverage/**"` which is unambiguous for the project-root output directory produced by `just test-coverage`.
 
 ## (deps) — Update specta to rc.23
 

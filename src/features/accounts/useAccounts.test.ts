@@ -25,7 +25,7 @@ vi.mock("./gateway", () => ({
   },
 }));
 
-vi.mock("../../lib/store", () => ({
+vi.mock("@/lib/store", () => ({
   useAppStore: vi.fn((selector) =>
     selector({
       accounts: [],

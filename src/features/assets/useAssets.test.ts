@@ -3,17 +3,23 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset, CreateAssetDTO, UpdateAssetDTO } from "@/bindings";
 
-const { mockCreateAsset, mockUpdateAsset, mockArchiveAsset, mockUnarchiveAsset, mockDeleteAsset } =
-  vi.hoisted(() => ({
-    mockCreateAsset: vi.fn(),
-    mockUpdateAsset: vi.fn(),
-    mockArchiveAsset: vi.fn(),
-    mockUnarchiveAsset: vi.fn(),
-    mockDeleteAsset: vi.fn(),
-  }));
-
-const mockFetchAssets = vi.fn();
-const mockShowSnackbar = vi.fn();
+const {
+  mockCreateAsset,
+  mockUpdateAsset,
+  mockArchiveAsset,
+  mockUnarchiveAsset,
+  mockDeleteAsset,
+  mockFetchAssets,
+  mockShowSnackbar,
+} = vi.hoisted(() => ({
+  mockCreateAsset: vi.fn(),
+  mockUpdateAsset: vi.fn(),
+  mockArchiveAsset: vi.fn(),
+  mockUnarchiveAsset: vi.fn(),
+  mockDeleteAsset: vi.fn(),
+  mockFetchAssets: vi.fn(),
+  mockShowSnackbar: vi.fn(),
+}));
 
 vi.mock("./gateway", () => ({
   assetGateway: {
@@ -142,11 +148,33 @@ describe("useAssets", () => {
       risk_level: 4,
       reference: "AAPL",
     };
+    let ret: { data: Asset | null; error: string | null } = { data: null, error: "sentinel" };
     await act(async () => {
-      await result.current.updateAsset(dto);
+      ret = await result.current.updateAsset(dto);
     });
     expect(mockUpdateAsset).toHaveBeenCalledWith(dto);
     expect(mockShowSnackbar).toHaveBeenCalledWith("asset.success_updated", "success");
+    expect(ret.data).toEqual(asset);
+    expect(ret.error).toBeNull();
+  });
+
+  it("updateAsset returns error code on failure", async () => {
+    mockUpdateAsset.mockResolvedValue({ status: "error", error: { code: "NameAlreadyExists" } });
+    const { result } = renderHook(() => useAssets());
+    const dto: UpdateAssetDTO = {
+      asset_id: "a1",
+      name: "Apple Inc.",
+      class: "Stocks",
+      category_id: "cat-1",
+      currency: "USD",
+      risk_level: 4,
+      reference: "AAPL",
+    };
+    let ret: { data: Asset | null; error: string | null } = { data: null, error: null };
+    await act(async () => {
+      ret = await result.current.updateAsset(dto);
+    });
+    expect(ret.error).toBe("error.NameAlreadyExists");
   });
 
   // ── archiveAsset ──────────────────────────────────────────────────────────────
@@ -178,11 +206,13 @@ describe("useAssets", () => {
   it("unarchiveAsset calls gateway and shows snackbar on success", async () => {
     mockUnarchiveAsset.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useAssets());
+    let ret: { error: string | null } = { error: "sentinel" };
     await act(async () => {
-      await result.current.unarchiveAsset("a2");
+      ret = await result.current.unarchiveAsset("a2");
     });
     expect(mockUnarchiveAsset).toHaveBeenCalledWith("a2");
     expect(mockShowSnackbar).toHaveBeenCalledWith("asset.success_unarchived", "success");
+    expect(ret.error).toBeNull();
   });
 
   // ── deleteAsset ───────────────────────────────────────────────────────────────
@@ -197,5 +227,15 @@ describe("useAssets", () => {
     expect(mockDeleteAsset).toHaveBeenCalledWith("a1");
     expect(mockShowSnackbar).toHaveBeenCalledWith("asset.success_deleted", "info");
     expect(ret.error).toBeNull();
+  });
+
+  it("deleteAsset returns error code on failure", async () => {
+    mockDeleteAsset.mockResolvedValue({ status: "error", error: { code: "HasActiveHoldings" } });
+    const { result } = renderHook(() => useAssets());
+    let ret: { error: string | null } = { error: null };
+    await act(async () => {
+      ret = await result.current.deleteAsset("a1");
+    });
+    expect(ret.error).toBe("error.HasActiveHoldings");
   });
 });

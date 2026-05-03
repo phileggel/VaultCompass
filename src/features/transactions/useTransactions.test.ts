@@ -160,6 +160,28 @@ describe("useTransactions", () => {
     });
     expect(mockCorrectTransaction).toHaveBeenCalledWith("tx-1", "acc-1", dto);
     expect(ret.data).toEqual(tx);
+    expect(ret.error).toBeNull();
+  });
+
+  it("correctTransaction returns error code on failure", async () => {
+    mockCorrectTransaction.mockResolvedValue({
+      status: "error",
+      error: { code: "TransactionNotFound" },
+    });
+    const { result } = renderHook(() => useTransactions());
+    const dto: CorrectTransactionDTO = {
+      date: "2024-01-20",
+      quantity: 2_000_000,
+      unit_price: 90_000_000,
+      exchange_rate: 1_000_000,
+      fees: 0,
+      note: null,
+    };
+    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    await act(async () => {
+      ret = await result.current.correctTransaction("tx-1", "acc-1", dto);
+    });
+    expect(ret.error).toBe("error.TransactionNotFound");
   });
 
   // ── cancelTransaction ─────────────────────────────────────────────────────────
@@ -173,6 +195,19 @@ describe("useTransactions", () => {
     });
     expect(mockCancelTransaction).toHaveBeenCalledWith("tx-1", "acc-1");
     expect(ret.error).toBeNull();
+  });
+
+  it("cancelTransaction returns error code on failure", async () => {
+    mockCancelTransaction.mockResolvedValue({
+      status: "error",
+      error: { code: "TransactionNotFound" },
+    });
+    const { result } = renderHook(() => useTransactions());
+    let ret: { error: string | null } = { error: null };
+    await act(async () => {
+      ret = await result.current.cancelTransaction("tx-1", "acc-1");
+    });
+    expect(ret.error).toBe("error.TransactionNotFound");
   });
 
   // ── getTransactions ───────────────────────────────────────────────────────────

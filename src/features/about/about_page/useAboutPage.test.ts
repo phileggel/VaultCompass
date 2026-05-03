@@ -2,7 +2,9 @@ import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockCheckForUpdate = vi.fn();
+const { mockCheckForUpdate } = vi.hoisted(() => ({
+  mockCheckForUpdate: vi.fn(),
+}));
 
 vi.mock("@/lib/update", () => ({
   updateGateway: {
@@ -63,7 +65,7 @@ describe("useAboutPage", () => {
     );
     const { result } = renderHook(() => useAboutPage());
 
-    act(() => {
+    await act(async () => {
       result.current.handleCheckForUpdate();
     });
     expect(result.current.checkStatus).toBe("checking");
@@ -73,6 +75,8 @@ describe("useAboutPage", () => {
     });
     expect(mockCheckForUpdate).toHaveBeenCalledTimes(1);
 
-    resolve(null);
+    await act(async () => {
+      resolve(null);
+    });
   });
 });

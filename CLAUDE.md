@@ -57,7 +57,7 @@ On top of the standard kit workflow, this project requires:
 
 - Dev: `./scripts/start-app.sh`
 - Quality: `just check-full` (full check) | `just check` (fast lint+format only) | `just format` (auto-fix formatting)
-- Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-all` (both)
+- Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-unit` (both)
 - Types: `just generate-types` (Sync Rust to TS via Specta) | `just prepare-sqlx` (after schema/query changes)
 - Database: `just migrate` (run migrations) | `just clean-db` (⚠️ destructive reset)
 - E2E setup (once): `/setup-e2e` (installs WebDriver deps + generates `wdio.conf.ts`)

@@ -345,8 +345,9 @@ impl AccountService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // Integration tests: use concrete SQLite repos against an in-memory DB to catch
-    // real constraint violations (e.g. UNIQUE ON LOWER(name)) that mocks would miss.
+    // This module contains both SQLite-backed integration tests (real in-memory DB,
+    // catch constraint violations) and mock-based unit tests (fast delegation checks).
+    // SQLite tests are grouped first; mock-based unit tests follow after the section header.
     use crate::context::account::{
         AccountOperationError, MockAccountRepository, MockHoldingRepository,
         MockTransactionRepository, SqliteAccountRepository, SqliteHoldingRepository,
@@ -374,7 +375,7 @@ mod tests {
         .bind(1_i64)
         .execute(pool)
         .await
-        .unwrap();
+        .expect("seed asset row");
         (svc, asset_id)
     }
 
@@ -941,7 +942,10 @@ mod tests {
         .unwrap();
 
         let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
-        let h = holdings.iter().find(|h| h.asset_id == asset_id).unwrap();
+        let h = holdings
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding must exist after VWAP test operations");
         // VWAP = (200 + 200) / 4 = 100
         assert_eq!(h.quantity, micro(4));
         assert_eq!(
@@ -1063,7 +1067,10 @@ mod tests {
             MockHoldingRepository::new(),
             MockTransactionRepository::new(),
         );
-        let result = svc.get_all().await.unwrap();
+        let result = svc
+            .get_all()
+            .await
+            .expect("get_all should delegate cleanly");
         assert!(result.is_empty());
     }
 
@@ -1079,7 +1086,10 @@ mod tests {
             MockHoldingRepository::new(),
             MockTransactionRepository::new(),
         );
-        let result = svc.get_by_id("target-id").await.unwrap();
+        let result = svc
+            .get_by_id("target-id")
+            .await
+            .expect("get_by_id should delegate cleanly");
         assert!(result.is_none());
     }
 
@@ -1095,7 +1105,9 @@ mod tests {
             MockHoldingRepository::new(),
             MockTransactionRepository::new(),
         );
-        svc.delete("del-id").await.unwrap();
+        svc.delete("del-id")
+            .await
+            .expect("delete should delegate cleanly");
     }
 
     #[tokio::test]
@@ -1110,7 +1122,10 @@ mod tests {
             hr,
             MockTransactionRepository::new(),
         );
-        let result = svc.get_holdings_for_account("acc-id").await.unwrap();
+        let result = svc
+            .get_holdings_for_account("acc-id")
+            .await
+            .expect("get_holdings_for_account should delegate cleanly");
         assert!(result.is_empty());
     }
 
@@ -1129,7 +1144,7 @@ mod tests {
         let result = svc
             .get_holding_by_account_asset("acc-1", "asset-1")
             .await
-            .unwrap();
+            .expect("get_holding_by_account_asset should delegate cleanly");
         assert!(result.is_none());
     }
 
@@ -1145,7 +1160,10 @@ mod tests {
             MockHoldingRepository::new(),
             tr,
         );
-        let result = svc.get_transaction_by_id("tx-id").await.unwrap();
+        let result = svc
+            .get_transaction_by_id("tx-id")
+            .await
+            .expect("get_transaction_by_id should delegate cleanly");
         assert!(result.is_none());
     }
 
@@ -1161,7 +1179,10 @@ mod tests {
             MockHoldingRepository::new(),
             tr,
         );
-        let result = svc.get_transactions("acc-1", "asset-1").await.unwrap();
+        let result = svc
+            .get_transactions("acc-1", "asset-1")
+            .await
+            .expect("get_transactions should delegate cleanly");
         assert!(result.is_empty());
     }
 
@@ -1177,7 +1198,10 @@ mod tests {
             MockHoldingRepository::new(),
             tr,
         );
-        let result = svc.get_asset_ids_for_account("acc-1").await.unwrap();
+        let result = svc
+            .get_asset_ids_for_account("acc-1")
+            .await
+            .expect("get_asset_ids_for_account should delegate cleanly");
         assert!(result.is_empty());
     }
 }

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  AccountCommandError,
   BuyHoldingDTO,
   CorrectTransactionDTO,
   SellHoldingDTO,
@@ -122,6 +123,21 @@ describe("transactionGateway", () => {
     });
   });
 
+  it("correctTransaction returns error on failure", async () => {
+    const err: TransactionCommandError = { code: "TransactionNotFound" };
+    mockInvoke.mockRejectedValue(err);
+    const dto: CorrectTransactionDTO = {
+      date: "2024-01-20",
+      quantity: 2_000_000,
+      unit_price: 90_000_000,
+      exchange_rate: 1_000_000,
+      fees: 0,
+      note: null,
+    };
+    const result = await transactionGateway.correctTransaction("tx-1", "acc-1", dto);
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
   // ── cancelTransaction ────────────────────────────────────────────────────────
 
   it("cancelTransaction returns null on success", async () => {
@@ -132,6 +148,13 @@ describe("transactionGateway", () => {
       id: "tx-1",
       accountId: "acc-1",
     });
+  });
+
+  it("cancelTransaction returns error on failure", async () => {
+    const err: TransactionCommandError = { code: "TransactionNotFound" };
+    mockInvoke.mockRejectedValue(err);
+    const result = await transactionGateway.cancelTransaction("tx-1", "acc-1");
+    expect(result).toEqual({ status: "error", error: err });
   });
 
   // ── getTransactions ──────────────────────────────────────────────────────────
@@ -156,6 +179,13 @@ describe("transactionGateway", () => {
     expect(mockInvoke).toHaveBeenCalledWith("get_asset_ids_for_account", { accountId: "acc-1" });
   });
 
+  it("getAssetIdsForAccount returns error on failure", async () => {
+    const err: AccountCommandError = { code: "Unknown" };
+    mockInvoke.mockRejectedValue(err);
+    const result = await transactionGateway.getAssetIdsForAccount("acc-1");
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
   // ── recordAssetPrice ─────────────────────────────────────────────────────────
 
   it("recordAssetPrice returns null on success", async () => {
@@ -167,5 +197,12 @@ describe("transactionGateway", () => {
       date: "2024-01-15",
       price: 150.5,
     });
+  });
+
+  it("recordAssetPrice returns error on failure", async () => {
+    const err: TransactionCommandError = { code: "Unknown" };
+    mockInvoke.mockRejectedValue(err);
+    const result = await transactionGateway.recordAssetPrice("asset-1", "2024-01-15", 150.5);
+    expect(result).toEqual({ status: "error", error: err });
   });
 });
