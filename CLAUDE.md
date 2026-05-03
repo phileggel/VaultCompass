@@ -61,12 +61,13 @@ On top of the standard kit workflow, this project requires:
 - Types: `just generate-types` (Sync Rust to TS via Specta) | `just prepare-sqlx` (after schema/query changes)
 - Database: `just migrate` (run migrations) | `just clean-db` (⚠️ destructive reset)
 - E2E setup (once): `/setup-e2e` (installs WebDriver deps + generates `wdio.conf.ts`)
-- E2E tests: `npm run test:e2e` (local) | `npm run test:e2e:xvfb` (Linux headless)
+- E2E tests: `just test-e2e` (local) | `just test-e2e-headless` (Linux headless)
 - Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions)
 - Code audit: `/prune` (dead code, verbose patterns, KISS review)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
 - PR: `/create-pr` (push branch + open GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI)
 - Merge branch: `just merge` (fast-forward current branch into main, then delete it)
+- Housekeeping: `just clean-branches` (⚠️ remove stale remote-tracking branches) | `just stat` (line count via cloc)
 - After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
 
 ## 📖 Ubiquitous Language

@@ -1,8 +1,6 @@
 # Kit Tools Reference
 
-Thematic index of all agents, skills, scripts, git hooks, and justfile recipes
-provided by **claude-kit**. Use this file to discover what is available
-without reading each agent definition individually.
+Thematic index of all agents, skills, scripts, git hooks, and justfile recipes provided by **claude-kit** — a spec-driven dev toolchain for the **spec → contract → plan → test-first → verify** workflow. Use this file to discover what is available without reading each agent definition individually.
 
 ---
 
@@ -59,12 +57,6 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 >
 > Never say "continue" alone — the agent will re-plan from scratch instead of resuming.
 
-### Quality & Process Agents
-
-| Agent          | Trigger                                         | Description                                                                 |
-| -------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
-| `i18n-checker` | Any `.ts` / `.tsx` or translation JSON modified | Hardcoded strings, missing/unused translation keys, cross-locale mismatches |
-
 ---
 
 ## Tauri Profile Agents (`tauri` profile only)
@@ -86,19 +78,37 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 
 ## Skills (slash commands)
 
+### SDD skills
+
+Skills that directly drive or support the spec → contract → plan → test-first → verify pipeline.
+
 | Skill          | Command          | Description                                                                                                                                                                           |
 | -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `start`        | `/start [scope]` | Select workflow A (full) or B (simple) for the current task; outputs actionable checklist. Optional scope: `fix`, `chore`, `test`, `feature`, `refactor`                              |
+| `spec-writer`  | `/spec-writer`   | Interactive spec writer: interviews user, reads domain, produces `docs/spec/{feature}.md` with TRIGRAM-NNN rules                                                                      |
+| `contract`     | `/contract`      | Derives or updates `docs/contracts/{domain}-contract.md` from a validated spec; upsert-aware, human-approved                                                                          |
+| `adr-manager`  | `/adr-manager`   | Create, update (supersede), or index Architecture Decision Records in `docs/adr/`                                                                                                     |
 | `whats-next`   | `/whats-next`    | Triage pending work across TODOs, plans, specs, and in-flight git; returns value/effort table and one suggested next action                                                           |
 | `smart-commit` | `/smart-commit`  | Conventional commit with sensitive-file check, linter run, suggested title with char count, and user confirmation                                                                     |
-| `dep-audit`    | `/dep-audit`     | Audit npm + Cargo dependencies for outdated versions and CVEs; run before every release                                                                                               |
-| `adr-manager`  | `/adr-manager`   | Create, update (supersede), or index Architecture Decision Records in `docs/adr/`                                                                                                     |
-| `spec-writer`  | `/spec-writer`   | Interactive spec writer: interviews user, reads domain, produces `docs/spec/{feature}.md` with TRIGRAM-NNN rules                                                                      |
 | `create-pr`    | `/create-pr`     | Push the current feature branch and open a GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI                                                                |
-| `contract`     | `/contract`      | Derives or updates `docs/contracts/{domain}-contract.md` from a validated spec; upsert-aware, human-approved                                                                          |
-| `kit-discover` | `/kit-discover`  | Cross-references CLAUDE.md against `kit-tools.md` and `kit-version.md`; surfaces drift, gaps, and redundancies and proposes a patch (never auto-applied)                              |
-| `prune`        | `/prune [path]`  | Audit the project for dead code, pass-through methods, verbose patterns, and duplicate definitions; coverage report mandatory, read-only output                                       |
 | `setup-e2e`    | `/setup-e2e`     | One-time Tauri WebDriver E2E setup: installs npm packages, generates `wdio.conf.ts` from the binary name, adds `test:e2e` / `test:e2e:ci` scripts. Idempotent. _(Tauri profile only)_ |
+
+### Sanity skills
+
+Generic lifecycle tools. No direct SDD connection — included because they must run somewhere in any project's lifecycle.
+
+| Skill       | Command         | Description                                                                                                                                     |
+| ----------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dep-audit` | `/dep-audit`    | Audit npm + Cargo dependencies for outdated versions and CVEs; run before every release                                                         |
+| `prune`     | `/prune [path]` | Audit the project for dead code, pass-through methods, verbose patterns, and duplicate definitions; coverage report mandatory, read-only output |
+
+### Kit sync
+
+Not a workflow tool — run only after syncing a new kit version to realign `CLAUDE.md` with what the kit now ships.
+
+| Skill          | Command         | Description                                                                                                                                              |
+| -------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kit-discover` | `/kit-discover` | Cross-references CLAUDE.md against `kit-tools.md` and `kit-version.md`; surfaces drift, gaps, and redundancies and proposes a patch (never auto-applied) |
 
 ---
 
@@ -112,19 +122,6 @@ Read on demand to orient — none are auto-loaded by Claude Code.
 | `pre-merge-commit` | `git merge`  | Blocks non-fast-forward merge commits to enforce linear history; does not affect `--ff-only` or `--squash`         |
 
 Activate with: `git config core.hooksPath .githooks`
-
----
-
-## Doc Templates (profile-specific, copy-once)
-
-These files are copied to `docs/` on first sync only — never overwritten on re-sync,
-so project teams can customize them freely after initial install.
-
-### Tauri profile (`tauri`)
-
-| File           | Destination         | Purpose                                                                                                                                                              |
-| -------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e-rules.md` | `docs/e2e-rules.md` | E2E testability conventions: form ids (E1–E2), submit buttons (E3), aria-labels (E4), role=alert (E5), setReactInputValue (E6), locale dates (E7–E9), timeouts (E10) |
 
 ---
 

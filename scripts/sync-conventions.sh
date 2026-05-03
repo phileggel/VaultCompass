@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO="philippe-eggel/tauri-conventions"
+REPO="phileggel/tauri-conventions"
 BRANCH="main"
 BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 DOCS_DIR="docs"
@@ -16,6 +16,7 @@ FILES=(
   "e2e-rules.md"
   "test_convention.md"
   "ddd-reference.md"
+  "i18n-rules.md"
 )
 
 # Self-update: pull latest version of this script before syncing docs

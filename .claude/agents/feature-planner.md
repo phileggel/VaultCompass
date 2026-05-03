@@ -34,7 +34,7 @@ Read the following to ensure compliance (skip silently if a file is absent):
 - `ARCHITECTURE.md`: Bounded contexts, module layout, data flow, naming conventions.
 - `docs/backend-rules.md`: Factory methods, service layer, repository traits.
 - `docs/frontend-rules.md`: Gateway, hook, component patterns, colocated tests.
-- `docs/test_convention.md`: Testing conventions (inline `#[cfg(test)]` for Rust, colocated `.test.ts` for React).
+- `docs/testing.md`: Testing conventions (inline `#[cfg(test)]` for Rust, colocated `.test.ts` for React).
 - `docs/contracts/{domain}-contract.md`: If present, mandatory — commands anchor the test-writer tasks
   in the plan. Derive the domain name from the spec's Context section.
 
@@ -83,7 +83,6 @@ A synthetic checklist for mandatory quality and process steps:
 - [ ] 🔍 Frontend Review (`reviewer-frontend` → fix issues in E2E test files) — Tauri profile only, if frontend rules present
 - [ ] 💾 Commit: E2E tests (suggested title from plan)
 - [ ] 🔍 Cross-cutting Review (`reviewer-arch` always + `reviewer-sql` if migrations + `reviewer-infra` if any config, script, hook, or workflow file changed)
-- [ ] 🌐 i18n Review (`i18n-checker` if UI text changed)
 - [ ] 📚 Documentation Update (`ARCHITECTURE.md` + `docs/todo.md` — entries in English)
 - [ ] ✅ Spec check (`spec-checker`)
 - [ ] 💾 Commit: tests & docs (suggested title from plan)
