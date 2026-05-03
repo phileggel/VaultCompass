@@ -47,7 +47,7 @@ migrate:
 # Regenerate Specta TypeScript bindings (run after adding or changing Tauri commands)
 # The exact command depends on your Specta export setup — override in your local justfile if needed
 generate-types:
-    cd src-tauri && cargo test export_bindings
+    cd src-tauri && SQLX_OFFLINE=true cargo test export_bindings
 
 # Regenerate SQLx offline query cache (run after schema or query changes)
 prepare-sqlx:

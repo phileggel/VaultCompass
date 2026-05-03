@@ -88,17 +88,6 @@ After merging: delete the two source files and update all references (plan docs,
 
 `let exit = false` at line 42 shadows the global `process.exit` function name within the module scope. Rename to `cleanShutdown` or `driverExitClean` to remove the ambiguity.
 
-## (infra) — common.just `generate-types` recipe lacks SQLX_OFFLINE=true
-
-`generate-types` runs `cargo test export_bindings` without `SQLX_OFFLINE=true`. On a fresh checkout without a live database the command fails because SQLx macro checks require the offline cache. Add `SQLX_OFFLINE=true` to the recipe inline env, consistent with `test-rust`.
-
-## (infra) — scripts/check.py Clippy step missing SQLX_OFFLINE
-
-`scripts/check.py` runs `cargo clippy --all-targets` without `SQLX_OFFLINE=true` (it uses `SQLX_OFFLINE: "1"` for Rust tests but omits it for the Clippy step). On a fresh checkout without a live DB, Clippy fails because SQLx macros attempt to connect. Add `SQLX_OFFLINE: "1"` to the `env_update` dict of the Clippy `run_step` call in `check.py`.
-
-## (infra) — biome.json coverage exclude pattern is ambiguous
-
-`"!**/coverage"` matches any path segment named `coverage` but does not explicitly cover files inside the root-level `coverage/` directory. Replace with `"!coverage/**"` which is unambiguous for the project-root output directory produced by `just coverage-fe`.
 
 ## (deps) — Update specta to rc.23
 
