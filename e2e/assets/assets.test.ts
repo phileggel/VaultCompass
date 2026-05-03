@@ -161,13 +161,16 @@ describe("assets", () => {
     await seedAsset(ASSET_NAME, categoryId);
     await navigateToAssets();
 
-    // Find and click the Archive icon button for this asset.
-    const archiveBtn = await $('button[aria-label="Archive"]');
+    // Find and click the Archive icon button scoped to the asset's row,
+    // to avoid matching a button in another row when multiple assets are present.
+    const archiveBtn = await $(
+      `//tr[.//td[contains(., "${ASSET_NAME}")]]//button[@aria-label="Archive"]`,
+    );
     await archiveBtn.waitForExist({ timeout: 8000 });
     await archiveBtn.click();
 
-    // Confirm in the dialog (confirmLabel = "Archive").
-    const confirmBtn = await $('//button[normalize-space()="Archive"]');
+    // Confirm in the dialog (confirmLabel = "Archive") — scoped to dialog.
+    const confirmBtn = await $('//*[@role="dialog"]//button[normalize-space()="Archive"]');
     await confirmBtn.waitForDisplayed({ timeout: 5000 });
     await confirmBtn.click();
 
@@ -208,13 +211,15 @@ describe("assets", () => {
     const assetCell = await $(`*=${ASSET_NAME}`);
     await assetCell.waitForExist({ timeout: 8000 });
 
-    // Click Unarchive.
-    const unarchiveBtn = await $('button[aria-label="Unarchive"]');
+    // Click Unarchive — scoped to the asset's row.
+    const unarchiveBtn = await $(
+      `//tr[.//td[contains(., "${ASSET_NAME}")]]//button[@aria-label="Unarchive"]`,
+    );
     await unarchiveBtn.waitForExist({ timeout: 5000 });
     await unarchiveBtn.click();
 
-    // Confirm in the dialog (confirmLabel = "Unarchive").
-    const confirmBtn = await $('//button[normalize-space()="Unarchive"]');
+    // Confirm in the dialog (confirmLabel = "Unarchive") — scoped to dialog.
+    const confirmBtn = await $('//*[@role="dialog"]//button[normalize-space()="Unarchive"]');
     await confirmBtn.waitForDisplayed({ timeout: 5000 });
     await confirmBtn.click();
 

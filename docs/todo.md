@@ -10,10 +10,6 @@
 
 `vitest run --coverage` always exits 0 — no regression floor is enforced. Add a `thresholds` block (e.g. `lines: 60, functions: 60`) once a stable baseline has been measured on `main`. Increment thresholds incrementally rather than setting a tight target immediately.
 
-## (e2e) — accounts.test.ts confirm-delete button selector too broad
-
-`$('//button[normalize-space()="Delete"]')` at line 184 matches any visible Delete button. Scope to the dialog: `$('[role="dialog"] .//button[normalize-space()="Delete"]')` to prevent matching the wrong element if other Delete buttons exist in the DOM simultaneously.
-
 ## (backend) — Introduce dependency injection container for service wiring
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.
@@ -39,10 +35,6 @@ The `buy_sell.test.ts` E2E test uses `setReactInputValue` on `#buy-trx-asset` (a
 
 `BuyTransactionModal.tsx` and `SellTransactionModal.tsx` use hardcoded `"0.000000"` / `"0.000"` placeholder strings instead of i18n keys. Fixed in `OpenBalanceModal` (keys `open_balance.form_quantity_placeholder` / `open_balance.form_total_cost_placeholder`). Buy and sell modals should be updated consistently.
 
-## (e2e) — assets.test.ts Archive/Unarchive button selectors not scoped to row
-
-`$('button[aria-label="Archive"]')` and `$('button[aria-label="Unarchive"]')` match the first matching button in the table regardless of which asset row is targeted. If multiple archive buttons are visible simultaneously (e.g. after seeding several assets), the selector will act on the wrong row. Scope to the asset row by its name or position, similarly to the fix needed for the confirm-delete button in `accounts.test.ts`.
-
 ## (deps) — Update specta to rc.23
 
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
@@ -66,8 +58,8 @@ Not a correctness issue today (single-user, SQLite). Address as a dedicated `cho
 Flagged in `release-windows.yml` and `release-manual.yml` (not introduced by coverage CI work):
 
 - **`prefix-key` embeds lock-file hash** — both workflows use `prefix-key: *-rust-${{ hashFiles('Cargo.lock') }}`. This defeats `Swatinem/rust-cache`'s partial-match restore because a changed lock file creates a brand-new prefix bucket with no fallback. Change to a static prefix (e.g. `windows-rust-`) and let the action handle lock-file hashing internally.
-- **`releaseDraft: true` + live updater endpoint** — `tauri.conf.json` endpoints point to `/releases/latest/download/latest.json`, which GitHub only serves from *published* (non-draft) releases. Until a draft is manually published, the auto-updater 404s for all users. Either set `releaseDraft: false` or change the updater endpoint to a tag-specific URL.
-- **`gh cache delete --all` blast radius** — both release workflows delete *all* repo caches on failure, including caches from the coverage workflow. Scope to the key created by the run (e.g. `gh cache delete --pattern "windows-rust-"`).
+- **`releaseDraft: true` + live updater endpoint** — `tauri.conf.json` endpoints point to `/releases/latest/download/latest.json`, which GitHub only serves from _published_ (non-draft) releases. Until a draft is manually published, the auto-updater 404s for all users. Either set `releaseDraft: false` or change the updater endpoint to a tag-specific URL.
+- **`gh cache delete --all` blast radius** — both release workflows delete _all_ repo caches on failure, including caches from the coverage workflow. Scope to the key created by the run (e.g. `gh cache delete --pattern "windows-rust-"`).
 - **Fragile `sleep 10` in asset verification** — replace with a short retry loop (3 attempts, 10 s apart) so the check survives slow GitHub asset uploads.
 - **`release-manual.yml` missing "tag is on main" guard** — unlike `release-windows.yml`, the manual workflow does not verify the tag is an ancestor of `main`. Add the same `git merge-base --is-ancestor` check.
 - **`release-manual.yml` three-way ternary duplication** — `runs-on`, `targets`, and `tauri-action args` all repeat the same platform→value mapping. Extract to a prior step output to keep changes in one place.

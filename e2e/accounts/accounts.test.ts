@@ -139,7 +139,10 @@ describe("accounts", () => {
     // up the IPC-seeded account from the store.
     await forceRefreshToAccounts();
 
-    const editBtn = await $('button[aria-label="Edit"]');
+    // Scope to the row for this account to avoid matching another row's Edit button.
+    const editBtn = await $(
+      `//tr[.//button[contains(@aria-label, "${ORIGINAL_NAME}")]]//button[@aria-label="Edit"]`,
+    );
     await editBtn.waitForExist({ timeout: 8000 });
     await editBtn.click();
 
@@ -176,12 +179,16 @@ describe("accounts", () => {
     const accountBtn = await findAccountButton(ACCOUNT_NAME);
     await accountBtn.waitForExist({ timeout: 8000 });
 
-    const deleteBtn = await $('button[aria-label="Delete"]');
+    // Scope to the row for this account to avoid matching another row's Delete button.
+    const deleteBtn = await $(
+      `//tr[.//button[contains(@aria-label, "${ACCOUNT_NAME}")]]//button[@aria-label="Delete"]`,
+    );
     await deleteBtn.waitForExist({ timeout: 5000 });
     await deleteBtn.click();
 
-    // Confirm in the dialog (confirmLabel = "Delete")
-    const confirmBtn = await $('//button[normalize-space()="Delete"]');
+    // Confirm in the dialog (confirmLabel = "Delete") — scoped to dialog to avoid
+    // matching the row-level Delete button that remains in the DOM.
+    const confirmBtn = await $('//*[@role="dialog"]//button[normalize-space()="Delete"]');
     await confirmBtn.waitForDisplayed({ timeout: 5000 });
     await confirmBtn.click();
 
