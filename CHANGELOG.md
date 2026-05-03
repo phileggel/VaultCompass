@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-05-03
+
+### Added
+
+- improve web lookup with Derivatives class and exchange
+  Add Derivatives AssetClass (default_risk=5); maps Warrant/Option/Future/Rights (WEB-023)
+  Add exchange field to AssetLookupResult; resolved from exchCode via static table (WEB-049)
+  Sort results by AssetClass priority before 10-item truncation (WEB-048)
+  Two-line result row in SearchPanel: code+name / type·exchange (WEB-031)
+  Add formatAssetClass() presenter for human-readable class labels
+
+### Fixed
+
+- address PR review comments on exchange_code and i18n
+
 ## [0.9.1] - 2026-05-03
 
 ### Fixed
