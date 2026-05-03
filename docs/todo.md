@@ -98,7 +98,7 @@ After merging: delete the two source files and update all references (plan docs,
 
 ## (infra) — biome.json coverage exclude pattern is ambiguous
 
-`"!**/coverage"` matches any path segment named `coverage` but does not explicitly cover files inside the root-level `coverage/` directory. Replace with `"!coverage/**"` which is unambiguous for the project-root output directory produced by `just test-coverage`.
+`"!**/coverage"` matches any path segment named `coverage` but does not explicitly cover files inside the root-level `coverage/` directory. Replace with `"!coverage/**"` which is unambiguous for the project-root output directory produced by `just coverage-fe`.
 
 ## (deps) — Update specta to rc.23
 

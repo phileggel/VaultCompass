@@ -28,12 +28,12 @@ test-rust:
     cd src-tauri && SQLX_OFFLINE=true cargo test
 
 # Run frontend tests with lcov coverage (output: coverage/lcov.info)
-test-coverage:
+coverage-fe:
     npm run test:coverage
 
-# Run backend tests with coverage (output: coverage/tarpaulin-report.json); requires: cargo install cargo-tarpaulin
-test-rust-coverage:
-    cd src-tauri && SQLX_OFFLINE=true cargo tarpaulin --out Json --output-dir ../coverage --tests --exclude-files "build.rs" --exclude-files "src/bin/generate_bindings.rs"
+# Run backend tests with coverage (output: coverage/rust/lcov.info + tarpaulin-report.html); requires: cargo install cargo-tarpaulin
+coverage-be:
+    cd src-tauri && SQLX_OFFLINE=true cargo tarpaulin --out Lcov Html --output-dir ../coverage/rust --tests --exclude-files "build.rs" --exclude-files "src/bin/generate_bindings.rs"
 
 # Run E2E tests against the built binary (opens a window)
 test-e2e:
@@ -43,7 +43,7 @@ test-e2e:
 test-e2e-headless:
     npm run test:e2e:xvfb
 
-# Run unit tests only (excludes E2E and coverage; see test-e2e and test-coverage)
+# Run unit tests only (excludes E2E and coverage; see test-e2e and coverage-fe/coverage-be)
 test-unit: test test-rust
 
 # Collect logs for debugging
