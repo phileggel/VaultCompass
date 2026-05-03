@@ -144,9 +144,9 @@ Based on value and dependency chain:
 1. ~~**Delete confirmation UI**~~ — ✅ done
 2. ~~**Transaction list view**~~ — ✅ done
 3. ~~**Inline asset creation from Account Details**~~ — ✅ done
-4. **Sell transaction** — unlocks phases 5 & 6; requires new spec
-5. **Realized P&L** — follows sell; display per transaction and per position
-6. **Archive eligibility guard** — depends on phase 5 (need sell to reach `qty = 0`)
+4. ~~**Sell transaction**~~ — ✅ done (SEL spec)
+5. ~~**Realized P&L**~~ — ✅ done (per transaction + per holding, SEL-024/SEL-038/SEL-042)
+6. ~~**Archive eligibility guard**~~ — ✅ done (`ArchiveAssetUseCase`, OQ-6)
 7. ~~**Current market price**~~ — ✅ done (manual entry, MKT spec)
 8. ~~**Unrealized P&L + performance %**~~ — ✅ done
 9. **Corporate events (dividends, splits)** — standalone spec; relatively independent
