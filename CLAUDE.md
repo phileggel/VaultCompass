@@ -62,7 +62,7 @@ On top of the standard kit workflow, this project requires:
 - Database: `just migrate` (run migrations) | `just clean-db` (⚠️ destructive reset)
 - E2E setup (once): `/setup-e2e` (installs WebDriver deps + generates `wdio.conf.ts`)
 - E2E tests: `just test-e2e` (local) | `just test-e2e-headless` (Linux headless)
-- Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions)
+- Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions) | `/security-review` (IPC, capabilities, SQL injection, hardcoded secrets)
 - Code audit: `/prune` (dead code, verbose patterns, KISS review)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
 - PR: `/create-pr` (push branch + open GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI)
