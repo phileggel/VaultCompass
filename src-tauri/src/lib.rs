@@ -265,7 +265,7 @@ fn initialize_tracing(log_dir: &std::path::Path) -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(fmt::layer().with_ansi(false).with_writer(file))
         .with(fmt::layer().with_writer(std::io::stderr))
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
     tracing::trace!(target: BACKEND, "Logging initialized. Log file: {}", log_file.display());
