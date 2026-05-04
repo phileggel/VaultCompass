@@ -34,16 +34,9 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 
 ## (migrations) — Add missing FK indexes across migrations
 
-SQL reviewer flagged FK columns without standalone indexes in several migrations:
-
-- `init.sql`: `asset_accounts.account_id/asset_id`, `assets.category_id`
-- `202604120001`: `holdings.account_id/asset_id`
-- `202604120002`: `transactions.account_id/asset_id` (composite index exists but not standalone)
-- `202604260001`: `asset_prices.asset_id` (covered by PK composite but standalone preferred)
-
-Also: `202604040001` `CREATE UNIQUE INDEX` missing `IF NOT EXISTS`; `202604250002` DDL + multi-DML should have an explicit SQLx transaction comment.
-
-Not a correctness issue today (single-user, SQLite). Address as a dedicated `chore(migrations): add FK indexes` migration before the schema grows further.
+SQL reviewer flagged FK columns without standalone indexes in several migrations.
+Addressed in `202605040001_add_fk_indexes.sql`: added `idx_assets_category_id`, `idx_holdings_asset_id`, `idx_transactions_asset_id`.
+Dropped: `asset_prices.asset_id` (already covered by PK leftmost prefix); `202604040001` IF NOT EXISTS and `202604250002` transaction comment fixes (cannot edit applied migrations — would break SQLx hash checks for existing users).
 
 ## (ci) — Release workflow warnings from infra reviewer
 
