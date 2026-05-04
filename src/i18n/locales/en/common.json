@@ -316,7 +316,8 @@
     "success": "Price recorded",
     "error_price_not_positive": "Price must be greater than zero",
     "error_invalid_date": "Date must be a valid date (YYYY-MM-DD)",
-    "error_future_date": "Date cannot be in the future"
+    "error_future_date": "Date cannot be in the future",
+    "form_price_placeholder": "0.00"
   },
   "error": {
     "Unknown": "An unexpected error occurred. Please try again.",

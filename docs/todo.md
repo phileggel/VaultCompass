@@ -2,11 +2,9 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (i18n) — Hardcoded numeric placeholders in remaining transaction modals
+## (ux) — Remove step="0.000001" from numeric transaction fields
 
-`AddTransactionModal.tsx` (lines 135, 146, 161, 175), `EditTransactionModal.tsx` (lines 138, 153, 168, 183), and `AddTransactionPage.tsx` (lines 141, 152, 167, 181) still use hardcoded `"0.000"` / `"1.000000"` placeholder strings. The `transaction.form_*_placeholder` keys introduced for Buy/Sell modals can be reused directly.
-
-`PriceModal.tsx` (line 84) and `EditPriceForm.tsx` (line 99) use hardcoded `"0.00"` — may need a new `price_history.form_price_placeholder` key.
+All numeric inputs in transaction modals (quantity, unit price, exchange rate, fees) carry `step="0.000001"`. This is not UI-convenient — it forces browser spin-buttons to increment by one micro-unit and triggers HTML5 step-mismatch validation on free-typed values. Remove `step` (or set `step="any"`) across `AddTransactionModal`, `EditTransactionModal`, `AddTransactionPage`, `BuyTransactionModal`, `SellTransactionModal`, `OpenBalanceModal`, `PriceModal`, and `EditPriceForm`.
 
 ## (backend/test) — Review account service delegation tests for B33 compliance
 

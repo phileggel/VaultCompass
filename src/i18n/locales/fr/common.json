@@ -316,7 +316,8 @@
     "success": "Prix enregistré",
     "error_price_not_positive": "Le prix doit être supérieur à zéro",
     "error_invalid_date": "La date doit être au format AAAA-MM-JJ",
-    "error_future_date": "La date ne peut pas être dans le futur"
+    "error_future_date": "La date ne peut pas être dans le futur",
+    "form_price_placeholder": "0,00"
   },
   "error": {
     "Unknown": "Une erreur inattendue est survenue. Veuillez réessayer.",

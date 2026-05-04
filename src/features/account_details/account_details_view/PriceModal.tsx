@@ -81,7 +81,7 @@ export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceM
           step="0.000001"
           value={price}
           onChange={(e) => handleChange("price", e.target.value)}
-          placeholder="0.00"
+          placeholder={t("price_modal.form_price_placeholder")}
           required
         />
 

@@ -135,7 +135,7 @@ export function EditTransactionModal({
               step="0.000001"
               value={formData.quantity}
               onChange={(e) => handleChange("quantity", e.target.value)}
-              placeholder="0.000"
+              placeholder={t("transaction.form_quantity_placeholder")}
               required
             />
             <TextField
@@ -150,7 +150,7 @@ export function EditTransactionModal({
               step="0.000001"
               value={formData.unitPrice}
               onChange={(e) => handleChange("unitPrice", e.target.value)}
-              placeholder="0.000"
+              placeholder={t("transaction.form_unit_price_placeholder")}
               required
             />
           </div>
@@ -165,7 +165,7 @@ export function EditTransactionModal({
               step="0.000001"
               value={formData.exchangeRate}
               onChange={(e) => handleChange("exchangeRate", e.target.value)}
-              placeholder="1.000000"
+              placeholder={t("transaction.form_exchange_rate_placeholder")}
             />
           )}
 
@@ -180,7 +180,7 @@ export function EditTransactionModal({
                 step="0.000001"
                 value={formData.fees}
                 onChange={(e) => handleChange("fees", e.target.value)}
-                placeholder="0.000"
+                placeholder={t("transaction.form_fees_placeholder")}
               />
               <TextField
                 id="edit-trx-total"

@@ -96,7 +96,7 @@ export function EditPriceForm({
           step="0.000001"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          placeholder="0.00"
+          placeholder={t("price_modal.form_price_placeholder")}
           required
         />
         {error && (
