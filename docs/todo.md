@@ -14,6 +14,22 @@
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.
 
+## (e2e/ci) — Wire `test-e2e-headless` into a GitHub Actions workflow
+
+The headless E2E recipe (`just test-e2e-headless`) runs locally via Xvfb but is not yet executed in CI — failures only surface when a contributor runs it manually. Add a workflow that runs it on PRs and uploads the failure-screenshot directory as an artifact for post-mortem:
+
+```yaml
+- name: Upload E2E failure screenshots
+  if: failure()
+  uses: actions/upload-artifact@v4
+  with:
+    name: e2e-failure-screenshots
+    path: screenshots/e2e-failures/
+    if-no-files-found: ignore
+```
+
+The `afterTest` hook in `wdio.conf.ts` (commit `7386ab7`) already populates that directory; CI just needs to consume it.
+
 ## (deps) — Update specta to rc.23
 
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
