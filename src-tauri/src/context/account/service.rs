@@ -355,6 +355,10 @@ mod tests {
     };
     use sqlx::sqlite::SqlitePoolOptions;
 
+    #[derive(Debug, thiserror::Error)]
+    #[error("simulated DB failure")]
+    struct SimulatedSaveError;
+
     async fn setup(pool: &sqlx::Pool<sqlx::Sqlite>) -> (AccountService, String) {
         let svc = AccountService::new(
             Box::new(SqliteAccountRepository::new(pool.clone())),
@@ -734,7 +738,7 @@ mod tests {
         mock_ar
             .expect_save()
             .once()
-            .returning(|_| Err(anyhow::anyhow!("simulated DB failure")));
+            .returning(|_| Err(SimulatedSaveError.into()));
 
         let svc = AccountService::new(
             Box::new(mock_ar),
@@ -755,13 +759,12 @@ mod tests {
             )
             .await;
 
-        assert!(result.is_err(), "buy_holding must propagate save errors");
+        let err = result.unwrap_err();
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("simulated DB failure"),
-            "error message should propagate unchanged"
+            err.downcast_ref::<SimulatedSaveError>()
+                .map(|_| true)
+                .unwrap_or(false),
+            "buy_holding must propagate repository save errors unchanged, got: {err}"
         );
     }
 
