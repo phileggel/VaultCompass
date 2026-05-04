@@ -247,6 +247,54 @@ async fn test_get_transactions_returns_chronological_order() {
     assert!(txs[1].date <= txs[2].date);
 }
 
+/// get_transaction_by_id() returns Some for an existing transaction and None for an unknown id.
+#[tokio::test]
+async fn test_get_transaction_by_id_returns_some_or_none() {
+    let pool = make_pool().await;
+    let svc = make_service(&pool).await;
+    let asset_id = seed_asset(&pool).await;
+
+    let account = svc
+        .create(
+            "TxLookup".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .unwrap();
+
+    svc.buy_holding(
+        &account.id,
+        asset_id.clone(),
+        "2020-04-01".to_string(),
+        micro(2),
+        micro(150),
+        micro(1),
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let txs = svc.get_transactions(&account.id, &asset_id).await.unwrap();
+    let created_tx_id = &txs[0].id;
+
+    let tx = svc
+        .get_transaction_by_id(created_tx_id)
+        .await
+        .unwrap()
+        .expect("existing transaction must be returned");
+    assert_eq!(&tx.id, created_tx_id);
+    assert_eq!(tx.account_id, account.id);
+    assert_eq!(tx.asset_id, asset_id);
+
+    let missing = svc
+        .get_transaction_by_id("nonexistent-tx-id")
+        .await
+        .unwrap();
+    assert!(missing.is_none(), "unknown id must return None");
+}
+
 /// get_asset_ids_for_account() returns distinct asset IDs that have transactions.
 #[tokio::test]
 async fn test_get_asset_ids_for_account_deduplicates() {
