@@ -63,6 +63,12 @@ fn to_account_error(e: anyhow::Error) -> AccountCommandError {
             AccountDomainError::NameEmpty => AccountCommandError::NameEmpty,
             AccountDomainError::NameAlreadyExists => AccountCommandError::NameAlreadyExists,
             AccountDomainError::InvalidCurrency(_) => AccountCommandError::InvalidCurrency,
+            // AccountNotFound cannot fire here: create/update never loads an aggregate via
+            // get_with_holdings_and_transactions — the ID is only used for name-uniqueness checks.
+            AccountDomainError::AccountNotFound(_) => {
+                tracing::error!(target: BACKEND, err = ?err, "BUG: AccountNotFound in account command");
+                AccountCommandError::Unknown
+            }
         }
     } else {
         tracing::error!(target: BACKEND, err = ?e, "unexpected error in account command");
@@ -298,9 +304,16 @@ fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
             }
         };
     }
-    // "account not found" is surfaced as a plain anyhow error from the service
-    if e.to_string().contains("account not found") {
-        return TransactionCommandError::AccountNotFound;
+    if let Some(err) = e.downcast_ref::<AccountDomainError>() {
+        return match err {
+            AccountDomainError::AccountNotFound(_) => TransactionCommandError::AccountNotFound,
+            // NameEmpty / NameAlreadyExists / InvalidCurrency cannot fire from aggregate-write
+            // operations — they belong to account create/update paths only.
+            _ => {
+                tracing::error!(target: BACKEND, err = ?err, "BUG: unexpected AccountDomainError in transaction command");
+                TransactionCommandError::Unknown
+            }
+        };
     }
     tracing::error!(target: BACKEND, err = ?e, "unexpected error in transaction command");
     TransactionCommandError::Unknown

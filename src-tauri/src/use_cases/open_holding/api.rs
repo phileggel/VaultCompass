@@ -2,7 +2,9 @@
 #![allow(clippy::unreachable)]
 
 use super::OpenHoldingUseCase;
-use crate::context::account::{OpeningBalanceDomainError, Transaction, TransactionDomainError};
+use crate::context::account::{
+    AccountDomainError, OpeningBalanceDomainError, Transaction, TransactionDomainError,
+};
 use crate::core::logger::BACKEND;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -86,10 +88,15 @@ fn to_open_holding_error(e: anyhow::Error) -> OpenHoldingCommandError {
             }
         };
     }
-    // TODO: replace with a typed AccountNotFoundError — string sentinel is fragile but
-    // consistent with the existing pattern in account/api.rs to_transaction_error.
-    if e.to_string().contains("account not found") {
-        return OpenHoldingCommandError::AccountNotFound;
+    if let Some(err) = e.downcast_ref::<AccountDomainError>() {
+        return match err {
+            AccountDomainError::AccountNotFound(_) => OpenHoldingCommandError::AccountNotFound,
+            // NameEmpty / NameAlreadyExists / InvalidCurrency cannot fire from open_holding.
+            _ => {
+                tracing::error!(target: BACKEND, err = ?err, "BUG: unexpected AccountDomainError in open_holding command");
+                OpenHoldingCommandError::Unknown
+            }
+        };
     }
     tracing::error!(target: BACKEND, err = ?e, "unexpected error in open_holding command");
     OpenHoldingCommandError::Unknown

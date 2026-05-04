@@ -10,6 +10,9 @@ pub enum AccountDomainError {
     /// The currency string is not a valid ISO 4217 code.
     #[error("Invalid currency code: {0}")]
     InvalidCurrency(String),
+    /// No account exists with the requested ID.
+    #[error("Account not found: {0}")]
+    AccountNotFound(String),
 }
 
 /// Typed errors raised during holding validation.

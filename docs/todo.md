@@ -2,6 +2,10 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (backend/test) — Replace string-sentinel assertion in service.rs test_buy_holding_returns_error_when_save_fails
+
+`src-tauri/src/context/account/service.rs:759` still asserts via `.to_string().contains("simulated DB failure")` — the same string-sentinel antipattern eliminated elsewhere in this file. Replace with a typed downcast assertion, consistent with the rest of the test suite.
+
 ## (backend/test) — Review account service delegation tests for B33 compliance
 
 8 mock-based tests added to `src-tauri/src/context/account/service.rs` verify one-line passthrough methods (e.g. `get_all`, `get_by_id`, `delete`). B33 flags tests that only verify "a getter returns what was just passed in". Evaluate whether these should be enriched with assertion content or replaced by the existing integration tests in `tests/account_service_crud.rs` that already cover the same methods end-to-end.

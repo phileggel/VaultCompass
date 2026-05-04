@@ -170,7 +170,7 @@ impl AccountService {
             .account_repo
             .get_with_holdings_and_transactions(account_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "buy_holding");
         let tx = account
             .buy_holding(
@@ -207,7 +207,7 @@ impl AccountService {
             .account_repo
             .get_with_holdings_and_transactions(account_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "sell_holding");
         let tx = account
             .sell_holding(
@@ -244,7 +244,7 @@ impl AccountService {
             .account_repo
             .get_with_holdings_and_transactions(account_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
         info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "correct_transaction");
         let tx = account
             .correct_transaction(tx_id, date, quantity, unit_price, exchange_rate, fees, note)?
@@ -262,7 +262,7 @@ impl AccountService {
             .account_repo
             .get_with_holdings_and_transactions(account_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
         info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "cancel_transaction");
         account.cancel_transaction(tx_id)?;
         self.account_repo.save(&mut account).await?;
@@ -286,7 +286,7 @@ impl AccountService {
             .account_repo
             .get_with_holdings_and_transactions(account_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("account not found: {}", account_id))?;
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "open_holding");
         let tx = account
             .open_holding(asset_id, date, quantity, total_cost)?
@@ -783,11 +783,11 @@ mod tests {
             )
             .await
             .unwrap_err();
-        // Service propagates the anyhow error as "account not found"
         assert!(
-            err.to_string().contains("account not found")
-                || err.to_string().contains("AccountNotFound"),
-            "expected account-not-found error, got: {err}"
+            err.downcast_ref::<AccountDomainError>()
+                .map(|e| matches!(e, AccountDomainError::AccountNotFound(_)))
+                .unwrap_or(false),
+            "expected AccountDomainError::AccountNotFound, got: {err}"
         );
     }
 
