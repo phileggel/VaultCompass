@@ -10,45 +10,9 @@
  */
 
 import assert from "node:assert";
-import { $, browser } from "@wdio/globals";
-
-// ---------------------------------------------------------------------------
-// Helpers (E2E rules E6, E7)
-// ---------------------------------------------------------------------------
-
-async function setReactInputValue(elementId: string, value: string): Promise<void> {
-  await browser.execute(
-    (id, val) => {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (!el) return;
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      nativeSetter?.call(el, val);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-    elementId,
-    value,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// IPC seed helpers
-// ---------------------------------------------------------------------------
-
-async function seedAccount(name: string): Promise<string> {
-  const acc = (await browser.executeAsync((n: string, done: (r: unknown) => void) => {
-    // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
-    window.__TAURI_INTERNALS__
-      .invoke("add_account", { dto: { name: n, currency: "EUR", update_frequency: "ManualMonth" } })
-      .then(done)
-      .catch((err: unknown) => done({ __error: String(err) }));
-  }, name)) as { id: string };
-  assert.ok(!("__error" in acc), `seedAccount failed: ${JSON.stringify(acc)}`);
-  return acc.id;
-}
+import { $ } from "@wdio/globals";
+import { setReactInputValue } from "../helpers/react";
+import { seedAccount } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
 // Navigation helpers

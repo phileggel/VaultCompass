@@ -14,6 +14,29 @@
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.
 
+## (e2e) — Wire failure screenshot hook in wdio.conf.ts
+
+Add an `afterTest` hook to `wdio.conf.ts` that saves a screenshot to `screenshots/e2e-failures/` whenever a test fails. WebdriverIO supports `browser.saveScreenshot(path)` in hooks; the filename should encode the suite + test name + timestamp so multiple failures don't overwrite each other. This would make the pre-existing flaky navigation failures much easier to diagnose.
+
+## (e2e) — Fix pre-existing failing E2E tests
+
+The following tests were failing before the helpers refactor (confirmed via baseline run on 2026-05-04) and are unrelated to that change:
+
+### buy_sell — 3 failing (navigation timing after IPC seed)
+- **TRX-010, TRX-020, TRX-030** — all fail at `navigateToAccountDetails`: `//button[contains(., "${accountName}")]` not found after IPC-seeding the account and navigating away/back. Root cause unclear — likely the Accounts list doesn't reflect IPC-seeded rows on remount fast enough. Investigate whether the store event (`AccountAdded`) is being emitted by `add_account` IPC and caught by the frontend store, or whether a longer wait / retry loop is needed.
+
+### accounts — 2 failing (same root cause)
+- **ACC-002** — edit account: seeded account row (`//tr[.//button[contains(@aria-label, "${ORIGINAL_NAME}")]]`) not found after `forceRefreshToAccounts()`.
+- **ACC-003** — delete account: same selector pattern, same failure.
+- ACC-001 and ACC-004 pass, confirming `seedAccount` itself works; the issue is the list not reflecting IPC-seeded rows post-navigation.
+
+### assets — 2 failing (navigation + list refresh)
+- **"creates an asset manually"** — creates via UI successfully, but `*=E2E Asset Create` not found after navigating away to Accounts and back. The asset was created but the list doesn't reflect it on remount.
+- **"unarchiving an asset"** — archives via IPC, navigates, toggles "Show archived", unarchives, then `*=E2E Asset Unarchive` not found in active list after unchecking toggle.
+
+### open_balance — 1 failing (element click intercepted in beforeEach)
+- **TRX-042, TRX-046, TRX-043** — the `beforeEach` `navigateToAccountDetails` fails with "element click intercepted" after TRX-055 passes. The `td:first-child span` click is blocked by an overlapping element — likely a modal or overlay not fully dismissed between tests. Adding an explicit wait for any `[role="dialog"]` to disappear before navigation may fix this.
+
 ## (e2e) — Review ProjectSF combobox ADRs for applicability to VaultCompass
 
 ProjectSF has two ADRs on combobox handling in tests:
@@ -22,10 +45,6 @@ ProjectSF has two ADRs on combobox handling in tests:
 - `\\wsl.localhost\Ubuntu\home\phil\projects\ProjectSF\docs\adr\005-combobox-feasibility-investigation.md`
 
 The `buy_sell.test.ts` E2E test uses `setReactInputValue` on `#buy-trx-asset` (a combobox) then clicks an option via `*=${ASSET_NAME}`. If the combobox behaves differently in WebKit vs jsdom (E2E vs RTL), the same boundary issue may apply here. Review those ADRs and decide if a VaultCompass-specific ADR or test adjustment is needed.
-
-## (e2e) — Extract shared E2E helpers to a common module
-
-`setReactInputValue`, `isoToDisplayDate`, and IPC seed helpers (`seedCategory`, `seedAccount`, `seedAsset`, `seedBuy`) are copy-pasted verbatim across every spec file (`accounts`, `assets`, `buy_sell`, `open_balance`, `asset_web_lookup`). Extract to `e2e/helpers/` (e.g. `react.ts`, `seed.ts`, `date.ts`) and import from there. Reduces duplication and keeps cross-cutting fixes in one place.
 
 ## (deps) — Update specta to rc.23
 

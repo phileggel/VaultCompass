@@ -10,69 +10,8 @@
 
 import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
-
-// ---------------------------------------------------------------------------
-// Helpers (E2E rules E6)
-// ---------------------------------------------------------------------------
-
-async function setReactInputValue(elementId: string, value: string): Promise<void> {
-  await browser.execute(
-    (id, val) => {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (!el) return;
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      nativeSetter?.call(el, val);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-    elementId,
-    value,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// IPC seed helpers
-// ---------------------------------------------------------------------------
-
-async function seedCategory(label: string): Promise<string> {
-  const cat = (await browser.executeAsync((lbl: string, done: (r: unknown) => void) => {
-    // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
-    window.__TAURI_INTERNALS__
-      .invoke("add_category", { label: lbl })
-      .then(done)
-      .catch((err: unknown) => done({ __error: String(err) }));
-  }, label)) as { id: string };
-  assert.ok(!("__error" in cat), `seedCategory failed: ${JSON.stringify(cat)}`);
-  return cat.id;
-}
-
-async function seedAsset(name: string, categoryId: string): Promise<string> {
-  const asset = (await browser.executeAsync(
-    (n: string, catId: string, done: (r: unknown) => void) => {
-      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
-      window.__TAURI_INTERNALS__
-        .invoke("add_asset", {
-          dto: {
-            name: n,
-            reference: n.slice(0, 6).toUpperCase(),
-            class: "Stocks",
-            category_id: catId,
-            currency: "EUR",
-            risk_level: 3,
-          },
-        })
-        .then(done)
-        .catch((err: unknown) => done({ __error: String(err) }));
-    },
-    name,
-    categoryId,
-  )) as { id: string };
-  assert.ok(!("__error" in asset), `seedAsset failed: ${JSON.stringify(asset)}`);
-  return asset.id;
-}
+import { setReactInputValue } from "../helpers/react";
+import { seedAsset, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
 // Navigation

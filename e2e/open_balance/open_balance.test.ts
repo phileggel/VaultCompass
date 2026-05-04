@@ -16,44 +16,9 @@
 
 import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
-
-// ---------------------------------------------------------------------------
-// Helpers (E2E rules E6, E7)
-// ---------------------------------------------------------------------------
-
-/**
- * Sets a value on a React controlled input by bypassing React's value tracker
- * and dispatching native input/change events. (E2E rule E6)
- *
- * Standard setValue() does NOT reliably trigger React's synthetic onChange in
- * WebKitGTK — the DOM value is set but React state never updates.
- */
-async function setReactInputValue(elementId: string, value: string): Promise<void> {
-  await browser.execute(
-    (id, val) => {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (!el) return;
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      nativeSetter?.call(el, val);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-    elementId,
-    value,
-  );
-}
-
-/**
- * Converts ISO date to the DateField display format.
- * DateField defaults to fr-FR locale → DD/MM/YYYY. (E2E rule E7)
- */
-function isoToDisplayDate(iso: string): string {
-  const [year, month, day] = iso.split("-");
-  return `${day}/${month}/${year}`; // "2020-01-15" → "15/01/2020"
-}
+import { isoToDisplayDate } from "../helpers/date";
+import { setReactInputValue } from "../helpers/react";
+import { seedAccount, seedAsset, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
 // Fixed past dates — one constant per write operation (E2E rule E9)
@@ -61,67 +26,6 @@ function isoToDisplayDate(iso: string): string {
 const DATES = {
   openBalance: isoToDisplayDate("2020-06-15"),
 } as const;
-
-// ---------------------------------------------------------------------------
-// IPC seed helpers — uses executeAsync to handle Promise-returning Tauri invoke.
-//
-// browser.execute() uses execute/sync which cannot return Promise results from
-// the WebView. browser.executeAsync() passes a `done` callback that we call
-// with the resolved value, bridging the async Tauri IPC back to WebDriver.
-// ---------------------------------------------------------------------------
-
-async function seedCategory(label: string): Promise<string> {
-  const cat = (await browser.executeAsync((lbl: string, done: (r: unknown) => void) => {
-    // @ts-expect-error __TAURI_INTERNALS__ is injected by the Tauri WebView
-    window.__TAURI_INTERNALS__
-      .invoke("add_category", { label: lbl })
-      .then(done)
-      .catch((err: unknown) => done({ __error: String(err) }));
-  }, label)) as { id: string };
-  return cat.id;
-}
-
-async function seedAccount(name: string, currency: string): Promise<string> {
-  const account = (await browser.executeAsync(
-    (n: string, c: string, done: (r: unknown) => void) => {
-      // @ts-expect-error __TAURI_INTERNALS__ is injected by the Tauri WebView
-      window.__TAURI_INTERNALS__
-        .invoke("add_account", {
-          dto: { name: n, currency: c, update_frequency: "ManualMonth" },
-        })
-        .then(done)
-        .catch((err: unknown) => done({ __error: String(err) }));
-    },
-    name,
-    currency,
-  )) as { id: string };
-  return account.id;
-}
-
-async function seedAsset(name: string, reference: string, categoryId: string): Promise<string> {
-  const asset = (await browser.executeAsync(
-    (n: string, ref: string, catId: string, done: (r: unknown) => void) => {
-      // @ts-expect-error __TAURI_INTERNALS__ is injected by the Tauri WebView
-      window.__TAURI_INTERNALS__
-        .invoke("add_asset", {
-          dto: {
-            name: n,
-            reference: ref,
-            class: "Stock",
-            currency: "EUR",
-            risk_level: 3,
-            category_id: catId,
-          },
-        })
-        .then(done)
-        .catch((err: unknown) => done({ __error: String(err) }));
-    },
-    name,
-    reference,
-    categoryId,
-  )) as { id: string };
-  return asset.id;
-}
 
 /**
  * Seed a buy_holding so the account has an active (non-closed) holding.
@@ -213,7 +117,7 @@ describe("open_balance", () => {
   before(async () => {
     const categoryId = await seedCategory("E2E OB Category");
     accountId = await seedAccount(ACCOUNT_NAME, "EUR");
-    assetId = await seedAsset(ASSET_NAME, "E2E-OB-REF", categoryId);
+    assetId = await seedAsset(ASSET_NAME, categoryId, { reference: "E2E-OB-REF" });
     // Make the account non-empty so the "Open Balance" button is visible.
     // The ids are stored in closure variables and passed explicitly to avoid
     // any serialization issue with executeAsync argument passing.
