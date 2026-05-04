@@ -2,6 +2,12 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (i18n) — Hardcoded numeric placeholders in remaining transaction modals
+
+`AddTransactionModal.tsx` (lines 135, 146, 161, 175), `EditTransactionModal.tsx` (lines 138, 153, 168, 183), and `AddTransactionPage.tsx` (lines 141, 152, 167, 181) still use hardcoded `"0.000"` / `"1.000000"` placeholder strings. The `transaction.form_*_placeholder` keys introduced for Buy/Sell modals can be reused directly.
+
+`PriceModal.tsx` (line 84) and `EditPriceForm.tsx` (line 99) use hardcoded `"0.00"` — may need a new `price_history.form_price_placeholder` key.
+
 ## (backend/test) — Review account service delegation tests for B33 compliance
 
 8 mock-based tests added to `src-tauri/src/context/account/service.rs` verify one-line passthrough methods (e.g. `get_all`, `get_by_id`, `delete`). B33 flags tests that only verify "a getter returns what was just passed in". Evaluate whether these should be enriched with assertion content or replaced by the existing integration tests in `tests/account_service_crud.rs` that already cover the same methods end-to-end.
@@ -30,10 +36,6 @@ The `buy_sell.test.ts` E2E test uses `setReactInputValue` on `#buy-trx-asset` (a
 ## (backend) — String-sentinel "account not found" pattern in open_holding/api.rs
 
 `open_holding/api.rs:89` (and `context/account/api.rs:302`) maps `AccountService::open_holding` errors by matching the string `"account not found"`. This is fragile. Fix: introduce a typed `AccountNotFoundError` in the service layer and downcast it in `to_open_holding_error` as is done for the other variants.
-
-## (i18n) — Hardcoded numeric placeholders in buy/sell transaction modals
-
-`BuyTransactionModal.tsx` and `SellTransactionModal.tsx` use hardcoded `"0.000000"` / `"0.000"` placeholder strings instead of i18n keys. Fixed in `OpenBalanceModal` (keys `open_balance.form_quantity_placeholder` / `open_balance.form_total_cost_placeholder`). Buy and sell modals should be updated consistently.
 
 ## (deps) — Update specta to rc.23
 
