@@ -125,7 +125,7 @@ export function BuyTransactionModal({
             label={t("transaction.form_quantity_label")}
             type="number"
             min="0"
-            step="0.000001"
+            step="any"
             value={formData.quantity}
             onChange={(e) => handleChange("quantity", e.target.value)}
             placeholder={t("transaction.form_quantity_placeholder")}
@@ -138,7 +138,7 @@ export function BuyTransactionModal({
             label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
             type="number"
             min="0"
-            step="0.000001"
+            step="any"
             value={formData.unitPrice}
             onChange={(e) => handleChange("unitPrice", e.target.value)}
             placeholder={t("transaction.form_unit_price_placeholder")}
@@ -152,7 +152,7 @@ export function BuyTransactionModal({
               label={t("transaction.form_exchange_rate_label")}
               type="number"
               min="0"
-              step="0.000001"
+              step="any"
               value={formData.exchangeRate}
               onChange={(e) => handleChange("exchangeRate", e.target.value)}
               placeholder={t("transaction.form_exchange_rate_placeholder")}
@@ -166,7 +166,7 @@ export function BuyTransactionModal({
               label={t("transaction.form_fees_label")}
               type="number"
               min="0"
-              step="0.000001"
+              step="any"
               value={formData.fees}
               onChange={(e) => handleChange("fees", e.target.value)}
               placeholder={t("transaction.form_fees_placeholder")}

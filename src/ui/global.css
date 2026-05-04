@@ -535,6 +535,16 @@
     color: var(--color-m3-on-surface);
   }
 
+  .m3-input::-webkit-inner-spin-button,
+  .m3-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .m3-input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
   .m3-input::placeholder {
     @apply text-xs text-m3-on-surface-variant/50;
   }

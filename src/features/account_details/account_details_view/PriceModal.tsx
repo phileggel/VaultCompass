@@ -78,7 +78,7 @@ export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceM
           label={`${t("price_modal.price_label")} (${holding.asset_currency})`}
           type="number"
           min="0.000001"
-          step="0.000001"
+          step="any"
           value={price}
           onChange={(e) => handleChange("price", e.target.value)}
           placeholder={t("price_modal.form_price_placeholder")}

@@ -2,10 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (ux) — Remove step="0.000001" from numeric transaction fields
-
-All numeric inputs in transaction modals (quantity, unit price, exchange rate, fees) carry `step="0.000001"`. This is not UI-convenient — it forces browser spin-buttons to increment by one micro-unit and triggers HTML5 step-mismatch validation on free-typed values. Remove `step` (or set `step="any"`) across `AddTransactionModal`, `EditTransactionModal`, `AddTransactionPage`, `BuyTransactionModal`, `SellTransactionModal`, `OpenBalanceModal`, `PriceModal`, and `EditPriceForm`.
-
 ## (backend/test) — Review account service delegation tests for B33 compliance
 
 8 mock-based tests added to `src-tauri/src/context/account/service.rs` verify one-line passthrough methods (e.g. `get_all`, `get_by_id`, `delete`). B33 flags tests that only verify "a getter returns what was just passed in". Evaluate whether these should be enriched with assertion content or replaced by the existing integration tests in `tests/account_service_crud.rs` that already cover the same methods end-to-end.
@@ -30,10 +26,6 @@ The `buy_sell.test.ts` E2E test uses `setReactInputValue` on `#buy-trx-asset` (a
 ## (e2e) — Extract shared E2E helpers to a common module
 
 `setReactInputValue`, `isoToDisplayDate`, and IPC seed helpers (`seedCategory`, `seedAccount`, `seedAsset`, `seedBuy`) are copy-pasted verbatim across every spec file (`accounts`, `assets`, `buy_sell`, `open_balance`, `asset_web_lookup`). Extract to `e2e/helpers/` (e.g. `react.ts`, `seed.ts`, `date.ts`) and import from there. Reduces duplication and keeps cross-cutting fixes in one place.
-
-## (backend) — String-sentinel "account not found" pattern in open_holding/api.rs
-
-`open_holding/api.rs:89` (and `context/account/api.rs:302`) maps `AccountService::open_holding` errors by matching the string `"account not found"`. This is fragile. Fix: introduce a typed `AccountNotFoundError` in the service layer and downcast it in `to_open_holding_error` as is done for the other variants.
 
 ## (deps) — Update specta to rc.23
 

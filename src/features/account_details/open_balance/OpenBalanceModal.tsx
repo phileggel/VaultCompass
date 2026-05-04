@@ -93,7 +93,7 @@ export function OpenBalanceModal({
           label={t("transaction.form_quantity_label")}
           type="number"
           min="0"
-          step="0.000001"
+          step="any"
           value={formData.quantity}
           onChange={(e) => handleChange("quantity", e.target.value)}
           placeholder={t("open_balance.form_quantity_placeholder")}
@@ -106,7 +106,7 @@ export function OpenBalanceModal({
           label={t("open_balance.form_total_cost_label")}
           type="number"
           min="0"
-          step="0.000001"
+          step="any"
           value={formData.totalCost}
           onChange={(e) => handleChange("totalCost", e.target.value)}
           placeholder={t("open_balance.form_total_cost_placeholder")}

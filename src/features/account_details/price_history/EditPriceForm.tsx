@@ -93,7 +93,7 @@ export function EditPriceForm({
           label={`${t("price_modal.price_label")} (${assetCurrency})`}
           type="number"
           min="0.000001"
-          step="0.000001"
+          step="any"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           placeholder={t("price_modal.form_price_placeholder")}
