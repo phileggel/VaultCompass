@@ -19,6 +19,10 @@ import type { Options } from "@wdio/types";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+// On test failure, save a screenshot here so flaky/broken tests can be
+// diagnosed without re-running locally. The directory is git-ignored.
+const SCREENSHOT_DIR = resolve(__dirname, "screenshots/e2e-failures");
+
 // Binary name from [[bin]] in src-tauri/Cargo.toml where path = "src/main.rs".
 // Must use `tauri build --debug --no-bundle`, NOT plain `cargo build`:
 // plain cargo build produces a binary that connects to the Vite dev server (devUrl).
@@ -63,6 +67,23 @@ export const config: Options.Testrunner = {
   ],
   reporters: ["spec"],
   mochaOpts: { timeout: 60000 },
+
+  // Capture a screenshot on every failed test for post-mortem diagnosis.
+  // File: screenshots/e2e-failures/{suite}-{test}-{timestamp}.png
+  afterTest: async (test, _context, result) => {
+    if (result.passed) return;
+    try {
+      if (!existsSync(SCREENSHOT_DIR)) mkdirSync(SCREENSHOT_DIR, { recursive: true });
+      const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9-_]+/g, "_").slice(0, 80);
+      const suite = sanitize(test.parent ?? "unknown-suite");
+      const title = sanitize(test.title);
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      // @ts-expect-error browser is injected by @wdio/globals into the runner scope
+      await browser.saveScreenshot(resolve(SCREENSHOT_DIR, `${suite}-${title}-${ts}.png`));
+    } catch (err) {
+      console.error("[afterTest] screenshot capture failed:", err);
+    }
+  },
 
   // Build the binary once before any session starts.
   // --no-bundle: skip installer packaging, just produce the binary.
@@ -139,7 +160,7 @@ function onShutdown(fn: () => void) {
 }
 
 onShutdown(() => {
-  exit = true;
+  cleanShutdown = true;
   if (existsSync(E2E_DATA_DIR)) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
   tauriDriver?.kill();
 });

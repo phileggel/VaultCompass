@@ -25,6 +25,8 @@ dist-ssr
 
 # Custom Project folders
 .screenshots
+# Auto-generated E2E failure screenshots (captured by wdio.conf.ts afterTest hook)
+screenshots/e2e-failures/
 tmp/
 coverage/
 

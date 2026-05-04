@@ -14,10 +14,6 @@
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.
 
-## (e2e) — Wire failure screenshot hook in wdio.conf.ts
-
-Add an `afterTest` hook to `wdio.conf.ts` that saves a screenshot to `screenshots/e2e-failures/` whenever a test fails. WebdriverIO supports `browser.saveScreenshot(path)` in hooks; the filename should encode the suite + test name + timestamp so multiple failures don't overwrite each other. This would make the pre-existing flaky navigation failures much easier to diagnose.
-
 ## (deps) — Update specta to rc.23
 
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
