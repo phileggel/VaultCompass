@@ -63,10 +63,6 @@ lint:
 clean:
     rm -rf dist src-tauri/target
 
-# Sync convention docs from tauri-conventions repo
-sync-conventions:
-    ./scripts/sync-conventions.sh
-
 # ⚠️  Destructive: resets database and restarts app in dev mode
 reset-db:
     ./scripts/start-app.sh --reset-db

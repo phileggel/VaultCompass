@@ -15,18 +15,18 @@ State it explicitly at the top of the PR description:
 
 > No visual impact — internal refactor / Rust-only change.
 
-Then screenshot at least one screen that *consumes* the modified code as a non-regression proof.
+Then screenshot at least one screen that _consumes_ the modified code as a non-regression proof.
 
 ---
 
 ## What to capture
 
-| Change type | Required artefact |
-|---|---|
-| New component or layout change | Screenshot of every affected state |
+| Change type                                                          | Required artefact                      |
+| -------------------------------------------------------------------- | -------------------------------------- |
+| New component or layout change                                       | Screenshot of every affected state     |
 | Interaction (hover, animation, modal open/close, loading transition) | Playwright video clip saved as `.webm` |
-| Shared / design-system component | Screenshot of 2–3 distinct call sites |
-| Dark mode (if ever added) | Both modes side by side |
+| Shared / design-system component                                     | Screenshot of 2–3 distinct call sites  |
+| Dark mode (if ever added)                                            | Both modes side by side                |
 
 **States to cover for every component panel:** idle · loading · results/content · empty · error.
 
@@ -51,10 +51,14 @@ Then use the Playwright script (step 3) against the unmodified code.
 Create two temporary files (delete them before the final commit):
 
 **`preview.html`** at the project root:
+
 ```html
 <!doctype html>
 <html lang="en">
-  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width" /></head>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/__preview__/main.tsx"></script>
@@ -89,8 +93,11 @@ import { chromium } from "/tmp/pw-test/node_modules/playwright/index.mjs";
 ```
 
 For interaction clips, use Playwright's video recording:
+
 ```js
-const context = await browser.newContext({ recordVideo: { dir: "screenshots/" } });
+const context = await browser.newContext({
+  recordVideo: { dir: "screenshots/" },
+});
 ```
 
 ### 4 — Commit the artefact and embed it in the PR
@@ -99,6 +106,7 @@ Save screenshots to `screenshots/<ComponentName>-preview.png`.
 Commit them on the feature branch before pushing.
 
 Reference in the PR body using the raw GitHub URL:
+
 ```markdown
 ![ComponentName preview](https://raw.githubusercontent.com/phileggel/VaultCompass/<branch>/screenshots/<ComponentName>-preview.png)
 ```
@@ -121,15 +129,15 @@ Delete `preview.html` and `src/__preview__/` before the final commit on the bran
 
 The preview page imports the same files the real app uses, so design parity is very high:
 
-| Design element | Source | In preview? |
-|---|---|---|
-| M3 color tokens | `src/ui/global.css` `@theme` block | ✅ (same import) |
-| Inter + Manrope fonts | `@fontsource-variable/*` npm packages | ✅ (resolved by Vite) |
-| Tailwind utilities | `@tailwindcss/vite` plugin | ✅ (same plugin) |
-| Component code | Direct import | ✅ (identical) |
-| i18n translations | `src/i18n/config.ts` | ✅ (same import) |
-| Modal backdrop / elevation | App shell context | ⚠️ absent — preview is standalone |
-| WebView font rendering | Platform WebView (WebKit on Linux) | ⚠️ preview uses Chromium — minor subpixel differences |
+| Design element             | Source                                | In preview?                                           |
+| -------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| M3 color tokens            | `src/ui/global.css` `@theme` block    | ✅ (same import)                                      |
+| Inter + Manrope fonts      | `@fontsource-variable/*` npm packages | ✅ (resolved by Vite)                                 |
+| Tailwind utilities         | `@tailwindcss/vite` plugin            | ✅ (same plugin)                                      |
+| Component code             | Direct import                         | ✅ (identical)                                        |
+| i18n translations          | `src/i18n/config.ts`                  | ✅ (same import)                                      |
+| Modal backdrop / elevation | App shell context                     | ⚠️ absent — preview is standalone                     |
+| WebView font rendering     | Platform WebView (WebKit on Linux)    | ⚠️ preview uses Chromium — minor subpixel differences |
 
 The two caveats are cosmetic and do not affect review usefulness. If a change specifically touches
 modal chrome or backdrop blur, add a note in the PR description that those elements are not shown.
@@ -140,24 +148,30 @@ modal chrome or backdrop blur, add a note in the PR description that those eleme
 
 ```markdown
 ## What
+
 <1–2 sentence summary>
 
 ## Visual proof
 
 ### Before
-![before](<raw-github-url>)
+
+![before](raw-github-url)
 
 ### After
-![after](<raw-github-url>)
+
+![after](raw-github-url)
 
 ### States covered
+
 - Idle · Loading · Results · Empty · Error: <screenshot or note>
 
 ## How to test
+
 1. <step>
 2. <step>
 
 ## Checklist
+
 - [ ] Screenshots for every modified component
 - [ ] Edge states captured (empty, loading, error)
 - [ ] No `invoke()` calls in presentational components

@@ -38,11 +38,11 @@ See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.m
 
 On top of the standard kit workflow, this project requires:
 
-1. **Before implementing**: read `docs/backend-rules.md` (backend changes), `docs/frontend-rules.md` (frontend changes), and/or `docs/e2e-rules.md` (E2E test changes). For frontend changes also read `docs/frontend-visual-proof.md` — capture a "before" screenshot before touching any code.
+1. **Before implementing**: read `docs/backend-rules.md` (backend changes), `docs/frontend-rules.md` (frontend changes), and/or `docs/e2e-rules.md` (E2E test changes). For frontend changes also read `docs/frontend-visual-proof.md` — capture a "before" screenshot before touching any code, then run `/visual-proof` after implementation.
 2. **Plan step**: after proposing the TODO plan, immediately create a TaskList (`TaskCreate`) with one task per remaining step. Ask user to validate before implementing.
 3. **Docs update**: at the end, update `ARCHITECTURE.md` if new files/modules added; `docs/todo.md` if new tech debt or resolved items; for new business rules use `/spec-writer` to author/extend the spec in `docs/spec/` and `/contract` to derive the matching `docs/contracts/{domain}-contract.md`. Use `/adr-manager` to record architectural decisions in `docs/adr/`.
 4. **E2E tests** (after frontend impl, before release): run `test-writer-e2e` agent with the domain contract to write passing WebDriver E2E tests against the live app (verifies green before finishing). Run `/setup-e2e` once first if not yet initialized.
-5. **Visual proof** (frontend changes only): commit screenshot to `screenshots/` per `docs/frontend-visual-proof.md` before merging. If opening a PR, also embed it in the description.
+5. **Visual proof** (frontend changes only): run `/visual-proof` to capture and commit screenshots for all component states. If opening a PR, also embed a screenshot in the description.
 6. **Commit**: ask user if a commit is needed → use `/smart-commit` skill.
 
 ### Task tracking (within a conversation)
@@ -64,7 +64,7 @@ On top of the standard kit workflow, this project requires:
 - E2E setup (once): `/setup-e2e` (installs WebDriver deps + generates `wdio.conf.ts`)
 - E2E tests: `just test-e2e` (local) | `just test-e2e-headless` (Linux headless)
 - Pre-release audit: `/dep-audit` (npm + Cargo CVEs and outdated versions) | `/security-review` (IPC, capabilities, SQL injection, hardcoded secrets)
-- Code audit: `/prune` (dead code, verbose patterns, KISS review)
+- Code audit: `/prune` (dead code, verbose patterns, KISS review) | `/visual-proof` (capture + commit visual proof screenshots for all component states)
 - Release: `just release [--dry-run] [--version X.Y.Z] [-y]` (run `/dep-audit` first)
 - PR: `/create-pr` (push branch + open GitHub PR; drafts title + body from commits and plan doc; requires `gh` CLI)
 - Merge branch: `just merge` (fast-forward current branch into main, then delete it)
