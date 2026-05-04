@@ -38,16 +38,6 @@ SQL reviewer flagged FK columns without standalone indexes in several migrations
 Addressed in `202605040001_add_fk_indexes.sql`: added `idx_assets_category_id`, `idx_holdings_asset_id`, `idx_transactions_asset_id`.
 Dropped: `asset_prices.asset_id` (already covered by PK leftmost prefix); `202604040001` IF NOT EXISTS and `202604250002` transaction comment fixes (cannot edit applied migrations — would break SQLx hash checks for existing users).
 
-## (ci) — Release workflow warnings from infra reviewer
-
-Flagged in `release-windows.yml` and `release-manual.yml` (not introduced by coverage CI work):
-
-- **`prefix-key` embeds lock-file hash** — both workflows use `prefix-key: *-rust-${{ hashFiles('Cargo.lock') }}`. This defeats `Swatinem/rust-cache`'s partial-match restore because a changed lock file creates a brand-new prefix bucket with no fallback. Change to a static prefix (e.g. `windows-rust-`) and let the action handle lock-file hashing internally.
-- **`releaseDraft: true` + live updater endpoint** — `tauri.conf.json` endpoints point to `/releases/latest/download/latest.json`, which GitHub only serves from _published_ (non-draft) releases. Until a draft is manually published, the auto-updater 404s for all users. Either set `releaseDraft: false` or change the updater endpoint to a tag-specific URL.
-- **`gh cache delete --all` blast radius** — both release workflows delete _all_ repo caches on failure, including caches from the coverage workflow. Scope to the key created by the run (e.g. `gh cache delete --pattern "windows-rust-"`).
-- **Fragile `sleep 10` in asset verification** — replace with a short retry loop (3 attempts, 10 s apart) so the check survives slow GitHub asset uploads.
-- **`release-manual.yml` missing "tag is on main" guard** — unlike `release-windows.yml`, the manual workflow does not verify the tag is an ancestor of `main`. Add the same `git merge-base --is-ancestor` check.
-- **`release-manual.yml` three-way ternary duplication** — `runs-on`, `targets`, and `tauri-action args` all repeat the same platform→value mapping. Extract to a prior step output to keep changes in one place.
 
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 

@@ -34,6 +34,29 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
 
+      - name: Verify tag is on main
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          git fetch origin main
+          COMMIT=$(git rev-list -n 1 "$TAG")
+          git merge-base --is-ancestor "$COMMIT" origin/main \
+            || { echo "Tag $TAG is not on main branch — aborting release"; exit 1; }
+
+      - name: Resolve platform target
+        id: target
+        shell: bash
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          case "$PLATFORM" in
+            windows)   echo "triple=x86_64-pc-windows-msvc" >> "$GITHUB_OUTPUT" ;;
+            macos-x86) echo "triple=x86_64-apple-darwin" >> "$GITHUB_OUTPUT" ;;
+            macos-arm) echo "triple=aarch64-apple-darwin" >> "$GITHUB_OUTPUT" ;;
+            *)         echo "::error::Unknown platform '$PLATFORM'"; exit 1 ;;
+          esac
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -42,13 +65,13 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ inputs.platform == 'windows' && 'x86_64-pc-windows-msvc' || inputs.platform == 'macos-x86' && 'x86_64-apple-darwin' || inputs.platform == 'macos-arm' && 'aarch64-apple-darwin' || 'x86_64-unknown-linux-gnu' }}
+          targets: ${{ steps.target.outputs.triple }}
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          prefix-key: ${{ inputs.platform }}-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
+          prefix-key: ${{ inputs.platform }}-rust-
 
       - name: Install Linux dependencies
         if: inputs.platform == 'linux'
@@ -72,11 +95,11 @@ jobs:
           RUSTFLAGS: "-C debuginfo=0"
         with:
           tauriScript: npm run tauri
-          args: --target ${{ inputs.platform == 'windows' && 'x86_64-pc-windows-msvc' || inputs.platform == 'macos-x86' && 'x86_64-apple-darwin' || inputs.platform == 'macos-arm' && 'aarch64-apple-darwin' || 'x86_64-unknown-linux-gnu' }}
+          args: --target ${{ steps.target.outputs.triple }}
           tagName: ${{ inputs.tag }}
           releaseName: "VaultCompass ${{ inputs.tag }}"
           releaseBody: "See the release assets to download and install this version."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
 
@@ -87,18 +110,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Waiting for release assets to be available..."
-          sleep 10
-          STATUS=$(gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" --json assets --jq '[.assets[].name] | map(select(test("latest\\.json"))) | length')
-          if [ "$STATUS" -eq 0 ]; then
-            echo "::error::latest.json was not found in release assets — updater endpoint is broken"
-            exit 1
-          else
-            echo "✓ latest.json found in release assets"
-          fi
+          for i in 1 2 3; do
+            sleep 10
+            STATUS=$(gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" --json assets --jq '[.assets[].name] | map(select(test("latest\\.json"))) | length')
+            if [ "$STATUS" -gt 0 ]; then
+              echo "✓ latest.json found in release assets"
+              exit 0
+            fi
+            echo "Attempt $i: latest.json not yet available, retrying..."
+          done
+          echo "::error::latest.json was not found in release assets after 3 attempts — updater endpoint is broken"
+          exit 1
 
       - name: Clear Rust cache on failure
         if: failure()
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh cache delete --all --repo ${{ github.repository }} || true
+        run: gh cache delete --pattern "${{ inputs.platform }}-rust-" --repo ${{ github.repository }} || true
