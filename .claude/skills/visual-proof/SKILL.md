@@ -126,6 +126,10 @@ import "../index.css";
 import { setupI18n } from "../i18n/i18n";
 import { LoginForm } from "../features/auth/LoginForm";
 
+if (new URLSearchParams(window.location.search).get("theme") === "dark") {
+  document.documentElement.classList.add("dark");
+}
+
 setupI18n();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -178,7 +182,8 @@ for (const scheme of ["light", "dark"]) {
     }
   });
 
-  await page.goto(`http://${HOST}:${PORT}/preview.html`, {
+  const url = `http://${HOST}:${PORT}/preview.html${scheme === "dark" ? "?theme=dark" : ""}`;
+  await page.goto(url, {
     waitUntil: "domcontentloaded",
   });
   await page.waitForSelector(`#state-${STATES[0]}`, { timeout: 10000 });
