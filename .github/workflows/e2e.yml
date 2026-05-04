@@ -1,0 +1,78 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E — headless WebDriver
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    env:
+      SQLX_OFFLINE: true
+      CARGO_INCREMENTAL: 0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        # webkit2gtk-driver provides WebKitWebDriver (used by tauri-driver on Linux);
+        # xvfb provides the virtual framebuffer for headless rendering.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            webkit2gtk-driver xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: linux-e2e-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Cache tauri-driver binary
+        id: cache-tauri-driver
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/tauri-driver
+          key: tauri-driver-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Install tauri-driver
+        if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
+        run: cargo install tauri-driver
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run E2E (headless via Xvfb)
+        # Equivalent to `just test-e2e-headless` — npm script invoked directly to
+        # avoid requiring `just` in CI (matches coverage.yml convention).
+        run: npm run test:e2e:xvfb
+
+      - name: Upload E2E failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-screenshots
+          path: screenshots/e2e-failures/
+          if-no-files-found: ignore
+          retention-days: 7

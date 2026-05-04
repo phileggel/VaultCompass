@@ -10,6 +10,7 @@
 
 import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
+import { dismissLeftoverModal } from "../helpers/modal";
 import { setReactInputValue } from "../helpers/react";
 import { seedAsset, seedCategory } from "../helpers/seed";
 
@@ -31,11 +32,7 @@ async function navigateToAssets(): Promise<void> {
 
 describe("assets", () => {
   beforeEach(async () => {
-    const closeBtn = await $('[data-testid="modal-close-btn"]');
-    if (await closeBtn.isExisting()) {
-      await closeBtn.click();
-      await closeBtn.waitForExist({ timeout: 3000, reverse: true });
-    }
+    await dismissLeftoverModal();
     await navigateToAssets();
   });
 

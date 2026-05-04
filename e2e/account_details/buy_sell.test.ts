@@ -15,6 +15,7 @@
 import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
+import { dismissLeftoverModal } from "../helpers/modal";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
@@ -61,11 +62,7 @@ const DATES = {
 
 describe("buy_sell", () => {
   beforeEach(async () => {
-    const closeBtn = await $('[data-testid="modal-close-btn"]');
-    if (await closeBtn.isExisting()) {
-      await closeBtn.click();
-      await closeBtn.waitForExist({ timeout: 3000, reverse: true });
-    }
+    await dismissLeftoverModal();
   });
 
   // -------------------------------------------------------------------------

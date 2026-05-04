@@ -12,6 +12,7 @@
 
 import assert from "node:assert";
 import { $ } from "@wdio/globals";
+import { dismissLeftoverModal } from "../helpers/modal";
 
 // ---------------------------------------------------------------------------
 // Navigation helper — navigate to the Assets page via the sidebar nav button.
@@ -32,14 +33,7 @@ async function navigateToAssets(): Promise<void> {
 
 describe("asset_web_lookup", () => {
   beforeEach(async () => {
-    // Dismiss any leftover modal from a prior test by clicking its Close button.
-    // The Dialog is a <div role="dialog">, not a native <dialog>, so Escape has no effect.
-    const closeBtn = await $('[data-testid="modal-close-btn"]');
-    if (await closeBtn.isExisting()) {
-      await closeBtn.click();
-      // Wait for the button to disappear before navigating.
-      await closeBtn.waitForExist({ timeout: 3000, reverse: true });
-    }
+    await dismissLeftoverModal();
     await navigateToAssets();
   });
 

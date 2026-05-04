@@ -11,6 +11,7 @@
 
 import assert from "node:assert";
 import { $ } from "@wdio/globals";
+import { dismissLeftoverModal } from "../helpers/modal";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount } from "../helpers/seed";
 
@@ -50,11 +51,7 @@ async function findAccountRow(accountName: string) {
 
 describe("accounts", () => {
   beforeEach(async () => {
-    const closeBtn = await $('[data-testid="modal-close-btn"]');
-    if (await closeBtn.isExisting()) {
-      await closeBtn.click();
-      await closeBtn.waitForExist({ timeout: 3000, reverse: true });
-    }
+    await dismissLeftoverModal();
     await navigateToAccounts();
   });
 
