@@ -31,7 +31,7 @@ async function navigateToAssets(): Promise<void> {
 
 describe("assets", () => {
   beforeEach(async () => {
-    const closeBtn = await $('button[aria-label="Close"]');
+    const closeBtn = await $('[data-testid="modal-close-btn"]');
     if (await closeBtn.isExisting()) {
       await closeBtn.click();
       await closeBtn.waitForExist({ timeout: 3000, reverse: true });
@@ -74,16 +74,20 @@ describe("assets", () => {
     await submitBtn.waitForEnabled({ timeout: 5000 });
     await submitBtn.click();
 
-    // After success the router navigates to /assets. Navigate away and back
-    // to force the assets list to remount and reflect the newly created asset.
+    // After success: handleAddAssetSuccess closes the modal AND calls
+    // navigate({to: "/assets"}). Force AssetManager to remount cleanly by
+    // navigating away and back — same pattern as buy_sell to defeat any
+    // stale loading state caused by the concurrent AssetUpdated event fetch.
     await form.waitForExist({ timeout: 8000, reverse: true });
+
     const accountsNav = await $('button[aria-label="Accounts"]');
     await accountsNav.waitForExist({ timeout: 10000 });
     await accountsNav.click();
     await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
     await navigateToAssets();
 
-    const assetCell = await $(`*=${ASSET_NAME}`);
+    // Use XPath for reliable text matching — WebdriverIO `*=` selector is flaky in WebKit.
+    const assetCell = await $(`//td[normalize-space(text())="${ASSET_NAME}"]`);
     await assetCell.waitForExist({ timeout: 10000 });
     assert.ok(
       await assetCell.isExisting(),
@@ -142,13 +146,16 @@ describe("assets", () => {
     await navigateToAssets();
 
     // Show the archived list by checking the "Show archived" checkbox.
-    // Use data-testid to avoid language-specific text matching.
-    const showArchivedLabel = await $('[data-testid="show-archived-toggle"]');
-    await showArchivedLabel.waitForExist({ timeout: 5000 });
-    await showArchivedLabel.click();
+    // Click the input directly — label-click propagation is unreliable in WebKitGTK.
+    const showArchivedCheckbox = await $(
+      '[data-testid="show-archived-toggle"] input[type="checkbox"]',
+    );
+    await showArchivedCheckbox.waitForExist({ timeout: 5000 });
+    await showArchivedCheckbox.click();
 
-    const assetCell = await $(`*=${ASSET_NAME}`);
-    await assetCell.waitForExist({ timeout: 8000 });
+    // Use XPath for reliable text matching — WebdriverIO `*=` selector is flaky in WebKit.
+    const assetCell = await $(`//td[normalize-space(text())="${ASSET_NAME}"]`);
+    await assetCell.waitForExist({ timeout: 10000 });
 
     // Click Unarchive — scoped to the asset's row.
     const unarchiveBtn = await $(
@@ -162,9 +169,18 @@ describe("assets", () => {
     await confirmBtn.waitForDisplayed({ timeout: 5000 });
     await confirmBtn.click();
 
-    // Uncheck "Show archived" and verify asset is now back in the active list.
-    await showArchivedLabel.click();
-    const activeAssetCell = await $(`*=${ASSET_NAME}`);
+    // Wait for the dialog to close (handleUnarchiveConfirm is async — the backdrop
+    // would intercept the next click if we toggle showArchived while it's still open).
+    const dialog = await $('[role="dialog"]');
+    await dialog.waitForExist({ timeout: 8000, reverse: true });
+
+    // Re-query the checkbox after re-render to avoid stale element reference.
+    const showArchivedCheckboxAfter = await $(
+      '[data-testid="show-archived-toggle"] input[type="checkbox"]',
+    );
+    await showArchivedCheckboxAfter.waitForExist({ timeout: 5000 });
+    await showArchivedCheckboxAfter.click();
+    const activeAssetCell = await $(`//td[normalize-space(text())="${ASSET_NAME}"]`);
     await activeAssetCell.waitForExist({ timeout: 8000 });
     assert.ok(
       await activeAssetCell.isExisting(),

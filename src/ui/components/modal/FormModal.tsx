@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { ModalContainer } from "./ModalContainer";
 
 interface FormModalProps {
@@ -32,6 +33,7 @@ export function FormModal({
   maxWidth = "max-w-md",
   maxHeight = "max-h-[90vh]",
 }: FormModalProps) {
+  const { t } = useTranslation("common");
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} maxWidth={maxWidth} maxHeight={maxHeight}>
       {/* Header */}
@@ -40,7 +42,9 @@ export function FormModal({
         <button
           type="button"
           onClick={onClose}
-          className="p-1 hover:bg-neutral-20 rounded transition-colors"
+          aria-label={t("action.close")}
+          data-testid="modal-close-btn"
+          className="p-1 hover:bg-neutral-20 rounded-full transition-colors"
         >
           <X size={20} className="text-neutral-70" />
         </button>

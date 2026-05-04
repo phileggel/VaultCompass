@@ -34,7 +34,7 @@ describe("asset_web_lookup", () => {
   beforeEach(async () => {
     // Dismiss any leftover modal from a prior test by clicking its Close button.
     // The Dialog is a <div role="dialog">, not a native <dialog>, so Escape has no effect.
-    const closeBtn = await $('button[aria-label="Close"]');
+    const closeBtn = await $('[data-testid="modal-close-btn"]');
     if (await closeBtn.isExisting()) {
       await closeBtn.click();
       // Wait for the button to disappear before navigating.

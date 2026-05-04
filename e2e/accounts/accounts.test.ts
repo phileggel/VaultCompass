@@ -37,10 +37,11 @@ async function forceRefreshToAccounts(): Promise<void> {
   await navigateToAccounts();
 }
 
-// Language-invariant selector: finds the account row button by the account
-// name text content rather than the translated aria-label.
-async function findAccountButton(accountName: string) {
-  return $(`//button[contains(., "${accountName}")]`);
+// Language-invariant selector: finds the account row by the tr aria-label
+// ("Open account NAME") set by AccountTable — the account name is user data
+// and is never translated.
+async function findAccountRow(accountName: string) {
+  return $(`tr[aria-label="Open account ${accountName}"]`);
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@ async function findAccountButton(accountName: string) {
 
 describe("accounts", () => {
   beforeEach(async () => {
-    const closeBtn = await $('button[aria-label="Close"]');
+    const closeBtn = await $('[data-testid="modal-close-btn"]');
     if (await closeBtn.isExisting()) {
       await closeBtn.click();
       await closeBtn.waitForExist({ timeout: 3000, reverse: true });
@@ -82,10 +83,10 @@ describe("accounts", () => {
     // Navigate back to the accounts list to verify the entry is there.
     await navigateToAccounts();
 
-    const accountBtn = await findAccountButton(ACCOUNT_NAME);
-    await accountBtn.waitForExist({ timeout: 10000 });
+    const accountRow = await findAccountRow(ACCOUNT_NAME);
+    await accountRow.waitForExist({ timeout: 10000 });
     assert.ok(
-      await accountBtn.isExisting(),
+      await accountRow.isExisting(),
       `Account "${ACCOUNT_NAME}" must appear in list after creation`,
     );
   });
@@ -103,9 +104,10 @@ describe("accounts", () => {
     // up the IPC-seeded account from the store.
     await forceRefreshToAccounts();
 
-    // Scope to the row for this account to avoid matching another row's Edit button.
+    // Scope to the row for this account (tr aria-label contains the account name)
+    // to avoid matching another row's Edit button.
     const editBtn = await $(
-      `//tr[.//button[contains(@aria-label, "${ORIGINAL_NAME}")]]//button[@aria-label="Edit"]`,
+      `//tr[contains(@aria-label, "${ORIGINAL_NAME}")]//button[@aria-label="Edit"]`,
     );
     await editBtn.waitForExist({ timeout: 8000 });
     await editBtn.click();
@@ -121,10 +123,10 @@ describe("accounts", () => {
 
     await form.waitForExist({ timeout: 8000, reverse: true });
 
-    const updatedBtn = await findAccountButton(UPDATED_NAME);
-    await updatedBtn.waitForExist({ timeout: 10000 });
+    const updatedRow = await findAccountRow(UPDATED_NAME);
+    await updatedRow.waitForExist({ timeout: 10000 });
     assert.ok(
-      await updatedBtn.isExisting(),
+      await updatedRow.isExisting(),
       `Updated account "${UPDATED_NAME}" must appear in list`,
     );
   });
@@ -140,12 +142,13 @@ describe("accounts", () => {
     // Force remount so the seeded account appears in the list.
     await forceRefreshToAccounts();
 
-    const accountBtn = await findAccountButton(ACCOUNT_NAME);
-    await accountBtn.waitForExist({ timeout: 8000 });
+    const accountRow = await findAccountRow(ACCOUNT_NAME);
+    await accountRow.waitForExist({ timeout: 8000 });
 
-    // Scope to the row for this account to avoid matching another row's Delete button.
+    // Scope to the row for this account (tr aria-label contains the account name)
+    // to avoid matching another row's Delete button.
     const deleteBtn = await $(
-      `//tr[.//button[contains(@aria-label, "${ACCOUNT_NAME}")]]//button[@aria-label="Delete"]`,
+      `//tr[contains(@aria-label, "${ACCOUNT_NAME}")]//button[@aria-label="Delete"]`,
     );
     await deleteBtn.waitForExist({ timeout: 5000 });
     await deleteBtn.click();
@@ -156,9 +159,9 @@ describe("accounts", () => {
     await confirmBtn.waitForDisplayed({ timeout: 5000 });
     await confirmBtn.click();
 
-    await accountBtn.waitForExist({ timeout: 8000, reverse: true });
+    await accountRow.waitForExist({ timeout: 8000, reverse: true });
     assert.ok(
-      !(await accountBtn.isExisting()),
+      !(await accountRow.isExisting()),
       `Account "${ACCOUNT_NAME}" must be removed from list after deletion`,
     );
   });

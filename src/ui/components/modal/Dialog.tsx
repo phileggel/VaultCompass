@@ -69,6 +69,7 @@ export function Dialog({
               type="button"
               onClick={onClose}
               aria-label={t("action.close")}
+              data-testid="modal-close-btn"
               className="p-2 hover:bg-m3-on-surface/5 rounded-full text-m3-on-surface-variant transition-colors"
             >
               <X size={20} />
