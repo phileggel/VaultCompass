@@ -56,5 +56,14 @@ export function useEditPrice({
     }
   }, [isValid, assetId, target.date, date, price, onSuccess]);
 
-  return { date, price, setDate, setPrice, isValid, isSubmitting, error, handleSubmit };
+  return {
+    date,
+    price,
+    setDate,
+    setPrice,
+    isValid,
+    isSubmitting,
+    error,
+    handleSubmit,
+  };
 }

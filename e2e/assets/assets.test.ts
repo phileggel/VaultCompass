@@ -80,7 +80,9 @@ describe("assets", () => {
     const accountsNav = await $('button[aria-label="Accounts"]');
     await accountsNav.waitForExist({ timeout: 10000 });
     await accountsNav.click();
-    await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
+    await $('button[aria-label="Add account"]').waitForExist({
+      timeout: 10000,
+    });
     await navigateToAssets();
 
     // Use XPath for reliable text matching — WebdriverIO `*=` selector is flaky in WebKit.

@@ -101,11 +101,16 @@ describe("accountGateway", () => {
   // ── getAccountDeletionSummary ─────────────────────────────────────────────────
 
   it("getAccountDeletionSummary returns summary on success", async () => {
-    const summary: AccountDeletionSummary = { holding_count: 2, transaction_count: 5 };
+    const summary: AccountDeletionSummary = {
+      holding_count: 2,
+      transaction_count: 5,
+    };
     mockInvoke.mockResolvedValue(summary);
     const result = await accountGateway.getAccountDeletionSummary("acc-1");
     expect(result).toEqual({ status: "ok", data: summary });
-    expect(mockInvoke).toHaveBeenCalledWith("get_account_deletion_summary", { accountId: "acc-1" });
+    expect(mockInvoke).toHaveBeenCalledWith("get_account_deletion_summary", {
+      accountId: "acc-1",
+    });
   });
 
   it("getAccountDeletionSummary returns error on failure", async () => {

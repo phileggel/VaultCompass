@@ -107,7 +107,10 @@ describe("useWebLookupSearch", () => {
   // WEB-033 — retry re-issues the last query
   it("retry re-issues the last query after an error", async () => {
     mockLookupAsset
-      .mockResolvedValueOnce({ status: "error", error: { code: "NetworkError" } })
+      .mockResolvedValueOnce({
+        status: "error",
+        error: { code: "NetworkError" },
+      })
       .mockResolvedValueOnce({
         status: "ok",
         data: [

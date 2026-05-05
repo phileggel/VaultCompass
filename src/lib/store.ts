@@ -58,7 +58,10 @@ export const useAppStore = create<AppState>((set, get) => {
       if (result.status === "ok") {
         set({ assets: result.data, isLoadingAssets: false });
       } else {
-        set({ assetsError: `error.${result.error.code}`, isLoadingAssets: false });
+        set({
+          assetsError: `error.${result.error.code}`,
+          isLoadingAssets: false,
+        });
       }
     },
 
@@ -68,7 +71,10 @@ export const useAppStore = create<AppState>((set, get) => {
       if (result.status === "ok") {
         set({ categories: result.data, isLoadingCategories: false });
       } else {
-        set({ categoriesError: `error.${result.error.code}`, isLoadingCategories: false });
+        set({
+          categoriesError: `error.${result.error.code}`,
+          isLoadingCategories: false,
+        });
       }
     },
 
@@ -78,7 +84,10 @@ export const useAppStore = create<AppState>((set, get) => {
       if (result.status === "ok") {
         set({ accounts: result.data, isLoadingAccounts: false });
       } else {
-        set({ accountsError: `error.${result.error.code}`, isLoadingAccounts: false });
+        set({
+          accountsError: `error.${result.error.code}`,
+          isLoadingAccounts: false,
+        });
       }
     },
 

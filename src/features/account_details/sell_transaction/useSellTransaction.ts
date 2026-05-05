@@ -121,7 +121,11 @@ export function useSellTransaction({
               formData.date,
               parseFloat(microToDecimal(microValues.priceMicro)),
             )
-            .catch((e) => logger.warn("Failed to record asset price after sell", { error: e }));
+            .catch((e) =>
+              logger.warn("Failed to record asset price after sell", {
+                error: e,
+              }),
+            );
         }
 
         showSnackbar(t("transaction.success_sell_created"), "success");

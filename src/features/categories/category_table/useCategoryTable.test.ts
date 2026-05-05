@@ -11,7 +11,10 @@ const cats = [
 describe("useCategoryTable", () => {
   it("defaults to name asc sort", () => {
     const { result } = renderHook(() => useCategoryTable(cats, ""));
-    expect(result.current.sortConfig).toEqual({ key: "name", direction: "asc" });
+    expect(result.current.sortConfig).toEqual({
+      key: "name",
+      direction: "asc",
+    });
     expect(result.current.sortedAndFilteredCategories.map((c) => c.name)).toEqual([
       "Actions",
       "Bonds",

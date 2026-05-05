@@ -52,7 +52,11 @@ export function AddTransactionModal({
     handleSubmit,
     handleConfirmArchived,
     handleCancelArchived,
-  } = useAddTransaction({ prefillAssetId, prefillAccountId, onSubmitSuccess: onClose });
+  } = useAddTransaction({
+    prefillAssetId,
+    prefillAccountId,
+    onSubmitSuccess: onClose,
+  });
 
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
   const selectedAccount = accounts.find((a) => a.id === formData.accountId);

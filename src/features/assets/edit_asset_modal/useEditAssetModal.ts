@@ -78,7 +78,9 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
     setIsSubmitting(false);
 
     if (result.error) {
-      logger.error("[useEditAssetModal] update failed", { error: result.error });
+      logger.error("[useEditAssetModal] update failed", {
+        error: result.error,
+      });
       setError(result.error);
       return;
     }

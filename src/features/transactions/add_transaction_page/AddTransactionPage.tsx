@@ -15,7 +15,9 @@ import { useAddTransaction } from "../add_transaction/useAddTransaction";
 export function AddTransactionPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { prefillAssetId, prefillAccountId } = useSearch({ from: "/transactions/new" });
+  const { prefillAssetId, prefillAccountId } = useSearch({
+    from: "/transactions/new",
+  });
 
   useEffect(() => {
     logger.info("[AddTransactionPage] mounted");
@@ -26,9 +28,15 @@ export function AddTransactionPage() {
 
   const handleBack = useCallback(() => {
     if (prefillAccountId) {
-      navigate({ to: "/accounts/$accountId", params: { accountId: prefillAccountId } });
+      navigate({
+        to: "/accounts/$accountId",
+        params: { accountId: prefillAccountId },
+      });
     } else {
-      navigate({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
+      navigate({
+        to: "/assets",
+        search: { createNew: undefined, returnPath: undefined },
+      });
     }
   }, [navigate, prefillAccountId]);
 
@@ -43,7 +51,11 @@ export function AddTransactionPage() {
     handleSubmit,
     handleConfirmArchived,
     handleCancelArchived,
-  } = useAddTransaction({ prefillAssetId, prefillAccountId, onSubmitSuccess: handleBack });
+  } = useAddTransaction({
+    prefillAssetId,
+    prefillAccountId,
+    onSubmitSuccess: handleBack,
+  });
 
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
   const selectedAccount = accounts.find((a) => a.id === formData.accountId);

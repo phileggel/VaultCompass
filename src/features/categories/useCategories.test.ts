@@ -40,7 +40,10 @@ describe("useCategories", () => {
   // ── addCategory ───────────────────────────────────────────────────────────────
 
   it("addCategory returns empty object on success", async () => {
-    mockAddCategory.mockResolvedValue({ status: "ok", data: { id: "cat-1", name: "Bonds" } });
+    mockAddCategory.mockResolvedValue({
+      status: "ok",
+      data: { id: "cat-1", name: "Bonds" },
+    });
     const { result } = renderHook(() => useCategories());
     let ret: { error?: string } = {};
     await act(async () => {
@@ -51,7 +54,10 @@ describe("useCategories", () => {
   });
 
   it("addCategory returns error key on failure", async () => {
-    mockAddCategory.mockResolvedValue({ status: "error", error: { code: "DuplicateName" } });
+    mockAddCategory.mockResolvedValue({
+      status: "error",
+      error: { code: "DuplicateName" },
+    });
     const { result } = renderHook(() => useCategories());
     let ret: { error?: string } = {};
     await act(async () => {
@@ -63,7 +69,10 @@ describe("useCategories", () => {
   // ── updateCategory ────────────────────────────────────────────────────────────
 
   it("updateCategory returns empty object on success", async () => {
-    mockUpdateCategory.mockResolvedValue({ status: "ok", data: { id: "cat-1", name: "Equities" } });
+    mockUpdateCategory.mockResolvedValue({
+      status: "ok",
+      data: { id: "cat-1", name: "Equities" },
+    });
     const { result } = renderHook(() => useCategories());
     let ret: { error?: string } = {};
     await act(async () => {
@@ -74,7 +83,10 @@ describe("useCategories", () => {
   });
 
   it("updateCategory returns error key on failure", async () => {
-    mockUpdateCategory.mockResolvedValue({ status: "error", error: { code: "NotFound" } });
+    mockUpdateCategory.mockResolvedValue({
+      status: "error",
+      error: { code: "NotFound" },
+    });
     const { result } = renderHook(() => useCategories());
     let ret: { error?: string } = {};
     await act(async () => {
@@ -97,7 +109,10 @@ describe("useCategories", () => {
   });
 
   it("deleteCategory returns error key on failure", async () => {
-    mockDeleteCategory.mockResolvedValue({ status: "error", error: { code: "HasLinkedAssets" } });
+    mockDeleteCategory.mockResolvedValue({
+      status: "error",
+      error: { code: "HasLinkedAssets" },
+    });
     const { result } = renderHook(() => useCategories());
     let ret: { error?: string } = {};
     await act(async () => {

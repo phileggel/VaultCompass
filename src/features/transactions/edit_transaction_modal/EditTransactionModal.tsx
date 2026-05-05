@@ -52,7 +52,10 @@ export function EditTransactionModal({
     handleSubmit,
     handleConfirmArchived,
     handleCancelArchived,
-  } = useEditTransactionModal({ transaction, onSubmitSuccess: onSuccess ?? onClose });
+  } = useEditTransactionModal({
+    transaction,
+    onSubmitSuccess: onSuccess ?? onClose,
+  });
 
   const isOpeningBalance = transaction.transaction_type === "OpeningBalance";
   const selectedAsset = assets.find((a) => a.id === formData.assetId);

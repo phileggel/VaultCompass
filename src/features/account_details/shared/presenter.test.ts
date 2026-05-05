@@ -202,7 +202,11 @@ describe("toHoldingRow — market price fields (MKT)", () => {
   // MKT-034 — currency mismatch: unrealized_pnl null but current_price non-null
   it("MKT-034 — unrealizedPnl is '—' and performancePct is '—' when unrealized_pnl is null but current_price is set", () => {
     const row = toHoldingRow(
-      makeHolding({ current_price: 110_000_000, unrealized_pnl: null, performance_pct: null }),
+      makeHolding({
+        current_price: 110_000_000,
+        unrealized_pnl: null,
+        performance_pct: null,
+      }),
     );
     expect(row.unrealizedPnl).toBe("—");
     expect(row.performancePct).toBe("—");

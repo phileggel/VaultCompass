@@ -79,7 +79,9 @@ describe("SearchPanel — status states", () => {
     );
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByText("asset.web_lookup.error_network")).toBeInTheDocument();
-    const retryBtn = screen.getByRole("button", { name: "asset.web_lookup.action_retry" });
+    const retryBtn = screen.getByRole("button", {
+      name: "asset.web_lookup.action_retry",
+    });
     expect(retryBtn).toBeInTheDocument();
     fireEvent.click(retryBtn);
     expect(retry).toHaveBeenCalledTimes(1);
@@ -214,14 +216,18 @@ describe("SearchPanel — fill manually bypass (WEB-013)", () => {
   it("fill manually button is always visible in idle state", () => {
     renderPanel({ status: "idle" });
     expect(
-      screen.getByRole("button", { name: "asset.web_lookup.action_fill_manually" }),
+      screen.getByRole("button", {
+        name: "asset.web_lookup.action_fill_manually",
+      }),
     ).toBeInTheDocument();
   });
 
   it("fill manually button is visible even in error state", () => {
     renderPanel({ status: "error" });
     expect(
-      screen.getByRole("button", { name: "asset.web_lookup.action_fill_manually" }),
+      screen.getByRole("button", {
+        name: "asset.web_lookup.action_fill_manually",
+      }),
     ).toBeInTheDocument();
   });
 });

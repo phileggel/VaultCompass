@@ -167,7 +167,9 @@ export function DateField({
               <div className="grid grid-cols-7 gap-0.5 mb-2">
                 {Array.from({ length: 7 }, (_, i) => {
                   const date = new Date(1970, 0, 4 + i);
-                  const label = new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(date);
+                  const label = new Intl.DateTimeFormat(locale, {
+                    weekday: "narrow",
+                  }).format(date);
                   return (
                     <div
                       key={date.toISOString()}

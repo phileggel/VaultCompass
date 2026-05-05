@@ -176,7 +176,10 @@ describe("useOpenBalance", () => {
 
   // TRX-042 — submit calls openHolding with micro-unit DTO and invokes onSubmitSuccess
   it("handleSubmit calls openHolding with correct micro-unit DTO on success", async () => {
-    mockOpenHolding.mockResolvedValue({ status: "ok", data: makeTransaction() });
+    mockOpenHolding.mockResolvedValue({
+      status: "ok",
+      data: makeTransaction(),
+    });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useOpenBalance({ ...BASE_PROPS, onSubmitSuccess }));
 
@@ -204,7 +207,10 @@ describe("useOpenBalance", () => {
 
   // Success clears the error state
   it("clears error on successful submit", async () => {
-    mockOpenHolding.mockResolvedValue({ status: "ok", data: makeTransaction() });
+    mockOpenHolding.mockResolvedValue({
+      status: "ok",
+      data: makeTransaction(),
+    });
     const { result } = renderHook(() => useOpenBalance(BASE_PROPS));
 
     await act(async () => {
@@ -319,7 +325,10 @@ describe("useOpenBalance", () => {
 
   // TRX-058 — on success: snackbar fires with success_created key + onSubmitSuccess is called
   it("TRX-058: calls showSnackbar with success key and calls onSubmitSuccess on success", async () => {
-    mockOpenHolding.mockResolvedValue({ status: "ok", data: makeTransaction() });
+    mockOpenHolding.mockResolvedValue({
+      status: "ok",
+      data: makeTransaction(),
+    });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useOpenBalance({ ...BASE_PROPS, onSubmitSuccess }));
 

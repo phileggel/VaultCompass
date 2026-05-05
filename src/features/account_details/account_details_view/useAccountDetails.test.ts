@@ -133,7 +133,10 @@ describe("useAccountDetails — market price events (MKT)", () => {
       mockSubscribe,
     );
 
-    mockGetAccountDetails.mockResolvedValue({ status: "ok", data: makeResponse() });
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse(),
+    });
 
     renderHook(() => useAccountDetails("account-1"));
     await act(async () => {});

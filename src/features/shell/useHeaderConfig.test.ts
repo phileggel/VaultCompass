@@ -27,9 +27,10 @@ const mockRouterState = vi.mocked(useRouterState);
 const { useHeaderConfig } = await import("./useHeaderConfig");
 
 function makeLocation(pathname: string, searchStr = "") {
-  mockRouterState.mockReturnValue({ pathname, searchStr } as unknown as ReturnType<
-    typeof useRouterState
-  >);
+  mockRouterState.mockReturnValue({
+    pathname,
+    searchStr,
+  } as unknown as ReturnType<typeof useRouterState>);
 }
 
 describe("useHeaderConfig", () => {

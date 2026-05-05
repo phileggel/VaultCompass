@@ -15,7 +15,11 @@ const makeAsset = (overrides: Partial<Asset> = {}): Asset => ({
   ...overrides,
 });
 
-const activeAsset = makeAsset({ id: "active", name: "Apple", reference: "AAPL" });
+const activeAsset = makeAsset({
+  id: "active",
+  name: "Apple",
+  reference: "AAPL",
+});
 const archivedAsset = makeAsset({
   id: "archived",
   name: "Bond Fund",

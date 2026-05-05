@@ -94,5 +94,13 @@ export function usePriceModal({
     [isFormValid, holding.asset_id, date, price, showSnackbar, t, onSubmitSuccess],
   );
 
-  return { date, price, error, isSubmitting, isFormValid, handleChange, handleSubmit };
+  return {
+    date,
+    price,
+    error,
+    isSubmitting,
+    isFormValid,
+    handleChange,
+    handleSubmit,
+  };
 }

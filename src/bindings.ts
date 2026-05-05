@@ -6,1380 +6,1530 @@
 
 /** user-defined commands **/
 
-
 export const commands = {
-/**
- * Fetches all active (non-archived) assets.
- */
-async getAssets() : Promise<Result<Asset[], AssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_assets") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Fetches all assets including archived ones.
- */
-async getAssetsWithArchived() : Promise<Result<Asset[], AssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_assets_with_archived") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Adds a new asset.
- */
-async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, AssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("add_asset", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Updates an existing asset.
- */
-async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, AssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_asset", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Archives an asset, guarded against active holdings (OQ-6).
- */
-async archiveAsset(id: string) : Promise<Result<null, ArchiveAssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("archive_asset", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Unarchives an asset (R18).
- */
-async unarchiveAsset(id: string) : Promise<Result<null, AssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("unarchive_asset", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Deletes an asset, guarded against existing transactions.
- */
-async deleteAsset(id: string) : Promise<Result<null, DeleteAssetCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_asset", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Fetches all active categories.
- */
-async getCategories() : Promise<Result<AssetCategory[], CategoryCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_categories") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Creates a new category.
- */
-async addCategory(label: string) : Promise<Result<AssetCategory, CategoryCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("add_category", { label }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Updates an existing category.
- */
-async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, CategoryCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_category", { id, label }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Deletes a category.
- */
-async deleteCategory(id: string) : Promise<Result<null, CategoryCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_category", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
- * price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
- */
-async recordAssetPrice(assetId: string, date: string, price: number) : Promise<Result<null, AssetPriceCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("record_asset_price", { assetId, date, price }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns all recorded prices for the given asset, sorted date descending (MKT-072).
- */
-async getAssetPrices(assetId: string) : Promise<Result<AssetPrice[], AssetPriceCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_asset_prices", { assetId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Updates the date and/or price of an existing price record (MKT-083/084).
- */
-async updateAssetPrice(assetId: string, originalDate: string, newDate: string, newPrice: number) : Promise<Result<null, UpdateAssetPriceCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_asset_price", { assetId, originalDate, newDate, newPrice }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Deletes a specific price record by (asset_id, date) (MKT-090).
- */
-async deleteAssetPrice(assetId: string, date: string) : Promise<Result<null, DeleteAssetPriceCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_asset_price", { assetId, date }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Retrieves all accounts.
- */
-async getAccounts() : Promise<Result<Account[], AccountCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_accounts") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Adds a new account.
- */
-async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, AccountCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("add_account", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Updates an existing account.
- */
-async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, AccountCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_account", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Deletes an account.
- */
-async deleteAccount(id: string) : Promise<Result<null, AccountCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_account", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Tauri command allowing the frontend to emit structured log entries
- * into the backend tracing system (visible in app logs and collect-logs output).
- */
-async logFrontend(level: string, message: string) : Promise<void> {
-    await TAURI_INVOKE("log_frontend", { level, message });
-},
-/**
- * Checks whether a new application version is available (R1, R25).
- * 
- * Returns `None` if the application is up to date or if the check fails due
- * to network or server errors (R21). Emits `"update:available"` on the app
- * handle if an update is found.
- */
-async checkForUpdate() : Promise<Result<UpdateInfo | null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("check_for_update") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Starts downloading the available update in the background (R6).
- * 
- * Returns immediately — the download runs as a detached async task.
- * Progress is reported via `"update:progress"` events (R8).
- * On success, emits `"update:complete"` (R11).
- * On failure, emits `"update:error"` (R23).
- * Concurrent download requests are silently ignored (R10).
- */
-async downloadUpdate() : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("download_update") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Installs the downloaded update and restarts the application (R13).
- * 
- * Must be called after `download_update` has completed successfully.
- * Returns an error if no downloaded update is available.
- */
-async installUpdate() : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("install_update") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns the distinct asset IDs that have transactions for the given account (TXL-013).
- */
-async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], AccountCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_asset_ids_for_account", { accountId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Records a purchase of an asset into an account (TRX-027).
- */
-async buyHolding(dto: BuyHoldingDTO) : Promise<Result<Transaction, TransactionCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("buy_holding", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
- */
-async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, TransactionCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("sell_holding", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Corrects an existing transaction and recalculates the affected holding (TRX-031).
- */
-async correctTransaction(id: string, accountId: string, dto: CorrectTransactionDTO) : Promise<Result<Transaction, TransactionCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("correct_transaction", { id, accountId, dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
- */
-async cancelTransaction(id: string, accountId: string) : Promise<Result<null, TransactionCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("cancel_transaction", { id, accountId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Retrieves all transactions for an account/asset pair (TRX-036).
- */
-async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], TransactionCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_transactions", { accountId, assetId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Seeds a holding directly from a known quantity and total cost (TRX-042, TRX-047).
- */
-async openHolding(dto: OpenHoldingDTO) : Promise<Result<Transaction, OpenHoldingCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("open_holding", { dto }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns the full account details view for the given account (ACD-012 to ACD-041).
- */
-async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountDetailsCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_account_details", { accountId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns the number of active holdings and transactions for an account (ACC-020).
- * 
- * Used by the frontend to decide whether to show the standard or reinforced
- * delete confirmation dialog (ACC-018 vs ACC-019).
- */
-async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDeletionSummary, AccountDeletionCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_account_deletion_summary", { accountId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Searches OpenFIGI for instruments matching the query and returns up to 10
- * results (WEB-020, WEB-022).
- * 
- * Routing is transparent to the caller: 12-char alphanumeric queries are sent
- * to the ISIN mapping endpoint; all others to the keyword search endpoint
- * (WEB-014).  Any network or HTTP failure is returned as
- * `WebLookupCommandError::NetworkError` (WEB-025).
- */
-async lookupAsset(query: string) : Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("lookup_asset", { query }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-}
-}
+	/**
+	 * Fetches all active (non-archived) assets.
+	 */
+	async getAssets(): Promise<Result<Asset[], AssetCommandError>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("get_assets") };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Fetches all assets including archived ones.
+	 */
+	async getAssetsWithArchived(): Promise<Result<Asset[], AssetCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("get_assets_with_archived"),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Adds a new asset.
+	 */
+	async addAsset(
+		dto: CreateAssetDTO,
+	): Promise<Result<Asset, AssetCommandError>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("add_asset", { dto }) };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Updates an existing asset.
+	 */
+	async updateAsset(
+		dto: UpdateAssetDTO,
+	): Promise<Result<Asset, AssetCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("update_asset", { dto }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Archives an asset, guarded against active holdings (OQ-6).
+	 */
+	async archiveAsset(
+		id: string,
+	): Promise<Result<null, ArchiveAssetCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("archive_asset", { id }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Unarchives an asset (R18).
+	 */
+	async unarchiveAsset(id: string): Promise<Result<null, AssetCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("unarchive_asset", { id }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Deletes an asset, guarded against existing transactions.
+	 */
+	async deleteAsset(
+		id: string,
+	): Promise<Result<null, DeleteAssetCommandError>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("delete_asset", { id }) };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Fetches all active categories.
+	 */
+	async getCategories(): Promise<
+		Result<AssetCategory[], CategoryCommandError>
+	> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("get_categories") };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Creates a new category.
+	 */
+	async addCategory(
+		label: string,
+	): Promise<Result<AssetCategory, CategoryCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("add_category", { label }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Updates an existing category.
+	 */
+	async updateCategory(
+		id: string,
+		label: string,
+	): Promise<Result<AssetCategory, CategoryCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("update_category", { id, label }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Deletes a category.
+	 */
+	async deleteCategory(
+		id: string,
+	): Promise<Result<null, CategoryCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("delete_category", { id }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
+	 * price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
+	 */
+	async recordAssetPrice(
+		assetId: string,
+		date: string,
+		price: number,
+	): Promise<Result<null, AssetPriceCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("record_asset_price", {
+					assetId,
+					date,
+					price,
+				}),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Returns all recorded prices for the given asset, sorted date descending (MKT-072).
+	 */
+	async getAssetPrices(
+		assetId: string,
+	): Promise<Result<AssetPrice[], AssetPriceCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("get_asset_prices", { assetId }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Updates the date and/or price of an existing price record (MKT-083/084).
+	 */
+	async updateAssetPrice(
+		assetId: string,
+		originalDate: string,
+		newDate: string,
+		newPrice: number,
+	): Promise<Result<null, UpdateAssetPriceCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("update_asset_price", {
+					assetId,
+					originalDate,
+					newDate,
+					newPrice,
+				}),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Deletes a specific price record by (asset_id, date) (MKT-090).
+	 */
+	async deleteAssetPrice(
+		assetId: string,
+		date: string,
+	): Promise<Result<null, DeleteAssetPriceCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("delete_asset_price", { assetId, date }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Retrieves all accounts.
+	 */
+	async getAccounts(): Promise<Result<Account[], AccountCommandError>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("get_accounts") };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Adds a new account.
+	 */
+	async addAccount(
+		dto: CreateAccountDTO,
+	): Promise<Result<Account, AccountCommandError>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("add_account", { dto }) };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Updates an existing account.
+	 */
+	async updateAccount(
+		dto: UpdateAccountDTO,
+	): Promise<Result<Account, AccountCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("update_account", { dto }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Deletes an account.
+	 */
+	async deleteAccount(id: string): Promise<Result<null, AccountCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("delete_account", { id }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Tauri command allowing the frontend to emit structured log entries
+	 * into the backend tracing system (visible in app logs and collect-logs output).
+	 */
+	async logFrontend(level: string, message: string): Promise<void> {
+		await TAURI_INVOKE("log_frontend", { level, message });
+	},
+	/**
+	 * Checks whether a new application version is available (R1, R25).
+	 *
+	 * Returns `None` if the application is up to date or if the check fails due
+	 * to network or server errors (R21). Emits `"update:available"` on the app
+	 * handle if an update is found.
+	 */
+	async checkForUpdate(): Promise<Result<UpdateInfo | null, string>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("check_for_update") };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Starts downloading the available update in the background (R6).
+	 *
+	 * Returns immediately — the download runs as a detached async task.
+	 * Progress is reported via `"update:progress"` events (R8).
+	 * On success, emits `"update:complete"` (R11).
+	 * On failure, emits `"update:error"` (R23).
+	 * Concurrent download requests are silently ignored (R10).
+	 */
+	async downloadUpdate(): Promise<Result<null, string>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("download_update") };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Installs the downloaded update and restarts the application (R13).
+	 *
+	 * Must be called after `download_update` has completed successfully.
+	 * Returns an error if no downloaded update is available.
+	 */
+	async installUpdate(): Promise<Result<null, string>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("install_update") };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Returns the distinct asset IDs that have transactions for the given account (TXL-013).
+	 */
+	async getAssetIdsForAccount(
+		accountId: string,
+	): Promise<Result<string[], AccountCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("get_asset_ids_for_account", { accountId }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Records a purchase of an asset into an account (TRX-027).
+	 */
+	async buyHolding(
+		dto: BuyHoldingDTO,
+	): Promise<Result<Transaction, TransactionCommandError>> {
+		try {
+			return { status: "ok", data: await TAURI_INVOKE("buy_holding", { dto }) };
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
+	 */
+	async sellHolding(
+		dto: SellHoldingDTO,
+	): Promise<Result<Transaction, TransactionCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("sell_holding", { dto }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Corrects an existing transaction and recalculates the affected holding (TRX-031).
+	 */
+	async correctTransaction(
+		id: string,
+		accountId: string,
+		dto: CorrectTransactionDTO,
+	): Promise<Result<Transaction, TransactionCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("correct_transaction", { id, accountId, dto }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
+	 */
+	async cancelTransaction(
+		id: string,
+		accountId: string,
+	): Promise<Result<null, TransactionCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("cancel_transaction", { id, accountId }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Retrieves all transactions for an account/asset pair (TRX-036).
+	 */
+	async getTransactions(
+		accountId: string,
+		assetId: string,
+	): Promise<Result<Transaction[], TransactionCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("get_transactions", { accountId, assetId }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Seeds a holding directly from a known quantity and total cost (TRX-042, TRX-047).
+	 */
+	async openHolding(
+		dto: OpenHoldingDTO,
+	): Promise<Result<Transaction, OpenHoldingCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("open_holding", { dto }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Returns the full account details view for the given account (ACD-012 to ACD-041).
+	 */
+	async getAccountDetails(
+		accountId: string,
+	): Promise<Result<AccountDetailsResponse, AccountDetailsCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("get_account_details", { accountId }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Returns the number of active holdings and transactions for an account (ACC-020).
+	 *
+	 * Used by the frontend to decide whether to show the standard or reinforced
+	 * delete confirmation dialog (ACC-018 vs ACC-019).
+	 */
+	async getAccountDeletionSummary(
+		accountId: string,
+	): Promise<Result<AccountDeletionSummary, AccountDeletionCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("get_account_deletion_summary", { accountId }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+	/**
+	 * Searches OpenFIGI for instruments matching the query and returns up to 10
+	 * results (WEB-020, WEB-022).
+	 *
+	 * Routing is transparent to the caller: 12-char alphanumeric queries are sent
+	 * to the ISIN mapping endpoint; all others to the keyword search endpoint
+	 * (WEB-014).  Any network or HTTP failure is returned as
+	 * `WebLookupCommandError::NetworkError` (WEB-025).
+	 */
+	async lookupAsset(
+		query: string,
+	): Promise<Result<AssetLookupResult[], WebLookupCommandError>> {
+		try {
+			return {
+				status: "ok",
+				data: await TAURI_INVOKE("lookup_asset", { query }),
+			};
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			else return { status: "error", error: e as any };
+		}
+	},
+};
 
 /** user-defined events **/
 
-
 export const events = __makeEvents__<{
-event: Event
+	event: Event;
 }>({
-event: "event"
-})
+	event: "event",
+});
 
 /** user-defined constants **/
-
-
 
 /** user-defined types **/
 
 /**
  * Represents a financial account — the Aggregate Root of the Account bounded context.
  * Owns all holdings and transactions for this account.
- * 
+ *
  * The `holdings`, `transactions`, and `pending_changes` fields are populated only
  * when the aggregate is loaded for mutation via `AccountRepository::get_with_holdings_and_transactions`.
  * They are excluded from Tauri serialization and TypeScript bindings.
  */
-export type Account = { 
-/**
- * Unique identifier (uuid).
- */
-id: string; 
-/**
- * User defined name.
- */
-name: string; 
-/**
- * ISO 4217 currency code for this account (TRX-021).
- */
-currency: string; 
-/**
- * How often this account is updated.
- */
-update_frequency: UpdateFrequency }
+export type Account = {
+	/**
+	 * Unique identifier (uuid).
+	 */
+	id: string;
+	/**
+	 * User defined name.
+	 */
+	name: string;
+	/**
+	 * ISO 4217 currency code for this account (TRX-021).
+	 */
+	currency: string;
+	/**
+	 * How often this account is updated.
+	 */
+	update_frequency: UpdateFrequency;
+};
 /**
  * Typed error returned to the frontend for account commands.
  */
-export type AccountCommandError = 
-/**
- * Account name is empty or whitespace-only.
- */
-{ code: "NameEmpty" } | 
-/**
- * An account with the same name already exists.
- */
-{ code: "NameAlreadyExists" } | 
-/**
- * The currency string is not a valid ISO 4217 code.
- */
-{ code: "InvalidCurrency" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type AccountCommandError =
+	/**
+	 * Account name is empty or whitespace-only.
+	 */
+	| { code: "NameEmpty" }
+	/**
+	 * An account with the same name already exists.
+	 */
+	| { code: "NameAlreadyExists" }
+	/**
+	 * The currency string is not a valid ISO 4217 code.
+	 */
+	| { code: "InvalidCurrency" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Typed error returned to the frontend for the get_account_deletion_summary command.
  */
-export type AccountDeletionCommandError = 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type AccountDeletionCommandError =
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	{ code: "Unknown" };
 /**
  * Pre-deletion counts for an account (ACC-020).
  */
-export type AccountDeletionSummary = { 
-/**
- * Number of active holdings (quantity > 0) in the account.
- */
-holding_count: number; 
-/**
- * Total number of transactions associated with the account.
- */
-transaction_count: number }
+export type AccountDeletionSummary = {
+	/**
+	 * Number of active holdings (quantity > 0) in the account.
+	 */
+	holding_count: number;
+	/**
+	 * Total number of transactions associated with the account.
+	 */
+	transaction_count: number;
+};
 /**
  * Typed error returned to the frontend for the get_account_details command.
  */
-export type AccountDetailsCommandError = 
-/**
- * No account exists with the requested ID.
- */
-{ code: "AccountNotFound" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type AccountDetailsCommandError =
+	/**
+	 * No account exists with the requested ID.
+	 */
+	| { code: "AccountNotFound" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Top-level response for the get_account_details command (ACD spec).
  */
-export type AccountDetailsResponse = { 
-/**
- * Display name of the account (ACD-032).
- */
-account_name: string; 
-/**
- * Active holdings (quantity > 0), sorted by asset_name asc (ACD-020, ACD-033).
- */
-holdings: HoldingDetail[]; 
-/**
- * Closed positions (quantity == 0), sorted by asset_name asc (ACD-044, ACD-046).
- */
-closed_holdings: ClosedHoldingDetail[]; 
-/**
- * Total holding count regardless of quantity (ACD-034).
- */
-total_holding_count: number; 
-/**
- * Sum of cost_basis across all active holdings, 0 if none (ACD-031).
- */
-total_cost_basis: number; 
-/**
- * Sum of total_realized_pnl across ALL holdings (active + closed), 0 if none (ACD-047).
- */
-total_realized_pnl: number; 
-/**
- * Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
- */
-total_unrealized_pnl: number | null }
+export type AccountDetailsResponse = {
+	/**
+	 * Display name of the account (ACD-032).
+	 */
+	account_name: string;
+	/**
+	 * Active holdings (quantity > 0), sorted by asset_name asc (ACD-020, ACD-033).
+	 */
+	holdings: HoldingDetail[];
+	/**
+	 * Closed positions (quantity == 0), sorted by asset_name asc (ACD-044, ACD-046).
+	 */
+	closed_holdings: ClosedHoldingDetail[];
+	/**
+	 * Total holding count regardless of quantity (ACD-034).
+	 */
+	total_holding_count: number;
+	/**
+	 * Sum of cost_basis across all active holdings, 0 if none (ACD-031).
+	 */
+	total_cost_basis: number;
+	/**
+	 * Sum of total_realized_pnl across ALL holdings (active + closed), 0 if none (ACD-047).
+	 */
+	total_realized_pnl: number;
+	/**
+	 * Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
+	 */
+	total_unrealized_pnl: number | null;
+};
 /**
  * Typed error returned to the frontend for the archive_asset command.
  */
-export type ArchiveAssetCommandError = 
-/**
- * Asset still has non-zero holdings in at least one account.
- */
-{ code: "ActiveHoldings" } | 
-/**
- * No asset exists with the requested ID.
- */
-{ code: "NotFound" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type ArchiveAssetCommandError =
+	/**
+	 * Asset still has non-zero holdings in at least one account.
+	 */
+	| { code: "ActiveHoldings" }
+	/**
+	 * No asset exists with the requested ID.
+	 */
+	| { code: "NotFound" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * A financial instrument or resource held by a user.
  */
-export type Asset = { 
-/**
- * Unique identifier.
- */
-id: string; 
-/**
- * Display name.
- */
-name: string; 
-/**
- * Asset classification.
- */
-class: AssetClass; 
-/**
- * Category link.
- */
-category: AssetCategory; 
-/**
- * ISO 4217 currency code.
- */
-currency: string; 
-/**
- * Risk score from 1 to 5.
- */
-risk_level: number; 
-/**
- * Identifier like ticker or ISIN.
- */
-reference: string; 
-/**
- * Whether the asset is archived (soft-archived, reversible).
- */
-is_archived: boolean }
+export type Asset = {
+	/**
+	 * Unique identifier.
+	 */
+	id: string;
+	/**
+	 * Display name.
+	 */
+	name: string;
+	/**
+	 * Asset classification.
+	 */
+	class: AssetClass;
+	/**
+	 * Category link.
+	 */
+	category: AssetCategory;
+	/**
+	 * ISO 4217 currency code.
+	 */
+	currency: string;
+	/**
+	 * Risk score from 1 to 5.
+	 */
+	risk_level: number;
+	/**
+	 * Identifier like ticker or ISIN.
+	 */
+	reference: string;
+	/**
+	 * Whether the asset is archived (soft-archived, reversible).
+	 */
+	is_archived: boolean;
+};
 /**
  * A user-defined grouping for assets.
  */
-export type AssetCategory = { 
-/**
- * Unique identifier.
- */
-id: string; 
-/**
- * Display name.
- */
-name: string }
+export type AssetCategory = {
+	/**
+	 * Unique identifier.
+	 */
+	id: string;
+	/**
+	 * Display name.
+	 */
+	name: string;
+};
 /**
  * Represents the classification of an asset.
  */
-export type AssetClass = 
-/**
- * Real estate properties or REITs.
- */
-"RealEstate" | 
-/**
- * Fiat currency or highly liquid equivalents.
- */
-"Cash" | 
-/**
- * Individual company equities.
- */
-"Stocks" | 
-/**
- * Fixed income securities.
- */
-"Bonds" | 
-/**
- * Exchange Traded Funds.
- */
-"ETF" | 
-/**
- * Managed investment funds.
- */
-"MutualFunds" | 
-/**
- * Cryptocurrencies or other blockchain-based assets.
- */
-"DigitalAsset" | 
-/**
- * Leveraged or contingent instruments derived from an underlying asset (warrants, options, futures, rights).
- */
-"Derivatives"
+export type AssetClass =
+	/**
+	 * Real estate properties or REITs.
+	 */
+	| "RealEstate"
+	/**
+	 * Fiat currency or highly liquid equivalents.
+	 */
+	| "Cash"
+	/**
+	 * Individual company equities.
+	 */
+	| "Stocks"
+	/**
+	 * Fixed income securities.
+	 */
+	| "Bonds"
+	/**
+	 * Exchange Traded Funds.
+	 */
+	| "ETF"
+	/**
+	 * Managed investment funds.
+	 */
+	| "MutualFunds"
+	/**
+	 * Cryptocurrencies or other blockchain-based assets.
+	 */
+	| "DigitalAsset"
+	/**
+	 * Leveraged or contingent instruments derived from an underlying asset (warrants, options, futures, rights).
+	 */
+	| "Derivatives";
 /**
  * Typed error returned to the frontend for asset CRUD commands.
  */
-export type AssetCommandError = 
-/**
- * Asset name is empty or whitespace-only.
- */
-{ code: "NameEmpty" } | 
-/**
- * Asset reference (ticker/ISIN) is empty.
- */
-{ code: "ReferenceEmpty" } | 
-/**
- * Risk level is outside the 1–5 range.
- */
-{ code: "InvalidRiskLevel" } | 
-/**
- * Currency string is not a valid ISO 4217 code.
- */
-{ code: "InvalidCurrency" } | 
-/**
- * Asset is archived and cannot be edited.
- */
-{ code: "Archived" } | 
-/**
- * No asset exists with the requested ID.
- */
-{ code: "NotFound" } | 
-/**
- * The category referenced in the DTO does not exist.
- */
-{ code: "CategoryNotFound" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type AssetCommandError =
+	/**
+	 * Asset name is empty or whitespace-only.
+	 */
+	| { code: "NameEmpty" }
+	/**
+	 * Asset reference (ticker/ISIN) is empty.
+	 */
+	| { code: "ReferenceEmpty" }
+	/**
+	 * Risk level is outside the 1–5 range.
+	 */
+	| { code: "InvalidRiskLevel" }
+	/**
+	 * Currency string is not a valid ISO 4217 code.
+	 */
+	| { code: "InvalidCurrency" }
+	/**
+	 * Asset is archived and cannot be edited.
+	 */
+	| { code: "Archived" }
+	/**
+	 * No asset exists with the requested ID.
+	 */
+	| { code: "NotFound" }
+	/**
+	 * The category referenced in the DTO does not exist.
+	 */
+	| { code: "CategoryNotFound" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Transient value object returned by `lookup_asset`.  Never persisted
  * (WEB-020). Fields may be absent per WEB-023, WEB-024, WEB-046, WEB-049.
  */
-export type AssetLookupResult = { 
-/**
- * Full name of the financial instrument.
- */
-name: string; 
-/**
- * ISIN (on the ISIN path) or ticker (on the keyword path), if available (WEB-046).
- */
-reference: string | null; 
-/**
- * ISO 4217 trading currency, if returned by OpenFIGI (WEB-024).
- */
-currency: string | null; 
-/**
- * Mapped asset class, if the `securityType` is recognised (WEB-023).
- */
-asset_class: AssetClass | null; 
-/**
- * Human-readable exchange name resolved from `exchCode` (WEB-049). Absent if OpenFIGI returns no exchange code.
- */
-exchange: string | null }
+export type AssetLookupResult = {
+	/**
+	 * Full name of the financial instrument.
+	 */
+	name: string;
+	/**
+	 * ISIN (on the ISIN path) or ticker (on the keyword path), if available (WEB-046).
+	 */
+	reference: string | null;
+	/**
+	 * ISO 4217 trading currency, if returned by OpenFIGI (WEB-024).
+	 */
+	currency: string | null;
+	/**
+	 * Mapped asset class, if the `securityType` is recognised (WEB-023).
+	 */
+	asset_class: AssetClass | null;
+	/**
+	 * Human-readable exchange name resolved from `exchCode` (WEB-049). Absent if OpenFIGI returns no exchange code.
+	 */
+	exchange: string | null;
+};
 /**
  * A manually recorded market price for a financial asset on a specific date.
  * Owned by the `asset` bounded context (MKT spec).
  */
-export type AssetPrice = { 
-/**
- * ID of the asset whose market price this record describes.
- */
-asset_id: string; 
-/**
- * ISO 8601 calendar date of the price observation (e.g. "2026-04-26").
- */
-date: string; 
-/**
- * Market price per unit in the asset's native currency (i64 micro-units, ADR-001).
- */
-price: number }
+export type AssetPrice = {
+	/**
+	 * ID of the asset whose market price this record describes.
+	 */
+	asset_id: string;
+	/**
+	 * ISO 8601 calendar date of the price observation (e.g. "2026-04-26").
+	 */
+	date: string;
+	/**
+	 * Market price per unit in the asset's native currency (i64 micro-units, ADR-001).
+	 */
+	price: number;
+};
 /**
  * Typed error returned to the frontend for the record_asset_price command.
  */
-export type AssetPriceCommandError = 
-/**
- * The asset referenced in the command does not exist (MKT-043).
- */
-{ code: "AssetNotFound" } | 
-/**
- * Price must be strictly positive.
- */
-{ code: "NotPositive" } | 
-/**
- * Price value is not a finite number.
- */
-{ code: "NonFinite" } | 
-/**
- * Price date is in the future.
- */
-{ code: "DateInFuture" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type AssetPriceCommandError =
+	/**
+	 * The asset referenced in the command does not exist (MKT-043).
+	 */
+	| { code: "AssetNotFound" }
+	/**
+	 * Price must be strictly positive.
+	 */
+	| { code: "NotPositive" }
+	/**
+	 * Price value is not a finite number.
+	 */
+	| { code: "NonFinite" }
+	/**
+	 * Price date is in the future.
+	 */
+	| { code: "DateInFuture" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Parameters for recording a purchase of an asset into an account.
  */
-export type BuyHoldingDTO = { 
-/**
- * Account where the purchase is recorded.
- */
-account_id: string; 
-/**
- * Financial asset being purchased.
- */
-asset_id: string; 
-/**
- * Transaction date (YYYY-MM-DD).
- */
-date: string; 
-/**
- * Quantity in micro-units.
- */
-quantity: number; 
-/**
- * Unit price in asset currency (micro-units).
- */
-unit_price: number; 
-/**
- * Exchange rate asset→account currency (micro-units).
- */
-exchange_rate: number; 
-/**
- * Fees in account currency (micro-units).
- */
-fees: number; 
-/**
- * Optional user note.
- */
-note: string | null }
+export type BuyHoldingDTO = {
+	/**
+	 * Account where the purchase is recorded.
+	 */
+	account_id: string;
+	/**
+	 * Financial asset being purchased.
+	 */
+	asset_id: string;
+	/**
+	 * Transaction date (YYYY-MM-DD).
+	 */
+	date: string;
+	/**
+	 * Quantity in micro-units.
+	 */
+	quantity: number;
+	/**
+	 * Unit price in asset currency (micro-units).
+	 */
+	unit_price: number;
+	/**
+	 * Exchange rate asset→account currency (micro-units).
+	 */
+	exchange_rate: number;
+	/**
+	 * Fees in account currency (micro-units).
+	 */
+	fees: number;
+	/**
+	 * Optional user note.
+	 */
+	note: string | null;
+};
 /**
  * Typed error returned to the frontend for category commands.
  */
-export type CategoryCommandError = 
-/**
- * Category label is empty or whitespace-only.
- */
-{ code: "LabelEmpty" } | 
-/**
- * A category with the same name already exists.
- */
-{ code: "DuplicateName" } | 
-/**
- * Attempt to rename the system default category.
- */
-{ code: "SystemReadonly" } | 
-/**
- * Attempt to delete the system default category.
- */
-{ code: "SystemProtected" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type CategoryCommandError =
+	/**
+	 * Category label is empty or whitespace-only.
+	 */
+	| { code: "LabelEmpty" }
+	/**
+	 * A category with the same name already exists.
+	 */
+	| { code: "DuplicateName" }
+	/**
+	 * Attempt to rename the system default category.
+	 */
+	| { code: "SystemReadonly" }
+	/**
+	 * Attempt to delete the system default category.
+	 */
+	| { code: "SystemProtected" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Enriched view of a fully-closed position (quantity == 0, ACD-044).
  */
-export type ClosedHoldingDetail = { 
-/**
- * ID of the previously held asset.
- */
-asset_id: string; 
-/**
- * Display name of the asset.
- */
-asset_name: string; 
-/**
- * Ticker or user-defined reference.
- */
-asset_reference: string; 
-/**
- * Total realized P&L for this position (micro-units, ACD-045).
- */
-realized_pnl: number; 
-/**
- * ISO date of the most recent sell for this position ("YYYY-MM-DD", ACD-043).
- */
-last_sold_date: string }
+export type ClosedHoldingDetail = {
+	/**
+	 * ID of the previously held asset.
+	 */
+	asset_id: string;
+	/**
+	 * Display name of the asset.
+	 */
+	asset_name: string;
+	/**
+	 * Ticker or user-defined reference.
+	 */
+	asset_reference: string;
+	/**
+	 * Total realized P&L for this position (micro-units, ACD-045).
+	 */
+	realized_pnl: number;
+	/**
+	 * ISO date of the most recent sell for this position ("YYYY-MM-DD", ACD-043).
+	 */
+	last_sold_date: string;
+};
 /**
  * Parameters for correcting an existing transaction.
  * `account_id` and `asset_id` are immutable — taken from the existing transaction.
  */
-export type CorrectTransactionDTO = { 
-/**
- * Corrected transaction date (YYYY-MM-DD).
- */
-date: string; 
-/**
- * Corrected quantity in micro-units.
- */
-quantity: number; 
-/**
- * Corrected unit price in asset currency (micro-units).
- */
-unit_price: number; 
-/**
- * Corrected exchange rate asset→account currency (micro-units).
- */
-exchange_rate: number; 
-/**
- * Corrected fees in account currency (micro-units).
- */
-fees: number; 
-/**
- * Optional user note.
- */
-note: string | null }
+export type CorrectTransactionDTO = {
+	/**
+	 * Corrected transaction date (YYYY-MM-DD).
+	 */
+	date: string;
+	/**
+	 * Corrected quantity in micro-units.
+	 */
+	quantity: number;
+	/**
+	 * Corrected unit price in asset currency (micro-units).
+	 */
+	unit_price: number;
+	/**
+	 * Corrected exchange rate asset→account currency (micro-units).
+	 */
+	exchange_rate: number;
+	/**
+	 * Corrected fees in account currency (micro-units).
+	 */
+	fees: number;
+	/**
+	 * Optional user note.
+	 */
+	note: string | null;
+};
 /**
  * Parameters for creating a new account.
  */
-export type CreateAccountDTO = { 
-/**
- * Display name.
- */
-name: string; 
-/**
- * ISO 4217 currency code.
- */
-currency: string; 
-/**
- * Update frequency.
- */
-update_frequency: UpdateFrequency }
+export type CreateAccountDTO = {
+	/**
+	 * Display name.
+	 */
+	name: string;
+	/**
+	 * ISO 4217 currency code.
+	 */
+	currency: string;
+	/**
+	 * Update frequency.
+	 */
+	update_frequency: UpdateFrequency;
+};
 /**
  * Parameters for creating a new asset.
  */
-export type CreateAssetDTO = { 
-/**
- * Display name.
- */
-name: string; 
-/**
- * Ticker, ISIN, or user-defined reference (mandatory — R1).
- */
-reference: string; 
-/**
- * Classification type.
- */
-class: AssetClass; 
-/**
- * ISO currency code.
- */
-currency: string; 
-/**
- * 1-5 risk score.
- */
-risk_level: number; 
-/**
- * ID of the primary category.
- */
-category_id: string }
+export type CreateAssetDTO = {
+	/**
+	 * Display name.
+	 */
+	name: string;
+	/**
+	 * Ticker, ISIN, or user-defined reference (mandatory — R1).
+	 */
+	reference: string;
+	/**
+	 * Classification type.
+	 */
+	class: AssetClass;
+	/**
+	 * ISO currency code.
+	 */
+	currency: string;
+	/**
+	 * 1-5 risk score.
+	 */
+	risk_level: number;
+	/**
+	 * ID of the primary category.
+	 */
+	category_id: string;
+};
 /**
  * Typed error returned to the frontend for the delete_asset command.
  */
-export type DeleteAssetCommandError = 
-/**
- * At least one transaction references this asset.
- */
-{ code: "ExistingTransactions" } | 
-/**
- * No asset exists with the requested ID.
- */
-{ code: "NotFound" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type DeleteAssetCommandError =
+	/**
+	 * At least one transaction references this asset.
+	 */
+	| { code: "ExistingTransactions" }
+	/**
+	 * No asset exists with the requested ID.
+	 */
+	| { code: "NotFound" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Typed error returned to the frontend for the delete_asset_price command.
  */
-export type DeleteAssetPriceCommandError = 
-/**
- * No price record exists for the given (asset_id, date) (MKT-090).
- */
-{ code: "NotFound" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type DeleteAssetPriceCommandError =
+	/**
+	 * No price record exists for the given (asset_id, date) (MKT-090).
+	 */
+	| { code: "NotFound" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * All possible side-effect events that can be published across the application.
  * Each variant represents a specific business event that features may need to react to.
  */
-export type Event = 
-/**
- * Health check event for testing/monitoring
- */
-{ type: "Health" } | 
-/**
- * An asset was created, updated, or deleted
- */
-{ type: "AssetUpdated" } | 
-/**
- * An account was created, updated, or deleted
- */
-{ type: "AccountUpdated" } | 
-/**
- * A category was created, updated, or deleted
- */
-{ type: "CategoryUpdated" } | 
-/**
- * A transaction was created, updated, or deleted (position data changed)
- */
-{ type: "TransactionUpdated" } | 
-/**
- * A market price was recorded or updated for an asset (MKT-026)
- */
-{ type: "AssetPriceUpdated" }
+export type Event =
+	/**
+	 * Health check event for testing/monitoring
+	 */
+	| { type: "Health" }
+	/**
+	 * An asset was created, updated, or deleted
+	 */
+	| { type: "AssetUpdated" }
+	/**
+	 * An account was created, updated, or deleted
+	 */
+	| { type: "AccountUpdated" }
+	/**
+	 * A category was created, updated, or deleted
+	 */
+	| { type: "CategoryUpdated" }
+	/**
+	 * A transaction was created, updated, or deleted (position data changed)
+	 */
+	| { type: "TransactionUpdated" }
+	/**
+	 * A market price was recorded or updated for an asset (MKT-026)
+	 */
+	| { type: "AssetPriceUpdated" };
 /**
  * Current state of a financial position: an asset held within an account (ADR-002).
  * All financial fields are stored as i64 micro-units (ADR-001).
  */
-export type Holding = { 
-/**
- * Unique identifier.
- */
-id: string; 
-/**
- * The account holding the asset.
- */
-account_id: string; 
-/**
- * The financial asset held.
- */
-asset_id: string; 
-/**
- * Current number of units held (micro-units: value × 10^6).
- */
-quantity: number; 
-/**
- * Volume-weighted average purchase price in account currency (micro-units).
- */
-average_price: number; 
-/**
- * Cumulative realized P&L from all sell transactions (micro-units, ACD-045).
- */
-total_realized_pnl: number; 
-/**
- * ISO date of the most recent sell transaction, if any (ACD-043).
- */
-last_sold_date: string | null }
+export type Holding = {
+	/**
+	 * Unique identifier.
+	 */
+	id: string;
+	/**
+	 * The account holding the asset.
+	 */
+	account_id: string;
+	/**
+	 * The financial asset held.
+	 */
+	asset_id: string;
+	/**
+	 * Current number of units held (micro-units: value × 10^6).
+	 */
+	quantity: number;
+	/**
+	 * Volume-weighted average purchase price in account currency (micro-units).
+	 */
+	average_price: number;
+	/**
+	 * Cumulative realized P&L from all sell transactions (micro-units, ACD-045).
+	 */
+	total_realized_pnl: number;
+	/**
+	 * ISO date of the most recent sell transaction, if any (ACD-043).
+	 */
+	last_sold_date: string | null;
+};
 /**
  * Enriched view of a single active holding (quantity > 0) with asset metadata (ACD-020).
  */
-export type HoldingDetail = { 
-/**
- * ID of the held asset.
- */
-asset_id: string; 
-/**
- * Display name of the asset.
- */
-asset_name: string; 
-/**
- * Ticker or user-defined reference.
- */
-asset_reference: string; 
-/**
- * Current units held (i64 micro-units, ADR-001).
- */
-quantity: number; 
-/**
- * VWAP purchase price in account currency (i64 micro-units, ADR-001).
- */
-average_price: number; 
-/**
- * Total cost of position: quantity × average_price / MICRO (i64 micro-units, ACD-023).
- */
-cost_basis: number; 
-/**
- * Sum of realized P&L from all Sell transactions for this asset (i64 micro-units, SEL-042).
- */
-realized_pnl: number; 
-/**
- * ISO 4217 currency code of the asset's native currency (MKT-023).
- */
-asset_currency: string; 
-/**
- * Most recently dated price for this asset in asset currency (i64 micros). None if no price recorded (MKT-031).
- */
-current_price: number | null; 
-/**
- * ISO date string of the price observation. None when current_price is None (MKT-031).
- */
-current_price_date: string | null; 
-/**
- * Unrealized gain/loss in account currency (i64 micros). None on currency mismatch or no price (MKT-033/034).
- * 0 (not None) when current price equals average price (MKT-033).
- */
-unrealized_pnl: number | null; 
-/**
- * Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
- * 0 (not None) when unrealized_pnl is 0 (MKT-035).
- */
-performance_pct: number | null }
+export type HoldingDetail = {
+	/**
+	 * ID of the held asset.
+	 */
+	asset_id: string;
+	/**
+	 * Display name of the asset.
+	 */
+	asset_name: string;
+	/**
+	 * Ticker or user-defined reference.
+	 */
+	asset_reference: string;
+	/**
+	 * Current units held (i64 micro-units, ADR-001).
+	 */
+	quantity: number;
+	/**
+	 * VWAP purchase price in account currency (i64 micro-units, ADR-001).
+	 */
+	average_price: number;
+	/**
+	 * Total cost of position: quantity × average_price / MICRO (i64 micro-units, ACD-023).
+	 */
+	cost_basis: number;
+	/**
+	 * Sum of realized P&L from all Sell transactions for this asset (i64 micro-units, SEL-042).
+	 */
+	realized_pnl: number;
+	/**
+	 * ISO 4217 currency code of the asset's native currency (MKT-023).
+	 */
+	asset_currency: string;
+	/**
+	 * Most recently dated price for this asset in asset currency (i64 micros). None if no price recorded (MKT-031).
+	 */
+	current_price: number | null;
+	/**
+	 * ISO date string of the price observation. None when current_price is None (MKT-031).
+	 */
+	current_price_date: string | null;
+	/**
+	 * Unrealized gain/loss in account currency (i64 micros). None on currency mismatch or no price (MKT-033/034).
+	 * 0 (not None) when current price equals average price (MKT-033).
+	 */
+	unrealized_pnl: number | null;
+	/**
+	 * Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
+	 * 0 (not None) when unrealized_pnl is 0 (MKT-035).
+	 */
+	performance_pct: number | null;
+};
 /**
  * Typed error returned to the frontend for the open_holding command.
  */
-export type OpenHoldingCommandError = 
-/**
- * No account exists with the requested ID.
- */
-{ code: "AccountNotFound" } | 
-/**
- * No asset exists with the requested ID.
- */
-{ code: "AssetNotFound" } | 
-/**
- * Asset is archived — cannot open a holding (TRX-050).
- */
-{ code: "ArchivedAsset" } | 
-/**
- * Total cost is zero or negative (TRX-045).
- */
-{ code: "InvalidTotalCost" } | 
-/**
- * Quantity is zero or negative (TRX-044).
- */
-{ code: "QuantityNotPositive" } | 
-/**
- * Date string could not be parsed as YYYY-MM-DD.
- */
-{ code: "InvalidDate" } | 
-/**
- * Transaction date is in the future.
- */
-{ code: "DateInFuture" } | 
-/**
- * Transaction date is before 1900-01-01.
- */
-{ code: "DateTooOld" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type OpenHoldingCommandError =
+	/**
+	 * No account exists with the requested ID.
+	 */
+	| { code: "AccountNotFound" }
+	/**
+	 * No asset exists with the requested ID.
+	 */
+	| { code: "AssetNotFound" }
+	/**
+	 * Asset is archived — cannot open a holding (TRX-050).
+	 */
+	| { code: "ArchivedAsset" }
+	/**
+	 * Total cost is zero or negative (TRX-045).
+	 */
+	| { code: "InvalidTotalCost" }
+	/**
+	 * Quantity is zero or negative (TRX-044).
+	 */
+	| { code: "QuantityNotPositive" }
+	/**
+	 * Date string could not be parsed as YYYY-MM-DD.
+	 */
+	| { code: "InvalidDate" }
+	/**
+	 * Transaction date is in the future.
+	 */
+	| { code: "DateInFuture" }
+	/**
+	 * Transaction date is before 1900-01-01.
+	 */
+	| { code: "DateTooOld" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Parameters for recording an opening balance for an asset in an account (TRX-042).
  */
-export type OpenHoldingDTO = { 
-/**
- * Account where the opening balance is recorded.
- */
-account_id: string; 
-/**
- * Financial asset being seeded.
- */
-asset_id: string; 
-/**
- * Date of the opening balance (YYYY-MM-DD).
- */
-date: string; 
-/**
- * Quantity in micro-units; strictly positive (TRX-044).
- */
-quantity: number; 
-/**
- * Total cost paid in account currency (micro-units); strictly positive (TRX-045).
- */
-total_cost: number }
+export type OpenHoldingDTO = {
+	/**
+	 * Account where the opening balance is recorded.
+	 */
+	account_id: string;
+	/**
+	 * Financial asset being seeded.
+	 */
+	asset_id: string;
+	/**
+	 * Date of the opening balance (YYYY-MM-DD).
+	 */
+	date: string;
+	/**
+	 * Quantity in micro-units; strictly positive (TRX-044).
+	 */
+	quantity: number;
+	/**
+	 * Total cost paid in account currency (micro-units); strictly positive (TRX-045).
+	 */
+	total_cost: number;
+};
 /**
  * Parameters for recording a sale of an asset from an account.
  */
-export type SellHoldingDTO = { 
-/**
- * Account where the sale is recorded.
- */
-account_id: string; 
-/**
- * Financial asset being sold.
- */
-asset_id: string; 
-/**
- * Transaction date (YYYY-MM-DD).
- */
-date: string; 
-/**
- * Quantity in micro-units.
- */
-quantity: number; 
-/**
- * Unit price in asset currency (micro-units).
- */
-unit_price: number; 
-/**
- * Exchange rate asset→account currency (micro-units).
- */
-exchange_rate: number; 
-/**
- * Fees in account currency (micro-units).
- */
-fees: number; 
-/**
- * Optional user note.
- */
-note: string | null }
+export type SellHoldingDTO = {
+	/**
+	 * Account where the sale is recorded.
+	 */
+	account_id: string;
+	/**
+	 * Financial asset being sold.
+	 */
+	asset_id: string;
+	/**
+	 * Transaction date (YYYY-MM-DD).
+	 */
+	date: string;
+	/**
+	 * Quantity in micro-units.
+	 */
+	quantity: number;
+	/**
+	 * Unit price in asset currency (micro-units).
+	 */
+	unit_price: number;
+	/**
+	 * Exchange rate asset→account currency (micro-units).
+	 */
+	exchange_rate: number;
+	/**
+	 * Fees in account currency (micro-units).
+	 */
+	fees: number;
+	/**
+	 * Optional user note.
+	 */
+	note: string | null;
+};
 /**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
  */
-export type Transaction = { 
-/**
- * Unique identifier.
- */
-id: string; 
-/**
- * The account where the transaction occurred.
- */
-account_id: string; 
-/**
- * The financial asset involved.
- */
-asset_id: string; 
-/**
- * Type of transaction: Purchase, Sell, or OpeningBalance.
- */
-transaction_type: TransactionType; 
-/**
- * Date when the transaction was executed (ISO 8601, "YYYY-MM-DD").
- */
-date: string; 
-/**
- * Number of units traded (micro-units: value × 10^6). Must be > 0.
- */
-quantity: number; 
-/**
- * Price per unit in asset's native currency (micro-units). Can be 0 (gifted assets).
- */
-unit_price: number; 
-/**
- * Conversion rate from asset currency to account currency (micro-units).
- */
-exchange_rate: number; 
-/**
- * Transaction fees in account currency (micro-units).
- */
-fees: number; 
-/**
- * Total cost (Purchase) or proceeds (Sell) in account currency (micro-units). Must be > 0.
- */
-total_amount: number; 
-/**
- * Optional user comment.
- */
-note: string | null; 
-/**
- * Realized P&L for Sell transactions (micro-units, SEL-024). NULL for Purchase.
- */
-realized_pnl: number | null; 
-/**
- * ISO 8601 timestamp of record creation — used for same-date tie-breaking (SEL-024).
- */
-created_at: string }
+export type Transaction = {
+	/**
+	 * Unique identifier.
+	 */
+	id: string;
+	/**
+	 * The account where the transaction occurred.
+	 */
+	account_id: string;
+	/**
+	 * The financial asset involved.
+	 */
+	asset_id: string;
+	/**
+	 * Type of transaction: Purchase, Sell, or OpeningBalance.
+	 */
+	transaction_type: TransactionType;
+	/**
+	 * Date when the transaction was executed (ISO 8601, "YYYY-MM-DD").
+	 */
+	date: string;
+	/**
+	 * Number of units traded (micro-units: value × 10^6). Must be > 0.
+	 */
+	quantity: number;
+	/**
+	 * Price per unit in asset's native currency (micro-units). Can be 0 (gifted assets).
+	 */
+	unit_price: number;
+	/**
+	 * Conversion rate from asset currency to account currency (micro-units).
+	 */
+	exchange_rate: number;
+	/**
+	 * Transaction fees in account currency (micro-units).
+	 */
+	fees: number;
+	/**
+	 * Total cost (Purchase) or proceeds (Sell) in account currency (micro-units). Must be > 0.
+	 */
+	total_amount: number;
+	/**
+	 * Optional user comment.
+	 */
+	note: string | null;
+	/**
+	 * Realized P&L for Sell transactions (micro-units, SEL-024). NULL for Purchase.
+	 */
+	realized_pnl: number | null;
+	/**
+	 * ISO 8601 timestamp of record creation — used for same-date tie-breaking (SEL-024).
+	 */
+	created_at: string;
+};
 /**
  * Typed error returned to the frontend for holding operation commands.
  */
-export type TransactionCommandError = 
-/**
- * No transaction exists with the requested ID.
- */
-{ code: "TransactionNotFound" } | 
-/**
- * No account exists with the requested ID.
- */
-{ code: "AccountNotFound" } | 
-/**
- * Sell requested but holding has zero available units.
- */
-{ code: "ClosedPosition" } | 
-/**
- * Sell quantity exceeds currently held units.
- */
-{ code: "Oversell"; available: number; requested: number } | 
-/**
- * Editing would leave a later transaction with insufficient units.
- */
-{ code: "CascadingOversell" } | 
-/**
- * Date string could not be parsed as YYYY-MM-DD.
- */
-{ code: "InvalidDate" } | 
-/**
- * Transaction date is in the future.
- */
-{ code: "DateInFuture" } | 
-/**
- * Transaction date is before 1900-01-01.
- */
-{ code: "DateTooOld" } | 
-/**
- * Quantity is zero or negative.
- */
-{ code: "QuantityNotPositive" } | 
-/**
- * Unit price is negative.
- */
-{ code: "UnitPriceNegative" } | 
-/**
- * Fees amount is negative.
- */
-{ code: "FeesNegative" } | 
-/**
- * Exchange rate is zero or negative.
- */
-{ code: "ExchangeRateNotPositive" } | 
-/**
- * Total amount is zero or negative.
- */
-{ code: "TotalAmountNotPositive" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type TransactionCommandError =
+	/**
+	 * No transaction exists with the requested ID.
+	 */
+	| { code: "TransactionNotFound" }
+	/**
+	 * No account exists with the requested ID.
+	 */
+	| { code: "AccountNotFound" }
+	/**
+	 * Sell requested but holding has zero available units.
+	 */
+	| { code: "ClosedPosition" }
+	/**
+	 * Sell quantity exceeds currently held units.
+	 */
+	| { code: "Oversell"; available: number; requested: number }
+	/**
+	 * Editing would leave a later transaction with insufficient units.
+	 */
+	| { code: "CascadingOversell" }
+	/**
+	 * Date string could not be parsed as YYYY-MM-DD.
+	 */
+	| { code: "InvalidDate" }
+	/**
+	 * Transaction date is in the future.
+	 */
+	| { code: "DateInFuture" }
+	/**
+	 * Transaction date is before 1900-01-01.
+	 */
+	| { code: "DateTooOld" }
+	/**
+	 * Quantity is zero or negative.
+	 */
+	| { code: "QuantityNotPositive" }
+	/**
+	 * Unit price is negative.
+	 */
+	| { code: "UnitPriceNegative" }
+	/**
+	 * Fees amount is negative.
+	 */
+	| { code: "FeesNegative" }
+	/**
+	 * Exchange rate is zero or negative.
+	 */
+	| { code: "ExchangeRateNotPositive" }
+	/**
+	 * Total amount is zero or negative.
+	 */
+	| { code: "TotalAmountNotPositive" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Type of financial transaction.
  */
-export type TransactionType = 
-/**
- * A purchase (acquisition) of an asset.
- */
-"Purchase" | 
-/**
- * A sale of a previously purchased asset.
- */
-"Sell" | 
-/**
- * Seeds a holding directly from a known quantity and total cost, without full transaction history (TRX-042).
- */
-"OpeningBalance"
+export type TransactionType =
+	/**
+	 * A purchase (acquisition) of an asset.
+	 */
+	| "Purchase"
+	/**
+	 * A sale of a previously purchased asset.
+	 */
+	| "Sell"
+	/**
+	 * Seeds a holding directly from a known quantity and total cost, without full transaction history (TRX-042).
+	 */
+	| "OpeningBalance";
 /**
  * Parameters for updating an existing account.
  */
-export type UpdateAccountDTO = { 
-/**
- * Target account ID.
- */
-id: string; 
-/**
- * New display name.
- */
-name: string; 
-/**
- * ISO 4217 currency code.
- */
-currency: string; 
-/**
- * New update frequency.
- */
-update_frequency: UpdateFrequency }
+export type UpdateAccountDTO = {
+	/**
+	 * Target account ID.
+	 */
+	id: string;
+	/**
+	 * New display name.
+	 */
+	name: string;
+	/**
+	 * ISO 4217 currency code.
+	 */
+	currency: string;
+	/**
+	 * New update frequency.
+	 */
+	update_frequency: UpdateFrequency;
+};
 /**
  * Parameters for updating an existing asset.
  */
-export type UpdateAssetDTO = { 
-/**
- * Target asset ID.
- */
-asset_id: string; 
-/**
- * New display name.
- */
-name: string; 
-/**
- * New reference (mandatory — R1).
- */
-reference: string; 
-/**
- * New classification.
- */
-class: AssetClass; 
-/**
- * New currency.
- */
-currency: string; 
-/**
- * New risk level.
- */
-risk_level: number; 
-/**
- * New category link.
- */
-category_id: string }
+export type UpdateAssetDTO = {
+	/**
+	 * Target asset ID.
+	 */
+	asset_id: string;
+	/**
+	 * New display name.
+	 */
+	name: string;
+	/**
+	 * New reference (mandatory — R1).
+	 */
+	reference: string;
+	/**
+	 * New classification.
+	 */
+	class: AssetClass;
+	/**
+	 * New currency.
+	 */
+	currency: string;
+	/**
+	 * New risk level.
+	 */
+	risk_level: number;
+	/**
+	 * New category link.
+	 */
+	category_id: string;
+};
 /**
  * Typed error returned to the frontend for the update_asset_price command.
  */
-export type UpdateAssetPriceCommandError = 
-/**
- * No price record exists for the given (asset_id, original_date) (MKT-083).
- */
-{ code: "NotFound" } | 
-/**
- * Price must be strictly positive.
- */
-{ code: "NotPositive" } | 
-/**
- * Price value is not a finite number.
- */
-{ code: "NonFinite" } | 
-/**
- * Price date is in the future.
- */
-{ code: "DateInFuture" } | 
-/**
- * An unexpected server-side error occurred.
- */
-{ code: "Unknown" }
+export type UpdateAssetPriceCommandError =
+	/**
+	 * No price record exists for the given (asset_id, original_date) (MKT-083).
+	 */
+	| { code: "NotFound" }
+	/**
+	 * Price must be strictly positive.
+	 */
+	| { code: "NotPositive" }
+	/**
+	 * Price value is not a finite number.
+	 */
+	| { code: "NonFinite" }
+	/**
+	 * Price date is in the future.
+	 */
+	| { code: "DateInFuture" }
+	/**
+	 * An unexpected server-side error occurred.
+	 */
+	| { code: "Unknown" };
 /**
  * Defines how often an account's data should be updated.
  */
-export type UpdateFrequency = 
-/**
- * Automatic updates (e.g. via API)
- */
-"Automatic" | 
-/**
- * Manual update daily
- */
-"ManualDay" | 
-/**
- * Manual update weekly
- */
-"ManualWeek" | 
-/**
- * Manual update monthly
- */
-"ManualMonth" | 
-/**
- * Manual update yearly
- */
-"ManualYear"
+export type UpdateFrequency =
+	/**
+	 * Automatic updates (e.g. via API)
+	 */
+	| "Automatic"
+	/**
+	 * Manual update daily
+	 */
+	| "ManualDay"
+	/**
+	 * Manual update weekly
+	 */
+	| "ManualWeek"
+	/**
+	 * Manual update monthly
+	 */
+	| "ManualMonth"
+	/**
+	 * Manual update yearly
+	 */
+	| "ManualYear";
 /**
  * Information about an available application update.
  */
-export type UpdateInfo = { 
-/**
- * Semantic version string of the available update (e.g. "1.2.3").
- */
-version: string }
+export type UpdateInfo = {
+	/**
+	 * Semantic version string of the available update (e.g. "1.2.3").
+	 */
+	version: string;
+};
 /**
  * Typed error for `lookup_asset` (WEB-025).
- * 
+ *
  * Single variant — covers all failure modes: network unreachable, connection
  * timeout, and any non-2xx HTTP status (including rate-limiting responses).
  */
-export type WebLookupCommandError = 
-/**
- * All network or HTTP-level failures.
- */
-{ code: "NetworkError" }
+export type WebLookupCommandError =
+	/**
+	 * All network or HTTP-level failures.
+	 */
+	{ code: "NetworkError" };
 
 /** tauri-specta globals **/
 
 import {
-	invoke as TAURI_INVOKE,
 	Channel as TAURI_CHANNEL,
+	invoke as TAURI_INVOKE,
 } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
-import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
+import type { WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
 
 type __EventObj__<T> = {
 	listen: (
@@ -1402,9 +1552,8 @@ function __makeEvents__<T extends Record<string, any>>(
 ) {
 	return new Proxy(
 		{} as unknown as {
-			[K in keyof T]: __EventObj__<T[K]> & {
-				(handle: __WebviewWindow__): __EventObj__<T[K]>;
-			};
+			[K in keyof T]: __EventObj__<T[K]> &
+				((handle: __WebviewWindow__) => __EventObj__<T[K]>);
 		},
 		{
 			get: (_, event) => {

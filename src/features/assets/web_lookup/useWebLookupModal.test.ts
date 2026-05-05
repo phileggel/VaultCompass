@@ -75,7 +75,10 @@ describe("useWebLookupModal", () => {
 
   // WEB-047 — back from form-prefilled restores search state (query + results retained)
   it("back from form-prefilled returns to search step with previous results retained", async () => {
-    mockLookupAsset.mockResolvedValue({ status: "ok", data: [appleResult, etfResult] });
+    mockLookupAsset.mockResolvedValue({
+      status: "ok",
+      data: [appleResult, etfResult],
+    });
 
     const { result } = renderHook(() => useWebLookupModal());
 
@@ -142,7 +145,10 @@ describe("useWebLookupModal", () => {
 
   // WEB-040 — selecting a different result replaces the previous selection
   it("selecting a different result replaces all pre-filled values", async () => {
-    mockLookupAsset.mockResolvedValue({ status: "ok", data: [appleResult, etfResult] });
+    mockLookupAsset.mockResolvedValue({
+      status: "ok",
+      data: [appleResult, etfResult],
+    });
 
     const { result } = renderHook(() => useWebLookupModal());
 

@@ -157,7 +157,11 @@ describe("useSellTransaction", () => {
   // SEL-011 — accountId and assetId are pre-filled from props (read-only)
   it("initialises formData accountId and assetId from props (SEL-011)", () => {
     const { result } = renderHook(() =>
-      useSellTransaction({ ...BASE_PROPS, accountId: "acc-42", assetId: "ast-99" }),
+      useSellTransaction({
+        ...BASE_PROPS,
+        accountId: "acc-42",
+        assetId: "ast-99",
+      }),
     );
     expect(result.current.formData.accountId).toBe("acc-42");
     expect(result.current.formData.assetId).toBe("ast-99");
@@ -245,7 +249,10 @@ describe("useSellTransaction", () => {
   // MKT-054 — calls recordAssetPrice when recordPrice is true and price is non-zero
   it("calls recordAssetPrice when recordPrice is true and price is non-zero", async () => {
     localStorage.setItem("auto_record_price", "true");
-    mockSellHolding.mockResolvedValue({ data: { id: "tx-sell-1" }, error: null });
+    mockSellHolding.mockResolvedValue({
+      data: { id: "tx-sell-1" },
+      error: null,
+    });
     mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
 
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
@@ -268,7 +275,10 @@ describe("useSellTransaction", () => {
   // MKT-054 — does not call recordAssetPrice when recordPrice is false
   it("does not call recordAssetPrice when recordPrice is false", async () => {
     localStorage.removeItem("auto_record_price");
-    mockSellHolding.mockResolvedValue({ data: { id: "tx-sell-2" }, error: null });
+    mockSellHolding.mockResolvedValue({
+      data: { id: "tx-sell-2" },
+      error: null,
+    });
 
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
 

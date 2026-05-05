@@ -45,9 +45,15 @@ export function useHeaderConfig(): HeaderConfig {
       title: t("transaction.add_modal_title"),
       onBack: () => {
         if (prefillAccountId) {
-          navigate({ to: "/accounts/$accountId", params: { accountId: prefillAccountId } });
+          navigate({
+            to: "/accounts/$accountId",
+            params: { accountId: prefillAccountId },
+          });
         } else {
-          navigate({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
+          navigate({
+            to: "/assets",
+            search: { createNew: undefined, returnPath: undefined },
+          });
         }
       },
     };

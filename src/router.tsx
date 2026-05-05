@@ -23,7 +23,10 @@ const indexRoute = createRoute({
   beforeLoad: () => {
     const path = getLastPath();
     if (path === "/assets") {
-      throw redirect({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
+      throw redirect({
+        to: "/assets",
+        search: { createNew: undefined, returnPath: undefined },
+      });
     }
     throw redirect({ to: path });
   },

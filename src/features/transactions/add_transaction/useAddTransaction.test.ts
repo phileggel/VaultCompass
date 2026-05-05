@@ -28,7 +28,12 @@ vi.mock("@/lib/store", () => ({
     selector({
       assets: [
         { id: "asset-1", name: "Apple", is_archived: false, currency: "USD" },
-        { id: "asset-archived", name: "OldCo", is_archived: true, currency: "USD" },
+        {
+          id: "asset-archived",
+          name: "OldCo",
+          is_archived: true,
+          currency: "USD",
+        },
       ],
       accounts: [{ id: "account-1", name: "My Account" }],
     }),
@@ -137,7 +142,10 @@ describe("useAddTransaction", () => {
 
   // Backend error keeps modal open and exposes error
   it("sets error and does not call onSubmitSuccess on backend error", async () => {
-    mockBuyHolding.mockResolvedValue({ data: null, error: "Invariant mismatch" });
+    mockBuyHolding.mockResolvedValue({
+      data: null,
+      error: "Invariant mismatch",
+    });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
       useAddTransaction({
@@ -244,7 +252,10 @@ describe("useAddTransaction", () => {
     mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
 
     const { result } = renderHook(() =>
-      useAddTransaction({ prefillAccountId: "account-1", prefillAssetId: "asset-1" }),
+      useAddTransaction({
+        prefillAccountId: "account-1",
+        prefillAssetId: "asset-1",
+      }),
     );
 
     await act(async () => {
@@ -267,7 +278,10 @@ describe("useAddTransaction", () => {
     mockBuyHolding.mockResolvedValue({ data: { id: "tx-add-2" }, error: null });
 
     const { result } = renderHook(() =>
-      useAddTransaction({ prefillAccountId: "account-1", prefillAssetId: "asset-1" }),
+      useAddTransaction({
+        prefillAccountId: "account-1",
+        prefillAssetId: "asset-1",
+      }),
     );
 
     await act(async () => {
@@ -288,11 +302,17 @@ describe("useAddTransaction", () => {
   // MKT-061 — skip recordAssetPrice when recordPrice is true but unit_price is 0
   it("does not call recordAssetPrice when recordPrice is true but unit_price is 0", async () => {
     localStorage.setItem("auto_record_price", "true");
-    mockBuyHolding.mockResolvedValue({ data: { id: "tx-zero-price" }, error: null });
+    mockBuyHolding.mockResolvedValue({
+      data: { id: "tx-zero-price" },
+      error: null,
+    });
     // mockRecordAssetPrice intentionally not set — it must not be called
 
     const { result } = renderHook(() =>
-      useAddTransaction({ prefillAccountId: "account-1", prefillAssetId: "asset-1" }),
+      useAddTransaction({
+        prefillAccountId: "account-1",
+        prefillAssetId: "asset-1",
+      }),
     );
 
     await act(async () => {
@@ -314,7 +334,10 @@ describe("useAddTransaction", () => {
   // MKT-062 — recordAssetPrice failure is silent; transaction commits and onSubmitSuccess fires
   it("swallows recordAssetPrice rejection and still calls onSubmitSuccess", async () => {
     localStorage.setItem("auto_record_price", "true");
-    mockBuyHolding.mockResolvedValue({ data: { id: "tx-price-fail" }, error: null });
+    mockBuyHolding.mockResolvedValue({
+      data: { id: "tx-price-fail" },
+      error: null,
+    });
     mockRecordAssetPrice.mockRejectedValue(new Error("network error"));
 
     const onSubmitSuccess = vi.fn();

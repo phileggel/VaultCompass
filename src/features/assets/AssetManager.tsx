@@ -87,7 +87,10 @@ export function AssetManager() {
           },
         });
       } else {
-        navigate({ to: "/assets", search: { createNew: undefined, returnPath: undefined } });
+        navigate({
+          to: "/assets",
+          search: { createNew: undefined, returnPath: undefined },
+        });
       }
     },
     [navigate, returnPath],

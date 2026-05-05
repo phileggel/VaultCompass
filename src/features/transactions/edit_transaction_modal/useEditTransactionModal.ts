@@ -64,7 +64,13 @@ export function useEditTransactionModal({
     const qtyMicro = decimalToMicro(formData.quantity);
     const priceMicro = decimalToMicro(formData.unitPrice);
     if (isOpeningBalance) {
-      return { qtyMicro, priceMicro, rateMicro: 1_000_000, feesMicro: 0, totalMicro: priceMicro };
+      return {
+        qtyMicro,
+        priceMicro,
+        rateMicro: 1_000_000,
+        feesMicro: 0,
+        totalMicro: priceMicro,
+      };
     }
     const rateMicro = decimalToMicro(formData.exchangeRate);
     const feesMicro = decimalToMicro(formData.fees);
@@ -140,7 +146,11 @@ export function useEditTransactionModal({
             formData.date,
             parseFloat(microToDecimal(microValues.priceMicro)),
           )
-          .catch((e) => logger.warn("Failed to record asset price after correction", { error: e }));
+          .catch((e) =>
+            logger.warn("Failed to record asset price after correction", {
+              error: e,
+            }),
+          );
       }
 
       showSnackbar(t("transaction.success_updated"), "success");

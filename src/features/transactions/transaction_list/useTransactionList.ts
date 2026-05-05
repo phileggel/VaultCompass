@@ -7,7 +7,9 @@ import { transactionGateway } from "../gateway";
 import { type TransactionRowViewModel, toTransactionRow } from "../shared/presenter";
 
 export function useTransactionList() {
-  const { accountId, assetId } = useParams({ from: "/accounts/$accountId/transactions/$assetId" });
+  const { accountId, assetId } = useParams({
+    from: "/accounts/$accountId/transactions/$assetId",
+  });
   const navigate = useNavigate();
 
   const accounts = useAppStore((s) => s.accounts);
@@ -114,7 +116,10 @@ export function useTransactionList() {
   const handleDeleteSuccess = useCallback(async () => {
     const remaining = await refreshTransactions();
     if (remaining.length === 0) {
-      navigate({ to: "/accounts/$accountId", params: { accountId: selectedAccountId } });
+      navigate({
+        to: "/accounts/$accountId",
+        params: { accountId: selectedAccountId },
+      });
     }
   }, [refreshTransactions, selectedAccountId, navigate]);
 

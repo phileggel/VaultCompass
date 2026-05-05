@@ -29,7 +29,12 @@ vi.mock("@/lib/store", () => ({
     selector({
       assets: [
         { id: "asset-1", name: "Apple", is_archived: false, currency: "USD" },
-        { id: "asset-archived", name: "OldCo", is_archived: true, currency: "USD" },
+        {
+          id: "asset-archived",
+          name: "OldCo",
+          is_archived: true,
+          currency: "USD",
+        },
       ],
       accounts: [{ id: "account-1", name: "My Account" }],
     }),
@@ -102,13 +107,21 @@ describe("useEditTransactionModal", () => {
 
   // Submit calls correctTransaction with correct args: (id, accountId, dto)
   it("calls correctTransaction with correct args on submit", async () => {
-    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+    mockCorrectTransaction.mockResolvedValue({
+      data: { id: "tx-existing" },
+      error: null,
+    });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
-      useEditTransactionModal({ transaction: baseTransaction, onSubmitSuccess }),
+      useEditTransactionModal({
+        transaction: baseTransaction,
+        onSubmitSuccess,
+      }),
     );
 
-    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    const fakeSubmit = {
+      preventDefault: vi.fn(),
+    } as unknown as React.FormEvent;
 
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
@@ -128,13 +141,21 @@ describe("useEditTransactionModal", () => {
 
   // Backend error stays modal open
   it("sets error and does not call onSubmitSuccess on backend error", async () => {
-    mockCorrectTransaction.mockResolvedValue({ data: null, error: "Not found" });
+    mockCorrectTransaction.mockResolvedValue({
+      data: null,
+      error: "Not found",
+    });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
-      useEditTransactionModal({ transaction: baseTransaction, onSubmitSuccess }),
+      useEditTransactionModal({
+        transaction: baseTransaction,
+        onSubmitSuccess,
+      }),
     );
 
-    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    const fakeSubmit = {
+      preventDefault: vi.fn(),
+    } as unknown as React.FormEvent;
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
@@ -152,7 +173,10 @@ describe("useEditTransactionModal", () => {
 
   // MKT-054 — calls recordAssetPrice when recordPrice is manually set to true
   it("calls recordAssetPrice when recordPrice is manually set to true", async () => {
-    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+    mockCorrectTransaction.mockResolvedValue({
+      data: { id: "tx-existing" },
+      error: null,
+    });
     mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
 
     const { result } = renderHook(() => useEditTransactionModal({ transaction: baseTransaction }));
@@ -161,7 +185,9 @@ describe("useEditTransactionModal", () => {
       result.current.setRecordPrice(true);
     });
 
-    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    const fakeSubmit = {
+      preventDefault: vi.fn(),
+    } as unknown as React.FormEvent;
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
@@ -171,7 +197,10 @@ describe("useEditTransactionModal", () => {
 
   // MKT-061 — skip recordAssetPrice when recordPrice is true but unit_price is 0
   it("does not call recordAssetPrice when recordPrice is true but unit_price is 0", async () => {
-    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-zero-price" }, error: null });
+    mockCorrectTransaction.mockResolvedValue({
+      data: { id: "tx-zero-price" },
+      error: null,
+    });
 
     const { result } = renderHook(() =>
       useEditTransactionModal({ transaction: zeroUnitPriceTransaction }),
@@ -181,7 +210,9 @@ describe("useEditTransactionModal", () => {
       result.current.setRecordPrice(true);
     });
 
-    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    const fakeSubmit = {
+      preventDefault: vi.fn(),
+    } as unknown as React.FormEvent;
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
@@ -204,12 +235,17 @@ describe("useEditTransactionModal", () => {
 
   // TRX-051: submit recomputes unit_price = round(total_cost * 1M / quantity); fees=0, rate=1M, note=null
   it("TRX-051: submit sends computed unit_price, zero fees, unit exchange_rate, null note", async () => {
-    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-ob" }, error: null });
+    mockCorrectTransaction.mockResolvedValue({
+      data: { id: "tx-ob" },
+      error: null,
+    });
     const { result } = renderHook(() =>
       useEditTransactionModal({ transaction: openingBalanceTransaction }),
     );
 
-    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    const fakeSubmit = {
+      preventDefault: vi.fn(),
+    } as unknown as React.FormEvent;
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
@@ -228,19 +264,27 @@ describe("useEditTransactionModal", () => {
 
   // MKT-062 — recordAssetPrice failure is silent; edit commits and onSubmitSuccess fires
   it("swallows recordAssetPrice rejection and still calls onSubmitSuccess", async () => {
-    mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+    mockCorrectTransaction.mockResolvedValue({
+      data: { id: "tx-existing" },
+      error: null,
+    });
     mockRecordAssetPrice.mockRejectedValue(new Error("network error"));
 
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() =>
-      useEditTransactionModal({ transaction: baseTransaction, onSubmitSuccess }),
+      useEditTransactionModal({
+        transaction: baseTransaction,
+        onSubmitSuccess,
+      }),
     );
 
     await act(async () => {
       result.current.setRecordPrice(true);
     });
 
-    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+    const fakeSubmit = {
+      preventDefault: vi.fn(),
+    } as unknown as React.FormEvent;
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });

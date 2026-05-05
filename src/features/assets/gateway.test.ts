@@ -57,7 +57,9 @@ describe("asset gateway — lookupAsset", () => {
     const res = await assetGateway.lookupAsset("US0378331005");
 
     expect(res).toEqual({ status: "ok", data: results });
-    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", { query: "US0378331005" });
+    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", {
+      query: "US0378331005",
+    });
   });
 
   // WEB-020 — empty list is a valid success (WEB-032 handled by UI layer)
@@ -87,7 +89,13 @@ describe("asset gateway — lookupAsset", () => {
   // WEB-023/WEB-024/WEB-046 — optional fields may be null
   it("lookupAsset preserves null optional fields from result", async () => {
     const results: AssetLookupResult[] = [
-      { name: "Obscure Fund", reference: null, currency: null, asset_class: null, exchange: null },
+      {
+        name: "Obscure Fund",
+        reference: null,
+        currency: null,
+        asset_class: null,
+        exchange: null,
+      },
     ];
     mockInvoke.mockResolvedValue(results);
 

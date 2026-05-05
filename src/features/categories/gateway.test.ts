@@ -38,7 +38,9 @@ describe("categoryGateway", () => {
     mockInvoke.mockResolvedValue(category);
     const result = await categoryGateway.addCategory("Equities");
     expect(result).toEqual({ status: "ok", data: category });
-    expect(mockInvoke).toHaveBeenCalledWith("add_category", { label: "Equities" });
+    expect(mockInvoke).toHaveBeenCalledWith("add_category", {
+      label: "Equities",
+    });
   });
 
   it("addCategory returns DuplicateName error", async () => {

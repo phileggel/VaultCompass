@@ -17,8 +17,14 @@ export function useAccountTable(
   ) => Promise<{ data: AccountDeletionSummary | null; error: string | null }>,
   onAccountClick: (accountId: string) => void,
 ) {
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "name", direction: "asc" });
-  const [deleteData, setDeleteData] = useState<{ id: string; name: string } | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: "name",
+    direction: "asc",
+  });
+  const [deleteData, setDeleteData] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [deleteSummary, setDeleteSummary] = useState<AccountDeletionSummary | null>(null);
   const [fetchingSummaryFor, setFetchingSummaryFor] = useState<string | null>(null);
   const [editData, setEditData] = useState<Account | null>(null);

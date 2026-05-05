@@ -93,7 +93,9 @@ export function useDateField(
   const clearDate = () => {
     setDisplayValue("");
     setShowCalendar(false);
-    onChange?.({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>);
+    onChange?.({
+      target: { value: "" },
+    } as React.ChangeEvent<HTMLInputElement>);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,7 +117,9 @@ export function useDateField(
     const isoDate = `${year}-${month}-${day}`;
     setDisplayValue(formatDateForDisplay(isoDate));
     setShowCalendar(false);
-    onChange?.({ target: { value: isoDate } } as React.ChangeEvent<HTMLInputElement>);
+    onChange?.({
+      target: { value: isoDate },
+    } as React.ChangeEvent<HTMLInputElement>);
     inputRef.current?.blur();
   };
 

@@ -195,7 +195,9 @@ describe("OpenBalanceModal", () => {
     const onClose = vi.fn();
     render(<OpenBalanceModal {...BASE_PROPS} onClose={onClose} />);
 
-    const cancelButton = screen.getByRole("button", { name: /action\.cancel/i });
+    const cancelButton = screen.getByRole("button", {
+      name: /action\.cancel/i,
+    });
     await userEvent.click(cancelButton);
 
     expect(onClose).toHaveBeenCalledTimes(1);

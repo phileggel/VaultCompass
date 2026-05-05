@@ -64,14 +64,20 @@ describe("usePriceModal", () => {
 
   // MKT-012 — Price field pre-filled when current_price_date == today, empty otherwise
   it("MKT-012 — pre-fills price when current_price_date is today", () => {
-    const holding = makeHolding({ current_price: 150_000_000, current_price_date: TODAY });
+    const holding = makeHolding({
+      current_price: 150_000_000,
+      current_price_date: TODAY,
+    });
     const { result } = renderHook(() => usePriceModal({ holding, onSubmitSuccess: vi.fn() }));
     expect(result.current.price).toBe("150.00");
   });
 
   // MKT-012 — price is empty when current_price_date is not today
   it("MKT-012 — price is empty when current_price_date is not today", () => {
-    const holding = makeHolding({ current_price: 150_000_000, current_price_date: "2024-01-01" });
+    const holding = makeHolding({
+      current_price: 150_000_000,
+      current_price_date: "2024-01-01",
+    });
     const { result } = renderHook(() => usePriceModal({ holding, onSubmitSuccess: vi.fn() }));
     expect(result.current.price).toBe("");
   });
@@ -200,7 +206,10 @@ describe("usePriceModal", () => {
 
   // MKT-029 — Modal stays open on error + inline error shown
   it("MKT-029 — sets inline error and does not call onSubmitSuccess on backend error", async () => {
-    mockRecordAssetPrice.mockResolvedValue({ status: "error", error: { code: "NotPositive" } });
+    mockRecordAssetPrice.mockResolvedValue({
+      status: "error",
+      error: { code: "NotPositive" },
+    });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess }));
 

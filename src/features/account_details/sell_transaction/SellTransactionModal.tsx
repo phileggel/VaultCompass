@@ -54,7 +54,12 @@ export function SellTransactionModal({
     setRecordPrice,
     handleChange,
     handleSubmit,
-  } = useSellTransaction({ accountId, assetId, holdingQuantityMicro, onSubmitSuccess });
+  } = useSellTransaction({
+    accountId,
+    assetId,
+    holdingQuantityMicro,
+    onSubmitSuccess,
+  });
 
   const footer = useMemo(
     () => (
@@ -128,7 +133,9 @@ export function SellTransactionModal({
             required
           />
           <span className="text-xs text-m3-on-surface-variant">
-            {t("transaction.form_max_quantity_hint", { max: maxQuantityDisplay })}
+            {t("transaction.form_max_quantity_hint", {
+              max: maxQuantityDisplay,
+            })}
           </span>
         </div>
 

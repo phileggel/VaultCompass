@@ -96,7 +96,9 @@ export function SearchPanel({
                 <li key={`${result.name}-${result.reference ?? result.exchange ?? index}`}>
                   <button
                     type="button"
-                    aria-label={t("asset.web_lookup.select_result", { name: result.name })}
+                    aria-label={t("asset.web_lookup.select_result", {
+                      name: result.name,
+                    })}
                     onClick={() => onSelect(result)}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-m3-surface-variant/40 transition-colors"
                   >

@@ -57,7 +57,10 @@ const makeTx = (id: string, date: string) => ({
 describe("useTransactionList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAssetIdsForAccount.mockResolvedValue({ status: "ok", data: ["asset-1", "asset-2"] });
+    mockGetAssetIdsForAccount.mockResolvedValue({
+      status: "ok",
+      data: ["asset-1", "asset-2"],
+    });
     mockGetTransactions.mockResolvedValue({
       status: "ok",
       data: [makeTx("tx-1", "2024-01-01"), makeTx("tx-2", "2024-03-01")],

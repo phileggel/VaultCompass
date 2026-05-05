@@ -176,7 +176,9 @@ describe("transactionGateway", () => {
     mockInvoke.mockResolvedValue(["asset-1", "asset-2"]);
     const result = await transactionGateway.getAssetIdsForAccount("acc-1");
     expect(result).toEqual({ status: "ok", data: ["asset-1", "asset-2"] });
-    expect(mockInvoke).toHaveBeenCalledWith("get_asset_ids_for_account", { accountId: "acc-1" });
+    expect(mockInvoke).toHaveBeenCalledWith("get_asset_ids_for_account", {
+      accountId: "acc-1",
+    });
   });
 
   it("getAssetIdsForAccount returns error on failure", async () => {

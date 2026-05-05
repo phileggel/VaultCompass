@@ -110,7 +110,9 @@ describe("open_balance", () => {
   before(async () => {
     const categoryId = await seedCategory("E2E OB Category");
     accountId = await seedAccount(ACCOUNT_NAME, "EUR");
-    assetId = await seedAsset(ASSET_NAME, categoryId, { reference: "E2E-OB-REF" });
+    assetId = await seedAsset(ASSET_NAME, categoryId, {
+      reference: "E2E-OB-REF",
+    });
     // Make the account non-empty so the "Open Balance" button is visible.
     // The ids are stored in closure variables and passed explicitly to avoid
     // any serialization issue with executeAsync argument passing.

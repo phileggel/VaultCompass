@@ -33,7 +33,10 @@ describe("useEditAccountModal", () => {
 
   // R13, R15 — backend error keeps modal open and exposes error
   it("does not call onClose and exposes error on backend failure", async () => {
-    mockUpdateAccount.mockResolvedValue({ data: null, error: "Duplicate name" });
+    mockUpdateAccount.mockResolvedValue({
+      data: null,
+      error: "Duplicate name",
+    });
     const onClose = vi.fn();
     const { result } = renderHook(() => useEditAccountModal({ account: mockAccount, onClose }));
 

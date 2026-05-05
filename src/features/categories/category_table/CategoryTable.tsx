@@ -31,7 +31,10 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
     searchTerm,
   );
 
-  const [deleteData, setDeleteData] = useState<{ id: string; name: string } | null>(null);
+  const [deleteData, setDeleteData] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editData, setEditData] = useState<AssetCategory | null>(null);
@@ -152,7 +155,10 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
                         e.stopPropagation();
                         if (!isSystemCategory(category.id)) {
                           setDeleteError(null);
-                          setDeleteData({ id: category.id, name: category.name });
+                          setDeleteData({
+                            id: category.id,
+                            name: category.name,
+                          });
                         }
                       }}
                     />

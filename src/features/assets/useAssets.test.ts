@@ -95,7 +95,10 @@ describe("useAssets", () => {
     const asset = makeAsset();
     mockCreateAsset.mockResolvedValue({ status: "ok", data: asset });
     const { result } = renderHook(() => useAssets());
-    let ret: { data: Asset | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Asset | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     const dto: CreateAssetDTO = {
       name: "Apple",
       class: "Stocks",
@@ -115,9 +118,15 @@ describe("useAssets", () => {
   });
 
   it("addAsset returns error code on failure without fetching", async () => {
-    mockCreateAsset.mockResolvedValue({ status: "error", error: { code: "NameAlreadyExists" } });
+    mockCreateAsset.mockResolvedValue({
+      status: "error",
+      error: { code: "NameAlreadyExists" },
+    });
     const { result } = renderHook(() => useAssets());
-    let ret: { data: Asset | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Asset | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     const dto: CreateAssetDTO = {
       name: "Apple",
       class: "Stocks",
@@ -148,7 +157,10 @@ describe("useAssets", () => {
       risk_level: 4,
       reference: "AAPL",
     };
-    let ret: { data: Asset | null; error: string | null } = { data: null, error: "sentinel" };
+    let ret: { data: Asset | null; error: string | null } = {
+      data: null,
+      error: "sentinel",
+    };
     await act(async () => {
       ret = await result.current.updateAsset(dto);
     });
@@ -159,7 +171,10 @@ describe("useAssets", () => {
   });
 
   it("updateAsset returns error code on failure", async () => {
-    mockUpdateAsset.mockResolvedValue({ status: "error", error: { code: "NameAlreadyExists" } });
+    mockUpdateAsset.mockResolvedValue({
+      status: "error",
+      error: { code: "NameAlreadyExists" },
+    });
     const { result } = renderHook(() => useAssets());
     const dto: UpdateAssetDTO = {
       asset_id: "a1",
@@ -170,7 +185,10 @@ describe("useAssets", () => {
       risk_level: 4,
       reference: "AAPL",
     };
-    let ret: { data: Asset | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Asset | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.updateAsset(dto);
     });
@@ -192,7 +210,10 @@ describe("useAssets", () => {
   });
 
   it("archiveAsset returns error code on failure", async () => {
-    mockArchiveAsset.mockResolvedValue({ status: "error", error: { code: "HasActiveHoldings" } });
+    mockArchiveAsset.mockResolvedValue({
+      status: "error",
+      error: { code: "HasActiveHoldings" },
+    });
     const { result } = renderHook(() => useAssets());
     let ret: { error: string | null } = { error: null };
     await act(async () => {
@@ -230,7 +251,10 @@ describe("useAssets", () => {
   });
 
   it("deleteAsset returns error code on failure", async () => {
-    mockDeleteAsset.mockResolvedValue({ status: "error", error: { code: "HasActiveHoldings" } });
+    mockDeleteAsset.mockResolvedValue({
+      status: "error",
+      error: { code: "HasActiveHoldings" },
+    });
     const { result } = renderHook(() => useAssets());
     let ret: { error: string | null } = { error: null };
     await act(async () => {

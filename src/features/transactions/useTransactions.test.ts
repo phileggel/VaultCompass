@@ -75,7 +75,10 @@ describe("useTransactions", () => {
     const tx = makeTx();
     mockBuyHolding.mockResolvedValue({ status: "ok", data: tx });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.buyHolding(buyDto);
     });
@@ -85,9 +88,15 @@ describe("useTransactions", () => {
   });
 
   it("buyHolding returns error code on failure", async () => {
-    mockBuyHolding.mockResolvedValue({ status: "error", error: { code: "AccountNotFound" } });
+    mockBuyHolding.mockResolvedValue({
+      status: "error",
+      error: { code: "AccountNotFound" },
+    });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.buyHolding(buyDto);
     });
@@ -110,7 +119,10 @@ describe("useTransactions", () => {
       fees: 0,
       note: null,
     };
-    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.sellHolding(sellDto);
     });
@@ -124,7 +136,10 @@ describe("useTransactions", () => {
       error: { code: "Oversell", available: 500_000, requested: 999_000_000 },
     });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.sellHolding({
         account_id: "acc-1",
@@ -154,7 +169,10 @@ describe("useTransactions", () => {
       fees: 0,
       note: null,
     };
-    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.correctTransaction("tx-1", "acc-1", dto);
     });
@@ -177,7 +195,10 @@ describe("useTransactions", () => {
       fees: 0,
       note: null,
     };
-    let ret: { data: Transaction | null; error: string | null } = { data: null, error: null };
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
     await act(async () => {
       ret = await result.current.correctTransaction("tx-1", "acc-1", dto);
     });
@@ -225,7 +246,10 @@ describe("useTransactions", () => {
   });
 
   it("getTransactions returns empty array on error", async () => {
-    mockGetTransactions.mockResolvedValue({ status: "error", error: { code: "Unknown" } });
+    mockGetTransactions.mockResolvedValue({
+      status: "error",
+      error: { code: "Unknown" },
+    });
     const { result } = renderHook(() => useTransactions());
     let ret: Transaction[] = [makeTx()];
     await act(async () => {

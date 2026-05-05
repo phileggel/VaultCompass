@@ -63,7 +63,9 @@ export function useOpenBalance({ accountId, assetId, onSubmitSuccess }: UseOpenB
           showSnackbar(t("open_balance.success_created"), "success");
           onSubmitSuccess?.();
         } else {
-          logger.error("[useOpenBalance] openHolding failed", { error: result.error });
+          logger.error("[useOpenBalance] openHolding failed", {
+            error: result.error,
+          });
           setError(`error.${result.error.code}`);
         }
       } finally {
@@ -73,5 +75,12 @@ export function useOpenBalance({ accountId, assetId, onSubmitSuccess }: UseOpenB
     [formData, onSubmitSuccess, showSnackbar, t],
   );
 
-  return { formData, error, isSubmitting, isFormValid, handleChange, handleSubmit };
+  return {
+    formData,
+    error,
+    isSubmitting,
+    isFormValid,
+    handleChange,
+    handleSubmit,
+  };
 }

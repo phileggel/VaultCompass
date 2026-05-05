@@ -37,13 +37,17 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
 
   // Archive state
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
-  const [assetToArchive, setAssetToArchive] = useState<{ id: string; name: string } | null>(null);
+  const [assetToArchive, setAssetToArchive] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Unarchive state
   const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
-  const [assetToUnarchive, setAssetToUnarchive] = useState<{ id: string; name: string } | null>(
-    null,
-  );
+  const [assetToUnarchive, setAssetToUnarchive] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Edit state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -216,7 +220,10 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                         e.stopPropagation();
                         navigate({
                           to: "/transactions/new",
-                          search: { prefillAssetId: asset.id, prefillAccountId: undefined },
+                          search: {
+                            prefillAssetId: asset.id,
+                            prefillAccountId: undefined,
+                          },
                         });
                       }}
                     />
@@ -238,7 +245,10 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                         aria-label={t("asset.action_unarchive")}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setAssetToUnarchive({ id: asset.id, name: asset.name });
+                          setAssetToUnarchive({
+                            id: asset.id,
+                            name: asset.name,
+                          });
                           setIsUnarchiveDialogOpen(true);
                         }}
                       />

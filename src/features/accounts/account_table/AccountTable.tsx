@@ -214,7 +214,9 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
         onCancel={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title={t("account.delete_confirm_title")}
-        message={t("account.delete_confirm_message", { name: deleteData?.name ?? "" })}
+        message={t("account.delete_confirm_message", {
+          name: deleteData?.name ?? "",
+        })}
         confirmLabel={t("action.delete")}
         cancelLabel={t("action.cancel")}
         variant="danger"

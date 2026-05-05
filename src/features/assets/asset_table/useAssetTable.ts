@@ -7,7 +7,10 @@ export type SortConfig = {
 };
 
 export function useAssetTable(assets: Asset[], searchTerm: string, showArchived: boolean) {
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "name", direction: "asc" });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: "name",
+    direction: "asc",
+  });
 
   const handleSort = (key: SortConfig["key"]) => {
     setSortConfig((prev) => ({
