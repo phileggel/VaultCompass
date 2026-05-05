@@ -75,6 +75,28 @@ An internal entity of `Asset`. A price observation for an asset on a given date.
 | `Purchase`       | A regular buy transaction — quantity, unit price, exchange rate, fees                | confirmed |
 | `Sell`           | A regular sell transaction — quantity, unit price, exchange rate, fees, realized P&L | confirmed |
 | `OpeningBalance` | A position seed entry — quantity and total cost paid directly, no fee breakdown      | confirmed |
+| `Deposit`        | A cash inflow from outside the application's tracked world (CSH-022)                 | pending   |
+| `Withdrawal`     | A cash outflow to outside the application's tracked world (CSH-032)                  | pending   |
+
+## Cash Domain Concepts (introduced by CSH spec)
+
+### Cash Asset
+
+> Status: pending
+
+A system-seeded `Asset` of `class = AssetClass::Cash`, one per ISO currency, with deterministic id `system-cash-{ccy}`. Acts as the asset reference for cash positions. Not user-editable, not user-creatable, not displayed in the asset catalog.
+
+### Cash Holding
+
+> Status: pending
+
+A `Holding` whose asset is a Cash Asset. Represents the cash balance held in the account in the account's reference currency. At most one Cash Holding per `(account_id, account.currency)`. Lazy-created on first Deposit or Sell; cleaned up by TRX-034 when no cash-affecting transactions remain.
+
+### Global Value
+
+> Status: pending
+
+The full economic value of an account: cash balance + Σ (market value of non-cash active holdings). Surfaced as `AccountDetailsResponse.total_global_value` (CSH-094). Used as the canonical "what is this account worth right now?" metric across the Account Details header and (later) the portfolio dashboard.
 
 ---
 

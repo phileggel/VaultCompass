@@ -132,7 +132,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-055 — Opening balance entry point (frontend)**: The opening balance form is accessible via a dedicated button in the Account Details page header, alongside the existing "Add Transaction" button. It is not available as a holding row action. The account is pre-filled from the current Account Details context; the user selects the asset in the form.
 
-**TRX-056 — Opening balance error variants (backend)**: The opening balance command exposes the following error variants: `QuantityNotPositive` (quantity ≤ 0), `InvalidTotalCost` (total cost ≤ 0, new variant), `DateInFuture` (date is in the future), `DateTooOld` (date before 1900-01-01, consistent with TRX-020/TRX-046), `AccountNotFound`, `AssetNotFound`, `ArchivedAsset` (asset archived — race condition per TRX-050; displayed as inline error). `DbError` covers unexpected persistence failures.
+**TRX-056 — Opening balance error variants (backend)**: The opening balance command exposes the following error variants: `QuantityNotPositive` (quantity ≤ 0), `InvalidTotalCost` (total cost ≤ 0, new variant), `DateInFuture` (date is in the future), `DateTooOld` (date before 1900-01-01, consistent with TRX-020/TRX-046), `AccountNotFound`, `AssetNotFound`, `ArchivedAsset` (asset archived — race condition per TRX-050; displayed as inline error), `OpeningBalanceOnCashAsset` (asset has `class = AssetClass::Cash` — see CSH-061; the user must use `record_deposit` instead). `DbError` covers unexpected persistence failures.
 
 **TRX-057 — Opening balance loading state (frontend)**: While the submission is in progress, the submit button is disabled and shows a loading indicator.
 

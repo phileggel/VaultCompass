@@ -2,6 +2,16 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (backend) — Consolidate transaction-recording command contracts
+
+After the `use_cases/holding_transaction/` consolidation, two pre-existing contract inconsistencies remain in the moved commands. Surfaced during the cash-tracking spec review (2026-05-05); deliberately deferred from the consolidation refactor to keep that PR scope-minimal.
+
+**1. Per-command error enums.** `buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction` share one permissive `TransactionCommandError` enum whose variants are a union of every error any of them might emit. `account-contract.md` already documents per-command subsets (e.g. `cancel_transaction` only emits `TransactionNotFound`/`DbError`) but the type system can't enforce that. Split into `BuyHoldingCommandError`, `SellHoldingCommandError`, `CorrectTransactionCommandError`, `CancelTransactionCommandError` matching what the contract already claims. `open_holding` already follows this pattern. Frontend impact: error-handler types in gateway/forms regenerate.
+
+**2. Parameter style.** `correct_transaction(id: String, account_id: String, dto: CorrectTransactionDTO)` and `cancel_transaction(id: String, account_id: String)` mix primitives + DTO; the rest are DTO-only. Move `id`/`account_id` into the DTOs for consistency. Frontend impact: gateway call sites change.
+
+Work order: do (1) first; (2) is optional and lower value. (1) becomes notably more relevant once cash lands, because `InsufficientCash { current_balance_micros, currency }` would otherwise pollute the shared enum and bleed into `cancel_transaction`'s TS type even though it only fires from a replay-violation edge case.
+
 ## (backend) — Introduce dependency injection container for service wiring
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.

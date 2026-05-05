@@ -58,16 +58,19 @@ Read projection for **closed** positions (`quantity = 0`). New DTO introduced by
 
 The top-level response returned by the `get_account_details(account_id)` Tauri command. Defined as a Rust struct with `#[derive(Type, Serialize)]`.
 
-| Field                 | Business meaning                                                                                          |
-| --------------------- | --------------------------------------------------------------------------------------------------------- |
-| `account_name`        | Display name of the account (per ACD-032).                                                                |
-| `holdings`            | Active holdings (`quantity > 0`), sorted per ACD-033.                                                     |
-| `closed_holdings`     | Closed holdings (`quantity = 0`), sorted per ACD-044. Empty list when none exist.                         |
-| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).                           |
-| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                                             |
-| `total_realized_pnl`  | Sum of `total_realized_pnl` across **all** holdings (open + closed) in the account (per SEL-042/ACD-045). |
+| Field                 | Business meaning                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account_name`        | Display name of the account (per ACD-032).                                                                                                      |
+| `holdings`            | Active holdings (`quantity > 0`), sorted per ACD-033.                                                                                           |
+| `closed_holdings`     | Closed holdings (`quantity = 0`), sorted per ACD-044. Empty list when none exist.                                                               |
+| `total_holding_count` | Count of all holdings for the account regardless of quantity (used by ACD-034).                                                                 |
+| `total_cost_basis`    | Sum of `cost_basis` across all active holdings (per ACD-031).                                                                                   |
+| `total_realized_pnl`  | Sum of `total_realized_pnl` across **all** holdings (open + closed) in the account (per SEL-042/ACD-045).                                       |
+| `total_global_value`  | Cash + Σ(market value of non-cash active holdings); see CSH-094 for the formula and missing-price treatment. Account-currency micros (ADR-001). |
 
 > **MKT extension**: `docs/spec/market-price.md` adds `total_unrealized_pnl: Option<i64>` to this response and five new fields to `HoldingDetail` (`asset_currency`, `current_price`, `current_price_date`, `unrealized_pnl`, `performance_pct`). See the MKT spec for definitions.
+
+> **CSH extension**: `docs/spec/cash-tracking.md` adds `total_global_value: i64` to this response (CSH-094) and amends ACD-020 / ACD-034 with cash-specific exceptions (CSH-097 / CSH-098). The Cash Holding (when present) is included in `holdings` like any other holding (CSH-090); its asset metadata is enriched via `AssetService` like any other asset (ACD-022).
 
 ---
 
@@ -83,7 +86,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 ### Holding List and Cost Basis
 
-**ACD-020 — Active holding filter (backend)**: Only holdings with `quantity > 0` are included in the **active holdings section** of the Account Details view. Holdings with `quantity = 0` are excluded from the active section but may appear in the closed positions section (ACD-044, ACD-047).
+**ACD-020 — Active holding filter (backend)**: Only holdings with `quantity > 0` are included in the **active holdings section** of the Account Details view. Holdings with `quantity = 0` are excluded from the active section but may appear in the closed positions section (ACD-044, ACD-047). **Cash exception (per CSH-097)**: the frontend renders the Cash Holding row in the active section regardless of `quantity`, so the cash row stays visible across balance fluctuations including `quantity = 0`. The backend payload still includes the Cash Holding when present (CSH-090); ACD-020's filter applies to the **non-cash** holdings shown in the active section.
 
 **ACD-021 — Archived asset inclusion (backend)**: Holdings for archived assets are included in the display as long as their `quantity > 0`. Archiving an asset does not close its position.
 
@@ -103,7 +106,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 ### States
 
-**ACD-034 — Empty account state (frontend)**: If no holdings remain after applying the `quantity > 0` filter (ACD-020), the view displays one of two messages depending on the backend response: "No positions yet" when the account has no holdings at all, or "All positions are closed" when holdings exist but all have `quantity = 0`. The Tauri command response includes `total_holding_count` so the frontend can distinguish these two cases without a second request.
+**ACD-034 — Empty account state (frontend)**: If no holdings remain after applying the `quantity > 0` filter (ACD-020), the view displays one of two messages depending on the backend response: "No positions yet" when the account has no holdings at all, or "All positions are closed" when holdings exist but all have `quantity = 0`. The Tauri command response includes `total_holding_count` so the frontend can distinguish these two cases without a second request. **Cash exception (per CSH-098)**: the Cash Holding is excluded from this active-holdings count — an account whose only non-zero holding is cash still renders the asset-positions area as empty (with the cash row visible above per ACD-020 / CSH-097).
 
 **ACD-035 — Empty state CTA (frontend)**: In the empty state, the view displays an "Add Transaction" button that opens the Add Transaction modal pre-filled with the `account_id` from the current route (ACD-011), per the pre-fill contract defined in TRX-011.
 

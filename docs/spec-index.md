@@ -1,17 +1,19 @@
 # Trigram Registry
 
-| Trigram | Spec Name                   | Description                                                    | Status |
-| ------- | --------------------------- | -------------------------------------------------------------- | ------ |
-| TRX     | Financial Asset Transaction | recording purchases and managing holdings                      | active |
-| ACD     | Account Details             | Account holdings, performance and asset list                   | active |
-| ACC     | Account Management          | CRUD operations for financial accounts                         | active |
-| TXL     | Transaction List            | Browse, edit and delete transactions per (account, asset) pair | active |
-| SEL     | Sell Transaction            | Recording asset sales, holding reduction, and realized P&L     | active |
-| MKT     | Market Price                | Manual market price entry per asset; unrealized P&L display    | active |
-| AST     | Asset                       | Asset CRUD, archival, and listing                              | active |
-| CAT     | Category                    | User-defined asset category management                         | active |
-| UPD     | Application Update          | Auto-update detection, download, and install                   | active |
-| WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                 | active |
+| Trigram | Spec Name                   | Description                                                                                    | Status   |
+| ------- | --------------------------- | ---------------------------------------------------------------------------------------------- | -------- |
+| TRX     | Financial Asset Transaction | recording purchases and managing holdings                                                      | active   |
+| ACD     | Account Details             | Account holdings, performance and asset list                                                   | active   |
+| ACC     | Account Management          | CRUD operations for financial accounts                                                         | active   |
+| TXL     | Transaction List            | Browse, edit and delete transactions per (account, asset) pair                                 | active   |
+| SEL     | Sell Transaction            | Recording asset sales, holding reduction, and realized P&L                                     | active   |
+| MKT     | Market Price                | Manual market price entry per asset; unrealized P&L display                                    | active   |
+| AST     | Asset                       | Asset CRUD, archival, and listing                                                              | active   |
+| CAT     | Category                    | User-defined asset category management                                                         | active   |
+| UPD     | Application Update          | Auto-update detection, download, and install                                                   | active   |
+| WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                                                 | active   |
+| PFD     | Portfolio Dashboard         | Cross-account aggregate view: KPIs + per-account list (paused — blocked on cash-tracking spec) | planning |
+| CSH     | Cash Tracking               | Cash-as-Holding (one per currency); Deposit/Withdrawal; Buy/Sell re-linked to cash             | active   |
 
 ---
 
