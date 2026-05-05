@@ -1,14 +1,22 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::OpenHoldingUseCase;
+use super::{
+    BuyHoldingUseCase, CancelTransactionUseCase, CorrectTransactionUseCase, OpenHoldingUseCase,
+    SellHoldingUseCase,
+};
 use crate::context::account::{
-    AccountDomainError, OpeningBalanceDomainError, Transaction, TransactionDomainError,
+    to_transaction_error, AccountDomainError, OpeningBalanceDomainError, Transaction,
+    TransactionCommandError, TransactionDomainError,
 };
 use crate::core::logger::BACKEND;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
+
+// =============================================================================
+// Opening Balance — DTO + dedicated error
+// =============================================================================
 
 /// Parameters for recording an opening balance for an asset in an account (TRX-042).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -102,6 +110,74 @@ fn to_open_holding_error(e: anyhow::Error) -> OpenHoldingCommandError {
     OpenHoldingCommandError::Unknown
 }
 
+// =============================================================================
+// Buy / Sell / Correct — DTOs (shared TransactionCommandError)
+// =============================================================================
+
+/// Parameters for recording a purchase of an asset into an account.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct BuyHoldingDTO {
+    /// Account where the purchase is recorded.
+    pub account_id: String,
+    /// Financial asset being purchased.
+    pub asset_id: String,
+    /// Transaction date (YYYY-MM-DD).
+    pub date: String,
+    /// Quantity in micro-units.
+    pub quantity: i64,
+    /// Unit price in asset currency (micro-units).
+    pub unit_price: i64,
+    /// Exchange rate asset→account currency (micro-units).
+    pub exchange_rate: i64,
+    /// Fees in account currency (micro-units).
+    pub fees: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Parameters for recording a sale of an asset from an account.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SellHoldingDTO {
+    /// Account where the sale is recorded.
+    pub account_id: String,
+    /// Financial asset being sold.
+    pub asset_id: String,
+    /// Transaction date (YYYY-MM-DD).
+    pub date: String,
+    /// Quantity in micro-units.
+    pub quantity: i64,
+    /// Unit price in asset currency (micro-units).
+    pub unit_price: i64,
+    /// Exchange rate asset→account currency (micro-units).
+    pub exchange_rate: i64,
+    /// Fees in account currency (micro-units).
+    pub fees: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Parameters for correcting an existing transaction.
+/// `account_id` and `asset_id` are immutable — taken from the existing transaction.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CorrectTransactionDTO {
+    /// Corrected transaction date (YYYY-MM-DD).
+    pub date: String,
+    /// Corrected quantity in micro-units.
+    pub quantity: i64,
+    /// Corrected unit price in asset currency (micro-units).
+    pub unit_price: i64,
+    /// Corrected exchange rate asset→account currency (micro-units).
+    pub exchange_rate: i64,
+    /// Corrected fees in account currency (micro-units).
+    pub fees: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+// =============================================================================
+// Commands
+// =============================================================================
+
 /// Seeds a holding directly from a known quantity and total cost (TRX-042, TRX-047).
 #[tauri::command]
 #[specta::specta]
@@ -118,4 +194,82 @@ pub async fn open_holding(
     )
     .await
     .map_err(to_open_holding_error)
+}
+
+/// Records a purchase of an asset into an account (TRX-027).
+#[tauri::command]
+#[specta::specta]
+pub async fn buy_holding(
+    uc: State<'_, BuyHoldingUseCase>,
+    dto: BuyHoldingDTO,
+) -> Result<Transaction, TransactionCommandError> {
+    uc.buy_holding(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.quantity,
+        dto.unit_price,
+        dto.exchange_rate,
+        dto.fees,
+        dto.note,
+    )
+    .await
+    .map_err(to_transaction_error)
+}
+
+/// Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
+#[tauri::command]
+#[specta::specta]
+pub async fn sell_holding(
+    uc: State<'_, SellHoldingUseCase>,
+    dto: SellHoldingDTO,
+) -> Result<Transaction, TransactionCommandError> {
+    uc.sell_holding(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.quantity,
+        dto.unit_price,
+        dto.exchange_rate,
+        dto.fees,
+        dto.note,
+    )
+    .await
+    .map_err(to_transaction_error)
+}
+
+/// Corrects an existing transaction and recalculates the affected holding (TRX-031).
+#[tauri::command]
+#[specta::specta]
+pub async fn correct_transaction(
+    uc: State<'_, CorrectTransactionUseCase>,
+    id: String,
+    account_id: String,
+    dto: CorrectTransactionDTO,
+) -> Result<Transaction, TransactionCommandError> {
+    uc.correct_transaction(
+        &account_id,
+        &id,
+        dto.date,
+        dto.quantity,
+        dto.unit_price,
+        dto.exchange_rate,
+        dto.fees,
+        dto.note,
+    )
+    .await
+    .map_err(to_transaction_error)
+}
+
+/// Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
+#[tauri::command]
+#[specta::specta]
+pub async fn cancel_transaction(
+    uc: State<'_, CancelTransactionUseCase>,
+    id: String,
+    account_id: String,
+) -> Result<(), TransactionCommandError> {
+    uc.cancel_transaction(&account_id, &id)
+        .await
+        .map_err(to_transaction_error)
 }

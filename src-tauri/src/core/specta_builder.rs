@@ -3,7 +3,7 @@ use crate::{
     core::{logger, Event},
     use_cases::{
         account_deletion, account_details, archive_asset, asset_web_lookup, delete_asset,
-        open_holding, update_checker,
+        holding_transaction, update_checker,
     },
 };
 
@@ -28,11 +28,11 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::AccountCommandError>()
         .typ::<account::Transaction>()
         .typ::<account::TransactionType>()
-        .typ::<account::BuyHoldingDTO>()
-        .typ::<account::SellHoldingDTO>()
-        .typ::<account::CorrectTransactionDTO>()
-        .typ::<open_holding::OpenHoldingDTO>()
-        .typ::<open_holding::OpenHoldingCommandError>()
+        .typ::<holding_transaction::BuyHoldingDTO>()
+        .typ::<holding_transaction::SellHoldingDTO>()
+        .typ::<holding_transaction::CorrectTransactionDTO>()
+        .typ::<holding_transaction::OpenHoldingDTO>()
+        .typ::<holding_transaction::OpenHoldingCommandError>()
         .typ::<account::TransactionCommandError>()
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
@@ -67,12 +67,12 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             update_checker::download_update,
             update_checker::install_update,
             account::get_asset_ids_for_account,
-            account::buy_holding,
-            account::sell_holding,
-            account::correct_transaction,
-            account::cancel_transaction,
+            holding_transaction::buy_holding,
+            holding_transaction::sell_holding,
+            holding_transaction::correct_transaction,
+            holding_transaction::cancel_transaction,
             account::get_transactions,
-            open_holding::open_holding,
+            holding_transaction::open_holding,
             account_details::get_account_details,
             account_deletion::get_account_deletion_summary,
             asset_web_lookup::lookup_asset

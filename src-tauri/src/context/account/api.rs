@@ -149,72 +149,13 @@ pub async fn get_asset_ids_for_account(
 }
 
 // =============================================================================
-// Holding operation DTOs
-// =============================================================================
-
-/// Parameters for recording a purchase of an asset into an account.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct BuyHoldingDTO {
-    /// Account where the purchase is recorded.
-    pub account_id: String,
-    /// Financial asset being purchased.
-    pub asset_id: String,
-    /// Transaction date (YYYY-MM-DD).
-    pub date: String,
-    /// Quantity in micro-units.
-    pub quantity: i64,
-    /// Unit price in asset currency (micro-units).
-    pub unit_price: i64,
-    /// Exchange rate asset→account currency (micro-units).
-    pub exchange_rate: i64,
-    /// Fees in account currency (micro-units).
-    pub fees: i64,
-    /// Optional user note.
-    pub note: Option<String>,
-}
-
-/// Parameters for recording a sale of an asset from an account.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SellHoldingDTO {
-    /// Account where the sale is recorded.
-    pub account_id: String,
-    /// Financial asset being sold.
-    pub asset_id: String,
-    /// Transaction date (YYYY-MM-DD).
-    pub date: String,
-    /// Quantity in micro-units.
-    pub quantity: i64,
-    /// Unit price in asset currency (micro-units).
-    pub unit_price: i64,
-    /// Exchange rate asset→account currency (micro-units).
-    pub exchange_rate: i64,
-    /// Fees in account currency (micro-units).
-    pub fees: i64,
-    /// Optional user note.
-    pub note: Option<String>,
-}
-
-/// Parameters for correcting an existing transaction.
-/// `account_id` and `asset_id` are immutable — taken from the existing transaction.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct CorrectTransactionDTO {
-    /// Corrected transaction date (YYYY-MM-DD).
-    pub date: String,
-    /// Corrected quantity in micro-units.
-    pub quantity: i64,
-    /// Corrected unit price in asset currency (micro-units).
-    pub unit_price: i64,
-    /// Corrected exchange rate asset→account currency (micro-units).
-    pub exchange_rate: i64,
-    /// Corrected fees in account currency (micro-units).
-    pub fees: i64,
-    /// Optional user note.
-    pub note: Option<String>,
-}
-
-// =============================================================================
 // Holding operation boundary error
 // =============================================================================
+//
+// Holding-mutating commands (buy/sell/correct/cancel) live in
+// `use_cases/holding_transaction/`; their DTOs are colocated there. The shared
+// `TransactionCommandError` enum stays here because `get_transactions` (below)
+// also uses it, and the transaction read path remains in the account context.
 
 /// Typed error returned to the frontend for holding operation commands.
 #[derive(Debug, serde::Serialize, specta::Type, thiserror::Error)]
@@ -269,7 +210,7 @@ pub enum TransactionCommandError {
     Unknown,
 }
 
-fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
+pub(crate) fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
     if let Some(err) = e.downcast_ref::<AccountOperationError>() {
         return match err {
             AccountOperationError::ClosedPosition => TransactionCommandError::ClosedPosition,
@@ -317,96 +258,6 @@ fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
     }
     tracing::error!(target: BACKEND, err = ?e, "unexpected error in transaction command");
     TransactionCommandError::Unknown
-}
-
-// =============================================================================
-// Holding operation commands
-// =============================================================================
-
-/// Records a purchase of an asset into an account (TRX-027).
-#[tauri::command]
-#[specta::specta]
-pub async fn buy_holding(
-    state: State<'_, AppState>,
-    dto: BuyHoldingDTO,
-) -> Result<Transaction, TransactionCommandError> {
-    state
-        .account_service
-        .buy_holding(
-            &dto.account_id,
-            dto.asset_id,
-            dto.date,
-            dto.quantity,
-            dto.unit_price,
-            dto.exchange_rate,
-            dto.fees,
-            dto.note,
-        )
-        .await
-        .map_err(to_transaction_error)
-}
-
-/// Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
-#[tauri::command]
-#[specta::specta]
-pub async fn sell_holding(
-    state: State<'_, AppState>,
-    dto: SellHoldingDTO,
-) -> Result<Transaction, TransactionCommandError> {
-    state
-        .account_service
-        .sell_holding(
-            &dto.account_id,
-            dto.asset_id,
-            dto.date,
-            dto.quantity,
-            dto.unit_price,
-            dto.exchange_rate,
-            dto.fees,
-            dto.note,
-        )
-        .await
-        .map_err(to_transaction_error)
-}
-
-/// Corrects an existing transaction and recalculates the affected holding (TRX-031).
-#[tauri::command]
-#[specta::specta]
-pub async fn correct_transaction(
-    state: State<'_, AppState>,
-    id: String,
-    account_id: String,
-    dto: CorrectTransactionDTO,
-) -> Result<Transaction, TransactionCommandError> {
-    state
-        .account_service
-        .correct_transaction(
-            &account_id,
-            &id,
-            dto.date,
-            dto.quantity,
-            dto.unit_price,
-            dto.exchange_rate,
-            dto.fees,
-            dto.note,
-        )
-        .await
-        .map_err(to_transaction_error)
-}
-
-/// Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
-#[tauri::command]
-#[specta::specta]
-pub async fn cancel_transaction(
-    state: State<'_, AppState>,
-    id: String,
-    account_id: String,
-) -> Result<(), TransactionCommandError> {
-    state
-        .account_service
-        .cancel_transaction(&account_id, &id)
-        .await
-        .map_err(to_transaction_error)
 }
 
 /// Retrieves all transactions for an account/asset pair (TRX-036).
