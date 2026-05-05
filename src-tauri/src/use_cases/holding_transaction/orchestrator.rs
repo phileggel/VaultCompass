@@ -44,6 +44,170 @@ impl OpenHoldingUseCase {
     }
 }
 
+// AssetService field is reserved for the upcoming Cash Asset seeding step (CSH-010)
+// in the buy/sell/correct/cancel use cases; the post-refactor cash-tracking work will
+// invoke `ensure_cash_asset` here before delegating to AccountService.
+
+/// Orchestrates the Buy operation. Currently delegates straight to `AccountService`;
+/// the cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-040).
+pub struct BuyHoldingUseCase {
+    account_service: Arc<AccountService>,
+    #[allow(dead_code)]
+    asset_service: Arc<AssetService>,
+}
+
+impl BuyHoldingUseCase {
+    /// Creates a new BuyHoldingUseCase.
+    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+        Self {
+            account_service,
+            asset_service,
+        }
+    }
+
+    /// Records a purchase of an asset into an account (TRX-027).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn buy_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        self.account_service
+            .buy_holding(
+                account_id,
+                asset_id,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                note,
+            )
+            .await
+    }
+}
+
+/// Orchestrates the Sell operation. Currently delegates straight to `AccountService`;
+/// the cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-050).
+pub struct SellHoldingUseCase {
+    account_service: Arc<AccountService>,
+    #[allow(dead_code)]
+    asset_service: Arc<AssetService>,
+}
+
+impl SellHoldingUseCase {
+    /// Creates a new SellHoldingUseCase.
+    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+        Self {
+            account_service,
+            asset_service,
+        }
+    }
+
+    /// Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn sell_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        self.account_service
+            .sell_holding(
+                account_id,
+                asset_id,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                note,
+            )
+            .await
+    }
+}
+
+/// Orchestrates the Correct (edit) operation. Currently delegates straight to `AccountService`;
+/// the cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-042).
+pub struct CorrectTransactionUseCase {
+    account_service: Arc<AccountService>,
+    #[allow(dead_code)]
+    asset_service: Arc<AssetService>,
+}
+
+impl CorrectTransactionUseCase {
+    /// Creates a new CorrectTransactionUseCase.
+    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+        Self {
+            account_service,
+            asset_service,
+        }
+    }
+
+    /// Corrects an existing transaction and recalculates the affected holding (TRX-031).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn correct_transaction(
+        &self,
+        account_id: &str,
+        transaction_id: &str,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        self.account_service
+            .correct_transaction(
+                account_id,
+                transaction_id,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                note,
+            )
+            .await
+    }
+}
+
+/// Orchestrates the Cancel (delete) operation. Currently delegates straight to `AccountService`;
+/// the cash replay-eligibility step is wired in by the cash-tracking spec (CSH-024 / CSH-051).
+pub struct CancelTransactionUseCase {
+    account_service: Arc<AccountService>,
+    #[allow(dead_code)]
+    asset_service: Arc<AssetService>,
+}
+
+impl CancelTransactionUseCase {
+    /// Creates a new CancelTransactionUseCase.
+    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+        Self {
+            account_service,
+            asset_service,
+        }
+    }
+
+    /// Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
+    pub async fn cancel_transaction(&self, account_id: &str, transaction_id: &str) -> Result<()> {
+        self.account_service
+            .cancel_transaction(account_id, transaction_id)
+            .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

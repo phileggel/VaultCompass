@@ -13,7 +13,7 @@ pub mod archive_asset;
 pub mod asset_web_lookup;
 /// Delete asset: guards hard-deletion against existing transactions.
 pub mod delete_asset;
-/// Open holding: cross-BC guard (asset existence + archived status) before seeding a holding (TRX-042).
-pub mod open_holding;
+/// Holding transaction: unified cross-BC orchestrators for buy/sell/correct/cancel/open (TRX, SEL, CSH).
+pub mod holding_transaction;
 /// Application auto-update: detection, download, and installation (R1–R27).
 pub mod update_checker;
