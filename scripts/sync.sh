@@ -8,11 +8,15 @@ set -euo pipefail
 # Never run this script directly.
 #
 # Env vars:
-#   KIT_TMP  — path to the cloned kit temp directory (required)
-#   PROFILE  — profile name (optional, e.g. "tauri"); empty = generic only
+#   KIT_TMP        — path to the cloned kit temp directory (required)
+#   PROFILE        — profile name (optional, e.g. "tauri"); empty = generic only
+#   KIT_SYNC_FORCE — set to "true" to overwrite drifted docs without prompting (-f flag)
 
 TMP="${KIT_TMP:?KIT_TMP not set — run via scripts/sync-config.sh}"
 VERSION="${1:?VERSION not set}"
+KIT_SYNC_FORCE="${KIT_SYNC_FORCE:-false}"
+
+_sha1() { python3 -c "import hashlib,sys; print(hashlib.sha1(open(sys.argv[1],'rb').read(),usedforsecurity=False).hexdigest())" "$1"; }
 
 trap 'rm -rf "$TMP"' EXIT
 
@@ -117,7 +121,7 @@ if [ -n "${PROFILE:-}" ] && [ -d "$TMP/kit/scripts/$PROFILE" ]; then
     fi
 fi
 
-# ── Profile docs (copy-once — never overwrite project customisations) ─────────
+# ── Profile docs (overwrite if unchanged; prompt on local drift; -f to force) ──
 if [ -n "${PROFILE:-}" ] && [ -d "$TMP/kit/docs/$PROFILE" ]; then
     echo -e "${BLUE}📁 Syncing ${PROFILE} profile docs...${NC}"
     mkdir -p "$PROJECT_ROOT/docs"
@@ -128,8 +132,20 @@ if [ -n "${PROFILE:-}" ] && [ -d "$TMP/kit/docs/$PROFILE" ]; then
         if [ ! -f "$dest" ]; then
             cp "$doc" "$dest"
             echo -e "  → docs/$doc_name (new)"
+        elif [ "$(_sha1 "$doc")" = "$(_sha1 "$dest")" ]; then
+            : # identical — silent, no drift
+        elif [ "$KIT_SYNC_FORCE" = "true" ]; then
+            cp "$doc" "$dest"
+            echo -e "  ↑ docs/$doc_name (overwritten — local differed from kit)"
         else
-            echo -e "  ↩ docs/$doc_name (already exists — not overwritten)"
+            printf "  ⚠  docs/%s differs from kit. Overwrite? [y/N] " "$doc_name"
+            read -r _answer </dev/tty || _answer="n"
+            if [[ "$_answer" =~ ^[Yy] ]]; then
+                cp "$doc" "$dest"
+                echo -e "  ↑ docs/$doc_name (overwritten)"
+            else
+                echo -e "  ↩ docs/$doc_name (skipped — local copy kept)"
+            fi
         fi
     done
 fi

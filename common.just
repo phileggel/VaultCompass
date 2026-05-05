@@ -1,7 +1,7 @@
 # Common recipes — synced from kit to downstream projects via sync-config.sh
 
-sync-kit:
-    ./scripts/sync-config.sh
+sync-kit *args:
+    ./scripts/sync-config.sh {{args}}
 
 # Run fast quality check (lint/format only, no tests)
 check:

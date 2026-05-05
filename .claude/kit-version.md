@@ -1,9 +1,7 @@
 # Kit version
 
-claude-kit **v3.18.5** — synced 2026-05-04
+claude-kit **v3.19.0** — synced 2026-05-05
 
-## Changes since v3.18.2 (your previous sync)
+## Changes since v3.18.5 (your previous sync)
 
-- v3.18.5: (no changes recorded)
-- v3.18.4: fix todo.md case and add inline TODO/FIXME scan
-- v3.18.3: support class-based Tailwind dark mode
+- v3.19.0: SHA1-based drift detection for profile docs
