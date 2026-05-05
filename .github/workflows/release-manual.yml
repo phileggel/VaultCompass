@@ -54,6 +54,7 @@ jobs:
             windows)   echo "triple=x86_64-pc-windows-msvc" >> "$GITHUB_OUTPUT" ;;
             macos-x86) echo "triple=x86_64-apple-darwin" >> "$GITHUB_OUTPUT" ;;
             macos-arm) echo "triple=aarch64-apple-darwin" >> "$GITHUB_OUTPUT" ;;
+            linux)     echo "triple=x86_64-unknown-linux-gnu" >> "$GITHUB_OUTPUT" ;;
             *)         echo "::error::Unknown platform '$PLATFORM'"; exit 1 ;;
           esac
 
@@ -71,7 +72,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          prefix-key: ${{ inputs.platform }}-rust-
+          prefix-key: ${{ inputs.platform }}-release-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - name: Install Linux dependencies
         if: inputs.platform == 'linux'
@@ -104,7 +105,7 @@ jobs:
           includeUpdaterJson: true
 
       - name: Verify updater manifest published
-        if: success() && inputs.platform == 'windows'
+        if: success()
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,4 +128,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh cache delete --pattern "${{ inputs.platform }}-rust-" --repo ${{ github.repository }} || true
+        run: gh cache delete --pattern "${{ inputs.platform }}-release-rust-" --repo ${{ github.repository }} || true

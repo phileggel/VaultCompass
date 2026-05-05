@@ -19,6 +19,10 @@ dev *ARGS:
 dev-wayland *ARGS:
     GDK_BACKEND=wayland ./scripts/start-app.sh {{ARGS}}
 
+# Regenerate Specta TypeScript bindings (run after adding or changing Tauri commands)
+generate-types:
+    cd src-tauri && SQLX_OFFLINE=true cargo run --bin generate_bindings
+
 # Run frontend tests
 test:
     npm test

@@ -13,7 +13,7 @@ concurrency:
 jobs:
   e2e:
     name: E2E — headless WebDriver
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -21,6 +21,7 @@ jobs:
     env:
       SQLX_OFFLINE: true
       CARGO_INCREMENTAL: 0
+      RUSTFLAGS: "-C debuginfo=0"
 
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +29,7 @@ jobs:
       - name: Install Linux dependencies
         # webkit2gtk-driver provides WebKitWebDriver (used by tauri-driver on Linux);
         # xvfb provides the virtual framebuffer for headless rendering.
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -54,18 +56,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/tauri-driver
-          key: tauri-driver-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: tauri-driver-2.0.5-${{ runner.os }}
 
       - name: Install tauri-driver
         if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
-        run: cargo install tauri-driver
+        shell: bash
+        run: cargo install tauri-driver --version 2.0.5 --locked
 
       - name: Install frontend dependencies
+        shell: bash
         run: npm ci
 
       - name: Run E2E (headless via Xvfb)
         # Equivalent to `just test-e2e-headless` — npm script invoked directly to
         # avoid requiring `just` in CI (matches coverage.yml convention).
+        shell: bash
         run: npm run test:e2e:xvfb
 
       - name: Upload E2E failure screenshots

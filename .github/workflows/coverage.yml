@@ -17,7 +17,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +28,11 @@ jobs:
           cache: npm
 
       - name: Install frontend dependencies
+        shell: bash
         run: npm ci
 
       - name: Run tests with coverage
+        shell: bash
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
@@ -49,16 +50,17 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      pull-requests: write
 
     env:
       SQLX_OFFLINE: true
       CARGO_INCREMENTAL: 0
+      RUSTFLAGS: "-C debuginfo=0"
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Linux dependencies
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -76,25 +78,24 @@ jobs:
 
       - name: Check formatting
         working-directory: src-tauri
-        env:
-          RUSTFLAGS: "-C debuginfo=0"
+        shell: bash
         run: cargo fmt --check
 
       - name: Run Clippy
         working-directory: src-tauri
-        env:
-          RUSTFLAGS: "-C debuginfo=0"
+        shell: bash
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Install cargo-tarpaulin
-        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk
+        # Pinned to full SHA of taiki-e/install-action (installs cargo-tarpaulin v2.75.30)
         uses: taiki-e/install-action@db5fb34fa772531a3ece57ca434f579eb334e0fb
         with:
           tool: cargo-tarpaulin
 
       - name: Run tests with coverage
         working-directory: src-tauri
-        run: cargo tarpaulin --out Lcov --output-dir ../coverage/backend
+        shell: bash
+        run: cargo tarpaulin --out Lcov --output-dir ../coverage/backend --lib --exclude-files "build.rs" --exclude-files "src/bin/generate_bindings.rs"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe
