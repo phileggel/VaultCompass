@@ -39,9 +39,12 @@
 
 ### Holdings & Transactions
 
-> All commands below live in `context/account/` except `open_holding`, which is implemented in
-> `use_cases/open_holding/` — it primarily mutates the account aggregate but also checks asset
-> state across the asset BC.
+> Commands below split between two locations:
+>
+> - `context/account/api.rs` — read paths only: `get_asset_ids_for_account`, `get_transactions`.
+> - `use_cases/holding_transaction/api.rs` — every command that mutates a `Holding` through a `Transaction`: `buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction`, `open_holding`. These live in a use case because the orchestrator coordinates across the account and asset BCs (cash-asset seeding, archived-asset guards, etc.).
+>
+> Errors are domain information and stay with their owning aggregate. `TransactionCommandError` lives in `context/account/api.rs` because every variant comes from account-context types (`AccountDomainError`, `AccountOperationError`, `TransactionDomainError`); the use-case commands import it to map their delegated calls. Per-command splitting (`BuyHoldingCommandError` vs the catch-all) is a separate granularity question tracked in `docs/todo.md`.
 
 | Command                     | Args                                   | Return             | Errors                                                                                                                                                                                                                                                                                                          |
 | --------------------------- | -------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

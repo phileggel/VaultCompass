@@ -148,14 +148,7 @@ pub async fn get_asset_ids_for_account(
         })
 }
 
-// =============================================================================
-// Holding operation boundary error
-// =============================================================================
-//
-// Holding-mutating commands (buy/sell/correct/cancel) live in
-// `use_cases/holding_transaction/`; their DTOs are colocated there. The shared
-// `TransactionCommandError` enum stays here because `get_transactions` (below)
-// also uses it, and the transaction read path remains in the account context.
+// Shared with `use_cases/holding_transaction/api.rs` (its commands map to this enum too).
 
 /// Typed error returned to the frontend for holding operation commands.
 #[derive(Debug, serde::Serialize, specta::Type, thiserror::Error)]
@@ -210,6 +203,11 @@ pub enum TransactionCommandError {
     Unknown,
 }
 
+/// Maps an `anyhow::Error` raised by `AccountService` holding/transaction operations
+/// to the `TransactionCommandError` variant exposed at the Tauri boundary.
+///
+/// Visible to `use_cases/holding_transaction/api.rs` so its command handlers can share
+/// the same translation logic; unrecognised errors are logged and reported as `Unknown`.
 pub(crate) fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError {
     if let Some(err) = e.downcast_ref::<AccountOperationError>() {
         return match err {
