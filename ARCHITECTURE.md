@@ -96,12 +96,18 @@ Cross-BC guard: checks transaction history before hard-deleting an asset.
 - `orchestrator.rs` — `DeleteAssetUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; calls `AccountService.has_holding_entries_for_asset()` then `AssetService.delete()`
 - `api.rs` — `delete_asset(id: String) -> Result<(), DeleteAssetCommandError>` Tauri command; error variants: `ExistingTransactions`, `NotFound`, `Unknown`
 
-#### Open Holding (`use_cases/open_holding/`)
+#### Holding Transaction (`use_cases/holding_transaction/`)
 
-Cross-BC guard: validates asset existence and archived status before seeding an opening balance (TRX-050, TRX-056).
+Unified home for every operation that mutates a `Holding` through a `Transaction` — opening balance, buy, sell, correct, cancel. A single orchestrator (`HoldingTransactionUseCase`) injects `Arc<AccountService>` + `Arc<AssetService>` once and shares them across all five methods.
 
-- `orchestrator.rs` — `OpenHoldingUseCase` injects `Arc<AccountService>` + `Arc<AssetService>`; calls `AssetService.get_asset_by_id()` then `AccountService.open_holding()`
-- `api.rs` — `open_holding(dto: OpenHoldingDTO) -> Result<Transaction, OpenHoldingCommandError>` Tauri command; error variants: `AccountNotFound`, `AssetNotFound`, `ArchivedAsset`, `InvalidTotalCost`, `QuantityNotPositive`, `InvalidDate`, `DateInFuture`, `DateTooOld`, `Unknown`
+- `orchestrator.rs` — one struct, `HoldingTransactionUseCase`, with five methods:
+  - `open_holding` — checks asset existence + archived status (TRX-050, TRX-056) then delegates to `AccountService.open_holding()`.
+  - `buy_holding` — delegates to `AccountService.buy_holding()`; will gain `ensure_cash_asset` (CSH-040).
+  - `sell_holding` — delegates to `AccountService.sell_holding()`; will gain `ensure_cash_asset` (CSH-050).
+  - `correct_transaction` — delegates to `AccountService.correct_transaction()`; will gain `ensure_cash_asset` (CSH-042).
+  - `cancel_transaction` — delegates to `AccountService.cancel_transaction()`; will gain cash replay-eligibility (CSH-024 / CSH-051).
+- `api.rs` — five Tauri commands taking `State<'_, HoldingTransactionUseCase>`. `open_holding` returns the dedicated `OpenHoldingCommandError`; the other four share `TransactionCommandError`, which lives with its owning aggregate in `context/account/api.rs` (errors are domain information). Per-command splitting is tracked in `docs/todo.md`.
+- `shared/ensure_cash_asset.rs` — Cash Asset seeding helper (CSH-010); stub in this refactor, real implementation lands with cash-tracking spec.
 
 #### Update Checker (`use_cases/update_checker/`)
 
@@ -252,11 +258,9 @@ context/{domain}/
 - `update_account(dto) -> Account`
 - `delete_account(id)`
 - `get_asset_ids_for_account(accountId) -> Vec<String>`
-- `buy_holding(dto: BuyHoldingDTO) -> Transaction`
-- `sell_holding(dto: SellHoldingDTO) -> Transaction`
-- `correct_transaction(id, accountId, dto: CorrectTransactionDTO) -> Transaction`
-- `cancel_transaction(id, accountId)`
 - `get_transactions(accountId, assetId) -> Vec<Transaction>`
+
+> The holding-mutating commands (`buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction`, `open_holding`) live in `use_cases/holding_transaction/api.rs` — see the Use Cases section above. They delegate to the `AccountService` methods listed in the bullets above this block.
 
 ---
 

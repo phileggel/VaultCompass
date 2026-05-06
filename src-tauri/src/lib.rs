@@ -26,10 +26,7 @@ use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
-use crate::use_cases::holding_transaction::{
-    BuyHoldingUseCase, CancelTransactionUseCase, CorrectTransactionUseCase, OpenHoldingUseCase,
-    SellHoldingUseCase,
-};
+use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
 use std::{fs, path::PathBuf, sync::Arc};
@@ -175,27 +172,7 @@ pub fn run() {
                 let account_deletion_uc =
                     AccountDeletionUseCase::new(Arc::clone(&account_service));
 
-                let open_holding_uc = OpenHoldingUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
-                );
-
-                let buy_holding_uc = BuyHoldingUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
-                );
-
-                let sell_holding_uc = SellHoldingUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
-                );
-
-                let correct_transaction_uc = CorrectTransactionUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
-                );
-
-                let cancel_transaction_uc = CancelTransactionUseCase::new(
+                let holding_transaction_uc = HoldingTransactionUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
                 );
@@ -204,11 +181,7 @@ pub fn run() {
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
                 app_handle.manage(account_deletion_uc);
-                app_handle.manage(open_holding_uc);
-                app_handle.manage(buy_holding_uc);
-                app_handle.manage(sell_holding_uc);
-                app_handle.manage(correct_transaction_uc);
-                app_handle.manage(cancel_transaction_uc);
+                app_handle.manage(holding_transaction_uc);
 
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 

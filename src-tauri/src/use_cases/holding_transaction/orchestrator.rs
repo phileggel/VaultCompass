@@ -3,17 +3,20 @@ use crate::context::asset::AssetService;
 use anyhow::Result;
 use std::sync::Arc;
 
-/// Orchestrates the Opening Balance operation across the asset and account bounded contexts.
+/// Single orchestrator for every operation that mutates a `Holding` through a `Transaction`:
+/// opening balance, buy, sell, correct, cancel.
 ///
-/// Validates asset existence and archived status (asset BC) before delegating the
-/// actual holding creation to AccountService (account BC) — TRX-050, TRX-056.
-pub struct OpenHoldingUseCase {
+/// Injects `Arc<AccountService>` + `Arc<AssetService>` and shares them across all five methods.
+/// `asset_service` is used today by `open_holding` for the archived-asset guard, and will also
+/// drive the cross-BC `ensure_cash_asset` step inserted by the cash-tracking spec
+/// (CSH-040 / CSH-050 / CSH-042 / CSH-024).
+pub struct HoldingTransactionUseCase {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
 }
 
-impl OpenHoldingUseCase {
-    /// Creates a new OpenHoldingUseCase.
+impl HoldingTransactionUseCase {
+    /// Creates a new HoldingTransactionUseCase.
     pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
         Self {
             account_service,
@@ -23,8 +26,8 @@ impl OpenHoldingUseCase {
 
     /// Seeds a holding from a known quantity and total cost (TRX-042).
     ///
-    /// Cross-BC guard: rejects the request if the asset does not exist or is archived.
-    /// Delegates the account-side write to AccountService::open_holding.
+    /// Cross-BC guard: rejects the request if the asset does not exist or is archived
+    /// (TRX-050, TRX-056). Delegates the account-side write to `AccountService::open_holding`.
     pub async fn open_holding(
         &self,
         account_id: &str,
@@ -42,30 +45,9 @@ impl OpenHoldingUseCase {
             .open_holding(account_id, asset_id, date, quantity, total_cost)
             .await
     }
-}
-
-// AssetService field is reserved for the upcoming Cash Asset seeding step (CSH-010)
-// in the buy/sell/correct/cancel use cases; the post-refactor cash-tracking work will
-// invoke `ensure_cash_asset` here before delegating to AccountService.
-
-/// Orchestrates the Buy operation. Currently delegates straight to `AccountService`;
-/// the cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-040).
-pub struct BuyHoldingUseCase {
-    account_service: Arc<AccountService>,
-    #[allow(dead_code)]
-    asset_service: Arc<AssetService>,
-}
-
-impl BuyHoldingUseCase {
-    /// Creates a new BuyHoldingUseCase.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
-        Self {
-            account_service,
-            asset_service,
-        }
-    }
 
     /// Records a purchase of an asset into an account (TRX-027).
+    /// The cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-040).
     #[allow(clippy::too_many_arguments)]
     pub async fn buy_holding(
         &self,
@@ -91,26 +73,9 @@ impl BuyHoldingUseCase {
             )
             .await
     }
-}
-
-/// Orchestrates the Sell operation. Currently delegates straight to `AccountService`;
-/// the cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-050).
-pub struct SellHoldingUseCase {
-    account_service: Arc<AccountService>,
-    #[allow(dead_code)]
-    asset_service: Arc<AssetService>,
-}
-
-impl SellHoldingUseCase {
-    /// Creates a new SellHoldingUseCase.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
-        Self {
-            account_service,
-            asset_service,
-        }
-    }
 
     /// Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
+    /// The cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-050).
     #[allow(clippy::too_many_arguments)]
     pub async fn sell_holding(
         &self,
@@ -136,26 +101,9 @@ impl SellHoldingUseCase {
             )
             .await
     }
-}
-
-/// Orchestrates the Correct (edit) operation. Currently delegates straight to `AccountService`;
-/// the cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-042).
-pub struct CorrectTransactionUseCase {
-    account_service: Arc<AccountService>,
-    #[allow(dead_code)]
-    asset_service: Arc<AssetService>,
-}
-
-impl CorrectTransactionUseCase {
-    /// Creates a new CorrectTransactionUseCase.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
-        Self {
-            account_service,
-            asset_service,
-        }
-    }
 
     /// Corrects an existing transaction and recalculates the affected holding (TRX-031).
+    /// The cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-042).
     #[allow(clippy::too_many_arguments)]
     pub async fn correct_transaction(
         &self,
@@ -181,26 +129,9 @@ impl CorrectTransactionUseCase {
             )
             .await
     }
-}
-
-/// Orchestrates the Cancel (delete) operation. Currently delegates straight to `AccountService`;
-/// the cash replay-eligibility step is wired in by the cash-tracking spec (CSH-024 / CSH-051).
-pub struct CancelTransactionUseCase {
-    account_service: Arc<AccountService>,
-    #[allow(dead_code)]
-    asset_service: Arc<AssetService>,
-}
-
-impl CancelTransactionUseCase {
-    /// Creates a new CancelTransactionUseCase.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
-        Self {
-            account_service,
-            asset_service,
-        }
-    }
 
     /// Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
+    /// The cash replay-eligibility check is wired in by the cash-tracking spec (CSH-024 / CSH-051).
     pub async fn cancel_transaction(&self, account_id: &str, transaction_id: &str) -> Result<()> {
         self.account_service
             .cancel_transaction(account_id, transaction_id)
@@ -277,7 +208,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = OpenHoldingUseCase::new(account_svc, asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
         let err = uc
             .open_holding(
                 &account.id,
@@ -313,7 +244,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = OpenHoldingUseCase::new(account_svc, asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
         let err = uc
             .open_holding(
                 &account.id,
@@ -350,7 +281,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = OpenHoldingUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
         let tx = uc
             .open_holding(
                 &account.id,

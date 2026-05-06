@@ -1,19 +1,16 @@
-//! Holding-transaction use cases.
+//! Holding-transaction use case.
 //!
-//! Cross-context orchestrators for every operation that mutates a `Holding`
-//! through a `Transaction`: opening balance, buy, sell, correct, cancel.
-//! Each use case injects `AccountService` + `AssetService` and shares
-//! `ensure_cash_asset(currency)` (Cash Asset seeding helper, CSH-010).
+//! Single cross-context orchestrator covering every operation that mutates a `Holding`
+//! through a `Transaction`: opening balance, buy, sell, correct, cancel. Injects
+//! `AccountService` + `AssetService` once and shares them across all five methods.
+//! Will use `ensure_cash_asset(currency)` (CSH-010 helper) once cash-tracking lands.
 
 /// Tauri command handlers for transaction-recording operations.
 mod api;
-/// Cross-BC orchestrators (one struct per operation).
+/// Cross-BC orchestrator (one struct, one method per operation).
 mod orchestrator;
-/// Shared helpers used by multiple orchestrators.
+/// Shared helpers used by the orchestrator.
 mod shared;
 
 pub use api::*;
-pub use orchestrator::{
-    BuyHoldingUseCase, CancelTransactionUseCase, CorrectTransactionUseCase, OpenHoldingUseCase,
-    SellHoldingUseCase,
-};
+pub use orchestrator::HoldingTransactionUseCase;

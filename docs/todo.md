@@ -12,6 +12,27 @@ After the `use_cases/holding_transaction/` consolidation, two pre-existing contr
 
 Work order: do (1) first; (2) is optional and lower value. (1) becomes notably more relevant once cash lands, because `InsufficientCash { current_balance_micros, currency }` would otherwise pollute the shared enum and bleed into `cancel_transaction`'s TS type even though it only fires from a replay-violation edge case.
 
+## (backend) — Remove ensure_cash_asset stub allows once CSH lands
+
+Two `#[allow(...)]` attributes are bridge-code waiting on the cash-tracking spec:
+
+- `use_cases/holding_transaction/shared/ensure_cash_asset.rs:10` — `#[allow(dead_code)]` on the no-op helper.
+- `use_cases/holding_transaction/shared/mod.rs:6` — `#[allow(unused_imports)]` on the `pub use` re-export.
+
+Both disappear the moment any orchestrator method actually calls `ensure_cash_asset` (per CSH-040 / CSH-050 / CSH-042 / CSH-024).
+
+Test coverage: `HoldingTransactionUseCase` only has tests on `open_holding` today. `test-writer-backend` should fill in `buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction` during CSH once each method gains the cross-BC cash side-effect.
+
+## (backend) — Promote BC application services to traits, mock with mockall
+
+`AccountService` and `AssetService` are concrete structs, so cross-BC orchestrators (`HoldingTransactionUseCase`, `ArchiveAssetUseCase`, `DeleteAssetUseCase`, `AccountDetailsUseCase`, …) cannot mockall-mock them and instead test against real services + in-memory SQLite. That's against the spirit of `docs/backend-rules.md` B34 ("Tests for services and orchestrators SHOULD mock external dependencies using mockall-generated mocks") — repositories already follow B34 via `#[cfg_attr(test, mockall::automock)]` on each domain.rs trait, but the service layer above them does not.
+
+Extract a trait per service (e.g. `AccountServiceContract`, `AssetServiceContract`) listing the methods orchestrators call, annotate with `#[cfg_attr(test, mockall::automock)]`, and have orchestrators inject `Arc<dyn AccountServiceContract>` / `Arc<dyn AssetServiceContract>`. Then rewrite the orchestrator inline tests to use the generated `MockAccountService` / `MockAssetService` instead of `setup_pool` + real repositories — true unit isolation, faster, no DB dependency. Surfaced during PR #4 review (2026-05-06).
+
+## (backend) — Carry diagnostic hint in OpenHoldingCommandError::Unknown
+
+`use_cases/holding_transaction/api.rs:90-96, 102-107` map "impossible" `TransactionDomainError` / `AccountDomainError` variants to `Unknown` after a `tracing::error!`. The user sees an opaque message with no correlation. Consider `Unknown { hint: String }` or returning a debug-only correlation id so support reports can be triaged. Pre-existing behaviour, not introduced by the refactor — surfaced during the inline review of `120e5ba`.
+
 ## (backend) — Introduce dependency injection container for service wiring
 
 `lib.rs` manually constructs and wires all repositories, services, and use cases in a single `block_on` closure. As the number of bounded contexts grows this becomes hard to maintain. Introduce a lightweight DI approach (e.g. a dedicated `AppContainer` struct or a builder pattern) to decouple service construction from app bootstrap, make the dependency graph explicit, and simplify testing of the wiring itself.

@@ -1,10 +1,7 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::{
-    BuyHoldingUseCase, CancelTransactionUseCase, CorrectTransactionUseCase, OpenHoldingUseCase,
-    SellHoldingUseCase,
-};
+use super::HoldingTransactionUseCase;
 use crate::context::account::{
     to_transaction_error, AccountDomainError, OpeningBalanceDomainError, Transaction,
     TransactionCommandError, TransactionDomainError,
@@ -182,7 +179,7 @@ pub struct CorrectTransactionDTO {
 #[tauri::command]
 #[specta::specta]
 pub async fn open_holding(
-    uc: State<'_, OpenHoldingUseCase>,
+    uc: State<'_, HoldingTransactionUseCase>,
     dto: OpenHoldingDTO,
 ) -> Result<Transaction, OpenHoldingCommandError> {
     uc.open_holding(
@@ -200,7 +197,7 @@ pub async fn open_holding(
 #[tauri::command]
 #[specta::specta]
 pub async fn buy_holding(
-    uc: State<'_, BuyHoldingUseCase>,
+    uc: State<'_, HoldingTransactionUseCase>,
     dto: BuyHoldingDTO,
 ) -> Result<Transaction, TransactionCommandError> {
     uc.buy_holding(
@@ -221,7 +218,7 @@ pub async fn buy_holding(
 #[tauri::command]
 #[specta::specta]
 pub async fn sell_holding(
-    uc: State<'_, SellHoldingUseCase>,
+    uc: State<'_, HoldingTransactionUseCase>,
     dto: SellHoldingDTO,
 ) -> Result<Transaction, TransactionCommandError> {
     uc.sell_holding(
@@ -242,7 +239,7 @@ pub async fn sell_holding(
 #[tauri::command]
 #[specta::specta]
 pub async fn correct_transaction(
-    uc: State<'_, CorrectTransactionUseCase>,
+    uc: State<'_, HoldingTransactionUseCase>,
     id: String,
     account_id: String,
     dto: CorrectTransactionDTO,
@@ -265,7 +262,7 @@ pub async fn correct_transaction(
 #[tauri::command]
 #[specta::specta]
 pub async fn cancel_transaction(
-    uc: State<'_, CancelTransactionUseCase>,
+    uc: State<'_, HoldingTransactionUseCase>,
     id: String,
     account_id: String,
 ) -> Result<(), TransactionCommandError> {
