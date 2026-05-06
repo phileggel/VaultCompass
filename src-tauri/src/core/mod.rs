@@ -12,6 +12,9 @@ pub use event_bus::{Event, SideEffectEventBus};
 mod db;
 pub use db::Database;
 
+/// Cross-context cash constants (CSH-014, CSH-017).
+pub mod cash;
+
 /// Logging infrastructure and frontend log bridge.
 pub mod logger;
 pub use logger::{BACKEND, FRONTEND};

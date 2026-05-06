@@ -1,139 +1,107 @@
-import { useNavigate, useParams } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useParams } from "@tanstack/react-router";
+import { ArrowDownToLine, ArrowUpFromLine, Plus } from "lucide-react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
+import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
-import type { ModalTarget, SellTarget } from "../shared/types";
+import { WithdrawalTransactionModal } from "../withdrawal_transaction/WithdrawalTransactionModal";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
+import { NoCashBanner } from "./NoCashBanner";
 import { PriceModal } from "./PriceModal";
-import { useAccountDetails } from "./useAccountDetails";
+import { useAccountDetailsView } from "./useAccountDetailsView";
 
 export function AccountDetailsView() {
   const { t } = useTranslation();
   const { accountId } = useParams({ from: "/accounts/$accountId" });
-  const navigate = useNavigate();
-  const { isLoading, error, retry, holdings, holdingDetails, closedHoldings, summary } =
-    useAccountDetails(accountId);
-
-  const [buyTarget, setBuyTarget] = useState<ModalTarget | null>(null);
-  const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
-  const [priceTarget, setPriceTarget] = useState<HoldingDetail | null>(null);
-  const [historyTarget, setHistoryTarget] = useState<HoldingDetail | null>(null);
-  const [openBalanceOpen, setOpenBalanceOpen] = useState(false);
+  const view = useAccountDetailsView(accountId);
 
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
   }, []);
-
-  const handleAddTransaction = useCallback(() => {
-    navigate({
-      to: "/transactions/new",
-      search: { prefillAccountId: accountId, prefillAssetId: undefined },
-    });
-  }, [navigate, accountId]);
-
-  const handleBuyClose = useCallback(() => setBuyTarget(null), []);
-  const handleSellClose = useCallback(() => setSellTarget(null), []);
-  const handlePriceClose = useCallback(() => setPriceTarget(null), []);
-  const handleHistoryClose = useCallback(() => setHistoryTarget(null), []);
-  const handleOpenBalanceOpen = useCallback(() => setOpenBalanceOpen(true), []);
-  const handleOpenBalanceClose = useCallback(() => setOpenBalanceOpen(false), []);
-  const handleOpenBalanceSuccess = useCallback(() => {
-    setOpenBalanceOpen(false);
-    retry();
-  }, [retry]);
-
-  const handleBuySuccess = useCallback(() => {
-    setBuyTarget(null);
-    retry();
-  }, [retry]);
-
-  const handleSellSuccess = useCallback(() => {
-    setSellTarget(null);
-    retry();
-  }, [retry]);
-
-  // MKT-028 — close modal on success; re-fetch happens via AssetPriceUpdated event (MKT-036)
-  const handlePriceSuccess = useCallback(() => {
-    setPriceTarget(null);
-  }, []);
-
-  // MKT-010/013 — find the raw HoldingDetail (no extra fetch) for the price modal
-  const handleEnterPrice = useCallback(
-    (assetId: string) => {
-      const holding = holdingDetails.find((h) => h.asset_id === assetId);
-      if (holding) setPriceTarget(holding);
-    },
-    [holdingDetails],
-  );
-
-  // MKT-072 — open price history modal for a holding
-  const handlePriceHistory = useCallback(
-    (assetId: string) => {
-      const holding = holdingDetails.find((h) => h.asset_id === assetId);
-      if (holding) setHistoryTarget(holding);
-    },
-    [holdingDetails],
-  );
-
-  const hasActiveHoldings = holdings.length > 0;
-  const hasClosedHoldings = summary?.hasClosedHoldings ?? false;
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
         {/* Summary header */}
         <div className="px-6 py-4 bg-m3-surface-container-high">
-          {isLoading ? (
+          {view.isLoading ? (
             <div className="h-4 w-32 bg-m3-surface-variant rounded animate-pulse" />
-          ) : summary ? (
+          ) : view.summary ? (
             <div className="flex items-center justify-between">
               <div className="flex gap-6 flex-wrap">
                 <p className="text-sm text-m3-on-surface-variant">
                   {t("account_details.total_cost_basis")}:{" "}
-                  <span className="font-semibold text-m3-on-surface">{summary.totalCostBasis}</span>
+                  <span className="font-semibold text-m3-on-surface">
+                    {view.summary.totalCostBasis}
+                  </span>
                 </p>
-                {summary.totalRealizedPnlRaw !== 0 && (
+                {view.summary.totalRealizedPnlRaw !== 0 && (
                   <p className="text-sm text-m3-on-surface-variant">
                     {t("account_details.total_realized_pnl")}:{" "}
                     <span
                       className={`font-semibold ${
-                        summary.totalRealizedPnlRaw < 0 ? "text-m3-error" : "text-m3-success"
+                        view.summary.totalRealizedPnlRaw < 0 ? "text-m3-error" : "text-m3-success"
                       }`}
                     >
-                      {summary.totalRealizedPnl}
+                      {view.summary.totalRealizedPnl}
                     </span>
                   </p>
                 )}
                 {/* MKT-041 — total unrealized P&L */}
-                {summary.totalUnrealizedPnl !== "—" && (
+                {view.summary.totalUnrealizedPnl !== "—" && (
                   <p className="text-sm text-m3-on-surface-variant">
                     {t("account_details.total_unrealized_pnl")}:{" "}
                     <span className="font-semibold text-m3-on-surface">
-                      {summary.totalUnrealizedPnl}
+                      {view.summary.totalUnrealizedPnl}
                     </span>
                   </p>
                 )}
+                {/* CSH-094 — Global Value (cash + priced holdings, account currency) */}
+                <p className="text-sm text-m3-on-surface-variant">
+                  {t("account_details.total_global_value")}:{" "}
+                  <span className="font-semibold text-m3-on-surface">
+                    {view.summary.totalGlobalValue}
+                  </span>
+                </p>
               </div>
               {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
               {/* ACD-036 — add transaction only when active holdings exist */}
               <div className="flex gap-2">
-                <Button variant="secondary" size="sm" onClick={handleOpenBalanceOpen}>
+                <Button variant="secondary" size="sm" onClick={view.handleOpenBalanceOpen}>
                   {t("account_details.action_open_balance")}
                 </Button>
-                {!summary.isEmpty && !summary.isAllClosed && (
+                {/* CSH-019 — Deposit always visible */}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ArrowDownToLine size={14} />}
+                  onClick={view.handleDepositOpen}
+                >
+                  {t("account_details.action_deposit")}
+                </Button>
+                {/* CSH-019 — Withdraw only when there is cash to withdraw */}
+                {view.hasVisibleCashRow && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<ArrowUpFromLine size={14} />}
+                    onClick={view.handleWithdrawalOpen}
+                  >
+                    {t("account_details.action_withdraw")}
+                  </Button>
+                )}
+                {!view.summary.isEmpty && !view.summary.isAllClosed && (
                   <Button
                     variant="tonal"
                     size="sm"
                     icon={<Plus size={14} />}
-                    onClick={handleAddTransaction}
+                    onClick={view.handleAddTransaction}
                   >
                     {t("account_details.add_transaction")}
                   </Button>
@@ -145,22 +113,22 @@ export function AccountDetailsView() {
 
         {/* Content */}
         <div className="flex-1 overflow-auto">
-          {isLoading ? (
+          {view.isLoading ? (
             /* ACD-037 — loading skeletons */
             <div className="animate-pulse p-4 space-y-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-10 bg-m3-surface-variant rounded-lg" />
               ))}
             </div>
-          ) : error ? (
+          ) : view.error ? (
             /* ACD-038 — error state */
             <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
               <span className="text-m3-error text-sm">{t("account_details.error_load")}</span>
-              <Button variant="secondary" size="sm" onClick={retry}>
+              <Button variant="secondary" size="sm" onClick={view.retry}>
                 {t("action.retry")}
               </Button>
             </div>
-          ) : summary?.isEmpty ? (
+          ) : view.summary?.isEmpty ? (
             /* ACD-034 — no positions at all */
             <div className="flex flex-col items-center justify-center h-full gap-4 py-12">
               <p className="text-m3-on-surface-variant italic">
@@ -171,15 +139,18 @@ export function AccountDetailsView() {
                 variant="primary"
                 size="sm"
                 icon={<Plus size={14} />}
-                onClick={handleAddTransaction}
+                onClick={view.handleAddTransaction}
               >
                 {t("account_details.add_transaction")}
               </Button>
             </div>
           ) : (
             <div className="flex flex-col">
+              {/* CSH-095 — no-cash banner above the active holdings table */}
+              {view.showNoCashBanner && <NoCashBanner onRecordDeposit={view.handleDepositOpen} />}
+
               {/* Active holdings table */}
-              {hasActiveHoldings && (
+              {view.hasActiveHoldings && (
                 <div className="m3-table-container">
                   <table className="w-full border-collapse">
                     <thead className="sticky top-0 bg-m3-surface-container z-10">
@@ -212,15 +183,17 @@ export function AccountDetailsView() {
                       </tr>
                     </thead>
                     <tbody>
-                      {holdings.map((row) => (
+                      {view.holdings.map((row) => (
                         <HoldingRow
                           key={row.assetId}
                           row={row}
                           accountId={accountId}
-                          onBuy={setBuyTarget}
-                          onSell={setSellTarget}
-                          onEnterPrice={handleEnterPrice}
-                          onPriceHistory={handlePriceHistory}
+                          onBuy={view.handleBuyOpen}
+                          onSell={view.handleSellOpen}
+                          onEnterPrice={view.handleEnterPrice}
+                          onPriceHistory={view.handlePriceHistory}
+                          onDeposit={view.handleDepositOpen}
+                          onWithdraw={view.handleWithdrawalOpen}
                         />
                       ))}
                     </tbody>
@@ -229,7 +202,7 @@ export function AccountDetailsView() {
               )}
 
               {/* ACD-048 — Closed positions section */}
-              {hasClosedHoldings && (
+              {view.hasClosedHoldings && (
                 <div className="mt-2">
                   <div className="px-6 py-3 bg-m3-surface-container-high">
                     <h3 className="text-sm font-semibold text-m3-on-surface-variant uppercase tracking-wide">
@@ -251,7 +224,7 @@ export function AccountDetailsView() {
                       </tr>
                     </thead>
                     <tbody>
-                      {closedHoldings.map((row) => (
+                      {view.closedHoldings.map((row) => (
                         <ClosedHoldingRow key={row.assetId} row={row} accountId={accountId} />
                       ))}
                     </tbody>
@@ -260,7 +233,7 @@ export function AccountDetailsView() {
               )}
 
               {/* No active holdings but has closed — show CTA */}
-              {!hasActiveHoldings && (
+              {!view.hasActiveHoldings && (
                 <div className="flex flex-col items-center justify-center gap-4 py-8">
                   <p className="text-m3-on-surface-variant italic">
                     {t("account_details.empty_all_closed")}
@@ -269,7 +242,7 @@ export function AccountDetailsView() {
                     variant="primary"
                     size="sm"
                     icon={<Plus size={14} />}
-                    onClick={handleAddTransaction}
+                    onClick={view.handleAddTransaction}
                   >
                     {t("account_details.add_transaction")}
                   </Button>
@@ -281,60 +254,80 @@ export function AccountDetailsView() {
       </div>
 
       {/* TRX-041 — Buy modal from holding row */}
-      {buyTarget && (
+      {view.buyTarget && (
         <BuyTransactionModal
           isOpen
-          onClose={handleBuyClose}
+          onClose={view.handleBuyClose}
           accountId={accountId}
-          accountName={buyTarget.accountName}
-          assetId={buyTarget.assetId}
-          assetName={buyTarget.assetName}
-          assetCurrency={buyTarget.assetCurrency}
-          showExchangeRate={buyTarget.showExchangeRate}
-          onSubmitSuccess={handleBuySuccess}
+          accountName={view.buyTarget.accountName}
+          assetId={view.buyTarget.assetId}
+          assetName={view.buyTarget.assetName}
+          assetCurrency={view.buyTarget.assetCurrency}
+          showExchangeRate={view.buyTarget.showExchangeRate}
+          onSubmitSuccess={view.handleBuySuccess}
         />
       )}
 
       {/* SEL-010 — Sell modal */}
-      {sellTarget && (
+      {view.sellTarget && (
         <SellTransactionModal
           isOpen
-          onClose={handleSellClose}
+          onClose={view.handleSellClose}
           accountId={accountId}
-          accountName={sellTarget.accountName}
-          assetId={sellTarget.assetId}
-          assetName={sellTarget.assetName}
-          assetCurrency={sellTarget.assetCurrency}
-          holdingQuantityMicro={sellTarget.holdingQuantityMicro}
-          showExchangeRate={sellTarget.showExchangeRate}
-          onSubmitSuccess={handleSellSuccess}
+          accountName={view.sellTarget.accountName}
+          assetId={view.sellTarget.assetId}
+          assetName={view.sellTarget.assetName}
+          assetCurrency={view.sellTarget.assetCurrency}
+          holdingQuantityMicro={view.sellTarget.holdingQuantityMicro}
+          showExchangeRate={view.sellTarget.showExchangeRate}
+          onSubmitSuccess={view.handleSellSuccess}
         />
       )}
 
       {/* MKT-010 — Enter price modal */}
-      {priceTarget && (
+      {view.priceTarget && (
         <PriceModal
           isOpen
-          onClose={handlePriceClose}
-          holding={priceTarget}
-          onSubmitSuccess={handlePriceSuccess}
+          onClose={view.handlePriceClose}
+          holding={view.priceTarget}
+          onSubmitSuccess={view.handlePriceSuccess}
         />
       )}
 
       {/* MKT-072 — Price history modal */}
-      {historyTarget && (
-        <PriceHistoryModal isOpen onClose={handleHistoryClose} holding={historyTarget} />
+      {view.historyTarget && (
+        <PriceHistoryModal isOpen onClose={view.handleHistoryClose} holding={view.historyTarget} />
       )}
 
       {/* TRX-055 — Open balance modal (account pre-filled, user picks asset inside) */}
       <OpenBalanceModal
-        isOpen={openBalanceOpen}
-        onClose={handleOpenBalanceClose}
+        isOpen={view.openBalanceOpen}
+        onClose={view.handleOpenBalanceClose}
         accountId={accountId}
-        accountName={summary?.accountName ?? ""}
+        accountName={view.summary?.accountName ?? ""}
         assetId=""
         assetName=""
-        onSubmitSuccess={handleOpenBalanceSuccess}
+        onSubmitSuccess={view.handleOpenBalanceSuccess}
+      />
+
+      {/* CSH-022 — Deposit modal */}
+      <DepositTransactionModal
+        isOpen={view.depositOpen}
+        onClose={view.handleDepositClose}
+        accountId={accountId}
+        accountName={view.summary?.accountName ?? ""}
+        accountCurrency={view.accountCurrency}
+        onSubmitSuccess={view.handleDepositSuccess}
+      />
+
+      {/* CSH-032 — Withdrawal modal */}
+      <WithdrawalTransactionModal
+        isOpen={view.withdrawalOpen}
+        onClose={view.handleWithdrawalClose}
+        accountId={accountId}
+        accountName={view.summary?.accountName ?? ""}
+        accountCurrency={view.accountCurrency}
+        onSubmitSuccess={view.handleWithdrawalSuccess}
       />
     </div>
   );

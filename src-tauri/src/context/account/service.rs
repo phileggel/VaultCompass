@@ -296,6 +296,49 @@ impl AccountService {
         Ok(tx)
     }
 
+    /// Records a Deposit (CSH-022) — cash inflow into the account.
+    /// Loads the Account aggregate, delegates to `Account::record_deposit`, saves atomically.
+    pub async fn record_deposit(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
+        info!(target: BACKEND, account_id = %account_id, amount = amount, "record_deposit");
+        let tx = account.record_deposit(date, amount, note)?;
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
+    /// Records a Withdrawal (CSH-032) — cash outflow from the account.
+    /// Loads the Account aggregate, delegates to `Account::record_withdrawal`, saves atomically.
+    /// Raises `InsufficientCash` (CSH-080) when no Cash Holding exists or balance < amount.
+    pub async fn record_withdrawal(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        let mut account = self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await?
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
+        info!(target: BACKEND, account_id = %account_id, amount = amount, "record_withdrawal");
+        let tx = account.record_withdrawal(date, amount, note)?;
+        self.account_repo.save(&mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
     // -------------------------------------------------------------------------
     // Cross-BC guard queries (called by use cases)
     // -------------------------------------------------------------------------
@@ -405,6 +448,43 @@ mod tests {
         )
     }
 
+    /// Seeds the system Cash Asset row + a large Deposit so existing buy/sell tests can
+    /// satisfy CSH-041 (purchase eligibility). Bypasses `AssetService` because these tests
+    /// only construct an `AccountService`.
+    async fn seed_cash_for_account(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+        svc: &AccountService,
+        account_id: &str,
+        currency: &str,
+    ) {
+        let cash_asset_id = format!("system-cash-{}", currency.to_lowercase());
+        sqlx::query(
+            "INSERT OR IGNORE INTO categories (id, name, is_deleted) VALUES ('system-cash-category', 'cash', 0)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed cash category");
+        sqlx::query(
+            "INSERT OR IGNORE INTO assets (id, name, reference, asset_class, category_id, currency, risk_level) \
+             VALUES (?, ?, ?, 'Cash', 'system-cash-category', ?, 1)",
+        )
+        .bind(&cash_asset_id)
+        .bind(format!("Cash {}", currency.to_uppercase()))
+        .bind(currency.to_uppercase())
+        .bind(currency)
+        .execute(pool)
+        .await
+        .expect("seed cash asset");
+        svc.record_deposit(
+            account_id,
+            "2020-01-01".to_string(),
+            1_000_000_000_000,
+            None,
+        )
+        .await
+        .expect("seed cash deposit");
+    }
+
     // R3 — duplicate name (case-insensitive) is rejected at creation
     #[tokio::test]
     async fn test_create_rejects_duplicate_name_case_insensitive() {
@@ -510,6 +590,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
         let tx = svc
             .buy_holding(
                 &account.id,
@@ -526,9 +607,12 @@ mod tests {
         assert_eq!(tx.account_id, account.id);
         assert_eq!(tx.asset_id, asset_id);
         let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
-        assert_eq!(holdings.len(), 1);
-        assert_eq!(holdings[0].quantity, micro(2));
-        assert_eq!(holdings[0].average_price, micro(100));
+        let asset_holding = holdings
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("asset holding present");
+        assert_eq!(asset_holding.quantity, micro(2));
+        assert_eq!(asset_holding.average_price, micro(100));
     }
 
     // SEL-021 — sell_holding rejects oversell via AccountOperationError
@@ -544,6 +628,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
         svc.buy_holding(
             &account.id,
             asset_id.clone(),
@@ -590,6 +675,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
         let tx = svc
             .buy_holding(
                 &account.id,
@@ -606,11 +692,14 @@ mod tests {
         svc.cancel_transaction(&account.id, &tx.id).await.unwrap();
         let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
         assert!(
-            holdings.is_empty(),
-            "holding should be removed after cancel"
+            holdings.iter().all(|h| h.asset_id != asset_id),
+            "asset holding should be removed after cancel"
         );
         let txs = svc.get_transactions(&account.id, &asset_id).await.unwrap();
-        assert!(txs.is_empty(), "transaction should be removed after cancel");
+        assert!(
+            txs.is_empty(),
+            "transactions for the asset should be removed after cancel"
+        );
     }
 
     // SEL-026 — full sell retains holding at quantity=0 with VWAP preserved
@@ -626,6 +715,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
         svc.buy_holding(
             &account.id,
             asset_id.clone(),
@@ -672,6 +762,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
         let buy = svc
             .buy_holding(
                 &account.id,
@@ -726,14 +817,17 @@ mod tests {
             .expect_get_with_holdings_and_transactions()
             .once()
             .returning(|_| {
-                Ok(Some(
-                    Account::new(
-                        "Test".to_string(),
-                        "EUR".to_string(),
-                        UpdateFrequency::ManualMonth,
-                    )
-                    .unwrap(),
-                ))
+                let mut acc = Account::new(
+                    "Test".to_string(),
+                    "EUR".to_string(),
+                    UpdateFrequency::ManualMonth,
+                )
+                .unwrap();
+                // Seed enough cash so CSH-041 doesn't short-circuit before save() is called.
+                acc.record_deposit("2020-01-01".to_string(), 1_000_000_000_000, None)
+                    .unwrap();
+                acc.pending_changes.clear();
+                Ok(Some(acc))
             });
         mock_ar
             .expect_save()
@@ -918,6 +1012,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
         // OpeningBalance: 2 units, total_cost = 200
         svc.open_holding(
@@ -1011,6 +1106,7 @@ mod tests {
             )
             .await
             .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
         let tx = svc
             .buy_holding(
                 &account.id,
@@ -1037,8 +1133,12 @@ mod tests {
         .await
         .unwrap();
         let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let asset_holding = holdings
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("asset holding present");
         assert_eq!(
-            holdings[0].average_price,
+            asset_holding.average_price,
             micro(200),
             "VWAP should update to 200"
         );

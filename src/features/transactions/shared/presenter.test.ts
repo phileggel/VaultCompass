@@ -39,3 +39,40 @@ describe("toTransactionRow — OpeningBalance", () => {
     expect(row.realizedPnlRaw).toBeNull();
   });
 });
+
+describe("toTransactionRow — cash transactions (CSH-101)", () => {
+  const depositTx = {
+    id: "tx-dep",
+    account_id: "account-1",
+    asset_id: "system-cash-eur",
+    transaction_type: "Deposit" as const,
+    date: "2025-06-15",
+    quantity: 250 * MICRO,
+    unit_price: 1 * MICRO,
+    exchange_rate: 1 * MICRO,
+    fees: 0,
+    total_amount: 250 * MICRO,
+    note: null,
+    realized_pnl: null,
+    created_at: "2025-06-15T10:00:00Z",
+  };
+  const withdrawalTx = { ...depositTx, transaction_type: "Withdrawal" as const, id: "tx-wd" };
+
+  // CSH-101 / TXL-023 — Deposit type round-trips for the i18n key
+  it("Deposit type label is 'Deposit'", () => {
+    const row = toTransactionRow(depositTx, "Cash EUR", "My Account");
+    expect(row.type).toBe("Deposit");
+  });
+
+  // CSH-101 / TXL-023 — Withdrawal type round-trips for the i18n key
+  it("Withdrawal type label is 'Withdrawal'", () => {
+    const row = toTransactionRow(withdrawalTx, "Cash EUR", "My Account");
+    expect(row.type).toBe("Withdrawal");
+  });
+
+  // TXL-022 — realized P&L is null on cash transactions; UI renders "—"
+  it("Deposit realizedPnl is null", () => {
+    const row = toTransactionRow(depositTx, "Cash EUR", "My Account");
+    expect(row.realizedPnl).toBeNull();
+  });
+});

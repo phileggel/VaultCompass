@@ -238,6 +238,8 @@
     "type_purchase": "Purchase",
     "type_sell": "Sell",
     "type_openingbalance": "Opening Balance",
+    "type_deposit": "Deposit",
+    "type_withdrawal": "Withdrawal",
     "action_sell": "Sell",
     "buy_modal_title": "Buy position",
     "sell_modal_title": "Sell position",
@@ -279,7 +281,33 @@
     "price_as_of": "as of {{date}}",
     "action_enter_price": "Enter price",
     "action_price_history": "Price history",
-    "action_open_balance": "Open Balance"
+    "action_open_balance": "Open Balance",
+    "action_deposit": "Deposit",
+    "action_withdraw": "Withdraw",
+    "total_global_value": "Global Value"
+  },
+  "cash": {
+    "deposit_modal_title": "Record a deposit",
+    "withdrawal_modal_title": "Record a withdrawal",
+    "form_amount_label": "Amount",
+    "form_amount_placeholder": "0.00",
+    "action_record_deposit": "Record deposit",
+    "action_record_withdrawal": "Record withdrawal",
+    "deposit_recorded": "Deposit recorded.",
+    "deposit_updated": "Deposit updated.",
+    "deposit_deleted": "Deposit deleted.",
+    "withdrawal_recorded": "Withdrawal recorded.",
+    "withdrawal_updated": "Withdrawal updated.",
+    "withdrawal_deleted": "Withdrawal deleted.",
+    "no_cash_banner_message": "No cash recorded for this account yet.",
+    "no_cash_banner_cta": "Record a deposit",
+    "insufficient_cash_inline": "Not enough cash. Available balance: {{balance}} {{currency}}."
+  },
+  "validation": {
+    "amount_not_positive": "Amount must be greater than 0.",
+    "invalid_date": "Date must be a valid YYYY-MM-DD.",
+    "date_in_future": "Date cannot be in the future.",
+    "date_too_old": "Date cannot be earlier than 1900-01-01."
   },
   "open_balance": {
     "modal_title": "Open Balance Position",
@@ -355,6 +383,8 @@
     "ExchangeRateNotPositive": "Exchange rate must be strictly positive.",
     "TotalAmountNotPositive": "Total amount must be strictly positive.",
     "ArchivedAsset": "Cannot open a balance for an archived asset.",
-    "InvalidTotalCost": "Total cost must be strictly positive."
+    "InvalidTotalCost": "Total cost must be strictly positive.",
+    "AmountNotPositive": "Amount must be greater than 0.",
+    "OpeningBalanceOnCashAsset": "Cannot open a balance on the system Cash Asset."
   }
 }

@@ -105,6 +105,17 @@ mod tests {
             )
             .await
             .unwrap();
+        // Cash is a Holding (CSH-090): seed cash before any purchase so CSH-041 holds.
+        asset_svc.seed_cash_asset("USD").await.unwrap();
+        account_svc
+            .record_deposit(
+                &account.id,
+                "2020-01-01".to_string(),
+                1_000_000_000_000,
+                None,
+            )
+            .await
+            .unwrap();
         account_svc
             .buy_holding(
                 &account.id,

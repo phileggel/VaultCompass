@@ -3,8 +3,8 @@
 
 use super::HoldingTransactionUseCase;
 use crate::context::account::{
-    to_transaction_error, AccountDomainError, OpeningBalanceDomainError, Transaction,
-    TransactionCommandError, TransactionDomainError,
+    to_transaction_error, AccountDomainError, CashOperationError, OpeningBalanceDomainError,
+    Transaction, TransactionCommandError, TransactionDomainError,
 };
 use crate::core::logger::BACKEND;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,9 @@ pub enum OpenHoldingCommandError {
     /// Asset is archived — cannot open a holding (TRX-050).
     #[error("Cannot open a holding for an archived asset")]
     ArchivedAsset,
+    /// Target asset is a system Cash Asset — record initial cash via `record_deposit` (CSH-061).
+    #[error("Opening balance cannot be recorded against a cash asset; use record_deposit instead")]
+    OpeningBalanceOnCashAsset,
     /// Total cost is zero or negative (TRX-045).
     #[error("Total cost must be strictly positive")]
     InvalidTotalCost,
@@ -71,6 +74,9 @@ fn to_open_holding_error(e: anyhow::Error) -> OpenHoldingCommandError {
             }
             OpeningBalanceDomainError::AssetNotFound => OpenHoldingCommandError::AssetNotFound,
             OpeningBalanceDomainError::ArchivedAsset => OpenHoldingCommandError::ArchivedAsset,
+            OpeningBalanceDomainError::OpeningBalanceOnCashAsset => {
+                OpenHoldingCommandError::OpeningBalanceOnCashAsset
+            }
         };
     }
     if let Some(err) = e.downcast_ref::<TransactionDomainError>() {
@@ -269,4 +275,145 @@ pub async fn cancel_transaction(
     uc.cancel_transaction(&account_id, &id)
         .await
         .map_err(to_transaction_error)
+}
+
+// =============================================================================
+// Cash Transactions — DTOs + dedicated errors (CSH-022 / CSH-032)
+// =============================================================================
+
+/// Parameters for recording a cash deposit (CSH-020).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DepositDTO {
+    /// Account receiving the cash.
+    pub account_id: String,
+    /// Transaction date (YYYY-MM-DD).
+    pub date: String,
+    /// Deposited amount in account currency (micro-units); strictly positive (CSH-021).
+    pub amount_micros: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Parameters for recording a cash withdrawal (CSH-030).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct WithdrawalDTO {
+    /// Account from which to withdraw cash.
+    pub account_id: String,
+    /// Transaction date (YYYY-MM-DD).
+    pub date: String,
+    /// Withdrawn amount in account currency (micro-units); strictly positive (CSH-031).
+    pub amount_micros: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Boundary-only variants for cash command errors — variants that don't exist in
+/// any domain error enum. Composed into the per-command boundary types via
+/// `#[serde(untagged)]` so the FE sees a flat `{ code: "..." }` union.
+#[derive(Debug, Serialize, Type, thiserror::Error, Clone)]
+#[serde(tag = "code")]
+pub enum CashCommandBoundaryError {
+    /// No account exists with the requested ID.
+    #[error("Account not found")]
+    AccountNotFound,
+    /// An unexpected server-side error occurred.
+    #[error("An unexpected error occurred")]
+    Unknown,
+}
+
+/// Typed error returned to the frontend for `record_deposit`.
+///
+/// Composes the domain-level `CashOperationError` (which itself unifies
+/// `AccountOperationError | TransactionDomainError`) with the boundary-only
+/// variants in `CashCommandBoundaryError`. Both inner enums are tagged with
+/// `#[serde(tag = "code")]`, so the TS shape is a flat `{ code: "...", ... }`
+/// union — no variant redefinition.
+#[derive(Debug, Serialize, Type, thiserror::Error)]
+#[serde(untagged)]
+pub enum RecordDepositCommandError {
+    /// Domain-level error raised by the aggregate (AmountNotPositive, InsufficientCash,
+    /// invalid date variants).
+    #[error(transparent)]
+    Domain(CashOperationError),
+    /// Boundary-only variants (`AccountNotFound`, `Unknown`).
+    #[error(transparent)]
+    Boundary(CashCommandBoundaryError),
+}
+
+/// Typed error returned to the frontend for `record_withdrawal`.
+///
+/// Same composition as `RecordDepositCommandError`. `InsufficientCash` (CSH-080)
+/// is carried by the inner `AccountOperationError` variant of `CashOperationError`.
+#[derive(Debug, Serialize, Type, thiserror::Error)]
+#[serde(untagged)]
+pub enum RecordWithdrawalCommandError {
+    /// Domain-level error raised by the aggregate (AmountNotPositive, InsufficientCash,
+    /// invalid date variants).
+    #[error(transparent)]
+    Domain(CashOperationError),
+    /// Boundary-only variants.
+    #[error(transparent)]
+    Boundary(CashCommandBoundaryError),
+}
+
+fn to_record_deposit_error(e: anyhow::Error) -> RecordDepositCommandError {
+    if let Some(err) = e.downcast_ref::<CashOperationError>() {
+        return RecordDepositCommandError::Domain(err.clone());
+    }
+    if let Some(err) = e.downcast_ref::<AccountDomainError>() {
+        return match err {
+            AccountDomainError::AccountNotFound(_) => {
+                RecordDepositCommandError::Boundary(CashCommandBoundaryError::AccountNotFound)
+            }
+            _ => {
+                tracing::error!(target: BACKEND, err = ?err, "BUG: unexpected AccountDomainError in record_deposit");
+                RecordDepositCommandError::Boundary(CashCommandBoundaryError::Unknown)
+            }
+        };
+    }
+    tracing::error!(target: BACKEND, err = ?e, "unexpected error in record_deposit command");
+    RecordDepositCommandError::Boundary(CashCommandBoundaryError::Unknown)
+}
+
+fn to_record_withdrawal_error(e: anyhow::Error) -> RecordWithdrawalCommandError {
+    if let Some(err) = e.downcast_ref::<CashOperationError>() {
+        return RecordWithdrawalCommandError::Domain(err.clone());
+    }
+    if let Some(err) = e.downcast_ref::<AccountDomainError>() {
+        return match err {
+            AccountDomainError::AccountNotFound(_) => {
+                RecordWithdrawalCommandError::Boundary(CashCommandBoundaryError::AccountNotFound)
+            }
+            _ => {
+                tracing::error!(target: BACKEND, err = ?err, "BUG: unexpected AccountDomainError in record_withdrawal");
+                RecordWithdrawalCommandError::Boundary(CashCommandBoundaryError::Unknown)
+            }
+        };
+    }
+    tracing::error!(target: BACKEND, err = ?e, "unexpected error in record_withdrawal command");
+    RecordWithdrawalCommandError::Boundary(CashCommandBoundaryError::Unknown)
+}
+
+/// Records a cash deposit into an account (CSH-022).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_deposit(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: DepositDTO,
+) -> Result<Transaction, RecordDepositCommandError> {
+    uc.record_deposit(&dto.account_id, dto.date, dto.amount_micros, dto.note)
+        .await
+        .map_err(to_record_deposit_error)
+}
+
+/// Records a cash withdrawal from an account (CSH-032).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_withdrawal(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: WithdrawalDTO,
+) -> Result<Transaction, RecordWithdrawalCommandError> {
+    uc.record_withdrawal(&dto.account_id, dto.date, dto.amount_micros, dto.note)
+        .await
+        .map_err(to_record_withdrawal_error)
 }

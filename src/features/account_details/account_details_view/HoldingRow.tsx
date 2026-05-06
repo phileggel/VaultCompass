@@ -1,5 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
-import { DollarSign, History, Minus, Plus, Search } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  DollarSign,
+  History,
+  Minus,
+  Plus,
+  Search,
+} from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
@@ -16,6 +24,10 @@ type HoldingRowProps = {
   onSell: (target: SellTarget) => void;
   onEnterPrice: (assetId: string) => void;
   onPriceHistory: (assetId: string) => void;
+  /** Cash variant — open Deposit modal (CSH-091). */
+  onDeposit?: () => void;
+  /** Cash variant — open Withdrawal modal (CSH-091). */
+  onWithdraw?: () => void;
 };
 
 export function HoldingRow({
@@ -25,6 +37,8 @@ export function HoldingRow({
   onSell,
   onEnterPrice,
   onPriceHistory,
+  onDeposit,
+  onWithdraw,
 }: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -69,6 +83,46 @@ export function HoldingRow({
 
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
+
+  // CSH-091 — cash row variant: no Buy/Sell/Inspect, only Deposit/Withdraw.
+  if (row.isCash) {
+    return (
+      <tr className="m3-tr">
+        <td className="m3-td">
+          <div className="flex flex-col">
+            <span className="font-medium text-m3-on-surface">{row.assetName}</span>
+            <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
+          </div>
+        </td>
+        <td className="m3-td text-right tabular-nums font-medium">{row.quantity}</td>
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td">
+          <div className="flex items-center gap-1">
+            <IconButton
+              icon={<ArrowDownToLine size={16} />}
+              variant="success"
+              size="sm"
+              aria-label={t("cash.action_record_deposit")}
+              onClick={onDeposit}
+            />
+            <IconButton
+              icon={<ArrowUpFromLine size={16} />}
+              variant="error"
+              size="sm"
+              aria-label={t("cash.action_record_withdrawal")}
+              onClick={onWithdraw}
+              disabled={row.quantityMicro <= 0}
+            />
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr className="m3-tr">

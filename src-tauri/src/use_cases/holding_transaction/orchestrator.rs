@@ -1,5 +1,8 @@
-use crate::context::account::{AccountService, OpeningBalanceDomainError, Transaction};
-use crate::context::asset::AssetService;
+use super::shared::ensure_cash_asset;
+use crate::context::account::{
+    AccountDomainError, AccountService, OpeningBalanceDomainError, Transaction,
+};
+use crate::context::asset::{AssetClass, AssetService};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -39,6 +42,11 @@ impl HoldingTransactionUseCase {
         match self.asset_service.get_asset_by_id(&asset_id).await? {
             None => return Err(OpeningBalanceDomainError::AssetNotFound.into()),
             Some(a) if a.is_archived => return Err(OpeningBalanceDomainError::ArchivedAsset.into()),
+            // CSH-061 — Cash Assets cannot be seeded via OpeningBalance; user records
+            // initial cash via `record_deposit` instead.
+            Some(a) if a.class == AssetClass::Cash => {
+                return Err(OpeningBalanceDomainError::OpeningBalanceOnCashAsset.into())
+            }
             Some(_) => {}
         }
         self.account_service
@@ -47,7 +55,8 @@ impl HoldingTransactionUseCase {
     }
 
     /// Records a purchase of an asset into an account (TRX-027).
-    /// The cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-040).
+    /// Seeds the system Cash Asset for the account's currency (CSH-010) before delegating;
+    /// the aggregate replays the cash holding inside `Account::buy_holding` (CSH-040 / CSH-041).
     #[allow(clippy::too_many_arguments)]
     pub async fn buy_holding(
         &self,
@@ -60,6 +69,7 @@ impl HoldingTransactionUseCase {
         fees: i64,
         note: Option<String>,
     ) -> Result<Transaction> {
+        self.ensure_cash_for(account_id).await?;
         self.account_service
             .buy_holding(
                 account_id,
@@ -75,7 +85,8 @@ impl HoldingTransactionUseCase {
     }
 
     /// Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
-    /// The cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-050).
+    /// Seeds the system Cash Asset (CSH-010); the aggregate lazy-creates the Cash Holding
+    /// when this is the first cash-affecting transaction (CSH-050 / CSH-012).
     #[allow(clippy::too_many_arguments)]
     pub async fn sell_holding(
         &self,
@@ -88,6 +99,7 @@ impl HoldingTransactionUseCase {
         fees: i64,
         note: Option<String>,
     ) -> Result<Transaction> {
+        self.ensure_cash_for(account_id).await?;
         self.account_service
             .sell_holding(
                 account_id,
@@ -103,7 +115,8 @@ impl HoldingTransactionUseCase {
     }
 
     /// Corrects an existing transaction and recalculates the affected holding (TRX-031).
-    /// The cross-BC `ensure_cash_asset` step is wired in by the cash-tracking spec (CSH-042).
+    /// Seeds the system Cash Asset; the aggregate replay re-evaluates the cash holding for
+    /// any cash-affecting tx (CSH-042 / CSH-051) and may raise InsufficientCash.
     #[allow(clippy::too_many_arguments)]
     pub async fn correct_transaction(
         &self,
@@ -116,6 +129,7 @@ impl HoldingTransactionUseCase {
         fees: i64,
         note: Option<String>,
     ) -> Result<Transaction> {
+        self.ensure_cash_for(account_id).await?;
         self.account_service
             .correct_transaction(
                 account_id,
@@ -131,11 +145,55 @@ impl HoldingTransactionUseCase {
     }
 
     /// Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
-    /// The cash replay-eligibility check is wired in by the cash-tracking spec (CSH-024 / CSH-051).
+    /// The aggregate replay catches any chronologically-later violation (CSH-024 / CSH-051).
     pub async fn cancel_transaction(&self, account_id: &str, transaction_id: &str) -> Result<()> {
+        self.ensure_cash_for(account_id).await?;
         self.account_service
             .cancel_transaction(account_id, transaction_id)
             .await
+    }
+
+    /// Records a Deposit into an account (CSH-022).
+    /// Seeds the system Cash Asset (CSH-010) before delegating; the aggregate
+    /// lazy-creates the Cash Holding (CSH-012) and persists the Transaction.
+    pub async fn record_deposit(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        self.ensure_cash_for(account_id).await?;
+        self.account_service
+            .record_deposit(account_id, date, amount, note)
+            .await
+    }
+
+    /// Records a Withdrawal from an account (CSH-032).
+    /// Raises InsufficientCash (CSH-080) when no Cash Holding exists or balance < amount.
+    pub async fn record_withdrawal(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> Result<Transaction> {
+        self.ensure_cash_for(account_id).await?;
+        self.account_service
+            .record_withdrawal(account_id, date, amount, note)
+            .await
+    }
+
+    /// Loads the account's currency and ensures the system Cash Asset for that currency
+    /// exists (CSH-010, CSH-011, CSH-017). Idempotent: safe to call on every cash-affecting
+    /// command.
+    async fn ensure_cash_for(&self, account_id: &str) -> Result<()> {
+        let account = self
+            .account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountDomainError::AccountNotFound(account_id.to_string()))?;
+        ensure_cash_asset(&self.asset_service, &account.currency).await
     }
 }
 

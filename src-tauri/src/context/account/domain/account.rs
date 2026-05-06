@@ -1,4 +1,6 @@
-use super::error::{AccountDomainError, AccountOperationError, OpeningBalanceDomainError};
+use super::error::{
+    AccountDomainError, AccountOperationError, CashOperationError, OpeningBalanceDomainError,
+};
 use super::holding::Holding;
 use super::transaction::{Transaction, TransactionType};
 use super::transaction_error::TransactionDomainError;
@@ -226,6 +228,9 @@ impl Account {
             .push(AccountChange::HoldingUpserted(holding.clone()));
         self.upsert_holding_in_memory(holding);
 
+        // CSH-040 — Purchase debits cash. CSH-041 raises InsufficientCash here when needed.
+        self.replay_cash_holding()?;
+
         self.transactions
             .last()
             .ok_or_else(|| anyhow!("BUG: tx list empty after push in account {}", self.id))
@@ -298,6 +303,10 @@ impl Account {
             .push(AccountChange::HoldingUpserted(holding.clone()));
         self.upsert_holding_in_memory(holding);
 
+        // CSH-050 — Sell credits cash; lazy-creates the Cash Holding when this is the first
+        // cash-affecting transaction (CSH-012). Sell never raises InsufficientCash.
+        self.replay_cash_holding()?;
+
         self.transactions
             .last()
             .ok_or_else(|| anyhow!("BUG: tx list empty after push in account {}", self.id))
@@ -339,6 +348,8 @@ impl Account {
             TransactionType::OpeningBalance => {
                 Self::compute_opening_balance_total(quantity, unit_price)
             }
+            // CSH-022 / CSH-032: cash transactions carry total_amount == quantity (no fees, no FX).
+            TransactionType::Deposit | TransactionType::Withdrawal => quantity,
         };
 
         let updated_tx = Transaction::with_id(
@@ -406,6 +417,10 @@ impl Account {
             .push(AccountChange::HoldingUpserted(holding.clone()));
         self.upsert_holding_in_memory(holding);
 
+        // CSH-042 / CSH-051 — chronological replay over Deposit / Withdrawal / Purchase / Sell.
+        // OpeningBalance corrections do not touch cash (CSH-060), so the replay is harmless on them.
+        self.replay_cash_holding()?;
+
         self.transactions
             .iter()
             .find(|t| t.id == tx_id)
@@ -468,6 +483,11 @@ impl Account {
             self.upsert_holding_in_memory(holding);
         }
 
+        // CSH-024 / CSH-051 — replay cash after the cancellation. Cancelling a Deposit, Buy, or
+        // Sell can change the cash trajectory; cancelling a Withdrawal only ever raises the
+        // running balance and never trips InsufficientCash. OpeningBalance cancels are harmless.
+        self.replay_cash_holding()?;
+
         Ok(())
     }
 
@@ -527,6 +547,203 @@ impl Account {
         self.transactions
             .last()
             .ok_or_else(|| anyhow!("BUG: tx list empty after push in account {}", self.id))
+    }
+
+    // -------------------------------------------------------------------------
+    // Cash transactions (CSH spec)
+    // -------------------------------------------------------------------------
+
+    /// Returns the deterministic asset_id of the system Cash Asset for this account's currency
+    /// (CSH-011). Format: `system-cash-{ccy_lower}` (e.g. `system-cash-eur`).
+    pub fn cash_asset_id(&self) -> String {
+        crate::core::cash::system_cash_asset_id(&self.currency)
+    }
+
+    /// Returns the current cash balance for this account, or 0 if no Cash Holding exists yet.
+    pub fn cash_holding_quantity(&self) -> i64 {
+        self.holding_quantity(&self.cash_asset_id())
+    }
+
+    /// Records a cash inflow into this account from outside the tracked world (CSH-022).
+    ///
+    /// Lazy-creates the Cash Holding when this is the first cash-affecting transaction
+    /// (CSH-012). Within a single Unit of Work, persists the Transaction and the updated
+    /// Cash Holding atomically (ADR-006). Returns the persisted Transaction by value —
+    /// no post-push lookup, so no `expect`/BUG-anyhow path is necessary.
+    ///
+    /// Typed return — `CashOperationError` unifies the two failure sources
+    /// (`AccountOperationError` aggregate-level + `TransactionDomainError` validation)
+    /// so the caller doesn't lose error type information through anyhow.
+    pub fn record_deposit(
+        &mut self,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, CashOperationError> {
+        if amount <= 0 {
+            return Err(AccountOperationError::AmountNotPositive.into());
+        }
+        let tx = Transaction::new(
+            self.id.clone(),
+            self.cash_asset_id(),
+            TransactionType::Deposit,
+            date,
+            amount,
+            1_000_000,
+            1_000_000,
+            0,
+            amount,
+            note,
+            None,
+        )?;
+        self.transactions.push(tx.clone());
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.replay_cash_holding()?;
+        Ok(tx)
+    }
+
+    /// Records a cash outflow from this account to outside the tracked world (CSH-032).
+    ///
+    /// Eligibility (CSH-080): rejected with `InsufficientCash` when no Cash Holding exists
+    /// or its balance is below `amount`. Withdrawals do not lazy-create the Cash Holding —
+    /// only Deposit and Sell do (CSH-012).
+    pub fn record_withdrawal(
+        &mut self,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, CashOperationError> {
+        if amount <= 0 {
+            return Err(AccountOperationError::AmountNotPositive.into());
+        }
+        // CSH-080 — eligibility pre-check before any mutation. Replay would also catch it,
+        // but failing early avoids leaving the rejected tx in self.transactions.
+        let current = self.cash_holding_quantity();
+        if current < amount {
+            return Err(AccountOperationError::InsufficientCash {
+                current_balance_micros: current,
+                currency: self.currency.clone(),
+            }
+            .into());
+        }
+        let tx = Transaction::new(
+            self.id.clone(),
+            self.cash_asset_id(),
+            TransactionType::Withdrawal,
+            date,
+            amount,
+            1_000_000,
+            1_000_000,
+            0,
+            amount,
+            note,
+            None,
+        )?;
+        self.transactions.push(tx.clone());
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.replay_cash_holding()?;
+        Ok(tx)
+    }
+
+    /// Replays the cash holding from scratch over all cash-affecting transactions
+    /// (Deposit, Withdrawal, Purchase, Sell — OpeningBalance is excluded per CSH-060)
+    /// in `(date ASC, created_at ASC)` order. Validates running balance is never strictly
+    /// negative; raises `InsufficientCash` otherwise (CSH-080).
+    ///
+    /// On success, queues the appropriate `AccountChange` (Upserted or Deleted) and updates
+    /// `self.holdings` in memory. CSH-013: the Cash Holding is deleted when no
+    /// Deposit / Withdrawal transactions remain for this account.
+    ///
+    /// Returns a typed `AccountOperationError` rather than `anyhow::Result` because
+    /// `InsufficientCash` is the only failure mode and callers benefit from knowing it
+    /// statically.
+    fn replay_cash_holding(&mut self) -> Result<(), AccountOperationError> {
+        let cash_asset_id = self.cash_asset_id();
+
+        // Walk cash-affecting transactions chronologically.
+        let mut cash_txs: Vec<&Transaction> = self
+            .transactions
+            .iter()
+            .filter(|t| {
+                matches!(
+                    t.transaction_type,
+                    TransactionType::Deposit
+                        | TransactionType::Withdrawal
+                        | TransactionType::Purchase
+                        | TransactionType::Sell
+                )
+            })
+            .collect();
+        cash_txs.sort_by(|a, b| {
+            a.date
+                .cmp(&b.date)
+                .then_with(|| a.created_at.cmp(&b.created_at))
+        });
+
+        let mut running: i64 = 0;
+        for t in &cash_txs {
+            match t.transaction_type {
+                TransactionType::Deposit | TransactionType::Sell => {
+                    running = running.saturating_add(t.total_amount);
+                }
+                TransactionType::Withdrawal | TransactionType::Purchase => {
+                    if running < t.total_amount {
+                        return Err(AccountOperationError::InsufficientCash {
+                            current_balance_micros: running,
+                            currency: self.currency.clone(),
+                        });
+                    }
+                    running -= t.total_amount;
+                }
+                _ => {}
+            }
+        }
+
+        // CSH-013 / TRX-034 cleanup: when no Deposit / Withdrawal remain *and* the running
+        // balance is zero, drop the Cash Holding. (The "pair" for cash, by analogy with
+        // TRX-034, is Deposit + Withdrawal; Purchase / Sell touch cash via side-effect but
+        // are owned by their non-cash asset's pair.)
+        let cash_pair_remains = self.transactions.iter().any(|t| {
+            matches!(
+                t.transaction_type,
+                TransactionType::Deposit | TransactionType::Withdrawal
+            )
+        });
+        let existing_cash_holding = self.holdings.iter().find(|h| h.asset_id == cash_asset_id);
+        if running == 0 && !cash_pair_remains {
+            if existing_cash_holding.is_some() {
+                self.holdings.retain(|h| h.asset_id != cash_asset_id);
+                self.pending_changes.push(AccountChange::HoldingDeleted {
+                    account_id: self.id.clone(),
+                    asset_id: cash_asset_id,
+                });
+            }
+            return Ok(());
+        }
+
+        // Upsert the Cash Holding with average_price = 1.0, total_realized_pnl = 0,
+        // last_sold_date = None — invariants from the spec entity definition.
+        // `Holding::restore` skips validation: `running` is guaranteed >= 0 by the
+        // replay invariant above, and the constant 1_000_000 average_price is positive,
+        // so the typical `Holding::new` validation would always succeed.
+        let holding_id = existing_cash_holding
+            .map(|h| h.id.clone())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let holding = Holding::restore(
+            holding_id,
+            self.id.clone(),
+            cash_asset_id,
+            running,
+            1_000_000,
+            0,
+            None,
+        );
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -601,6 +818,36 @@ impl Account {
                     let qty = t.quantity as i128;
                     vwap_numerator -= vwap_before as i128 * qty;
                     total_quantity -= qty;
+                }
+                // CSH-022: a Deposit credits cash quantity by total_amount; vwap stays at 1.0.
+                // unit_price and exchange_rate are both 1_000_000, so the vwap_numerator
+                // contribution equals total_amount * MICRO, matching Purchase math.
+                TransactionType::Deposit => {
+                    let qty = t.quantity as i128;
+                    total_quantity += qty;
+                    vwap_numerator += t.total_amount as i128 * MICRO;
+                }
+                // CSH-032: a Withdrawal debits cash quantity by total_amount; never realises P&L
+                // and never tracks last_sold_date. CSH-080's eligibility guard runs in
+                // `replay_cash_holding` (insufficient-cash check), not here — `recalculate_holding`
+                // is shared with Sell oversell which is a CascadingOversell, a different error.
+                TransactionType::Withdrawal => {
+                    if t.quantity as i128 > total_quantity {
+                        return Err(AccountOperationError::InsufficientCash {
+                            current_balance_micros: total_quantity as i64,
+                            currency: self.currency.clone(),
+                        }
+                        .into());
+                    }
+                    let qty = t.quantity as i128;
+                    total_quantity -= qty;
+                    // For a Withdrawal we shrink the running vwap_numerator proportionally so the
+                    // average_price stays at 1.0 (cash is its own unit).
+                    if total_quantity > 0 {
+                        vwap_numerator = total_quantity * MICRO;
+                    } else {
+                        vwap_numerator = 0;
+                    }
                 }
             }
         }
@@ -730,6 +977,17 @@ mod tests {
         )
     }
 
+    /// Returns a base account pre-seeded with a large cash balance so existing buy/sell
+    /// tests don't trip CSH-041 (Insufficient cash on Purchase).
+    fn cash_seeded_account() -> Account {
+        let mut acc = base_account();
+        acc.record_deposit("2020-01-01".to_string(), 1_000_000_000_000, None)
+            .unwrap();
+        // Drain pending_changes so tests that count emitted changes start clean.
+        acc.pending_changes.clear();
+        acc
+    }
+
     // R1 — trim at creation
     #[test]
     fn new_trims_leading_trailing_spaces() {
@@ -792,7 +1050,7 @@ mod tests {
     // TRX-026 / TRX-030 — buy_holding updates VWAP correctly (2 purchases)
     #[test]
     fn buy_holding_updates_vwap() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         // Buy 2 units @ 100.00 → total = 200.00
         acc.buy_holding(
             "asset-1".to_string(),
@@ -828,7 +1086,7 @@ mod tests {
     // SEL-012 — sell_holding on a zero-qty position is rejected
     #[test]
     fn sell_holding_rejects_closed_position() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .sell_holding(
                 "asset-1".to_string(),
@@ -851,7 +1109,7 @@ mod tests {
     // SEL-021 — sell_holding rejects quantity exceeding available
     #[test]
     fn sell_holding_rejects_oversell() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         acc.buy_holding(
             "asset-1".to_string(),
             "2024-01-01".to_string(),
@@ -884,7 +1142,7 @@ mod tests {
     // SEL-024 — sell_holding computes P&L: sell 1 unit @ 150 after buying @ 100 → P&L = +50
     #[test]
     fn sell_holding_computes_realized_pnl() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         acc.buy_holding(
             "asset-1".to_string(),
             "2024-01-01".to_string(),
@@ -912,7 +1170,7 @@ mod tests {
     // TRX-031 — correct_transaction recalculates holding
     #[test]
     fn correct_transaction_recalculates_holding() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let tx = acc
             .buy_holding(
                 "asset-1".to_string(),
@@ -949,7 +1207,7 @@ mod tests {
     // TRX-034 — cancel_transaction removes holding when it was the last transaction
     #[test]
     fn cancel_transaction_removes_holding_when_last() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let tx = acc
             .buy_holding(
                 "asset-1".to_string(),
@@ -967,9 +1225,12 @@ mod tests {
 
         assert!(
             acc.holdings.iter().all(|h| h.asset_id != "asset-1"),
-            "holding should be removed"
+            "asset-1 holding should be removed"
         );
-        assert!(acc.transactions.is_empty(), "transaction should be removed");
+        assert!(
+            acc.transactions.iter().all(|t| t.id != tx.id),
+            "purchase transaction should be removed"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -981,7 +1242,7 @@ mod tests {
     // the exact variant will be confirmed by the downcast once the impl imports it.
     #[test]
     fn open_holding_rejects_zero_quantity() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1001,7 +1262,7 @@ mod tests {
     // TRX-044 — open_holding rejects negative quantity
     #[test]
     fn open_holding_rejects_negative_quantity() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1019,7 +1280,7 @@ mod tests {
     // TRX-045 — open_holding rejects total_cost ≤ 0
     #[test]
     fn open_holding_rejects_zero_total_cost() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .open_holding("asset-1".to_string(), "2024-01-01".to_string(), micro(1), 0)
             .unwrap_err();
@@ -1035,7 +1296,7 @@ mod tests {
     // TRX-045 — open_holding rejects negative total_cost
     #[test]
     fn open_holding_rejects_negative_total_cost() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1056,7 +1317,7 @@ mod tests {
     // TRX-046 — open_holding rejects future date
     #[test]
     fn open_holding_rejects_future_date() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1075,7 +1336,7 @@ mod tests {
     // TRX-046 — open_holding rejects date before 1900-01-01
     #[test]
     fn open_holding_rejects_date_too_old() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let err = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1094,7 +1355,7 @@ mod tests {
     // TRX-047 — open_holding stores total_amount = total_cost directly
     #[test]
     fn open_holding_sets_total_amount_equal_to_total_cost() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let total_cost = micro(500); // 500.000000 in account currency
         let tx = acc
             .open_holding(
@@ -1113,7 +1374,7 @@ mod tests {
     // TRX-047 — open_holding sets fees = 0
     #[test]
     fn open_holding_sets_fees_to_zero() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let tx = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1128,7 +1389,7 @@ mod tests {
     // TRX-047 — open_holding sets exchange_rate = 1_000_000
     #[test]
     fn open_holding_sets_exchange_rate_to_one() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let tx = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1146,7 +1407,7 @@ mod tests {
     // TRX-047 — open_holding computes unit_price = floor(total_cost * MICRO / quantity)
     #[test]
     fn open_holding_computes_unit_price_as_floor_of_cost_over_qty() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         // quantity = 3_000_000 (3.0), total_cost = 10_000_000 (10.0)
         // unit_price = floor(10_000_000 * 1_000_000 / 3_000_000) = floor(3_333_333.33) = 3_333_333
         let quantity = 3 * 1_000_000i64;
@@ -1169,7 +1430,7 @@ mod tests {
     // TRX-047 — open_holding sets transaction_type = OpeningBalance
     #[test]
     fn open_holding_sets_transaction_type_to_opening_balance() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let tx = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1186,7 +1447,7 @@ mod tests {
     // VWAP = (200 + 200) / 4 = 100
     #[test]
     fn open_holding_participates_in_vwap_identically_to_purchase() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         // OpeningBalance: 2 units, total_cost = 200
         acc.open_holding(
             "asset-1".to_string(),
@@ -1224,7 +1485,7 @@ mod tests {
     // TRX-049 — multiple OpeningBalance entries allowed for same (account, asset) pair
     #[test]
     fn open_holding_allows_multiple_for_same_pair() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         let r1 = acc
             .open_holding(
                 "asset-1".to_string(),
@@ -1259,7 +1520,7 @@ mod tests {
     // total_amount = quantity * unit_price / MICRO (not TRX-026 purchase formula)
     #[test]
     fn correct_transaction_on_opening_balance_recomputes_total_from_qty_and_price() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         // Create an opening balance: 2 units, total_cost = 200 → unit_price = 100_000_000
         let tx = acc
             .open_holding(
@@ -1298,7 +1559,7 @@ mod tests {
     // TRX-047 — open_holding does NOT apply TRX-026 formula (no exchange_rate factor)
     #[test]
     fn open_holding_total_amount_ignores_exchange_rate() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         // total_cost = 1_000_000 (1.0 unit), quantity = 1_000_000 (1.0)
         // TRX-026 would multiply by exchange_rate — but open_holding must not
         let tx = acc
@@ -1318,7 +1579,7 @@ mod tests {
     // SEL-026 — cancel_transaction retains holding at qty=0 when other transactions remain
     #[test]
     fn cancel_transaction_retains_holding_when_transactions_remain() {
-        let mut acc = base_account();
+        let mut acc = cash_seeded_account();
         acc.buy_holding(
             "asset-1".to_string(),
             "2024-01-01".to_string(),

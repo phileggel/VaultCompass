@@ -1,5 +1,5 @@
 use super::domain::{
-    Asset, AssetCategory, AssetCategoryRepository, AssetDomainError, AssetPrice,
+    Asset, AssetCategory, AssetCategoryRepository, AssetClass, AssetDomainError, AssetPrice,
     AssetPriceDomainError, AssetPriceRepository, AssetRepository, CategoryDomainError,
     SYSTEM_CATEGORY_ID,
 };
@@ -54,6 +54,55 @@ impl AssetService {
     /// Retrieves a single asset by ID.
     pub async fn get_asset_by_id(&self, asset_id: &str) -> Result<Option<Asset>> {
         self.asset_repo.get_by_id(asset_id).await
+    }
+
+    /// Idempotently seeds the system Cash Asset for `currency` and the system
+    /// Cash category that hosts it (CSH-010, CSH-011, CSH-017). Safe to call from every
+    /// cash-affecting use case — returns the existing asset on subsequent calls.
+    ///
+    /// Asset id format: `system-cash-{ccy_lower}`. Category id: `system-cash-category`.
+    /// Both constants and the id format live in `core::cash` so the account context
+    /// can use the same format without crossing a context boundary (B13).
+    pub async fn seed_cash_asset(&self, currency: &str) -> Result<Asset> {
+        let asset_id = crate::core::cash::system_cash_asset_id(currency);
+
+        if let Some(existing) = self.asset_repo.get_by_id(&asset_id).await? {
+            return Ok(existing);
+        }
+
+        let category = match self
+            .category_repo
+            .get_by_id(crate::core::cash::SYSTEM_CASH_CATEGORY_ID)
+            .await?
+        {
+            Some(c) => c,
+            None => {
+                let cat = AssetCategory::with_id(
+                    crate::core::cash::SYSTEM_CASH_CATEGORY_ID.to_string(),
+                    crate::core::cash::SYSTEM_CASH_CATEGORY_LABEL.to_string(),
+                )?;
+                self.category_repo.create(cat).await?
+            }
+        };
+
+        let asset = Asset::with_id(
+            asset_id.clone(),
+            format!("Cash {}", currency.to_uppercase()),
+            AssetClass::Cash,
+            category,
+            currency.to_string(),
+            1,
+            currency.to_uppercase(),
+            false,
+        )?;
+        let asset = self.asset_repo.create(asset).await?;
+        tracing::info!(target: BACKEND, asset_id = %asset.id, currency = %currency, "Seeded Cash Asset");
+
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetUpdated);
+        }
+
+        Ok(asset)
     }
 
     /// Creates a new asset and publishes an AssetUpdated event.

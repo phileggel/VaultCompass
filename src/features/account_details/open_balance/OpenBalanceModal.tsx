@@ -67,7 +67,8 @@ export function OpenBalanceModal({
           <ComboboxField
             id="ob-asset-select"
             label={t("transaction.form_asset_label")}
-            items={assets.filter((a) => !a.is_archived)}
+            // CSH-018/061 — Cash Assets are not eligible for OpeningBalance; suppress them.
+            items={assets.filter((a) => !a.is_archived && a.class !== "Cash")}
             displayKey="name"
             idKey="id"
             value={formData.assetId}

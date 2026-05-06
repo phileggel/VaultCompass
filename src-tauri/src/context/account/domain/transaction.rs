@@ -28,6 +28,10 @@ pub enum TransactionType {
     Sell,
     /// Seeds a holding directly from a known quantity and total cost, without full transaction history (TRX-042).
     OpeningBalance,
+    /// A cash inflow from outside the application's tracked world (CSH-022).
+    Deposit,
+    /// A cash outflow to outside the application's tracked world (CSH-032).
+    Withdrawal,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -64,7 +68,8 @@ pub struct Transaction {
 
 impl Transaction {
     /// Creates a new Transaction with a generated ID.
-    /// Validates TRX-020 and TRX-026.
+    /// Validates TRX-020 and TRX-026. Returns a typed `TransactionDomainError`
+    /// so callers can propagate it through typed unions like `CashOperationError`.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         account_id: String,
@@ -78,7 +83,7 @@ impl Transaction {
         total_amount: i64,
         note: Option<String>,
         realized_pnl: Option<i64>,
-    ) -> Result<Self> {
+    ) -> std::result::Result<Self, TransactionDomainError> {
         Self::validate(
             &date,
             quantity,
@@ -100,7 +105,12 @@ impl Transaction {
             total_amount,
             note,
             realized_pnl,
-            created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            // Microsecond precision keeps the ORDER BY tiebreaker deterministic even when
+            // multiple Transactions land within the same second — important for the
+            // chronological cash replay (CSH-080).
+            created_at: chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+                .to_string(),
         })
     }
 
@@ -121,7 +131,7 @@ impl Transaction {
         note: Option<String>,
         realized_pnl: Option<i64>,
         created_at: String,
-    ) -> Result<Self> {
+    ) -> std::result::Result<Self, TransactionDomainError> {
         Self::validate(
             &date,
             quantity,
@@ -191,42 +201,42 @@ impl Transaction {
         exchange_rate: i64,
         fees: i64,
         total_amount: i64,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), TransactionDomainError> {
         // TRX-020 — date must be parseable, not in the future, not before 1900-01-01
         let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
             .map_err(|_| TransactionDomainError::InvalidDate)?;
         let today = chrono::Local::now().date_naive();
         if parsed_date > today {
-            return Err(TransactionDomainError::DateInFuture.into());
+            return Err(TransactionDomainError::DateInFuture);
         }
         let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).unwrap_or(chrono::NaiveDate::MIN);
         if parsed_date < min_date {
-            return Err(TransactionDomainError::DateTooOld.into());
+            return Err(TransactionDomainError::DateTooOld);
         }
 
         // TRX-020 — quantity must be strictly positive
         if quantity <= 0 {
-            return Err(TransactionDomainError::QuantityNotPositive.into());
+            return Err(TransactionDomainError::QuantityNotPositive);
         }
 
         // TRX-020 — unit_price must be >= 0
         if unit_price < 0 {
-            return Err(TransactionDomainError::UnitPriceNegative.into());
+            return Err(TransactionDomainError::UnitPriceNegative);
         }
 
         // SEL-020 — fees must be zero or positive
         if fees < 0 {
-            return Err(TransactionDomainError::FeesNegative.into());
+            return Err(TransactionDomainError::FeesNegative);
         }
 
         // TRX-020 — exchange_rate must be strictly positive
         if exchange_rate <= 0 {
-            return Err(TransactionDomainError::ExchangeRateNotPositive.into());
+            return Err(TransactionDomainError::ExchangeRateNotPositive);
         }
 
         // TRX-020 — total_amount must be > 0
         if total_amount <= 0 {
-            return Err(TransactionDomainError::TotalAmountNotPositive.into());
+            return Err(TransactionDomainError::TotalAmountNotPositive);
         }
 
         Ok(())
@@ -271,7 +281,7 @@ mod tests {
         exchange_rate: i64,
         fees: i64,
         total_amount: i64,
-    ) -> Result<Transaction> {
+    ) -> std::result::Result<Transaction, TransactionDomainError> {
         Transaction::new(
             "account-1".to_string(),
             "asset-1".to_string(),

@@ -54,6 +54,42 @@ async fn seed_asset(pool: &sqlx::Pool<sqlx::Sqlite>) -> String {
     asset_id
 }
 
+/// Seeds the system Cash Asset row for `currency` + a large Deposit so existing buy/sell
+/// integration tests satisfy CSH-041 (purchase eligibility on cash).
+async fn seed_cash_for_account(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    svc: &AccountService,
+    account_id: &str,
+    currency: &str,
+) {
+    let cash_asset_id = format!("system-cash-{}", currency.to_lowercase());
+    sqlx::query(
+        "INSERT OR IGNORE INTO categories (id, name, is_deleted) VALUES ('system-cash-category', 'cash', 0)",
+    )
+    .execute(pool)
+    .await
+    .expect("seed cash category");
+    sqlx::query(
+        "INSERT OR IGNORE INTO assets (id, name, reference, asset_class, category_id, currency, risk_level) \
+         VALUES (?, ?, ?, 'Cash', 'system-cash-category', ?, 1)",
+    )
+    .bind(&cash_asset_id)
+    .bind(format!("Cash {}", currency.to_uppercase()))
+    .bind(currency.to_uppercase())
+    .bind(currency)
+    .execute(pool)
+    .await
+    .expect("seed cash asset");
+    svc.record_deposit(
+        account_id,
+        "2020-01-01".to_string(),
+        1_000_000_000_000,
+        None,
+    )
+    .await
+    .expect("seed cash deposit");
+}
+
 /// delete() removes the account so it no longer appears in get_all().
 #[tokio::test]
 async fn test_delete_account_removes_it_from_get_all() {
@@ -161,6 +197,7 @@ async fn test_get_holding_by_account_asset_returns_none_then_some() {
         )
         .await
         .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
     let before = svc
         .get_holding_by_account_asset(&account.id, &asset_id)
@@ -203,6 +240,7 @@ async fn test_get_transactions_returns_chronological_order() {
         )
         .await
         .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
     svc.buy_holding(
         &account.id,
@@ -262,6 +300,7 @@ async fn test_get_transaction_by_id_returns_some_or_none() {
         )
         .await
         .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
     svc.buy_holding(
         &account.id,
@@ -310,6 +349,7 @@ async fn test_get_asset_ids_for_account_deduplicates() {
         )
         .await
         .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
     // Two buys on the same asset — must deduplicate to a single ID.
     svc.buy_holding(
@@ -338,8 +378,10 @@ async fn test_get_asset_ids_for_account_deduplicates() {
     .unwrap();
 
     let ids = svc.get_asset_ids_for_account(&account.id).await.unwrap();
-    assert_eq!(ids.len(), 1);
-    assert_eq!(ids[0], asset_id);
+    // Two distinct asset_ids: the test asset + system Cash Asset (CSH-090).
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&asset_id));
+    assert!(ids.iter().any(|id| id.starts_with("system-cash-")));
 }
 
 /// get_deletion_summary() counts active holdings and total transactions correctly.
@@ -357,6 +399,7 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
         )
         .await
         .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
     svc.buy_holding(
         &account.id,
@@ -384,6 +427,8 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
     .unwrap();
 
     let (holding_count, tx_count) = svc.get_deletion_summary(&account.id).await.unwrap();
-    assert_eq!(holding_count, 1, "one active holding for this asset");
-    assert_eq!(tx_count, 2, "two purchase transactions");
+    // 2 active holdings: the test asset + the Cash Holding (CSH-090).
+    assert_eq!(holding_count, 2, "asset holding + cash holding");
+    // 3 transactions: 2 purchases + the seeded Deposit.
+    assert_eq!(tx_count, 3, "two purchases plus the seeded deposit");
 }

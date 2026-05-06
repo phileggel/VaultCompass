@@ -20,8 +20,13 @@ export function useAssetTable(assets: Asset[], searchTerm: string, showArchived:
   };
 
   const sortedAndFilteredAssets = useMemo(() => {
+    // CSH-015 — system Cash Assets are infrastructure, never shown in Asset Manager.
+    const nonCashAssets = assets.filter((a) => a.class !== "Cash");
+
     // R7/R19: filter by archive state first
-    const visibleAssets = showArchived ? assets : assets.filter((a) => !a.is_archived);
+    const visibleAssets = showArchived
+      ? nonCashAssets
+      : nonCashAssets.filter((a) => !a.is_archived);
 
     // R16: fuzzy search applies only to currently displayed assets
     const filtered = visibleAssets.filter(

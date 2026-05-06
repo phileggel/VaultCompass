@@ -6,6 +6,14 @@
 
 Ten subagents in `.claude/agents/` were temporarily flipped from `model: sonnet` to `model: opus` on 2026-05-06 because the Sonnet weekly cap was at 100%. A scheduled remote routine reverts via PR at 2026-05-08 21:30 UTC. Affected agents: `contract-reviewer`, `reviewer-arch`, `reviewer-backend`, `reviewer-frontend`, `reviewer-infra`, `reviewer-security`, `spec-reviewer`, `test-writer-backend`, `test-writer-e2e`, `test-writer-frontend`. Helper: `scripts/swap-agent-model.sh sonnet opus` (or reverse). If `just sync-kit` runs before the revert PR merges, kit defaults restore the originals — that's also a valid revert path.
 
+## (backend) — Roll out untagged-composition pattern for boundary error types
+
+Following PR #5 review, `RecordDepositCommandError` and `RecordWithdrawalCommandError` now compose `AccountOperationError | TransactionDomainError | CashCommandBoundaryError` via `#[serde(untagged)]` instead of redefining variants. The same pattern should be rolled out to the older boundary types — `TransactionCommandError`, `OpenHoldingCommandError`, `AccountCommandError`, `AssetCommandError`, `AccountDetailsCommandError`, `ArchiveAssetCommandError`, `DeleteAssetCommandError`, `CategoryCommandError`, `AssetPriceCommandError`, `UpdateAssetPriceCommandError`, `DeleteAssetPriceCommandError`, `WebLookupCommandError`, `AccountDeletionCommandError` — so the entire boundary layer stops duplicating domain error variants. Each conversion is mechanical (compose existing domain enums + a per-command boundary-only enum for `Unknown` / `*NotFound`). Out of scope for the cash PR to keep its diff focused.
+
+## (backend) — Convert service layer methods to typed Result returns
+
+Service layer (`AccountService`, `AssetService`) currently returns `anyhow::Result<T>`. Domain errors get wrapped and downcast at the API boundary. The api.rs mappers downcast each domain error type explicitly, which works but loses the type-system guarantee that "this method can only return errors X, Y, Z". Convert each public service method to a typed `Result<T, ConcreteError>` where `ConcreteError` is either a single domain error enum or a small composition. Spawning point: cash methods (`record_deposit`, `record_withdrawal`) — they're new, contained, and only emit `AccountOperationError` / `TransactionDomainError` / `AccountDomainError`. Surfaced during PR #5 review (2026-05-06).
+
 ## (backend) — Consolidate transaction-recording command contracts
 
 After the `use_cases/holding_transaction/` consolidation, two pre-existing contract inconsistencies remain in the moved commands. Surfaced during the cash-tracking spec review (2026-05-05); deliberately deferred from the consolidation refactor to keep that PR scope-minimal.

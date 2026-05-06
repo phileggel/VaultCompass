@@ -4,11 +4,15 @@ import type {
   AssetPrice,
   AssetPriceCommandError,
   DeleteAssetPriceCommandError,
+  DepositDTO,
   OpenHoldingCommandError,
   OpenHoldingDTO,
+  RecordDepositCommandError,
+  RecordWithdrawalCommandError,
   Result,
   Transaction,
   UpdateAssetPriceCommandError,
+  WithdrawalDTO,
 } from "@/bindings";
 import { commands, events } from "@/bindings";
 
@@ -49,6 +53,16 @@ export const accountDetailsGateway = {
 
   async openHolding(dto: OpenHoldingDTO): Promise<Result<Transaction, OpenHoldingCommandError>> {
     return commands.openHolding(dto);
+  },
+
+  async recordDeposit(dto: DepositDTO): Promise<Result<Transaction, RecordDepositCommandError>> {
+    return commands.recordDeposit(dto);
+  },
+
+  async recordWithdrawal(
+    dto: WithdrawalDTO,
+  ): Promise<Result<Transaction, RecordWithdrawalCommandError>> {
+    return commands.recordWithdrawal(dto);
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

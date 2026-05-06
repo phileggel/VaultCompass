@@ -39,6 +39,7 @@ The original goal was a Portfolio Dashboard (PFD), which surfaced a data-model g
 ### What's done
 
 **Refactor (Level 1) — Phases A, B, C complete**:
+
 - New module `src-tauri/src/use_cases/holding_transaction/` with `mod.rs`, `api.rs`, `orchestrator.rs`, `shared/ensure_cash_asset.rs` (no-op stub).
 - Five orchestrators: `OpenHoldingUseCase` (moved from `use_cases/open_holding/`, now deleted), plus new `BuyHoldingUseCase`, `SellHoldingUseCase`, `CorrectTransactionUseCase`, `CancelTransactionUseCase`. Each injects `AccountService` + `AssetService`; the new four delegate straight to AccountService methods (cash side-effect comes in CSH).
 - Tauri command handlers for `buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction`, `open_holding` moved into `use_cases/holding_transaction/api.rs`. DTOs (`BuyHoldingDTO`, `SellHoldingDTO`, `CorrectTransactionDTO`, `OpenHoldingDTO`) colocated.
@@ -48,6 +49,7 @@ The original goal was a Portfolio Dashboard (PFD), which surfaced a data-model g
 - `just check-full` passes.
 
 **Cash Tracking spec — drafted + reviewed + critical findings addressed**:
+
 - `docs/spec/cash-tracking.md` — full spec with new Tauri Commands section, 28 rules covering Cash Asset/Holding lifecycle, Deposit, Withdrawal, Buy/Sell re-link, OpeningBalance interaction, eligibility guard, display, reactivity. All 8 spec-reviewer 🔴 findings addressed. Open Questions all resolved (one tracking item remains for UL confirmation).
 - `docs/spec-index.md` — CSH (active), PFD (planning, paused).
 - Cross-spec amendments:
@@ -60,14 +62,16 @@ The original goal was a Portfolio Dashboard (PFD), which surfaced a data-model g
 ### What's NOT done
 
 **Refactor — Phases D, E, F**:
+
 - **D — Docs**: `ARCHITECTURE.md` not yet updated (move buy/sell/correct/cancel listings from "Bounded Contexts → Account" to a new "Use Cases → holding_transaction" section). `docs/contracts/account-contract.md` not yet updated (the existing note "All commands below live in `context/account/` except `open_holding`..." needs to be revised to reflect that all transaction-recording commands now live in `use_cases/holding_transaction/`).
 - **E — Reviewers**: `reviewer-arch` + `reviewer-backend` agents not yet run on the refactor diff.
 - **F — Commit**: refactor is currently uncommitted on this branch; will be committed (alongside the cash spec drafts) as part of the handoff push.
 
 **Cash Tracking implementation** (Workflow A continuation, after refactor):
+
 - `/contract` — derive `docs/contracts/cash-tracking-contract.md` from the spec.
 - `contract-reviewer` agent.
-- `feature-planner` agent — produce `docs/plan/cash-tracking-feature-plan.md` (this file is the *meta* plan; the feature-planner output is the implementation plan per CLAUDE.md Workflow A).
+- `feature-planner` agent — produce `docs/plan/cash-tracking-feature-plan.md` (this file is the _meta_ plan; the feature-planner output is the implementation plan per CLAUDE.md Workflow A).
 - `test-writer-backend`, backend implementation, `just format`, `reviewer-backend`, `just generate-types`, smart-commit.
 - `test-writer-frontend`, frontend implementation, `just format`, `reviewer-frontend`, `/visual-proof`, smart-commit.
 - `test-writer-e2e`, E2E tests, smart-commit.
@@ -86,7 +90,7 @@ The original goal was a Portfolio Dashboard (PFD), which surfaced a data-model g
 2. **Update `docs/contracts/account-contract.md`**: the note at the top reads `> All commands below live in context/account/ except open_holding...`. Replace with a clear breakdown:
    - `context/account/`: get_accounts, add_account, update_account, delete_account, get_asset_ids_for_account, get_transactions
    - `use_cases/holding_transaction/`: buy_holding, sell_holding, correct_transaction, cancel_transaction, open_holding
-   No signature changes; this is a location-note only update.
+     No signature changes; this is a location-note only update.
 
 3. **Run reviewers**:
    - `reviewer-arch` agent — give it the diff scope: `src-tauri/src/use_cases/holding_transaction/`, `src-tauri/src/context/account/api.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/core/specta_builder.rs`, `src-tauri/src/use_cases/mod.rs`. Verify cross-context isolation, gateway pattern, factory methods, data flow.

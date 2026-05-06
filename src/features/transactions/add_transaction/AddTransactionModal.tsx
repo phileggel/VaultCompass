@@ -36,7 +36,8 @@ export function AddTransactionModal({
     logger.info("[AddTransactionModal] mounted");
   }, []);
 
-  const assets = useAppStore((state) => state.assets);
+  // CSH-018 — Cash Assets are managed via Deposit/Withdrawal flows; never selectable here.
+  const assets = useAppStore((state) => state.assets).filter((a) => a.class !== "Cash");
   const accounts = useAppStore((state) => state.accounts);
 
   const {

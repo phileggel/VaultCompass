@@ -35,6 +35,22 @@ describe("useAssetTable", () => {
     expect(result.current.sortedAndFilteredAssets[0]?.id).toBe("active");
   });
 
+  // CSH-015 — system Cash Assets are filtered out of the Asset Manager regardless of showArchived
+  it("filters out system Cash Assets even when showArchived is true (CSH-015)", () => {
+    const cashAsset = makeAsset({
+      id: "system-cash-eur",
+      name: "Cash EUR",
+      reference: "EUR",
+      class: "Cash",
+    });
+    const { result } = renderHook(() =>
+      useAssetTable([activeAsset, cashAsset, archivedAsset], "", true),
+    );
+    expect(result.current.sortedAndFilteredAssets.map((a) => a.id)).not.toContain(
+      "system-cash-eur",
+    );
+  });
+
   // R19 — includes archived assets when showArchived is true
   it("includes archived assets when showArchived is true", () => {
     const { result } = renderHook(() => useAssetTable([activeAsset, archivedAsset], "", true));
