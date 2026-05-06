@@ -2,10 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (claude) — Sonnet→Opus override on subagents (auto-reverts 2026-05-08)
-
-Ten subagents in `.claude/agents/` were temporarily flipped from `model: sonnet` to `model: opus` on 2026-05-06 because the Sonnet weekly cap was at 100%. A scheduled remote routine reverts via PR at 2026-05-08 21:30 UTC. Affected agents: `contract-reviewer`, `reviewer-arch`, `reviewer-backend`, `reviewer-frontend`, `reviewer-infra`, `reviewer-security`, `spec-reviewer`, `test-writer-backend`, `test-writer-e2e`, `test-writer-frontend`. Helper: `scripts/swap-agent-model.sh sonnet opus` (or reverse). If `just sync-kit` runs before the revert PR merges, kit defaults restore the originals — that's also a valid revert path.
-
 ## (backend) — Cash spec: backend test coverage gaps
 
 The cash-tracking spec (`docs/spec/cash-tracking.md`) ships with implementation but ~14 of its 28 rules lack a dedicated backend assertion (spec-checker run 2026-05-06):
