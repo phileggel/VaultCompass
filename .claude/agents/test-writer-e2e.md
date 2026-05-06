@@ -9,7 +9,7 @@ description:
   Verifies the suite exits zero (green) before finishing. Run in phase 4 (quality),
   after full implementation.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: opus
+model: sonnet
 ---
 
 You are a test engineer for a Tauri 2 / React 19 project. Your job is to write passing
