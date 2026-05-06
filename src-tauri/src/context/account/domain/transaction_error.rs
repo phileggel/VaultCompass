@@ -1,5 +1,10 @@
 /// Typed errors for transaction domain validation (TRX-020).
-#[derive(Debug, thiserror::Error)]
+///
+/// Derives `Serialize + specta::Type + #[serde(tag = "code")]` so it can be exposed
+/// at the Tauri boundary verbatim — boundary error types compose this enum via
+/// untagged unions instead of redefining its variants (PR #5 review feedback).
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
+#[serde(tag = "code")]
 pub enum TransactionDomainError {
     /// Date string could not be parsed as YYYY-MM-DD.
     #[error("Invalid date format — expected YYYY-MM-DD")]

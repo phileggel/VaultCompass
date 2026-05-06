@@ -6,6 +6,7 @@ import {
   type AccountSummaryViewModel,
   type ClosedHoldingRowViewModel,
   type HoldingRowViewModel,
+  isCashAsset,
   toAccountSummary,
   toClosedHoldingRow,
   toHoldingRow,
@@ -20,6 +21,8 @@ interface UseAccountDetailsResult {
   holdingDetails: HoldingDetail[];
   closedHoldings: ClosedHoldingRowViewModel[];
   summary: AccountSummaryViewModel | null;
+  /** True when the account currently shows a cash row in the active table (CSH-019/092/095). */
+  hasVisibleCashRow: boolean;
 }
 
 export function useAccountDetails(accountId: string): UseAccountDetailsResult {
@@ -63,10 +66,14 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
 
   const holdingDetails = useMemo<HoldingDetail[]>(() => data?.holdings ?? [], [data]);
 
-  const holdings = useMemo<HoldingRowViewModel[]>(
-    () => (data ? data.holdings.map(toHoldingRow) : []),
-    [data],
-  );
+  // CSH-092 — Cash row rendered first, ahead of the existing alphabetical sort.
+  const holdings = useMemo<HoldingRowViewModel[]>(() => {
+    if (!data) return [];
+    const rows = data.holdings.map(toHoldingRow);
+    const cashRows = rows.filter((r) => r.isCash);
+    const otherRows = rows.filter((r) => !r.isCash);
+    return [...cashRows, ...otherRows];
+  }, [data]);
 
   const closedHoldings = useMemo<ClosedHoldingRowViewModel[]>(
     () => (data ? data.closed_holdings.map(toClosedHoldingRow) : []),
@@ -78,6 +85,13 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     [data],
   );
 
+  // CSH-097 — backend filters cash holding when its quantity is 0 (ACD-020), so
+  // any cash holding present in `holdings` is by definition visible.
+  const hasVisibleCashRow = useMemo<boolean>(
+    () => (data ? data.holdings.some((h) => isCashAsset(h.asset_id)) : false),
+    [data],
+  );
+
   return {
     isLoading,
     error,
@@ -86,5 +100,6 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     holdingDetails,
     closedHoldings,
     summary,
+    hasVisibleCashRow,
   };
 }

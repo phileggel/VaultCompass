@@ -1,6 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OpenHoldingCommandError, OpenHoldingDTO, Transaction } from "@/bindings";
+import type {
+  DepositDTO,
+  OpenHoldingCommandError,
+  OpenHoldingDTO,
+  RecordDepositCommandError,
+  RecordWithdrawalCommandError,
+  Transaction,
+  WithdrawalDTO,
+} from "@/bindings";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -182,6 +190,128 @@ describe("accountDetailsGateway — openHolding", () => {
     mockInvoke.mockRejectedValue(err);
 
     const result = await accountDetailsGateway.openHolding(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+});
+
+describe("accountDetailsGateway — recordDeposit (CSH-022)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("recordDeposit returns Transaction on success", async () => {
+    const dto: DepositDTO = {
+      account_id: "account-1",
+      date: "2025-06-15",
+      amount_micros: 250_000_000,
+      note: null,
+    };
+    const mockTransaction: Transaction = {
+      id: "tx-deposit-1",
+      account_id: "account-1",
+      asset_id: "system-cash-eur",
+      transaction_type: "Deposit",
+      date: "2025-06-15",
+      quantity: 250_000_000,
+      unit_price: 1_000_000,
+      exchange_rate: 1_000_000,
+      fees: 0,
+      total_amount: 250_000_000,
+      note: null,
+      realized_pnl: null,
+      created_at: "2025-06-15T10:00:00Z",
+    };
+    mockInvoke.mockResolvedValue(mockTransaction);
+
+    const result = await accountDetailsGateway.recordDeposit(dto);
+
+    expect(result).toEqual({ status: "ok", data: mockTransaction });
+    expect(mockInvoke).toHaveBeenCalledWith("record_deposit", { dto });
+  });
+
+  it("recordDeposit surfaces AccountNotFound", async () => {
+    const dto: DepositDTO = {
+      account_id: "no-such",
+      date: "2025-06-15",
+      amount_micros: 250_000_000,
+      note: null,
+    };
+    const err: RecordDepositCommandError = { code: "AccountNotFound" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDeposit(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  it("recordDeposit surfaces AmountNotPositive", async () => {
+    const dto: DepositDTO = {
+      account_id: "account-1",
+      date: "2025-06-15",
+      amount_micros: 0,
+      note: null,
+    };
+    const err: RecordDepositCommandError = { code: "AmountNotPositive" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDeposit(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+});
+
+describe("accountDetailsGateway — recordWithdrawal (CSH-032)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("recordWithdrawal returns Transaction on success", async () => {
+    const dto: WithdrawalDTO = {
+      account_id: "account-1",
+      date: "2025-06-15",
+      amount_micros: 100_000_000,
+      note: null,
+    };
+    const mockTransaction: Transaction = {
+      id: "tx-with-1",
+      account_id: "account-1",
+      asset_id: "system-cash-eur",
+      transaction_type: "Withdrawal",
+      date: "2025-06-15",
+      quantity: 100_000_000,
+      unit_price: 1_000_000,
+      exchange_rate: 1_000_000,
+      fees: 0,
+      total_amount: 100_000_000,
+      note: null,
+      realized_pnl: null,
+      created_at: "2025-06-15T10:00:00Z",
+    };
+    mockInvoke.mockResolvedValue(mockTransaction);
+
+    const result = await accountDetailsGateway.recordWithdrawal(dto);
+
+    expect(result).toEqual({ status: "ok", data: mockTransaction });
+    expect(mockInvoke).toHaveBeenCalledWith("record_withdrawal", { dto });
+  });
+
+  // CSH-081 — InsufficientCash carries balance + currency payload
+  it("recordWithdrawal surfaces InsufficientCash with payload", async () => {
+    const dto: WithdrawalDTO = {
+      account_id: "account-1",
+      date: "2025-06-15",
+      amount_micros: 999_000_000,
+      note: null,
+    };
+    const err: RecordWithdrawalCommandError = {
+      code: "InsufficientCash",
+      current_balance_micros: 50_000_000,
+      currency: "EUR",
+    };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordWithdrawal(dto);
 
     expect(result).toEqual({ status: "error", error: err });
   });

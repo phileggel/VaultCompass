@@ -69,6 +69,11 @@ pub struct AccountDetailsResponse {
     pub total_realized_pnl: i64,
     /// Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
     pub total_unrealized_pnl: Option<i64>,
+    /// Total economic value of the account in account-currency micros (CSH-094):
+    /// `cash_holding.quantity + Σ_h (h.quantity × latest_price(h))` over non-cash active holdings.
+    /// Unpriced non-cash holdings contribute 0 (no fallback to `average_price`).
+    /// Returns 0 when no Cash Holding and no priced non-cash holdings.
+    pub total_global_value: i64,
 }
 
 /// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
@@ -110,13 +115,23 @@ impl AccountDetailsUseCase {
             all_holdings.into_iter().partition(|h| h.quantity > 0);
 
         // ACD-022 — enrich each active holding with asset metadata; ACD-021 — archived assets included
+        // CSH-094 — accumulate the Global Value as we go: cash quantity + Σ priced non-cash holdings.
         let mut details: Vec<HoldingDetail> = Vec::with_capacity(active_holdings.len());
+        let mut total_global_value: i64 = 0;
         for holding in active_holdings {
             let asset = self
                 .asset_service
                 .get_asset_by_id(&holding.asset_id)
                 .await?
                 .ok_or_else(|| anyhow!("Asset not found: {}", holding.asset_id))?;
+
+            // CSH-094 — Cash Holding contributes its raw quantity (already in account currency).
+            // Other holdings contribute `quantity × latest_price` only when priced and currencies
+            // match (no FX conversion in v1 — mirrors the MKT-033 same-currency guard for
+            // unrealized_pnl). Unpriced or foreign-currency non-cash holdings contribute 0.
+            if asset.class == crate::context::asset::AssetClass::Cash {
+                total_global_value = total_global_value.saturating_add(holding.quantity);
+            }
 
             // ACD-023/024 — i128 intermediate to prevent overflow before scaling back to i64
             let cost_basis =
@@ -153,6 +168,16 @@ impl AccountDetailsUseCase {
                 } else {
                     (None, None, None, None)
                 };
+
+            // CSH-094 — same-currency priced non-cash holding contributes its market value.
+            if asset.class != crate::context::asset::AssetClass::Cash
+                && asset.currency == account.currency
+            {
+                if let Some(cp) = current_price {
+                    let market_value = (holding.quantity as i128 * cp as i128 / 1_000_000) as i64;
+                    total_global_value = total_global_value.saturating_add(market_value);
+                }
+            }
 
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
@@ -217,6 +242,7 @@ impl AccountDetailsUseCase {
             total_cost_basis,
             total_realized_pnl,
             total_unrealized_pnl,
+            total_global_value,
         })
     }
 }

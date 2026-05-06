@@ -35,6 +35,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   total_cost_basis: 200_000_000,
   total_realized_pnl: 0,
   total_unrealized_pnl: null,
+  total_global_value: 0,
   ...overrides,
 });
 
@@ -91,7 +92,13 @@ describe("toAccountSummary", () => {
   });
 
   it("isAllClosed true when holdings exist but active list is empty (ACD-034)", () => {
-    const summary = toAccountSummary(makeResponse({ total_holding_count: 2, holdings: [] }));
+    const summary = toAccountSummary(
+      makeResponse({
+        total_holding_count: 2,
+        holdings: [],
+        closed_holdings: [makeClosedHolding()],
+      }),
+    );
     expect(summary.isEmpty).toBe(false);
     expect(summary.isAllClosed).toBe(true);
   });
@@ -230,5 +237,111 @@ describe("toAccountSummary — market price fields (MKT)", () => {
   it("MKT-041 — totalUnrealizedPnl is '—' when total_unrealized_pnl is null", () => {
     const summary = toAccountSummary(makeResponse({ total_unrealized_pnl: null }));
     expect(summary.totalUnrealizedPnl).toBe("—");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cash tracking — CSH-090/091/094/098
+// ---------------------------------------------------------------------------
+
+const makeCashHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail =>
+  makeHolding({
+    asset_id: "system-cash-eur",
+    asset_name: "Cash EUR",
+    asset_reference: "EUR",
+    quantity: 500_000_000,
+    average_price: 1_000_000,
+    cost_basis: 500_000_000,
+    realized_pnl: 0,
+    asset_currency: "EUR",
+    current_price: null,
+    current_price_date: null,
+    unrealized_pnl: null,
+    performance_pct: null,
+    ...overrides,
+  });
+
+describe("toHoldingRow — cash variant (CSH-090/091)", () => {
+  // CSH-090 — system Cash Asset id starts with "system-cash-"; presenter detects via prefix
+  it("flags isCash when asset_id starts with system-cash-", () => {
+    const row = toHoldingRow(makeCashHolding());
+    expect(row.isCash).toBe(true);
+  });
+
+  it("non-cash holdings have isCash false", () => {
+    const row = toHoldingRow(makeHolding());
+    expect(row.isCash).toBe(false);
+  });
+
+  // CSH-091 — cash row has no cost basis / average price / realized P&L cells
+  it("cash row leaves averagePrice / costBasis / realizedPnl blank", () => {
+    const row = toHoldingRow(makeCashHolding());
+    expect(row.averagePrice).toBe("");
+    expect(row.costBasis).toBe("");
+    expect(row.realizedPnl).toBe("");
+  });
+
+  // CSH-091 — cash row has no Buy/Sell/Inspect actions, no price entry
+  it("cash row disables canEnterPrice and clears market-price cells", () => {
+    const row = toHoldingRow(makeCashHolding());
+    expect(row.canEnterPrice).toBe(false);
+    expect(row.currentPrice).toBe("");
+    expect(row.unrealizedPnl).toBe("");
+    expect(row.performancePct).toBe("");
+  });
+
+  // CSH-090 — quantity rendered as a 2-decimal amount (currency), not 6-decimal qty
+  it("formats cash quantity with 2 decimals", () => {
+    const row = toHoldingRow(makeCashHolding({ quantity: 250_500_000 }));
+    expect(row.quantity).toBe("250,50");
+  });
+});
+
+describe("toAccountSummary — cash totals (CSH-094/098)", () => {
+  // CSH-094 — totalGlobalValue passed through, formatted with 2 decimals
+  it("formats totalGlobalValue with 2 decimals", () => {
+    const summary = toAccountSummary(makeResponse({ total_global_value: 250_000_000 }));
+    expect(summary.totalGlobalValue).toBe("250,00");
+    expect(summary.totalGlobalValueRaw).toBe(250_000_000);
+  });
+
+  // CSH-019/095 — hasCashHolding reflects presence of a cash holding with quantity > 0
+  it("hasCashHolding true when holdings include a non-zero cash row", () => {
+    const summary = toAccountSummary(
+      makeResponse({
+        holdings: [makeHolding(), makeCashHolding()],
+        total_holding_count: 2,
+      }),
+    );
+    expect(summary.hasCashHolding).toBe(true);
+  });
+
+  it("hasCashHolding false when no cash holding present", () => {
+    const summary = toAccountSummary(makeResponse());
+    expect(summary.hasCashHolding).toBe(false);
+  });
+
+  // CSH-098 — cash row excluded from isEmpty / isAllClosed gating
+  it("isEmpty true when only the cash holding is active and no closed holdings", () => {
+    const summary = toAccountSummary(
+      makeResponse({
+        holdings: [makeCashHolding()],
+        total_holding_count: 0,
+        closed_holdings: [],
+      }),
+    );
+    expect(summary.isEmpty).toBe(true);
+  });
+
+  it("isAllClosed true when only cash is active but closed holdings exist", () => {
+    const summary = toAccountSummary(
+      makeResponse({
+        holdings: [makeCashHolding()],
+        total_holding_count: 2,
+        closed_holdings: [makeClosedHolding()],
+      }),
+    );
+    expect(summary.isAllClosed).toBe(true);
+    expect(summary.isEmpty).toBe(false);
   });
 });

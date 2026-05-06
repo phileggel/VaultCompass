@@ -238,6 +238,8 @@
     "type_purchase": "Achat",
     "type_sell": "Vente",
     "type_openingbalance": "Solde d'ouverture",
+    "type_deposit": "Dépôt",
+    "type_withdrawal": "Retrait",
     "action_sell": "Vendre",
     "buy_modal_title": "Acheter la position",
     "sell_modal_title": "Vendre la position",
@@ -279,7 +281,33 @@
     "price_as_of": "au {{date}}",
     "action_enter_price": "Saisir le prix",
     "action_price_history": "Historique des prix",
-    "action_open_balance": "Ouvrir un solde"
+    "action_open_balance": "Ouvrir un solde",
+    "action_deposit": "Dépôt",
+    "action_withdraw": "Retrait",
+    "total_global_value": "Valeur globale"
+  },
+  "cash": {
+    "deposit_modal_title": "Enregistrer un dépôt",
+    "withdrawal_modal_title": "Enregistrer un retrait",
+    "form_amount_label": "Montant",
+    "form_amount_placeholder": "0,00",
+    "action_record_deposit": "Enregistrer le dépôt",
+    "action_record_withdrawal": "Enregistrer le retrait",
+    "deposit_recorded": "Dépôt enregistré.",
+    "deposit_updated": "Dépôt mis à jour.",
+    "deposit_deleted": "Dépôt supprimé.",
+    "withdrawal_recorded": "Retrait enregistré.",
+    "withdrawal_updated": "Retrait mis à jour.",
+    "withdrawal_deleted": "Retrait supprimé.",
+    "no_cash_banner_message": "Aucune trésorerie enregistrée pour ce compte.",
+    "no_cash_banner_cta": "Enregistrer un dépôt",
+    "insufficient_cash_inline": "Trésorerie insuffisante. Solde disponible : {{balance}} {{currency}}."
+  },
+  "validation": {
+    "amount_not_positive": "Le montant doit être supérieur à 0.",
+    "invalid_date": "La date doit être au format AAAA-MM-JJ.",
+    "date_in_future": "La date ne peut pas être dans le futur.",
+    "date_too_old": "La date ne peut pas être antérieure à 1900-01-01."
   },
   "open_balance": {
     "modal_title": "Ouvrir une position",
@@ -355,6 +383,8 @@
     "ExchangeRateNotPositive": "Le taux de change doit être strictement positif.",
     "TotalAmountNotPositive": "Le montant total doit être strictement positif.",
     "ArchivedAsset": "Impossible d'ouvrir un solde pour un actif archivé.",
-    "InvalidTotalCost": "Le coût total doit être strictement positif."
+    "InvalidTotalCost": "Le coût total doit être strictement positif.",
+    "AmountNotPositive": "Le montant doit être supérieur à 0.",
+    "OpeningBalanceOnCashAsset": "Impossible d'ouvrir un solde sur l'actif Cash système."
   }
 }

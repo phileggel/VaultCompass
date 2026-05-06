@@ -1,7 +1,7 @@
 # Contract — Account
 
 > Domain: account
-> Last updated by: account spec, financial-asset-transaction spec, sell-transaction spec, transaction-list spec, account-details spec
+> Last updated by: account spec, financial-asset-transaction spec, sell-transaction spec, transaction-list spec, account-details spec, cash-tracking spec
 
 > **Error model (account CRUD)**: commands return `Result<T, AccountCommandError>` — errors are typed Rust enums
 > serialized as `{ code: "VariantName" }` (discriminated union, `#[serde(tag = "code")]`).
@@ -9,12 +9,20 @@
 > **Error model (account details)**: `get_account_details` returns `Result<AccountDetailsResponse, AccountDetailsCommandError>` —
 > serialized as `{ code: "AccountNotFound" | "Unknown" }`; price lookup failures silently degrade to `None` (MKT-031).
 
-> **Error model (holding operations)**: commands return `Result<T, TransactionCommandError>` — errors are typed enums
-> serialized as `{ code: "VariantName" }` (plus `available`/`requested` fields for `Oversell`).
+> **Error model (holding operations)**: `buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction`, and `get_transactions` return `Result<T, TransactionCommandError>` — errors are typed enums
+> serialized as `{ code: "VariantName" }` (plus `available: i64`/`requested: i64` fields for `Oversell`, `current_balance_micros: i64`/`currency: String` for `InsufficientCash`).
 > Variants: `TransactionNotFound`, `AccountNotFound`, `AssetNotFound`,
 > `ArchivedAssetSell`, `ArchivedAsset`, `ClosedPosition`, `Oversell { available, requested }`, `CascadingOversell`,
+> `InsufficientCash { current_balance_micros, currency }` (CSH-080: cash-debit and replay-violation paths only — `sell_holding` itself never raises it),
 > `InvalidDate`, `DateInFuture`, `DateTooOld`, `QuantityNotPositive`, `UnitPriceNegative`,
 > `FeesNegative`, `ExchangeRateNotPositive`, `TotalAmountNotPositive`, `InvalidTotalCost`, `Unknown`.
+
+> **Error model (open holding)**: `open_holding` returns `Result<Transaction, OpenHoldingCommandError>` — dedicated enum.
+> Variants: `AccountNotFound`, `AssetNotFound`, `ArchivedAsset`, `OpeningBalanceOnCashAsset` (CSH-061), `InvalidTotalCost`, `QuantityNotPositive`, `InvalidDate`, `DateInFuture`, `DateTooOld`, `Unknown`.
+
+> **Error model (cash transactions)**: `record_deposit` returns `Result<Transaction, RecordDepositCommandError>`; `record_withdrawal` returns `Result<Transaction, RecordWithdrawalCommandError>`.
+> Deposit variants: `AccountNotFound`, `AmountNotPositive`, `DateInFuture`, `DateTooOld`, `Unknown`.
+> Withdrawal variants: `AccountNotFound`, `AmountNotPositive`, `DateInFuture`, `DateTooOld`, `InsufficientCash { current_balance_micros, currency }` (CSH-080), `Unknown`.
 
 ## Commands
 
@@ -46,15 +54,26 @@
 >
 > Errors are domain information and stay with their owning aggregate. `TransactionCommandError` lives in `context/account/api.rs` because every variant comes from account-context types (`AccountDomainError`, `AccountOperationError`, `TransactionDomainError`); the use-case commands import it to map their delegated calls. Per-command splitting (`BuyHoldingCommandError` vs the catch-all) is a separate granularity question tracked in `docs/todo.md`.
 
-| Command                     | Args                                   | Return             | Errors                                                                                                                                                                                                                                                                                                          |
-| --------------------------- | -------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_asset_ids_for_account` | `account_id: String`                   | `Vec<String>`      | `DbError (TXL-054)` — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                 |
-| `buy_holding`               | `BuyHoldingDTO`                        | `Transaction`      | `AccountNotFound (TRX-020)`, `AssetNotFound (TRX-020)`, `InvalidDate (TRX-020)`, `QuantityNotPositive (TRX-020)`, `ExchangeRateNotPositive (TRX-020)`, `FeesNegative (TRX-020)`, `TotalAmountNotPositive (TRX-020)`, `DbError`                                                                                  |
-| `sell_holding`              | `SellHoldingDTO`                       | `Transaction`      | `AccountNotFound (TRX-020)`, `AssetNotFound (TRX-020)`, `InvalidDate (TRX-020)`, `QuantityNotPositive (TRX-020)`, `ExchangeRateNotPositive (TRX-020)`, `FeesNegative (SEL-020)`, `TotalAmountNotPositive (TRX-020)`, `ArchivedAssetSell (SEL-037)`, `ClosedPosition (SEL-012)`, `Oversell (SEL-021)`, `DbError` |
-| `correct_transaction`       | `id: String, CorrectTransactionDTO`    | `Transaction`      | `TransactionNotFound (TRX-031)`, `InvalidDate (TRX-033)`, `QuantityNotPositive (TRX-033)`, `ExchangeRateNotPositive (TRX-033)`, `FeesNegative (TRX-033)`, `TotalAmountNotPositive (TRX-033)`, `ArchivedAssetSell (SEL-037)`, `CascadingOversell (SEL-032)`, `DbError`                                           |
-| `cancel_transaction`        | `id: String`                           | `()`               | `TransactionNotFound (TRX-034)`, `DbError`                                                                                                                                                                                                                                                                      |
-| `get_transactions`          | `account_id: String, asset_id: String` | `Vec<Transaction>` | `DbError (TXL-020)`                                                                                                                                                                                                                                                                                             |
-| `open_holding`              | `OpenHoldingDTO`                       | `Transaction`      | `AccountNotFound (TRX-056)`, `AssetNotFound (TRX-056)`, `ArchivedAsset (TRX-050)`, `QuantityNotPositive (TRX-044)`, `InvalidTotalCost (TRX-045)`, `DateInFuture (TRX-046)`, `DateTooOld (TRX-046)`, `DbError`                                                                                                   |
+| Command                     | Args                                   | Return             | Errors                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | -------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_asset_ids_for_account` | `account_id: String`                   | `Vec<String>`      | `DbError (TXL-054)` — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                    |
+| `buy_holding`               | `BuyHoldingDTO`                        | `Transaction`      | `AccountNotFound (TRX-020)`, `AssetNotFound (TRX-020)`, `InvalidDate (TRX-020)`, `QuantityNotPositive (TRX-020)`, `ExchangeRateNotPositive (TRX-020)`, `FeesNegative (TRX-020)`, `TotalAmountNotPositive (TRX-020)`, `InsufficientCash { current_balance_micros, currency } (CSH-041)`, `DbError`                                                  |
+| `sell_holding`              | `SellHoldingDTO`                       | `Transaction`      | `AccountNotFound (TRX-020)`, `AssetNotFound (TRX-020)`, `InvalidDate (TRX-020)`, `QuantityNotPositive (TRX-020)`, `ExchangeRateNotPositive (TRX-020)`, `FeesNegative (SEL-020)`, `TotalAmountNotPositive (TRX-020)`, `ArchivedAssetSell (SEL-037)`, `ClosedPosition (SEL-012)`, `Oversell (SEL-021)`, `DbError`                                    |
+| `correct_transaction`       | `id: String, CorrectTransactionDTO`    | `Transaction`      | `TransactionNotFound (TRX-031)`, `InvalidDate (TRX-033)`, `QuantityNotPositive (TRX-033)`, `ExchangeRateNotPositive (TRX-033)`, `FeesNegative (TRX-033)`, `TotalAmountNotPositive (TRX-033)`, `ArchivedAssetSell (SEL-037)`, `CascadingOversell (SEL-032)`, `InsufficientCash { current_balance_micros, currency } (CSH-042 / CSH-051)`, `DbError` |
+| `cancel_transaction`        | `id: String`                           | `()`               | `TransactionNotFound (TRX-034)`, `InsufficientCash { current_balance_micros, currency } (CSH-024 / CSH-051)`, `DbError`                                                                                                                                                                                                                            |
+| `get_transactions`          | `account_id: String, asset_id: String` | `Vec<Transaction>` | `DbError (TXL-020)`                                                                                                                                                                                                                                                                                                                                |
+| `open_holding`              | `OpenHoldingDTO`                       | `Transaction`      | `AccountNotFound (TRX-056)`, `AssetNotFound (TRX-056)`, `ArchivedAsset (TRX-050)`, `OpeningBalanceOnCashAsset (CSH-061)`, `QuantityNotPositive (TRX-044)`, `InvalidTotalCost (TRX-045)`, `DateInFuture (TRX-046)`, `DateTooOld (TRX-046)`, `DbError`                                                                                               |
+
+### Cash Transactions
+
+> Implemented in `use_cases/holding_transaction/api.rs`. Both commands record cash-only movements (no asset selector, no unit price, no exchange rate). They return the persisted `Transaction` so the frontend can mirror the buy/sell flow's success path.
+>
+> **Edit / delete of Deposit and Withdrawal reuse `correct_transaction` and `cancel_transaction`** (CSH-023 / CSH-033 / CSH-024 / CSH-034) — those commands accept any `transaction_type` and run the chronological replay across all cash-affecting transactions for the account.
+
+| Command             | Args                                                                                           | Return        | Errors                                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `record_deposit`    | `DepositDTO { account_id: String, date: String, amount_micros: i64, note: Option<String> }`    | `Transaction` | `AccountNotFound (CSH-021)`, `AmountNotPositive (CSH-021)`, `DateInFuture (CSH-021)`, `DateTooOld (CSH-021)`, `DbError`                                                                    |
+| `record_withdrawal` | `WithdrawalDTO { account_id: String, date: String, amount_micros: i64, note: Option<String> }` | `Transaction` | `AccountNotFound (CSH-031)`, `AmountNotPositive (CSH-031)`, `DateInFuture (CSH-031)`, `DateTooOld (CSH-031)`, `InsufficientCash { current_balance_micros, currency } (CSH-080)`, `DbError` |
 
 ## Shared Types
 
@@ -128,6 +147,24 @@ struct OpenHoldingDTO {
     quantity: i64,      // micro-units; strictly positive (TRX-044)
     total_cost: i64,    // micro-units, account currency; strictly positive (TRX-045)
 }
+
+// Cash inflow from outside the application (CSH-020/022). Backend resolves the Cash Asset
+// for `account.currency`; user does not pick an asset.
+struct DepositDTO {
+    account_id: String,
+    date: String,           // ISO date YYYY-MM-DD; same TRX-020 / CSH-021 bounds as buy/sell
+    amount_micros: i64,     // micro-units, account currency; strictly positive (CSH-021)
+    note: Option<String>,
+}
+
+// Cash outflow to outside the application (CSH-030/032). Same shape as Deposit; eligibility
+// (CSH-080) checked against current Cash Holding balance.
+struct WithdrawalDTO {
+    account_id: String,
+    date: String,
+    amount_micros: i64,
+    note: Option<String>,
+}
 ```
 
 ```rust
@@ -135,9 +172,16 @@ enum TransactionType {
     Purchase,
     Sell,
     OpeningBalance,  // TRX-042
+    Deposit,         // CSH-022 — cash inflow
+    Withdrawal,      // CSH-032 — cash outflow
 }
 
-// Returned by buy_holding, sell_holding, correct_transaction, open_holding, and get_transactions
+// Returned by buy_holding, sell_holding, correct_transaction, open_holding, record_deposit,
+// record_withdrawal, and get_transactions.
+//
+// For Deposit/Withdrawal: asset_id is always the Cash Asset for account.currency;
+// quantity == total_amount; unit_price == 1_000_000 (cash is its own unit); exchange_rate ==
+// 1_000_000; fees == 0 (v1); realized_pnl is None.
 struct Transaction {
     id: String,
     account_id: String,
@@ -184,12 +228,13 @@ struct ClosedHoldingDetail {
 // Top-level response for get_account_details
 struct AccountDetailsResponse {
     account_name: String,
-    holdings: Vec<HoldingDetail>,              // active (quantity > 0), includes archived assets (ACD-020, ACD-021), sorted by asset_name asc (ACD-033)
+    holdings: Vec<HoldingDetail>,              // active (quantity > 0), includes Cash Holding when present and qty > 0 (CSH-090, CSH-097); includes archived assets (ACD-020, ACD-021), sorted by asset_name asc (ACD-033)
     closed_holdings: Vec<ClosedHoldingDetail>, // closed, sorted by asset_name asc (ACD-046); empty list when none
     total_holding_count: i64,                  // all holdings regardless of quantity (ACD-034)
-    total_cost_basis: i64,                     // micros, sum of cost_basis across active holdings (ACD-031)
+    total_cost_basis: i64,                     // micros, sum of cost_basis across active non-cash holdings (ACD-031, CSH-093)
     total_realized_pnl: i64,                   // micros, sum of total_realized_pnl across all holdings (ACD-045)
     total_unrealized_pnl: Option<i64>,         // micros; sum across same-currency priced active holdings; None when none qualify (MKT-040)
+    total_global_value: i64,                   // micros, account currency: cash_holding.quantity + Σ_h (h.quantity × latest_price(h)) over non-cash active holdings; unpriced non-cash holdings contribute 0 (CSH-094)
 }
 ```
 
@@ -217,3 +262,4 @@ struct AccountDetailsResponse {
 - 2026-04-28 — Added `AccountUpdated` event (previously undeclared; owned by Account BC per migration plan)
 - 2026-05-03 — Merged from `record_transaction-contract.md` and `transaction-contract.md`: get_asset_ids_for_account, buy_holding, sell_holding, correct_transaction, cancel_transaction, get_transactions, open_holding; Transaction struct reconciled (added created_at, added OpeningBalance variant)
 - 2026-05-03 — Merged from `account_details-contract.md`: get_account_details; added AccountDetailsCommandError error model, HoldingDetail, ClosedHoldingDetail, AccountDetailsResponse shared types, subscribed events section; updated stale TransactionUpdated → AccountUpdated
+- 2026-05-06 — Added by `cash-tracking` spec: record_deposit, record_withdrawal; extended buy_holding / correct_transaction / cancel_transaction error sets with `InsufficientCash { current_balance_micros, currency }` (CSH-080); extended open_holding error set with `OpeningBalanceOnCashAsset` (CSH-061); `TransactionType` gained `Deposit` and `Withdrawal` variants; `AccountDetailsResponse` gained `total_global_value: i64` (CSH-094); added `DepositDTO`, `WithdrawalDTO`, `RecordDepositCommandError`, `RecordWithdrawalCommandError` types.

@@ -38,6 +38,15 @@ impl AssetCategory {
         })
     }
 
+    /// Creates a new AssetCategory with a known deterministic ID.
+    /// Used by system-seeded categories (e.g. the Cash category, CSH-017).
+    pub fn with_id(id: String, label: String) -> Result<Self> {
+        if label.trim().is_empty() {
+            return Err(CategoryDomainError::LabelEmpty.into());
+        }
+        Ok(Self { id, name: label })
+    }
+
     /// Updates an existing AssetCategory.
     pub fn update_from(id: String, label: String) -> Result<Self> {
         if label.trim().is_empty() {

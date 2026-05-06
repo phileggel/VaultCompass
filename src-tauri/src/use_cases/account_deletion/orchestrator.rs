@@ -130,6 +130,17 @@ mod tests {
             )
             .await
             .unwrap();
+        // Cash is now a Holding (CSH-090): seed it before any purchase so CSH-041 holds.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(
+                &account.id,
+                "2020-01-01".to_string(),
+                1_000_000_000_000,
+                None,
+            )
+            .await
+            .unwrap();
         account_svc
             .buy_holding(
                 &account.id,
@@ -147,8 +158,9 @@ mod tests {
         let uc = AccountDeletionUseCase::new(account_svc);
         let summary = uc.get_summary(&account.id).await.unwrap();
 
-        assert_eq!(summary.holding_count, 1);
-        assert_eq!(summary.transaction_count, 1);
+        // 2 holdings (asset + cash), 2 transactions (Purchase + Deposit) — Cash is a Holding too.
+        assert_eq!(summary.holding_count, 2);
+        assert_eq!(summary.transaction_count, 2);
     }
 
     // ACC-020 — closed holding (qty=0) does not count as active
@@ -164,6 +176,17 @@ mod tests {
                 "Test Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        // Cash is now a Holding (CSH-090): seed it before any purchase so CSH-041 holds.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(
+                &account.id,
+                "2020-01-01".to_string(),
+                1_000_000_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -197,7 +220,9 @@ mod tests {
         let uc = AccountDeletionUseCase::new(account_svc);
         let summary = uc.get_summary(&account.id).await.unwrap();
 
-        assert_eq!(summary.holding_count, 0);
-        assert_eq!(summary.transaction_count, 2);
+        // Asset holding closed (qty=0) — Cash Holding still active.
+        assert_eq!(summary.holding_count, 1);
+        // 3 transactions: Deposit + Purchase + Sell.
+        assert_eq!(summary.transaction_count, 3);
     }
 }

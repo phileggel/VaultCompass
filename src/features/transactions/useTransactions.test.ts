@@ -31,6 +31,14 @@ vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), info: vi.fn() },
 }));
 
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts ? `${key}::${JSON.stringify(opts)}` : key,
+    i18n: { language: "en" },
+  }),
+}));
+
 const { useTransactions } = await import("./useTransactions");
 
 const makeTx = (): Transaction => ({
@@ -101,6 +109,29 @@ describe("useTransactions", () => {
       ret = await result.current.buyHolding(buyDto);
     });
     expect(ret.error).toBe("error.AccountNotFound");
+  });
+
+  // CSH-081 — InsufficientCash is formatted with payload (balance + currency)
+  it("buyHolding formats InsufficientCash with balance + currency", async () => {
+    mockBuyHolding.mockResolvedValue({
+      status: "error",
+      error: {
+        code: "InsufficientCash",
+        current_balance_micros: 50_000_000,
+        currency: "EUR",
+      },
+    });
+    const { result } = renderHook(() => useTransactions());
+    let ret: { data: Transaction | null; error: string | null } = {
+      data: null,
+      error: null,
+    };
+    await act(async () => {
+      ret = await result.current.buyHolding(buyDto);
+    });
+    expect(ret.error).toContain("cash.insufficient_cash_inline");
+    expect(ret.error).toContain("50,00");
+    expect(ret.error).toContain("EUR");
   });
 
   // ── sellHolding ───────────────────────────────────────────────────────────────

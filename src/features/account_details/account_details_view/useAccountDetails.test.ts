@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountDetailsResponse, ClosedHoldingDetail } from "@/bindings";
+import type { AccountDetailsResponse, ClosedHoldingDetail, HoldingDetail } from "@/bindings";
 import { useAccountDetails } from "./useAccountDetails";
 
 const mockGetAccountDetails = vi.fn();
@@ -33,6 +33,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   total_cost_basis: 0,
   total_realized_pnl: 0,
   total_unrealized_pnl: null,
+  total_global_value: 0,
   ...overrides,
 });
 
@@ -112,6 +113,88 @@ describe("useAccountDetails — closed holdings (ACD-044–ACD-050)", () => {
 // Market-price hook stubs (MKT-NNN)
 // Assertion below is intentionally failing — implement useAccountDetails.ts to fix.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Cash tracking — CSH-019 / CSH-092 / CSH-095
+// ---------------------------------------------------------------------------
+
+const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => ({
+  asset_id: "asset-1",
+  asset_name: "Apple",
+  asset_reference: "AAPL",
+  quantity: 2_000_000,
+  average_price: 100_000_000,
+  cost_basis: 200_000_000,
+  realized_pnl: 0,
+  asset_currency: "EUR",
+  current_price: null,
+  current_price_date: null,
+  unrealized_pnl: null,
+  performance_pct: null,
+  ...overrides,
+});
+
+const makeCashHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail =>
+  makeHolding({
+    asset_id: "system-cash-eur",
+    asset_name: "Cash EUR",
+    asset_reference: "EUR",
+    quantity: 500_000_000,
+    average_price: 1_000_000,
+    cost_basis: 500_000_000,
+    realized_pnl: 0,
+    ...overrides,
+  });
+
+describe("useAccountDetails — cash row (CSH-092 / CSH-019 / CSH-095)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // CSH-092 — Cash row sorts to top of the active holdings list
+  it("sorts cash row to the top of holdings (CSH-092)", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        holdings: [
+          makeHolding({ asset_id: "z" }),
+          makeCashHolding(),
+          makeHolding({ asset_id: "a" }),
+        ],
+        total_holding_count: 3,
+      }),
+    });
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    expect(result.current.holdings.at(0)?.isCash).toBe(true);
+    expect(result.current.holdings.at(0)?.assetId).toBe("system-cash-eur");
+  });
+
+  // CSH-019/095 — hasVisibleCashRow is true when the response contains a cash holding
+  it("hasVisibleCashRow true when response contains a cash holding", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        holdings: [makeCashHolding()],
+        total_holding_count: 1,
+      }),
+    });
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    expect(result.current.hasVisibleCashRow).toBe(true);
+  });
+
+  // CSH-095 — hasVisibleCashRow is false when no cash holding present
+  it("hasVisibleCashRow false when response has no cash holding", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse({ holdings: [makeHolding()], total_holding_count: 1 }),
+    });
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    expect(result.current.hasVisibleCashRow).toBe(false);
+  });
+});
 
 describe("useAccountDetails — market price events (MKT)", () => {
   beforeEach(() => {

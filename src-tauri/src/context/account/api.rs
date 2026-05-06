@@ -174,6 +174,14 @@ pub enum TransactionCommandError {
     /// Editing would leave a later transaction with insufficient units.
     #[error("Editing this transaction would create a cascading oversell")]
     CascadingOversell,
+    /// Cash debit (or replay step) would drive the cash holding strictly negative (CSH-080).
+    #[error("Insufficient cash: current balance {current_balance_micros} {currency}")]
+    InsufficientCash {
+        /// Cash holding's running balance at the point of rejection (micro-units, account currency).
+        current_balance_micros: i64,
+        /// ISO 4217 currency code of the offending account's cash holding.
+        currency: String,
+    },
     /// Date string could not be parsed as YYYY-MM-DD.
     #[error("Invalid date format — expected YYYY-MM-DD")]
     InvalidDate,
@@ -222,6 +230,19 @@ pub(crate) fn to_transaction_error(e: anyhow::Error) -> TransactionCommandError 
             AccountOperationError::CascadingOversell => TransactionCommandError::CascadingOversell,
             AccountOperationError::TransactionNotFound => {
                 TransactionCommandError::TransactionNotFound
+            }
+            AccountOperationError::InsufficientCash {
+                current_balance_micros,
+                currency,
+            } => TransactionCommandError::InsufficientCash {
+                current_balance_micros: *current_balance_micros,
+                currency: currency.clone(),
+            },
+            AccountOperationError::AmountNotPositive => {
+                // Should not fire from buy/sell/correct/cancel paths — log and surface
+                // as Unknown so the FE doesn't see a stale "amount" error code.
+                tracing::error!(target: BACKEND, "BUG: AmountNotPositive raised from non-cash command");
+                TransactionCommandError::Unknown
             }
         };
     }

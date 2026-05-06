@@ -2,6 +2,12 @@ import type { AccountDetailsResponse, ClosedHoldingDetail, HoldingDetail } from 
 import { microToFormatted } from "@/lib/microUnits";
 
 const DASH = "—";
+const CASH_ASSET_PREFIX = "system-cash-";
+
+/** True when the asset_id is the deterministic system Cash Asset ID (CSH-014). */
+export function isCashAsset(assetId: string): boolean {
+  return assetId.startsWith(CASH_ASSET_PREFIX);
+}
 
 export interface HoldingRowViewModel {
   assetId: string;
@@ -30,6 +36,8 @@ export interface HoldingRowViewModel {
   unrealizedPnlRaw: number | null;
   /** Formatted performance % (e.g. "5.25%") or "—" when not computable (MKT-032/035). */
   performancePct: string;
+  /** True when this row is the system Cash Holding (CSH-090). Drives the cash variant in HoldingRow. */
+  isCash: boolean;
 }
 
 export interface ClosedHoldingRowViewModel {
@@ -58,9 +66,40 @@ export interface AccountSummaryViewModel {
   hasClosedHoldings: boolean;
   /** Formatted total unrealized P&L (2 decimals) or "—" when no qualifying holdings (MKT-041). */
   totalUnrealizedPnl: string;
+  /** Formatted total Global Value (cash + priced holdings, 2 decimals, CSH-094). */
+  totalGlobalValue: string;
+  /** Raw total Global Value in micro-units (CSH-094). */
+  totalGlobalValueRaw: number;
+  /** True when the account currently holds a non-zero cash balance (CSH-019/095). */
+  hasCashHolding: boolean;
 }
 
 export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
+  const isCash = isCashAsset(detail.asset_id);
+  if (isCash) {
+    // Cash row variant (CSH-090/091): no cost basis, average price, realized PnL or
+    // market-price columns — those cells render blank in the table. Quantity is the
+    // running cash balance, formatted to 2 decimals like an amount.
+    return {
+      assetId: detail.asset_id,
+      assetName: detail.asset_name,
+      assetReference: detail.asset_reference,
+      assetCurrency: detail.asset_currency,
+      quantity: microToFormatted(detail.quantity, 2),
+      quantityMicro: detail.quantity,
+      averagePrice: "",
+      costBasis: "",
+      realizedPnl: "",
+      realizedPnlRaw: 0,
+      canEnterPrice: false,
+      currentPrice: "",
+      currentPriceDate: null,
+      unrealizedPnl: "",
+      unrealizedPnlRaw: null,
+      performancePct: "",
+      isCash: true,
+    };
+  }
   return {
     assetId: detail.asset_id,
     assetName: detail.asset_name,
@@ -80,6 +119,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     unrealizedPnlRaw: detail.unrealized_pnl,
     performancePct:
       detail.performance_pct !== null ? `${microToFormatted(detail.performance_pct, 2)}%` : DASH,
+    isCash: false,
   };
 }
 
@@ -95,18 +135,28 @@ export function toClosedHoldingRow(detail: ClosedHoldingDetail): ClosedHoldingRo
 }
 
 export function toAccountSummary(response: AccountDetailsResponse): AccountSummaryViewModel {
+  // CSH-098 — exclude the cash holding from the active count used for empty/all-closed
+  // gating, otherwise an account with only a cash holding would never trigger the
+  // "no positions yet" empty state nor the closed-only message.
+  const nonCashActive = response.holdings.filter((h) => !isCashAsset(h.asset_id));
+  const hasCashHolding = response.holdings.some((h) => isCashAsset(h.asset_id) && h.quantity > 0);
   return {
     accountName: response.account_name,
     totalCostBasis: microToFormatted(response.total_cost_basis, 2),
     totalRealizedPnl: microToFormatted(response.total_realized_pnl, 2),
     totalRealizedPnlRaw: response.total_realized_pnl,
     holdingCount: response.total_holding_count,
-    isEmpty: response.total_holding_count === 0,
-    isAllClosed: response.total_holding_count > 0 && response.holdings.length === 0,
+    isEmpty:
+      response.total_holding_count === 0 ||
+      (nonCashActive.length === 0 && response.closed_holdings.length === 0),
+    isAllClosed: response.total_holding_count > 0 && nonCashActive.length === 0,
     hasClosedHoldings: response.closed_holdings.length > 0,
     totalUnrealizedPnl:
       response.total_unrealized_pnl !== null
         ? microToFormatted(response.total_unrealized_pnl, 2)
         : DASH,
+    totalGlobalValue: microToFormatted(response.total_global_value, 2),
+    totalGlobalValueRaw: response.total_global_value,
+    hasCashHolding,
   };
 }

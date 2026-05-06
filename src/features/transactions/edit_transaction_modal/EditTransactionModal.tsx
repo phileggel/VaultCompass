@@ -36,7 +36,8 @@ export function EditTransactionModal({
     logger.info("[EditTransactionModal] mounted");
   }, []);
 
-  const assets = useAppStore((state) => state.assets);
+  // CSH-018 — Cash Assets cannot be the target of a manual edit (Deposit/Withdrawal flow only).
+  const assets = useAppStore((state) => state.assets).filter((a) => a.class !== "Cash");
   const accounts = useAppStore((state) => state.accounts);
 
   const {

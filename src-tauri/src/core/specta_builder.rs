@@ -36,6 +36,10 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<holding_transaction::CorrectTransactionDTO>()
         .typ::<holding_transaction::OpenHoldingDTO>()
         .typ::<holding_transaction::OpenHoldingCommandError>()
+        .typ::<holding_transaction::DepositDTO>()
+        .typ::<holding_transaction::WithdrawalDTO>()
+        .typ::<holding_transaction::RecordDepositCommandError>()
+        .typ::<holding_transaction::RecordWithdrawalCommandError>()
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
@@ -75,6 +79,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             holding_transaction::sell_holding,
             holding_transaction::correct_transaction,
             holding_transaction::cancel_transaction,
+            holding_transaction::record_deposit,
+            holding_transaction::record_withdrawal,
             account_details::get_account_details,
             account_deletion::get_account_deletion_summary,
             asset_web_lookup::lookup_asset,
