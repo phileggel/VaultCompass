@@ -116,8 +116,11 @@ impl AccountDetailsUseCase {
 
         // ACD-022 — enrich each active holding with asset metadata; ACD-021 — archived assets included
         // CSH-094 — accumulate the Global Value as we go: cash quantity + Σ priced non-cash holdings.
+        // CSH-093 — accumulate the total cost basis from non-cash holdings only (cash has no
+        // cost basis by spec; its `cost_basis` field is set to 0 below so the row stays blank).
         let mut details: Vec<HoldingDetail> = Vec::with_capacity(active_holdings.len());
         let mut total_global_value: i64 = 0;
+        let mut total_cost_basis: i64 = 0;
         for holding in active_holdings {
             let asset = self
                 .asset_service
@@ -125,17 +128,26 @@ impl AccountDetailsUseCase {
                 .await?
                 .ok_or_else(|| anyhow!("Asset not found: {}", holding.asset_id))?;
 
+            let is_cash = asset.class == crate::context::asset::AssetClass::Cash;
+
             // CSH-094 — Cash Holding contributes its raw quantity (already in account currency).
             // Other holdings contribute `quantity × latest_price` only when priced and currencies
             // match (no FX conversion in v1 — mirrors the MKT-033 same-currency guard for
             // unrealized_pnl). Unpriced or foreign-currency non-cash holdings contribute 0.
-            if asset.class == crate::context::asset::AssetClass::Cash {
+            if is_cash {
                 total_global_value = total_global_value.saturating_add(holding.quantity);
             }
 
-            // ACD-023/024 — i128 intermediate to prevent overflow before scaling back to i64
-            let cost_basis =
-                (holding.quantity as i128 * holding.average_price as i128 / 1_000_000) as i64;
+            // CSH-093 — cash holdings carry no cost basis. Non-cash uses the standard
+            // (quantity × average_price) formula with i128 intermediates (ACD-023/024).
+            let cost_basis = if is_cash {
+                0
+            } else {
+                let cb =
+                    (holding.quantity as i128 * holding.average_price as i128 / 1_000_000) as i64;
+                total_cost_basis = total_cost_basis.saturating_add(cb);
+                cb
+            };
 
             // MKT-031 — fetch latest price, degrade gracefully on failure
             let latest_price = self
@@ -198,8 +210,7 @@ impl AccountDetailsUseCase {
         // ACD-033 — sort alphabetically by asset_name ascending
         details.sort_by(|a, b| a.asset_name.cmp(&b.asset_name));
 
-        // ACD-031 — sum of cost_basis; 0 when no active holdings
-        let total_cost_basis: i64 = details.iter().map(|d| d.cost_basis).sum();
+        // ACD-031 / CSH-093 — total_cost_basis already accumulated above (non-cash only).
 
         // MKT-040 — sum unrealized_pnl across qualifying holdings; None when none qualify
         let qualifying_pnls: Vec<i64> = details.iter().filter_map(|d| d.unrealized_pnl).collect();
@@ -1392,5 +1403,91 @@ mod tests {
             .map(|h| h.asset_name.as_str())
             .collect();
         assert_eq!(names, vec!["Apple Inc", "Microsoft", "Zebra Fund"]);
+    }
+
+    // CSH-093 — total_cost_basis sums non-cash holdings only.
+    // CSH-094 — total_global_value = cash quantity + Σ priced same-currency non-cash holdings.
+    // CSH-091 — cash row's cost_basis is 0 in the response (rendered blank in UI).
+    #[tokio::test]
+    async fn cash_holding_excluded_from_cost_basis_and_added_to_global_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "Cash + Stocks".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        // Seed the cash asset for the account currency, then a deposit so the cash
+        // holding exists with a known balance (250.00 EUR in micros).
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2020-01-01".to_string(), 250_000_000, None)
+            .await
+            .unwrap();
+
+        // Add a non-cash holding worth 200 EUR cost basis. No price recorded yet,
+        // so it contributes 0 to the global value (CSH-094 no-fallback semantic).
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Bond".to_string(),
+                reference: "BOND".to_string(),
+                class: AssetClass::Bonds,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap();
+        let holding_repo = SqliteHoldingRepository::new(pool.clone());
+        holding_repo
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+
+        // Two active holdings: cash + bond.
+        assert_eq!(resp.holdings.len(), 2);
+
+        // CSH-091: cash row carries cost_basis = 0; bond row keeps its 200 EUR cost basis.
+        let cash_row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id.starts_with("system-cash-"))
+            .expect("cash holding present");
+        let bond_row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == asset.id)
+            .expect("bond holding present");
+        assert_eq!(cash_row.cost_basis, 0, "cash holding has no cost basis");
+        assert_eq!(bond_row.cost_basis, 200_000_000, "bond cost basis = 200");
+
+        // CSH-093: total_cost_basis sums non-cash only.
+        assert_eq!(
+            resp.total_cost_basis, 200_000_000,
+            "total_cost_basis must exclude the cash holding (CSH-093)"
+        );
+
+        // CSH-094: with no recorded price for the bond, global value is cash only.
+        assert_eq!(
+            resp.total_global_value, 250_000_000,
+            "global value = cash (250) + bond (0, unpriced) = 250"
+        );
     }
 }

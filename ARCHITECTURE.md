@@ -69,7 +69,7 @@ Orchestrates a cross-context read of account + asset data for the Account Detail
 - DTOs:
   - `HoldingDetail` — active position: asset_id, asset_name, asset_reference, asset_currency, quantity, average_price, cost_basis, realized_pnl (all i64 micros), current_price, current_price_date, unrealized_pnl, performance_pct (nullable MKT fields)
   - `ClosedHoldingDetail` — closed position (qty=0): asset_id, asset_name, asset_reference, realized_pnl, last_sold_date: String (ACD-044, ACD-045)
-  - `AccountDetailsResponse` — account_name, holdings, closed_holdings, total_holding_count: i64, total_cost_basis, total_realized_pnl (ACD-047), total_unrealized_pnl (MKT-040: sum of qualifying holdings, None when empty)
+  - `AccountDetailsResponse` — account_name, holdings, closed_holdings, total_holding_count: i64, total_cost_basis, total_realized_pnl (ACD-047), total_unrealized_pnl (MKT-040: sum of qualifying holdings, None when empty), total_global_value (CSH-094: cash balance + Σ(quantity × latest_price) for same-currency priced holdings; no FX in v1)
 - `total_realized_pnl` is sourced from `Holding.total_realized_pnl` (persisted by `recalculate_holding`), not from a live transaction query; supersedes SEL-038
 - Frontend `useAccountDetails` subscribes to `TransactionUpdated`, `AssetUpdated`, and `AssetPriceUpdated` events to trigger re-fetch (MKT-036)
 - `api.rs` — `get_account_details(account_id: String) -> Result<AccountDetailsResponse, String>` Tauri command
@@ -98,16 +98,18 @@ Cross-BC guard: checks transaction history before hard-deleting an asset.
 
 #### Holding Transaction (`use_cases/holding_transaction/`)
 
-Unified home for every operation that mutates a `Holding` through a `Transaction` — opening balance, buy, sell, correct, cancel. A single orchestrator (`HoldingTransactionUseCase`) injects `Arc<AccountService>` + `Arc<AssetService>` once and shares them across all five methods.
+Unified home for every operation that mutates a `Holding` through a `Transaction` — opening balance, buy, sell, correct, cancel, deposit, withdrawal. A single orchestrator (`HoldingTransactionUseCase`) injects `Arc<AccountService>` + `Arc<AssetService>` once and shares them across all seven methods.
 
-- `orchestrator.rs` — one struct, `HoldingTransactionUseCase`, with five methods:
-  - `open_holding` — checks asset existence + archived status (TRX-050, TRX-056) then delegates to `AccountService.open_holding()`.
-  - `buy_holding` — delegates to `AccountService.buy_holding()`; will gain `ensure_cash_asset` (CSH-040).
-  - `sell_holding` — delegates to `AccountService.sell_holding()`; will gain `ensure_cash_asset` (CSH-050).
-  - `correct_transaction` — delegates to `AccountService.correct_transaction()`; will gain `ensure_cash_asset` (CSH-042).
-  - `cancel_transaction` — delegates to `AccountService.cancel_transaction()`; will gain cash replay-eligibility (CSH-024 / CSH-051).
-- `api.rs` — five Tauri commands taking `State<'_, HoldingTransactionUseCase>`. `open_holding` returns the dedicated `OpenHoldingCommandError`; the other four share `TransactionCommandError`, which lives with its owning aggregate in `context/account/api.rs` (errors are domain information). Per-command splitting is tracked in `docs/todo.md`.
-- `shared/ensure_cash_asset.rs` — Cash Asset seeding helper (CSH-010); stub in this refactor, real implementation lands with cash-tracking spec.
+- `orchestrator.rs` — one struct, `HoldingTransactionUseCase`, with seven methods:
+  - `open_holding` — checks asset existence + archived status (TRX-050, TRX-056); rejects when target is the system Cash Asset (CSH-061).
+  - `buy_holding` — calls `ensure_cash_asset` then delegates to `AccountService.buy_holding()`. Aggregate enforces the cash-replay invariant (CSH-041).
+  - `sell_holding` — calls `ensure_cash_asset` then delegates to `AccountService.sell_holding()`; sale proceeds flow into the Cash Holding via the aggregate's chronological replay.
+  - `correct_transaction` — calls `ensure_cash_asset` then delegates to `AccountService.correct_transaction()` (CSH-042).
+  - `cancel_transaction` — delegates to `AccountService.cancel_transaction()`; aggregate replays cash on remaining transactions (CSH-024 / CSH-051).
+  - `record_deposit` (CSH-022) — calls `ensure_cash_asset` for the account's currency then delegates to `AccountService.record_deposit()`.
+  - `record_withdrawal` (CSH-032) — calls `ensure_cash_asset` then delegates to `AccountService.record_withdrawal()`. Aggregate raises `InsufficientCash` when balance < amount (CSH-080/081).
+- `api.rs` — seven Tauri commands taking `State<'_, HoldingTransactionUseCase>`. `open_holding` returns the dedicated `OpenHoldingCommandError`; buy/sell/correct/cancel share `TransactionCommandError` (in `context/account/api.rs`); deposit/withdrawal use `RecordDepositCommandError` / `RecordWithdrawalCommandError` which compose the domain enums via `#[serde(untagged)]` instead of redefining variants. Per-command splitting for the shared error type is tracked in `docs/todo.md`.
+- `shared/ensure_cash_asset.rs` — wraps `AssetService.seed_cash_asset(currency)`; idempotent, lazy-seeds the system Cash Asset + Cash Category for the account's currency before any cash-affecting write (CSH-010 / CSH-011 / CSH-017). Constants and the deterministic id format live in `core::cash` so account and asset contexts share the format without crossing a bounded-context boundary.
 
 #### Update Checker (`use_cases/update_checker/`)
 
@@ -365,13 +367,18 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
 
 #### Account Details (`features/account_details/`)
 
-- Gateway: `getAccountDetails(accountId)`, `openHolding(dto: OpenHoldingDTO)`, `recordAssetPrice(assetId, date, price)`, `getAssetPrices(assetId)`, `updateAssetPrice(assetId, originalDate, newDate, newPrice)`, `deleteAssetPrice(assetId, date)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
-- Sub-features (use-case boundary: buy/sell modals live here, not in `transactions/`):
-  - `account_details_view/AccountDetailsView.tsx` — renders header (total cost basis + realized P&L), holdings table, and all UX states (loading skeletons, empty/all-closed, error with retry, non-empty CTA)
-  - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / Enter Price / History / magnifier action buttons; `buildTarget()` resolves account+asset metadata for modal props
-  - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` and `AssetUpdated` events (ACD-039, ACD-040); exposes `holdings` and `summary` view-models via `useMemo`
-  - `buy_transaction/BuyTransactionModal.tsx` + `useBuyTransaction.ts` — buy form opened from holding row (TRX-041); mirrors sell modal; includes archived-asset confirmation dialog (TRX-029)
+- Gateway: `getAccountDetails(accountId)`, `openHolding(dto: OpenHoldingDTO)`, `recordDeposit(dto: DepositDTO)` (CSH-022), `recordWithdrawal(dto: WithdrawalDTO)` (CSH-032), `recordAssetPrice(assetId, date, price)`, `getAssetPrices(assetId)`, `updateAssetPrice(assetId, originalDate, newDate, newPrice)`, `deleteAssetPrice(assetId, date)`, `subscribeToEvents(callback)` — only file that calls `commands.*` and `events.event.listen`
+- Sub-features (use-case boundary: buy/sell/deposit/withdrawal modals live here, not in `transactions/`):
+  - `account_details_view/AccountDetailsView.tsx` — pure JSX renderer; modal state, handlers, and derived flags live in `useAccountDetailsView`. Header tiles: cost basis, realized P&L, unrealized P&L, **Global Value** (CSH-094); header buttons: Open balance, **Deposit** (always visible, CSH-019), **Withdraw** (gated on cash > 0), Add transaction
+  - `account_details_view/useAccountDetailsView.ts` — orchestration hook: bundles `useAccountDetails` data with the modal state machine (Buy / Sell / Price / Price-history / Open-balance / Deposit / Withdrawal) and the derived flags (`hasActiveHoldings`, `hasClosedHoldings`, `showNoCashBanner`, `accountCurrency`)
+  - `account_details_view/HoldingRow.tsx` — table row with Buy (+) / Sell (−) / Enter Price / History / magnifier action buttons; cash variant (when `row.isCash`) renders only inline Deposit / Withdraw actions and leaves cost-basis / avg-price / realized-pnl cells blank (CSH-091)
+  - `account_details_view/NoCashBanner.tsx` — inline banner above the active holdings table when the account has positions but no cash recorded (CSH-095)
+  - `account_details_view/useAccountDetails.ts` — fetches via gateway on mount and on `accountId` change; re-fetches on `TransactionUpdated` / `AssetUpdated` / `AssetPriceUpdated` events (ACD-039, ACD-040, MKT-036); sorts the cash row to the top of `holdings` (CSH-092); exposes `hasVisibleCashRow` for header gating
+  - `buy_transaction/BuyTransactionModal.tsx` + `useBuyTransaction.ts` — buy form opened from holding row (TRX-041); mirrors sell modal; includes archived-asset confirmation dialog (TRX-029); maps `InsufficientCash` to a localised inline error with balance + currency interpolation (CSH-081)
   - `sell_transaction/SellTransactionModal.tsx` + `useSellTransaction.ts` — sell form opened from holding row (SEL-010 to SEL-037): asset read-only, max quantity hint, oversell guard, exchange rate conditional; calls `sellHolding`
+  - `deposit_transaction/DepositTransactionModal.tsx` + `useDepositTransaction.ts` — deposit form (CSH-020/022/025): account read-only, no asset selector, no exchange rate / fees / unit price; calls `recordDeposit`; success snackbar
+  - `withdrawal_transaction/WithdrawalTransactionModal.tsx` + `useWithdrawalTransaction.ts` — withdrawal form (CSH-030/031/032/035); same shape as Deposit plus the `InsufficientCash` inline-error path (CSH-081)
+  - `shared/validateCashForm.ts` — `validateAmount(s: string)` and `validateDate(s: string)` — pure validation helpers shared by Deposit / Withdrawal hooks (CSH-021/031)
   - `price_history/PriceHistoryModal.tsx` — list modal showing all recorded prices for an asset (date DESC); each row has Edit (pencil) and Delete (trash) actions; transitions to `EditPriceForm` on edit, shows `ConfirmationDialog` on delete (MKT-072–MKT-096)
   - `price_history/EditPriceForm.tsx` — edit form pre-filled with the target price (micros → decimal via `microToDecimal`); calls `updateAssetPrice`; on success refetches the list (MKT-083–MKT-087)
   - `price_history/usePriceHistory.ts` — loads prices on mount; `refetch()` re-calls gateway; `confirmDelete(assetId, date)` tracks `deletingDate` lifecycle (MKT-093)
@@ -379,7 +386,7 @@ All features follow the **feature-first (gold)** layout. Reference: `features/as
   - `open_balance/OpenBalanceModal.tsx` + `useOpenBalance.ts` — opening balance form; `assetId` prop non-empty → read-only asset display; empty → combobox for asset selection (TRX-055); date capped at today (TRX-046); calls `openHolding`; future-date and form completeness guard in `isFormValid`
   - `shared/types.ts` — `ModalTarget` (accountName, assetId, assetName, assetCurrency, showExchangeRate) and `SellTarget` (extends ModalTarget with holdingQuantityMicro)
   - `shared/validatePriceForm.ts` — `isPriceValid(price: string)`, `isDateValid(date: string)` — pure validation helpers shared by price entry and edit forms
-- `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number` on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number` on `AccountSummaryViewModel` for sign-based color rendering (SEL-042, SEL-043)
+- `shared/presenter.ts` — `toHoldingRow()` and `toAccountSummary()` mapping `HoldingDetail` / `AccountDetailsResponse` to display strings; includes `realizedPnl: string`, `realizedPnlRaw: number`, `isCash: boolean` (CSH-090) on `HoldingRowViewModel` and `totalRealizedPnl: string`, `totalRealizedPnlRaw: number`, `totalGlobalValue: string` (CSH-094), `hasCashHolding: boolean` (CSH-019) on `AccountSummaryViewModel`. `isEmpty` and `isAllClosed` exclude the cash row from the active count (CSH-098). `isCashAsset(assetId)` helper detects the deterministic `system-cash-` prefix.
 - Navigation: clicking an `AccountTable` row calls `useNavigate` to `/accounts/$accountId`; `AccountDetailsView` is rendered by its own route, not conditionally by `AccountManager`
 - Spec: `docs/spec/account-details.md` (ACD-010–ACD-041), `docs/spec/market-price.md` (MKT-072–MKT-096)
 

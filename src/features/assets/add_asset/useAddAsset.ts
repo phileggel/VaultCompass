@@ -14,14 +14,16 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
   const { addAsset, assets } = useAssets();
   const categories = useAppStore((s) => s.categories);
 
+  // CSH-015 — default class is `Stocks` (the dropdown's first user-selectable
+  // entry). `Cash` is reserved for the system Cash Asset and never available here.
   const [formData, setFormData] = useState({
     name: prefill?.name ?? "",
     reference: prefill?.reference ?? "",
-    class: (prefill?.asset_class ?? "Cash") as AssetClass,
+    class: (prefill?.asset_class ?? "Stocks") as AssetClass,
     currency: prefill?.currency ?? "EUR",
     risk_level: prefill?.asset_class
       ? DEFAULT_RISK_BY_CLASS[prefill.asset_class as AssetClass]
-      : DEFAULT_RISK_BY_CLASS.Cash,
+      : DEFAULT_RISK_BY_CLASS.Stocks,
     category_id: SYSTEM_CATEGORY_ID,
   });
   const [error, setError] = useState<string | null>(null);
@@ -78,9 +80,9 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
     setFormData({
       name: "",
       reference: "",
-      class: "Cash",
+      class: "Stocks",
       currency: "EUR",
-      risk_level: DEFAULT_RISK_BY_CLASS.Cash,
+      risk_level: DEFAULT_RISK_BY_CLASS.Stocks,
       category_id: SYSTEM_CATEGORY_ID,
     });
   };

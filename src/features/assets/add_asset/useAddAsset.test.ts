@@ -176,8 +176,9 @@ describe("useAddAsset", () => {
 
     const { result } = renderHook(() => useAddAsset({ prefill }));
 
-    // risk_level should remain the Cash default (initial form default)
-    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.Cash);
+    // risk_level should remain the Stocks default (initial form default — CSH-015 made
+    // Cash unavailable as a user-pickable class).
+    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.Stocks);
   });
 
   // WEB-043 — all prefilled fields remain editable
@@ -233,15 +234,16 @@ describe("useAddAsset", () => {
     expect(result.current.formData.category_id).toBe(SYSTEM_CATEGORY_ID);
   });
 
-  // Regression — no prefill keeps existing defaults (Cash / EUR / risk 1)
+  // Regression — no prefill defaults to Stocks / EUR / risk 4 (CSH-015 — Cash
+  // is not user-selectable, so the form defaults to the first dropdown entry).
   it("uses form defaults when no prefill is provided", () => {
     const { result } = renderHook(() => useAddAsset());
 
     expect(result.current.formData.name).toBe("");
     expect(result.current.formData.reference).toBe("");
     expect(result.current.formData.currency).toBe("EUR");
-    expect(result.current.formData.class).toBe("Cash");
-    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.Cash);
+    expect(result.current.formData.class).toBe("Stocks");
+    expect(result.current.formData.risk_level).toBe(DEFAULT_RISK_BY_CLASS.Stocks);
     expect(result.current.formData.category_id).toBe(SYSTEM_CATEGORY_ID);
   });
 });

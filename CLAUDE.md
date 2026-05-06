@@ -52,6 +52,20 @@ On top of the standard kit workflow, this project requires:
 - Create tasks before implementing anything
 - Mark each task `in_progress` when starting, `completed` when done
 
+### PR strategy — split per layer for non-trivial features
+
+For features that touch both backend and frontend, **default to one PR per layer** when either layer exceeds ~20 changed files or ~500 LOC. Below that threshold a single PR is fine.
+
+When splitting, the order is **BE → FE → E2E**:
+
+1. **Spec / contract / migration / backend domain + service + api + bindings** — first PR. Mergeable on its own (FE doesn't yet consume the new types but TS bindings are present and unused, no runtime impact).
+2. **Frontend gateway / hooks / presenter / components / i18n** — second PR, branched off the merged BE branch. Reviewable against a stable backend.
+3. **E2E tests + ARCHITECTURE / todo / spec-checker closure** — third PR.
+
+Why: a 60-file mixed-layer PR overwhelms reviewers; comment threads sprawl across concerns; review-fix cycles force backend re-runs for FE-only nits and vice versa. Per-layer PRs keep each diff tight (~20 files), let CI sign off independently, and let backend ship before FE has to react to the bindings.
+
+`feature-planner` should output a "PR plan" section listing which commits land in which PR. `/start` commits + opens a PR per layer, not one terminal PR.
+
 ---
 
 ## 🛠 Commands

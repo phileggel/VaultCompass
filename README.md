@@ -71,6 +71,35 @@ This runs lint + format + typecheck + tests for both backend and frontend. If it
 
 App opens automatically with hot reload.
 
+### E2E setup (optional — run once)
+
+E2E tests drive the real Tauri app via WebDriver and need two extra binaries that aren't part of the normal Tauri toolchain:
+
+**1. WebKit WebDriver + Xvfb (system, requires sudo)**
+
+```bash
+sudo apt install -y webkit2gtk-driver xvfb
+```
+
+`webkit2gtk-driver` provides the `WebKitWebDriver` binary that `tauri-driver` proxies to. `xvfb` is only required for headless runs (`just test-e2e-headless`); skip it if you only need `just test-e2e` against your real display.
+
+**2. tauri-driver (user-local, must match the project's Tauri version)**
+
+```bash
+cargo install tauri-driver --version 2.0.5 --locked
+```
+
+The version must match what `.github/workflows/e2e.yml` installs. Run a fresh `cargo install ... --locked` whenever the workflow's pinned version changes.
+
+**3. Run the suite**
+
+```bash
+just test-e2e            # uses your current $DISPLAY
+just test-e2e-headless   # uses xvfb-run, useful over SSH or in tmux
+```
+
+Specs live in `e2e/` and follow `docs/e2e-rules.md`. Each spec seeds its own state via IPC (`e2e/helpers/seed.ts`) and tears down via the wdio harness — no shared global fixtures.
+
 ### Build
 
 ```bash

@@ -64,12 +64,83 @@ export async function seedAsset(
   return asset.id;
 }
 
+/**
+ * Records a cash deposit on the given account (CSH-022). Used both as a
+ * dedicated seed helper for cash flows and internally by `seedBuy` to satisfy
+ * the CSH-041 "buy needs cash" guard.
+ */
+export async function seedDeposit(
+  accountId: string,
+  date: string,
+  amountMicros: number,
+): Promise<void> {
+  const result = (await browser.executeAsync(
+    (accId: string, d: string, amt: number, done: (r: unknown) => void) => {
+      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
+      window.__TAURI_INTERNALS__
+        .invoke("record_deposit", {
+          dto: {
+            account_id: accId,
+            date: d,
+            amount_micros: amt,
+            note: "",
+          },
+        })
+        .then(done)
+        .catch((err: unknown) => done({ __error: String(err) }));
+    },
+    accountId,
+    date,
+    amountMicros,
+  )) as { id?: string; __error?: string };
+  assert.ok(!("__error" in result), `seedDeposit failed: ${JSON.stringify(result)}`);
+}
+
+/**
+ * Records a withdrawal on the given account (CSH-032). Useful for setting up
+ * tests that need to drain the cash holding to specific values.
+ */
+export async function seedWithdrawal(
+  accountId: string,
+  date: string,
+  amountMicros: number,
+): Promise<void> {
+  const result = (await browser.executeAsync(
+    (accId: string, d: string, amt: number, done: (r: unknown) => void) => {
+      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
+      window.__TAURI_INTERNALS__
+        .invoke("record_withdrawal", {
+          dto: {
+            account_id: accId,
+            date: d,
+            amount_micros: amt,
+            note: "",
+          },
+        })
+        .then(done)
+        .catch((err: unknown) => done({ __error: String(err) }));
+    },
+    accountId,
+    date,
+    amountMicros,
+  )) as { id?: string; __error?: string };
+  assert.ok(!("__error" in result), `seedWithdrawal failed: ${JSON.stringify(result)}`);
+}
+
 export async function seedBuy(
   accountId: string,
   assetId: string,
   date: string,
   quantity: number,
 ): Promise<void> {
+  // CSH-041 — buy now needs sufficient cash on the account. Seed a large
+  // deposit on the day before the buy so any seedBuy callsite keeps working
+  // without forcing every test to thread a deposit through manually.
+  const cashSeedDate = new Date(`${date}T00:00:00Z`);
+  cashSeedDate.setUTCDate(cashSeedDate.getUTCDate() - 1);
+  const depositDate = cashSeedDate.toISOString().slice(0, 10);
+  await seedDeposit(accountId, depositDate, 1_000_000_000_000);
+
   const result = (await browser.executeAsync(
     (accId: string, astId: string, d: string, qty: number, done: (r: unknown) => void) => {
       // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView

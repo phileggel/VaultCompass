@@ -128,8 +128,11 @@ export function AccountDetailsView() {
                 {t("action.retry")}
               </Button>
             </div>
-          ) : view.summary?.isEmpty ? (
-            /* ACD-034 — no positions at all */
+          ) : view.summary?.isEmpty && !view.hasVisibleCashRow ? (
+            /* ACD-034 / CSH-098 — empty state only when there are no positions
+               AND no cash row to display. With a cash holding present, the
+               cash row renders even though `isEmpty` excludes cash from its
+               own count (CSH-098 gating intent). */
             <div className="flex flex-col items-center justify-center h-full gap-4 py-12">
               <p className="text-m3-on-surface-variant italic">
                 {t("account_details.empty_no_positions")}

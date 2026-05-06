@@ -229,6 +229,11 @@ fn create_app_dirs(app: &tauri::AppHandle) -> anyhow::Result<AppDirectories> {
         let log_dir = path_resolver
             .app_log_dir()
             .with_context(|| "Failed to get app log directory")?;
+        // The non-E2E branch below creates `log_dir` before returning. The E2E
+        // branch must do the same — `app_log_dir()` only resolves the path,
+        // it doesn't create the directory, and `initialize_tracing` will fail
+        // to open `app.log` if the parent doesn't exist.
+        fs::create_dir_all(&log_dir).with_context(|| "Failed to create log directory")?;
         return Ok(AppDirectories {
             local_data_dir,
             log_dir,
