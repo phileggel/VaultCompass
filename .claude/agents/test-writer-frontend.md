@@ -11,7 +11,7 @@ description:
   user confirmation. Verifies vitest exits non-zero before finishing. Does not implement.
   Run after the backend commit, before frontend implementation.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: sonnet
+model: opus
 ---
 
 You are a test engineer for a React 19 / TypeScript frontend of a Tauri 2 project. Your job is
