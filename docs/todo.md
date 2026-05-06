@@ -6,6 +6,20 @@
 
 Ten subagents in `.claude/agents/` were temporarily flipped from `model: sonnet` to `model: opus` on 2026-05-06 because the Sonnet weekly cap was at 100%. A scheduled remote routine reverts via PR at 2026-05-08 21:30 UTC. Affected agents: `contract-reviewer`, `reviewer-arch`, `reviewer-backend`, `reviewer-frontend`, `reviewer-infra`, `reviewer-security`, `spec-reviewer`, `test-writer-backend`, `test-writer-e2e`, `test-writer-frontend`. Helper: `scripts/swap-agent-model.sh sonnet opus` (or reverse). If `just sync-kit` runs before the revert PR merges, kit defaults restore the originals — that's also a valid revert path.
 
+## (backend) — Cash spec: backend test coverage gaps
+
+The cash-tracking spec (`docs/spec/cash-tracking.md`) ships with implementation but ~14 of its 28 rules lack a dedicated backend assertion (spec-checker run 2026-05-06):
+
+- Aggregate-level: CSH-012 (lazy create), CSH-013 (TRX-034 cleanup), CSH-022/023/024 (Deposit create/edit/delete replay), CSH-032/033/034 (Withdrawal create/edit/delete replay), CSH-040/041/042/043 (Purchase cash side-effect), CSH-050/051 (Sell credits cash, edit/delete replay).
+- Use-case level: CSH-061 (`OpeningBalanceOnCashAsset` rejection), CSH-080 payload assertion (current_balance_micros equals pre-mutation balance), CSH-097 (cash row hidden at quantity 0), CSH-100 (`TransactionUpdated` event after deposit/withdrawal).
+- Frontend: CSH-018 (no vitest case asserting Cash assets are filtered from the asset selector in AddTransactionModal/EditTransactionModal/OpenBalanceModal), CSH-095 (NoCashBanner has no direct test).
+
+Most are 1-2 `#[test]` or `#[tokio::test]` additions in `src-tauri/src/context/account/domain/account.rs` or `src-tauri/src/use_cases/account_details/orchestrator.rs#tests`. Surfaced by spec-checker on the cash closure branch.
+
+## (backend) — Asset-mutation guards on system Cash Asset (CSH-016)
+
+The frontend already hides the system Cash Asset from the Asset Manager (CSH-015) and from every selector that lets the user pick an asset (CSH-018). The backend, however, would still accept `update_asset` / `archive_asset` / `unarchive_asset` / `delete_asset` calls against `system-cash-{ccy}` if invoked directly through Tauri. Add a typed guard variant on `AssetCommandError` (e.g. `CashAssetNotEditable`) and reject those four commands when `asset.class == AssetClass::Cash`. Out of scope for the cash PR (asset-contract upsert) — track here so it can be picked up as a small standalone change. Surfaced during the cash-tracking spec review.
+
 ## (backend) — Roll out untagged-composition pattern for boundary error types
 
 Following PR #5 review, `RecordDepositCommandError` and `RecordWithdrawalCommandError` now compose `AccountOperationError | TransactionDomainError | CashCommandBoundaryError` via `#[serde(untagged)]` instead of redefining variants. The same pattern should be rolled out to the older boundary types — `TransactionCommandError`, `OpenHoldingCommandError`, `AccountCommandError`, `AssetCommandError`, `AccountDetailsCommandError`, `ArchiveAssetCommandError`, `DeleteAssetCommandError`, `CategoryCommandError`, `AssetPriceCommandError`, `UpdateAssetPriceCommandError`, `DeleteAssetPriceCommandError`, `WebLookupCommandError`, `AccountDeletionCommandError` — so the entire boundary layer stops duplicating domain error variants. Each conversion is mechanical (compose existing domain enums + a per-command boundary-only enum for `Unknown` / `*NotFound`). Out of scope for the cash PR to keep its diff focused.
@@ -23,17 +37,6 @@ After the `use_cases/holding_transaction/` consolidation, two pre-existing contr
 **2. Parameter style.** `correct_transaction(id: String, account_id: String, dto: CorrectTransactionDTO)` and `cancel_transaction(id: String, account_id: String)` mix primitives + DTO; the rest are DTO-only. Move `id`/`account_id` into the DTOs for consistency. Frontend impact: gateway call sites change.
 
 Work order: do (1) first; (2) is optional and lower value. (1) becomes notably more relevant once cash lands, because `InsufficientCash { current_balance_micros, currency }` would otherwise pollute the shared enum and bleed into `cancel_transaction`'s TS type even though it only fires from a replay-violation edge case.
-
-## (backend) — Remove ensure_cash_asset stub allows once CSH lands
-
-Two `#[allow(...)]` attributes are bridge-code waiting on the cash-tracking spec:
-
-- `use_cases/holding_transaction/shared/ensure_cash_asset.rs:10` — `#[allow(dead_code)]` on the no-op helper.
-- `use_cases/holding_transaction/shared/mod.rs:6` — `#[allow(unused_imports)]` on the `pub use` re-export.
-
-Both disappear the moment any orchestrator method actually calls `ensure_cash_asset` (per CSH-040 / CSH-050 / CSH-042 / CSH-024).
-
-Test coverage: `HoldingTransactionUseCase` only has tests on `open_holding` today. `test-writer-backend` should fill in `buy_holding`, `sell_holding`, `correct_transaction`, `cancel_transaction` during CSH once each method gains the cross-BC cash side-effect.
 
 ## (backend) — Promote BC application services to traits, mock with mockall
 

@@ -55,10 +55,10 @@ describe("useEditAssetModal", () => {
     const { result } = renderHook(() => useEditAssetModal({ asset: mockAsset, onClose }));
 
     act(() => {
-      result.current.handleClassChange("Cash");
+      result.current.handleClassChange("Bonds");
     });
 
-    // risk_level should remain 4 (from mockAsset), not 1 (Cash default)
+    // risk_level should remain 4 (from mockAsset), not 2 (Bonds default)
     expect(result.current.formData.risk_level).toBe(4);
   });
 

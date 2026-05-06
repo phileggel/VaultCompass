@@ -2,9 +2,11 @@ import type { AssetClass } from "@/bindings";
 
 export const SYSTEM_CATEGORY_ID = "default-uncategorized";
 
+// CSH-015 — `Cash` is a system-only asset class, seeded automatically via
+// `ensure_cash_asset` for each account currency. Excluded from the user-facing
+// Add Asset / Edit Asset dropdown so users cannot create their own cash assets.
 export const ASSET_CLASSES: AssetClass[] = [
   "RealEstate",
-  "Cash",
   "Stocks",
   "Bonds",
   "ETF",
