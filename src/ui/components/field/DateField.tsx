@@ -12,21 +12,18 @@ interface DateFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "ty
   locale?: string;
 }
 
+const I18N_TO_BCP47: Record<string, string> = {
+  en: "en-US",
+  fr: "fr-FR",
+};
+
 /**
  * DateField - M3 Design System Date Input Component
  *
  * Modern date input field with custom calendar popup, label and optional error message.
- * Uses ISO format (YYYY-MM-DD) internally, displays in locale format (DD/MM/YYYY for fr-FR).
+ * Uses ISO format (YYYY-MM-DD) internally, displays in locale format (MM/DD/YYYY for en-US,
+ * DD/MM/YYYY for fr-FR). Locale follows the active i18n language unless overridden.
  * Calendar uses fixed positioning calculated from input bounding rect to avoid viewport overflow.
- *
- * @example
- * <DateField
- *   id="paymentDate"
- *   label="Payment Date *"
- *   value="2026-02-20"
- *   onChange={(e) => setDate(e.target.value)}
- *   error={errors.date}
- * />
  */
 export function DateField({
   id,
@@ -34,12 +31,13 @@ export function DateField({
   error,
   value,
   onChange,
-  locale = "fr-FR",
+  locale,
   className = "",
   disabled = false,
   ...props
 }: DateFieldProps) {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const effectiveLocale = locale ?? I18N_TO_BCP47[i18n.language] ?? i18n.language;
   const {
     displayValue,
     showCalendar,
@@ -56,7 +54,7 @@ export function DateField({
     handleDateSelect,
     getDaysInMonth,
     getFirstDayOfMonth,
-  } = useDateField(value, onChange, locale);
+  } = useDateField(value, onChange, effectiveLocale);
 
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth);
@@ -167,7 +165,7 @@ export function DateField({
               <div className="grid grid-cols-7 gap-0.5 mb-2">
                 {Array.from({ length: 7 }, (_, i) => {
                   const date = new Date(1970, 0, 4 + i);
-                  const label = new Intl.DateTimeFormat(locale, {
+                  const label = new Intl.DateTimeFormat(effectiveLocale, {
                     weekday: "narrow",
                   }).format(date);
                   return (
