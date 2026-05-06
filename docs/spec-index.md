@@ -12,7 +12,7 @@
 | CAT     | Category                    | User-defined asset category management                                                         | active   |
 | UPD     | Application Update          | Auto-update detection, download, and install                                                   | active   |
 | WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                                                 | active   |
-| PFD     | Portfolio Dashboard         | Cross-account aggregate view: KPIs + per-account list (paused — blocked on cash-tracking spec) | planning |
+| PFD     | Portfolio Dashboard         | Cross-account aggregate view: KPIs + per-account list                                          | planning |
 | CSH     | Cash Tracking               | Cash-as-Holding (one per currency); Deposit/Withdrawal; Buy/Sell re-linked to cash             | active   |
 
 ---

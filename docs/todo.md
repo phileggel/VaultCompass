@@ -2,6 +2,14 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
+
+`docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.
+
+## (spec) — Triage stale `docs/dashboard.md`
+
+`docs/dashboard.md` is a loose planning doc for an **Account Performance Dashboard** (per-account, time-series, "Performance" tab inside `AccountAssetDetailsView`). It is not in the trigram registry, has no TRIGRAM-NNN numbering, and depends on two specs that do not exist (`docs/operations.md`, `docs/account-currency.md`). It also references stale concepts (`Operation`, separate `AssetAccount.average_price`) that predate the current `Transaction` + `Holding` model. Decide: (a) rewrite against the current domain and promote to a real TRIGRAM spec, or (b) retire the doc and fold the useful ideas into a future ACD extension. Leaving it as-is means it keeps surfacing in spec audits as drift.
+
 ## (backend) — Cash spec: backend test coverage gaps
 
 The cash-tracking spec (`docs/spec/cash-tracking.md`) ships with implementation but ~14 of its 28 rules lack a dedicated backend assertion (spec-checker run 2026-05-06):
