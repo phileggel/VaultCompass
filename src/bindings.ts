@@ -582,6 +582,10 @@ export type ArchiveAssetCommandError =
  */
 { code: "ActiveHoldings" } | 
 /**
+ * Target asset is a system Cash Asset and cannot be archived (CSH-016).
+ */
+{ code: "CashAssetNotEditable" } | 
+/**
  * No asset exists with the requested ID.
  */
 { code: "NotFound" } | 
@@ -697,6 +701,10 @@ export type AssetCommandError =
  * Asset is archived and cannot be edited.
  */
 { code: "Archived" } | 
+/**
+ * Target asset is a system Cash Asset and cannot be edited or unarchived (CSH-016).
+ */
+{ code: "CashAssetNotEditable" } | 
 /**
  * No asset exists with the requested ID.
  */
@@ -973,6 +981,10 @@ export type DeleteAssetCommandError =
  * At least one transaction references this asset.
  */
 { code: "ExistingTransactions" } | 
+/**
+ * Target asset is a system Cash Asset and cannot be deleted (CSH-016).
+ */
+{ code: "CashAssetNotEditable" } | 
 /**
  * No asset exists with the requested ID.
  */

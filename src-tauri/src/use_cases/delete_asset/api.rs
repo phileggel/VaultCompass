@@ -14,6 +14,9 @@ pub enum DeleteAssetCommandError {
     /// At least one transaction references this asset.
     #[error("Cannot delete an asset with existing transactions")]
     ExistingTransactions,
+    /// Target asset is a system Cash Asset and cannot be deleted (CSH-016).
+    #[error("Cannot delete a system Cash Asset")]
+    CashAssetNotEditable,
     /// No asset exists with the requested ID.
     #[error("Asset not found")]
     NotFound,
@@ -31,6 +34,7 @@ fn to_delete_error(e: anyhow::Error) -> DeleteAssetCommandError {
     if let Some(err) = e.downcast_ref::<AssetDomainError>() {
         return match err {
             AssetDomainError::NotFound(_) => DeleteAssetCommandError::NotFound,
+            AssetDomainError::CashAssetNotEditable => DeleteAssetCommandError::CashAssetNotEditable,
             other => {
                 tracing::error!(err = ?other, "unexpected asset error in delete_asset command");
                 DeleteAssetCommandError::Unknown
@@ -49,4 +53,20 @@ pub async fn delete_asset(
     id: String,
 ) -> Result<(), DeleteAssetCommandError> {
     uc.delete_asset(&id).await.map_err(to_delete_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // CSH-016 — to_delete_error maps AssetDomainError::CashAssetNotEditable
+    #[test]
+    fn to_delete_error_maps_cash_asset_not_editable() {
+        let domain_err = AssetDomainError::CashAssetNotEditable;
+        let cmd_err = to_delete_error(anyhow::anyhow!(domain_err));
+        assert!(
+            matches!(cmd_err, DeleteAssetCommandError::CashAssetNotEditable),
+            "got: {cmd_err:?}"
+        );
+    }
 }

@@ -14,6 +14,9 @@ pub enum ArchiveAssetCommandError {
     /// Asset still has non-zero holdings in at least one account.
     #[error("Cannot archive an asset with active holdings")]
     ActiveHoldings,
+    /// Target asset is a system Cash Asset and cannot be archived (CSH-016).
+    #[error("Cannot archive a system Cash Asset")]
+    CashAssetNotEditable,
     /// No asset exists with the requested ID.
     #[error("Asset not found")]
     NotFound,
@@ -31,6 +34,9 @@ fn to_archive_error(e: anyhow::Error) -> ArchiveAssetCommandError {
     if let Some(err) = e.downcast_ref::<AssetDomainError>() {
         return match err {
             AssetDomainError::NotFound(_) => ArchiveAssetCommandError::NotFound,
+            AssetDomainError::CashAssetNotEditable => {
+                ArchiveAssetCommandError::CashAssetNotEditable
+            }
             other => {
                 tracing::error!(err = ?other, "unexpected asset error in archive_asset command");
                 ArchiveAssetCommandError::Unknown
@@ -49,4 +55,20 @@ pub async fn archive_asset(
     id: String,
 ) -> Result<(), ArchiveAssetCommandError> {
     uc.archive_asset(&id).await.map_err(to_archive_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // CSH-016 — to_archive_error maps AssetDomainError::CashAssetNotEditable
+    #[test]
+    fn to_archive_error_maps_cash_asset_not_editable() {
+        let domain_err = AssetDomainError::CashAssetNotEditable;
+        let cmd_err = to_archive_error(anyhow::anyhow!(domain_err));
+        assert!(
+            matches!(cmd_err, ArchiveAssetCommandError::CashAssetNotEditable),
+            "got: {cmd_err:?}"
+        );
+    }
 }

@@ -16,6 +16,9 @@ pub enum AssetDomainError {
     /// The asset is archived and cannot be edited.
     #[error("Cannot edit an archived asset")]
     Archived,
+    /// The asset is a system Cash Asset and cannot be edited, archived, unarchived, or deleted (CSH-016).
+    #[error("Cannot edit a system Cash Asset")]
+    CashAssetNotEditable,
     /// No asset with the given ID exists.
     #[error("Asset not found: {0}")]
     NotFound(String),

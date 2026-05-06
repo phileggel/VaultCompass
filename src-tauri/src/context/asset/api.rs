@@ -71,6 +71,9 @@ pub enum AssetCommandError {
     /// Asset is archived and cannot be edited.
     #[error("Cannot edit an archived asset")]
     Archived,
+    /// Target asset is a system Cash Asset and cannot be edited or unarchived (CSH-016).
+    #[error("Cannot edit a system Cash Asset")]
+    CashAssetNotEditable,
     /// No asset exists with the requested ID.
     #[error("Asset not found")]
     NotFound,
@@ -90,6 +93,7 @@ fn to_asset_error(e: anyhow::Error) -> AssetCommandError {
             AssetDomainError::InvalidRiskLevel(_) => AssetCommandError::InvalidRiskLevel,
             AssetDomainError::InvalidCurrency(_) => AssetCommandError::InvalidCurrency,
             AssetDomainError::Archived => AssetCommandError::Archived,
+            AssetDomainError::CashAssetNotEditable => AssetCommandError::CashAssetNotEditable,
             AssetDomainError::NotFound(_) => AssetCommandError::NotFound,
         };
     }
@@ -438,6 +442,17 @@ pub async fn delete_asset_price(
 mod tests {
     use super::*;
     use crate::context::asset::domain::error::{AssetDomainError, AssetPriceDomainError};
+
+    // CSH-016 — to_asset_error maps AssetDomainError::CashAssetNotEditable to AssetCommandError::CashAssetNotEditable
+    #[test]
+    fn to_asset_error_maps_cash_asset_not_editable() {
+        let domain_err = AssetDomainError::CashAssetNotEditable;
+        let cmd_err = to_asset_error(anyhow::anyhow!(domain_err));
+        assert!(
+            matches!(cmd_err, AssetCommandError::CashAssetNotEditable),
+            "got: {cmd_err:?}"
+        );
+    }
 
     // MKT-043 — to_asset_price_error maps AssetDomainError::NotFound to AssetPriceCommandError::AssetNotFound
     #[test]

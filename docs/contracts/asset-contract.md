@@ -5,14 +5,14 @@
 
 > **Error model**: commands return typed error enums serialized as `{ code: "VariantName" }`; `lookup_asset` returns `Result<Vec<AssetLookupResult>, WebLookupCommandError>` (single variant: `NetworkError`):
 >
-> - Asset CRUD: `AssetCommandError` — `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel`, `InvalidCurrency`, `Archived`, `NotFound`, `CategoryNotFound`, `Unknown`
+> - Asset CRUD: `AssetCommandError` — `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel`, `InvalidCurrency`, `Archived`, `CashAssetNotEditable`, `NotFound`, `CategoryNotFound`, `Unknown`
 > - Categories: `CategoryCommandError` — `LabelEmpty`, `DuplicateName`, `SystemReadonly`, `SystemProtected`, `Unknown`
 > - `record_asset_price`: `AssetPriceCommandError` — `AssetNotFound`, `NotPositive`, `NonFinite`, `DateInFuture`, `Unknown`
 > - `get_asset_prices`: `AssetPriceCommandError` — `AssetNotFound`, `Unknown`
 > - `update_asset_price`: `UpdateAssetPriceCommandError` — `NotFound`, `NotPositive`, `NonFinite`, `DateInFuture`, `Unknown`
 > - `delete_asset_price`: `DeleteAssetPriceCommandError` — `NotFound`, `Unknown`
-> - `archive_asset`: `ArchiveAssetCommandError` — `ActiveHoldings`, `Unknown`
-> - `delete_asset`: `DeleteAssetCommandError` — `ExistingTransactions`, `Unknown`
+> - `archive_asset`: `ArchiveAssetCommandError` — `ActiveHoldings`, `CashAssetNotEditable`, `NotFound`, `Unknown`
+> - `delete_asset`: `DeleteAssetCommandError` — `ExistingTransactions`, `CashAssetNotEditable`, `NotFound`, `Unknown`
 
 ---
 
@@ -91,3 +91,4 @@ struct AssetPrice {
 - 2026-04-29 — Added by `market-price` spec (MKT-070+): `get_asset_prices`, `update_asset_price`, `delete_asset_price`; `AssetPrice` shared type; error model extended with `UpdateAssetPriceCommandError`, `DeleteAssetPriceCommandError`
 - 2026-05-03 — Merged from `asset_web_lookup-contract.md`: `lookup_asset`; added `AssetLookupResult` shared type
 - 2026-05-03 — WEB-048/049: added `exchange` field to `AssetLookupResult`; added `Derivatives` AssetClass variant (AST-003); WEB-023 extended to map Warrant/Option/Future/Rights → Derivatives
+- 2026-05-06 — CSH-016: added `CashAssetNotEditable` variant to `AssetCommandError`, `ArchiveAssetCommandError`, `DeleteAssetCommandError`; `archive_asset` and `delete_asset` now also surface `NotFound` (commands now load the asset to enforce the cash guard)

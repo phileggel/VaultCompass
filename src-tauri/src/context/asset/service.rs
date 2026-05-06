@@ -131,13 +131,17 @@ impl AssetService {
         Ok(asset)
     }
 
-    /// Updates an existing asset. Rejects if the asset is archived (R6).
+    /// Updates an existing asset. Rejects if the asset is archived (R6) or a system Cash Asset (CSH-016).
     pub async fn update_asset(&self, dto: UpdateAssetDTO) -> Result<Asset> {
         let existing = self
             .asset_repo
             .get_by_id(&dto.asset_id)
             .await?
             .ok_or_else(|| AssetDomainError::NotFound(dto.asset_id.clone()))?;
+
+        if existing.class == AssetClass::Cash {
+            return Err(AssetDomainError::CashAssetNotEditable.into());
+        }
 
         if existing.is_archived {
             return Err(AssetDomainError::Archived.into());
@@ -169,8 +173,9 @@ impl AssetService {
         Ok(asset)
     }
 
-    /// Archives an asset (reversible — R6).
+    /// Archives an asset (reversible — R6). Rejects system Cash Assets (CSH-016).
     pub async fn archive_asset(&self, asset_id: &str) -> Result<()> {
+        self.guard_not_cash(asset_id).await?;
         self.asset_repo.archive(asset_id).await?;
         tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset archived");
         if let Some(bus) = &self.event_bus {
@@ -179,8 +184,9 @@ impl AssetService {
         Ok(())
     }
 
-    /// Unarchives an asset (R18).
+    /// Unarchives an asset (R18). Rejects system Cash Assets (CSH-016).
     pub async fn unarchive_asset(&self, asset_id: &str) -> Result<()> {
+        self.guard_not_cash(asset_id).await?;
         self.asset_repo.unarchive(asset_id).await?;
         tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset unarchived");
         if let Some(bus) = &self.event_bus {
@@ -189,12 +195,27 @@ impl AssetService {
         Ok(())
     }
 
-    /// Soft-deletes an asset and publishes an AssetUpdated event.
+    /// Soft-deletes an asset and publishes an AssetUpdated event. Rejects system Cash Assets (CSH-016).
     pub async fn delete_asset(&self, asset_id: &str) -> Result<()> {
+        self.guard_not_cash(asset_id).await?;
         self.asset_repo.delete(asset_id).await?;
         tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset deleted");
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetUpdated);
+        }
+        Ok(())
+    }
+
+    /// Loads the asset and rejects with `CashAssetNotEditable` if it is a system Cash Asset (CSH-016).
+    /// `NotFound` propagates so the boundary can map it for callers that did not pre-load the asset.
+    async fn guard_not_cash(&self, asset_id: &str) -> Result<()> {
+        let existing = self
+            .asset_repo
+            .get_by_id(asset_id)
+            .await?
+            .ok_or_else(|| AssetDomainError::NotFound(asset_id.to_string()))?;
+        if existing.class == AssetClass::Cash {
+            return Err(AssetDomainError::CashAssetNotEditable.into());
         }
         Ok(())
     }
@@ -403,12 +424,25 @@ mod tests {
         Asset::restore(
             id.to_string(),
             "Test Asset".to_string(),
-            AssetClass::Cash,
+            AssetClass::Stocks,
             make_category(),
             "USD".to_string(),
             1,
             "REF".to_string(),
             archived,
+        )
+    }
+
+    fn make_cash_asset(id: &str) -> Asset {
+        Asset::restore(
+            id.to_string(),
+            "Cash".to_string(),
+            AssetClass::Cash,
+            make_category(),
+            "USD".to_string(),
+            1,
+            "USD".to_string(),
+            false,
         )
     }
 
@@ -629,6 +663,8 @@ mod tests {
     #[tokio::test]
     async fn test_archive_asset_delegates_to_repo() {
         let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
         ar.expect_archive()
             .withf(|id| id == "asset-id")
             .times(1)
@@ -645,6 +681,8 @@ mod tests {
     #[tokio::test]
     async fn test_unarchive_asset_delegates_to_repo() {
         let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("asset-id", true))));
         ar.expect_unarchive()
             .withf(|id| id == "asset-id")
             .times(1)
@@ -1401,6 +1439,8 @@ mod tests {
     #[tokio::test]
     async fn test_archive_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("a-id", false))));
         ar.expect_archive().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
@@ -1422,6 +1462,8 @@ mod tests {
     #[tokio::test]
     async fn test_unarchive_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("a-id", true))));
         ar.expect_unarchive().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
@@ -1443,6 +1485,8 @@ mod tests {
     #[tokio::test]
     async fn test_delete_asset_emits_event_when_bus_present() {
         let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("a-id", false))));
         ar.expect_delete().times(1).return_once(|_| Ok(()));
         let bus = Arc::new(SideEffectEventBus::new());
         let mut rx = bus.subscribe();
@@ -1459,6 +1503,126 @@ mod tests {
             .await
             .expect("watch sender dropped before event fired");
         assert_eq!(*rx.borrow(), Event::AssetUpdated);
+    }
+
+    // CSH-016 — update_asset rejects a system Cash Asset
+    #[tokio::test]
+    async fn test_update_asset_rejects_cash_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_cash_asset("system-cash-USD"))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+
+        let err = svc
+            .update_asset(UpdateAssetDTO {
+                asset_id: "system-cash-USD".to_string(),
+                name: "Renamed".to_string(),
+                reference: "USD".to_string(),
+                class: AssetClass::Cash,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+            })
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::CashAssetNotEditable)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // CSH-016 — archive_asset rejects a system Cash Asset
+    #[tokio::test]
+    async fn test_archive_asset_rejects_cash_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_cash_asset("system-cash-USD"))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+
+        let err = svc.archive_asset("system-cash-USD").await.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::CashAssetNotEditable)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // CSH-016 — unarchive_asset rejects a system Cash Asset
+    #[tokio::test]
+    async fn test_unarchive_asset_rejects_cash_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_cash_asset("system-cash-USD"))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+
+        let err = svc.unarchive_asset("system-cash-USD").await.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::CashAssetNotEditable)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // CSH-016 — delete_asset rejects a system Cash Asset
+    #[tokio::test]
+    async fn test_delete_asset_rejects_cash_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_cash_asset("system-cash-USD"))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+
+        let err = svc.delete_asset("system-cash-USD").await.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::CashAssetNotEditable)
+            ),
+            "got: {err}"
+        );
+    }
+
+    // CSH-016 — archive_asset surfaces NotFound when the id is unknown
+    #[tokio::test]
+    async fn test_archive_asset_returns_not_found_for_unknown_id() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id().return_once(|_| Ok(None));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+
+        let err = svc.archive_asset("missing").await.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AssetDomainError>(),
+                Some(AssetDomainError::NotFound(_))
+            ),
+            "got: {err}"
+        );
     }
 
     #[tokio::test]

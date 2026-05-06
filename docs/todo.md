@@ -20,10 +20,6 @@ The cash-tracking spec (`docs/spec/cash-tracking.md`) ships with implementation 
 
 Most are 1-2 `#[test]` or `#[tokio::test]` additions in `src-tauri/src/context/account/domain/account.rs` or `src-tauri/src/use_cases/account_details/orchestrator.rs#tests`. Surfaced by spec-checker on the cash closure branch.
 
-## (backend) — Asset-mutation guards on system Cash Asset (CSH-016)
-
-The frontend already hides the system Cash Asset from the Asset Manager (CSH-015) and from every selector that lets the user pick an asset (CSH-018). The backend, however, would still accept `update_asset` / `archive_asset` / `unarchive_asset` / `delete_asset` calls against `system-cash-{ccy}` if invoked directly through Tauri. Add a typed guard variant on `AssetCommandError` (e.g. `CashAssetNotEditable`) and reject those four commands when `asset.class == AssetClass::Cash`. Out of scope for the cash PR (asset-contract upsert) — track here so it can be picked up as a small standalone change. Surfaced during the cash-tracking spec review.
-
 ## (backend) — Roll out untagged-composition pattern for boundary error types
 
 Following PR #5 review, `RecordDepositCommandError` and `RecordWithdrawalCommandError` now compose `AccountOperationError | TransactionDomainError | CashCommandBoundaryError` via `#[serde(untagged)]` instead of redefining variants. The same pattern should be rolled out to the older boundary types — `TransactionCommandError`, `OpenHoldingCommandError`, `AccountCommandError`, `AssetCommandError`, `AccountDetailsCommandError`, `ArchiveAssetCommandError`, `DeleteAssetCommandError`, `CategoryCommandError`, `AssetPriceCommandError`, `UpdateAssetPriceCommandError`, `DeleteAssetPriceCommandError`, `WebLookupCommandError`, `AccountDeletionCommandError` — so the entire boundary layer stops duplicating domain error variants. Each conversion is mechanical (compose existing domain enums + a per-command boundary-only enum for `Unknown` / `*NotFound`). Out of scope for the cash PR to keep its diff focused.
