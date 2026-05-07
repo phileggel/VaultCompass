@@ -18,42 +18,7 @@ import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { setReactInputValue } from "../helpers/react";
-import { seedAccount, seedAsset, seedCategory } from "../helpers/seed";
-
-/**
- * Seed a buy_holding so the account has an active (non-closed) holding.
- * Required for the "Open Balance" button to appear in the header
- * (only shown when !isEmpty && !isAllClosed — AccountDetailsView.tsx:126).
- */
-async function seedBuyHolding(accountId: string, assetId: string, date: string): Promise<void> {
-  type SeedResult = { id: string } | { __error: string };
-  const result = (await browser.executeAsync(
-    (accId: string, astId: string, d: string, done: (r: SeedResult) => void) => {
-      // @ts-expect-error __TAURI_INTERNALS__ is injected by the Tauri WebView
-      window.__TAURI_INTERNALS__
-        .invoke("buy_holding", {
-          dto: {
-            account_id: accId,
-            asset_id: astId,
-            date: d,
-            quantity: 10_000_000, // 10 units in micro-units
-            unit_price: 100_000_000, // 100.00 per unit in micro-units
-            exchange_rate: 1_000_000, // 1:1 rate in micro-units
-            fees: 0,
-            note: "", // empty string avoids Tauri 2 null-deserialization issue for Option<String>
-          },
-        })
-        .then((r: SeedResult) => done(r))
-        .catch((err: unknown) => done({ __error: JSON.stringify(err) }));
-    },
-    accountId,
-    assetId,
-    date,
-  )) as SeedResult;
-  if ("__error" in result) {
-    throw new Error(`seedBuyHolding failed: ${result.__error}`);
-  }
-}
+import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
 // Navigation helper — Accounts list → Account Details (E2E rule E8: no browser.url())
@@ -118,7 +83,10 @@ describe("open_balance", () => {
     // any serialization issue with executeAsync argument passing.
     const storedAccountId = accountId;
     const storedAssetId = assetId;
-    await seedBuyHolding(storedAccountId, storedAssetId, "2019-12-01");
+    // seedBuy auto-deposits cash on (date − 1) so the buy passes the CSH-041
+    // sufficient-cash guard. The "Open Balance" button is gated on a non-empty,
+    // non-all-closed holdings list (AccountDetailsView.tsx:126).
+    await seedBuy(storedAccountId, storedAssetId, "2019-12-01", 10_000_000);
   });
 
   // Navigate to Account Details and dismiss any leftover modal before each test.
