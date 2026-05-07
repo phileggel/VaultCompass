@@ -69,10 +69,6 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 
 `coverage.yml` uses `ubuntu-latest` (currently resolves to 24.04 on GitHub-hosted runners) while `e2e.yml` and `release-manual.yml` (linux path) use `ubuntu-22.04`. If webkit2gtk or other apt packages behave differently between versions, coverage and e2e jobs may diverge silently. Pin all jobs to `ubuntu-22.04` until 24.04 compatibility is validated, then move all to 24.04 together.
 
-## (ci) — Fix Cargo cache key in release-windows.yml
-
-`release-windows.yml` uses `prefix-key: windows-rust-` with no `Cargo.lock` hash. A dependency update mid-release can silently reuse a stale cache. Add `${{ hashFiles('src-tauri/Cargo.lock') }}` to the prefix-key, matching the pattern already used in `coverage.yml` and `e2e.yml`.
-
 ## (ci) — Remove npm ci from security-audit.yml npm-audit job
 
 `npm audit` (npm 7+) reads `package-lock.json` directly and does not require a full install. Removing the `npm ci` step and `cache: npm` from the npm-audit job in `security-audit.yml` cuts ~30 s of network I/O from every weekly run.

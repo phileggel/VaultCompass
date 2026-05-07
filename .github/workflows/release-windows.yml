@@ -34,7 +34,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          prefix-key: windows-rust-
+          prefix-key: windows-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - name: Clear stale WiX artifacts
         shell: powershell
