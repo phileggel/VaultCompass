@@ -40,6 +40,14 @@ jobs:
         shell: powershell
         run: Remove-Item -Recurse -Force "src-tauri\target\x86_64-pc-windows-msvc\release\wix" -ErrorAction SilentlyContinue
 
+      # Defensive: the dev-only generate_bindings bin is gated behind a Cargo
+      # feature (Cargo.toml `required-features`), so cargo build skips it.
+      # If a cache from a pre-gate run restored the stale binary into target/,
+      # Tauri's NSIS bundler would still pick it up. Remove it before bundling.
+      - name: Strip stale dev-only binary from cached target
+        shell: bash
+        run: rm -f src-tauri/target/x86_64-pc-windows-msvc/release/generate_bindings*
+
       - name: Verify tag is on main
         shell: bash
         env:

@@ -65,10 +65,6 @@ Extract a trait per service (e.g. `AccountServiceContract`, `AssetServiceContrac
 `tauri-specta rc.21` pins `specta = "=2.0.0-rc.22"` (exact version). Wait for `tauri-specta rc.22+` before upgrading to `specta rc.23` + `specta-typescript 0.0.10`.
 Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `rc.21`.
 
-## (backend) — Add required-features guard to generate_bindings bin
-
-`src-tauri/Cargo.toml` `[[bin]] name = "generate_bindings"` has no `required-features` guard. Without it, `cargo build --all-targets` and `tauri-action` in CI both compile this dev-only codegen tool on every release build, wasting minutes. Fix: add a `[features]` section with a `generate-bindings` feature, set `required-features = ["generate-bindings"]` on the bin entry, and update the `generate-types` justfile recipe + `generate-types.sh` script to pass `--features generate-bindings`.
-
 ## (ci) — Standardise ubuntu runner version across all workflows
 
 `coverage.yml` uses `ubuntu-latest` (currently resolves to 24.04 on GitHub-hosted runners) while `e2e.yml` and `release-manual.yml` (linux path) use `ubuntu-22.04`. If webkit2gtk or other apt packages behave differently between versions, coverage and e2e jobs may diverge silently. Pin all jobs to `ubuntu-22.04` until 24.04 compatibility is validated, then move all to 24.04 together.

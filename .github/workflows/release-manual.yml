@@ -74,6 +74,14 @@ jobs:
           workspaces: src-tauri
           prefix-key: ${{ inputs.platform }}-release-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
 
+      # Defensive: the dev-only generate_bindings bin is gated behind a Cargo
+      # feature (Cargo.toml `required-features`), so cargo build skips it.
+      # If a cache from a pre-gate run restored the stale binary into target/,
+      # the Tauri bundler would still pick it up. Remove it before bundling.
+      - name: Strip stale dev-only binary from cached target
+        shell: bash
+        run: rm -f "src-tauri/target/${{ steps.target.outputs.triple }}/release/generate_bindings"*
+
       - name: Install Linux dependencies
         if: inputs.platform == 'linux'
         shell: bash

@@ -21,7 +21,7 @@ dev-wayland *ARGS:
 
 # Regenerate Specta TypeScript bindings (run after adding or changing Tauri commands)
 generate-types:
-    cd src-tauri && SQLX_OFFLINE=true cargo run --bin generate_bindings
+    cd src-tauri && SQLX_OFFLINE=true cargo run --bin generate_bindings --features generate-bindings
 
 # Run frontend tests
 test:
