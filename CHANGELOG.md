@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-05-22
+
+### Fixed
+
+- stop Tauri bundler probing for phantom .exe
+  Tauri's NSIS bundler walks src-tauri/src/bin/ on disk and expects
+  every entry to produce a bundled .exe — required-features gating
+  (b89b343) didn't help, breaking v0.11.0 and v0.12.0 Windows builds.
+  Moving the dev tool to src-tauri/dev/ keeps it buildable while
+  hiding it from the bundler. Mirrors PatientManager d79a245.
+
 ## [0.12.0] - 2026-05-20
 
 ### Added
