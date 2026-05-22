@@ -180,7 +180,7 @@ jobs:
         if: github.event_name == 'push'
         working-directory: src-tauri
         shell: bash
-        run: cargo tarpaulin --out Lcov --output-dir ../coverage/backend --lib --exclude-files "build.rs" --exclude-files "src/bin/generate_bindings.rs"
+        run: cargo tarpaulin --out Lcov --output-dir ../coverage/backend --lib --exclude-files "build.rs" --exclude-files "dev/generate_bindings.rs"
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'push'
