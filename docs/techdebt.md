@@ -91,10 +91,10 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-23 — useRefreshAccountPrices switches on raw error.code (bypasses F27 presenter)
+## 2026-05-23 — snackbarStore lives in src/lib/ instead of src/ui/components/snackbar/ (F28)
 
-- Found by: reviewer-arch (during F27 port to account_details + transactions)
-- Where: `src/features/account_details/refresh_prices/useRefreshAccountPrices.ts:34`
-- Context: branch `fix/f27-account-details-transactions` @ `8f50ed5`
+- Found by: reviewer-frontend + reviewer-arch (during F27 cleanup for refresh-prices hooks)
+- Where: `src/lib/snackbarStore.ts` (imported as `@/lib/snackbarStore` by 15+ hooks/components across `features/account_details`, `features/accounts`, `features/transactions`, `features/assets`)
+- Context: branch `fix/f27-refresh-prices-hooks` @ `a2c022c`
 - Severity: 🟡
-- Observation: Component-adjacent hook inspects `result.error.code` directly in a switch — violates F27 layer-4 ("components/hooks never inspect error.code directly"). Belongs in a future presenter or the existing `transactionMutationErrorToI18n`. Outside the scope of the current F27 port because the refresh-prices flow uses `FetchAllAssetPricesError` / `FetchAccountAssetPricesError` unions (separate from HoldingTransactionError / AssetPriceError), so the existing presenters don't cover it. Add a `fetchPriceErrorToI18n` presenter when next touched.
+- Observation: `snackbarStore` is a stateful UI runtime; per F28 it belongs under `src/ui/components/snackbar/snackbarStore.ts` (colocated with its widget), not in the pre-gold `src/lib/` bucket. Move is mechanical (file rename + path-alias update across ~15 callers) but spans many features outside any single PR's scope. Same pattern as the broader `src/lib/` → F28-bucket migration already tracked above; this entry just calls out snackbarStore specifically since it surfaces on every snackbar-dispatching feature.

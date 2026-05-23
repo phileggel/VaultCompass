@@ -10,3 +10,14 @@ export type I18nMessage = {
   key: string;
   vars?: Record<string, string | number>;
 };
+
+/**
+ * Variant of `I18nMessage` returned by presenters whose output drives a global
+ * snackbar instead of component-rendered error state. Carries the i18n key + vars
+ * plus a severity dimension the snackbar needs.
+ *
+ * `severity` is intentionally narrower than `SnackbarVariant` in @/lib/snackbarStore
+ * (no `"success"`) because error presenters never return success — narrowing here
+ * documents that constraint at the type level.
+ */
+export type SnackbarMessage = I18nMessage & { severity: "info" | "error" };

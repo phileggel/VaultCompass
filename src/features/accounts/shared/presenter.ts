@@ -1,5 +1,43 @@
-import type { AccountApplicationError, AccountCrudError, UpdateFrequency } from "@/bindings";
-import type { I18nMessage } from "@/ui/format/i18n";
+import type {
+  AccountApplicationError,
+  AccountCrudError,
+  FetchAccountAssetPricesError,
+  FetchAllAssetPricesError,
+  UpdateFrequency,
+} from "@/bindings";
+import type { I18nMessage, SnackbarMessage } from "@/ui/format/i18n";
+
+/**
+ * F27 — Maps any asset-price fetch error (per-account or all-accounts) to a
+ * snackbar message + severity. Pure function, no React, no useTranslation.
+ *
+ * Covers `FetchAccountAssetPricesError | FetchAllAssetPricesError` — both
+ * compose AssetError + AccountApplicationError + FetchPriceTask on the wire.
+ *
+ * reviewer-arch FP: severity is intentionally narrower than SnackbarVariant
+ * (no "success") because an error presenter never returns success — the narrow
+ * union documents that constraint at the type level. See PR #NN.
+ */
+export function fetchPriceErrorToI18n(
+  err: FetchAccountAssetPricesError | FetchAllAssetPricesError,
+): SnackbarMessage {
+  switch (err.code) {
+    case "FetchAlreadyRunning":
+      return { key: "mkt.fetch_already_running", severity: "info" };
+    case "NoFetchableHoldings":
+      return { key: "mkt.fetch_no_holdings", severity: "info" };
+    case "AccountNotFound":
+      return { key: "error.AccountNotFound", severity: "error" };
+    case "NameAlreadyExists":
+    case "DatabaseError":
+    case "UnknownError":
+      return { key: "error.DatabaseError", severity: "error" };
+    default: {
+      const _exhaustive: never = err;
+      return _exhaustive;
+    }
+  }
+}
 
 /**
  * F27 — Maps any account-BC mutation error (add / update / delete / deletion-summary)
