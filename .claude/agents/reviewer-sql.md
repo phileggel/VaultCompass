@@ -65,7 +65,7 @@ If invoked with no migration files in the branch diff, halt with the refusal in 
 
 ### Step 1 — Discover changed migration files
 
-Run `bash scripts/branch-files.sh | grep '^migrations/'`. If the result is empty, halt — output the no-migrations refusal and stop.
+Run `bash scripts/branch-files.sh --migrations`. If the result is empty, halt — output the no-migrations refusal and stop.
 
 The kit's SQLx convention pins migrations to `migrations/` at the repo root. Projects using a different layout must override this agent's discovery in a local fork, not rely on a runtime branch.
 
@@ -266,7 +266,5 @@ The main agent only sees your terminal message; the file ensures `/review-triage
 `model: haiku` is deliberate. The rule set is narrow and pattern-based: substring-matching type names, regex-flagging missing `IF NOT EXISTS` guards, identifying unsafeguarded `DROP`. The judgment surface (NOT NULL completeness on "clearly required" fields, partial-failure DDL/DML reasoning for the SQLx transaction exception) is small enough that haiku is correctly calibrated. Promoting to sonnet would burn budget without changing findings.
 
 The exclusive-lane stance (no co-firing with `reviewer-backend` / `reviewer-arch` / `reviewer-security`) is a design choice: migrations are a self-contained surface with their own failure modes — silent SQLite type-affinity drift, missing FK indexes, irreversible destructive DDL — that don't benefit from a parallel code-quality pass.
-
-Workflow B compatible: this agent never hard-reads `docs/plan/*.md` or `docs/contracts/*.md`. Safe to invoke in fix/chore branches that have no plan or contract doc.
 
 The `Type Affinity` table (and the deterministic checks under `Idempotency`, `Foreign Key Indexes`, and `Primary Key Convention`) are extraction candidates for a future `scripts/check-migrations.py` — pre-flag every `BOOLEAN`, `DATETIME`, `VARCHAR(n)`, `DROP COLUMN` without a guard, missing FK index, missing PK as structured findings, and let this agent focus on the judgment-heavy calls (NOT NULL completeness, SQLx transaction reasoning). Tracked as a kit-infra concern, not in scope for this file.

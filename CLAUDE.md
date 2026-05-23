@@ -53,7 +53,7 @@ Each task ships under these constraints (in priority order):
 Run `/whats-next` first to triage pending work, then `/start` to pick the right workflow for the task at hand.
 See `.claude/kit-readme.md` for the full workflow guide and `.claude/kit-tools.md` for the agent/skill reference.
 
-Key skills: `/spec-writer` (draft spec), `/contract` (derive contract), `/adr-writer` (Architecture Decision Records), `/kit-discover` (post-sync reconcile), `/smart-commit` (commit), `/create-pr` (push + open PR), `/review-triage` (triage reviewer findings (a)/(b)/(c) before applying), `/prune` (dead-code audit), `/dep-audit` (dependency CVE check), `/setup-e2e` (one-time E2E setup), `/visual-proof` (capture frontend screenshots), `/techdebt` (record tech-debt entry), `/session-reflect` (end-of-session rule audit).
+Key skills: `/spec-writer` (draft spec), `/contract` (derive contract), `/feature-planner` (translate spec into implementation plan), `/adr-writer` (Architecture Decision Records), `/kit-discover` (post-sync reconcile), `/smart-commit` (commit), `/create-pr` (push + open PR), `/review-triage` (triage reviewer findings (a)/(b)/(c) before applying), `/prune` (dead-code audit), `/dep-audit` (dependency CVE check), `/setup-e2e` (one-time E2E setup), `/visual-proof` (capture frontend screenshots), `/techdebt` (record tech-debt entry), `/session-reflect` (end-of-session rule audit).
 Key recipes: `just check` (lint/format), `just check-full` (tests + build + lint), `just format` (auto-fix), `just generate-types` (regenerate Specta bindings), `just merge` (auto-rebase, fast-forward, push, delete branch), `just sync-kit` (sync to latest kit version), `just release` (full quality validation → semver bump → CHANGELOG → commit + tag + push).
 Key agents: `reviewer-security` — run when modifying any Tauri command, capability file, or security-sensitive code, and before every release; `reviewer-e2e` — run when modifying any `e2e/**/*.test.ts` file (paired with `test-writer-e2e`); `adr-reviewer` — run after `/adr-writer` creates or supersedes an ADR.
 
@@ -72,7 +72,7 @@ When work resolves a TODO entry, an open question, a plan step, or a tech-debt o
 
 ### Kit-managed docs are read-only for project-specific content
 
-Convention docs listed in `.claude/kit-manifest.txt` (currently: `docs/backend-rules.md`, `docs/ddd-reference.md`, `docs/e2e-rules.md`, `docs/error-model.md`, `docs/frontend-rules.md`, `docs/frontend-visual-proof.md`, `docs/i18n-rules.md`, `docs/test_convention.md`) are owned by the kit and get overwritten on `just sync-kit -f`. **Do not add project-specific addenda (known limits, migration status, project-name-flavored examples) to these files** — the next sync will silently delete the content if `KIT_SYNC_FORCE=true`, or force a manual conflict every sync if not.
+Convention docs listed in `.claude/kit-manifest.txt` (currently: `docs/backend-rules.md`, `docs/ddd-reference.md`, `docs/e2e-rules.md`, `docs/error-model.md`, `docs/frontend-rules.md`, `docs/frontend-visual-proof.md`, `docs/i18n-rules.md`, `docs/test_convention.md`) are owned by the kit and get overwritten on `KIT_SYNC_FORCE=true just sync-kit`. **Do not add project-specific addenda (known limits, migration status, project-name-flavored examples) to these files** — the next sync will silently delete the content if `KIT_SYNC_FORCE=true`, or force a manual conflict every sync if not.
 
 Where project addenda belong instead:
 
@@ -99,7 +99,7 @@ When splitting, the order is **BE → FE → E2E**:
 
 Why: a 60-file mixed-layer PR overwhelms reviewers; comment threads sprawl across concerns; review-fix cycles force backend re-runs for FE-only nits and vice versa. Per-layer PRs keep each diff tight (~20 files), let CI sign off independently, and let backend ship before FE has to react to the bindings.
 
-`feature-planner` should output a "PR plan" section listing which commits land in which PR; run the `plan-reviewer` agent after the plan lands to validate it before any test-writer runs. `/start` commits + opens a PR per layer, not one terminal PR.
+`/feature-planner` should output a "PR plan" section listing which commits land in which PR; run the `plan-reviewer` agent after the plan lands to validate it before any test-writer runs. `/start` commits + opens a PR per layer, not one terminal PR.
 
 ---
 
@@ -111,7 +111,7 @@ Why: a 60-file mixed-layer PR overwhelms reviewers; comment threads sprawl acros
 - Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-unit` (both)
 - E2E tests: `just test-e2e` (local) | `just test-e2e-headless` (Linux headless)
 - Security audit: `/security-review` (IPC, capabilities, SQL injection, hardcoded secrets) — Claude Code built-in, run before release alongside the kit's `/dep-audit`
-- Release sequence: `/dep-audit` → `just release [--dry-run] [--version X.Y.Z] [-y]`
+- Release sequence: `/dep-audit` → `just release [--preview] [--dry-run] [--version X.Y.Z] [-y]` (use `--preview` first to see the next computed version without side effects)
 - After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
 
 ## 📖 Ubiquitous Language

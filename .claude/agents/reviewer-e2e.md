@@ -60,7 +60,7 @@ If no E2E test files match, halt with the refusal in `## Output format`.
 
 ### Step 1 — Discover changed E2E test files
 
-Run `bash scripts/branch-files.sh | grep -E '^e2e/.*\.test\.ts$'`. If the result is empty, halt — output the empty-result refusal in `## Output format` and stop.
+Run `bash scripts/branch-files.sh --e2e`. If the result is empty, halt — output the empty-result refusal in `## Output format` and stop.
 
 Filter out deleted paths (their content can't be read): for each candidate, confirm the file exists with `Glob` before adding it to the review set.
 
@@ -227,7 +227,7 @@ The main agent only sees your terminal message; the file ensures `/review-triage
 5. **Project rules win.** When `docs/e2e-rules.md` or `docs/test_convention.md` defines a rule that conflicts with this file, follow the docs.
 6. **Don't double up with siblings.** Findings about React component code (selectors-as-DOM-attributes on the component side, F25 stable-id at the component layer) belong to `reviewer-frontend`. Findings about the IPC / backend implementation belong to `reviewer-arch` / `reviewer-backend`.
 7. **Cite the E-rule on every selector / async / input finding.** The E-rule numbers are stable.
-8. **Scope-drift guard.** Per-PR review reads the diff + tightly-coupled neighbours (the changed test file plus its `_helpers/` references). Cap reads at 10 files unless a specific cross-reference ties to the diff; when the diff exceeds the cap, prioritize the largest changed-line counts and note the trim in the headline. Release-sweep mode (`## Scope`) is the only exception.
+8. **Scope-drift guard.** Per-PR review reads the diff + tightly-coupled neighbours (the test files importing a changed `_helpers/` symbol). Cap reads at 10 files unless a specific cross-reference ties to the diff; when the diff exceeds the cap, prioritize the largest changed-line counts and note the trim in the headline. Release-sweep mode (`## Scope`) is the only exception.
 
 ---
 

@@ -85,7 +85,7 @@ Read for comparison (skip silently if a file or directory is absent):
 - 🟡 Frontend rules present but no UX state coverage: missing empty / loading / error / success
 - 🟡 Prerequisite checks (e.g. "requires a fund to exist") not captured as a rule
 - 🔵 No workflow diagram for a multi-step user action
-- 🔵 "Wire shape rule" is redundant with `## Entity Definition` — the entity table IS the canonical wire shape. Do not require a separate rule that re-asserts a field appears in command responses
+- 🔵 "Wire shape rule" is redundant with `## Entity Definition` — the entity table IS the canonical wire shape. Do not require a separate rule that re-asserts a field is observable to the user
 
 #### D — DDD & Architecture alignment
 
@@ -113,8 +113,7 @@ Read for comparison (skip silently if a file or directory is absent):
 - 🔴 Backend rules are present but the `## Entity Definition` section is missing — payload types
   cannot be derived for the domain contract
 - 🟡 Backend mutation rule (create / update / delete) has no behavioral failure-mode statement
-  (e.g. "the action is rejected with a specific error if the {entity} is unknown"). The error
-  variant _name_ is contract territory and stays out of the spec; the _failure mode_ is spec
+  (e.g. "the action is rejected with a specific error if the {entity} is unknown")
 - 🟡 A state-transition rule implies an event but no event name is given
 
 ### Step 4 — Output
@@ -166,8 +165,8 @@ Ready for /contract: yes — 0 critical findings (incl. contractability). / no �
 
 ## Critical Rules
 
-1. Never suggest implementation details (file names, functions) — that's feature-planner's job
-2. Every 🔴 finding must block the spec from going to feature-planner
+1. Never suggest implementation details (file names, functions) — that's /feature-planner's job
+2. Every 🔴 finding must block the spec from going to /feature-planner
 3. Report findings against rule identifiers (e.g. "REF-020 — scope missing") not against lines
 4. Trigram must be registered in `docs/spec-index.md` before sign-off (handled by spec-writer's trigram-registration step)
 5. Do not rewrite the spec — report issues only, the user corrects via spec-writer
