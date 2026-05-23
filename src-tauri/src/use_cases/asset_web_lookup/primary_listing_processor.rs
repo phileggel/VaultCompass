@@ -34,9 +34,10 @@
 //!
 //! 1. Drop hits whose `share_class_figi` is `None` (trade-reporting noise).
 //! 2. Group remaining hits by `share_class_figi`.
-//! 3. For each group, walk `GLOBAL_VENUE_PRIORITY` and keep up to 3 entries
-//!    whose `exchange_code` is on the list, in priority order. If none match,
-//!    keep the first entry as a fallback so the share class isn't lost.
+//! 3. For each group, walk `GLOBAL_VENUE_PRIORITY` and keep up to
+//!    `MAX_ENTRIES_PER_SHARE_CLASS` entries whose `exchange_code` is on the
+//!    list, in priority order. If none match, keep the first entry as a
+//!    fallback so the share class isn't lost.
 //! 4. ISIN path: when `QueryContext::isin` is `Some(_)`, the country prefix
 //!    is used to bring matching country-primary venues to the head of the
 //!    priority order before the walk.
@@ -44,7 +45,7 @@
 //!    [`Exchange`] via [`resolve_canonical_exchange`] (WEB-049) — `micCode`
 //!    first, then `exchCode` through the OpenFIGI mapper.
 //!
-//! Final cap (WEB-022, 10 results) is applied by the caller, not here.
+//! Final cap (WEB-022, 30 results) is applied by the caller, not here.
 
 use crate::context::asset::openfigi_exchange_mapper::{
     openfigi_exchcode_to_exchange, openfigi_mic_to_exchange,
@@ -115,10 +116,14 @@ pub struct QueryContext {
 }
 
 /// Maximum entries retained per share class group (WEB-050 step 5).
-/// Set to 3 so dual-listed names like TotalEnergies (FP + UN) surface both,
-/// while a stock cross-listed on every secondary venue cannot crowd out
-/// other share classes from the final 10-result list.
-const MAX_ENTRIES_PER_SHARE_CLASS: usize = 3;
+///
+/// Set to 10 so a single-company query like `ASML` surfaces all of its
+/// notable venues (Amsterdam, London, Xetra, Milan, …) and the user can
+/// pick the one they want. A multi-company query (e.g. `Apple`) still
+/// stays diverse because the final 30-result cap (WEB-022) lets at most
+/// 3 distinct share classes fill the dropdown when each takes the full
+/// per-class allowance.
+const MAX_ENTRIES_PER_SHARE_CLASS: usize = 10;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -128,7 +133,7 @@ const MAX_ENTRIES_PER_SHARE_CLASS: usize = 3;
 ///
 /// Pure function: no I/O, no allocation beyond the returned `Vec`.
 ///
-/// Caller is responsible for the final 10-row truncation (WEB-022).
+/// Caller is responsible for the final 30-row truncation (WEB-022).
 pub fn process_hits(raw_hits: Vec<RawFigiHit>, ctx: &QueryContext) -> Vec<AssetLookupResult> {
     let groups = group_by_share_class(raw_hits);
     let priority = priority_for(ctx);
@@ -1250,7 +1255,8 @@ mod tests {
     }
 
     #[test]
-    fn process_hits_caps_per_share_class_at_three() {
+    fn process_hits_caps_per_share_class_at_ten() {
+        // 11 priority venues, all on the same share class → cap of 10 keeps 10.
         let hits = vec![
             hit(
                 "X",
@@ -1292,9 +1298,57 @@ mod tests {
                 None,
                 Some("Common Stock"),
             ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("GY"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("HK"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("SE"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("AT"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("CT"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("IM"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
         ];
         let results = process_hits(hits, &QueryContext::default());
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 10);
     }
 
     #[test]

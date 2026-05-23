@@ -50,7 +50,7 @@ pub trait OpenFigiClient: Send + Sync {
 /// Orchestrates the OpenFIGI lookup: routes the query (WEB-014), fans out to
 /// the share-class-mapping endpoint on the keyword path (WEB-050), then hands
 /// the raw hits to [`primary_listing_processor::process_hits`] for dedup and
-/// primary-listing pick. The final result is truncated to 10 entries (WEB-022).
+/// primary-listing pick. The final result is truncated to 30 entries (WEB-022).
 pub struct AssetWebLookupUseCase {
     client: Arc<dyn OpenFigiClient>,
 }
@@ -97,7 +97,7 @@ impl AssetWebLookupUseCase {
         };
 
         let mut results = primary_listing_processor::process_hits(raw_hits, &ctx);
-        results.truncate(10);
+        results.truncate(30);
         Ok(results)
     }
 
@@ -523,16 +523,16 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // WEB-022 — final 10-row truncation
+    // WEB-022 — final 30-row truncation
     // ------------------------------------------------------------------
 
     #[tokio::test]
-    async fn truncates_results_to_ten() {
-        // Initial keyword response carries 15 distinct share classes; mapping
+    async fn truncates_results_to_thirty() {
+        // Initial keyword response carries 35 distinct share classes; mapping
         // returns one populated hit per share class so the dedup pipeline
-        // produces 15 candidate result rows. The final truncation must cap
-        // them to 10.
-        let initial: Vec<RawFigiHit> = (0..15)
+        // produces 35 candidate result rows. The final truncation must cap
+        // them to 30.
+        let initial: Vec<RawFigiHit> = (0..35)
             .map(|i| {
                 raw_hit(
                     &format!("Fund {i}"),
@@ -568,7 +568,7 @@ mod tests {
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
         let results = uc.search("fund".to_string()).await.unwrap();
-        assert_eq!(results.len(), 10);
+        assert_eq!(results.len(), 30);
     }
 
     #[tokio::test]

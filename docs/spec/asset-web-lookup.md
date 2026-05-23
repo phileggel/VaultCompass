@@ -44,7 +44,7 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 **WEB-021 — No API key required (backend)**: The OpenFIGI API is accessed without authentication. No credential is stored or transmitted.
 
-**WEB-022 — Result limit (backend)**: The command returns at most 10 results. If the OpenFIGI response contains more, only the first 10 are forwarded.
+**WEB-022 — Result limit (backend)**: The command returns at most 30 results. If the OpenFIGI response contains more, only the first 30 are forwarded.
 
 **WEB-023 — Asset class mapping (backend)**: The OpenFIGI `securityType` field is mapped to `AssetClass` as follows: `"Common Stock"` → `Stocks`; `"ETF"` → `ETF`; `"Mutual Fund"` → `MutualFunds`; `"Corporate Bond"` / `"Government Bond"` → `Bonds`; `"Cryptocurrency"` / `"Digital Currency"` → `DigitalAsset`; `"REIT"` / `"Real Estate Investment Trust"` → `RealEstate`; `"Cash"` → `Cash`; `"Warrant"` / `"Option"` / `"Future"` / `"Rights"` → `Derivatives`. Any unrecognised `securityType` (including `"Structured Product"`, `"Certificate"`, and others) results in `asset_class` being absent from the result.
 
@@ -90,7 +90,7 @@ In both cases the "Fill manually" bypass (WEB-013) remains accessible. No naviga
 
 **WEB-047 — Back navigation from form to search results (frontend)**: When the form is in the pre-filled state (WEB-040), a back action is available that returns the user to the search step. The previous query and results list are retained in memory; the user does not need to retype the query. Selecting a different result replaces all pre-filled values.
 
-**WEB-048 — Result ordering (backend)**: Results are sorted by instrument type priority before the 10-item truncation (WEB-022). Priority is determined by the resolved `asset_class` value (WEB-023): Priority 1 (top) — `asset_class` ∈ {`Stocks`, `ETF`, `MutualFunds`, `Bonds`, `DigitalAsset`, `RealEstate`, `Cash`}; Priority 2 — `asset_class` = `Derivatives`; Priority 3 — `asset_class` absent (unrecognised `securityType`, including structured products and certificates). Within each priority group, the original OpenFIGI response order is preserved.
+**WEB-048 — Result ordering (backend)**: Results are sorted by instrument type priority before the 30-item truncation (WEB-022). Priority is determined by the resolved `asset_class` value (WEB-023): Priority 1 (top) — `asset_class` ∈ {`Stocks`, `ETF`, `MutualFunds`, `Bonds`, `DigitalAsset`, `RealEstate`, `Cash`}; Priority 2 — `asset_class` = `Derivatives`; Priority 3 — `asset_class` absent (unrecognised `securityType`, including structured products and certificates). Within each priority group, the original OpenFIGI response order is preserved.
 
 **WEB-049 — Exchange field (backend)**: The OpenFIGI response is normalized to a canonical `Exchange` value (per AST Entity Definition) via a per-provider mapper. The mapper consults OpenFIGI's exchange identifier fields (`micCode` when present, otherwise `exchCode`) and returns `Some(Exchange)` when the venue is in the canonical curated set, `None` otherwise (including when OpenFIGI returns no exchange information). The resolved `Exchange` is forwarded as `AssetLookupResult.exchange`. Provider key equality (e.g. OpenFIGI's `micCode` happening to match ISO 10383 MIC) is treated as accidental convergence; the mapper is the contract.
 
@@ -101,7 +101,7 @@ In both cases the "Fill manually" bypass (WEB-013) remains accessible. No naviga
 3. **Dedup by share class**: remaining results are grouped by `shareClassFIGI`. Multiple keyword-search hits for the same share class collapse into one group.
 4. **Share-class enrichment**: for the unique `shareClassFIGI` values from step 3, a single batched call is made to `/v3/mapping` with `idType: "ID_BB_GLOBAL_SHARE_CLASS_LEVEL"`. The response — all known listings for that share class globally — replaces the original keyword-search hits for the group. This is the step that uncovers primary listings (e.g. `FP AI`) that the keyword search alone never returns.
 5. **Primary pick per group**: the entries of each group are filtered against `GLOBAL_VENUE_PRIORITY` — a hardcoded ordered list of primary venue `exchCode` values (e.g. `UN`, `UW`, `LO`, `JT`, `FP`, `GY`, `HK`, `SE`, `AT`, `CT`, `IM`, `NA`, …). All entries whose `exchCode` is on the list are kept, in priority order. Up to 3 entries per share class are kept (cap chosen so dual-listed names like TotalEnergies surface both their NYSE and Euronext rows). If no entry on the list matches, the first entry from OpenFIGI's order is kept as a fallback so the share class is not lost.
-6. **Final cap (WEB-022)**: the combined result list across all share classes is truncated to 10.
+6. **Final cap (WEB-022)**: the combined result list across all share classes is truncated to 30.
 
 The ISIN search path (WEB-014) calls `/v3/mapping` directly and skips steps 1–4; only steps 5–6 apply, ensuring consistent primary-pick behaviour regardless of entry path. The opinionated tables and pipeline live in a single `primary_listing_processor` module so they can be audited and tested in isolation.
 
@@ -115,7 +115,7 @@ Add Asset FAB / button
         user types ISIN / ticker / name → search (WEB-011, WEB-012)
             backend: route query (WEB-014)
             backend: HTTP to OpenFIGI (WEB-020)
-            → returns up to 10 AssetLookupResult items (WEB-022)
+            → returns up to 30 AssetLookupResult items (WEB-022)
         → results list shown (WEB-031)
         → user selects a result (WEB-040)
         → Add Asset form opens pre-filled (WEB-041–WEB-046)
