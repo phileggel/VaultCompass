@@ -36,7 +36,9 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 **WEB-013 — Fill manually bypass (frontend)**: A "Fill manually" action is always visible in the lookup step. Activating it skips the web lookup entirely and opens the blank Add Asset form, preserving the pre-existing creation path.
 
-**WEB-014 — Query routing (backend)**: When `lookup_asset` receives a query, it applies the following routing rule: if the trimmed query is exactly 12 alphanumeric characters it is sent to the OpenFIGI ISIN mapping endpoint; all other queries — including queries that contain non-alphanumeric characters or are shorter or longer than 12 characters — are sent to the OpenFIGI keyword search endpoint.
+**WEB-014 — Query routing (backend)**: When `lookup_asset` receives a query, it applies the following routing rule: if the trimmed query is exactly 12 alphanumeric characters it is sent to the OpenFIGI ISIN mapping endpoint; all other queries — including queries that contain non-alphanumeric characters or are shorter or longer than 12 characters — are sent to the OpenFIGI keyword search endpoint. Routing is evaluated on the normalized query (WEB-015).
+
+**WEB-015 — Diacritics normalization (backend)**: Before routing (WEB-014), the trimmed query is normalized by Unicode NFD decomposition followed by combining-mark removal. This maps `"Société Générale"` to `"Societe Generale"`, `"Münchener Rück"` to `"Munchener Ruck"`, and so on. OpenFIGI's name index is unaccented, so the unnormalized form returns zero hits for accented inputs. ASCII inputs and ISINs are unaffected.
 
 ### Lookup Command (020–029)
 

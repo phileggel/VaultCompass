@@ -8,6 +8,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::result::Result as StdResult;
 use std::sync::Arc;
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 use super::error::WebLookupApplicationError;
 use super::primary_listing_processor::{self, AssetLookupResult, QueryContext, RawFigiHit};
@@ -76,7 +77,8 @@ impl AssetWebLookupUseCase {
         &self,
         query: String,
     ) -> StdResult<Vec<AssetLookupResult>, WebLookupApplicationError> {
-        let trimmed = query.trim();
+        let normalized = normalize_query(query.trim());
+        let trimmed = normalized.as_str();
         let is_isin = trimmed.len() == 12 && trimmed.chars().all(|c| c.is_ascii_alphanumeric());
 
         let ctx = QueryContext {
@@ -135,6 +137,23 @@ impl AssetWebLookupUseCase {
             })?;
         Ok(enriched.into_iter().flatten().collect())
     }
+}
+
+// ---------------------------------------------------------------------------
+// Query normalization (WEB-015)
+// ---------------------------------------------------------------------------
+
+/// Strips Latin diacritics from a query before sending it to OpenFIGI (WEB-015).
+///
+/// OpenFIGI's name index is unaccented — `"Société Générale"` returns 0 hits
+/// while `"Societe Generale"` returns 100. Normalizing the query upfront makes
+/// the search behave the way users expect when typing names with accents.
+///
+/// Implementation: Unicode NFD decomposition then drop combining marks. Handles
+/// the full Latin diacritic range (é/è/ê/ç/à/ô/ñ/ü/…) without a hardcoded
+/// table. ISIN inputs are unaffected (no combining marks in ASCII-alphanumeric).
+fn normalize_query(s: &str) -> String {
+    s.nfd().filter(|c| !is_combining_mark(*c)).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -370,6 +389,52 @@ mod tests {
             share_class_figi: share_class.map(str::to_string),
             composite_figi: None,
         }
+    }
+
+    // ------------------------------------------------------------------
+    // WEB-015 query normalization (diacritics)
+    // ------------------------------------------------------------------
+
+    // OpenFIGI's name index is unaccented — these are the diacritics most
+    // likely to surface in European stock names.
+    #[test]
+    fn normalize_query_strips_french_diacritics() {
+        assert_eq!(normalize_query("Société Générale"), "Societe Generale");
+        assert_eq!(normalize_query("Crédit Agricole"), "Credit Agricole");
+        assert_eq!(normalize_query("Pernod Ricard"), "Pernod Ricard");
+    }
+
+    #[test]
+    fn normalize_query_strips_german_umlauts_via_nfd() {
+        // NFD decomposes ü to "u" + combining diaeresis; the combining mark is
+        // dropped, leaving "u". OpenFIGI stores Münchener as "MUNCHENER".
+        assert_eq!(normalize_query("Münchener Rück"), "Munchener Ruck");
+    }
+
+    #[test]
+    fn normalize_query_strips_spanish_tilde() {
+        assert_eq!(normalize_query("España"), "Espana");
+    }
+
+    #[test]
+    fn normalize_query_is_noop_on_ascii() {
+        assert_eq!(normalize_query("ASML"), "ASML");
+        assert_eq!(normalize_query("FR0000130809"), "FR0000130809");
+    }
+
+    #[tokio::test]
+    async fn accented_keyword_query_is_normalized_before_search() {
+        // The user types accented input; the gateway must receive the stripped form.
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .with(eq("Societe Generale"))
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_map_isin().times(0);
+        mock.expect_map_share_classes().times(0);
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        assert!(uc.search("Société Générale".to_string()).await.is_ok());
     }
 
     // ------------------------------------------------------------------
