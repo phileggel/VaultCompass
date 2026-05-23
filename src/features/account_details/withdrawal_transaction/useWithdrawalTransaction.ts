@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { transactionMutationErrorToI18n } from "@/features/transactions/shared/presenter";
 import { logger } from "@/lib/logger";
-import { decimalToMicro, microToFormatted } from "@/lib/microUnits";
+import { decimalToMicro } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 import { validateAmount, validateDate } from "../shared/validateCashForm";
 
@@ -18,6 +20,7 @@ interface WithdrawalFormData {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export function useWithdrawalTransaction({
   accountId,
@@ -31,7 +34,7 @@ export function useWithdrawalTransaction({
     amount: "",
     note: "",
   }));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isFormValid = useMemo(
@@ -50,7 +53,7 @@ export function useWithdrawalTransaction({
       const dateErr = validateDate(formData.date);
       const validationError = amountErr ?? dateErr;
       if (validationError) {
-        setError(t(validationError, { defaultValue: validationError }));
+        setError(validationError);
         return;
       }
 
@@ -67,25 +70,14 @@ export function useWithdrawalTransaction({
           logger.error("[useWithdrawalTransaction] recordWithdrawal failed", {
             error: result.error,
           });
-          // CSH-081 — InsufficientCash carries balance + currency for inline display.
-          if (result.error.code === "InsufficientCash") {
-            setError(
-              t("cash.insufficient_cash_inline", {
-                balance: microToFormatted(result.error.current_balance_micros, 2),
-                currency: result.error.currency,
-              }),
-            );
-            return;
-          }
-          const code = result.error.code;
-          setError(t(`error.${code}`, { defaultValue: code }));
+          setError(transactionMutationErrorToI18n(result.error));
           return;
         }
         showSnackbar(t("cash.withdrawal_recorded"), "success");
         onSubmitSuccess?.();
       } catch (e) {
         logger.error("Failed to record withdrawal", { error: e });
-        setError(String(e));
+        setError(UNKNOWN_ERROR);
       } finally {
         setIsSubmitting(false);
       }

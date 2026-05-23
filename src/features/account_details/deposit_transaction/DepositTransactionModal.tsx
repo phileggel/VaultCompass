@@ -103,7 +103,7 @@ export function DepositTransactionModal({
 
         {error && (
           <p role="alert" className="text-sm text-m3-error">
-            {t(error, { defaultValue: error })}
+            {t(error.key, error.vars)}
           </p>
         )}
       </form>

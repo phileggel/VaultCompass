@@ -1,9 +1,11 @@
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { transactionMutationErrorToI18n } from "@/features/transactions/shared/presenter";
 import { logger } from "@/lib/logger";
 import { decimalToMicro } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 
 interface UseOpenBalanceProps {
@@ -31,7 +33,7 @@ export function useOpenBalance({ accountId, assetId, onSubmitSuccess }: UseOpenB
     quantity: "",
     totalCost: "",
   }));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isFormValid = useMemo(() => {
@@ -66,7 +68,7 @@ export function useOpenBalance({ accountId, assetId, onSubmitSuccess }: UseOpenB
           logger.error("[useOpenBalance] openHolding failed", {
             error: result.error,
           });
-          setError(`error.${result.error.code}`);
+          setError(transactionMutationErrorToI18n(result.error));
         }
       } finally {
         setIsSubmitting(false);

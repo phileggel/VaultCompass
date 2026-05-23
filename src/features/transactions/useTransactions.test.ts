@@ -2,6 +2,7 @@ import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BuyHoldingDTO, CorrectTransactionDTO, SellHoldingDTO, Transaction } from "@/bindings";
+import type { I18nMessage } from "@/ui/format/i18n";
 
 const {
   mockBuyHolding,
@@ -83,7 +84,7 @@ describe("useTransactions", () => {
     const tx = makeTx();
     mockBuyHolding.mockResolvedValue({ status: "ok", data: tx });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -101,14 +102,14 @@ describe("useTransactions", () => {
       error: { code: "AccountNotFound" },
     });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
     await act(async () => {
       ret = await result.current.buyHolding(buyDto);
     });
-    expect(ret.error).toBe("error.AccountNotFound");
+    expect(ret.error).toEqual({ key: "error.AccountNotFound" });
   });
 
   // CSH-081 — InsufficientCash is formatted with payload (balance + currency)
@@ -122,16 +123,17 @@ describe("useTransactions", () => {
       },
     });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
     await act(async () => {
       ret = await result.current.buyHolding(buyDto);
     });
-    expect(ret.error).toContain("cash.insufficient_cash_inline");
-    expect(ret.error).toContain("50,00");
-    expect(ret.error).toContain("EUR");
+    expect(ret.error).toEqual({
+      key: "cash.insufficient_cash_inline",
+      vars: { balance: "50,00", currency: "EUR" },
+    });
   });
 
   // ── sellHolding ───────────────────────────────────────────────────────────────
@@ -150,7 +152,7 @@ describe("useTransactions", () => {
       fees: 0,
       note: null,
     };
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -167,7 +169,7 @@ describe("useTransactions", () => {
       error: { code: "Oversell", available: 500_000, requested: 999_000_000 },
     });
     const { result } = renderHook(() => useTransactions());
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -183,7 +185,10 @@ describe("useTransactions", () => {
         note: null,
       });
     });
-    expect(ret.error).toBe("error.Oversell");
+    expect(ret.error).toEqual({
+      key: "error.Oversell",
+      vars: { available: "0,500000", requested: "999,000000" },
+    });
   });
 
   // ── correctTransaction ────────────────────────────────────────────────────────
@@ -200,7 +205,7 @@ describe("useTransactions", () => {
       fees: 0,
       note: null,
     };
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -226,14 +231,14 @@ describe("useTransactions", () => {
       fees: 0,
       note: null,
     };
-    let ret: { data: Transaction | null; error: string | null } = {
+    let ret: { data: Transaction | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
     await act(async () => {
       ret = await result.current.correctTransaction("tx-1", "acc-1", dto);
     });
-    expect(ret.error).toBe("error.TransactionNotFound");
+    expect(ret.error).toEqual({ key: "error.TransactionNotFound" });
   });
 
   // ── cancelTransaction ─────────────────────────────────────────────────────────
@@ -241,7 +246,7 @@ describe("useTransactions", () => {
   it("cancelTransaction returns null error on success", async () => {
     mockCancelTransaction.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useTransactions());
-    let ret: { error: string | null } = { error: "sentinel" };
+    let ret: { error: I18nMessage | null } = { error: { key: "sentinel" } };
     await act(async () => {
       ret = await result.current.cancelTransaction("tx-1", "acc-1");
     });
@@ -255,11 +260,11 @@ describe("useTransactions", () => {
       error: { code: "TransactionNotFound" },
     });
     const { result } = renderHook(() => useTransactions());
-    let ret: { error: string | null } = { error: null };
+    let ret: { error: I18nMessage | null } = { error: null };
     await act(async () => {
       ret = await result.current.cancelTransaction("tx-1", "acc-1");
     });
-    expect(ret.error).toBe("error.TransactionNotFound");
+    expect(ret.error).toEqual({ key: "error.TransactionNotFound" });
   });
 
   // ── getTransactions ───────────────────────────────────────────────────────────

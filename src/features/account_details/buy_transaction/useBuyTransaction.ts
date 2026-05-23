@@ -13,6 +13,7 @@ import {
 } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 
 interface UseBuyTransactionProps {
@@ -39,7 +40,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
     fees: "0",
     note: "",
   }));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedConfirm, setShowArchivedConfirm] = useState(false);
   // MKT-052/053 — snapshot of the global auto-record toggle at hook mount
@@ -76,7 +77,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
       microValues.totalMicro,
     );
     if (validationError) {
-      setError(t(validationError, { defaultValue: validationError }));
+      setError(validationError);
       return;
     }
 

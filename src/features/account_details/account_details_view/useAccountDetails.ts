@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
+import { accountMutationErrorToI18n } from "@/features/accounts/shared/presenter";
 import { logger } from "@/lib/logger";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 import {
   type AccountSummaryViewModel,
@@ -14,7 +16,7 @@ import {
 
 interface UseAccountDetailsResult {
   isLoading: boolean;
-  error: string | null;
+  error: I18nMessage | null;
   retry: () => void;
   holdings: HoldingRowViewModel[];
   /** Raw active HoldingDetail records — used to pass to PriceModal (MKT-013). */
@@ -28,7 +30,7 @@ interface UseAccountDetailsResult {
 export function useAccountDetails(accountId: string): UseAccountDetailsResult {
   const [data, setData] = useState<AccountDetailsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
 
   const fetchDetails = useCallback(async () => {
     setIsLoading(true);
@@ -38,7 +40,7 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
       setData(result.data);
     } else {
       logger.error("[useAccountDetails] fetch failed", result.error);
-      setError(`error.${result.error.code}`);
+      setError(accountMutationErrorToI18n(result.error));
     }
     setIsLoading(false);
   }, [accountId]);

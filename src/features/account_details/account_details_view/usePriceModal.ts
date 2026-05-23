@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useSnackbar } from "@/lib/snackbarStore";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
+import { assetPriceMutationErrorToI18n } from "../shared/presenter";
 
 export interface UsePriceModalProps {
   holding: HoldingDetail;
@@ -13,7 +15,7 @@ export interface UsePriceModalProps {
 export interface UsePriceModalResult {
   date: string;
   price: string;
-  error: string | null;
+  error: I18nMessage | null;
   isSubmitting: boolean;
   isFormValid: boolean;
   handleChange: (field: "date" | "price", value: string) => void;
@@ -22,15 +24,15 @@ export interface UsePriceModalResult {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function validatePrice(price: string): string | null {
+function validatePrice(price: string): I18nMessage | null {
   const n = parseFloat(price);
-  if (Number.isNaN(n) || n <= 0) return "price_modal.error_price_not_positive";
+  if (Number.isNaN(n) || n <= 0) return { key: "price_modal.error_price_not_positive" };
   return null;
 }
 
-function validateDate(date: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "price_modal.error_invalid_date";
-  if (date > today()) return "price_modal.error_future_date";
+function validateDate(date: string): I18nMessage | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { key: "price_modal.error_invalid_date" };
+  if (date > today()) return { key: "price_modal.error_future_date" };
   return null;
 }
 
@@ -50,7 +52,7 @@ export function usePriceModal({
   const showSnackbar = useSnackbar();
   const [date, setDate] = useState(today);
   const [price, setPrice] = useState(() => initialPrice(holding));
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Inline validation — only applied to non-empty values (MKT-021, MKT-022)
@@ -88,7 +90,7 @@ export function usePriceModal({
         onSubmitSuccess?.();
       } else {
         logger.error("[usePriceModal] recordAssetPrice failed", result.error);
-        setSubmitError(`error.${result.error.code}`);
+        setSubmitError(assetPriceMutationErrorToI18n(result.error));
       }
     },
     [isFormValid, holding.asset_id, date, price, showSnackbar, t, onSubmitSuccess],

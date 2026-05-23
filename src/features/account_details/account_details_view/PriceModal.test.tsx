@@ -118,7 +118,7 @@ describe("usePriceModal", () => {
       result.current.handleChange("price", "0");
     });
     expect(result.current.isFormValid).toBe(false);
-    expect(result.current.error).toBe("price_modal.error_price_not_positive");
+    expect(result.current.error).toEqual({ key: "price_modal.error_price_not_positive" });
   });
 
   // MKT-021 — negative price also invalid
@@ -130,7 +130,7 @@ describe("usePriceModal", () => {
       result.current.handleChange("price", "-10");
     });
     expect(result.current.isFormValid).toBe(false);
-    expect(result.current.error).toBe("price_modal.error_price_not_positive");
+    expect(result.current.error).toEqual({ key: "price_modal.error_price_not_positive" });
   });
 
   // MKT-022 — Inline error + submit disabled for future date
@@ -143,7 +143,7 @@ describe("usePriceModal", () => {
       result.current.handleChange("price", "100");
     });
     expect(result.current.isFormValid).toBe(false);
-    expect(result.current.error).toBe("price_modal.error_future_date");
+    expect(result.current.error).toEqual({ key: "price_modal.error_future_date" });
   });
 
   // MKT-022 — Inline error + submit disabled for malformed date
@@ -156,7 +156,7 @@ describe("usePriceModal", () => {
       result.current.handleChange("price", "100");
     });
     expect(result.current.isFormValid).toBe(false);
-    expect(result.current.error).toBe("price_modal.error_invalid_date");
+    expect(result.current.error).toEqual({ key: "price_modal.error_invalid_date" });
   });
 
   // MKT-027 — Submit button disabled + spinner while in-flight (isSubmitting true during call)
@@ -224,6 +224,6 @@ describe("usePriceModal", () => {
     });
 
     expect(onSubmitSuccess).not.toHaveBeenCalled();
-    expect(result.current.error).toBe("error.NotPositive");
+    expect(result.current.error).toEqual({ key: "error.NotPositive" });
   });
 });

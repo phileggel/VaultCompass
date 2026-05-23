@@ -71,10 +71,30 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-23 — F27 pipeline gap remains in account_details + transactions features
+## 2026-05-23 — usePriceModal handleSubmit lacks try/catch around recordAssetPrice
 
-- Found by: reviewer-frontend (during F27 fix for assets/categories/accounts)
-- Where: `src/features/account_details/withdrawal_transaction/useWithdrawalTransaction.ts:88`, `src/features/account_details/deposit_transaction/useDepositTransaction.ts:73`, `src/features/transactions/useTransactions.ts:46/62/78/94`
-- Context: branch `fix/f27-hook-typed-error-passthrough` @ `4ca4f7d`
+- Found by: reviewer-frontend (during F27 port to account_details + transactions)
+- Where: `src/features/account_details/account_details_view/usePriceModal.ts:75-95`
+- Context: branch `fix/f27-account-details-transactions` @ `8f50ed5`
+- Severity: 🔵
+- Observation: A thrown gateway exception leaves `isSubmitting` stuck at `true` and never sets an error state. All other transaction hooks in the same feature wrap the gateway call in `try/catch` with an `UNKNOWN_ERROR` fallback. Mechanical to fold in next time `usePriceModal` is touched.
+
+---
+
+## 2026-05-23 — useAccountDetails fetchDetails lacks try/catch around getAccountDetails
+
+- Found by: reviewer-frontend (during F27 port to account_details + transactions)
+- Where: `src/features/account_details/account_details_view/useAccountDetails.ts:33-44`
+- Context: branch `fix/f27-account-details-transactions` @ `8f50ed5`
+- Severity: 🔵
+- Observation: A thrown gateway exception leaves `isLoading` stuck at `true` and never sets an error state. Same symmetry gap as `usePriceModal` above — `useAccountDetails` was the canonical view-fetch hook that the per-BC hooks (assets, accounts, categories) modeled their `catch (e) → setError(UNKNOWN_ERROR)` pattern on, but the original hook itself doesn't follow it.
+
+---
+
+## 2026-05-23 — useRefreshAccountPrices switches on raw error.code (bypasses F27 presenter)
+
+- Found by: reviewer-arch (during F27 port to account_details + transactions)
+- Where: `src/features/account_details/refresh_prices/useRefreshAccountPrices.ts:34`
+- Context: branch `fix/f27-account-details-transactions` @ `8f50ed5`
 - Severity: 🟡
-- Observation: `setError(String(e))` and `return { data: null, error: String(e) }` patterns persist in two features that weren't in scope for the asset/category/account F27 fix. Same root cause: typed errors collapsed to strings at the hook layer, presenter bypassed, per-variant payloads lost. Mechanically identical refactor to what shipped today; deferred only because expanding scope would have doubled the PR size. The new canonical `I18nMessage` lives at `src/ui/format/i18n.ts` and the per-BC presenter pattern is now established — port across when these features are next touched, or schedule a dedicated cleanup PR.
+- Observation: Component-adjacent hook inspects `result.error.code` directly in a switch — violates F27 layer-4 ("components/hooks never inspect error.code directly"). Belongs in a future presenter or the existing `transactionMutationErrorToI18n`. Outside the scope of the current F27 port because the refresh-prices flow uses `FetchAllAssetPricesError` / `FetchAccountAssetPricesError` unions (separate from HoldingTransactionError / AssetPriceError), so the existing presenters don't cover it. Add a `fetchPriceErrorToI18n` presenter when next touched.

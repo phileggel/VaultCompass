@@ -1,5 +1,62 @@
-import type { Transaction } from "@/bindings";
+import type { HoldingTransactionError, OpenHoldingError, Transaction } from "@/bindings";
 import { microToFormatted } from "@/lib/microUnits";
+import type { I18nMessage } from "@/ui/format/i18n";
+
+/**
+ * F27 — Maps any transaction-BC mutation error (buy / sell / correct / cancel /
+ * deposit / withdrawal / open holding) to an i18n key + interpolation vars.
+ * Pure function: no React, no useTranslation. Micros formatting is performed
+ * here (via the project's `microToFormatted` data helper) so components do not
+ * need to know about the underlying numeric scale.
+ *
+ * Exhaustive switch on `code`: TypeScript catches new variants at compile time.
+ */
+export function transactionMutationErrorToI18n(
+  err: HoldingTransactionError | OpenHoldingError,
+): I18nMessage {
+  switch (err.code) {
+    case "InsufficientCash":
+      return {
+        key: "cash.insufficient_cash_inline",
+        vars: {
+          balance: microToFormatted(err.current_balance_micros, 2),
+          currency: err.currency,
+        },
+      };
+    case "Oversell":
+      return {
+        key: "error.Oversell",
+        vars: {
+          available: microToFormatted(err.available, 6),
+          requested: microToFormatted(err.requested, 6),
+        },
+      };
+    case "ClosedPosition":
+    case "CascadingOversell":
+    case "TransactionNotFound":
+    case "AccountNotFound":
+    case "NameAlreadyExists":
+    case "DatabaseError":
+    case "InvalidDate":
+    case "DateInFuture":
+    case "DateTooOld":
+    case "QuantityNotPositive":
+    case "AmountNotPositive":
+    case "UnitPriceNegative":
+    case "FeesNegative":
+    case "ExchangeRateNotPositive":
+    case "TotalAmountNotPositive":
+    case "AssetNotFound":
+    case "ArchivedAsset":
+    case "OpeningBalanceOnCashAsset":
+    case "InvalidTotalCost":
+      return { key: `error.${err.code}` };
+    default: {
+      const _exhaustive: never = err;
+      return _exhaustive;
+    }
+  }
+}
 
 /** Display-ready shape for a transaction row. */
 export interface TransactionRowViewModel {

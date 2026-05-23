@@ -96,16 +96,16 @@ describe("useDepositTransaction (CSH-020/021/022/025)", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("error.AmountNotPositive");
+    expect(result.current.error).toEqual({ key: "error.AmountNotPositive" });
     expect(mockShowSnackbar).not.toHaveBeenCalled();
   });
 
-  // Unknown error path — diagnostic hint flows through to logger.error so
-  // support reports retain the developer-only triage info that error.Unknown hides.
-  it("logs full error including hint on Unknown backend error", async () => {
+  // DatabaseError path — the presenter maps to error.DatabaseError; logger keeps
+  // the full payload server-side via tracing for triage outside the user-visible message.
+  it("logs full error and maps DatabaseError to inline i18n key", async () => {
     mockRecordDeposit.mockResolvedValue({
       status: "error",
-      error: { code: "Unknown", hint: "test diagnostic" },
+      error: { code: "DatabaseError" },
     });
     const { result } = renderHook(() => useDepositTransaction({ accountId: "account-1" }));
 
@@ -114,9 +114,9 @@ describe("useDepositTransaction (CSH-020/021/022/025)", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("error.Unknown");
+    expect(result.current.error).toEqual({ key: "error.DatabaseError" });
     expect(logger.error).toHaveBeenCalledWith("[useDepositTransaction] recordDeposit failed", {
-      error: { code: "Unknown", hint: "test diagnostic" },
+      error: { code: "DatabaseError" },
     });
     expect(mockShowSnackbar).not.toHaveBeenCalled();
   });

@@ -11,6 +11,7 @@ import {
 } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { transactionGateway } from "../gateway";
 import type { TransactionFormData } from "../shared/types";
 import { validateTransactionForm } from "../shared/validateTransaction";
@@ -50,7 +51,7 @@ export function useEditTransactionModal({
     note: transaction.note ?? "",
   }));
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchivedConfirm, setShowArchivedConfirm] = useState(false);
   // MKT-052 — edit mode always starts OFF, regardless of the global toggle.
@@ -110,7 +111,7 @@ export function useEditTransactionModal({
       microValues.totalMicro,
     );
     if (validationError) {
-      setError(t(validationError, { defaultValue: validationError }));
+      setError(validationError);
       return;
     }
 

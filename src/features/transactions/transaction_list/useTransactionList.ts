@@ -1,10 +1,14 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Transaction } from "@/bindings";
+import { accountMutationErrorToI18n } from "@/features/accounts/shared/presenter";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { transactionGateway } from "../gateway";
 import { type TransactionRowViewModel, toTransactionRow } from "../shared/presenter";
+
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export function useTransactionList() {
   const { accountId, assetId } = useParams({
@@ -20,11 +24,11 @@ export function useTransactionList() {
 
   const [assetIdsForAccount, setAssetIdsForAccount] = useState<string[]>([]);
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
-  const [assetListError, setAssetListError] = useState<string | null>(null);
+  const [assetListError, setAssetListError] = useState<I18nMessage | null>(null);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
-  const [transactionError, setTransactionError] = useState<string | null>(null);
+  const [transactionError, setTransactionError] = useState<I18nMessage | null>(null);
 
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
@@ -36,12 +40,12 @@ export function useTransactionList() {
       if (res.status === "ok") {
         setAssetIdsForAccount(res.data);
       } else {
-        setAssetListError(`error.${res.error.code}`);
+        setAssetListError(accountMutationErrorToI18n(res.error));
         setAssetIdsForAccount([]);
       }
     } catch (e) {
       logger.error("Failed to fetch asset IDs", { error: e });
-      setAssetListError(String(e));
+      setAssetListError(UNKNOWN_ERROR);
       setAssetIdsForAccount([]);
     } finally {
       setIsLoadingAssets(false);
@@ -58,12 +62,12 @@ export function useTransactionList() {
           setTransactions(res.data);
           return res.data;
         }
-        setTransactionError(`error.${res.error.code}`);
+        setTransactionError(accountMutationErrorToI18n(res.error));
         setTransactions([]);
         return [];
       } catch (e) {
         logger.error("Failed to fetch transactions", { error: e });
-        setTransactionError(String(e));
+        setTransactionError(UNKNOWN_ERROR);
         setTransactions([]);
         return [];
       } finally {

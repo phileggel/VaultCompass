@@ -395,7 +395,7 @@
     "TypeImmutable": "Cannot change the type of an existing transaction.",
     "ArchivedAssetSell": "Cannot sell an archived asset.",
     "ClosedPosition": "No units available to sell for this asset.",
-    "Oversell": "Sell quantity exceeds the units available in the holding.",
+    "Oversell": "Sell quantity ({{requested}}) exceeds the units available ({{available}}) in the holding.",
     "CascadingOversell": "Editing this transaction would leave a later transaction without enough units.",
     "InvalidDate": "Invalid date format — expected YYYY-MM-DD.",
     "DateTooOld": "Transaction date cannot be before 1900-01-01.",

@@ -6,6 +6,7 @@ import type {
   HoldingDetail,
 } from "@/bindings";
 import {
+  assetPriceMutationErrorToI18n,
   formatSource,
   formatStaleness,
   toAccountSummary,
@@ -454,5 +455,44 @@ describe("toHoldingRow — staleness and sourceLabel fields (MKT-140, MKT-142)",
       makeHolding({ current_price_source: "Stooq", current_price: 100_000_000 }),
     );
     expect(row.sourceLabel).toBe("mkt.source_stooq");
+  });
+});
+
+// F27 layer-3 presenter — exhaustive variant coverage across AssetPriceError.
+// One payload-bearing variant (`InvalidDateFormat { date }`) gets interpolation;
+// the rest fall through to the flat error key.
+describe("assetPriceMutationErrorToI18n", () => {
+  it("InvalidDateFormat interpolates the offending date payload", () => {
+    expect(
+      assetPriceMutationErrorToI18n({ code: "InvalidDateFormat", date: "2024/13/45" }),
+    ).toEqual({
+      key: "error.InvalidDateFormat",
+      vars: { date: "2024/13/45" },
+    });
+  });
+
+  it("NotFound (carries id payload) maps to its flat key", () => {
+    expect(assetPriceMutationErrorToI18n({ code: "NotFound", id: "asset-1" })).toEqual({
+      key: "error.NotFound",
+    });
+  });
+
+  it("PriceNotFound (carries asset_id + date payload) maps to its flat key", () => {
+    expect(
+      assetPriceMutationErrorToI18n({
+        code: "PriceNotFound",
+        asset_id: "asset-1",
+        date: "2024-01-15",
+      }),
+    ).toEqual({ key: "error.PriceNotFound" });
+  });
+
+  it.each([
+    "DatabaseError",
+    "NotPositive",
+    "NonFinite",
+    "DateInFuture",
+  ] as const)("%s unit variant maps to its flat error key", (code) => {
+    expect(assetPriceMutationErrorToI18n({ code })).toEqual({ key: `error.${code}` });
   });
 });

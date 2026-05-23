@@ -92,9 +92,10 @@ describe("useWithdrawalTransaction (CSH-030/031/032/035/081)", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toContain("cash.insufficient_cash_inline");
-    expect(result.current.error).toContain("50,00");
-    expect(result.current.error).toContain("EUR");
+    expect(result.current.error).toEqual({
+      key: "cash.insufficient_cash_inline",
+      vars: { balance: "50,00", currency: "EUR" },
+    });
   });
 
   // CSH-031 — generic backend error code surfaced as error.<code>
@@ -110,15 +111,15 @@ describe("useWithdrawalTransaction (CSH-030/031/032/035/081)", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toContain("error.AmountNotPositive");
+    expect(result.current.error).toEqual({ key: "error.AmountNotPositive" });
   });
 
-  // Unknown error path — diagnostic hint flows through to logger.error so
-  // support reports retain the developer-only triage info that error.Unknown hides.
-  it("logs full error including hint on Unknown backend error", async () => {
+  // DatabaseError path — the presenter maps to error.DatabaseError; logger keeps
+  // the full payload server-side via tracing for triage outside the user-visible message.
+  it("logs full error and maps DatabaseError to inline i18n key", async () => {
     mockRecordWithdrawal.mockResolvedValue({
       status: "error",
-      error: { code: "Unknown", hint: "test diagnostic" },
+      error: { code: "DatabaseError" },
     });
     const { result } = renderHook(() => useWithdrawalTransaction({ accountId: "account-1" }));
 
@@ -127,10 +128,10 @@ describe("useWithdrawalTransaction (CSH-030/031/032/035/081)", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toContain("error.Unknown");
+    expect(result.current.error).toEqual({ key: "error.DatabaseError" });
     expect(logger.error).toHaveBeenCalledWith(
       "[useWithdrawalTransaction] recordWithdrawal failed",
-      { error: { code: "Unknown", hint: "test diagnostic" } },
+      { error: { code: "DatabaseError" } },
     );
     expect(mockShowSnackbar).not.toHaveBeenCalled();
   });

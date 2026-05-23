@@ -1,10 +1,36 @@
 import type {
   AccountDetailsResponse,
+  AssetPriceError,
   AssetPriceSource,
   ClosedHoldingDetail,
   HoldingDetail,
 } from "@/bindings";
 import { microToFormatted } from "@/lib/microUnits";
+import type { I18nMessage } from "@/ui/format/i18n";
+
+/**
+ * F27 — Maps any asset-price mutation error (record / update / delete /
+ * get prices) to an i18n key + optional interpolation vars. Pure function:
+ * no React, no useTranslation. Exhaustive switch on `code`; TypeScript
+ * catches new variants at compile time.
+ */
+export function assetPriceMutationErrorToI18n(err: AssetPriceError): I18nMessage {
+  switch (err.code) {
+    case "InvalidDateFormat":
+      return { key: "error.InvalidDateFormat", vars: { date: err.date } };
+    case "NotFound":
+    case "DatabaseError":
+    case "PriceNotFound":
+    case "NotPositive":
+    case "NonFinite":
+    case "DateInFuture":
+      return { key: `error.${err.code}` };
+    default: {
+      const _exhaustive: never = err;
+      return _exhaustive;
+    }
+  }
+}
 
 const DASH = "—";
 const CASH_ASSET_PREFIX = "system-cash-";

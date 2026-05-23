@@ -248,8 +248,7 @@ describe("useOpenBalance", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBeTruthy();
-    expect(result.current.error).toContain("QuantityNotPositive");
+    expect(result.current.error).toEqual({ key: "error.QuantityNotPositive" });
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
@@ -272,8 +271,7 @@ describe("useOpenBalance", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBeTruthy();
-    expect(result.current.error).toContain("InvalidTotalCost");
+    expect(result.current.error).toEqual({ key: "error.InvalidTotalCost" });
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
@@ -296,18 +294,17 @@ describe("useOpenBalance", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBeTruthy();
-    expect(result.current.error).toContain("ArchivedAsset");
+    expect(result.current.error).toEqual({ key: "error.ArchivedAsset" });
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
   // Generic backend error: sets error from error code, modal stays open.
   // Also asserts the diagnostic `hint` flows through to logger.error so support
   // reports retain the developer-only triage info that `error.Unknown` hides.
-  it("sets error and does not call onSubmitSuccess on generic backend error", async () => {
+  it("sets DatabaseError and does not call onSubmitSuccess on generic backend error", async () => {
     mockOpenHolding.mockResolvedValue({
       status: "error",
-      error: { code: "Unknown", hint: "test diagnostic" },
+      error: { code: "DatabaseError" },
     });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useOpenBalance({ ...BASE_PROPS, onSubmitSuccess }));
@@ -322,10 +319,10 @@ describe("useOpenBalance", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBeTruthy();
+    expect(result.current.error).toEqual({ key: "error.DatabaseError" });
     expect(onSubmitSuccess).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledWith("[useOpenBalance] openHolding failed", {
-      error: { code: "Unknown", hint: "test diagnostic" },
+      error: { code: "DatabaseError" },
     });
   });
 

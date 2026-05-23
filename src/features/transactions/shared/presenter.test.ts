@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toTransactionRow } from "./presenter";
+import { toTransactionRow, transactionMutationErrorToI18n } from "./presenter";
 
 const MICRO = 1_000_000;
 
@@ -74,5 +74,66 @@ describe("toTransactionRow — cash transactions (CSH-101)", () => {
   it("Deposit realizedPnl is null", () => {
     const row = toTransactionRow(depositTx, "Cash EUR", "My Account");
     expect(row.realizedPnl).toBeNull();
+  });
+});
+
+// F27 layer-3 presenter — exhaustive variant coverage across HoldingTransactionError
+// and OpenHoldingError. Payload-bearing variants get pre-formatted micros (presenter
+// owns the data formatting; component owns t()).
+describe("transactionMutationErrorToI18n", () => {
+  it("InsufficientCash interpolates balance (formatted to 2 decimals) and currency", () => {
+    expect(
+      transactionMutationErrorToI18n({
+        code: "InsufficientCash",
+        current_balance_micros: 50_000_000,
+        currency: "EUR",
+      }),
+    ).toEqual({
+      key: "cash.insufficient_cash_inline",
+      vars: { balance: "50,00", currency: "EUR" },
+    });
+  });
+
+  it("Oversell interpolates available + requested (formatted to 6 decimals)", () => {
+    expect(
+      transactionMutationErrorToI18n({
+        code: "Oversell",
+        available: 1_500_000,
+        requested: 2_000_000,
+      }),
+    ).toEqual({
+      key: "error.Oversell",
+      vars: { available: "1,500000", requested: "2,000000" },
+    });
+  });
+
+  it.each([
+    "ClosedPosition",
+    "CascadingOversell",
+    "TransactionNotFound",
+    "AccountNotFound",
+    "NameAlreadyExists",
+    "DatabaseError",
+    "InvalidDate",
+    "DateInFuture",
+    "DateTooOld",
+    "QuantityNotPositive",
+    "AmountNotPositive",
+    "UnitPriceNegative",
+    "FeesNegative",
+    "ExchangeRateNotPositive",
+    "TotalAmountNotPositive",
+    "AssetNotFound",
+    "ArchivedAsset",
+    "OpeningBalanceOnCashAsset",
+    "InvalidTotalCost",
+  ] as const)("%s unit variant maps to its flat error key", (code) => {
+    // `AccountNotFound` carries `account_id` payload; we strip it because the
+    // presenter falls through to the flat key regardless. Other codes are unit.
+    const err =
+      code === "AccountNotFound"
+        ? { code, account_id: "acc-1" }
+        : ({ code } as Parameters<typeof transactionMutationErrorToI18n>[0]);
+    expect(transactionMutationErrorToI18n(err)).toEqual({ key: `error.${code}` });
   });
 });

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AssetPrice } from "@/bindings";
 import { logger } from "@/lib/logger";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
+import { assetPriceMutationErrorToI18n } from "../shared/presenter";
+
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 interface UsePriceHistoryProps {
   assetId: string;
@@ -10,8 +14,8 @@ interface UsePriceHistoryProps {
 export interface UsePriceHistoryResult {
   prices: AssetPrice[];
   isLoading: boolean;
-  fetchError: string | null;
-  deleteError: string | null;
+  fetchError: I18nMessage | null;
+  deleteError: I18nMessage | null;
   deletingDate: string | null;
   refetch: () => void;
   /** Returns true on success, false on failure. */
@@ -21,8 +25,8 @@ export interface UsePriceHistoryResult {
 export function usePriceHistory({ assetId }: UsePriceHistoryProps): UsePriceHistoryResult {
   const [prices, setPrices] = useState<AssetPrice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<I18nMessage | null>(null);
+  const [deleteError, setDeleteError] = useState<I18nMessage | null>(null);
   const [deletingDate, setDeletingDate] = useState<string | null>(null);
 
   const loadPrices = useCallback(async () => {
@@ -34,11 +38,11 @@ export function usePriceHistory({ assetId }: UsePriceHistoryProps): UsePriceHist
         setFetchError(null);
       } else {
         logger.error("[usePriceHistory] getAssetPrices failed", result.error);
-        setFetchError(result.error.code);
+        setFetchError(assetPriceMutationErrorToI18n(result.error));
       }
     } catch (err) {
       logger.error("[usePriceHistory] getAssetPrices threw", err);
-      setFetchError("Unknown");
+      setFetchError(UNKNOWN_ERROR);
     } finally {
       setIsLoading(false);
     }
@@ -59,7 +63,7 @@ export function usePriceHistory({ assetId }: UsePriceHistoryProps): UsePriceHist
         return true;
       }
       logger.error("[usePriceHistory] deleteAssetPrice failed", result.error);
-      setDeleteError(result.error.code);
+      setDeleteError(assetPriceMutationErrorToI18n(result.error));
       return false;
     },
     [assetId, loadPrices],

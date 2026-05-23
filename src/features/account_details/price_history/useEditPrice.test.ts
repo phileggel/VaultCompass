@@ -194,7 +194,7 @@ describe("useEditPrice", () => {
     await act(async () => {
       await result.current.handleSubmit();
     });
-    expect(result.current.error).toBe("PriceNotFound");
+    expect(result.current.error).toEqual({ key: "error.PriceNotFound" });
     expect(onSuccess).not.toHaveBeenCalled();
 
     // Second call → success
@@ -223,7 +223,7 @@ describe("useEditPrice", () => {
     });
 
     expect(onSuccess).not.toHaveBeenCalled();
-    expect(result.current.error).toBe("DateInFuture");
+    expect(result.current.error).toEqual({ key: "error.DateInFuture" });
     expect(result.current.isSubmitting).toBe(false);
   });
 });

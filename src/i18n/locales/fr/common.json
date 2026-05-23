@@ -395,7 +395,7 @@
     "TypeImmutable": "Impossible de modifier le type d'une transaction existante.",
     "ArchivedAssetSell": "Impossible de vendre un actif archivé.",
     "ClosedPosition": "Aucune unité disponible à la vente pour cet actif.",
-    "Oversell": "La quantité à vendre dépasse les unités disponibles dans la position.",
+    "Oversell": "La quantité à vendre ({{requested}}) dépasse les unités disponibles ({{available}}) dans la position.",
     "CascadingOversell": "La modification de cette transaction laisserait une transaction ultérieure sans unités suffisantes.",
     "InvalidDate": "Format de date invalide — attendu AAAA-MM-JJ.",
     "DateTooOld": "La date de transaction ne peut pas être antérieure au 01/01/1900.",

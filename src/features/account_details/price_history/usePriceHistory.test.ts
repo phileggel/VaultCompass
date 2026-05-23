@@ -71,7 +71,7 @@ describe("usePriceHistory", () => {
     await act(async () => {});
 
     expect(result.current.prices).toEqual([]);
-    expect(result.current.fetchError).toBe("NotFound");
+    expect(result.current.fetchError).toEqual({ key: "error.NotFound" });
     expect(result.current.isLoading).toBe(false);
     expect(mockGetAssetPrices).toHaveBeenCalledWith("asset-unknown");
   });
@@ -159,7 +159,7 @@ describe("usePriceHistory", () => {
 
     // Entry must still be present
     expect(result.current.prices).toEqual(rows);
-    expect(result.current.deleteError).toBe("PriceNotFound");
+    expect(result.current.deleteError).toEqual({ key: "error.PriceNotFound" });
     expect(result.current.deletingDate).toBeNull();
   });
 
@@ -183,7 +183,7 @@ describe("usePriceHistory", () => {
     await act(async () => {
       await result.current.confirmDelete("2026-04-01");
     });
-    expect(result.current.deleteError).toBe("DatabaseError");
+    expect(result.current.deleteError).toEqual({ key: "error.DatabaseError" });
 
     // Trigger a succeeding delete — deleteError should be cleared
     await act(async () => {

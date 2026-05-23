@@ -12,6 +12,7 @@ import {
   microToFormatted,
 } from "@/lib/microUnits";
 import { useSnackbar } from "@/lib/snackbarStore";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 
 interface UseSellTransactionProps {
@@ -44,7 +45,7 @@ export function useSellTransaction({
     fees: "0",
     note: "",
   }));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // MKT-052/053 — snapshot of the global auto-record toggle at hook mount
   const [recordPrice, setRecordPrice] = useState<boolean>(() => getAutoRecordPrice());
@@ -84,12 +85,7 @@ export function useSellTransaction({
         holdingQuantityMicro,
       );
       if (validationError) {
-        setError(
-          t(validationError, {
-            defaultValue: validationError,
-            max: microToFormatted(holdingQuantityMicro, 6),
-          }),
-        );
+        setError(validationError);
         return;
       }
 

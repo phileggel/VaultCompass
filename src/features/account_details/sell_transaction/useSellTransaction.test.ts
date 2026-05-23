@@ -100,7 +100,10 @@ describe("useSellTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toContain("transaction.error_validation_oversell");
+    expect(result.current.error).toEqual({
+      key: "transaction.error_validation_oversell",
+      vars: expect.objectContaining({ max: expect.any(String) }),
+    });
     expect(mockSellHolding).not.toHaveBeenCalled();
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
@@ -134,7 +137,7 @@ describe("useSellTransaction", () => {
 
   // Backend error keeps modal open, sets error, does not call onSubmitSuccess
   it("sets error on backend failure and does not call onSubmitSuccess", async () => {
-    mockSellHolding.mockResolvedValue({ data: null, error: "backend error" });
+    mockSellHolding.mockResolvedValue({ data: null, error: { key: "error.DatabaseError" } });
     const onSubmitSuccess = vi.fn();
     const { result } = renderHook(() => useSellTransaction({ ...BASE_PROPS, onSubmitSuccess }));
 
@@ -150,7 +153,7 @@ describe("useSellTransaction", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("backend error");
+    expect(result.current.error).toEqual({ key: "error.DatabaseError" });
     expect(onSubmitSuccess).not.toHaveBeenCalled();
   });
 
