@@ -43,25 +43,27 @@ describe("formatAssetClass", () => {
     expect(formatAssetClass("Cash", t)).toBe("asset.class.Cash");
     expect(formatAssetClass("Bonds", t)).toBe("asset.class.Bonds");
     expect(formatAssetClass("ETF", t)).toBe("asset.class.ETF");
+    expect(formatAssetClass("ETP", t)).toBe("asset.class.ETP");
     expect(formatAssetClass("Stocks", t)).toBe("asset.class.Stocks");
     expect(formatAssetClass("Derivatives", t)).toBe("asset.class.Derivatives");
   });
 
-  // Exhaustiveness — all 8 AssetClass variants dispatch to distinct non-empty keys
-  it("covers all 8 AssetClass variants with distinct non-empty keys", () => {
+  // Exhaustiveness — all 9 AssetClass variants dispatch to distinct non-empty keys
+  it("covers all 9 AssetClass variants with distinct non-empty keys", () => {
     const all = [
       "Cash",
       "Bonds",
       "RealEstate",
       "MutualFunds",
       "ETF",
+      "ETP",
       "Stocks",
       "DigitalAsset",
       "Derivatives",
     ] as const;
     const keys = all.map((c) => formatAssetClass(c, t));
     expect(keys.every((k) => k.trim().length > 0)).toBe(true);
-    expect(new Set(keys).size).toBe(8);
+    expect(new Set(keys).size).toBe(9);
   });
 });
 

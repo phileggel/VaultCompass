@@ -795,6 +795,13 @@ export type AssetClass =
  */
 "ETF" | 
 /**
+ * Exchange Traded Products — umbrella class for ETF, ETN, and ETC
+ * instruments that OpenFIGI returns under a single `"ETP"` securityType
+ * (WEB-023). Used when the structural distinction isn't available; users
+ * can edit the class manually if they need ETF/ETN/ETC granularity.
+ */
+"ETP" | 
+/**
  * Managed investment funds.
  */
 "MutualFunds" | 

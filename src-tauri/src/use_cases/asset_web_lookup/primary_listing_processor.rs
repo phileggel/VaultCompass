@@ -274,6 +274,10 @@ pub fn map_security_type(s: &str) -> Option<AssetClass> {
     match s {
         "Common Stock" => Some(AssetClass::Stocks),
         "ETF" => Some(AssetClass::ETF),
+        // OpenFIGI uses "ETP" as the umbrella for ETF + ETN + ETC; the
+        // distinction isn't exposed at the securityType level. Mapped to the
+        // ETP class so the user sees a real label instead of "Unknown".
+        "ETP" => Some(AssetClass::ETP),
         "Mutual Fund" => Some(AssetClass::MutualFunds),
         "Corporate Bond" | "Government Bond" => Some(AssetClass::Bonds),
         "Cryptocurrency" | "Digital Currency" => Some(AssetClass::DigitalAsset),
@@ -971,6 +975,25 @@ mod tests {
         assert_eq!(resolve_exchange_name("XT"), "Athens OTC Stock Exchange");
         assert_eq!(resolve_exchange_name("XJ"), "Ljubljana SE OTC");
         assert_eq!(resolve_exchange_name("XG"), "Nordic Growth Market OTC");
+    }
+
+    // ------------------------------------------------------------------
+    // securityType → AssetClass mapping (WEB-023)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn map_security_type_etp_returns_etp_class() {
+        // OpenFIGI uses "ETP" as the umbrella for ETF/ETN/ETC. Without this
+        // mapping the user's example (Amundi PEA MSCI World, ISIN FR001400U5Q4)
+        // rendered as "Unknown type".
+        assert_eq!(map_security_type("ETP"), Some(AssetClass::ETP));
+    }
+
+    #[test]
+    fn map_security_type_etf_returns_etf_class() {
+        // "ETF" is a separate OpenFIGI value from "ETP" and must continue to
+        // resolve to ETF, not ETP.
+        assert_eq!(map_security_type("ETF"), Some(AssetClass::ETF));
     }
 
     #[test]

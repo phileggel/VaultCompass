@@ -73,6 +73,8 @@ export function formatAssetClass(assetClass: AssetClass, t: (key: string) => str
       return t("asset.class.MutualFunds");
     case "ETF":
       return t("asset.class.ETF");
+    case "ETP":
+      return t("asset.class.ETP");
     case "Stocks":
       return t("asset.class.Stocks");
     case "DigitalAsset":

@@ -36,6 +36,11 @@ pub enum AssetClass {
     Bonds,
     /// Exchange Traded Funds.
     ETF,
+    /// Exchange Traded Products — umbrella class for ETF, ETN, and ETC
+    /// instruments that OpenFIGI returns under a single `"ETP"` securityType
+    /// (WEB-023). Used when the structural distinction isn't available; users
+    /// can edit the class manually if they need ETF/ETN/ETC granularity.
+    ETP,
     /// Managed investment funds.
     MutualFunds,
     /// Cryptocurrencies or other blockchain-based assets.
@@ -53,6 +58,7 @@ impl AssetClass {
             AssetClass::RealEstate => 2,
             AssetClass::MutualFunds => 3,
             AssetClass::ETF => 3,
+            AssetClass::ETP => 3,
             AssetClass::Stocks => 4,
             AssetClass::DigitalAsset => 5,
             AssetClass::Derivatives => 5,
