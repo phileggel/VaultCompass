@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-05-23
+
+### Added
+
+- add ETP class for OpenFIGI umbrella securityType
+  ETFs like Amundi PEA MSCI World (FR001400U5Q4) come back from OpenFIGI
+  with securityType=ETP, which our previous mapping didn't know — user
+  saw "Unknown type". OpenFIGI uses ETP as umbrella for ETF/ETN/ETC and
+  doesn't expose the distinction, so we surface the same umbrella. Users
+  can edit the class manually for finer granularity.
+- raise lookup caps to 10/share-class, 30 total
+  Previously the per-share-class cap of 3 hid the primary venue for
+  single-company queries (e.g. ASML keyword showed London/Xetra/Milan
+  but never Amsterdam — its actual primary). Bumping per-class to 10
+  and total to 30 lets the user scroll a longer list and pick the
+  right venue. Spec WEB-022 updated to match.
+
+### Fixed
+
+- strip diacritics from OpenFIGI lookup query
+  OpenFIGI's name index is unaccented — "Société Générale" returns 0
+  hits while "Societe Generale" returns 100. NFD-normalize the query
+  before WEB-014 routing so accented inputs find their matches. Handles
+  all Latin diacritics (é/è/ê/ç/à/ô/ñ/ü/…) via combining-mark removal.
+  Spec adds WEB-015 alongside existing WEB-014 routing rule.
+- map LO and SQ OpenFIGI codes to XLON/XMAD
+  OpenFIGI exposes some venues under two short codes — LSE as both LN
+  (lit primary) and LO (consolidated), Madrid as both SM (Continuous)
+  and SQ (BME composite). Mapping only one in each pair left priority-
+  walker picks of LO/SQ unlabelled (e.g. ENGIE 0LD0, SANTANDER SAN).
+- F27 fetch-price presenter for refresh hooks
+  useRefreshGlobalPrices + useRefreshAccountPrices were switching on
+  result.error.code directly, bypassing F27. Adds fetchPriceErrorToI18n
+  covering FetchAccountAssetPricesError + FetchAllAssetPricesError, plus
+  a SnackbarMessage type at src/ui/format/i18n.ts for hooks that dispatch
+  via snackbar rather than rendered error state.
+- F27 pipeline → account_details + transactions
+  Hooks in account_details + transactions still stringified typed errors,
+  losing Oversell.available, InsufficientCash.current_balance_micros,
+  and InvalidDateFormat.date payloads at the hook layer. Adds two per-BC
+  presenters covering HoldingTransactionError + AssetPriceError unions
+  with payload interpolation in en/fr; boyscout-fixes useEditPrice.
+- restore F27 typed-error pipeline across 3 features
+  Hooks were stringifying typed errors to `error.${code}` before the F27
+  presenter ever ran, dropping per-variant payloads (InvalidExchange,
+  InvalidCurrency). Adds three per-BC presenters + canonical I18nMessage
+  at src/ui/format/i18n.ts, payload interpolation in en/fr, and
+  exhaustive variant tests across assets, categories, accounts.
+- pin sqlx-cli to 0.8.6 to match sqlx 0.8
+  taiki-e/install-action with `tool: sqlx-cli` (no version) drifted to
+  0.9.0, which requires DATABASE_URL for `prepare --check` even with
+  SQLX_OFFLINE=true. Match the runtime dep version explicitly.
+
+L-001 (Tauri bundler walks src/bin/) and L-002 (unpinned install-action
+tools drift) codified in docs/lessons.md.
+
 ## [0.12.1] - 2026-05-22
 
 ### Fixed
