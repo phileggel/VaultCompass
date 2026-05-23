@@ -35,17 +35,24 @@ pub fn openfigi_exchcode_to_exchange(exch_code: &str) -> Option<Exchange> {
 /// OpenFIGI `exchCode` → ISO 10383 MIC. Only covers the codes that map to a
 /// venue in the canonical curated set. Unknown codes are not represented.
 ///
+/// Some venues are exposed under two OpenFIGI short codes; both must be mapped
+/// or the priority walker can pick a code that doesn't resolve, leaving the
+/// result with no exchange label. `LO`/`LN` and `SQ`/`SM` are the known pairs
+/// in the curated set today.
+///
 /// Source: OpenFIGI Exchange Codes CSV cross-referenced against the curated set.
 const EXCHCODE_TO_MIC: &[(&str, &str)] = &[
     ("FP", "XPAR"),
     ("UN", "XNYS"),
     ("UW", "XNAS"),
     ("LN", "XLON"),
+    ("LO", "XLON"),
     ("GY", "XETR"),
     ("NA", "XAMS"),
     ("BB", "XBRU"),
     ("IM", "XMIL"),
     ("SM", "XMAD"),
+    ("SQ", "XMAD"),
     ("SE", "XSWX"),
     ("CT", "XTSE"),
     ("HK", "XHKG"),
@@ -156,5 +163,33 @@ mod tests {
         );
         let exchange = result.unwrap();
         assert_eq!(exchange.code, "XETR");
+    }
+
+    // OpenFIGI exposes LSE under both LN (lit primary) and LO (consolidated
+    // listing). Both must resolve to XLON or the priority walker can pick LO
+    // and leave the result with no exchange label.
+    #[test]
+    fn exchcode_to_exchange_lo_returns_xlon() {
+        let result = openfigi_exchcode_to_exchange("LO");
+        assert!(
+            result.is_some(),
+            "openfigi_exchcode_to_exchange(\"LO\") expected Some(XLON), got None"
+        );
+        let exchange = result.unwrap();
+        assert_eq!(exchange.code, "XLON");
+    }
+
+    // OpenFIGI exposes Madrid under both SM (Continuous Market) and SQ (BME
+    // composite). The ES ISIN-country promotion in primary_listing_processor
+    // picks SQ first, so SQ must resolve to XMAD.
+    #[test]
+    fn exchcode_to_exchange_sq_returns_xmad() {
+        let result = openfigi_exchcode_to_exchange("SQ");
+        assert!(
+            result.is_some(),
+            "openfigi_exchcode_to_exchange(\"SQ\") expected Some(XMAD), got None"
+        );
+        let exchange = result.unwrap();
+        assert_eq!(exchange.code, "XMAD");
     }
 }
