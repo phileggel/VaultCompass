@@ -160,10 +160,11 @@ jobs:
           prefix-key: linux-rust
 
       - name: Install sqlx-cli
-        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk
+        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk.
+        # sqlx-cli version pinned to match `sqlx` in src-tauri/Cargo.toml — see L-002.
         uses: taiki-e/install-action@db5fb34fa772531a3ece57ca434f579eb334e0fb
         with:
-          tool: sqlx-cli
+          tool: sqlx-cli@0.8.6
 
       - name: Quality checks (clippy + fmt + sqlx + tests, skip coverage)
         shell: bash

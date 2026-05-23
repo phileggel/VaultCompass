@@ -68,7 +68,7 @@ Before implementing, read the relevant convention docs:
 
 ### After completion — update the source doc
 
-When work resolves a TODO entry, an open question, a plan step, or a tech-debt observation, update the source doc immediately — don't wait for the next `/whats-next` run. Use `/techdebt` for non-actionable code smells, `/spec-writer` + `spec-reviewer` for new business rules, `/contract` + `contract-reviewer` for the matching contract, `/adr-writer` + `adr-reviewer` for architectural decisions. Update `ARCHITECTURE.md` if new files/modules added.
+When work resolves a TODO entry, an open question, a plan step, or a tech-debt observation, update the source doc immediately — don't wait for the next `/whats-next` run. Use `/techdebt` for non-actionable code smells, `/spec-writer` + `spec-reviewer` for new business rules, `/contract` + `contract-reviewer` for the matching contract, `/adr-writer` + `adr-reviewer` for architectural decisions. When an empirical failure mode bites (especially involving external tooling we don't control), append an `L-NNN` entry to [`docs/lessons.md`](docs/lessons.md) — symptom / trigger / root cause / mitigation, one screen. Update `ARCHITECTURE.md` if new files/modules added.
 
 ### Kit-managed docs are read-only for project-specific content
 
