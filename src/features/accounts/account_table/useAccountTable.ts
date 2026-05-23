@@ -1,7 +1,10 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { Account, AccountDeletionSummary } from "@/bindings";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { FREQUENCY_ORDER } from "../shared/presenter";
+
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export type SortConfig = {
   key: "name" | "update_frequency";
@@ -11,10 +14,10 @@ export type SortConfig = {
 export function useAccountTable(
   accounts: Account[],
   searchTerm: string,
-  deleteAccount: (id: string) => Promise<{ error: string | null }>,
+  deleteAccount: (id: string) => Promise<{ error: I18nMessage | null }>,
   getAccountDeletionSummary: (
     id: string,
-  ) => Promise<{ data: AccountDeletionSummary | null; error: string | null }>,
+  ) => Promise<{ data: AccountDeletionSummary | null; error: I18nMessage | null }>,
   onAccountClick: (accountId: string) => void,
 ) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -28,7 +31,7 @@ export function useAccountTable(
   const [deleteSummary, setDeleteSummary] = useState<AccountDeletionSummary | null>(null);
   const [fetchingSummaryFor, setFetchingSummaryFor] = useState<string | null>(null);
   const [editData, setEditData] = useState<Account | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<I18nMessage | null>(null);
 
   const handleSort = useCallback((key: SortConfig["key"]) => {
     setSortConfig((prev) => ({
@@ -86,7 +89,7 @@ export function useAccountTable(
         return;
       }
       if (!result.data) {
-        setActionError("error.Unknown");
+        setActionError(UNKNOWN_ERROR);
         return;
       }
       setDeleteSummary(result.data);

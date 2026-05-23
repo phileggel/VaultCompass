@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
 import type { AssetCategory } from "@/bindings";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { useCategories } from "../useCategories";
 
 interface UseEditCategoryModalProps {
@@ -9,10 +9,9 @@ interface UseEditCategoryModalProps {
 }
 
 export function useEditCategoryModal({ category, onClose }: UseEditCategoryModalProps) {
-  const { t } = useTranslation();
   const { updateCategory } = useCategories();
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -34,13 +33,7 @@ export function useEditCategoryModal({ category, onClose }: UseEditCategoryModal
     setIsSubmitting(true);
     const result = await updateCategory(category.id, name.trim());
     if (result.error) {
-      if (result.error === "error.DuplicateName") {
-        setError(t("category.error_duplicate"));
-      } else if (result.error === "error.SystemReadonly") {
-        setError(t("category.error_system_readonly"));
-      } else {
-        setError(t("category.error_generic"));
-      }
+      setError(result.error);
     } else {
       onClose();
     }

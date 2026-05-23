@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { useCategories } from "../useCategories";
 
 interface UseAddCategoryProps {
@@ -7,10 +7,9 @@ interface UseAddCategoryProps {
 }
 
 export function useAddCategory({ onSubmitSuccess }: UseAddCategoryProps = {}) {
-  const { t } = useTranslation();
   const { addCategory } = useCategories();
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,11 +24,7 @@ export function useAddCategory({ onSubmitSuccess }: UseAddCategoryProps = {}) {
     setIsSubmitting(true);
     const result = await addCategory(name.trim());
     if (result.error) {
-      if (result.error === "error.DuplicateName") {
-        setError(t("category.error_duplicate"));
-      } else {
-        setError(t("category.error_generic"));
-      }
+      setError(result.error);
     } else {
       setName("");
       setError(null);

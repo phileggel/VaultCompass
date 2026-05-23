@@ -58,8 +58,8 @@ describe("useAddCategory", () => {
     expect(mockAddCategory).not.toHaveBeenCalled();
   });
 
-  it("sets error_duplicate when addCategory returns DuplicateName error", async () => {
-    mockAddCategory.mockResolvedValue({ error: "error.DuplicateName" });
+  it("stores duplicate I18nMessage when addCategory returns it (presenter maps upstream)", async () => {
+    mockAddCategory.mockResolvedValue({ error: { key: "category.error_duplicate" } });
     const { result } = renderHook(() => useAddCategory());
 
     act(() => {
@@ -72,11 +72,11 @@ describe("useAddCategory", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("category.error_duplicate");
+    expect(result.current.error).toEqual({ key: "category.error_duplicate" });
   });
 
-  it("sets error_generic for unknown errors", async () => {
-    mockAddCategory.mockResolvedValue({ error: "error.Unknown" });
+  it("stores generic I18nMessage when addCategory returns a fallback error", async () => {
+    mockAddCategory.mockResolvedValue({ error: { key: "category.error_generic" } });
     const { result } = renderHook(() => useAddCategory());
 
     act(() => {
@@ -89,6 +89,6 @@ describe("useAddCategory", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("category.error_generic");
+    expect(result.current.error).toEqual({ key: "category.error_generic" });
   });
 });

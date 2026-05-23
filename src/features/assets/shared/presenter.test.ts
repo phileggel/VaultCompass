@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAssetClass, getRiskBadgeClasses } from "./presenter";
+import { assetMutationErrorToI18n, formatAssetClass, getRiskBadgeClasses } from "./presenter";
 
 describe("getRiskBadgeClasses", () => {
   // R11 — 5 distinct colours for risk levels 1–5
@@ -62,5 +62,56 @@ describe("formatAssetClass", () => {
     const keys = all.map((c) => formatAssetClass(c, t));
     expect(keys.every((k) => k.trim().length > 0)).toBe(true);
     expect(new Set(keys).size).toBe(8);
+  });
+});
+
+// F27 layer-3 presenter — exhaustive variant coverage. Each test pairs a code with
+// its expected i18n key + vars; new variants added to the typed union without a
+// presenter case will fail compile, not silently regress.
+describe("assetMutationErrorToI18n", () => {
+  it("InvalidExchange interpolates the exchange_code payload", () => {
+    expect(assetMutationErrorToI18n({ code: "InvalidExchange", exchange_code: "BAR" })).toEqual({
+      key: "error.InvalidExchange",
+      vars: { exchange_code: "BAR" },
+    });
+  });
+
+  it("InvalidCurrency interpolates the currency payload", () => {
+    expect(assetMutationErrorToI18n({ code: "InvalidCurrency", currency: "ZZZ" })).toEqual({
+      key: "error.InvalidCurrency",
+      vars: { currency: "ZZZ" },
+    });
+  });
+
+  it("InvalidRiskLevel maps to its flat key (payload not user-meaningful)", () => {
+    expect(assetMutationErrorToI18n({ code: "InvalidRiskLevel", received: 99 })).toEqual({
+      key: "error.InvalidRiskLevel",
+    });
+  });
+
+  it("NotFound maps to its flat key (id payload not surfaced)", () => {
+    expect(assetMutationErrorToI18n({ code: "NotFound", id: "asset-1" })).toEqual({
+      key: "error.NotFound",
+    });
+  });
+
+  it("AccountNotFound maps to its flat key (account_id payload not surfaced)", () => {
+    expect(assetMutationErrorToI18n({ code: "AccountNotFound", account_id: "acc-1" })).toEqual({
+      key: "error.AccountNotFound",
+    });
+  });
+
+  it.each([
+    "NameEmpty",
+    "ReferenceEmpty",
+    "Archived",
+    "CashAssetNotEditable",
+    "DatabaseError",
+    "NameAlreadyExists",
+    "ActiveHoldings",
+    "ExistingTransactions",
+    "DuplicateName",
+  ] as const)("%s unit variant maps to its flat error key", (code) => {
+    expect(assetMutationErrorToI18n({ code })).toEqual({ key: `error.${code}` });
   });
 });

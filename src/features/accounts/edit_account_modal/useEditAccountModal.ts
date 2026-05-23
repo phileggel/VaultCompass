@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Account } from "@/bindings";
+import type { I18nMessage } from "@/ui/format/i18n";
 import type { AccountFormData } from "../shared/AccountForm";
 import { FREQUENCIES } from "../shared/presenter";
 import { validateAccountCurrency, validateAccountName } from "../shared/validateAccount";
@@ -18,7 +19,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     currency: "EUR",
     update_frequency: "ManualMonth",
   });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sync form data when account changes; reset error (R13)

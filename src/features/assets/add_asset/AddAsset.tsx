@@ -89,7 +89,7 @@ export function AddAssetModal({ isOpen, onClose, prefill, onBack, onSuccess }: A
         />
         {error && (
           <p role="alert" className="mt-3 text-sm text-m3-error">
-            {t(error)}
+            {t(error.key, error.vars)}
           </p>
         )}
       </form>

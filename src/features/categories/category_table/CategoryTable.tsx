@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { Dialog } from "@/ui/components/modal/Dialog";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { EditCategoryModal } from "../edit_category_modal/EditCategoryModal";
 import { isSystemCategory } from "../shared/presenter";
 import { useCategories } from "../useCategories";
@@ -35,7 +36,7 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
     id: string;
     name: string;
   } | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<I18nMessage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editData, setEditData] = useState<AssetCategory | null>(null);
 
@@ -48,11 +49,7 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
     setIsDeleting(true);
     const result = await deleteCategory(deleteData.id);
     if (result.error) {
-      if (result.error === "error.SystemProtected") {
-        setDeleteError(t("category.error_system_protected"));
-      } else {
-        setDeleteError(t("category.error_generic"));
-      }
+      setDeleteError(result.error);
     } else {
       setDeleteData(null);
       setDeleteError(null);
@@ -210,7 +207,9 @@ export function CategoryTable({ searchTerm }: CategoryTableProps) {
         }
       >
         <p className="text-m3-on-surface-variant leading-relaxed">
-          {deleteError ?? t("category.delete_confirm_message")}
+          {deleteError
+            ? t(deleteError.key, deleteError.vars)
+            : t("category.delete_confirm_message")}
         </p>
       </Dialog>
     </div>

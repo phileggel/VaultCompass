@@ -8,6 +8,7 @@ import type {
   UpdateAccountDTO,
 } from "@/bindings";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 
 const { mockAddAccount, mockUpdateAccount, mockDeleteAccount, mockGetSummary } = vi.hoisted(() => ({
   mockAddAccount: vi.fn(),
@@ -60,7 +61,7 @@ describe("useAccounts", () => {
     const account = makeAccount();
     mockAddAccount.mockResolvedValue({ status: "ok", data: account });
     const { result } = renderHook(() => useAccounts());
-    let ret: { data: Account | null; error: string | null } = {
+    let ret: { data: Account | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -83,7 +84,7 @@ describe("useAccounts", () => {
       error: { code: "NameAlreadyExists" },
     });
     const { result } = renderHook(() => useAccounts());
-    let ret: { data: Account | null; error: string | null } = {
+    let ret: { data: Account | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -94,7 +95,7 @@ describe("useAccounts", () => {
         update_frequency: "ManualMonth",
       });
     });
-    expect(ret.error).toBe("error.NameAlreadyExists");
+    expect(ret.error).toEqual({ key: "error.NameAlreadyExists" });
   });
 
   // ── updateAccount ─────────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ describe("useAccounts", () => {
     const account = makeAccount();
     mockUpdateAccount.mockResolvedValue({ status: "ok", data: account });
     const { result } = renderHook(() => useAccounts());
-    let ret: { data: Account | null; error: string | null } = {
+    let ret: { data: Account | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -126,7 +127,7 @@ describe("useAccounts", () => {
       error: { code: "NameAlreadyExists" },
     });
     const { result } = renderHook(() => useAccounts());
-    let ret: { data: Account | null; error: string | null } = {
+    let ret: { data: Account | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -138,7 +139,7 @@ describe("useAccounts", () => {
         update_frequency: "ManualMonth",
       });
     });
-    expect(ret.error).toBe("error.NameAlreadyExists");
+    expect(ret.error).toEqual({ key: "error.NameAlreadyExists" });
   });
 
   // ── deleteAccount ─────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ describe("useAccounts", () => {
   it("deleteAccount returns null error on success", async () => {
     mockDeleteAccount.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useAccounts());
-    let ret: { error: string | null } = { error: "sentinel" };
+    let ret: { error: I18nMessage | null } = { error: { key: "sentinel" } };
     await act(async () => {
       ret = await result.current.deleteAccount("acc-1");
     });
@@ -154,17 +155,27 @@ describe("useAccounts", () => {
     expect(ret.error).toBeNull();
   });
 
-  it("deleteAccount returns error code on failure", async () => {
+  it("deleteAccount returns mapped DatabaseError on failure", async () => {
     mockDeleteAccount.mockResolvedValue({
       status: "error",
-      error: { code: "Unknown" },
+      error: { code: "DatabaseError" },
     });
     const { result } = renderHook(() => useAccounts());
-    let ret: { error: string | null } = { error: null };
+    let ret: { error: I18nMessage | null } = { error: null };
     await act(async () => {
       ret = await result.current.deleteAccount("acc-1");
     });
-    expect(ret.error).toBe("error.Unknown");
+    expect(ret.error).toEqual({ key: "error.DatabaseError" });
+  });
+
+  it("deleteAccount falls back to UNKNOWN_ERROR when gateway throws", async () => {
+    mockDeleteAccount.mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useAccounts());
+    let ret: { error: I18nMessage | null } = { error: null };
+    await act(async () => {
+      ret = await result.current.deleteAccount("acc-1");
+    });
+    expect(ret.error).toEqual({ key: "error.Unknown" });
   });
 
   // ── getAccountDeletionSummary ─────────────────────────────────────────────────
@@ -176,7 +187,7 @@ describe("useAccounts", () => {
     };
     mockGetSummary.mockResolvedValue({ status: "ok", data: summary });
     const { result } = renderHook(() => useAccounts());
-    let ret: { data: AccountDeletionSummary | null; error: string | null } = {
+    let ret: { data: AccountDeletionSummary | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -194,13 +205,13 @@ describe("useAccounts", () => {
       error: { code: "DatabaseError" },
     });
     const { result } = renderHook(() => useAccounts());
-    let ret: { data: AccountDeletionSummary | null; error: string | null } = {
+    let ret: { data: AccountDeletionSummary | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
     await act(async () => {
       ret = await result.current.getAccountDeletionSummary("missing");
     });
-    expect(ret.error).toBe("error.DatabaseError");
+    expect(ret.error).toEqual({ key: "error.DatabaseError" });
   });
 });

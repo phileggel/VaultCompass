@@ -3,6 +3,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssetCategory } from "@/bindings";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 
 const { mockAddCategory, mockUpdateCategory, mockDeleteCategory } = vi.hoisted(() => ({
   mockAddCategory: vi.fn(),
@@ -43,7 +44,7 @@ describe("useCategories", () => {
       data: { id: "cat-1", name: "Bonds" },
     });
     const { result } = renderHook(() => useCategories());
-    let ret: { error?: string } = {};
+    let ret: { error?: I18nMessage } = {};
     await act(async () => {
       ret = await result.current.addCategory("Bonds");
     });
@@ -57,11 +58,11 @@ describe("useCategories", () => {
       error: { code: "DuplicateName" },
     });
     const { result } = renderHook(() => useCategories());
-    let ret: { error?: string } = {};
+    let ret: { error?: I18nMessage } = {};
     await act(async () => {
       ret = await result.current.addCategory("Bonds");
     });
-    expect(ret).toEqual({ error: "error.DuplicateName" });
+    expect(ret).toEqual({ error: { key: "category.error_duplicate" } });
   });
 
   // ── updateCategory ────────────────────────────────────────────────────────────
@@ -72,7 +73,7 @@ describe("useCategories", () => {
       data: { id: "cat-1", name: "Equities" },
     });
     const { result } = renderHook(() => useCategories());
-    let ret: { error?: string } = {};
+    let ret: { error?: I18nMessage } = {};
     await act(async () => {
       ret = await result.current.updateCategory("cat-1", "Equities");
     });
@@ -86,11 +87,11 @@ describe("useCategories", () => {
       error: { code: "NotFound" },
     });
     const { result } = renderHook(() => useCategories());
-    let ret: { error?: string } = {};
+    let ret: { error?: I18nMessage } = {};
     await act(async () => {
       ret = await result.current.updateCategory("missing", "X");
     });
-    expect(ret).toEqual({ error: "error.NotFound" });
+    expect(ret).toEqual({ error: { key: "category.error_generic" } });
   });
 
   // ── deleteCategory ────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ describe("useCategories", () => {
   it("deleteCategory returns empty object on success", async () => {
     mockDeleteCategory.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useCategories());
-    let ret: { error?: string } = {};
+    let ret: { error?: I18nMessage } = {};
     await act(async () => {
       ret = await result.current.deleteCategory("cat-1");
     });
@@ -106,16 +107,16 @@ describe("useCategories", () => {
     expect(ret).toEqual({});
   });
 
-  it("deleteCategory returns error key on failure", async () => {
+  it("deleteCategory returns system_protected key on system-category attempt", async () => {
     mockDeleteCategory.mockResolvedValue({
       status: "error",
-      error: { code: "HasLinkedAssets" },
+      error: { code: "SystemProtected" },
     });
     const { result } = renderHook(() => useCategories());
-    let ret: { error?: string } = {};
+    let ret: { error?: I18nMessage } = {};
     await act(async () => {
       ret = await result.current.deleteCategory("cat-1");
     });
-    expect(ret).toEqual({ error: "error.HasLinkedAssets" });
+    expect(ret).toEqual({ error: { key: "category.error_system_protected" } });
   });
 });

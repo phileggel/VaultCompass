@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AssetClass, AssetLookupResult, Exchange } from "@/bindings";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { DEFAULT_RISK_BY_CLASS, SYSTEM_CATEGORY_ID } from "../shared/constants";
 import { hasDuplicateReference } from "../shared/validateAsset";
 import { useAssets } from "../useAssets";
@@ -35,7 +36,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
     category_id: SYSTEM_CATEGORY_ID,
     exchange: prefill?.exchange ?? null,
   });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Duplicate reference warning — R9 (includes archived assets)

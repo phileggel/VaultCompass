@@ -57,7 +57,7 @@ export function EditAccountModal({ isOpen, onClose, account }: EditAccountModalP
         {/* R13 — inline error, modal stays open */}
         {error && (
           <p role="alert" className="mt-3 text-sm text-m3-error">
-            {t(error, { defaultValue: error })}
+            {t(error.key, error.vars)}
           </p>
         )}
       </form>

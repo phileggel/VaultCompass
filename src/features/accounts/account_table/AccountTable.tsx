@@ -62,7 +62,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           role="alert"
           className="mb-3 flex items-center justify-between gap-2 text-sm text-m3-error px-2"
         >
-          <span>{t(actionError, { defaultValue: actionError })}</span>
+          <span>{t(actionError.key, actionError.vars)}</span>
           <IconButton
             icon={<X size={14} />}
             size="sm"

@@ -1,5 +1,40 @@
-import type { AssetClass } from "@/bindings";
+import type { ArchiveAssetError, AssetClass, AssetCrudError, DeleteAssetError } from "@/bindings";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { DEFAULT_RISK_BY_CLASS } from "./constants";
+
+/**
+ * F27 — Maps any asset-BC mutation error (add / update / archive / unarchive / delete)
+ * to an i18n key + interpolation vars. Pure function, no React, no useTranslation.
+ *
+ * Exhaustive switch on `code`: TypeScript catches new variants at compile time.
+ */
+export function assetMutationErrorToI18n(
+  err: AssetCrudError | ArchiveAssetError | DeleteAssetError,
+): I18nMessage {
+  switch (err.code) {
+    case "InvalidExchange":
+      return { key: "error.InvalidExchange", vars: { exchange_code: err.exchange_code } };
+    case "InvalidCurrency":
+      return { key: "error.InvalidCurrency", vars: { currency: err.currency } };
+    case "NameEmpty":
+    case "ReferenceEmpty":
+    case "InvalidRiskLevel":
+    case "Archived":
+    case "CashAssetNotEditable":
+    case "NotFound":
+    case "DatabaseError":
+    case "AccountNotFound":
+    case "NameAlreadyExists":
+    case "ActiveHoldings":
+    case "ExistingTransactions":
+    case "DuplicateName":
+      return { key: `error.${err.code}` };
+    default: {
+      const _exhaustive: never = err;
+      return _exhaustive;
+    }
+  }
+}
 
 /** Returns Tailwind classes for the risk badge — R11 (5 distinct colours). */
 export function getRiskBadgeClasses(riskLevel: number): string {

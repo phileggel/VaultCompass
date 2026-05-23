@@ -45,7 +45,7 @@ export function EditCategoryModal({ isOpen, onClose, category }: EditCategoryMod
     >
       <form id="edit-category-form" className="py-2" onSubmit={handleSubmit}>
         <CategoryForm name={name} handleChange={handleChange} idPrefix="edit-category" />
-        {error && <p className="mt-3 text-sm text-m3-error">{error}</p>}
+        {error && <p className="mt-3 text-sm text-m3-error">{t(error.key, error.vars)}</p>}
       </form>
     </Dialog>
   );

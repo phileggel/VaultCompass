@@ -42,7 +42,7 @@ export function AddCategoryModal({ isOpen, onClose }: AddCategoryModalProps) {
     >
       <form id="add-category-form" className="py-2" onSubmit={handleSubmit}>
         <CategoryForm name={name} handleChange={handleChange} idPrefix="add-category" />
-        {error && <p className="mt-3 text-sm text-m3-error">{error}</p>}
+        {error && <p className="mt-3 text-sm text-m3-error">{t(error.key, error.vars)}</p>}
       </form>
     </Dialog>
   );

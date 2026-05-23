@@ -8,6 +8,7 @@ import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { SortIcon } from "@/ui/components/SortIcon";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { EditAssetModal } from "../edit_asset_modal/EditAssetModal";
 import { getRiskBadgeClasses } from "../shared/presenter";
 import { useAssets } from "../useAssets";
@@ -23,7 +24,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
   const navigate = useNavigate();
   const { archiveAsset, unarchiveAsset, assets, loading, fetchError, fetchAssets } = useAssets();
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<I18nMessage | null>(null);
 
   useEffect(() => {
     logger.info("[AssetTable] mounted");
@@ -78,7 +79,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
           role="alert"
           className="mb-3 flex items-center justify-between gap-2 text-sm text-m3-error px-2"
         >
-          <span>{actionError}</span>
+          <span>{t(actionError.key, actionError.vars)}</span>
           <IconButton
             icon={<X size={14} />}
             size="sm"

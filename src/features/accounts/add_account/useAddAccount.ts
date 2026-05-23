@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { I18nMessage } from "@/ui/format/i18n";
 import type { AccountFormData } from "../shared/AccountForm";
 import { FREQUENCIES } from "../shared/presenter";
 import { validateAccountCurrency, validateAccountName } from "../shared/validateAccount";
@@ -16,7 +17,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
     currency: "EUR",
     update_frequency: "ManualMonth",
   });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

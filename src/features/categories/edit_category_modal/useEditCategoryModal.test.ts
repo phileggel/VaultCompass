@@ -48,8 +48,8 @@ describe("useEditCategoryModal", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("sets error_duplicate when updateCategory returns DuplicateName error", async () => {
-    mockUpdateCategory.mockResolvedValue({ error: "error.DuplicateName" });
+  it("stores duplicate I18nMessage when updateCategory returns it (presenter mapping verified upstream)", async () => {
+    mockUpdateCategory.mockResolvedValue({ error: { key: "category.error_duplicate" } });
     const { result } = renderHook(() =>
       useEditCategoryModal({ category: fakeCategory, onClose: vi.fn() }),
     );
@@ -58,11 +58,11 @@ describe("useEditCategoryModal", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("category.error_duplicate");
+    expect(result.current.error).toEqual({ key: "category.error_duplicate" });
   });
 
-  it("sets error_system_readonly when updateCategory returns SystemReadonly error", async () => {
-    mockUpdateCategory.mockResolvedValue({ error: "error.SystemReadonly" });
+  it("stores system_readonly I18nMessage when updateCategory returns it", async () => {
+    mockUpdateCategory.mockResolvedValue({ error: { key: "category.error_system_readonly" } });
     const { result } = renderHook(() =>
       useEditCategoryModal({ category: fakeCategory, onClose: vi.fn() }),
     );
@@ -71,11 +71,11 @@ describe("useEditCategoryModal", () => {
       await result.current.handleSubmit(fakeSubmit);
     });
 
-    expect(result.current.error).toBe("category.error_system_readonly");
+    expect(result.current.error).toEqual({ key: "category.error_system_readonly" });
   });
 
   it("resets name and clears error when category prop changes", async () => {
-    mockUpdateCategory.mockResolvedValue({ error: "error.DuplicateName" });
+    mockUpdateCategory.mockResolvedValue({ error: { key: "category.error_duplicate" } });
     const onClose = vi.fn();
     const { result, rerender } = renderHook(
       ({ category }) => useEditCategoryModal({ category, onClose }),

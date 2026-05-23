@@ -4,7 +4,11 @@ import type { CreateAssetDTO, UpdateAssetDTO } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { assetGateway } from "./gateway";
+import { assetMutationErrorToI18n } from "./shared/presenter";
+
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export function useAssets() {
   const { t } = useTranslation();
@@ -23,10 +27,10 @@ export function useAssets() {
           showSnackbar(t("asset.success_created"), "success");
           return { data: res.data, error: null };
         }
-        return { data: null, error: `error.${res.error.code}` };
+        return { data: null, error: assetMutationErrorToI18n(res.error) };
       } catch (e) {
         logger.error("Failed to add asset", { error: e });
-        return { data: null, error: String(e) };
+        return { data: null, error: UNKNOWN_ERROR };
       }
     },
     [fetchAssets, showSnackbar, t],
@@ -41,10 +45,10 @@ export function useAssets() {
           showSnackbar(t("asset.success_updated"), "success");
           return { data: res.data, error: null };
         }
-        return { data: null, error: `error.${res.error.code}` };
+        return { data: null, error: assetMutationErrorToI18n(res.error) };
       } catch (e) {
         logger.error("Failed to update asset", { error: e });
-        return { data: null, error: String(e) };
+        return { data: null, error: UNKNOWN_ERROR };
       }
     },
     [fetchAssets, showSnackbar, t],
@@ -59,10 +63,10 @@ export function useAssets() {
           showSnackbar(t("asset.success_archived"), "success");
           return { error: null };
         }
-        return { error: `error.${res.error.code}` };
+        return { error: assetMutationErrorToI18n(res.error) };
       } catch (e) {
         logger.error("Failed to archive asset", { error: e });
-        return { error: String(e) };
+        return { error: UNKNOWN_ERROR };
       }
     },
     [fetchAssets, showSnackbar, t],
@@ -77,10 +81,10 @@ export function useAssets() {
           showSnackbar(t("asset.success_unarchived"), "success");
           return { error: null };
         }
-        return { error: `error.${res.error.code}` };
+        return { error: assetMutationErrorToI18n(res.error) };
       } catch (e) {
         logger.error("Failed to unarchive asset", { error: e });
-        return { error: String(e) };
+        return { error: UNKNOWN_ERROR };
       }
     },
     [fetchAssets, showSnackbar, t],
@@ -95,10 +99,10 @@ export function useAssets() {
           showSnackbar(t("asset.success_deleted"), "info");
           return { error: null };
         }
-        return { error: `error.${res.error.code}` };
+        return { error: assetMutationErrorToI18n(res.error) };
       } catch (e) {
         logger.error("Failed to delete asset", { error: e });
-        return { error: String(e) };
+        return { error: UNKNOWN_ERROR };
       }
     },
     [fetchAssets, showSnackbar, t],

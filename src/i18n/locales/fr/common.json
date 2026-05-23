@@ -365,12 +365,12 @@
     "form_price_placeholder": "0,00"
   },
   "error": {
-    "InvalidExchange": "La place de cotation sélectionnée n'est pas dans la liste prise en charge.",
+    "InvalidExchange": "La place de cotation \"{{exchange_code}}\" sélectionnée n'est pas dans la liste prise en charge.",
     "Unknown": "Une erreur inattendue est survenue. Veuillez réessayer.",
     "DatabaseError": "Une erreur de base de données inattendue est survenue. Veuillez réessayer.",
     "NameEmpty": "Le nom ne peut pas être vide.",
     "NameAlreadyExists": "Un compte avec ce nom existe déjà.",
-    "InvalidCurrency": "Code de devise invalide.",
+    "InvalidCurrency": "\"{{currency}}\" n'est pas un code de devise valide.",
     "ReferenceEmpty": "La référence (ticker/ISIN) ne peut pas être vide.",
     "InvalidRiskLevel": "Le niveau de risque doit être compris entre 1 et 5.",
     "Archived": "Cet actif est archivé et ne peut pas être modifié.",

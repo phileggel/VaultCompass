@@ -69,10 +69,12 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Severity: low
 - Observation: E2E nav selectors target `button[aria-label="Assets"]`, `aria-label="Accounts"`, `aria-label="Settings"`, `aria-label="Price history"` — all locale-coupled per E4. `wdio.conf.ts` forces English so they work today, but rename of any i18n key or non-English run silently breaks navigation. Pattern is established across 4+ E2E files and not introduced by any single PR.
 
-## 2026-05-19 — Hook-layer stringification breaks F27 presenter pipeline
+---
 
-- Found by: reviewer-frontend
-- Where: src/features/assets/useAssets.ts and equivalents in features/categories, features/accounts
-- Context: branch `feat/asset-exchange-fe` @ `7df4a9c`
+## 2026-05-23 — F27 pipeline gap remains in account_details + transactions features
+
+- Found by: reviewer-frontend (during F27 fix for assets/categories/accounts)
+- Where: `src/features/account_details/withdrawal_transaction/useWithdrawalTransaction.ts:88`, `src/features/account_details/deposit_transaction/useDepositTransaction.ts:73`, `src/features/transactions/useTransactions.ts:46/62/78/94`
+- Context: branch `fix/f27-hook-typed-error-passthrough` @ `4ca4f7d`
 - Severity: 🟡
-- Observation: Hook layer stringifies typed errors to `error.${code}` before they reach component layer, so the F27 layer-3 presenter is bypassed across the asset/category/account features. Symptom: per-variant payloads (e.g. `InvalidExchange.exchange_code`) cannot be interpolated into the user-facing message because the typed shape is already lost by the time the component renders.
+- Observation: `setError(String(e))` and `return { data: null, error: String(e) }` patterns persist in two features that weren't in scope for the asset/category/account F27 fix. Same root cause: typed errors collapsed to strings at the hook layer, presenter bypassed, per-variant payloads lost. Mechanically identical refactor to what shipped today; deferred only because expanding scope would have doubled the PR size. The new canonical `I18nMessage` lives at `src/ui/format/i18n.ts` and the per-BC presenter pattern is now established — port across when these features are next touched, or schedule a dedicated cleanup PR.

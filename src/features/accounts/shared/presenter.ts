@@ -1,4 +1,30 @@
-import type { UpdateFrequency } from "@/bindings";
+import type { AccountApplicationError, AccountCrudError, UpdateFrequency } from "@/bindings";
+import type { I18nMessage } from "@/ui/format/i18n";
+
+/**
+ * F27 — Maps any account-BC mutation error (add / update / delete / deletion-summary)
+ * to an i18n key + interpolation vars. Pure function, no React, no useTranslation.
+ *
+ * Covers AccountCrudError (add/update) and AccountApplicationError (delete and the
+ * pre-deletion summary lookup) — both unions share the same variant pool.
+ */
+export function accountMutationErrorToI18n(
+  err: AccountCrudError | AccountApplicationError,
+): I18nMessage {
+  switch (err.code) {
+    case "InvalidCurrency":
+      return { key: "error.InvalidCurrency", vars: { currency: err.currency } };
+    case "NameEmpty":
+    case "AccountNotFound":
+    case "NameAlreadyExists":
+    case "DatabaseError":
+      return { key: `error.${err.code}` };
+    default: {
+      const _exhaustive: never = err;
+      return _exhaustive;
+    }
+  }
+}
 
 // i18n keys for UpdateFrequency display labels
 export const FREQUENCY_I18N_KEYS: Record<UpdateFrequency, string> = {

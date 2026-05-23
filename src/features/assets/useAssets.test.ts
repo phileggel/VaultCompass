@@ -3,6 +3,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset, CreateAssetDTO, UpdateAssetDTO } from "@/bindings";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 
 const {
   mockCreateAsset,
@@ -94,7 +95,7 @@ describe("useAssets", () => {
     const asset = makeAsset();
     mockCreateAsset.mockResolvedValue({ status: "ok", data: asset });
     const { result } = renderHook(() => useAssets());
-    let ret: { data: Asset | null; error: string | null } = {
+    let ret: { data: Asset | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -123,7 +124,7 @@ describe("useAssets", () => {
       error: { code: "NameAlreadyExists" },
     });
     const { result } = renderHook(() => useAssets());
-    let ret: { data: Asset | null; error: string | null } = {
+    let ret: { data: Asset | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
@@ -140,7 +141,7 @@ describe("useAssets", () => {
       ret = await result.current.addAsset(dto);
     });
     expect(mockFetchAssets).not.toHaveBeenCalled();
-    expect(ret.error).toBe("error.NameAlreadyExists");
+    expect(ret.error).toEqual({ key: "error.NameAlreadyExists" });
   });
 
   // ── updateAsset ───────────────────────────────────────────────────────────────
@@ -159,9 +160,9 @@ describe("useAssets", () => {
       reference: "AAPL",
       exchange: null,
     };
-    let ret: { data: Asset | null; error: string | null } = {
+    let ret: { data: Asset | null; error: I18nMessage | null } = {
       data: null,
-      error: "sentinel",
+      error: { key: "sentinel" },
     };
     await act(async () => {
       ret = await result.current.updateAsset(dto);
@@ -188,14 +189,14 @@ describe("useAssets", () => {
       reference: "AAPL",
       exchange: null,
     };
-    let ret: { data: Asset | null; error: string | null } = {
+    let ret: { data: Asset | null; error: I18nMessage | null } = {
       data: null,
       error: null,
     };
     await act(async () => {
       ret = await result.current.updateAsset(dto);
     });
-    expect(ret.error).toBe("error.NameAlreadyExists");
+    expect(ret.error).toEqual({ key: "error.NameAlreadyExists" });
   });
 
   // ── archiveAsset ──────────────────────────────────────────────────────────────
@@ -203,7 +204,7 @@ describe("useAssets", () => {
   it("archiveAsset calls gateway and shows snackbar on success", async () => {
     mockArchiveAsset.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useAssets());
-    let ret: { error: string | null } = { error: null };
+    let ret: { error: I18nMessage | null } = { error: null };
     await act(async () => {
       ret = await result.current.archiveAsset("a1");
     });
@@ -218,11 +219,11 @@ describe("useAssets", () => {
       error: { code: "ActiveHoldings" },
     });
     const { result } = renderHook(() => useAssets());
-    let ret: { error: string | null } = { error: null };
+    let ret: { error: I18nMessage | null } = { error: null };
     await act(async () => {
       ret = await result.current.archiveAsset("a1");
     });
-    expect(ret.error).toBe("error.ActiveHoldings");
+    expect(ret.error).toEqual({ key: "error.ActiveHoldings" });
   });
 
   // ── unarchiveAsset ────────────────────────────────────────────────────────────
@@ -230,7 +231,7 @@ describe("useAssets", () => {
   it("unarchiveAsset calls gateway and shows snackbar on success", async () => {
     mockUnarchiveAsset.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useAssets());
-    let ret: { error: string | null } = { error: "sentinel" };
+    let ret: { error: I18nMessage | null } = { error: { key: "sentinel" } };
     await act(async () => {
       ret = await result.current.unarchiveAsset("a2");
     });
@@ -244,7 +245,7 @@ describe("useAssets", () => {
   it("deleteAsset calls gateway and shows info snackbar on success", async () => {
     mockDeleteAsset.mockResolvedValue({ status: "ok", data: null });
     const { result } = renderHook(() => useAssets());
-    let ret: { error: string | null } = { error: null };
+    let ret: { error: I18nMessage | null } = { error: null };
     await act(async () => {
       ret = await result.current.deleteAsset("a1");
     });
@@ -259,10 +260,10 @@ describe("useAssets", () => {
       error: { code: "ExistingTransactions" },
     });
     const { result } = renderHook(() => useAssets());
-    let ret: { error: string | null } = { error: null };
+    let ret: { error: I18nMessage | null } = { error: null };
     await act(async () => {
       ret = await result.current.deleteAsset("a1");
     });
-    expect(ret.error).toBe("error.ExistingTransactions");
+    expect(ret.error).toEqual({ key: "error.ExistingTransactions" });
   });
 });

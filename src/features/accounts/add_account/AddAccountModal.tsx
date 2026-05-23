@@ -55,7 +55,7 @@ export function AddAccountModal({ isOpen, onClose }: AddAccountModalProps) {
         {/* R13 — inline error stays modal open */}
         {error && (
           <p role="alert" className="mt-3 text-sm text-m3-error">
-            {t(error, { defaultValue: error })}
+            {t(error.key, error.vars)}
           </p>
         )}
       </form>

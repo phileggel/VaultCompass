@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Asset, AssetClass, Exchange } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
+import type { I18nMessage } from "@/ui/format/i18n";
 import { hasDuplicateReference } from "../shared/validateAsset";
 import { useAssets } from "../useAssets";
 
@@ -31,7 +32,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
     category_id: "",
     exchange: null,
   });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sync form data when asset changes

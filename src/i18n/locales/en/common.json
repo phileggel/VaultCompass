@@ -365,12 +365,12 @@
     "form_price_placeholder": "0.00"
   },
   "error": {
-    "InvalidExchange": "The selected exchange is not in the supported list.",
+    "InvalidExchange": "The selected exchange \"{{exchange_code}}\" is not in the supported list.",
     "Unknown": "An unexpected error occurred. Please try again.",
     "DatabaseError": "An unexpected database error occurred. Please try again.",
     "NameEmpty": "Name cannot be empty.",
     "NameAlreadyExists": "An account with this name already exists.",
-    "InvalidCurrency": "Invalid currency code.",
+    "InvalidCurrency": "\"{{currency}}\" is not a valid currency code.",
     "ReferenceEmpty": "Reference (ticker/ISIN) cannot be empty.",
     "InvalidRiskLevel": "Risk level must be between 1 and 5.",
     "Archived": "This asset is archived and cannot be edited.",
