@@ -20,8 +20,11 @@ export function WebLookupModal({ isOpen, onClose, prefillName, onSuccess }: WebL
   const {
     modalStep,
     searchState,
-    query,
-    setQuery,
+    isinQuery,
+    keywordQuery,
+    lastMode,
+    setIsinQuery,
+    setKeywordQuery,
     submitSearch,
     retrySearch,
     selectResult,
@@ -87,11 +90,14 @@ export function WebLookupModal({ isOpen, onClose, prefillName, onSuccess }: WebL
       maxWidth="max-w-xl"
     >
       <SearchPanel
-        query={query}
-        setQuery={setQuery}
+        isinQuery={isinQuery}
+        keywordQuery={keywordQuery}
         state={searchState}
+        lastMode={lastMode}
         submit={submitSearch}
         retry={retrySearch}
+        setIsinQuery={setIsinQuery}
+        setKeywordQuery={setKeywordQuery}
         onSelect={selectResult}
         onFillManually={fillManually}
       />

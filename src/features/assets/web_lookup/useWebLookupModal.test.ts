@@ -45,11 +45,11 @@ describe("useWebLookupModal", () => {
     const { result } = renderHook(() => useWebLookupModal());
 
     act(() => {
-      result.current.setQuery("AAPL");
+      result.current.setIsinQuery("AAPL");
     });
 
     await act(async () => {
-      result.current.submitSearch();
+      result.current.submitSearch("Isin");
     });
 
     act(() => {
@@ -83,11 +83,11 @@ describe("useWebLookupModal", () => {
     const { result } = renderHook(() => useWebLookupModal());
 
     act(() => {
-      result.current.setQuery("apple");
+      result.current.setKeywordQuery("apple");
     });
 
     await act(async () => {
-      result.current.submitSearch();
+      result.current.submitSearch("Keyword");
     });
 
     act(() => {
@@ -101,9 +101,7 @@ describe("useWebLookupModal", () => {
     });
 
     expect(result.current.modalStep.step).toBe("search");
-    // Previous query is retained — no need to retype (WEB-047)
-    expect(result.current.query).toBe("apple");
-    // Previous results are retained in state
+    expect(result.current.keywordQuery).toBe("apple");
     expect(result.current.searchState.status).toBe("results");
     if (result.current.searchState.status === "results") {
       expect(result.current.searchState.results).toEqual([appleResult, etfResult]);
@@ -129,11 +127,11 @@ describe("useWebLookupModal", () => {
     const { result } = renderHook(() => useWebLookupModal());
 
     act(() => {
-      result.current.setQuery("AAPL");
+      result.current.setIsinQuery("AAPL");
     });
 
     await act(async () => {
-      result.current.submitSearch();
+      result.current.submitSearch("Isin");
     });
 
     act(() => {
@@ -153,18 +151,17 @@ describe("useWebLookupModal", () => {
     const { result } = renderHook(() => useWebLookupModal());
 
     act(() => {
-      result.current.setQuery("apple");
+      result.current.setKeywordQuery("apple");
     });
 
     await act(async () => {
-      result.current.submitSearch();
+      result.current.submitSearch("Keyword");
     });
 
     act(() => {
       result.current.selectResult(appleResult);
     });
 
-    // Go back and select a different result
     act(() => {
       result.current.back();
     });
@@ -176,6 +173,96 @@ describe("useWebLookupModal", () => {
     expect(result.current.modalStep.step).toBe("form-prefilled");
     if (result.current.modalStep.step === "form-prefilled") {
       expect(result.current.modalStep.selection).toEqual(etfResult);
+    }
+  });
+
+  // WEB-011 / WEB-014 — ISIN submit dispatches to gateway with "Isin" mode
+  it("submitSearch with Isin mode calls gateway with isinQuery and mode Isin", async () => {
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
+
+    const { result } = renderHook(() => useWebLookupModal());
+
+    act(() => {
+      result.current.setIsinQuery("IE00B53L3W79");
+    });
+
+    await act(async () => {
+      result.current.submitSearch("Isin");
+    });
+
+    expect(mockLookupAsset).toHaveBeenCalledWith("IE00B53L3W79", "Isin");
+  });
+
+  // WEB-011 / WEB-014 — Keyword submit dispatches to gateway with "Keyword" mode
+  it("submitSearch with Keyword mode calls gateway with keywordQuery and mode Keyword", async () => {
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
+
+    const { result } = renderHook(() => useWebLookupModal());
+
+    act(() => {
+      result.current.setKeywordQuery("Apple");
+    });
+
+    await act(async () => {
+      result.current.submitSearch("Keyword");
+    });
+
+    expect(mockLookupAsset).toHaveBeenCalledWith("Apple", "Keyword");
+  });
+
+  // WEB-030 / WEB-033 — lastMode is tracked so SearchPanel can anchor loading/error to the right field
+  it("lastMode is Isin after an ISIN submit", async () => {
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
+
+    const { result } = renderHook(() => useWebLookupModal());
+
+    act(() => {
+      result.current.setIsinQuery("IE00B53L3W79");
+    });
+
+    await act(async () => {
+      result.current.submitSearch("Isin");
+    });
+
+    expect(result.current.lastMode).toBe("Isin");
+  });
+
+  it("lastMode is Keyword after a Keyword submit", async () => {
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
+
+    const { result } = renderHook(() => useWebLookupModal());
+
+    act(() => {
+      result.current.setKeywordQuery("Apple");
+    });
+
+    await act(async () => {
+      result.current.submitSearch("Keyword");
+    });
+
+    expect(result.current.lastMode).toBe("Keyword");
+  });
+
+  // WEB-025 / WEB-033 — InvalidIsinFormat error is surfaced in searchState
+  it("searchState carries InvalidIsinFormat code when ISIN path rejects the query", async () => {
+    mockLookupAsset.mockResolvedValue({
+      status: "error",
+      error: { code: "InvalidIsinFormat" },
+    });
+
+    const { result } = renderHook(() => useWebLookupModal());
+
+    act(() => {
+      result.current.setIsinQuery("NOTANISIN");
+    });
+
+    await act(async () => {
+      result.current.submitSearch("Isin");
+    });
+
+    expect(result.current.searchState.status).toBe("error");
+    if (result.current.searchState.status === "error") {
+      expect(result.current.searchState.code).toBe("InvalidIsinFormat");
     }
   });
 });
