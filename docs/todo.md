@@ -13,23 +13,6 @@ AST-006 states "An archived asset can no longer receive new prices." But `record
 
 Surfaced 2026-05-17 by `contract-reviewer` after the MKT auto-fetch amendment. Out of scope for that amendment but worth resolving before the next asset-domain feature.
 
-## (contracts) — Migrate account-contract.md and update-contract.md to wire-only framing
-
-`asset-contract.md` was migrated 2026-05-17 to the wire-only framing — no Rust-internal type names (composites, leaves, `*ApplicationError` / `*DomainError`) in the contract; each command's "Errors" column lists wire-flat variant codes only. The other two contracts still use the older "Error type | Reachable codes" two-column shape with Rust-internal attributions.
-
-**Scope per file**:
-
-- `docs/contracts/account-contract.md` — ~15 commands across Account CRUD + Holding/Transaction + Cash; header rework + per-command table cleanup
-- `docs/contracts/update-contract.md` — ~3 commands; small file
-
-**Approach** (per file): replace the multi-block error-model header (composites + leaves) with a short wire-only intro mirroring `asset-contract.md`; for each command row, collapse "Error type | Reachable codes" into a single "Errors" column listing variant codes (strip `(AssetApplicationError, ...)` / `(*DomainError)` attributions, keep spec-rule tags like `(MKT-043)` and contextual prose like `(when category_id missing)`). Also drop the `## Changelog` section — git history is the changelog.
-
-**Estimate**: ~1.5h for both files combined (mechanical doc editing).
-
-**Trigger**: bundle with the next session that touches either BC, or run as a standalone refactor PR.
-
-Surfaced 2026-05-17 during `/contract market-price`.
-
 ## (mkt) — Surface fetch-task completion to FE for end-of-task user feedback
 
 `fetch_all_asset_prices` and `fetch_account_asset_prices` return synchronously on dispatch; per-asset results stream via `AssetPriceUpdated` events. The user has no signal for "task finished" — whether successfully, with partial failures, or with full provider outage. Per-asset failures are currently logged BE-side per MKT-114 with no FE surface; the task-level summary is the missing layer.
@@ -42,7 +25,7 @@ Surfaced 2026-05-17 during `/contract market-price` triage. Spec amendment to MK
 
 ADR-011 captures the BYOK + OS keychain + 3-tier fallback decision. The spec to write — trigram `KEY` — covers the Tauri command surface, state machine, Connections settings panel UX, link-out to provider signup, "test connection" probe, and the Linux-without-keyring detection + UX flow.
 
-Cross-cutting enabler: every current and future external-provider feature depends on this. Once shipped, the OpenFIGI 429 TODO above is largely subsumed (the user just adds a key).
+Cross-cutting enabler: every current and future external-provider feature depends on this. First downstream consumers (in expected build order): Finnhub price fallback per ADR-008 (`/quote`), Finnhub ISIN ↔ ticker enrichment for `Asset` (see `(asset) — Auto-fill ISIN ↔ ticker via Finnhub` below — uses `/stock/profile2`), and the OpenFIGI free-key uplift that lifts the WEB lookup search rate from ~5/min to ~100/min.
 
 Workflow-A: `/spec-writer api-key-management` → `/contract` → `feature-planner` → implementation. ~1-2 day feature.
 
@@ -58,24 +41,19 @@ Workflow-A: `/spec-writer fx-rate` → `/contract` → `feature-planner` → imp
 
 Surfaced 2026-05-16 by `adr-reviewer` after ADR-009 was written.
 
-## (asset) — Promote ISIN to canonical identifier alongside ticker
+## (asset) — Auto-fill ISIN ↔ ticker via Finnhub (BYOK)
 
-`Asset.reference` is currently a single field that ends up holding either an ISIN or a ticker depending on how the asset was created (ISIN search → ISIN; keyword search → ticker; manual → whatever the user typed). This makes the AST uniqueness check semantic noise — the same instrument can be created twice as `AI` and `FR0000120073` and the two records won't dedup.
+PR #41 shipped `Asset.isin` as an optional field separate from `reference` (the ticker). On the web-lookup ISIN path both fields populate from the user's query and the OpenFIGI ticker; on the keyword path only `reference` gets filled because OpenFIGI's free `/v3` endpoints do not expose ISIN in any response shape (verified live 2026-05-24). Manual creation similarly leaves the other field empty.
 
-Industry convention: ISIN is the canonical identity (stable across rebrands, globally unique by ISO 6166), ticker is a venue-specific display label that can change (e.g. `TOT → TTE` for Total → TotalEnergies in 2021).
+Once the KEY spec ships (BYOK + OS keychain per ADR-011), Finnhub's `/api/v1/stock/profile2?symbol={SYMBOL}&token={KEY}` becomes the reference enrichment path: the documented response includes both `ticker` and `isin`, so one call can fill the missing side. UX entry point: an "Auto-fill" affordance on the Add/Edit Asset form next to whichever identifier field is blank, triggered on demand by the user (not automatic) to keep call volume aligned with the ~3-5 adds/session pattern.
 
-**Proposed shape (additive, no breaking migration):**
+**Coverage caveat — must validate before committing:** Finnhub's free-tier coverage for European ETFs (especially Amundi's `FR0014…` range, the original motivating case) is documented in the field schema but not verified end-to-end. Cheapest validation is a one-shot curl against `/stock/profile2?symbol=PE500.PA&token=…` with a free Finnhub key (~30s signup). If coverage gaps surface, EODHD `/api/fundamentals` is the secondary candidate (similar key model, stronger European coverage, $20/mo for all-markets).
 
-- New nullable column `isin: Option<String>` on `Asset`
-- Existing `reference` field becomes the human-friendly ticker (rename to `ticker` if breaking is acceptable; otherwise leave as-is and treat the field as ticker)
-- Uniqueness check switches to ISIN-when-present, ticker-when-not
-- Add Asset form: ticker required, ISIN optional
-- Web lookup ISIN-path → both filled; keyword-path → ticker only (OpenFIGI's free `/v3/mapping` response doesn't expose ISIN, so we cannot recover it for keyword-discovered assets)
-- Manual creation: ticker required, ISIN optional with a "lookup ISIN" affordance for the user
+**Dependencies:** KEY spec (above) must ship first — Finnhub gates every endpoint behind a token, so the BYOK key-storage layer is a hard prerequisite (verified 2026-05-24: keyless calls return `401 — Please use an API key.`).
 
-**Why it's not done now:** the just-shipped WEB-050 fix already surfaces the right primary listing for free-text searches; the user pain that motivated this discussion is resolved. Adding a second identifier field is a 1–2 day Workflow-A feature (migration, domain entity, validation, AST spec edit, gateway, presenter, form, tests) and only pays off once a downstream feature actually consumes ISIN.
+**Subsumes:** the legacy "(mkt) Stooq fetch by ISIN returns N/D" issue — once the enrichment path fills `reference` (ticker) when the user only supplied ISIN, Stooq fetches the resolved ticker and the original symptom disappears. The ISIN-based dedup question (deferred during PR #41 — see asset spec § Future features) is independent of this entry.
 
-**Spawning point:** wire it in as part of the first downstream ISIN consumer (dividend tracking, broker import/export, corporate-action handling). At that point the cost is amortized into the feature that needs it. Surfaced during the WEB-050 review (2026-05-08).
+Surfaced 2026-05-24 (post-PR #41 follow-up).
 
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
@@ -107,25 +85,3 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
 `cargo audit` flags `rsa 0.9.10` (timing sidechannel, CVSS 5.9 medium) with no upstream fix. Pulled transitively via `sqlx-mysql 0.8.6` because the `sqlx` macro crate compiles all backends regardless of enabled features. We only enable `sqlite`, so the vulnerable RSA path is never reached at runtime. Re-evaluate when sqlx ships a fix or when we change DB backend.
-
-## (mkt) — Stooq fetch by ISIN returns N/D when the asset is indexed by ticker
-
-User-reported 2026-05-24: a Stooq fetch for the asset whose `reference` is `FR001400U5Q4` returns no data. Probe results (2026-05-24):
-
-- `PE500.FR` (the Amundi PEA S&P 500 UCITS ETF ticker) → 52.972 EUR, fresh ✅
-- `FR001400U5Q4` (the same ETF's ISIN) → `N/D` ❌
-- `CW8.FR` (Amundi MSCI World ticker) → 668.851 EUR, fresh ✅
-
-So Stooq does carry the instrument — keyed by ticker, not ISIN. The original framing ("FR0014… is the OAT ISIN range") was wrong: FR0014… is also Amundi's ETF range, and likely many other issuers'. The actual bug is on our side — `Asset.reference` holds whatever the user / OpenFIGI supplied (ticker OR ISIN), and the Stooq symbol-derivation path lowercases that verbatim. When `reference` is an ISIN, Stooq can't find it.
-
-Root-caused by the existing `(asset) — Promote ISIN to canonical identifier alongside ticker` todo above. Until that lands, an intermediate option is to resolve ISIN → ticker via OpenFIGI's `/v3/mapping` response inside the dispatcher, then issue the Stooq fetch on the resolved ticker. Smaller change than the schema split but adds an external dependency on every fetch.
-
-Surfaced 2026-05-24 and investigated 2026-05-24 (revert of the misdirected `stooq_coverage` helper).
-
-## (fe) — Account details price column too dense + FR date in EN locale
-
-User-reported 2026-05-24: the holdings table's price cell shows 4–5 lines (price + Stooq tag + date + update info). Reorganize the data into 2–3 columns so each cell is one line. Also a locale bug: dates render in FR format (`DD/MM/YYYY`) even when the UI locale is English — likely a `toLocaleDateString` call missing the locale argument or using a hardcoded one. Both issues live in the holdings view of the account details page.
-
-## (fe) — Rename "Open balance" → clearer label
-
-User-reported 2026-05-24: the "Open balance" CTA is opaque to users without a finance background and not great even with one. Rename to something self-explanatory like "Add a position" (i18n in both `common.json` namespaces). Probably affects holdings creation flow in account details + transactions UI.
