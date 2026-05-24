@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-05-24
+
+### Added
+
+- add optional ISIN field alongside ticker reference
+- two-field web lookup with ISIN format gate
+  SearchPanel now exposes one input + submit per path (ISIN and
+  Keyword). Loading spinner and inline error anchor to the field
+  that triggered the action so the other path stays usable; new
+  presenter maps InvalidIsinFormat to a field-local copy key.
+- explicit ISIN/keyword lookup mode + format validator
+  Auto-routing by query shape is replaced by an explicit
+  `mode: LookupMode { Isin, Keyword }` so the FE can drive path
+  selection. ISIN path adds ISO 6166 validation (WEB-016) and a
+  tighter 3-venue cap per share class (WEB-050e). FE two-field UI
+  follows in a subsequent commit.
+- show per-account global value on accounts list
+  ACC-021 surfaces CSH-094's per-account economic value (cash + same-
+  currency priced holdings) on the Accounts list, alongside the name +
+  frequency columns. New use_cases/account_summary/ wraps Account with
+  total_global_value via a dedicated IPC, keeping the existing
+  get_accounts cheap for dropdown callers that don't need the value.
+
+### Fixed
+
+- i18n ModalContainer close-button aria-label (F24)
+- thread i18n locale through formatIsoDate + compact price cell
+- rename Open Balance CTA to Add a position
+- guard account_details_view hooks with try/catch fallback
+  usePriceModal.handleSubmit and useAccountDetails.fetchDetails called
+  the gateway without try/catch — a throw would leave isSubmitting /
+  isLoading stuck true and never set an error. Both now match the
+  canonical pattern used by the sibling hooks (UNKNOWN_ERROR fallback,
+  flag cleared in finally). Closes two 2026-05-23 techdebt entries.
+- clip Dialog to viewport so tall modals scroll inside
+  E2E in CI's 800x600 viewport reported the AddAsset submit button
+  as "not interactable" — Dialog had no max-height and content
+  overflowed the screen, with the footer pushed below the viewport.
+  max-h-[calc(100vh-2rem)] + flex-1/min-h-0 lets the content scroll
+  within bounds; matches the FormModal pattern.
+
 ## [0.13.0] - 2026-05-23
 
 ### Added
