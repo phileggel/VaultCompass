@@ -100,6 +100,7 @@
     "search_placeholder": "Rechercher un compte...",
     "column_name": "Nom",
     "column_frequency": "Fréquence",
+    "column_global_value": "Valeur globale",
     "column_actions": "Actions",
     "loading": "Chargement des comptes...",
     "empty": "Aucun compte. Créez votre premier compte avec le bouton +.",

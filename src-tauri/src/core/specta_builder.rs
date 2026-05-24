@@ -2,8 +2,8 @@ use crate::{
     context::{account, asset},
     core::{logger, Event},
     use_cases::{
-        account_deletion, account_details, archive_asset, asset_price_fetch, asset_web_lookup,
-        delete_asset, holding_transaction, update_checker,
+        account_deletion, account_details, account_summary, archive_asset, asset_price_fetch,
+        asset_web_lookup, delete_asset, holding_transaction, update_checker,
     },
 };
 
@@ -51,6 +51,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
+        .typ::<account_summary::AccountSummary>()
         .typ::<account_deletion::AccountDeletionSummary>()
         .typ::<asset_web_lookup::AssetLookupResult>()
         .typ::<asset_web_lookup::WebLookupApplicationError>()
@@ -92,6 +93,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             holding_transaction::record_deposit,
             holding_transaction::record_withdrawal,
             account_details::get_account_details,
+            account_summary::get_account_summaries,
             account_deletion::get_account_deletion_summary,
             asset_web_lookup::lookup_asset,
             asset_price_fetch::fetch_all_asset_prices,

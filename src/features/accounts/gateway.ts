@@ -3,8 +3,10 @@ import {
   type AccountApplicationError,
   type AccountCrudError,
   type AccountDeletionSummary,
+  type AccountSummary,
   type CreateAccountDTO,
   commands,
+  events,
   type FetchAllAssetPricesError,
   type Result,
   type UpdateAccountDTO,
@@ -17,6 +19,10 @@ import {
 export const accountGateway = {
   async getAccounts(): Promise<Result<Account[], AccountApplicationError>> {
     return await commands.getAccounts();
+  },
+
+  async getAccountSummaries(): Promise<Result<AccountSummary[], AccountApplicationError>> {
+    return await commands.getAccountSummaries();
   },
 
   async addAccount(dto: CreateAccountDTO): Promise<Result<Account, AccountCrudError>> {
@@ -39,5 +45,11 @@ export const accountGateway = {
 
   async fetchAllAssetPrices(): Promise<Result<null, FetchAllAssetPricesError>> {
     return commands.fetchAllAssetPrices();
+  },
+
+  async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
+    return events.event.listen((event) => {
+      callback(event.payload.type);
+    });
   },
 };
