@@ -368,10 +368,10 @@ describe("asset gateway — lookupAsset", () => {
     // bindings.ts wraps the TAURI_INVOKE result in { status: "ok", data: ... }
     mockInvoke.mockResolvedValue(results);
 
-    const res = await assetGateway.lookupAsset("AAPL");
+    const res = await assetGateway.lookupAsset("AAPL", "Keyword");
 
     expect(res).toEqual({ status: "ok", data: results });
-    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", { query: "AAPL" });
+    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", { query: "AAPL", mode: "Keyword" });
   });
 
   // WEB-020 — ISIN query (12 alphanumeric chars) is forwarded as-is
@@ -387,11 +387,12 @@ describe("asset gateway — lookupAsset", () => {
     ];
     mockInvoke.mockResolvedValue(results);
 
-    const res = await assetGateway.lookupAsset("US0378331005");
+    const res = await assetGateway.lookupAsset("US0378331005", "Isin");
 
     expect(res).toEqual({ status: "ok", data: results });
     expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", {
       query: "US0378331005",
+      mode: "Isin",
     });
   });
 
@@ -399,11 +400,12 @@ describe("asset gateway — lookupAsset", () => {
   it("lookupAsset returns empty list when no instruments found", async () => {
     mockInvoke.mockResolvedValue([]);
 
-    const res = await assetGateway.lookupAsset("xyzzy-not-a-real-ticker");
+    const res = await assetGateway.lookupAsset("xyzzy-not-a-real-ticker", "Keyword");
 
     expect(res).toEqual({ status: "ok", data: [] });
     expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", {
       query: "xyzzy-not-a-real-ticker",
+      mode: "Keyword",
     });
   });
 
@@ -413,10 +415,10 @@ describe("asset gateway — lookupAsset", () => {
     // bindings.ts catches the rejection and returns { status: "error", error: e }
     mockInvoke.mockRejectedValue(err);
 
-    const res = await assetGateway.lookupAsset("AAPL");
+    const res = await assetGateway.lookupAsset("AAPL", "Keyword");
 
     expect(res).toEqual({ status: "error", error: err });
-    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", { query: "AAPL" });
+    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", { query: "AAPL", mode: "Keyword" });
   });
 
   // WEB-023/WEB-024/WEB-046 — optional fields may be null
@@ -432,7 +434,7 @@ describe("asset gateway — lookupAsset", () => {
     ];
     mockInvoke.mockResolvedValue(results);
 
-    const res = await assetGateway.lookupAsset("obscure fund");
+    const res = await assetGateway.lookupAsset("obscure fund", "Keyword");
 
     expect(res).toEqual({ status: "ok", data: results });
   });

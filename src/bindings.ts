@@ -370,18 +370,18 @@ async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDelet
 }
 },
 /**
- * Searches OpenFIGI for instruments matching the query and returns up to 10
- * results (WEB-020, WEB-022).
+ * Searches OpenFIGI for instruments matching `query` along the explicit `mode`
+ * path (WEB-014, WEB-020). Returns up to 30 results (WEB-022).
  * 
- * Routing is transparent to the caller: 12-char alphanumeric queries are sent
- * to the ISIN mapping endpoint; all others to the keyword search endpoint
- * (WEB-014). HTTP 429 surfaces as `WebLookupApplicationError::RateLimited`;
- * every other failure surfaces as `WebLookupApplicationError::NetworkError`
- * (WEB-025).
+ * The frontend chooses the path: `Isin` validates the query against ISO 6166
+ * (WEB-016) before any HTTP call and routes to `/v3/mapping`; `Keyword`
+ * normalizes diacritics (WEB-015) and routes to `/v3/search`. HTTP 429
+ * surfaces as `RateLimited`; every other reachability failure surfaces as
+ * `NetworkError`; ISIN format failures surface as `InvalidIsinFormat` (WEB-025).
  */
-async lookupAsset(query: string) : Promise<Result<AssetLookupResult[], WebLookupApplicationError>> {
+async lookupAsset(query: string, mode: LookupMode) : Promise<Result<AssetLookupResult[], WebLookupApplicationError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("lookup_asset", { query }) };
+    return { status: "ok", data: await TAURI_INVOKE("lookup_asset", { query, mode }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1592,6 +1592,22 @@ AccountOperationError |
  */
 TransactionDomainError
 /**
+ * Explicit lookup path selector passed by the frontend (WEB-014).
+ * 
+ * `Isin` routes the query through `/v3/mapping` after ISO 6166 format
+ * validation (WEB-016). `Keyword` routes through `/v3/search` with
+ * diacritics normalization (WEB-015).
+ */
+export type LookupMode = 
+/**
+ * ISIN path: validate format (WEB-016) then call `/v3/mapping`.
+ */
+"Isin" | 
+/**
+ * Keyword path: normalize diacritics (WEB-015) then call `/v3/search`.
+ */
+"Keyword"
+/**
  * Application-layer rejections specific to the `open_holding` use case —
  * cross-BC asset checks performed by the orchestrator before delegating to
  * `AccountService::open_holding`.
@@ -1953,7 +1969,16 @@ export type WebLookupApplicationError =
  * Network unreachable, connection timeout, or any non-2xx HTTP status
  * other than 429.
  */
-{ code: "NetworkError" }
+{ code: "NetworkError" } | 
+/**
+ * The query was submitted on the ISIN path (`LookupMode::Isin`) but does
+ * not satisfy the ISO 6166 format rules: wrong length, invalid charset, or
+ * failing Luhn-mod-10 check digit (WEB-016, WEB-025).
+ * 
+ * Wire shape: `{ "code": "InvalidIsinFormat" }` — no payload; the FE
+ * renders a single static copy string.
+ */
+{ code: "InvalidIsinFormat" }
 /**
  * Parameters for recording a cash withdrawal (CSH-030).
  */

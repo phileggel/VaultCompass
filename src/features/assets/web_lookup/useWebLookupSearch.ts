@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { AssetLookupResult, WebLookupApplicationError } from "@/bindings";
+import type { AssetLookupResult, LookupMode, WebLookupApplicationError } from "@/bindings";
 import { assetGateway } from "../gateway";
 
 export type WebLookupSearchState =
@@ -21,9 +21,9 @@ export function useWebLookupSearch(): UseWebLookupSearchReturn {
   const [query, setQuery] = useState("");
   const [state, setState] = useState<WebLookupSearchState>({ status: "idle" });
 
-  const runSearch = useCallback(async (q: string) => {
+  const runSearch = useCallback(async (q: string, mode: LookupMode) => {
     setState({ status: "loading" });
-    const result = await assetGateway.lookupAsset(q);
+    const result = await assetGateway.lookupAsset(q, mode);
     if (result.status === "error") {
       setState({ status: "error", code: result.error.code });
     } else if (result.data.length === 0) {
@@ -35,12 +35,16 @@ export function useWebLookupSearch(): UseWebLookupSearchReturn {
 
   const submit = useCallback(() => {
     if (!query.trim() || state.status === "loading") return;
-    runSearch(query);
+    const mode: LookupMode =
+      query.trim().length === 12 && /^[A-Za-z0-9]+$/.test(query.trim()) ? "Isin" : "Keyword";
+    runSearch(query, mode);
   }, [query, state, runSearch]);
 
   const retry = useCallback(() => {
     if (!query.trim() || state.status === "loading") return;
-    runSearch(query);
+    const mode: LookupMode =
+      query.trim().length === 12 && /^[A-Za-z0-9]+$/.test(query.trim()) ? "Isin" : "Keyword";
+    runSearch(query, mode);
   }, [query, state, runSearch]);
 
   return { query, setQuery, state, submit, retry };

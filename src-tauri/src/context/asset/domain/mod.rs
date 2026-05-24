@@ -8,6 +8,8 @@ pub mod category;
 pub mod error;
 /// Canonical trading venue value object (Exchange) and curated set (AST-021).
 pub mod exchange;
+/// ISIN format validator and error type (WEB-016).
+pub mod isin;
 /// OpenFIGI inbound exchange mapper — `micCode` / `exchCode` → `Exchange` (WEB-049).
 pub mod openfigi_exchange_mapper;
 /// Stooq outbound exchange mapper — `Exchange` → Stooq suffix (MKT-110).

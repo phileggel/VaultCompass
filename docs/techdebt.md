@@ -10,6 +10,26 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
+
+- Found by: reviewer-backend (during ISIN-lookup-split review)
+- Where: src-tauri/src/ (project-wide — 315 of 391 test functions use descriptive naming without the `test_` prefix)
+- Context: branch `feat/explicit-isin-lookup` @ `30ec513`
+- Severity: 🔵
+- Observation: `docs/test_convention.md` mandates the `test_<subject>_<condition>_<expected_outcome>` naming pattern, but the codebase has organically settled on descriptive names without the `test_` prefix (e.g. `validates_ishares_sp500_isin`, `rejects_empty_string_as_wrong_length`). Only ~20% of test functions (76 of 391) carry the prefix. The reviewer surfaced 26 new tests in the ISIN-lookup feature that follow the existing local convention but diverge from the doc. Resolution direction (project-wide rename to align with the doc OR doc update to codify the de facto pattern) is a separate decision and a separate MR; either path is mechanical but spans every Rust test file in the repo.
+
+---
+
+## 2026-05-24 — WEB-050a keyword filter narrower than WEB-023 mapping
+
+- Found by: spec-reviewer
+- Where: docs/spec/asset-web-lookup.md (WEB-050a + WEB-023)
+- Context: branch `feat/explicit-isin-lookup` @ `30ec513`
+- Severity: 🟡
+- Observation: WEB-050a restricts the keyword `/v3/search` request to `securityType: "Common Stock"`, but WEB-023 publishes a broader asset-class mapping (ETF, MutualFunds, Bonds, DigitalAsset, RealEstate, Cash, Derivatives). Practical effect: on the keyword path only stocks can surface; ETFs, bonds, mutual funds, etc. are reachable only via the ISIN path. Pre-existing inconsistency introduced by 4fd0f2e; surfaced by spec-reviewer during the ISIN-lookup-split amendment, out of scope for that amendment.
+
+---
+
 ## 2026-05-16 — ADR status vocabulary lacks an "amends" relationship
 
 - Found by: adr-reviewer (during review of ADRs 008/009/010/011)

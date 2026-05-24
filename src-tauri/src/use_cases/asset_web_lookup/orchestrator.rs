@@ -5,14 +5,33 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 use super::error::WebLookupApplicationError;
 use super::primary_listing_processor::{self, AssetLookupResult, QueryContext, RawFigiHit};
+use crate::context::asset::isin::validate_isin;
 use crate::core::logger::BACKEND;
+
+// ---------------------------------------------------------------------------
+// LookupMode — explicit path selector (WEB-014, contract § LookupMode)
+// ---------------------------------------------------------------------------
+
+/// Explicit lookup path selector passed by the frontend (WEB-014).
+///
+/// `Isin` routes the query through `/v3/mapping` after ISO 6166 format
+/// validation (WEB-016). `Keyword` routes through `/v3/search` with
+/// diacritics normalization (WEB-015).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LookupMode {
+    /// ISIN path: validate format (WEB-016) then call `/v3/mapping`.
+    Isin,
+    /// Keyword path: normalize diacritics (WEB-015) then call `/v3/search`.
+    Keyword,
+}
 
 /// Sentinel error raised by `ReqwestOpenFigiClient` when OpenFIGI returns
 /// HTTP 429. Translation closures in `search` / `collect_keyword_hits`
@@ -62,45 +81,46 @@ impl AssetWebLookupUseCase {
         Self { client }
     }
 
-    /// Searches OpenFIGI for instruments matching `query`.
-    ///
-    /// Routing rule (WEB-014): exactly 12 ASCII-alphanumeric chars → ISIN path;
-    /// everything else → keyword path. The keyword path issues a second HTTP
-    /// call (WEB-050) to enrich each unique share class with its full set of
-    /// listings, so primary venues missing from `/v3/search` (notably Euronext
-    /// Paris for European stocks) are surfaced.
+    /// Searches OpenFIGI for instruments matching `query` along the explicit
+    /// `mode` path (WEB-014). The ISIN path validates the query against ISO 6166
+    /// (WEB-016) before any HTTP call; the keyword path normalizes diacritics
+    /// (WEB-015) and issues a second HTTP call (WEB-050) to enrich each unique
+    /// share class with its full set of listings, so primary venues missing
+    /// from `/v3/search` (notably Euronext Paris for European stocks) are
+    /// surfaced.
     ///
     /// Client errors are routed by [`translate_client_error`] (WEB-025): HTTP 429
-    /// → `RateLimited`, everything else → `NetworkError`. The full diagnostic
+    /// → `RateLimited`, everything else → `NetworkError`. ISIN format failures
+    /// surface as `InvalidIsinFormat` with no HTTP call made. The full diagnostic
     /// chain is preserved server-side via `tracing::warn!`.
     pub async fn search(
         &self,
         query: String,
+        mode: LookupMode,
     ) -> StdResult<Vec<AssetLookupResult>, WebLookupApplicationError> {
-        let normalized = normalize_query(query.trim());
-        let trimmed = normalized.as_str();
-        let is_isin = trimmed.len() == 12 && trimmed.chars().all(|c| c.is_ascii_alphanumeric());
-
-        let ctx = QueryContext {
-            isin: if is_isin {
-                Some(trimmed.to_string())
-            } else {
-                None
-            },
-        };
-
-        let raw_hits = if is_isin {
-            self.client
-                .map_isin(trimmed)
-                .await
-                .map_err(|e| translate_client_error(e, trimmed, "search: ISIN lookup"))?
-        } else {
-            self.collect_keyword_hits(trimmed).await?
-        };
-
-        let mut results = primary_listing_processor::process_hits(raw_hits, &ctx);
-        results.truncate(30);
-        Ok(results)
+        match mode {
+            LookupMode::Isin => {
+                let normalized_isin = validate_isin(&query)
+                    .map_err(|_| WebLookupApplicationError::InvalidIsinFormat)?;
+                let ctx = QueryContext {
+                    isin: Some(normalized_isin.clone()),
+                };
+                let raw_hits = self.client.map_isin(&normalized_isin).await.map_err(|e| {
+                    translate_client_error(e, &normalized_isin, "search: ISIN lookup")
+                })?;
+                let mut results = primary_listing_processor::process_hits(raw_hits, &ctx);
+                results.truncate(30);
+                Ok(results)
+            }
+            LookupMode::Keyword => {
+                let normalized = normalize_query(query.trim());
+                let ctx = QueryContext { isin: None };
+                let raw_hits = self.collect_keyword_hits(&normalized).await?;
+                let mut results = primary_listing_processor::process_hits(raw_hits, &ctx);
+                results.truncate(30);
+                Ok(results)
+            }
+        }
     }
 
     /// Keyword path (WEB-050): does the initial `/v3/search` call, collects the
@@ -434,68 +454,10 @@ mod tests {
         mock.expect_map_share_classes().times(0);
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search("Société Générale".to_string()).await.is_ok());
-    }
-
-    // ------------------------------------------------------------------
-    // WEB-014 routing
-    // ------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn routes_12_alphanumeric_query_to_map_isin() {
-        let isin = "US0378331005";
-        let mut mock = MockOpenFigiClient::new();
-        mock.expect_map_isin()
-            .with(eq(isin))
-            .times(1)
-            .returning(|_| Ok(vec![]));
-        mock.expect_search_keyword().times(0);
-        mock.expect_map_share_classes().times(0);
-
-        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search(isin.to_string()).await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn routes_short_query_to_search_keyword() {
-        let query = "AAPL";
-        let mut mock = MockOpenFigiClient::new();
-        mock.expect_search_keyword()
-            .with(eq(query))
-            .times(1)
-            .returning(|_| Ok(vec![]));
-        mock.expect_map_isin().times(0);
-        mock.expect_map_share_classes().times(0); // empty share-class set
-        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search(query.to_string()).await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn routes_13_char_alphanumeric_to_search_keyword() {
-        let query = "US03783310051";
-        let mut mock = MockOpenFigiClient::new();
-        mock.expect_search_keyword()
-            .with(eq(query))
-            .times(1)
-            .returning(|_| Ok(vec![]));
-        mock.expect_map_isin().times(0);
-        mock.expect_map_share_classes().times(0);
-        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search(query.to_string()).await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn routes_query_with_dash_to_search_keyword() {
-        let query = "US037833-005";
-        let mut mock = MockOpenFigiClient::new();
-        mock.expect_search_keyword()
-            .with(eq(query))
-            .times(1)
-            .returning(|_| Ok(vec![]));
-        mock.expect_map_isin().times(0);
-        mock.expect_map_share_classes().times(0);
-        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search(query.to_string()).await.is_ok());
+        assert!(uc
+            .search("Société Générale".to_string(), LookupMode::Keyword)
+            .await
+            .is_ok());
     }
 
     // ------------------------------------------------------------------
@@ -543,7 +505,10 @@ mod tests {
         mock.expect_map_isin().times(0);
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search("anything".to_string()).await.is_ok());
+        assert!(uc
+            .search("anything".to_string(), LookupMode::Keyword)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
@@ -564,7 +529,10 @@ mod tests {
         mock.expect_map_share_classes().times(0);
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search("anything".to_string()).await.is_ok());
+        assert!(uc
+            .search("anything".to_string(), LookupMode::Keyword)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
@@ -584,7 +552,10 @@ mod tests {
         mock.expect_map_share_classes().times(0);
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        assert!(uc.search("FR0000120073".to_string()).await.is_ok());
+        assert!(uc
+            .search("FR0000120073".to_string(), LookupMode::Isin)
+            .await
+            .is_ok());
     }
 
     // ------------------------------------------------------------------
@@ -632,7 +603,10 @@ mod tests {
             .returning(move |_| Ok(enriched.clone()));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let results = uc.search("fund".to_string()).await.unwrap();
+        let results = uc
+            .search("fund".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 30);
     }
 
@@ -655,7 +629,10 @@ mod tests {
             .returning(|_| Ok(vec![vec![]]));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let results = uc.search("anything".to_string()).await.unwrap();
+        let results = uc
+            .search("anything".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap();
         assert!(results.is_empty());
     }
 
@@ -681,7 +658,7 @@ mod tests {
             .returning(move |_| Ok(vec![hit.clone()]));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let results = uc.search(isin.to_string()).await.unwrap();
+        let results = uc.search(isin.to_string(), LookupMode::Isin).await.unwrap();
         // exchange is now Option<Exchange>; verify the canonical code is resolved
         let exchange = results[0]
             .exchange
@@ -712,7 +689,7 @@ mod tests {
             .returning(move |_| Ok(vec![hit.clone()]));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let results = uc.search(isin.to_string()).await.unwrap();
+        let results = uc.search(isin.to_string(), LookupMode::Isin).await.unwrap();
         assert_eq!(results[0].reference.as_deref(), Some(isin));
     }
 
@@ -743,7 +720,10 @@ mod tests {
             .returning(move |_| Ok(enriched.clone()));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let results = uc.search("apple".to_string()).await.unwrap();
+        let results = uc
+            .search("apple".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap();
         assert_eq!(results[0].reference.as_deref(), Some("AAPL"));
     }
 
@@ -759,7 +739,10 @@ mod tests {
             .returning(|_| Err(anyhow::anyhow!("connection refused")));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let err = uc.search("AAPL".to_string()).await.unwrap_err();
+        let err = uc
+            .search("AAPL".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, WebLookupApplicationError::NetworkError),
             "got: {err:?}"
@@ -785,7 +768,10 @@ mod tests {
             .returning(|_| Err(anyhow::anyhow!("rate limited")));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let err = uc.search("anything".to_string()).await.unwrap_err();
+        let err = uc
+            .search("anything".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, WebLookupApplicationError::NetworkError),
             "got: {err:?}"
@@ -800,7 +786,10 @@ mod tests {
             .returning(|_| Err(anyhow::anyhow!("HTTP 500")));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let err = uc.search("FR0000120073".to_string()).await.unwrap_err();
+        let err = uc
+            .search("FR0000120073".to_string(), LookupMode::Isin)
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, WebLookupApplicationError::NetworkError),
             "got: {err:?}"
@@ -819,7 +808,10 @@ mod tests {
             .returning(|_| Err(anyhow::Error::from(RateLimitedError)));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let err = uc.search("FR0000120073".to_string()).await.unwrap_err();
+        let err = uc
+            .search("FR0000120073".to_string(), LookupMode::Isin)
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, WebLookupApplicationError::RateLimited),
             "got: {err:?}"
@@ -834,7 +826,10 @@ mod tests {
             .returning(|_| Err(anyhow::Error::from(RateLimitedError)));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let err = uc.search("AAPL".to_string()).await.unwrap_err();
+        let err = uc
+            .search("AAPL".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, WebLookupApplicationError::RateLimited),
             "got: {err:?}"
@@ -860,10 +855,102 @@ mod tests {
             .returning(|_| Err(anyhow::Error::from(RateLimitedError)));
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
-        let err = uc.search("anything".to_string()).await.unwrap_err();
+        let err = uc
+            .search("anything".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, WebLookupApplicationError::RateLimited),
             "got: {err:?}"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // WEB-014 (amended) — explicit LookupMode routing
+    // ------------------------------------------------------------------
+
+    /// `LookupMode::Isin` with a valid ISIN must call `map_isin` with the
+    /// normalized form and never call `search_keyword` (WEB-014).
+    #[tokio::test]
+    async fn lookup_with_isin_mode_validates_and_calls_map_isin() {
+        let isin = "IE00B53L3W79";
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_map_isin()
+            .with(eq(isin))
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_search_keyword().times(0);
+        mock.expect_map_share_classes().times(0);
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        assert!(uc.search(isin.to_string(), LookupMode::Isin).await.is_ok());
+    }
+
+    /// `LookupMode::Keyword` must call `search_keyword` and never call
+    /// `map_isin`, even when the query happens to look like an ISIN (WEB-014).
+    #[tokio::test]
+    async fn lookup_with_keyword_mode_calls_search_keyword() {
+        let query = "IE00B53L3W79"; // looks like an ISIN, but mode forces keyword
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .with(eq(query))
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_map_isin().times(0);
+        mock.expect_map_share_classes().times(0);
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        assert!(uc
+            .search(query.to_string(), LookupMode::Keyword)
+            .await
+            .is_ok());
+    }
+
+    /// `LookupMode::Isin` with an invalid ISIN format must return
+    /// `Err(InvalidIsinFormat)` without making any HTTP calls (WEB-016, WEB-025).
+    #[tokio::test]
+    async fn lookup_with_isin_mode_rejects_invalid_format() {
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_map_isin().times(0);
+        mock.expect_search_keyword().times(0);
+        mock.expect_map_share_classes().times(0);
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let err = uc
+            .search("NOTANISIN".to_string(), LookupMode::Isin)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, WebLookupApplicationError::InvalidIsinFormat),
+            "got: {err:?}"
+        );
+    }
+
+    /// `LookupMode::Isin` with a lowercase/whitespace ISIN must normalize the
+    /// input; the `AssetLookupResult.reference` field on every returned result
+    /// must contain the uppercased+trimmed ISIN (WEB-046).
+    #[tokio::test]
+    async fn lookup_with_isin_mode_forwards_normalized_isin_in_reference() {
+        let normalized = "IE00B53L3W79";
+        let hit = raw_hit(
+            "iShares Core S&P 500 UCITS ETF",
+            Some("ID"),
+            Some("SC1"),
+            Some("CSPX"),
+            Some("USD"),
+            Some("Common Stock"),
+        );
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_map_isin()
+            .with(eq(normalized))
+            .times(1)
+            .returning(move |_| Ok(vec![hit.clone()]));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc
+            .search("  ie00b53l3w79  ".to_string(), LookupMode::Isin)
+            .await
+            .unwrap();
+        assert_eq!(results[0].reference.as_deref(), Some(normalized));
     }
 }

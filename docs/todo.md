@@ -107,3 +107,15 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
 `cargo audit` flags `rsa 0.9.10` (timing sidechannel, CVSS 5.9 medium) with no upstream fix. Pulled transitively via `sqlx-mysql 0.8.6` because the `sqlx` macro crate compiles all backends regardless of enabled features. We only enable `sqlite`, so the vulnerable RSA path is never reached at runtime. Re-evaluate when sqlx ships a fix or when we change DB backend.
+
+## (mkt) — Stooq cannot find FR001400U5Q4 (and likely other French OAT/bond ISINs)
+
+User-reported 2026-05-24: a Stooq fetch for `FR001400U5Q4` returns no data. `FR0014…` is the ISIN range for French government bonds (OATs) issued via Agence France Trésor. Stooq's symbol coverage may not include FR OATs at all, or may require a different symbol prefix (`oat_…`, `…oats`, etc.). Investigate Stooq's symbol scheme for FR bonds; if unsupported, surface a clearer "provider does not cover this ISIN" message instead of generic "not found", and consider documenting the coverage gap in MKT spec.
+
+## (fe) — Account details price column too dense + FR date in EN locale
+
+User-reported 2026-05-24: the holdings table's price cell shows 4–5 lines (price + Stooq tag + date + update info). Reorganize the data into 2–3 columns so each cell is one line. Also a locale bug: dates render in FR format (`DD/MM/YYYY`) even when the UI locale is English — likely a `toLocaleDateString` call missing the locale argument or using a hardcoded one. Both issues live in the holdings view of the account details page.
+
+## (fe) — Rename "Open balance" → clearer label
+
+User-reported 2026-05-24: the "Open balance" CTA is opaque to users without a finance background and not great even with one. Rename to something self-explanatory like "Add a position" (i18n in both `common.json` namespaces). Probably affects holdings creation flow in account details + transactions UI.

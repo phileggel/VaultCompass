@@ -54,6 +54,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account_summary::AccountSummary>()
         .typ::<account_deletion::AccountDeletionSummary>()
         .typ::<asset_web_lookup::AssetLookupResult>()
+        .typ::<asset_web_lookup::LookupMode>()
         .typ::<asset_web_lookup::WebLookupApplicationError>()
         .typ::<asset_price_fetch::FetchAllAssetPricesError>()
         .typ::<asset_price_fetch::FetchAccountAssetPricesError>()
