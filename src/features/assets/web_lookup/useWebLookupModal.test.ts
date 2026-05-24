@@ -14,6 +14,7 @@ vi.mock("../gateway", () => ({
 const appleResult: AssetLookupResult = {
   name: "Apple Inc.",
   reference: "AAPL",
+  isin: null,
   currency: "USD",
   asset_class: "Stocks",
   exchange: null,
@@ -22,6 +23,7 @@ const appleResult: AssetLookupResult = {
 const etfResult: AssetLookupResult = {
   name: "iShares Core S&P 500",
   reference: "IVV",
+  isin: null,
   currency: "USD",
   asset_class: "ETF",
   exchange: null,

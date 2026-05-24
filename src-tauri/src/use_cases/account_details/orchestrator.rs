@@ -370,6 +370,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "AAPL".to_string(),
                 reference: "AAPL".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "USD".to_string(),
                 risk_level: 3,
@@ -415,6 +416,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Bond".to_string(),
                 reference: "BOND".to_string(),
+                isin: None,
                 class: AssetClass::Bonds,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -467,6 +469,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Archived Stock".to_string(),
                 reference: "ARCH".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "USD".to_string(),
                 risk_level: 2,
@@ -542,6 +545,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "A".to_string(),
                 reference: "A".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -589,6 +593,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Closed Co".to_string(),
                 reference: "CC".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -637,6 +642,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Meta Inc".to_string(),
                 reference: "META".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "USD".to_string(),
                 risk_level: 3,
@@ -684,6 +690,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Q".to_string(),
                 reference: "Q".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -730,6 +737,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "E".to_string(),
                 reference: "E".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -776,6 +784,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "G".to_string(),
                 reference: "G".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -815,6 +824,7 @@ mod tests {
                 .create_asset(CreateAssetDTO {
                     name: name.to_string(),
                     reference: reference.to_string(),
+                    isin: None,
                     class: AssetClass::Stocks,
                     currency: "EUR".to_string(),
                     risk_level: 1,
@@ -869,6 +879,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Active".to_string(),
                 reference: "ACT".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -897,6 +908,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Closed".to_string(),
                 reference: "CLO".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -978,6 +990,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1024,6 +1037,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(), // same as account
                 risk_level: 1,
@@ -1075,6 +1089,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "USD".to_string(), // differs from account EUR
                 risk_level: 1,
@@ -1127,6 +1142,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1169,6 +1185,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1220,6 +1237,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1271,6 +1289,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1344,6 +1363,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "A1".to_string(),
                 reference: "A1".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1376,6 +1396,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "A2".to_string(),
                 reference: "A2".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "USD".to_string(),
                 risk_level: 1,
@@ -1433,6 +1454,7 @@ mod tests {
                 .create_asset(CreateAssetDTO {
                     name: name.to_string(),
                     reference: reference.to_string(),
+                    isin: None,
                     class: AssetClass::Stocks,
                     currency: "USD".to_string(),
                     risk_level: 2,
@@ -1492,6 +1514,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Bond".to_string(),
                 reference: "BOND".to_string(),
+                isin: None,
                 class: AssetClass::Bonds,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1628,6 +1651,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -1670,6 +1694,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "X".to_string(),
                 reference: "X".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,

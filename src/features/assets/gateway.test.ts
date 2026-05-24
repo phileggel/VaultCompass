@@ -26,6 +26,7 @@ const makeAsset = (): Asset => ({
   id: "asset-1",
   name: "Apple Inc.",
   reference: "AAPL",
+  isin: null,
   class: "Stocks",
   category: { id: "cat-1", name: "Equities" },
   currency: "USD",
@@ -37,6 +38,7 @@ const makeAsset = (): Asset => ({
 const baseCreateDto: CreateAssetDTO = {
   name: "Apple Inc.",
   reference: "AAPL",
+  isin: null,
   class: "Stocks",
   currency: "USD",
   risk_level: 3,
@@ -48,6 +50,7 @@ const baseUpdateDto: UpdateAssetDTO = {
   asset_id: "asset-1",
   name: "Apple Inc.",
   reference: "AAPL",
+  isin: null,
   class: "Stocks",
   currency: "USD",
   risk_level: 3,
@@ -353,6 +356,7 @@ describe("asset gateway — lookupAsset", () => {
       {
         name: "Apple Inc.",
         reference: "AAPL",
+        isin: null,
         currency: "USD",
         asset_class: "Stocks",
         exchange: null,
@@ -360,6 +364,7 @@ describe("asset gateway — lookupAsset", () => {
       {
         name: "iShares Core S&P 500",
         reference: "IVV",
+        isin: null,
         currency: "USD",
         asset_class: "ETF",
         exchange: null,
@@ -376,10 +381,13 @@ describe("asset gateway — lookupAsset", () => {
 
   // WEB-020 — ISIN query (12 alphanumeric chars) is forwarded as-is
   it("lookupAsset forwards 12-char ISIN query verbatim", async () => {
+    // WEB-046 — on the ISIN path, `reference` is the ticker and `isin` is the
+    // normalized ISIN query.
     const results: AssetLookupResult[] = [
       {
         name: "Apple Inc.",
-        reference: "US0378331005",
+        reference: "AAPL",
+        isin: "US0378331005",
         currency: "USD",
         asset_class: "Stocks",
         exchange: null,
@@ -427,6 +435,7 @@ describe("asset gateway — lookupAsset", () => {
       {
         name: "Obscure Fund",
         reference: null,
+        isin: null,
         currency: null,
         asset_class: null,
         exchange: null,
@@ -455,10 +464,13 @@ describe("asset gateway — lookupAsset", () => {
 
   // WEB-014 — ISIN mode arg is forwarded exactly as "Isin" (not inferred)
   it("lookupAsset forwards mode: Isin to the backend command", async () => {
+    // WEB-046 — on the ISIN path, `reference` is the ticker and `isin` is the
+    // normalized ISIN query.
     const results: AssetLookupResult[] = [
       {
         name: "iShares Core S&P 500 UCITS ETF",
-        reference: "IE00B53L3W79",
+        reference: "CSPX",
+        isin: "IE00B53L3W79",
         currency: "EUR",
         asset_class: "ETF",
         exchange: null,

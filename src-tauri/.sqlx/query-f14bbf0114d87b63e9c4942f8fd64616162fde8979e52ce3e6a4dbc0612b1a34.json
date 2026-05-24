@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id,\n                c.name as category_name,\n                a.is_archived as \"is_archived: bool\",\n                a.exchange_code\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.is_deleted = 0 AND c.is_deleted = 0\n            ",
+  "query": "\n            SELECT\n                a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id,\n                c.name as category_name,\n                a.is_archived as \"is_archived: bool\",\n                a.exchange_code\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.is_deleted = 0 AND a.is_archived = 0 AND c.is_deleted = 0\n            ",
   "describe": {
     "columns": [
       {
@@ -19,38 +19,43 @@
         "type_info": "Text"
       },
       {
-        "name": "asset_class",
+        "name": "isin",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "currency",
+        "name": "asset_class",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "risk_level",
+        "name": "currency",
         "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "risk_level",
+        "ordinal": 6,
         "type_info": "Integer"
       },
       {
         "name": "category_id",
-        "ordinal": 6,
-        "type_info": "Text"
-      },
-      {
-        "name": "category_name",
         "ordinal": 7,
         "type_info": "Text"
       },
       {
-        "name": "is_archived: bool",
+        "name": "category_name",
         "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_archived: bool",
+        "ordinal": 9,
         "type_info": "Integer"
       },
       {
         "name": "exchange_code",
-        "ordinal": 9,
+        "ordinal": 10,
         "type_info": "Text"
       }
     ],
@@ -61,6 +66,7 @@
       false,
       false,
       false,
+      true,
       false,
       false,
       false,
@@ -70,5 +76,5 @@
       true
     ]
   },
-  "hash": "f39463aab28c1cd17462387728a1a13d59b9e9952c45207c87d823f763694e2a"
+  "hash": "f14bbf0114d87b63e9c4942f8fd64616162fde8979e52ce3e6a4dbc0612b1a34"
 }

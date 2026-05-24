@@ -671,8 +671,11 @@ mod tests {
     // WEB-046 — reference field source
     // ------------------------------------------------------------------
 
+    // WEB-046 — on the ISIN path, `reference` holds the ticker from the hit
+    // (so the FE always pre-fills `Asset.reference` with a value Stooq can
+    // resolve) and `isin` holds the normalized ISIN query.
     #[tokio::test]
-    async fn reference_is_input_isin_on_isin_path() {
+    async fn isin_path_fills_ticker_in_reference_and_isin_in_isin() {
         let isin = "US0378331005";
         let hit = raw_hit(
             "Apple Inc.",
@@ -690,7 +693,44 @@ mod tests {
 
         let uc = AssetWebLookupUseCase::new(Arc::new(mock));
         let results = uc.search(isin.to_string(), LookupMode::Isin).await.unwrap();
-        assert_eq!(results[0].reference.as_deref(), Some(isin));
+        assert_eq!(results[0].reference.as_deref(), Some("AAPL"));
+        assert_eq!(results[0].isin.as_deref(), Some(isin));
+    }
+
+    // WEB-046 — on the keyword path, `isin` stays None because OpenFIGI's
+    // `/v3/search` response does not expose ISIN.
+    #[tokio::test]
+    async fn isin_is_none_on_keyword_path() {
+        let initial = vec![raw_hit(
+            "Apple Inc.",
+            Some("UN"),
+            Some("SC1"),
+            Some("AAPL"),
+            Some("USD"),
+            Some("Common Stock"),
+        )];
+        let enriched = vec![vec![raw_hit(
+            "Apple Inc.",
+            Some("UN"),
+            Some("SC1"),
+            Some("AAPL"),
+            Some("USD"),
+            Some("Common Stock"),
+        )]];
+        let mut mock = MockOpenFigiClient::new();
+        mock.expect_search_keyword()
+            .times(1)
+            .returning(move |_| Ok(initial.clone()));
+        mock.expect_map_share_classes()
+            .times(1)
+            .returning(move |_| Ok(enriched.clone()));
+
+        let uc = AssetWebLookupUseCase::new(Arc::new(mock));
+        let results = uc
+            .search("apple".to_string(), LookupMode::Keyword)
+            .await
+            .unwrap();
+        assert!(results[0].isin.is_none());
     }
 
     #[tokio::test]
@@ -927,10 +967,10 @@ mod tests {
     }
 
     /// `LookupMode::Isin` with a lowercase/whitespace ISIN must normalize the
-    /// input; the `AssetLookupResult.reference` field on every returned result
-    /// must contain the uppercased+trimmed ISIN (WEB-046).
+    /// input; the `AssetLookupResult.isin` field on every returned result must
+    /// contain the uppercased+trimmed ISIN (WEB-046).
     #[tokio::test]
-    async fn lookup_with_isin_mode_forwards_normalized_isin_in_reference() {
+    async fn lookup_with_isin_mode_forwards_normalized_isin_in_isin_field() {
         let normalized = "IE00B53L3W79";
         let hit = raw_hit(
             "iShares Core S&P 500 UCITS ETF",
@@ -951,6 +991,6 @@ mod tests {
             .search("  ie00b53l3w79  ".to_string(), LookupMode::Isin)
             .await
             .unwrap();
-        assert_eq!(results[0].reference.as_deref(), Some(normalized));
+        assert_eq!(results[0].isin.as_deref(), Some(normalized));
     }
 }

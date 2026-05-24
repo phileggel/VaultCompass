@@ -117,6 +117,7 @@ impl AssetService {
             currency.to_string(),
             1,
             currency.to_uppercase(),
+            None,
             false,
             None,
         )?;
@@ -141,6 +142,7 @@ impl AssetService {
             dto.currency,
             dto.risk_level,
             dto.reference,
+            dto.isin,
             dto.exchange,
         )?;
 
@@ -171,6 +173,7 @@ impl AssetService {
             dto.currency,
             dto.risk_level,
             dto.reference,
+            dto.isin,
             dto.exchange,
         )?;
 
@@ -636,6 +639,7 @@ mod tests {
             "USD".to_string(),
             1,
             "REF".to_string(),
+            None,
             archived,
             None,
         )
@@ -650,6 +654,7 @@ mod tests {
             "USD".to_string(),
             1,
             "USD".to_string(),
+            None,
             false,
             None,
         )
@@ -675,6 +680,7 @@ mod tests {
         CreateAssetDTO {
             name: name.to_string(),
             reference: "REF-001".to_string(),
+            isin: None,
             class: AssetClass::Cash,
             currency: "USD".to_string(),
             risk_level: 1,
@@ -726,6 +732,7 @@ mod tests {
         let err = svc
             .create_asset(CreateAssetDTO {
                 reference: "".to_string(),
+                isin: None,
                 ..base_dto("Bond")
             })
             .await
@@ -811,6 +818,7 @@ mod tests {
         let asset = svc
             .create_asset(CreateAssetDTO {
                 reference: "aapl".to_string(),
+                isin: None,
                 ..base_dto("Apple")
             })
             .await
@@ -834,6 +842,7 @@ mod tests {
         let asset = svc
             .create_asset(CreateAssetDTO {
                 reference: "  AAPL  ".to_string(),
+                isin: None,
                 ..base_dto("Apple")
             })
             .await
@@ -857,6 +866,7 @@ mod tests {
                 asset_id: "asset-id".to_string(),
                 name: "Apple Updated".to_string(),
                 reference: "AAPL".to_string(),
+                isin: None,
                 class: AssetClass::Stocks,
                 currency: "USD".to_string(),
                 risk_level: 4,
@@ -1780,6 +1790,7 @@ mod tests {
                 asset_id: "a-id".to_string(),
                 name: "New".to_string(),
                 reference: "REF".to_string(),
+                isin: None,
                 class: AssetClass::Cash,
                 currency: "USD".to_string(),
                 risk_level: 1,
@@ -1810,6 +1821,7 @@ mod tests {
                 asset_id: "a-id".to_string(),
                 name: "New".to_string(),
                 reference: "REF".to_string(),
+                isin: None,
                 class: AssetClass::Cash,
                 currency: "USD".to_string(),
                 risk_level: 1,
@@ -1913,6 +1925,7 @@ mod tests {
                 asset_id: "system-cash-USD".to_string(),
                 name: "Renamed".to_string(),
                 reference: "USD".to_string(),
+                isin: None,
                 class: AssetClass::Cash,
                 currency: "USD".to_string(),
                 risk_level: 1,

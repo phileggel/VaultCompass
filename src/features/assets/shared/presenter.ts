@@ -17,6 +17,7 @@ export function assetMutationErrorToI18n(
       return { key: "error.InvalidCurrency", vars: { currency: err.currency } };
     case "NameEmpty":
     case "ReferenceEmpty":
+    case "InvalidIsinFormat":
     case "InvalidRiskLevel":
     case "Archived":
     case "CashAssetNotEditable":

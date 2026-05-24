@@ -194,6 +194,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Bond".to_string(),
                 reference: "BOND".to_string(),
+                isin: None,
                 class: crate::context::asset::AssetClass::Bonds,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -261,6 +262,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "US Stock".to_string(),
                 reference: "USX".to_string(),
+                isin: None,
                 class: crate::context::asset::AssetClass::Stocks,
                 currency: "USD".to_string(),
                 risk_level: 1,
@@ -310,6 +312,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Unpriced".to_string(),
                 reference: "UNP".to_string(),
+                isin: None,
                 class: crate::context::asset::AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,
@@ -356,6 +359,7 @@ mod tests {
             .create_asset(CreateAssetDTO {
                 name: "Closed".to_string(),
                 reference: "CLS".to_string(),
+                isin: None,
                 class: crate::context::asset::AssetClass::Stocks,
                 currency: "EUR".to_string(),
                 risk_level: 1,

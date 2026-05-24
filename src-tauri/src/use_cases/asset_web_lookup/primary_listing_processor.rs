@@ -93,9 +93,15 @@ pub struct RawFigiHit {
 pub struct AssetLookupResult {
     /// Full instrument name (e.g. `"AIR LIQUIDE SA"`).
     pub name: String,
-    /// ISIN (ISIN path) or ticker (keyword path); `None` when no value is
-    /// available (WEB-046).
+    /// Ticker symbol returned by OpenFIGI; `None` when no ticker is available
+    /// (WEB-046). Consistent across both lookup paths so the FE always pre-fills
+    /// `Asset.reference` with a value market-data providers (Stooq, etc.) can
+    /// resolve.
     pub reference: Option<String>,
+    /// ISIN (ISO 6166, 12 chars normalized). Populated only on the ISIN path
+    /// with the validated query (WEB-046); `None` on the keyword path because
+    /// OpenFIGI's `/v3/search` response does not expose ISIN.
+    pub isin: Option<String>,
     /// ISO 4217 currency forwarded from OpenFIGI (WEB-024).
     pub currency: Option<String>,
     /// Asset class derived from `securityType` (WEB-023).
@@ -241,16 +247,18 @@ fn priority_for(ctx: &QueryContext) -> Vec<&'static str> {
 /// Step 5 of WEB-050: convert a chosen `RawFigiHit` into the public
 /// `AssetLookupResult`. Performs `securityType` → `AssetClass` mapping
 /// (WEB-023), `exchCode` → human-readable resolution (WEB-049), and
-/// reference selection (WEB-046).
+/// reference/ISIN field selection (WEB-046).
+///
+/// Per WEB-046: `reference` is the ticker symbol on BOTH paths (so the FE
+/// always pre-fills `Asset.reference` with a value market-data providers
+/// understand); `isin` is populated only on the ISIN path with the normalized
+/// query carried in `ctx.isin`.
 fn to_result(hit: &RawFigiHit, ctx: &QueryContext) -> AssetLookupResult {
-    let reference = if ctx.isin.is_some() {
-        ctx.isin.clone()
-    } else {
-        hit.ticker.clone().filter(|t| !t.is_empty())
-    };
+    let reference = hit.ticker.clone().filter(|t| !t.is_empty());
     AssetLookupResult {
         name: hit.name.clone(),
         reference,
+        isin: ctx.isin.clone(),
         currency: hit.currency.clone(),
         asset_class: hit.security_type.as_deref().and_then(map_security_type),
         exchange: resolve_canonical_exchange(hit),
@@ -1232,8 +1240,11 @@ mod tests {
         assert_eq!(exchange.code, "XPAR");
     }
 
+    // WEB-046 — on the ISIN path, the result's `reference` field carries the
+    // ticker from the hit (here, "AI") and `isin` carries the normalized ISIN
+    // forwarded via `QueryContext.isin`.
     #[test]
-    fn process_hits_isin_path_uses_isin_as_reference() {
+    fn process_hits_isin_path_fills_ticker_in_reference_and_isin_in_isin() {
         let hits = vec![hit(
             "AIR LIQUIDE SA",
             Some("SC1"),
@@ -1246,7 +1257,8 @@ mod tests {
             isin: Some("FR0000120073".to_string()),
         };
         let results = process_hits(hits, &ctx);
-        assert_eq!(results[0].reference.as_deref(), Some("FR0000120073"));
+        assert_eq!(results[0].reference.as_deref(), Some("AI"));
+        assert_eq!(results[0].isin.as_deref(), Some("FR0000120073"));
     }
 
     #[test]

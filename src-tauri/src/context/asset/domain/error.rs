@@ -39,6 +39,11 @@ pub enum AssetDomainError {
         /// a conflict with the `#[serde(tag = "code")]` discriminant field.
         exchange_code: String,
     },
+    /// The supplied ISIN fails the ISO 6166 format validation (AST-023, WEB-016).
+    /// Sub-variants of the `IsinFormatError` (wrong length, invalid charset, bad
+    /// check digit) collapse to this single wire code per the `isin.rs` doc.
+    #[error("Invalid ISIN format")]
+    InvalidIsinFormat,
 }
 
 /// Typed errors for asset price value-object validation. Only aggregate-method

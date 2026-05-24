@@ -17,8 +17,11 @@ use super::domain::{exchange, Asset, AssetCategory, AssetClass, AssetPrice, Exch
 pub struct CreateAssetDTO {
     /// Display name.
     pub name: String,
-    /// Ticker, ISIN, or user-defined reference (mandatory — R1).
+    /// Ticker / user-defined reference (mandatory — R1).
     pub reference: String,
+    /// Optional ISIN (ISO 6166, 12 chars). Validated + normalized by the domain
+    /// when present (AST-023, WEB-016).
+    pub isin: Option<String>,
     /// Classification type.
     pub class: AssetClass,
     /// ISO currency code.
@@ -40,6 +43,8 @@ pub struct UpdateAssetDTO {
     pub name: String,
     /// New reference (mandatory — R1).
     pub reference: String,
+    /// New optional ISIN (AST-023). `None` clears the field.
+    pub isin: Option<String>,
     /// New classification.
     pub class: AssetClass,
     /// New currency.

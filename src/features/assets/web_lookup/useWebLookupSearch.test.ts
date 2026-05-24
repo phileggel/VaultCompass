@@ -32,10 +32,13 @@ describe("useWebLookupSearch", () => {
 
   // WEB-014 / WEB-030 — Isin mode dispatches to gateway with "Isin" and transitions through loading
   it("transitions idle → loading → results on successful ISIN search", async () => {
+    // WEB-046 — on the ISIN path, `reference` carries the ticker from OpenFIGI
+    // and `isin` carries the normalized query.
     const results: AssetLookupResult[] = [
       {
         name: "iShares Core S&P 500 UCITS ETF",
-        reference: "IE00B53L3W79",
+        reference: "CSPX",
+        isin: "IE00B53L3W79",
         currency: "EUR",
         asset_class: "ETF",
         exchange: null,
@@ -66,6 +69,7 @@ describe("useWebLookupSearch", () => {
       {
         name: "Apple Inc.",
         reference: "AAPL",
+        isin: null,
         currency: "USD",
         asset_class: "Stocks",
         exchange: null,
@@ -164,6 +168,7 @@ describe("useWebLookupSearch", () => {
           {
             name: "Apple Inc.",
             reference: "AAPL",
+            isin: null,
             currency: "USD",
             asset_class: "Stocks",
             exchange: null,

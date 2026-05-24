@@ -51,6 +51,7 @@ const makeAsset = (overrides: Partial<Asset> = {}): Asset => ({
   id: "a1",
   name: "Apple",
   reference: "AAPL",
+  isin: null,
   class: "Stocks",
   currency: "USD",
   risk_level: 4,
@@ -106,6 +107,7 @@ describe("useAssets", () => {
       currency: "USD",
       risk_level: 4,
       reference: "AAPL",
+      isin: null,
       exchange: null,
     };
     await act(async () => {
@@ -135,6 +137,7 @@ describe("useAssets", () => {
       currency: "USD",
       risk_level: 4,
       reference: "AAPL",
+      isin: null,
       exchange: null,
     };
     await act(async () => {
@@ -158,6 +161,7 @@ describe("useAssets", () => {
       currency: "USD",
       risk_level: 4,
       reference: "AAPL",
+      isin: null,
       exchange: null,
     };
     let ret: { data: Asset | null; error: I18nMessage | null } = {
@@ -187,6 +191,7 @@ describe("useAssets", () => {
       currency: "USD",
       risk_level: 4,
       reference: "AAPL",
+      isin: null,
       exchange: null,
     };
     let ret: { data: Asset | null; error: I18nMessage | null } = {

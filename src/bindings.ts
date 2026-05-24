@@ -758,9 +758,16 @@ currency: string;
  */
 risk_level: number; 
 /**
- * Identifier like ticker or ISIN.
+ * Ticker / free-form reference (mandatory — R1). For quoted assets that
+ * also carry an ISIN, the canonical ISO 6166 identity lives in `isin`
+ * (AST-023); `reference` holds the provider-lookup symbol (Stooq, etc.).
  */
 reference: string; 
+/**
+ * Optional ISIN (ISO 6166, 12 chars, Luhn-validated — AST-023). Stored
+ * in the normalized uppercase form returned by `validate_isin`.
+ */
+isin: string | null; 
 /**
  * Whether the asset is archived (soft-archived, reversible).
  */
@@ -914,7 +921,13 @@ export type AssetDomainError =
 /**
  * The supplied exchange code is not a member of the canonical curated set (AST-001).
  */
-{ code: "InvalidExchange"; exchange_code: string }
+{ code: "InvalidExchange"; exchange_code: string } | 
+/**
+ * The supplied ISIN fails the ISO 6166 format validation (AST-023, WEB-016).
+ * Sub-variants of the `IsinFormatError` (wrong length, invalid charset, bad
+ * check digit) collapse to this single wire code per the `isin.rs` doc.
+ */
+{ code: "InvalidIsinFormat" }
 /**
  * Flat error enum for the asset bounded context (per error-model.md).
  * 
@@ -939,10 +952,18 @@ export type AssetLookupResult = {
  */
 name: string; 
 /**
- * ISIN (ISIN path) or ticker (keyword path); `None` when no value is
- * available (WEB-046).
+ * Ticker symbol returned by OpenFIGI; `None` when no ticker is available
+ * (WEB-046). Consistent across both lookup paths so the FE always pre-fills
+ * `Asset.reference` with a value market-data providers (Stooq, etc.) can
+ * resolve.
  */
 reference: string | null; 
+/**
+ * ISIN (ISO 6166, 12 chars normalized). Populated only on the ISIN path
+ * with the validated query (WEB-046); `None` on the keyword path because
+ * OpenFIGI's `/v3/search` response does not expose ISIN.
+ */
+isin: string | null; 
 /**
  * ISO 4217 currency forwarded from OpenFIGI (WEB-024).
  */
@@ -1277,9 +1298,14 @@ export type CreateAssetDTO = {
  */
 name: string; 
 /**
- * Ticker, ISIN, or user-defined reference (mandatory — R1).
+ * Ticker / user-defined reference (mandatory — R1).
  */
 reference: string; 
+/**
+ * Optional ISIN (ISO 6166, 12 chars). Validated + normalized by the domain
+ * when present (AST-023, WEB-016).
+ */
+isin: string | null; 
 /**
  * Classification type.
  */
@@ -1903,6 +1929,10 @@ name: string;
  * New reference (mandatory — R1).
  */
 reference: string; 
+/**
+ * New optional ISIN (AST-023). `None` clears the field.
+ */
+isin: string | null; 
 /**
  * New classification.
  */

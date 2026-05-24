@@ -77,6 +77,7 @@ mod tests {
         CreateAssetDTO {
             name: "Test Asset".to_string(),
             reference: "TST".to_string(),
+            isin: None,
             class: AssetClass::Stocks,
             currency: "USD".to_string(),
             risk_level: 1,

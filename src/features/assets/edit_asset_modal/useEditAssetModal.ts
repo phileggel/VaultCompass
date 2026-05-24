@@ -18,6 +18,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
   const [formData, setFormData] = useState<{
     name: string;
     reference: string;
+    isin: string;
     class: AssetClass;
     currency: string;
     risk_level: number;
@@ -26,6 +27,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
   }>({
     name: "",
     reference: "",
+    isin: "",
     class: "Stocks",
     currency: "USD",
     risk_level: 3,
@@ -41,6 +43,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
       setFormData({
         name: asset.name,
         reference: asset.reference,
+        isin: asset.isin ?? "",
         class: asset.class,
         currency: asset.currency,
         risk_level: asset.risk_level,
@@ -85,6 +88,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
       asset_id: asset.id,
       name: formData.name,
       reference: formData.reference,
+      isin: formData.isin.trim() ? formData.isin.trim() : null,
       class: formData.class,
       currency: formData.currency,
       risk_level: formData.risk_level,

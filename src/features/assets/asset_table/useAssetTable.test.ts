@@ -7,6 +7,7 @@ const makeAsset = (overrides: Partial<Asset> = {}): Asset => ({
   id: "a1",
   name: "Apple",
   reference: "AAPL",
+  isin: null,
   class: "Stocks",
   currency: "USD",
   risk_level: 4,
@@ -20,11 +21,13 @@ const activeAsset = makeAsset({
   id: "active",
   name: "Apple",
   reference: "AAPL",
+  isin: null,
 });
 const archivedAsset = makeAsset({
   id: "archived",
   name: "Bond Fund",
   reference: "BND",
+  isin: null,
   is_archived: true,
   exchange: null,
 });
@@ -43,6 +46,7 @@ describe("useAssetTable", () => {
       id: "system-cash-eur",
       name: "Cash EUR",
       reference: "EUR",
+      isin: null,
       class: "Cash",
     });
     const { result } = renderHook(() =>
