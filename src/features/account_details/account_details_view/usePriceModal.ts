@@ -22,6 +22,8 @@ export interface UsePriceModalResult {
   handleSubmit: (e: React.FormEvent) => Promise<void>;
 }
 
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 function validatePrice(price: string): I18nMessage | null {
@@ -79,18 +81,24 @@ export function usePriceModal({
       e.preventDefault();
       if (!isFormValid) return;
       setIsSubmitting(true);
-      const result = await accountDetailsGateway.recordAssetPrice(
-        holding.asset_id,
-        date,
-        parseFloat(price),
-      );
-      setIsSubmitting(false);
-      if (result.status === "ok") {
-        showSnackbar(t("price_modal.success"));
-        onSubmitSuccess?.();
-      } else {
-        logger.error("[usePriceModal] recordAssetPrice failed", result.error);
-        setSubmitError(assetPriceMutationErrorToI18n(result.error));
+      try {
+        const result = await accountDetailsGateway.recordAssetPrice(
+          holding.asset_id,
+          date,
+          parseFloat(price),
+        );
+        if (result.status === "ok") {
+          showSnackbar(t("price_modal.success"));
+          onSubmitSuccess?.();
+        } else {
+          logger.error("[usePriceModal] recordAssetPrice failed", result.error);
+          setSubmitError(assetPriceMutationErrorToI18n(result.error));
+        }
+      } catch (err) {
+        logger.error("[usePriceModal] recordAssetPrice threw", { error: err });
+        setSubmitError(UNKNOWN_ERROR);
+      } finally {
+        setIsSubmitting(false);
       }
     },
     [isFormValid, holding.asset_id, date, price, showSnackbar, t, onSubmitSuccess],

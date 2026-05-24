@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountDetailsResponse, ClosedHoldingDetail, HoldingDetail } from "@/bindings";
+import { logger } from "@/lib/logger";
 import { useAccountDetails } from "./useAccountDetails";
 
 const mockGetAccountDetails = vi.fn();
@@ -233,5 +234,43 @@ describe("useAccountDetails — market price events (MKT)", () => {
     });
 
     expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
+  });
+});
+
+describe("useAccountDetails — gateway throw fallback", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Gateway throw path — getAccountDetails rejects → UNKNOWN_ERROR set, isLoading cleared
+  it("falls back to UNKNOWN_ERROR and clears isLoading when gateway throws", async () => {
+    mockGetAccountDetails.mockRejectedValue(new Error("boom"));
+
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+
+    expect(result.current.error).toEqual({ key: "error.Unknown" });
+    expect(result.current.isLoading).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith("[useAccountDetails] fetch threw", {
+      error: expect.any(Error),
+    });
+  });
+
+  // Typed-error path — gateway returns status="error" → presenter maps the code to an i18n key
+  it("maps typed AccountMutationError to inline i18n key and clears isLoading", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "error",
+      error: { code: "AccountNotFound", account_id: "account-1" },
+    });
+
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+
+    expect(result.current.error).toEqual({ key: "error.AccountNotFound" });
+    expect(result.current.isLoading).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith("[useAccountDetails] fetch failed", {
+      code: "AccountNotFound",
+      account_id: "account-1",
+    });
   });
 });

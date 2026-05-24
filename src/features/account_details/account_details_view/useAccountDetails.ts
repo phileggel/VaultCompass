@@ -14,6 +14,8 @@ import {
   toHoldingRow,
 } from "../shared/presenter";
 
+const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
+
 interface UseAccountDetailsResult {
   isLoading: boolean;
   error: I18nMessage | null;
@@ -35,14 +37,20 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
   const fetchDetails = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    const result = await accountDetailsGateway.getAccountDetails(accountId);
-    if (result.status === "ok") {
-      setData(result.data);
-    } else {
-      logger.error("[useAccountDetails] fetch failed", result.error);
-      setError(accountMutationErrorToI18n(result.error));
+    try {
+      const result = await accountDetailsGateway.getAccountDetails(accountId);
+      if (result.status === "ok") {
+        setData(result.data);
+      } else {
+        logger.error("[useAccountDetails] fetch failed", result.error);
+        setError(accountMutationErrorToI18n(result.error));
+      }
+    } catch (err) {
+      logger.error("[useAccountDetails] fetch threw", { error: err });
+      setError(UNKNOWN_ERROR);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, [accountId]);
 
   // ACD-037 — fetch on mount and on accountId change
