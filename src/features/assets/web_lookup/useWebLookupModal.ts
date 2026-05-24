@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { AssetLookupResult } from "@/bindings";
+import type { AssetLookupResult, LookupMode } from "@/bindings";
 import type { WebLookupSearchState } from "./useWebLookupSearch";
 import { useWebLookupSearch } from "./useWebLookupSearch";
 
@@ -11,9 +11,12 @@ export type ModalStep =
 export interface UseWebLookupModalReturn {
   modalStep: ModalStep;
   searchState: WebLookupSearchState;
-  query: string;
-  setQuery: (q: string) => void;
-  submitSearch: () => void;
+  isinQuery: string;
+  keywordQuery: string;
+  lastMode: LookupMode | null;
+  setIsinQuery: (q: string) => void;
+  setKeywordQuery: (q: string) => void;
+  submitSearch: (mode: LookupMode) => void;
   retrySearch: () => void;
   selectResult: (result: AssetLookupResult) => void;
   fillManually: () => void;
@@ -23,7 +26,21 @@ export interface UseWebLookupModalReturn {
 
 export function useWebLookupModal(): UseWebLookupModalReturn {
   const search = useWebLookupSearch();
+  const [isinQuery, setIsinQueryState] = useState("");
+  const [keywordQuery, setKeywordQueryState] = useState("");
   const [modalStep, setModalStep] = useState<ModalStep>({ step: "search" });
+
+  // reviewer-frontend FP: `[search]` re-creates these every render (no correctness impact).
+  const setIsinQuery = useCallback((q: string) => setIsinQueryState(q), []);
+  const setKeywordQuery = useCallback((q: string) => setKeywordQueryState(q), []);
+
+  const submitSearch = useCallback(
+    (mode: LookupMode) => {
+      const query = mode === "Isin" ? isinQuery : keywordQuery;
+      search.submit(mode, query);
+    },
+    [isinQuery, keywordQuery, search],
+  );
 
   const selectResult = useCallback((result: AssetLookupResult) => {
     setModalStep({ step: "form-prefilled", selection: result });
@@ -42,9 +59,12 @@ export function useWebLookupModal(): UseWebLookupModalReturn {
   return {
     modalStep,
     searchState: search.state,
-    query: search.query,
-    setQuery: search.setQuery,
-    submitSearch: search.submit,
+    isinQuery,
+    keywordQuery,
+    lastMode: search.lastMode,
+    setIsinQuery,
+    setKeywordQuery,
+    submitSearch,
     retrySearch: search.retry,
     selectResult,
     fillManually,

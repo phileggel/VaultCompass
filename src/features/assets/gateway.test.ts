@@ -438,4 +438,62 @@ describe("asset gateway — lookupAsset", () => {
 
     expect(res).toEqual({ status: "ok", data: results });
   });
+
+  // WEB-025 — InvalidIsinFormat is surfaced as { status: "error", error: { code: "InvalidIsinFormat" } }
+  it("lookupAsset returns InvalidIsinFormat when ISIN path rejects the query", async () => {
+    const err: WebLookupApplicationError = { code: "InvalidIsinFormat" };
+    mockInvoke.mockRejectedValue(err);
+
+    const res = await assetGateway.lookupAsset("NOTANISIN", "Isin");
+
+    expect(res).toEqual({ status: "error", error: { code: "InvalidIsinFormat" } });
+    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", {
+      query: "NOTANISIN",
+      mode: "Isin",
+    });
+  });
+
+  // WEB-014 — ISIN mode arg is forwarded exactly as "Isin" (not inferred)
+  it("lookupAsset forwards mode: Isin to the backend command", async () => {
+    const results: AssetLookupResult[] = [
+      {
+        name: "iShares Core S&P 500 UCITS ETF",
+        reference: "IE00B53L3W79",
+        currency: "EUR",
+        asset_class: "ETF",
+        exchange: null,
+      },
+    ];
+    mockInvoke.mockResolvedValue(results);
+
+    const res = await assetGateway.lookupAsset("IE00B53L3W79", "Isin");
+
+    expect(res).toEqual({ status: "ok", data: results });
+    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", {
+      query: "IE00B53L3W79",
+      mode: "Isin",
+    });
+  });
+
+  // WEB-014 — Keyword mode arg is forwarded exactly as "Keyword" (not inferred)
+  it("lookupAsset forwards mode: Keyword to the backend command", async () => {
+    mockInvoke.mockResolvedValue([]);
+
+    await assetGateway.lookupAsset("Apple", "Keyword");
+
+    expect(mockInvoke).toHaveBeenCalledWith("lookup_asset", {
+      query: "Apple",
+      mode: "Keyword",
+    });
+  });
+
+  // WEB-025 — RateLimited pass-through still works (regression guard)
+  it("lookupAsset returns RateLimited on HTTP 429 from OpenFIGI", async () => {
+    const err: WebLookupApplicationError = { code: "RateLimited" };
+    mockInvoke.mockRejectedValue(err);
+
+    const res = await assetGateway.lookupAsset("AAPL", "Keyword");
+
+    expect(res).toEqual({ status: "error", error: { code: "RateLimited" } });
+  });
 });

@@ -13,15 +13,26 @@ export interface UseWebLookupSearchReturn {
   query: string;
   setQuery: (q: string) => void;
   state: WebLookupSearchState;
-  submit: () => void;
+  lastMode: LookupMode | null;
+  /**
+   * Dispatches a search. When `queryOverride` is provided it takes precedence
+   * over the internal `query` state — required by the two-field modal where
+   * the internal state mirrors only the most-recently-typed field, not the
+   * one whose submit button was actually clicked.
+   */
+  submit: (mode: LookupMode, queryOverride?: string) => void;
   retry: () => void;
 }
 
 export function useWebLookupSearch(): UseWebLookupSearchReturn {
   const [query, setQuery] = useState("");
   const [state, setState] = useState<WebLookupSearchState>({ status: "idle" });
+  const [lastMode, setLastMode] = useState<LookupMode | null>(null);
+  const [lastQuery, setLastQuery] = useState<string>("");
 
   const runSearch = useCallback(async (q: string, mode: LookupMode) => {
+    setLastMode(mode);
+    setLastQuery(q);
     setState({ status: "loading" });
     const result = await assetGateway.lookupAsset(q, mode);
     if (result.status === "error") {
@@ -33,19 +44,19 @@ export function useWebLookupSearch(): UseWebLookupSearchReturn {
     }
   }, []);
 
-  const submit = useCallback(() => {
-    if (!query.trim() || state.status === "loading") return;
-    const mode: LookupMode =
-      query.trim().length === 12 && /^[A-Za-z0-9]+$/.test(query.trim()) ? "Isin" : "Keyword";
-    runSearch(query, mode);
-  }, [query, state, runSearch]);
+  const submit = useCallback(
+    (mode: LookupMode, queryOverride?: string) => {
+      const effective = queryOverride ?? query;
+      if (!effective.trim() || state.status === "loading") return;
+      runSearch(effective, mode);
+    },
+    [query, state, runSearch],
+  );
 
   const retry = useCallback(() => {
-    if (!query.trim() || state.status === "loading") return;
-    const mode: LookupMode =
-      query.trim().length === 12 && /^[A-Za-z0-9]+$/.test(query.trim()) ? "Isin" : "Keyword";
-    runSearch(query, mode);
-  }, [query, state, runSearch]);
+    if (!lastQuery.trim() || state.status === "loading" || !lastMode) return;
+    runSearch(lastQuery, lastMode);
+  }, [lastQuery, state, lastMode, runSearch]);
 
-  return { query, setQuery, state, submit, retry };
+  return { query, setQuery, state, lastMode, submit, retry };
 }

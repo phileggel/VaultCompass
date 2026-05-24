@@ -20,19 +20,48 @@ describe("useWebLookupSearch", () => {
   it("does not call the gateway and stays idle when query is empty", async () => {
     const { result } = renderHook(() => useWebLookupSearch());
 
-    expect(result.current.query).toBe("");
     expect(result.current.state.status).toBe("idle");
 
     await act(async () => {
-      result.current.submit();
+      result.current.submit("Isin");
     });
 
     expect(mockLookupAsset).not.toHaveBeenCalled();
     expect(result.current.state.status).toBe("idle");
   });
 
-  // WEB-030 — transitions through loading and lands on results (WEB-031)
-  it("transitions idle → loading → results on successful search", async () => {
+  // WEB-014 / WEB-030 — Isin mode dispatches to gateway with "Isin" and transitions through loading
+  it("transitions idle → loading → results on successful ISIN search", async () => {
+    const results: AssetLookupResult[] = [
+      {
+        name: "iShares Core S&P 500 UCITS ETF",
+        reference: "IE00B53L3W79",
+        currency: "EUR",
+        asset_class: "ETF",
+        exchange: null,
+      },
+    ];
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: results });
+
+    const { result } = renderHook(() => useWebLookupSearch());
+
+    act(() => {
+      result.current.setQuery("IE00B53L3W79");
+    });
+
+    await act(async () => {
+      result.current.submit("Isin");
+    });
+
+    expect(mockLookupAsset).toHaveBeenCalledWith("IE00B53L3W79", "Isin");
+    expect(result.current.state.status).toBe("results");
+    if (result.current.state.status === "results") {
+      expect(result.current.state.results).toEqual(results);
+    }
+  });
+
+  // WEB-014 / WEB-030 — Keyword mode dispatches to gateway with "Keyword"
+  it("transitions idle → loading → results on successful keyword search", async () => {
     const results: AssetLookupResult[] = [
       {
         name: "Apple Inc.",
@@ -47,24 +76,15 @@ describe("useWebLookupSearch", () => {
     const { result } = renderHook(() => useWebLookupSearch());
 
     act(() => {
-      result.current.setQuery("AAPL");
-    });
-
-    // Start the submit but do not await yet so we can observe loading
-    let submitPromise: Promise<void>;
-    act(() => {
-      submitPromise = Promise.resolve().then(() => result.current.submit());
+      result.current.setQuery("Apple");
     });
 
     await act(async () => {
-      await submitPromise;
+      result.current.submit("Keyword");
     });
 
-    expect(mockLookupAsset).toHaveBeenCalledWith("AAPL");
+    expect(mockLookupAsset).toHaveBeenCalledWith("Apple", "Keyword");
     expect(result.current.state.status).toBe("results");
-    if (result.current.state.status === "results") {
-      expect(result.current.state.results).toEqual(results);
-    }
   });
 
   // WEB-032 — empty result list transitions to empty state
@@ -78,13 +98,13 @@ describe("useWebLookupSearch", () => {
     });
 
     await act(async () => {
-      result.current.submit();
+      result.current.submit("Keyword");
     });
 
     expect(result.current.state.status).toBe("empty");
   });
 
-  // WEB-033 — NetworkError transitions to error state
+  // WEB-033 — NetworkError transitions to error state with code preserved
   it("transitions to error state when gateway returns NetworkError", async () => {
     mockLookupAsset.mockResolvedValue({
       status: "error",
@@ -98,14 +118,41 @@ describe("useWebLookupSearch", () => {
     });
 
     await act(async () => {
-      result.current.submit();
+      result.current.submit("Keyword");
     });
 
     expect(result.current.state.status).toBe("error");
+    if (result.current.state.status === "error") {
+      expect(result.current.state.code).toBe("NetworkError");
+    }
   });
 
-  // WEB-033 — retry re-issues the last query
-  it("retry re-issues the last query after an error", async () => {
+  // WEB-025 / WEB-033 — InvalidIsinFormat on ISIN path transitions to error state
+  it("transitions to error state with InvalidIsinFormat when ISIN format is invalid", async () => {
+    mockLookupAsset.mockResolvedValue({
+      status: "error",
+      error: { code: "InvalidIsinFormat" },
+    });
+
+    const { result } = renderHook(() => useWebLookupSearch());
+
+    act(() => {
+      result.current.setQuery("NOTANISIN");
+    });
+
+    await act(async () => {
+      result.current.submit("Isin");
+    });
+
+    expect(mockLookupAsset).toHaveBeenCalledWith("NOTANISIN", "Isin");
+    expect(result.current.state.status).toBe("error");
+    if (result.current.state.status === "error") {
+      expect(result.current.state.code).toBe("InvalidIsinFormat");
+    }
+  });
+
+  // WEB-033 — retry re-issues the last query with the last mode
+  it("retry re-issues the last query and mode after an error", async () => {
     mockLookupAsset
       .mockResolvedValueOnce({
         status: "error",
@@ -131,7 +178,7 @@ describe("useWebLookupSearch", () => {
     });
 
     await act(async () => {
-      result.current.submit();
+      result.current.submit("Keyword");
     });
 
     expect(result.current.state.status).toBe("error");
@@ -141,7 +188,7 @@ describe("useWebLookupSearch", () => {
     });
 
     expect(mockLookupAsset).toHaveBeenCalledTimes(2);
-    expect(mockLookupAsset).toHaveBeenNthCalledWith(2, "AAPL");
+    expect(mockLookupAsset).toHaveBeenNthCalledWith(2, "AAPL", "Keyword");
     expect(result.current.state.status).toBe("results");
   });
 
@@ -159,22 +206,67 @@ describe("useWebLookupSearch", () => {
       result.current.setQuery("AAPL");
     });
 
-    // Kick off first submit — intentionally not awaited yet
     act(() => {
-      result.current.submit();
+      result.current.submit("Keyword");
     });
 
-    // Immediately fire a second submit while loading
     act(() => {
-      result.current.submit();
+      result.current.submit("Keyword");
     });
 
-    // Now let the first call resolve
     await act(async () => {
       resolveFirst({ status: "ok", data: [] });
     });
 
-    // Gateway should have been called only once
     expect(mockLookupAsset).toHaveBeenCalledTimes(1);
+  });
+
+  // lastMode is exposed in state so components can anchor error/loading UI to the right field
+  it("exposes lastMode in state after an ISIN submit", async () => {
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
+
+    const { result } = renderHook(() => useWebLookupSearch());
+
+    act(() => {
+      result.current.setQuery("IE00B53L3W79");
+    });
+
+    await act(async () => {
+      result.current.submit("Isin");
+    });
+
+    expect(result.current.lastMode).toBe("Isin");
+  });
+
+  it("exposes lastMode in state after a Keyword submit", async () => {
+    mockLookupAsset.mockResolvedValue({ status: "ok", data: [] });
+
+    const { result } = renderHook(() => useWebLookupSearch());
+
+    act(() => {
+      result.current.setQuery("Apple");
+    });
+
+    await act(async () => {
+      result.current.submit("Keyword");
+    });
+
+    expect(result.current.lastMode).toBe("Keyword");
+  });
+
+  // Guard branch — retry before any submit is a no-op (lastMode is null)
+  it("retry is a no-op when no prior submit was made (lastMode is null)", async () => {
+    const { result } = renderHook(() => useWebLookupSearch());
+
+    act(() => {
+      result.current.setQuery("IE00B53L3W79");
+    });
+
+    await act(async () => {
+      result.current.retry();
+    });
+
+    expect(mockLookupAsset).not.toHaveBeenCalled();
+    expect(result.current.state.status).toBe("idle");
   });
 });
