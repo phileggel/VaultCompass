@@ -10,14 +10,6 @@ export function isSystemCategory(id: string): boolean {
 }
 
 /**
- * Excludes the Cash Category from a category list (CSH-017).
- * Default uncategorized stays visible because users explicitly pick it for new assets.
- */
-export function excludeCashCategory<T extends { id: string }>(categories: T[]): T[] {
-  return categories.filter((c) => c.id !== SYSTEM_CASH_CATEGORY_ID);
-}
-
-/**
  * F27 — Maps any category-BC mutation error (add / update / delete) to a
  * category-scoped i18n key. Pure function, no React, no useTranslation.
  *
