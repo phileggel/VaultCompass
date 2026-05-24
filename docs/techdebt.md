@@ -71,26 +71,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-23 — usePriceModal handleSubmit lacks try/catch around recordAssetPrice
-
-- Found by: reviewer-frontend (during F27 port to account_details + transactions)
-- Where: `src/features/account_details/account_details_view/usePriceModal.ts:75-95`
-- Context: branch `fix/f27-account-details-transactions` @ `8f50ed5`
-- Severity: 🔵
-- Observation: A thrown gateway exception leaves `isSubmitting` stuck at `true` and never sets an error state. All other transaction hooks in the same feature wrap the gateway call in `try/catch` with an `UNKNOWN_ERROR` fallback. Mechanical to fold in next time `usePriceModal` is touched.
-
----
-
-## 2026-05-23 — useAccountDetails fetchDetails lacks try/catch around getAccountDetails
-
-- Found by: reviewer-frontend (during F27 port to account_details + transactions)
-- Where: `src/features/account_details/account_details_view/useAccountDetails.ts:33-44`
-- Context: branch `fix/f27-account-details-transactions` @ `8f50ed5`
-- Severity: 🔵
-- Observation: A thrown gateway exception leaves `isLoading` stuck at `true` and never sets an error state. Same symmetry gap as `usePriceModal` above — `useAccountDetails` was the canonical view-fetch hook that the per-BC hooks (assets, accounts, categories) modeled their `catch (e) → setError(UNKNOWN_ERROR)` pattern on, but the original hook itself doesn't follow it.
-
----
-
 ## 2026-05-23 — snackbarStore lives in src/lib/ instead of src/ui/components/snackbar/ (F28)
 
 - Found by: reviewer-frontend + reviewer-arch (during F27 cleanup for refresh-prices hooks)

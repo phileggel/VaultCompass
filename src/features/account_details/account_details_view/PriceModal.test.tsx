@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HoldingDetail } from "@/bindings";
+import { logger } from "@/lib/logger";
 
 // Gateway mock — recordAssetPrice is the new command (Result<null, string>)
 const mockRecordAssetPrice = vi.fn();
@@ -225,5 +226,28 @@ describe("usePriceModal", () => {
 
     expect(onSubmitSuccess).not.toHaveBeenCalled();
     expect(result.current.error).toEqual({ key: "error.NotPositive" });
+  });
+
+  // Gateway throw path — recordAssetPrice rejects → UNKNOWN_ERROR set, isSubmitting cleared
+  it("falls back to UNKNOWN_ERROR and clears isSubmitting when gateway throws", async () => {
+    mockRecordAssetPrice.mockRejectedValue(new Error("boom"));
+    const onSubmitSuccess = vi.fn();
+    const { result } = renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess }));
+
+    await act(async () => {
+      result.current.handleChange("date", TODAY);
+      result.current.handleChange("price", "150.50");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.error).toEqual({ key: "error.Unknown" });
+    expect(result.current.isSubmitting).toBe(false);
+    expect(onSubmitSuccess).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith("[usePriceModal] recordAssetPrice threw", {
+      error: expect.any(Error),
+    });
   });
 });
