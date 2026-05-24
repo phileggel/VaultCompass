@@ -55,7 +55,7 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative w-full ${maxWidth} bg-m3-surface-container-lowest/85 backdrop-blur-md rounded-[28px] shadow-elevation-4 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200`}
+        className={`relative w-full ${maxWidth} max-h-[calc(100vh-2rem)] bg-m3-surface-container-lowest/85 backdrop-blur-md rounded-[28px] shadow-elevation-4 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
@@ -78,7 +78,9 @@ export function Dialog({
         </div>
 
         {/* Content */}
-        <div className="px-6 py-2 overflow-y-auto text-m3-on-surface-variant">{children}</div>
+        <div className="px-6 py-2 overflow-y-auto text-m3-on-surface-variant flex-1 min-h-0">
+          {children}
+        </div>
 
         {/* Footer Actions */}
         {actions && (

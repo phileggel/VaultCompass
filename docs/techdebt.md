@@ -98,3 +98,19 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `fix/f27-refresh-prices-hooks` @ `a2c022c`
 - Severity: 🟡
 - Observation: `snackbarStore` is a stateful UI runtime; per F28 it belongs under `src/ui/components/snackbar/snackbarStore.ts` (colocated with its widget), not in the pre-gold `src/lib/` bucket. Move is mechanical (file rename + path-alias update across ~15 callers) but spans many features outside any single PR's scope. Same pattern as the broader `src/lib/` → F28-bucket migration already tracked above; this entry just calls out snackbarStore specifically since it surfaces on every snackbar-dispatching feature.
+
+## 2026-05-24 — Dialog dialog/close-button lack stable F25 ids
+
+- Found by: reviewer-frontend (during Dialog viewport-clip fix review)
+- Where: `src/ui/components/modal/Dialog.tsx:54` (role="dialog" surface), `src/ui/components/modal/Dialog.tsx:69` (close button uses `data-testid="modal-close-btn"`)
+- Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
+- Severity: 🔵
+- Observation: F25 mandates stable `id` attributes on dialog containers and prefers `id` over `data-testid` for E2E selectors. Dialog's `role="dialog"` surface has no `id`, and the close button is selectable only via `data-testid="modal-close-btn"`. Migration would touch every Dialog consumer (8+ feature modals) plus the `dismissLeftoverModal` E2E helper which queries the testid — multi-file fanout outside any single fix's scope.
+
+## 2026-05-24 — ModalContainer hardcodes "Close modal" aria-label (F24 violation)
+
+- Found by: reviewer-frontend (during Dialog viewport-clip fix review)
+- Where: `src/ui/components/modal/ModalContainer.tsx:58`
+- Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
+- Severity: 🔵
+- Observation: The backdrop's `aria-label="Close modal"` is a literal English string; F24 requires i18n-aware aria-labels via `t()`. ModalContainer doesn't currently consume `react-i18next`, so the fix needs a hook + dependency on the same translation namespace as Dialog ("common").
