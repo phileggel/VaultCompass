@@ -290,7 +290,6 @@
     "column_unrealized_pnl": "P&L latent",
     "column_performance_pct": "Performance",
     "total_unrealized_pnl": "P&L latent total",
-    "price_as_of": "au {{date}}",
     "action_enter_price": "Saisir le prix",
     "action_price_history": "Historique des prix",
     "action_open_balance": "Ajouter une position",

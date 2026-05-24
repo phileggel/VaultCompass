@@ -22,7 +22,7 @@ interface PriceHistoryModalProps {
 }
 
 export function PriceHistoryModal({ isOpen, onClose, holding }: PriceHistoryModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const showSnackbar = useSnackbar();
   const { prices, isLoading, fetchError, deleteError, deletingDate, confirmDelete, refetch } =
     usePriceHistory({ assetId: holding.asset_id });
@@ -141,7 +141,7 @@ export function PriceHistoryModal({ isOpen, onClose, holding }: PriceHistoryModa
                 const sourceLabel = formatSource(row.source);
                 return (
                   <tr key={row.date} className="m3-tr">
-                    <td className="m3-td">{formatIsoDate(row.date)}</td>
+                    <td className="m3-td">{formatIsoDate(row.date, i18n.language)}</td>
                     <td className="m3-td text-right tabular-nums">
                       {microToFormatted(row.price, 2)}
                     </td>
@@ -202,7 +202,7 @@ export function PriceHistoryModal({ isOpen, onClose, holding }: PriceHistoryModa
           onConfirm={handleDeleteConfirm}
           title={t("price_history.delete_confirm_title")}
           message={t("price_history.delete_confirm_message", {
-            date: formatIsoDate(deleteTarget.date),
+            date: formatIsoDate(deleteTarget.date, i18n.language),
           })}
           confirmLabel={t("action.delete")}
           cancelLabel={t("action.cancel")}

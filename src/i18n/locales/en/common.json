@@ -290,7 +290,6 @@
     "column_unrealized_pnl": "Unrealized P&L",
     "column_performance_pct": "Performance",
     "total_unrealized_pnl": "Total Unrealized P&L",
-    "price_as_of": "as of {{date}}",
     "action_enter_price": "Enter price",
     "action_price_history": "Price history",
     "action_open_balance": "Add a position",
