@@ -293,7 +293,7 @@
     "price_as_of": "as of {{date}}",
     "action_enter_price": "Enter price",
     "action_price_history": "Price history",
-    "action_open_balance": "Open Balance",
+    "action_open_balance": "Add a position",
     "action_deposit": "Deposit",
     "action_withdraw": "Withdraw",
     "action_refresh_prices": "Refresh prices",
@@ -332,12 +332,12 @@
     "date_too_old": "Date cannot be earlier than 1900-01-01."
   },
   "open_balance": {
-    "modal_title": "Open Balance Position",
+    "modal_title": "Add a position",
     "form_total_cost_label": "Total Cost",
     "form_quantity_placeholder": "0.000000",
     "form_total_cost_placeholder": "0.000",
-    "action_submit": "Open Balance",
-    "success_created": "Opening balance recorded successfully."
+    "action_submit": "Add position",
+    "success_created": "Position added."
   },
   "price_history": {
     "title": "Price History",
