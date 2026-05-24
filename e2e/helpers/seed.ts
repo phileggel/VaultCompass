@@ -96,37 +96,6 @@ export async function seedDeposit(
   assert.ok(!("__error" in result), `seedDeposit failed: ${JSON.stringify(result)}`);
 }
 
-/**
- * Records a withdrawal on the given account (CSH-032). Useful for setting up
- * tests that need to drain the cash holding to specific values.
- */
-export async function seedWithdrawal(
-  accountId: string,
-  date: string,
-  amountMicros: number,
-): Promise<void> {
-  const result = (await browser.executeAsync(
-    (accId: string, d: string, amt: number, done: (r: unknown) => void) => {
-      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
-      window.__TAURI_INTERNALS__
-        .invoke("record_withdrawal", {
-          dto: {
-            account_id: accId,
-            date: d,
-            amount_micros: amt,
-            note: "",
-          },
-        })
-        .then(done)
-        .catch((err: unknown) => done({ __error: String(err) }));
-    },
-    accountId,
-    date,
-    amountMicros,
-  )) as { id?: string; __error?: string };
-  assert.ok(!("__error" in result), `seedWithdrawal failed: ${JSON.stringify(result)}`);
-}
-
 export async function seedBuy(
   accountId: string,
   assetId: string,

@@ -1,6 +1,5 @@
 import type { ArchiveAssetError, AssetClass, AssetCrudError, DeleteAssetError } from "@/bindings";
 import type { I18nMessage } from "@/ui/format/i18n";
-import { DEFAULT_RISK_BY_CLASS } from "./constants";
 
 /**
  * F27 — Maps any asset-BC mutation error (add / update / archive / unarchive / delete)
@@ -52,11 +51,6 @@ export function getRiskBadgeClasses(riskLevel: number): string {
     default:
       return "bg-gray-100 text-gray-600";
   }
-}
-
-/** Returns the default risk level for the given asset class — R3/R10. */
-export function getDefaultRisk(assetClass: AssetClass): number {
-  return DEFAULT_RISK_BY_CLASS[assetClass];
 }
 
 /** Returns a localised label for an asset class — WEB-031.
