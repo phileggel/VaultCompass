@@ -107,14 +107,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Severity: 🔵
 - Observation: F25 mandates stable `id` attributes on dialog containers and prefers `id` over `data-testid` for E2E selectors. Dialog's `role="dialog"` surface has no `id`, and the close button is selectable only via `data-testid="modal-close-btn"`. Migration would touch every Dialog consumer (8+ feature modals) plus the `dismissLeftoverModal` E2E helper which queries the testid — multi-file fanout outside any single fix's scope.
 
-## 2026-05-24 — ModalContainer hardcodes "Close modal" aria-label (F24 violation)
-
-- Found by: reviewer-frontend (during Dialog viewport-clip fix review)
-- Where: `src/ui/components/modal/ModalContainer.tsx:58`
-- Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
-- Severity: 🔵
-- Observation: The backdrop's `aria-label="Close modal"` is a literal English string; F24 requires i18n-aware aria-labels via `t()`. ModalContainer doesn't currently consume `react-i18next`, so the fix needs a hook + dependency on the same translation namespace as Dialog ("common").
-
 ## 2026-05-24 — contract — account: event-naming and error-coverage gaps vs wire surface
 
 - Found by: contract-reviewer
