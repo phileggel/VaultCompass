@@ -33,11 +33,13 @@ describe("asset_web_lookup", () => {
     await fab.waitForExist({ timeout: 10000 });
     await fab.click();
 
-    // The modal is open when the search input is present.
+    // The modal is open when the ISIN input is present. Two-field web lookup
+    // (WEB-012) renders both #web-lookup-isin-input and #web-lookup-keyword-input;
+    // asserting on the ISIN input is sufficient to confirm the modal mounted.
     // Use the stable id selector — text-based selectors are unreliable in WebKitGTK.
-    const searchInput = await $("#web-lookup-search-query");
+    const searchInput = await $("#web-lookup-isin-input");
     await searchInput.waitForExist({ timeout: 8000 });
-    assert.ok(await searchInput.isExisting(), "Search input must be present");
+    assert.ok(await searchInput.isExisting(), "ISIN input must be present");
 
     // The "Fill manually" button must be visible immediately.
     const fillManuallyBtn = await $('button[aria-label="Fill manually"]');
