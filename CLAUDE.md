@@ -111,7 +111,7 @@ Why: a 60-file mixed-layer PR overwhelms reviewers; comment threads sprawl acros
 - Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-unit` (both)
 - E2E tests: `just test-e2e` (local) | `just test-e2e-headless` (Linux headless)
 - Security audit: `/security-review` (IPC, capabilities, SQL injection, hardcoded secrets) — Claude Code built-in, run before release alongside the kit's `/dep-audit`
-- Release sequence: `/dep-audit` → `just release [--preview] [--dry-run] [--version X.Y.Z] [-y]` (use `--preview` first to see the next computed version without side effects)
+- Release sequence: `/dep-audit` → `just test-e2e-headless` → `just release [--preview] [--dry-run] [--version X.Y.Z] [-y]` (use `--preview` first to see the next computed version without side effects). `just release` runs `check-full` (lint/test/build) but NOT E2E — E2E only fires on `main` push, so a release tag can hide pre-existing E2E breakage. Run E2E locally first; if red, fix before tagging.
 - After `just sync-kit` with a non-trivial delta: run `/kit-discover` to reconcile this file with the kit.
 
 ## 📖 Ubiquitous Language

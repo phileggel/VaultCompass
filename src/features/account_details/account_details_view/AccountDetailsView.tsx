@@ -88,7 +88,12 @@ export function AccountDetailsView() {
                 >
                   {t("account_details.action_refresh_prices")}
                 </Button>
-                <Button variant="secondary" size="sm" onClick={view.handleOpenBalanceOpen}>
+                <Button
+                  id="action-open-balance"
+                  variant="secondary"
+                  size="sm"
+                  onClick={view.handleOpenBalanceOpen}
+                >
                   {t("account_details.action_open_balance")}
                 </Button>
                 {/* CSH-019 — Deposit always visible */}
