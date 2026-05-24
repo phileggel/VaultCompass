@@ -108,9 +108,19 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 
 `cargo audit` flags `rsa 0.9.10` (timing sidechannel, CVSS 5.9 medium) with no upstream fix. Pulled transitively via `sqlx-mysql 0.8.6` because the `sqlx` macro crate compiles all backends regardless of enabled features. We only enable `sqlite`, so the vulnerable RSA path is never reached at runtime. Re-evaluate when sqlx ships a fix or when we change DB backend.
 
-## (mkt) — Stooq cannot find FR001400U5Q4 (and likely other French OAT/bond ISINs)
+## (mkt) — Stooq fetch by ISIN returns N/D when the asset is indexed by ticker
 
-User-reported 2026-05-24: a Stooq fetch for `FR001400U5Q4` returns no data. `FR0014…` is the ISIN range for French government bonds (OATs) issued via Agence France Trésor. Stooq's symbol coverage may not include FR OATs at all, or may require a different symbol prefix (`oat_…`, `…oats`, etc.). Investigate Stooq's symbol scheme for FR bonds; if unsupported, surface a clearer "provider does not cover this ISIN" message instead of generic "not found", and consider documenting the coverage gap in MKT spec.
+User-reported 2026-05-24: a Stooq fetch for the asset whose `reference` is `FR001400U5Q4` returns no data. Probe results (2026-05-24):
+
+- `PE500.FR` (the Amundi PEA S&P 500 UCITS ETF ticker) → 52.972 EUR, fresh ✅
+- `FR001400U5Q4` (the same ETF's ISIN) → `N/D` ❌
+- `CW8.FR` (Amundi MSCI World ticker) → 668.851 EUR, fresh ✅
+
+So Stooq does carry the instrument — keyed by ticker, not ISIN. The original framing ("FR0014… is the OAT ISIN range") was wrong: FR0014… is also Amundi's ETF range, and likely many other issuers'. The actual bug is on our side — `Asset.reference` holds whatever the user / OpenFIGI supplied (ticker OR ISIN), and the Stooq symbol-derivation path lowercases that verbatim. When `reference` is an ISIN, Stooq can't find it.
+
+Root-caused by the existing `(asset) — Promote ISIN to canonical identifier alongside ticker` todo above. Until that lands, an intermediate option is to resolve ISIN → ticker via OpenFIGI's `/v3/mapping` response inside the dispatcher, then issue the Stooq fetch on the resolved ticker. Smaller change than the schema split but adds an external dependency on every fetch.
+
+Surfaced 2026-05-24 and investigated 2026-05-24 (revert of the misdirected `stooq_coverage` helper).
 
 ## (fe) — Account details price column too dense + FR date in EN locale
 
