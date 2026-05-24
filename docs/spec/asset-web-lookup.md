@@ -17,7 +17,8 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 | Field         | Business meaning                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`        | Full name of the financial instrument (e.g. "Apple Inc.").                                                                                              |
-| `reference`   | ISIN or ticker symbol; pre-fills the Add Asset `reference` field. Absent when the keyword search path finds no ticker for the result (WEB-046).         |
+| `reference`   | Ticker symbol returned by OpenFIGI; pre-fills the Add Asset `reference` field. Absent when OpenFIGI returns no ticker for the result (WEB-046).         |
+| `isin`        | ISIN code (12 chars, ISO 6166); pre-fills the Add Asset `isin` field. Populated only on the ISIN path (WEB-046); absent on the keyword path.            |
 | `currency`    | ISO 4217 trading currency of the instrument (e.g. "USD"). Absent if OpenFIGI does not return one for the result.                                        |
 | `asset_class` | Classification of the instrument mapped from the OpenFIGI `securityType`. Absent if the type is unrecognised (WEB-023).                                 |
 | `exchange`    | Canonical `Exchange` value (per AST Entity Definition) resolved from the OpenFIGI response. Absent when OpenFIGI returns no recognized venue (WEB-049). |
@@ -48,7 +49,7 @@ Each field has its own search button. There is no auto-detection or shared input
 
 **WEB-015 — Diacritics normalization (backend)**: On the keyword path (WEB-014), the trimmed query is normalized by Unicode NFD decomposition followed by combining-mark removal. This maps `"Société Générale"` to `"Societe Generale"`, `"Münchener Rück"` to `"Munchener Ruck"`, and so on. OpenFIGI's name index is unaccented, so the unnormalized form returns zero hits for accented inputs. ASCII inputs are unaffected. The ISIN path does not apply this normalization (ISIN charset is restricted to `[A-Z0-9]` per WEB-016).
 
-**WEB-016 — ISIN format validation (backend)**: On the ISIN path (WEB-014), the query is first trimmed and uppercased; this normalized form is the value used by the rest of the pipeline (sent to OpenFIGI, embedded in `AssetLookupResult.reference` per WEB-046, and ultimately persisted by `add_asset`). The normalized form MUST satisfy three checks before any HTTP call. If any check fails the action is rejected with a specific error and no HTTP request is made:
+**WEB-016 — ISIN format validation (backend)**: On the ISIN path (WEB-014), the query is first trimmed and uppercased; this normalized form is the value used by the rest of the pipeline (sent to OpenFIGI, embedded in `AssetLookupResult.isin` per WEB-046, and ultimately persisted by `add_asset` into the `Asset.isin` field per AST-023). The normalized form MUST satisfy three checks before any HTTP call. If any check fails the action is rejected with a specific error and no HTTP request is made:
 
 1. **Length**: exactly 12 characters.
 2. **Charset**: characters 1–2 are ASCII letters (`[A-Z]`, an ISO 3166-1 alpha-2 country code), characters 3–11 are alphanumeric (`[A-Z0-9]`), character 12 is a digit (`[0-9]`).
@@ -96,7 +97,7 @@ In all cases the "Fill manually" bypass (WEB-013) remains accessible. No navigat
 
 **WEB-040 — Result selection (frontend)**: Selecting a result from the list transitions to the Add Asset form with fields pre-filled from the selected `AssetLookupResult`.
 
-**WEB-041 — Pre-filled fields (frontend)**: The following Add Asset form fields are pre-filled from the selected result: `name` ← `AssetLookupResult.name`; `reference` ← `AssetLookupResult.reference` (blank if absent); `currency` ← `AssetLookupResult.currency` (blank if absent); `asset_class` ← `AssetLookupResult.asset_class` (no selection if absent); `exchange` ← `AssetLookupResult.exchange` (no selection if absent). All pre-filled values remain user-editable per WEB-043.
+**WEB-041 — Pre-filled fields (frontend)**: The following Add Asset form fields are pre-filled from the selected result: `name` ← `AssetLookupResult.name`; `reference` ← `AssetLookupResult.reference` (blank if absent); `isin` ← `AssetLookupResult.isin` (blank if absent); `currency` ← `AssetLookupResult.currency` (blank if absent); `asset_class` ← `AssetLookupResult.asset_class` (no selection if absent); `exchange` ← `AssetLookupResult.exchange` (no selection if absent). All pre-filled values remain user-editable per WEB-043.
 
 **WEB-042 — Risk level default from asset class (frontend)**: When opening the Add Asset form from the web lookup path (creation only), if `asset_class` is pre-filled, `risk_level` is automatically set to the class default, consistent with the `AssetClass::default_risk()` behaviour defined in AST-010. When `asset_class` is absent, `risk_level` is left at its form default. This rule applies exclusively to the creation flow; it does not affect the edit form.
 
@@ -106,7 +107,7 @@ In all cases the "Fill manually" bypass (WEB-013) remains accessible. No navigat
 
 **WEB-045 — Save via existing add_asset command (frontend + backend)**: Saving the pre-filled form uses the existing `add_asset` command. All existing Asset creation rules apply — reference uniqueness check, field validation, and `AssetUpdated` event publication — as defined in the AST spec. The web lookup path introduces no new save rules.
 
-**WEB-046 — Reference field source (backend)**: On the ISIN path (WEB-014), `AssetLookupResult.reference` is the normalized ISIN string (per WEB-016: trimmed + uppercased + format-validated). On the keyword path, `reference` is the ticker symbol returned by OpenFIGI when available; when OpenFIGI does not return a ticker for a result, `reference` is absent.
+**WEB-046 — Reference and ISIN field sources (backend)**: `AssetLookupResult.reference` is the ticker symbol returned by OpenFIGI when available; absent when OpenFIGI does not return a ticker for the result. This is consistent across both lookup paths so `reference` always carries the value that market-data providers expect (ticker, not ISIN). `AssetLookupResult.isin` is populated only on the ISIN path with the normalized ISIN query (per WEB-016: trimmed + uppercased + format-validated); absent on the keyword path because OpenFIGI's `/v3/search` response does not expose ISIN.
 
 **WEB-047 — Back navigation from form to search results (frontend)**: When the form is in the pre-filled state (WEB-040), a back action is available that returns the user to the search step. The previous query and results list are retained in memory; the user does not need to retype the query. Selecting a different result replaces all pre-filled values.
 

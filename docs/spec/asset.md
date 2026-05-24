@@ -34,7 +34,11 @@ Subjective risk score from 1 (low risk) to 5 (high risk). The frontend suggests 
 
 ### `reference`
 
-Security identifier: stock ticker (e.g. `AAPL`), ISIN code (e.g. `FR0000131104`), or free-form identifier entered by the user (e.g. `APPART-PARIS-15`) for non-quoted assets. Required.
+Security ticker (e.g. `AAPL`) or free-form identifier entered by the user (e.g. `APPART-PARIS-15`) for non-quoted assets. Required. For assets that also have an ISIN, the canonical ISO 6166 identity is stored separately in `isin` (see below); `reference` holds the ticker symbol used for market-data provider lookups (Stooq, etc.).
+
+### `isin`
+
+Optional International Securities Identification Number (12 characters, ISO 6166). When present, MUST satisfy the format validation defined in WEB-016 (length, charset, Luhn check digit). Absent for non-quoted assets (real estate, free-form references) and for assets discovered via the keyword path of web lookup (OpenFIGI's free `/v3/search` response does not expose ISIN). Independent of `reference`: both may be populated for quoted assets discovered via the ISIN path of web lookup.
 
 ### `exchange`
 
@@ -65,7 +69,7 @@ The list of supported `Exchange` values is finite and curated. Provider keys (St
 
 ### Asset — Backend
 
-**AST-001 (was R1) — Field validation (backend)**: An asset is valid if and only if: `name` is non-empty, `reference` is non-empty, `category` is set, `class` is a value of `AssetClass`, `currency` is a valid ISO 4217 code, `risk_level` is an integer between 1 and 5 inclusive, and — if present — `exchange.code` is a member of the canonical curated `Exchange` set. Any violation is rejected by the backend with an explicit error.
+**AST-001 (was R1) — Field validation (backend)**: An asset is valid if and only if: `name` is non-empty, `reference` is non-empty, `category` is set, `class` is a value of `AssetClass`, `currency` is a valid ISO 4217 code, `risk_level` is an integer between 1 and 5 inclusive, — if present — `exchange.code` is a member of the canonical curated `Exchange` set, and — if present — `isin` satisfies the format validation defined in WEB-016. Any violation is rejected by the backend with an explicit error.
 
 **AST-003 (was R3) — Asset classes and default risk (backend)**: Classification (`AssetClass`) is a fixed pre-seeded list, not user-customizable:
 
@@ -113,7 +117,7 @@ The table displays only active assets (`is_archived = false`) by default. A page
 
 **AST-017 (was R17) — Column sorting (frontend)**: Clicking a sortable column header sorts the list by that column ascending. A second click toggles to descending.
 
-**AST-008 (was R8) — Creation via FAB (frontend)**: A floating FAB at the bottom right opens a creation modal. The form contains: Name (required), Reference (required), ISO Currency (required), Category (select, pre-selected to `default-uncategorized`, see AST-002), Class (select, pre-selected to `Cash`), Risk level (1–5 selector, pre-filled per class, see AST-010). Submission is blocked if name, reference, or currency is missing. The `Exchange` picker is optional and defaults to (none) — see AST-021.
+**AST-008 (was R8) — Creation via FAB (frontend)**: A floating FAB at the bottom right opens a creation modal. The form contains: Name (required), Reference (required — ticker / free-form identifier), ISIN (optional, see AST-023), ISO Currency (required), Category (select, pre-selected to `default-uncategorized`, see AST-002), Class (select, pre-selected to `Cash`), Risk level (1–5 selector, pre-filled per class, see AST-010). Submission is blocked if name, reference, or currency is missing, or if the ISIN field is filled with a value that fails the format validation (AST-023 / WEB-016). The `Exchange` picker is optional and defaults to (none) — see AST-021.
 
 **AST-009 (was R9) — Reference duplicate warning (frontend)**: When creating or modifying an asset, if the entered reference matches (case-insensitive) the reference of an existing asset — active or archived — regardless of class, a non-blocking warning is shown in the form. The user can ignore the warning and confirm. The warning is intentionally non-blocking: the same identifier may legitimately designate distinct instruments depending on quotation currency or marketplace. Archived assets are included in the check to avoid silent duplicates in case of later unarchival.
 
@@ -136,6 +140,8 @@ The table displays only active assets (`is_archived = false`) by default. A page
 **AST-021 — Optional exchange picker (frontend)**: The asset creation (AST-008) and edit (AST-012) forms expose an optional `Exchange` picker. The picker lists the canonical curated set (see Entity Definition). Selecting "(none)" submits `exchange = None`. The picker pre-fill behavior from the web-lookup path is defined in WEB-041.
 
 **AST-022 — Exchange persistence (backend)**: The backend accepts the submitted `Exchange` value as-is and persists it without transformation. Editing an asset MAY freely set, change, or clear `exchange` (subject to AST-005 and AST-001).
+
+**AST-023 — Optional ISIN field (backend)**: An asset MAY carry an optional `isin: Option<String>`. When present, `isin` MUST satisfy the ISIN format validation defined in WEB-016 (12 characters, ASCII alphanumeric with letter prefix and digit suffix, Luhn-mod-10 check digit); the trimmed + uppercased form is the value persisted. When absent, the asset has no canonical ISO 6166 identity (typical for non-quoted assets or assets discovered via the keyword path of web lookup). The `isin` field is independent of `reference`: both may be populated for quoted assets discovered via the ISIN path. Editing an asset MAY freely set, change, or clear `isin` (subject to AST-005 and AST-001).
 
 ---
 
@@ -208,6 +214,10 @@ Allow physical deletion (hard delete) of an archived asset, only if no operation
 ### Asset operations history
 
 Display, from the Assets page, the list of operations linked to a given asset. Likely entry point: a contextual action on the asset row in the table, opening a panel or dedicated sub-page. This feature will be handled in the `operation` spec.
+
+### ISIN-based duplicate detection
+
+AST-009 currently warns on `reference` matches only. With AST-023 introducing the optional `isin` field as the ISO 6166 canonical identity, duplicate detection on `isin` (when present) would be more authoritative than `reference` matching. Deferred: surfaces only once a downstream feature (broker import, corporate-action handling, cross-account reconciliation) makes the dedup gap user-visible.
 
 ### Success feedback via snackbar
 
