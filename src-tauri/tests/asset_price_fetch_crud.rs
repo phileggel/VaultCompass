@@ -204,6 +204,7 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
         .create_asset(CreateAssetDTO {
             name: "Air Liquide".to_string(),
             reference: "AI".to_string(),
+            isin: None,
             class: vault_compass_lib::context::asset::AssetClass::Stocks,
             currency: "EUR".to_string(),
             risk_level: 4,

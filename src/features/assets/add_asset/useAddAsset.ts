@@ -20,6 +20,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
   const [formData, setFormData] = useState<{
     name: string;
     reference: string;
+    isin: string;
     class: AssetClass;
     currency: string;
     risk_level: number;
@@ -28,6 +29,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
   }>({
     name: prefill?.name ?? "",
     reference: prefill?.reference ?? "",
+    isin: prefill?.isin ?? "",
     class: (prefill?.asset_class ?? "Stocks") as AssetClass,
     currency: prefill?.currency ?? "EUR",
     risk_level: prefill?.asset_class
@@ -75,6 +77,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
     const result = await addAsset({
       name: formData.name,
       reference: formData.reference,
+      isin: formData.isin.trim() ? formData.isin.trim() : null,
       class: formData.class,
       currency: formData.currency,
       risk_level: formData.risk_level,
@@ -96,6 +99,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
     setFormData({
       name: "",
       reference: "",
+      isin: "",
       class: "Stocks",
       currency: "EUR",
       risk_level: DEFAULT_RISK_BY_CLASS.Stocks,

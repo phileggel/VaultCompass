@@ -1,6 +1,7 @@
 use super::category::AssetCategory;
 use super::error::AssetDomainError;
 use super::exchange::{self, Exchange};
+use super::isin::validate_isin;
 use anyhow::Result;
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -81,8 +82,13 @@ pub struct Asset {
     pub currency: String,
     /// Risk score from 1 to 5.
     pub risk_level: u8,
-    /// Identifier like ticker or ISIN.
+    /// Ticker / free-form reference (mandatory — R1). For quoted assets that
+    /// also carry an ISIN, the canonical ISO 6166 identity lives in `isin`
+    /// (AST-023); `reference` holds the provider-lookup symbol (Stooq, etc.).
     pub reference: String,
+    /// Optional ISIN (ISO 6166, 12 chars, Luhn-validated — AST-023). Stored
+    /// in the normalized uppercase form returned by `validate_isin`.
+    pub isin: Option<String>,
     /// Whether the asset is archived (soft-archived, reversible).
     pub is_archived: bool,
     /// Optional canonical trading venue (AST-021).
@@ -99,11 +105,13 @@ impl Asset {
         currency: String,
         risk_level: u8,
         reference: String,
+        isin: Option<String>,
         exchange: Option<Exchange>,
     ) -> StdResult<Self, AssetDomainError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
         let reference = reference.trim().to_uppercase();
+        let isin = normalize_optional_isin(isin)?;
 
         Ok(Self {
             id: Uuid::new_v4().to_string(),
@@ -113,6 +121,7 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            isin,
             is_archived: false,
             exchange,
         })
@@ -128,12 +137,14 @@ impl Asset {
         currency: String,
         risk_level: u8,
         reference: String,
+        isin: Option<String>,
         is_archived: bool,
         exchange: Option<Exchange>,
     ) -> StdResult<Self, AssetDomainError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
         let reference = reference.trim().to_uppercase();
+        let isin = normalize_optional_isin(isin)?;
 
         Ok(Self {
             id: asset_id,
@@ -143,6 +154,7 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            isin,
             is_archived,
             exchange,
         })
@@ -191,6 +203,7 @@ impl Asset {
         currency: String,
         risk_level: u8,
         reference: String,
+        isin: Option<String>,
         is_archived: bool,
         exchange: Option<Exchange>,
     ) -> Self {
@@ -202,6 +215,7 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            isin,
             is_archived,
             exchange,
         }
@@ -246,12 +260,14 @@ impl Asset {
         currency: String,
         risk_level: u8,
         reference: String,
+        isin: Option<String>,
         exchange: Option<Exchange>,
     ) -> Result<Self, AssetDomainError> {
         self.ensure_user_managed()?;
         self.ensure_not_archived()?;
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
         let reference = reference.trim().to_uppercase();
+        let isin = normalize_optional_isin(isin)?;
         Ok(Self {
             id: self.id,
             name,
@@ -260,6 +276,7 @@ impl Asset {
             currency,
             risk_level,
             reference,
+            isin,
             is_archived: self.is_archived,
             exchange,
         })
@@ -286,6 +303,26 @@ impl Asset {
     }
 }
 
+/// Runs `validate_isin` on `Some(raw)` and returns the normalized form, or
+/// passes `None` through. The sub-variants of `IsinFormatError` collapse to
+/// the single domain code `InvalidIsinFormat` (per `isin.rs` doc — the wire
+/// does not need sub-variant granularity); the sub-variant is preserved
+/// server-side via `tracing::debug!` for diagnostics.
+fn normalize_optional_isin(isin: Option<String>) -> StdResult<Option<String>, AssetDomainError> {
+    match isin {
+        Some(raw) => validate_isin(&raw).map(Some).map_err(|err| {
+            tracing::debug!(
+                target: crate::core::logger::BACKEND,
+                raw = %raw,
+                err = ?err,
+                "ISIN validation failed; collapsing to InvalidIsinFormat",
+            );
+            AssetDomainError::InvalidIsinFormat
+        }),
+        None => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod aggregate_tests {
     use super::*;
@@ -299,6 +336,7 @@ mod aggregate_tests {
             "USD".to_string(),
             3,
             "AAPL".to_string(),
+            None,
             archived,
             None,
         )
@@ -313,6 +351,7 @@ mod aggregate_tests {
             "USD".to_string(),
             1,
             "USD".to_string(),
+            None,
             false,
             None,
         )
@@ -329,6 +368,7 @@ mod aggregate_tests {
                 "USD".into(),
                 3,
                 "AAPL".into(),
+                None,
                 None,
             )
             .unwrap_err();
@@ -347,6 +387,7 @@ mod aggregate_tests {
                 3,
                 "AAPL".into(),
                 None,
+                None,
             )
             .unwrap_err();
         assert!(matches!(err, AssetDomainError::Archived));
@@ -363,6 +404,7 @@ mod aggregate_tests {
                 "USD".into(),
                 3,
                 "AAPL".into(),
+                None,
                 None,
             )
             .unwrap_err();
@@ -422,6 +464,7 @@ mod aggregate_tests {
                 2,
                 "MSFT".into(),
                 None,
+                None,
             )
             .unwrap();
         assert_eq!(updated.id, "a1");
@@ -446,6 +489,7 @@ mod aggregate_tests {
                 3,
                 "  msft  ".into(),
                 None,
+                None,
             )
             .unwrap();
         assert_eq!(updated.reference, "MSFT");
@@ -463,6 +507,7 @@ mod aggregate_tests {
             "USD".into(),
             1,
             "USD".into(),
+            None,
             true,
             None,
         );
@@ -474,6 +519,7 @@ mod aggregate_tests {
                 "USD".into(),
                 3,
                 "AAPL".into(),
+                None,
                 None,
             )
             .unwrap_err();
@@ -510,6 +556,129 @@ mod aggregate_tests {
 }
 
 #[cfg(test)]
+mod isin_tests {
+    use super::*;
+
+    // AST-023 — None ISIN is always valid (the field is optional).
+    #[test]
+    fn new_accepts_no_isin() {
+        let asset = Asset::new(
+            "Apple".into(),
+            AssetClass::Stocks,
+            AssetCategory::default(),
+            "USD".into(),
+            3,
+            "AAPL".into(),
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(asset.isin.is_none());
+    }
+
+    // AST-023 + WEB-016 — well-formed ISIN passes validation and is stored
+    // in the normalized uppercase form (trimmed + uppercased).
+    #[test]
+    fn new_accepts_and_normalizes_valid_isin() {
+        let asset = Asset::new(
+            "iShares S&P 500".into(),
+            AssetClass::ETF,
+            AssetCategory::default(),
+            "USD".into(),
+            3,
+            "CSPX".into(),
+            Some("  ie00b53l3w79  ".into()),
+            None,
+        )
+        .unwrap();
+        assert_eq!(asset.isin.as_deref(), Some("IE00B53L3W79"));
+    }
+
+    // AST-023 — malformed ISIN (here: 11 chars) is rejected with
+    // InvalidIsinFormat. Sub-variants of IsinFormatError collapse to the
+    // single domain code per `isin.rs` doc.
+    #[test]
+    fn new_rejects_malformed_isin() {
+        let err = Asset::new(
+            "Apple".into(),
+            AssetClass::Stocks,
+            AssetCategory::default(),
+            "USD".into(),
+            3,
+            "AAPL".into(),
+            Some("IE00B53L3W7".into()),
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(err, AssetDomainError::InvalidIsinFormat));
+    }
+
+    // AST-023 — ISIN with a bad Luhn check digit also collapses to
+    // InvalidIsinFormat (no sub-variant exposure on the wire).
+    #[test]
+    fn new_rejects_isin_with_bad_check_digit() {
+        let err = Asset::new(
+            "Apple".into(),
+            AssetClass::Stocks,
+            AssetCategory::default(),
+            "USD".into(),
+            3,
+            "AAPL".into(),
+            Some("IE00B53L3W70".into()),
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(err, AssetDomainError::InvalidIsinFormat));
+    }
+
+    // AST-023 — update_from can set ISIN when previously None and clear it
+    // when None is passed.
+    #[test]
+    fn update_from_can_set_and_clear_isin() {
+        let base = Asset::new(
+            "Apple".into(),
+            AssetClass::Stocks,
+            AssetCategory::default(),
+            "USD".into(),
+            3,
+            "AAPL".into(),
+            None,
+            None,
+        )
+        .unwrap();
+        // Set
+        let with_isin = base
+            .clone()
+            .update_from(
+                "Apple".into(),
+                AssetClass::Stocks,
+                AssetCategory::default(),
+                "USD".into(),
+                3,
+                "AAPL".into(),
+                Some("US0378331005".into()),
+                None,
+            )
+            .unwrap();
+        assert_eq!(with_isin.isin.as_deref(), Some("US0378331005"));
+        // Clear
+        let cleared = with_isin
+            .update_from(
+                "Apple".into(),
+                AssetClass::Stocks,
+                AssetCategory::default(),
+                "USD".into(),
+                3,
+                "AAPL".into(),
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(cleared.isin.is_none());
+    }
+}
+
+#[cfg(test)]
 mod exchange_tests {
     use super::super::exchange::Exchange;
     use super::*;
@@ -536,6 +705,7 @@ mod exchange_tests {
             "USD".to_string(),
             3,
             "AAPL".to_string(),
+            None,
             false,
             exchange,
         )
@@ -567,6 +737,7 @@ mod exchange_tests {
             3,
             "AAPL".to_string(),
             None,
+            None,
         );
         assert!(result.is_ok());
         assert!(result.unwrap().exchange.is_none());
@@ -582,6 +753,7 @@ mod exchange_tests {
             "EUR".to_string(),
             4,
             "AI".to_string(),
+            None,
             Some(xpar()),
         );
         assert!(result.is_ok());
@@ -600,6 +772,7 @@ mod exchange_tests {
             "USD".to_string(),
             3,
             "REF".to_string(),
+            None,
             Some(bogus_exchange()),
         )
         .unwrap_err();
@@ -622,6 +795,7 @@ mod exchange_tests {
                 3,
                 "AAPL".to_string(),
                 None,
+                None,
             )
             .unwrap();
         assert!(updated.exchange.is_none());
@@ -639,6 +813,7 @@ mod exchange_tests {
                 "EUR".to_string(),
                 4,
                 "AI".to_string(),
+                None,
                 Some(xpar()),
             )
             .unwrap();
@@ -662,6 +837,7 @@ mod exchange_tests {
                 "EUR".to_string(),
                 4,
                 "AI".to_string(),
+                None,
                 Some(xpar()),
             )
             .unwrap();
@@ -683,6 +859,7 @@ mod exchange_tests {
                 "USD".to_string(),
                 3,
                 "REF".to_string(),
+                None,
                 Some(bogus_exchange()),
             )
             .unwrap_err();

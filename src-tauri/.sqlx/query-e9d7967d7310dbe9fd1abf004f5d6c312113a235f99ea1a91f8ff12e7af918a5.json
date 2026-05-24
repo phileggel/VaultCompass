@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id,\n                c.name as category_name,\n                a.is_archived as \"is_archived: bool\",\n                a.exchange_code\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.id = ?\n                AND a.is_deleted = 0\n                AND c.is_deleted = 0\n            ",
+  "query": "\n            SELECT\n                a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,\n                c.id as category_id,\n                c.name as category_name,\n                a.is_archived as \"is_archived: bool\",\n                a.exchange_code\n            FROM assets a\n            JOIN categories c ON a.category_id = c.id\n            WHERE a.id = ?\n                AND a.is_deleted = 0\n                AND c.is_deleted = 0\n            ",
   "describe": {
     "columns": [
       {
@@ -19,38 +19,43 @@
         "type_info": "Text"
       },
       {
-        "name": "asset_class",
+        "name": "isin",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "currency",
+        "name": "asset_class",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "risk_level",
+        "name": "currency",
         "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "risk_level",
+        "ordinal": 6,
         "type_info": "Integer"
       },
       {
         "name": "category_id",
-        "ordinal": 6,
-        "type_info": "Text"
-      },
-      {
-        "name": "category_name",
         "ordinal": 7,
         "type_info": "Text"
       },
       {
-        "name": "is_archived: bool",
+        "name": "category_name",
         "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_archived: bool",
+        "ordinal": 9,
         "type_info": "Integer"
       },
       {
         "name": "exchange_code",
-        "ordinal": 9,
+        "ordinal": 10,
         "type_info": "Text"
       }
     ],
@@ -61,6 +66,7 @@
       false,
       false,
       false,
+      true,
       false,
       false,
       false,
@@ -70,5 +76,5 @@
       true
     ]
   },
-  "hash": "ed0bf4055453b3c29af8eea2950ecbd47c0ac0e578286f04ebcfc06ebb92aec1"
+  "hash": "e9d7967d7310dbe9fd1abf004f5d6c312113a235f99ea1a91f8ff12e7af918a5"
 }

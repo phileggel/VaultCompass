@@ -44,6 +44,7 @@ export function WebLookupModal({ isOpen, onClose, prefillName, onSuccess }: WebL
         ? {
             name: prefillName,
             reference: null,
+            isin: null,
             currency: null,
             asset_class: null,
             exchange: null,

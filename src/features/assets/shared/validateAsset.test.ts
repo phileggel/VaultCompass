@@ -6,6 +6,7 @@ const makeAsset = (id: string, reference: string, is_archived = false): Asset =>
   id,
   name: "Test",
   reference,
+  isin: null,
   class: "Stocks",
   currency: "USD",
   risk_level: 4,

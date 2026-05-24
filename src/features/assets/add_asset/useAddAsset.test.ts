@@ -135,6 +135,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "Apple Inc.",
       reference: "AAPL",
+      isin: null,
       currency: "USD",
       asset_class: "Stocks",
       exchange: null,
@@ -153,6 +154,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "iShares Core S&P 500",
       reference: "IVV",
+      isin: null,
       currency: "USD",
       asset_class: "ETF",
       exchange: null,
@@ -169,6 +171,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "Obscure Fund",
       reference: null,
+      isin: null,
       currency: null,
       asset_class: null,
       exchange: null,
@@ -186,6 +189,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "Apple Inc.",
       reference: "AAPL",
+      isin: null,
       currency: "USD",
       asset_class: "Stocks",
       exchange: null,
@@ -207,6 +211,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "Apple Inc.",
       reference: "AAPL",
+      isin: null,
       currency: "USD",
       asset_class: "Stocks",
       exchange: null,
@@ -226,6 +231,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "Apple Inc.",
       reference: "AAPL",
+      isin: null,
       currency: "USD",
       asset_class: "Stocks",
       exchange: null,
@@ -259,6 +265,7 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "Total SE",
       reference: "TTE",
+      isin: null,
       currency: "EUR",
       asset_class: "Stocks",
       exchange,
@@ -272,12 +279,83 @@ describe("useAddAsset", () => {
     const prefill: AssetLookupResult = {
       name: "No Exchange Fund",
       reference: "NEF",
+      isin: null,
       currency: "EUR",
       asset_class: "ETF",
       exchange: null,
     };
     const { result } = renderHook(() => useAddAsset({ prefill }));
     expect(result.current.formData.exchange).toBeNull();
+  });
+
+  // AST-023 / WEB-041 — prefill seeds the ISIN field when the lookup result carries one
+  it("seeds isin from prefill.isin (ISIN-path result)", () => {
+    const prefill: AssetLookupResult = {
+      name: "iShares Core S&P 500",
+      reference: "CSPX",
+      isin: "IE00B53L3W79",
+      currency: "USD",
+      asset_class: "ETF",
+      exchange: null,
+    };
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+    expect(result.current.formData.isin).toBe("IE00B53L3W79");
+  });
+
+  // AST-023 — when prefill has no ISIN (keyword path or manual), formData.isin starts empty
+  it("starts isin empty when prefill has no ISIN", () => {
+    const prefill: AssetLookupResult = {
+      name: "Apple Inc.",
+      reference: "AAPL",
+      isin: null,
+      currency: "USD",
+      asset_class: "Stocks",
+      exchange: null,
+    };
+    const { result } = renderHook(() => useAddAsset({ prefill }));
+    expect(result.current.formData.isin).toBe("");
+  });
+
+  // AST-023 — empty / whitespace ISIN submits as null (the field is optional)
+  it("submits isin as null when the field is empty or whitespace", async () => {
+    mockAddAsset.mockResolvedValue({ data: { id: "new-3" }, error: null });
+    const { result } = renderHook(() => useAddAsset());
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Apple" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "reference", value: "AAPL" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "isin", value: "   " },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(mockAddAsset).toHaveBeenCalledWith(expect.objectContaining({ isin: null }));
+  });
+
+  // AST-023 — non-empty ISIN is trimmed and forwarded to the gateway
+  it("trims and forwards a non-empty isin to the gateway on submit", async () => {
+    mockAddAsset.mockResolvedValue({ data: { id: "new-4" }, error: null });
+    const { result } = renderHook(() => useAddAsset());
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "iShares" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "reference", value: "CSPX" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "isin", value: "  IE00B53L3W79  " },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(mockAddAsset).toHaveBeenCalledWith(expect.objectContaining({ isin: "IE00B53L3W79" }));
   });
 
   // AST-021 — exchange is forwarded to the gateway on submit

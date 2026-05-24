@@ -300,6 +300,7 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
   const stockResult: AssetLookupResult = {
     name: "Apple Inc.",
     reference: "AAPL",
+    isin: null,
     currency: "USD",
     asset_class: "Stocks",
     exchange: { code: "XNYS", label: "New York Stock Exchange" },
@@ -323,6 +324,7 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
     const noRef: AssetLookupResult = {
       name: "No Reference Fund",
       reference: null,
+      isin: null,
       currency: "EUR",
       asset_class: "MutualFunds",
       exchange: null,
@@ -345,6 +347,7 @@ describe("SearchPanel — result row layout (WEB-031)", () => {
     const unclassified: AssetLookupResult = {
       name: "Mystery Instrument",
       reference: "MYST",
+      isin: null,
       currency: "USD",
       asset_class: null,
       exchange: null,

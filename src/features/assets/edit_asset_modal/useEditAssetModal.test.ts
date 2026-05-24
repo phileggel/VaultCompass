@@ -9,6 +9,7 @@ const mockAsset: Asset = {
   id: "asset-1",
   name: "Apple Inc.",
   reference: "AAPL",
+  isin: null,
   class: "Stocks",
   currency: "USD",
   risk_level: 4,
@@ -133,6 +134,60 @@ describe("useEditAssetModal", () => {
     });
 
     expect(mockUpdateAsset).toHaveBeenCalledWith(expect.objectContaining({ exchange: null }));
+  });
+
+  // AST-023 — editing an asset with an existing ISIN pre-fills the form field
+  it("pre-fills isin from asset.isin", () => {
+    const assetWithIsin: Asset = { ...mockAsset, isin: "US0378331005" };
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAssetModal({ asset: assetWithIsin, onClose }));
+    expect(result.current.formData.isin).toBe("US0378331005");
+  });
+
+  // AST-023 — asset with no ISIN initialises form field to empty string
+  it("initialises isin to empty string when asset.isin is null", () => {
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAssetModal({ asset: mockAsset, onClose }));
+    expect(result.current.formData.isin).toBe("");
+  });
+
+  // AST-023 — entering an ISIN trims whitespace and forwards the normalized value
+  it("trims and forwards a non-empty isin to the gateway on submit", async () => {
+    mockUpdateAsset.mockResolvedValue({ data: mockAsset, error: null });
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAssetModal({ asset: mockAsset, onClose }));
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "isin", value: "  US0378331005  " },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockUpdateAsset).toHaveBeenCalledWith(expect.objectContaining({ isin: "US0378331005" }));
+  });
+
+  // AST-023 — clearing the ISIN field submits isin: null
+  it("submits isin: null when the ISIN field is cleared", async () => {
+    const assetWithIsin: Asset = { ...mockAsset, isin: "US0378331005" };
+    mockUpdateAsset.mockResolvedValue({ data: assetWithIsin, error: null });
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAssetModal({ asset: assetWithIsin, onClose }));
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "isin", value: "" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockUpdateAsset).toHaveBeenCalledWith(expect.objectContaining({ isin: null }));
   });
 
   // AST-022 — changing the picker submits the new exchange

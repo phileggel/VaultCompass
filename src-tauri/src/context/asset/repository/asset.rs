@@ -9,6 +9,7 @@ struct AssetRow {
     id: String,
     name: String,
     reference: String,
+    isin: Option<String>,
     asset_class: String,
     currency: String,
     risk_level: i64,
@@ -30,6 +31,7 @@ impl From<AssetRow> for Asset {
             row.currency,
             row.risk_level.try_into().unwrap_or(0),
             row.reference,
+            row.isin,
             row.is_archived,
             exchange,
         )
@@ -56,7 +58,7 @@ impl AssetRepository for SqliteAssetRepository {
             AssetRow,
             r#"
             SELECT
-                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,
+                a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
                 c.id as category_id,
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
@@ -78,7 +80,7 @@ impl AssetRepository for SqliteAssetRepository {
             AssetRow,
             r#"
             SELECT
-                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,
+                a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
                 c.id as category_id,
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
@@ -100,7 +102,7 @@ impl AssetRepository for SqliteAssetRepository {
             AssetRow,
             r#"
             SELECT
-                a.id, a.name, a.reference, a.asset_class, a.currency, a.risk_level,
+                a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
                 c.id as category_id,
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
@@ -124,10 +126,11 @@ impl AssetRepository for SqliteAssetRepository {
         let asset_class_str = asset.class.to_string();
         let exchange_code = asset.exchange.as_ref().map(|e| e.code.clone());
         sqlx::query!(
-            r#"INSERT INTO assets (id, name, reference, asset_class, currency, risk_level, is_deleted, is_archived, category_id, exchange_code) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)"#,
+            r#"INSERT INTO assets (id, name, reference, isin, asset_class, currency, risk_level, is_deleted, is_archived, category_id, exchange_code) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)"#,
             asset.id,
             asset.name,
             asset.reference,
+            asset.isin,
             asset_class_str,
             asset.currency,
             asset.risk_level,
@@ -144,9 +147,10 @@ impl AssetRepository for SqliteAssetRepository {
         let asset_class_str = asset.class.to_string();
         let exchange_code = asset.exchange.as_ref().map(|e| e.code.clone());
         sqlx::query!(
-            r#"UPDATE assets SET name = ?, reference = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ?, exchange_code = ? WHERE id = ? AND is_archived = 0"#,
+            r#"UPDATE assets SET name = ?, reference = ?, isin = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ?, exchange_code = ? WHERE id = ? AND is_archived = 0"#,
             asset.name,
             asset.reference,
+            asset.isin,
             asset_class_str,
             asset.currency,
             asset.risk_level,

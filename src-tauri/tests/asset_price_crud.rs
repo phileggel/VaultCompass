@@ -36,6 +36,7 @@ async fn create_asset(svc: &AssetService) -> String {
     svc.create_asset(CreateAssetDTO {
         name: "Apple".to_string(),
         reference: "AAPL".to_string(),
+        isin: None,
         class: AssetClass::Stocks,
         currency: "USD".to_string(),
         risk_level: 3,
@@ -56,6 +57,7 @@ async fn get_asset_prices_returns_all_sorted_descending_and_scoped() {
         .create_asset(CreateAssetDTO {
             name: "Google".to_string(),
             reference: "GOOG".to_string(),
+            isin: None,
             class: AssetClass::Stocks,
             currency: "USD".to_string(),
             risk_level: 3,

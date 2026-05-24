@@ -8,6 +8,7 @@ import { ExchangePicker } from "./ExchangePicker";
 interface AssetFormData {
   name: string;
   reference: string;
+  isin: string;
   class: AssetClass;
   currency: string;
   risk_level: number;
@@ -98,6 +99,16 @@ export function AssetForm({
           onChange={handleChange}
         />
       </div>
+
+      <TextField
+        label={t("asset.form_isin_label")}
+        id={`${idPrefix}-isin`}
+        name="isin"
+        className="uppercase"
+        placeholder={t("asset.form_isin_placeholder")}
+        value={formData.isin}
+        onChange={handleChange}
+      />
 
       <SelectField
         label={t("asset.form_category_label")}
