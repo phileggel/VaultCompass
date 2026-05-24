@@ -114,3 +114,11 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
 - Severity: 🔵
 - Observation: The backdrop's `aria-label="Close modal"` is a literal English string; F24 requires i18n-aware aria-labels via `t()`. ModalContainer doesn't currently consume `react-i18next`, so the fix needs a hook + dependency on the same translation namespace as Dialog ("common").
+
+## 2026-05-24 — contract — account: event-naming and error-coverage gaps vs wire surface
+
+- Found by: contract-reviewer
+- Where: `docs/contracts/account-contract.md`
+- Context: branch `docs/contracts-wire-only-account-update` @ `c90eb5e`
+- Severity: 🟡
+- Observation: Five gaps between the contract and the actual wire surface, surfaced during the wire-only framing migration. (1) Published `AccountUpdated` row cites TRX-037 which actually defines `TransactionUpdated`; the BE emits two distinct events (`AccountUpdated` on CRUD via `AccountService::emit_account_updated`, `TransactionUpdated` on transaction ops via `emit_transaction_updated` — see `src-tauri/src/context/account/service.rs:453-461`) but the published `TransactionUpdated` event is entirely missing from the contract. (2) Subscribed `AccountUpdated` row cites ACD-039 incorrectly — ACD-039 in `docs/spec/account-details.md` reacts to `TransactionUpdated`, not `AccountUpdated`; confirmed in `src/features/account_details/account_details_view/useAccountDetails.ts:65`. (3) `correct_transaction` and `cancel_transaction` Errors columns omit `AccountNotFound { account_id }`, reachable via the shared `load_account` helper at `src-tauri/src/context/account/service.rs:470`. (4) `UnitPriceNegative` (TransactionDomainError) wire-reachable for all HoldingTransactionError mutating commands (`src-tauri/src/context/account/domain/transaction.rs:291`) but absent from every command's Errors column. (5) `open_holding` Errors column omits `InvalidDate` (TRX-046), part of OpenHoldingError via TxValidation (`src-tauri/src/use_cases/holding_transaction/error.rs:61`). Shared root cause: the contract was never reconciled against the actual wire surface after the BE landed.
