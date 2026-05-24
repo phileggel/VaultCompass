@@ -6,11 +6,27 @@ import type {
   AccountCrudError,
   AccountDeletionSummary,
   AccountDomainError,
+  AccountSummary,
   CreateAccountDTO,
   UpdateAccountDTO,
 } from "@/bindings";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+
+// Mock the events.event.listen surface used by subscribeToEvents — the real
+// implementation is a tauri-specta __makeEvents__ wrapper around Tauri's
+// runtime event system, which we don't want to bring into a Vitest run.
+const mockEventListen = vi.fn<
+  (cb: (e: { payload: { type: string } }) => void) => Promise<() => void>
+>(() => Promise.resolve(() => {}));
+vi.mock("@/bindings", async () => {
+  const actual = (await vi.importActual("@/bindings")) as Record<string, unknown>;
+  return {
+    ...actual,
+    events: { event: { listen: (cb: unknown) => mockEventListen(cb as never) } },
+  };
+});
+
 const mockInvoke = vi.mocked(invoke);
 const { accountGateway } = await import("./gateway");
 
@@ -218,5 +234,52 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
     mockInvoke.mockRejectedValue(error);
     const result = await accountGateway.fetchAllAssetPrices();
     expect(result).toEqual({ status: "error", error });
+  });
+
+  // ── getAccountSummaries (ACC-021) ────────────────────────────────────────────
+
+  it("getAccountSummaries returns the enriched list on success", async () => {
+    const summaries: AccountSummary[] = [
+      {
+        id: "acc-1",
+        name: "Main",
+        currency: "EUR",
+        update_frequency: "ManualMonth",
+        total_global_value: 470_000_000,
+      },
+    ];
+    mockInvoke.mockResolvedValue(summaries);
+    const result = await accountGateway.getAccountSummaries();
+    expect(result).toEqual({ status: "ok", data: summaries });
+    expect(mockInvoke).toHaveBeenCalledWith("get_account_summaries");
+  });
+
+  it("getAccountSummaries surfaces DatabaseError when the use case fails", async () => {
+    const err: AccountApplicationError = { code: "DatabaseError" };
+    mockInvoke.mockRejectedValue(err);
+    const result = await accountGateway.getAccountSummaries();
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // ── subscribeToEvents ────────────────────────────────────────────────────────
+
+  it("subscribeToEvents forwards the event payload type to the caller", async () => {
+    type Listener = (e: { payload: { type: string } }) => void;
+    const captured: { current: Listener | null } = { current: null };
+    const unlisten = vi.fn();
+    mockEventListen.mockImplementation((cb: Listener) => {
+      captured.current = cb;
+      return Promise.resolve(unlisten);
+    });
+    const callback = vi.fn();
+
+    const result = await accountGateway.subscribeToEvents(callback);
+
+    expect(mockEventListen).toHaveBeenCalledTimes(1);
+    // Simulate the underlying event firing — the gateway adapter strips the
+    // envelope and forwards only the `payload.type` string.
+    captured.current?.({ payload: { type: "AccountUpdated" } });
+    expect(callback).toHaveBeenCalledWith("AccountUpdated");
+    expect(result).toBe(unlisten);
   });
 });

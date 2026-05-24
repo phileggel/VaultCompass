@@ -46,6 +46,15 @@
 | --------------------- | -------------------- | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `get_account_details` | `account_id: String` | `AccountDetailsResponse` | `AccountApplicationError` | `AccountNotFound { account_id } (ACD-012)`, `DatabaseError (ACD-038)`; price lookup failures silently degrade to `None` (MKT-031) |
 
+### Account Summaries
+
+> `get_account_summaries` is implemented in `use_cases/account_summary/` — it reads from both the
+> account and asset BCs (price lookups for each account's holdings) but mutates neither.
+
+| Command                 | Args | Return                | Error type                | Reachable codes                                                                     |
+| ----------------------- | ---- | --------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
+| `get_account_summaries` | —    | `Vec<AccountSummary>` | `AccountApplicationError` | `DatabaseError`; price lookup failures silently contribute 0 to the value (MKT-031) |
+
 ### Holdings & Transactions
 
 > Commands below split between two locations:
@@ -237,6 +246,15 @@ struct AccountDetailsResponse {
     total_unrealized_pnl: Option<i64>,         // micros; sum across same-currency priced active holdings; None when none qualify (MKT-040)
     total_global_value: i64,                   // micros, account currency: cash_holding.quantity + Σ_h (h.quantity × latest_price(h)) over non-cash active holdings; unpriced non-cash holdings contribute 0 (CSH-094)
 }
+
+// Row returned by get_account_summaries (ACC-021)
+struct AccountSummary {
+    id: String,
+    name: String,
+    currency: String,                          // ISO 4217 currency code; same as Account.currency
+    update_frequency: UpdateFrequency,
+    total_global_value: i64,                   // micros, account currency: same algorithm as AccountDetailsResponse.total_global_value (CSH-094)
+}
 ```
 
 ## Events
@@ -264,4 +282,5 @@ struct AccountDetailsResponse {
 - 2026-05-03 — Merged from `record_transaction-contract.md` and `transaction-contract.md`: get_asset_ids_for_account, buy_holding, sell_holding, correct_transaction, cancel_transaction, get_transactions, open_holding; Transaction struct reconciled (added created_at, added OpeningBalance variant)
 - 2026-05-03 — Merged from `account_details-contract.md`: get_account_details; HoldingDetail, ClosedHoldingDetail, AccountDetailsResponse shared types, subscribed events section; updated stale TransactionUpdated → AccountUpdated
 - 2026-05-06 — Added by `cash-tracking` spec: record_deposit, record_withdrawal; extended buy_holding / correct_transaction / cancel_transaction error sets with `InsufficientCash { current_balance_micros, currency }` (CSH-080); extended open_holding error set with `OpeningBalanceOnCashAsset` (CSH-061); `TransactionType` gained `Deposit` and `Withdrawal` variants; `AccountDetailsResponse` gained `total_global_value: i64` (CSH-094); added `DepositDTO`, `WithdrawalDTO` types.
+- 2026-05-24 — Added by `account` spec ACC-021: `get_account_summaries` command returning `Vec<AccountSummary>` enriched with `total_global_value` per account (CSH-094 algorithm reused). Lives in `use_cases/account_summary/` (cross-context account + asset read).
 - 2026-05-11 — Refreshed error model after the 13-PR error-model arc: replaced legacy `*CommandError` boundary types with the current composite shape (`AccountCrudError`, `HoldingTransactionError`, `OpenHoldingError`) and per-leaf typed enums; renamed wire variants `DbError` / `Unknown` → `DatabaseError`; per-command tables now show both the error type and the reachable code subset; removed `ArchivedAssetSell` (no such variant in code) and `UnitPriceNegative` from buy/sell tables (factory accepts zero — TRX-020 only rejects strictly-negative); added missing `DateInFuture` / `DateTooOld` to buy/sell/correct (raised by `Transaction::validate`); added `CascadingOversell` to cancel_transaction (replay after cancel can leave a later sell oversold — SEL-033); clarified that `OpenHoldingError` is owned in `use_cases/holding_transaction/error.rs`.

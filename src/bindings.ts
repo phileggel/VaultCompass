@@ -345,6 +345,17 @@ async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsRespon
 }
 },
 /**
+ * Returns one `AccountSummary` per non-deleted account (ACC-021).
+ */
+async getAccountSummaries() : Promise<Result<AccountSummary[], AccountApplicationError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_account_summaries") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the number of active holdings and transactions for an account (ACC-020).
  * 
  * Used by the frontend to decide whether to show the standard or reinforced
@@ -637,6 +648,34 @@ export type AccountOperationError =
  * Attempted cash debit (or chronological replay step) would drive the cash holding strictly negative (CSH-080).
  */
 { code: "InsufficientCash"; current_balance_micros: number; currency: string }
+/**
+ * Row returned by `get_account_summaries` (ACC-021). Pairs each `Account` with its
+ * computed `total_global_value` so the Accounts list can render the value column
+ * without each row calling `get_account_details` separately.
+ */
+export type AccountSummary = { 
+/**
+ * Account identifier (UUID).
+ */
+id: string; 
+/**
+ * User-defined display name.
+ */
+name: string; 
+/**
+ * ISO 4217 currency code; matches `Account.currency`.
+ */
+currency: string; 
+/**
+ * Manual / Automatic update cadence (purely informational, ACC-004).
+ */
+update_frequency: UpdateFrequency; 
+/**
+ * Total economic value in account-currency micros (CSH-094): cash quantity
+ * plus the sum of `quantity × latest_price` over same-currency priced active
+ * non-cash holdings. Unpriced or foreign-currency non-cash holdings contribute 0.
+ */
+total_global_value: number }
 /**
  * Application-layer rejection specific to the `archive_asset` use case —
  * the cross-BC active-holdings check performed by the orchestrator before

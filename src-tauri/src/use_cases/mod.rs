@@ -7,6 +7,8 @@
 pub mod account_deletion;
 /// Account Details: cross-context read of holdings + asset metadata (ACD feature).
 pub mod account_details;
+/// Account Summary: per-account global value for the Accounts list (ACC-021).
+pub mod account_summary;
 /// Archive asset: guards archiving against active holdings across bounded contexts (OQ-6).
 pub mod archive_asset;
 /// Asset price auto-fetch: retrieves prices from Stooq on launch and user demand (MKT-100+).

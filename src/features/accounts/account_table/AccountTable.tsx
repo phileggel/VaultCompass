@@ -2,12 +2,14 @@ import { Calendar, ChevronRight, Edit2, Trash2, X } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
+import { microToFormatted } from "@/lib/microUnits";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { SortIcon } from "@/ui/components/SortIcon";
 import { EditAccountModal } from "../edit_account_modal/EditAccountModal";
 import { FREQUENCY_I18N_KEYS } from "../shared/presenter";
+import { useAccountSummaries } from "../useAccountSummaries";
 import { useAccounts } from "../useAccounts";
 import { useAccountTable } from "./useAccountTable";
 
@@ -19,8 +21,11 @@ interface AccountTableProps {
 
 export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) {
   const { t } = useTranslation();
-  const { accounts, loading, fetchError, fetchAccounts, deleteAccount, getAccountDeletionSummary } =
-    useAccounts();
+  // ACC-021 — list-page data comes from get_account_summaries (enriched with
+  // total_global_value); mutations (delete + delete-summary) remain on the bare
+  // useAccounts hook since they don't need the per-account value.
+  const { summaries, isLoading: loading, error: fetchError, refetch } = useAccountSummaries();
+  const { deleteAccount, getAccountDeletionSummary } = useAccounts();
 
   useEffect(() => {
     logger.info("[AccountTable] mounted");
@@ -32,6 +37,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     handleSort,
     handleNameKeyDown,
     handleFrequencyKeyDown,
+    handleGlobalValueKeyDown,
     handleRowKeyDown,
     handleEditClick,
     handleEditClose,
@@ -47,7 +53,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     setActionError,
     handleDeleteConfirm,
   } = useAccountTable(
-    accounts,
+    summaries,
     searchTerm,
     deleteAccount,
     getAccountDeletionSummary,
@@ -118,13 +124,36 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                 />
               </div>
             </th>
+            <th
+              id="account-column-global-value"
+              className="m3-th cursor-pointer text-right"
+              tabIndex={0}
+              scope="col"
+              aria-sort={
+                sortConfig.key === "total_global_value"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              onClick={() => handleSort("total_global_value")}
+              onKeyDown={handleGlobalValueKeyDown}
+            >
+              <div className="flex items-center justify-end">
+                {t("account.column_global_value")}
+                <SortIcon
+                  active={sortConfig.key === "total_global_value"}
+                  direction={sortConfig.key === "total_global_value" ? sortConfig.direction : null}
+                />
+              </div>
+            </th>
             <th className="m3-th text-right">{t("account.column_actions")}</th>
           </tr>
         </thead>
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={3} className="m3-td text-center py-12">
+              <td colSpan={4} className="m3-td text-center py-12">
                 <span className="text-m3-on-surface-variant animate-pulse">
                   {t("account.loading")}
                 </span>
@@ -133,17 +162,17 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           ) : isEmpty ? (
             // R11 — empty state distinct from no-search-results
             <tr>
-              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+              <td colSpan={4} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
                 {t("account.empty")}
               </td>
             </tr>
           ) : fetchError ? (
             // R12 — error state with retry (only shown when accounts exist but failed to reload)
             <tr>
-              <td colSpan={3} className="m3-td text-center py-12">
+              <td colSpan={4} className="m3-td text-center py-12">
                 <div className="flex flex-col items-center gap-3">
                   <span className="text-m3-error text-sm">{t("account.error_load")}</span>
-                  <Button variant="outline" size="sm" onClick={fetchAccounts}>
+                  <Button variant="outline" size="sm" onClick={refetch}>
                     {t("action.retry")}
                   </Button>
                 </div>
@@ -152,7 +181,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           ) : hasNoSearchResults ? (
             // R10 — no search results (filter active, no match)
             <tr>
-              <td colSpan={3} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+              <td colSpan={4} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
                 {t("account.no_search_results")}
               </td>
             </tr>
@@ -182,6 +211,14 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       {t(FREQUENCY_I18N_KEYS[account.update_frequency])}
                     </span>
                   </div>
+                </td>
+                <td className="m3-td text-right tabular-nums">
+                  <span className="font-medium text-m3-on-surface">
+                    {microToFormatted(account.total_global_value, 2)}
+                  </span>
+                  <span className="ml-1 text-xs text-m3-on-surface-variant">
+                    {account.currency}
+                  </span>
                 </td>
                 <td className="m3-td text-right">
                   <div className="flex items-center justify-end gap-1">

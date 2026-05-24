@@ -1,13 +1,18 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { Account, AccountDeletionSummary } from "@/bindings";
+import type { AccountDeletionSummary, AccountSummary } from "@/bindings";
 import { useAccountTable } from "./useAccountTable";
 
-function makeAccount(id: string, name: string, freq: Account["update_frequency"]): Account {
-  return { id, name, currency: "EUR", update_frequency: freq };
+function makeAccount(
+  id: string,
+  name: string,
+  freq: AccountSummary["update_frequency"],
+  total_global_value = 0,
+): AccountSummary {
+  return { id, name, currency: "EUR", update_frequency: freq, total_global_value };
 }
 
-const accounts: [Account, Account, Account, Account] = [
+const accounts: [AccountSummary, AccountSummary, AccountSummary, AccountSummary] = [
   makeAccount("1", "Alpha", "ManualYear"),
   makeAccount("2", "Beta", "Automatic"),
   makeAccount("3", "Gamma", "ManualDay"),
@@ -90,6 +95,59 @@ describe("useAccountTable", () => {
     expect(result.current.isEmpty).toBe(false);
   });
 
+  // ACC-008 / ACC-021 — sort by total_global_value ascending then descending (numeric, not string)
+  it("sorts total_global_value numerically ascending then descending", () => {
+    const valued: AccountSummary[] = [
+      makeAccount("a", "A", "ManualMonth", 500_000_000), // 500
+      makeAccount("b", "B", "ManualMonth", 100_000_000), // 100
+      makeAccount("c", "C", "ManualMonth", 9_000_000_000), // 9000 — would sort wrong as string
+    ];
+    const { result } = renderHook(() =>
+      useAccountTable(valued, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    act(() => result.current.handleSort("total_global_value"));
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["b", "a", "c"]);
+    act(() => result.current.handleSort("total_global_value"));
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["c", "a", "b"]);
+  });
+
+  // handleGlobalValueKeyDown — Enter triggers sort, Space triggers sort, other keys are ignored
+  it("handleGlobalValueKeyDown triggers total_global_value sort on Enter and Space", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(accounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    expect(result.current.sortConfig.key).toBe("name");
+
+    act(() => result.current.handleGlobalValueKeyDown(makeKeyEvent("Enter")));
+    expect(result.current.sortConfig.key).toBe("total_global_value");
+    expect(result.current.sortConfig.direction).toBe("asc");
+
+    act(() => result.current.handleGlobalValueKeyDown(makeKeyEvent(" ")));
+    expect(result.current.sortConfig.direction).toBe("desc");
+
+    // Any other key is a noop — sort remains where it was.
+    act(() => result.current.handleGlobalValueKeyDown(makeKeyEvent("Tab")));
+    expect(result.current.sortConfig.direction).toBe("desc");
+  });
+
+  // ACC-008 — ties broken by name asc to keep ordering stable
+  it("breaks total_global_value ties by name ascending", () => {
+    const tied: AccountSummary[] = [
+      makeAccount("1", "Beta", "ManualMonth", 100_000_000),
+      makeAccount("2", "Alpha", "ManualMonth", 100_000_000),
+      makeAccount("3", "Gamma", "ManualMonth", 100_000_000),
+    ];
+    const { result } = renderHook(() =>
+      useAccountTable(tied, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    act(() => result.current.handleSort("total_global_value"));
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.name)).toEqual([
+      "Alpha",
+      "Beta",
+      "Gamma",
+    ]);
+  });
+
   it("handleRowKeyDown calls onAccountClick on Enter", () => {
     const onClick = vi.fn();
     const { result } = renderHook(() =>
@@ -138,7 +196,14 @@ describe("useAccountTable", () => {
     act(() => result.current.handleEditClick(e, account));
 
     expect(e.stopPropagation).toHaveBeenCalled();
-    expect(result.current.editData).toBe(account);
+    // editData carries only the bare Account-shape (no total_global_value), so we
+    // assert structural equality on those fields rather than reference identity.
+    expect(result.current.editData).toEqual({
+      id: account.id,
+      name: account.name,
+      currency: account.currency,
+      update_frequency: account.update_frequency,
+    });
   });
 
   it("handleEditClose clears editData", () => {

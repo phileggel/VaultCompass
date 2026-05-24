@@ -49,11 +49,12 @@ A financial account owned by the user.
 
 **ACC-008 — Table columns (frontend)** _(formerly R8 — column definition)_: The account table exposes the following columns:
 
-| Column    | Content                                     | Sortable                                                                                              |
-| --------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Name      | `account.name`                              | Yes                                                                                                   |
-| Frequency | Human-readable label for `update_frequency` | Yes — sorted on the logical enum order: Automatic → ManualDay → ManualWeek → ManualMonth → ManualYear |
-| Actions   | Edit button + Delete button                 | No                                                                                                    |
+| Column       | Content                                                                                            | Sortable                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Name         | `account.name`                                                                                     | Yes                                                                                                   |
+| Frequency    | Human-readable label for `update_frequency`                                                        | Yes — sorted on the logical enum order: Automatic → ManualDay → ManualWeek → ManualMonth → ManualYear |
+| Global Value | `total_global_value` formatted in the account's own currency (ACC-021); 0 shown for empty accounts | Yes                                                                                                   |
+| Actions      | Edit button + Delete button                                                                        | No                                                                                                    |
 
 The account section title is displayed in the application shell header, not in the page body. A real-time search field (partial match, case-insensitive) filters the table by name.
 
@@ -88,6 +89,8 @@ The account section title is displayed in the application shell header, not in t
 > ⚠️ **Dependency**: ACC-019 depends on ACC-020 (pre-deletion count command), which crosses the `account/` and `transaction/` bounded contexts and requires a dedicated use case. Until ACC-020 is implemented, ACC-018 applies for all deletions (standard dialog without counts).
 
 **ACC-020 — Pre-deletion count query (backend)** _(new)_: A backend command `get_account_deletion_summary(account_id)` returns the number of active holdings and the number of transactions associated with the account. Because this read spans `context/account/` (holdings) and `context/transaction/` (transactions), it must be implemented as a use case in `use_cases/` — not as a bounded-context command — per ADR-003 and ADR-004.
+
+**ACC-021 — Account summaries with global value (backend + frontend)** _(new)_: A backend command `get_account_summaries()` returns a list of `AccountSummary` records — each `Account` enriched with its `total_global_value` (micros, computed in the account's own currency per CSH-094: `cash_holding.quantity + Σ_h (h.quantity × latest_price(h))` over same-currency priced active non-cash holdings; unpriced or foreign-currency non-cash holdings contribute 0; empty accounts return 0). This read spans `context/account/` and `context/asset/`, so it lives as a use case in `use_cases/` per ADR-003 and ADR-004. The Accounts table (ACC-008) renders the value in a Global Value column formatted in the account's own currency.
 
 ---
 

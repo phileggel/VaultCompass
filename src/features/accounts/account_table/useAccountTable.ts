@@ -1,18 +1,18 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
-import type { Account, AccountDeletionSummary } from "@/bindings";
+import type { Account, AccountDeletionSummary, AccountSummary } from "@/bindings";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { FREQUENCY_ORDER } from "../shared/presenter";
 
 const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export type SortConfig = {
-  key: "name" | "update_frequency";
+  key: "name" | "update_frequency" | "total_global_value";
   direction: "asc" | "desc";
 };
 
 export function useAccountTable(
-  accounts: Account[],
+  accounts: AccountSummary[],
   searchTerm: string,
   deleteAccount: (id: string) => Promise<{ error: I18nMessage | null }>,
   getAccountDeletionSummary: (
@@ -60,6 +60,16 @@ export function useAccountTable(
     [handleSort],
   );
 
+  const handleGlobalValueKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSort("total_global_value");
+      }
+    },
+    [handleSort],
+  );
+
   const handleRowKeyDown = useCallback(
     (e: KeyboardEvent, accountId: string) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -70,9 +80,12 @@ export function useAccountTable(
     [onAccountClick],
   );
 
-  const handleEditClick = useCallback((e: MouseEvent, account: Account) => {
+  const handleEditClick = useCallback((e: MouseEvent, account: AccountSummary) => {
     e.stopPropagation();
-    setEditData(account);
+    // EditAccountModal expects an Account; AccountSummary structurally satisfies
+    // it (same id/name/currency/update_frequency fields, plus the unused value).
+    const { id, name, currency, update_frequency } = account;
+    setEditData({ id, name, currency, update_frequency });
   }, []);
 
   const handleEditClose = useCallback(() => setEditData(null), []);
@@ -125,6 +138,10 @@ export function useAccountTable(
       if (sortConfig.key === "update_frequency") {
         // R9 — sort by logical enum order, not alphabetical label
         cmp = FREQUENCY_ORDER[a.update_frequency] - FREQUENCY_ORDER[b.update_frequency];
+      } else if (sortConfig.key === "total_global_value") {
+        // ACC-008 — numeric compare on micros; ties broken by name asc for stability
+        cmp = a.total_global_value - b.total_global_value;
+        if (cmp === 0) cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
       } else {
         cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
       }
@@ -144,6 +161,7 @@ export function useAccountTable(
     handleSort,
     handleNameKeyDown,
     handleFrequencyKeyDown,
+    handleGlobalValueKeyDown,
     handleRowKeyDown,
     handleEditClick,
     handleEditClose,
