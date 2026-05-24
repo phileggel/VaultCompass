@@ -10,8 +10,6 @@
 //!
 //! Returns the normalized 12-character uppercase ISIN on success.
 
-use std::result::Result as StdResult;
-
 /// Domain-level error variants for ISIN format validation (WEB-016).
 ///
 /// Deliberately granular so unit tests can pin the exact rejection reason.
@@ -41,7 +39,7 @@ pub enum IsinFormatError {
 ///   4. Verify Luhn-mod-10 check digit (`BadCheckDigit`).
 ///
 /// Returns the normalized uppercase 12-character ISIN on success.
-pub fn validate_isin(raw: &str) -> StdResult<String, IsinFormatError> {
+pub fn validate_isin(raw: &str) -> Result<String, IsinFormatError> {
     let normalized: String = raw.trim().to_ascii_uppercase();
     if normalized.chars().count() != 12 {
         return Err(IsinFormatError::WrongLength);
