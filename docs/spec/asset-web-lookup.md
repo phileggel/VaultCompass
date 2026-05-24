@@ -30,19 +30,35 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 **WEB-010 — Asset creation entry point (frontend)**: Initiating the creation of a new asset opens the web lookup step instead of going directly to the blank Add Asset form.
 
-**WEB-011 — Minimum query length (frontend)**: The search action requires at least 1 character in the query field. An empty query disables the search action.
+**WEB-011 — Minimum query length (frontend)**: Each lookup field's search action requires at least 1 character in its input. An empty field disables that field's search action; the other field's action is independent. The ISIN search button is enabled at ≥1 character (the strict 12-character format check is the backend's responsibility — WEB-016 — so the user receives a clear typed error if the entered value is malformed rather than a silently-disabled button that gives no hint why).
 
-**WEB-012 — Single query input (frontend)**: The lookup step exposes a single query input field that accepts any text — ISIN, ticker symbol, or instrument name. No mode selector or query type hint is shown; the routing decision is made transparently by the backend (WEB-014).
+**WEB-012 — Two explicit lookup inputs (frontend)**: The lookup step exposes two separate input fields with distinct search actions, stacked vertically:
+
+- **ISIN** — accepts a 12-character International Securities Identification Number.
+- **Keyword** — accepts a free-text instrument name or ticker symbol.
+
+Each field has its own search button. There is no auto-detection or shared input; the user explicitly chooses which path to invoke. Activating either button submits only that field's value to `lookup_asset` with the corresponding mode (WEB-014).
 
 **WEB-013 — Fill manually bypass (frontend)**: A "Fill manually" action is always visible in the lookup step. Activating it skips the web lookup entirely and opens the blank Add Asset form, preserving the pre-existing creation path.
 
-**WEB-014 — Query routing (backend)**: When `lookup_asset` receives a query, it applies the following routing rule: if the trimmed query is exactly 12 alphanumeric characters it is sent to the OpenFIGI ISIN mapping endpoint; all other queries — including queries that contain non-alphanumeric characters or are shorter or longer than 12 characters — are sent to the OpenFIGI keyword search endpoint. Routing is evaluated on the normalized query (WEB-015).
+**WEB-014 — Explicit lookup mode (backend)**: The lookup action takes an explicit mode that selects either the ISIN path or the keyword path. The frontend chooses the path based on which input was used. The backend never infers the path from the query shape.
 
-**WEB-015 — Diacritics normalization (backend)**: Before routing (WEB-014), the trimmed query is normalized by Unicode NFD decomposition followed by combining-mark removal. This maps `"Société Générale"` to `"Societe Generale"`, `"Münchener Rück"` to `"Munchener Ruck"`, and so on. OpenFIGI's name index is unaccented, so the unnormalized form returns zero hits for accented inputs. ASCII inputs and ISINs are unaffected.
+- **ISIN path** — the query is sent to the OpenFIGI ISIN mapping endpoint after passing format validation (WEB-016). If validation fails, no HTTP call is made.
+- **Keyword path** — the query is sent to the OpenFIGI keyword search endpoint after diacritics normalization (WEB-015).
+
+**WEB-015 — Diacritics normalization (backend)**: On the keyword path (WEB-014), the trimmed query is normalized by Unicode NFD decomposition followed by combining-mark removal. This maps `"Société Générale"` to `"Societe Generale"`, `"Münchener Rück"` to `"Munchener Ruck"`, and so on. OpenFIGI's name index is unaccented, so the unnormalized form returns zero hits for accented inputs. ASCII inputs are unaffected. The ISIN path does not apply this normalization (ISIN charset is restricted to `[A-Z0-9]` per WEB-016).
+
+**WEB-016 — ISIN format validation (backend)**: On the ISIN path (WEB-014), the query is first trimmed and uppercased; this normalized form is the value used by the rest of the pipeline (sent to OpenFIGI, embedded in `AssetLookupResult.reference` per WEB-046, and ultimately persisted by `add_asset`). The normalized form MUST satisfy three checks before any HTTP call. If any check fails the action is rejected with a specific error and no HTTP request is made:
+
+1. **Length**: exactly 12 characters.
+2. **Charset**: characters 1–2 are ASCII letters (`[A-Z]`, an ISO 3166-1 alpha-2 country code), characters 3–11 are alphanumeric (`[A-Z0-9]`), character 12 is a digit (`[0-9]`).
+3. **Check digit**: the trailing digit MUST match the value computed by the Luhn-mod-10 algorithm defined in ISO 6166 over the first 11 characters (letters expanded to their `A=10, B=11, …, Z=35` numeric values before the Luhn pass).
+
+Country code (chars 1–2) is not validated against the ISO 3166-1 list — OpenFIGI accepts any well-formed ISIN and a strict country whitelist would reject newly-issued codes the project has not yet learned about.
 
 ### Lookup Command (020–029)
 
-**WEB-020 — Backend command (backend)**: A new Tauri command `lookup_asset(query: String) -> Result<Vec<AssetLookupResult>, WebLookupCommandError>` issues an HTTP request to the OpenFIGI API using the routing logic defined in WEB-014. The command returns a (possibly empty) ordered list of results on success.
+**WEB-020 — Backend command (backend)**: The lookup action takes the query and the path mode (WEB-014) and returns a (possibly empty) ordered list of `AssetLookupResult` items on success.
 
 **WEB-021 — No API key required (backend)**: The OpenFIGI API is accessed without authentication. No credential is stored or transmitted.
 
@@ -52,12 +68,13 @@ A transient value object returned by the OpenFIGI API. Not persisted; used only 
 
 **WEB-024 — Currency passthrough (backend)**: The ISO 4217 currency code returned by OpenFIGI is forwarded unchanged. If OpenFIGI does not return a currency for a result, the `currency` field is absent.
 
-**WEB-025 — Error handling (backend)**: `WebLookupCommandError` has two variants:
+**WEB-025 — Error handling (backend)**: The lookup action surfaces three behavioral failure modes, surfaced as distinct typed errors so the frontend can render per-mode copy (WEB-033):
 
-- `RateLimited` — OpenFIGI returned `HTTP 429 Too Many Requests`. This is a transient, recoverable condition: the user can wait a short while and retry. Surfaced distinctly so the frontend can display retry-after-wait copy (WEB-033).
-- `NetworkError` — every other failure mode: network unreachable, connection timeout, any other non-2xx HTTP status returned by OpenFIGI.
+- **Invalid ISIN format** — the ISIN path was invoked with a query that failed any of the three checks in WEB-016 (wrong length, invalid charset, or check-digit mismatch). No HTTP call is made.
+- **Rate limited** — OpenFIGI signaled `HTTP 429 Too Many Requests`. Transient and recoverable: the user can wait briefly and retry.
+- **Generic network failure** — any other reachability or HTTP failure (network unreachable, connection timeout, any other non-2xx response).
 
-No partial result list is returned on either error.
+No partial result list is returned on any failure mode.
 
 ### Search UX (030–039)
 
@@ -67,12 +84,13 @@ No partial result list is returned on either error.
 
 **WEB-032 — Empty results state (frontend)**: When the command returns an empty list, a message indicates no instruments were found. The user can modify the query and search again, or use the "Fill manually" bypass (WEB-013).
 
-**WEB-033 — Error state (frontend)**: When the command returns an error, an inline error message is shown with a retry affordance. Copy is per-variant:
+**WEB-033 — Error state (frontend)**: When the lookup action fails, an inline error message is shown beside the field that triggered the action. Copy is per failure mode (WEB-025):
 
-- `RateLimited` (WEB-025): "Too many searches. Please wait a minute and try again." — same Retry affordance; the user is expected to wait briefly before retrying.
-- `NetworkError` (WEB-025): generic "Could not reach the lookup service. Try again or fill manually." — same Retry affordance.
+- **Invalid ISIN format**: "Not a valid ISIN. Expected 12 characters with a valid check digit." — shown beside the ISIN field; no Retry affordance (the user must correct the input). The other field's button stays enabled.
+- **Rate limited**: "Too many searches. Please wait a minute and try again." — Retry affordance; the user is expected to wait briefly before retrying.
+- **Generic network failure**: "Could not reach the lookup service. Try again or fill manually." — Retry affordance.
 
-In both cases the "Fill manually" bypass (WEB-013) remains accessible. No navigation away from the search step occurs on error.
+In all cases the "Fill manually" bypass (WEB-013) remains accessible. No navigation away from the search step occurs on error.
 
 ### Selection and Pre-fill (040–049)
 
@@ -88,7 +106,7 @@ In both cases the "Fill manually" bypass (WEB-013) remains accessible. No naviga
 
 **WEB-045 — Save via existing add_asset command (frontend + backend)**: Saving the pre-filled form uses the existing `add_asset` command. All existing Asset creation rules apply — reference uniqueness check, field validation, and `AssetUpdated` event publication — as defined in the AST spec. The web lookup path introduces no new save rules.
 
-**WEB-046 — Reference field source (backend)**: When the lookup path is ISIN (WEB-014), `AssetLookupResult.reference` is the ISIN string from the query. When the lookup path is keyword search, `reference` is the ticker symbol returned by OpenFIGI when available; when OpenFIGI does not return a ticker for a result, `reference` is absent.
+**WEB-046 — Reference field source (backend)**: On the ISIN path (WEB-014), `AssetLookupResult.reference` is the normalized ISIN string (per WEB-016: trimmed + uppercased + format-validated). On the keyword path, `reference` is the ticker symbol returned by OpenFIGI when available; when OpenFIGI does not return a ticker for a result, `reference` is absent.
 
 **WEB-047 — Back navigation from form to search results (frontend)**: When the form is in the pre-filled state (WEB-040), a back action is available that returns the user to the search step. The previous query and results list are retained in memory; the user does not need to retype the query. Selecting a different result replaces all pre-filled values.
 
@@ -96,16 +114,24 @@ In both cases the "Fill manually" bypass (WEB-013) remains accessible. No naviga
 
 **WEB-049 — Exchange field (backend)**: The OpenFIGI response is normalized to a canonical `Exchange` value (per AST Entity Definition) via a per-provider mapper. The mapper consults OpenFIGI's exchange identifier fields (`micCode` when present, otherwise `exchCode`) and returns `Some(Exchange)` when the venue is in the canonical curated set, `None` otherwise (including when OpenFIGI returns no exchange information). The resolved `Exchange` is forwarded as `AssetLookupResult.exchange`. Provider key equality (e.g. OpenFIGI's `micCode` happening to match ISO 10383 MIC) is treated as accidental convergence; the mapper is the contract.
 
-**WEB-050 — Primary listing surfacing (backend)**: The keyword search path applies a deduplication-and-enrichment pipeline so that the user is shown the asset's primary listing(s), not the dozens of secondary OTC/MTF listings OpenFIGI returns by default. The pipeline:
+**WEB-050 — Primary listing surfacing (backend)**: A deduplication-and-enrichment pipeline transforms the OpenFIGI response into a clean shortlist of primary venue(s) per share class, headed (on the ISIN path) by the instrument's home venue. The pipeline has six clauses (WEB-050a … WEB-050f). The keyword path runs all six; the ISIN path skips 050a–050d (the `/v3/mapping` response is already canonical for the ISIN) and applies only 050e and 050f. The opinionated tables and pipeline live in a single `primary_listing_processor` module so they can be audited and tested in isolation.
 
-1. **Common Stock filter on the initial keyword search**: the `/v3/search` request includes `securityType: "Common Stock"` so bonds, futures, structured products and warrants are excluded at source.
-2. **Drop noise**: results whose `shareClassFIGI` is `null` are discarded (these are pure trade-reporting venue rows such as `X1` "TradEcho APA EU"; they carry no canonical share class).
-3. **Dedup by share class**: remaining results are grouped by `shareClassFIGI`. Multiple keyword-search hits for the same share class collapse into one group.
-4. **Share-class enrichment**: for the unique `shareClassFIGI` values from step 3, a single batched call is made to `/v3/mapping` with `idType: "ID_BB_GLOBAL_SHARE_CLASS_LEVEL"`. The response — all known listings for that share class globally — replaces the original keyword-search hits for the group. This is the step that uncovers primary listings (e.g. `FP AI`) that the keyword search alone never returns.
-5. **Primary pick per group**: the entries of each group are filtered against `GLOBAL_VENUE_PRIORITY` — a hardcoded ordered list of primary venue `exchCode` values (e.g. `UN`, `UW`, `LO`, `JT`, `FP`, `GY`, `HK`, `SE`, `AT`, `CT`, `IM`, `NA`, …). All entries whose `exchCode` is on the list are kept, in priority order. Up to 3 entries per share class are kept (cap chosen so dual-listed names like TotalEnergies surface both their NYSE and Euronext rows). If no entry on the list matches, the first entry from OpenFIGI's order is kept as a fallback so the share class is not lost.
-6. **Final cap (WEB-022)**: the combined result list across all share classes is truncated to 30.
+**WEB-050a — Common Stock filter on keyword search (backend)**: On the keyword path, the initial `/v3/search` request includes `securityType: "Common Stock"` so bonds, futures, structured products, and warrants are excluded at source. _Known limitation_: this narrows keyword results to stocks even though WEB-023 maps more asset classes; broadening this filter is tracked separately (see `docs/todo.md`).
 
-The ISIN search path (WEB-014) calls `/v3/mapping` directly and skips steps 1–4; only steps 5–6 apply, ensuring consistent primary-pick behaviour regardless of entry path. The opinionated tables and pipeline live in a single `primary_listing_processor` module so they can be audited and tested in isolation.
+**WEB-050b — Drop trade-reporting noise (backend)**: Results whose `shareClassFIGI` is `null` are discarded — these are pure trade-reporting venue rows (e.g. `X1` "TradEcho APA EU") that carry no canonical share class.
+
+**WEB-050c — Dedup by share class (backend)**: Remaining keyword-path results are grouped by `shareClassFIGI`. Multiple keyword-search hits for the same share class collapse into one group, preserving the order of first appearance for cross-share-class ranking.
+
+**WEB-050d — Share-class enrichment (backend)**: For the unique `shareClassFIGI` values from WEB-050c, a single batched call is made to `/v3/mapping` with `idType: "ID_BB_GLOBAL_SHARE_CLASS_LEVEL"`. The response — all known listings for that share class globally — replaces the original keyword-search hits for the group. This is the step that uncovers primary listings (e.g. `FP AI`) that the keyword search alone never returns.
+
+**WEB-050e — Primary pick per share class with mode-dependent cap (backend)**: Each share-class group is filtered against `GLOBAL_VENUE_PRIORITY` — a curated, hardcoded ordered list of primary venue `exchCode` values (e.g. `UN`, `UW`, `LO`, `JT`, `FP`, `GY`, `HK`, `SE`, `AT`, `CT`, `IM`, `NA`, …). On the ISIN path, the country-code prefix of the ISIN (chars 1–2) is resolved through the curated `ISIN_COUNTRY_TO_PRIMARY_VENUES` table to a (possibly empty) ordered list of home venues, which is prepended to the priority list so the home venue wins ranking. Entries whose `exchCode` is on the resulting list are kept, in priority order. The per-share-class cap depends on the path:
+
+- **Keyword path**: up to 10 entries per share class — browsing intent, the user is exploring venues for a known instrument family.
+- **ISIN path**: up to 3 entries per share class — selection intent, the user has already pinpointed the specific instrument and wants a clean shortlist headed by the home venue.
+
+If no entry of the share-class group matches the priority list (only possible on the keyword path — the ISIN path's `/v3/mapping` response is already filtered to the ISIN's known listings and the priority list always contains at least the global venue universe), the first entry from OpenFIGI's order is kept as a fallback so the share class is not lost.
+
+**WEB-050f — Final cap (backend)**: The combined result list across all share classes is truncated to the WEB-022 cap (30 entries).
 
 ---
 
@@ -114,10 +140,20 @@ The ISIN search path (WEB-014) calls `/v3/mapping` directly and skips steps 1–
 ```
 Add Asset FAB / button
     → Web Lookup step (WEB-010)
-        user types ISIN / ticker / name → search (WEB-011, WEB-012)
-            backend: route query (WEB-014)
-            backend: HTTP to OpenFIGI (WEB-020)
-            → returns up to 30 AssetLookupResult items (WEB-022)
+        ┌─ ISIN path ─────────────────────────────────────────────┐
+        │ user types ISIN, clicks ISIN Search                     │
+        │   backend: ISIN format check (WEB-016)                  │
+        │     ↳ fail → InvalidIsinFormat (WEB-025, WEB-033)       │
+        │   backend: HTTP /v3/mapping (WEB-020)                   │
+        │   → up to 3 venues per share class (WEB-050e)           │
+        └─────────────────────────────────────────────────────────┘
+        ┌─ Keyword path ──────────────────────────────────────────┐
+        │ user types name/ticker, clicks Keyword Search           │
+        │   backend: diacritics normalize (WEB-015)               │
+        │   backend: HTTP /v3/search → /v3/mapping (WEB-020)      │
+        │   → up to 10 venues per share class (WEB-050e)          │
+        └─────────────────────────────────────────────────────────┘
+        → both paths converge in the results list, capped at 30 (WEB-022)
         → results list shown (WEB-031)
         → user selects a result (WEB-040)
         → Add Asset form opens pre-filled (WEB-041–WEB-046)
@@ -133,7 +169,7 @@ No results (WEB-032):
     → "No instruments found" + retry or fill manually
 
 Error (WEB-033):
-    → inline error + retry or fill manually
+    → inline error beside the offending field; the other path stays usable
 ```
 
 ---
@@ -148,26 +184,34 @@ Clicking the "Add Asset" FAB opens the web lookup dialog. A "Fill manually" link
 
 A dialog or modal with two sequential states:
 
-1. **Search state** — query input + search button + "Fill manually" bypass + results list (or loading / empty / error state).
+1. **Search state** — two stacked lookup rows (ISIN + Search button, Keyword + Search button) + "Fill manually" bypass + shared results list (or loading / empty / error state).
 2. **Form state** — the existing Add Asset form, pre-filled (or blank if bypass used) + back action.
 
 ### States
 
-- **Idle**: Empty query input, search button disabled (WEB-011). "Fill manually" visible.
-- **Loading**: Spinner shown, search action disabled (WEB-030).
-- **Results**: Up to 10 selectable rows (WEB-031), ordered by type priority (WEB-048). Each row: reference code + name (first line); type label + exchange (second line).
+- **Idle**: Both input fields empty, each search button disabled (WEB-011). "Fill manually" visible.
+- **Loading**: Spinner shown beside the active field; both search actions disabled (WEB-030).
+- **Results**: Up to 30 selectable rows (WEB-022, WEB-031), ordered by type priority (WEB-048). Each row: reference code + name (first line); type label + exchange (second line). The list is shared — switching paths replaces the previous results.
 - **Empty**: "No instruments found" message; retry or fill manually (WEB-032).
-- **Error**: Inline error banner with retry; fill manually always accessible (WEB-033).
+- **Error**: Inline error message beside the field that triggered the action; the other field stays usable. "Fill manually" always accessible (WEB-033).
 - **Form (pre-filled)**: Add Asset form fields populated from selected result; all editable (WEB-041–WEB-043). Back action returns to search results (WEB-047).
 - **Form (manual)**: Blank Add Asset form — identical to current behaviour.
 
 ### User Flow
 
 1. User clicks "Add Asset".
-2. Web lookup dialog opens: query input + "Fill manually" bypass.
-3. User types "AAPL", a 12-char ISIN, or a fund name and clicks Search.
-4. Backend fetches from OpenFIGI; results appear.
+2. Web lookup dialog opens: two input rows (ISIN / Keyword) + "Fill manually" bypass.
+3. User chooses one path:
+   - **ISIN**: types a 12-character code (e.g. `IE00B53L3W79`), clicks the ISIN search button. If the format is invalid the action is rejected inline with a field-local error (no HTTP call).
+   - **Keyword**: types an instrument name or ticker (e.g. `AAPL`, `iShares S&P 500`), clicks the keyword search button.
+4. Backend fetches from OpenFIGI; results appear in the shared list.
 5. User clicks the matching row.
 6. Add Asset form opens with name, reference, currency, asset class pre-filled.
 7. User reviews, adjusts category and risk level if needed, and saves.
 8. Existing `add_asset` command runs; asset appears in the list.
+
+---
+
+## Open Questions
+
+None — all questions have been resolved.

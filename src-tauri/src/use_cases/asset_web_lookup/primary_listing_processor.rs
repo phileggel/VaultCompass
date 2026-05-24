@@ -35,7 +35,7 @@
 //! 1. Drop hits whose `share_class_figi` is `None` (trade-reporting noise).
 //! 2. Group remaining hits by `share_class_figi`.
 //! 3. For each group, walk `GLOBAL_VENUE_PRIORITY` and keep up to
-//!    `MAX_ENTRIES_PER_SHARE_CLASS` entries whose `exchange_code` is on the
+//!    `MAX_ENTRIES_PER_SHARE_CLASS_{KEYWORD,ISIN}` entries whose `exchange_code` is on the
 //!    list, in priority order. If none match, keep the first entry as a
 //!    fallback so the share class isn't lost.
 //! 4. ISIN path: when `QueryContext::isin` is `Some(_)`, the country prefix
@@ -115,15 +115,23 @@ pub struct QueryContext {
     pub isin: Option<String>,
 }
 
-/// Maximum entries retained per share class group (WEB-050 step 5).
+/// Per-share-class cap on the keyword path (WEB-050e, browsing intent).
 ///
-/// Set to 10 so a single-company query like `ASML` surfaces all of its
-/// notable venues (Amsterdam, London, Xetra, Milan, …) and the user can
+/// 10 venues lets a single-company query like `ASML` surface all of its
+/// notable listings (Amsterdam, London, Xetra, Milan, …) so the user can
 /// pick the one they want. A multi-company query (e.g. `Apple`) still
 /// stays diverse because the final 30-result cap (WEB-022) lets at most
 /// 3 distinct share classes fill the dropdown when each takes the full
 /// per-class allowance.
-const MAX_ENTRIES_PER_SHARE_CLASS: usize = 10;
+const MAX_ENTRIES_PER_SHARE_CLASS_KEYWORD: usize = 10;
+
+/// Per-share-class cap on the ISIN path (WEB-050e, selection intent).
+///
+/// 3 venues — country home venue (prepended by `priority_for` when the ISIN's
+/// country prefix has a curated entry) plus two global fallbacks. The user
+/// has already pinpointed the specific instrument via the ISIN and just
+/// needs to choose a venue from a clean shortlist.
+const MAX_ENTRIES_PER_SHARE_CLASS_ISIN: usize = 3;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -137,10 +145,15 @@ const MAX_ENTRIES_PER_SHARE_CLASS: usize = 10;
 pub fn process_hits(raw_hits: Vec<RawFigiHit>, ctx: &QueryContext) -> Vec<AssetLookupResult> {
     let groups = group_by_share_class(raw_hits);
     let priority = priority_for(ctx);
+    let cap = if ctx.isin.is_some() {
+        MAX_ENTRIES_PER_SHARE_CLASS_ISIN
+    } else {
+        MAX_ENTRIES_PER_SHARE_CLASS_KEYWORD
+    };
 
     let mut results: Vec<AssetLookupResult> = Vec::new();
     for group in groups {
-        for hit in pick_primary_entries(&group, &priority) {
+        for hit in pick_primary_entries(&group, &priority, cap) {
             results.push(to_result(hit, ctx));
         }
     }
@@ -176,13 +189,17 @@ fn group_by_share_class(hits: Vec<RawFigiHit>) -> Vec<Vec<RawFigiHit>> {
     groups
 }
 
-/// Steps 3 + 4 of WEB-050: walk the priority list and keep up to
-/// `MAX_ENTRIES_PER_SHARE_CLASS` matching entries. Falls back to the first
-/// raw entry of the group when none match.
-fn pick_primary_entries<'a>(group: &'a [RawFigiHit], priority: &[&str]) -> Vec<&'a RawFigiHit> {
+/// Steps 3 + 4 of WEB-050: walk the priority list and keep up to `cap` matching
+/// entries (`MAX_ENTRIES_PER_SHARE_CLASS_KEYWORD` or `MAX_ENTRIES_PER_SHARE_CLASS_ISIN`
+/// per WEB-050e). Falls back to the first raw entry of the group when none match.
+fn pick_primary_entries<'a>(
+    group: &'a [RawFigiHit],
+    priority: &[&str],
+    cap: usize,
+) -> Vec<&'a RawFigiHit> {
     let mut picked: Vec<&RawFigiHit> = Vec::new();
     for venue in priority {
-        if picked.len() >= MAX_ENTRIES_PER_SHARE_CLASS {
+        if picked.len() >= cap {
             break;
         }
         if let Some(hit) = group
@@ -325,8 +342,8 @@ fn primary_venues_for_country(country: &str) -> Option<&'static [&'static str]> 
 /// Ordered list of primary venue `exchCode` values, walked top-to-bottom on
 /// the keyword path when no ISIN-country signal is available. Order reflects
 /// global trading volume and primary-listing density. Per WEB-050 the walk
-/// keeps up to `MAX_ENTRIES_PER_SHARE_CLASS` matches, so dual-listed names
-/// such as TotalEnergies (UN + FP) surface both rows.
+/// keeps up to `MAX_ENTRIES_PER_SHARE_CLASS_{KEYWORD,ISIN}` matches, so dual-listed
+/// names such as TotalEnergies (UN + FP) surface both rows.
 const GLOBAL_VENUE_PRIORITY: &[&str] = &[
     // Major primaries
     "UN", // New York Stock Exchange
@@ -1085,7 +1102,7 @@ mod tests {
             hit("X", Some("SC1"), Some("FP"), None, None, None),
         ];
         let priority = priority_for(&QueryContext::default());
-        let picked = pick_primary_entries(&group, &priority);
+        let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_KEYWORD);
         // FP is in the priority list, UV/XT are not — FP wins solo.
         assert_eq!(picked.len(), 1);
         assert_eq!(picked[0].exchange_code.as_deref(), Some("FP"));
@@ -1128,7 +1145,7 @@ mod tests {
             ),
         ];
         let priority = priority_for(&QueryContext::default());
-        let picked = pick_primary_entries(&group, &priority);
+        let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_KEYWORD);
         // Up to MAX_ENTRIES_PER_SHARE_CLASS hits returned — UN, FP, GY all qualify.
         assert_eq!(picked.len(), 3);
         // Order follows GLOBAL_VENUE_PRIORITY: UN before FP before GY.
@@ -1144,7 +1161,7 @@ mod tests {
             hit("X", Some("SC1"), Some("XT"), None, None, None),
         ];
         let priority = priority_for(&QueryContext::default());
-        let picked = pick_primary_entries(&group, &priority);
+        let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_KEYWORD);
         assert_eq!(picked.len(), 1);
         assert_eq!(picked[0].exchange_code.as_deref(), Some("UV"));
     }
@@ -1164,7 +1181,7 @@ mod tests {
             isin: Some("FR0000120073".to_string()),
         };
         let priority = priority_for(&ctx);
-        let picked = pick_primary_entries(&group, &priority);
+        let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_ISIN);
         // FR ISIN promotes FP to position 0; UN and GY remain selectable.
         assert_eq!(picked[0].exchange_code.as_deref(), Some("FP"));
     }
@@ -1277,9 +1294,10 @@ mod tests {
         assert_eq!(results[1].currency.as_deref(), Some("EUR"));
     }
 
+    /// WEB-050e — keyword path keeps up to 10 entries per share class.
+    /// 11 priority venues, all on the same share class → cap of 10 keeps 10.
     #[test]
-    fn process_hits_caps_per_share_class_at_ten() {
-        // 11 priority venues, all on the same share class → cap of 10 keeps 10.
+    fn keyword_path_caps_per_share_class_at_ten() {
         let hits = vec![
             hit(
                 "X",
@@ -1372,6 +1390,152 @@ mod tests {
         ];
         let results = process_hits(hits, &QueryContext::default());
         assert_eq!(results.len(), 10);
+    }
+
+    /// WEB-050e — ISIN path keeps at most 3 entries per share class.
+    ///
+    /// Same 15-venue setup as the keyword test, but with a `QueryContext`
+    /// that carries an ISIN.  With the dual-cap rule the result must be
+    /// exactly 3 (not 10).
+    #[test]
+    fn isin_path_caps_per_share_class_at_three() {
+        // 15 venues all belonging to the same share class — more than both caps.
+        // These exchange codes appear in GLOBAL_VENUE_PRIORITY so they all
+        // qualify as priority matches.
+        let hits = vec![
+            hit(
+                "X",
+                Some("SC1"),
+                Some("UN"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("UW"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("LO"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("JT"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("FP"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("GY"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("HK"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("SE"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("AT"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("CT"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("IM"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("NA"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("SQ"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("BB"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+            hit(
+                "X",
+                Some("SC1"),
+                Some("ID"),
+                None,
+                None,
+                Some("Common Stock"),
+            ),
+        ];
+        let ctx = QueryContext {
+            isin: Some("IE00B53L3W79".to_string()),
+        };
+        let results = process_hits(hits, &ctx);
+        // With the ISIN path cap of 3 (WEB-050e), at most 3 entries per share
+        // class are retained regardless of how many venues qualify.
+        assert_eq!(
+            results.len(),
+            3,
+            "ISIN path must cap per-share-class entries at 3, got {}",
+            results.len()
+        );
     }
 
     #[test]

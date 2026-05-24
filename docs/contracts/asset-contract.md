@@ -66,11 +66,12 @@
 
 > `lookup_asset` is implemented in `use_cases/asset_web_lookup/` — it reads from an external web
 > API and returns transient value objects; it does not persist anything. Owned here as the asset
-> aggregate is the primary subject.
+> aggregate is the primary subject. The frontend selects which path to invoke via the explicit
+> `mode` parameter (WEB-014); the backend does not infer it from the query shape.
 
-| Command        | Args            | Return                   | Errors                   |
-| -------------- | --------------- | ------------------------ | ------------------------ |
-| `lookup_asset` | `query: String` | `Vec<AssetLookupResult>` | `NetworkError` (WEB-025) |
+| Command        | Args                              | Return                   | Errors                                                                                    |
+| -------------- | --------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
+| `lookup_asset` | `query: String, mode: LookupMode` | `Vec<AssetLookupResult>` | `InvalidIsinFormat` (WEB-016, WEB-025), `RateLimited` (WEB-025), `NetworkError` (WEB-025) |
 
 ---
 
@@ -124,6 +125,11 @@ struct AssetLookupResult {
     asset_class: Option<AssetClass>, // absent when securityType unrecognised (WEB-023)
     exchange: Option<Exchange>,      // canonical Exchange resolved via per-provider mapper (WEB-049); absent when the venue is not in the curated set
 }
+
+// Explicit lookup path selector (WEB-014).
+// Isin → /v3/mapping with WEB-016 format validation before the HTTP call.
+// Keyword → /v3/search → /v3/mapping with WEB-015 diacritics normalization.
+enum LookupMode { Isin, Keyword }
 ```
 
 ```rust

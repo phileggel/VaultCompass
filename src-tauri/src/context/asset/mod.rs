@@ -17,6 +17,7 @@ pub use application::{
     CategoryApplicationError, CategoryCrudError,
 };
 pub use domain::exchange;
+pub use domain::isin::validate_isin;
 pub use domain::*;
 pub use error::AssetError;
 pub use repository::*;

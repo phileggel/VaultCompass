@@ -13,5 +13,5 @@ pub mod primary_listing_processor;
 
 pub use api::*;
 pub use error::WebLookupApplicationError;
-pub use orchestrator::{AssetWebLookupUseCase, OpenFigiClient, ReqwestOpenFigiClient};
+pub use orchestrator::{AssetWebLookupUseCase, LookupMode, OpenFigiClient, ReqwestOpenFigiClient};
 pub use primary_listing_processor::AssetLookupResult;

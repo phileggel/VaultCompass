@@ -3,22 +3,23 @@
 #![allow(clippy::unreachable)]
 
 use super::error::WebLookupApplicationError;
-use super::orchestrator::AssetWebLookupUseCase;
+use super::orchestrator::{AssetWebLookupUseCase, LookupMode};
 use super::primary_listing_processor::AssetLookupResult;
 
-/// Searches OpenFIGI for instruments matching the query and returns up to 10
-/// results (WEB-020, WEB-022).
+/// Searches OpenFIGI for instruments matching `query` along the explicit `mode`
+/// path (WEB-014, WEB-020). Returns up to 30 results (WEB-022).
 ///
-/// Routing is transparent to the caller: 12-char alphanumeric queries are sent
-/// to the ISIN mapping endpoint; all others to the keyword search endpoint
-/// (WEB-014). HTTP 429 surfaces as `WebLookupApplicationError::RateLimited`;
-/// every other failure surfaces as `WebLookupApplicationError::NetworkError`
-/// (WEB-025).
+/// The frontend chooses the path: `Isin` validates the query against ISO 6166
+/// (WEB-016) before any HTTP call and routes to `/v3/mapping`; `Keyword`
+/// normalizes diacritics (WEB-015) and routes to `/v3/search`. HTTP 429
+/// surfaces as `RateLimited`; every other reachability failure surfaces as
+/// `NetworkError`; ISIN format failures surface as `InvalidIsinFormat` (WEB-025).
 #[tauri::command]
 #[specta::specta]
 pub async fn lookup_asset(
     uc: tauri::State<'_, AssetWebLookupUseCase>,
     query: String,
+    mode: LookupMode,
 ) -> Result<Vec<AssetLookupResult>, WebLookupApplicationError> {
-    uc.search(query).await
+    uc.search(query, mode).await
 }
