@@ -293,7 +293,7 @@
     "price_as_of": "au {{date}}",
     "action_enter_price": "Saisir le prix",
     "action_price_history": "Historique des prix",
-    "action_open_balance": "Ouvrir un solde",
+    "action_open_balance": "Ajouter une position",
     "action_deposit": "Dépôt",
     "action_withdraw": "Retrait",
     "action_refresh_prices": "Actualiser les prix",
@@ -332,12 +332,12 @@
     "date_too_old": "La date ne peut pas être antérieure à 1900-01-01."
   },
   "open_balance": {
-    "modal_title": "Ouvrir une position",
+    "modal_title": "Ajouter une position",
     "form_total_cost_label": "Coût total",
     "form_quantity_placeholder": "0,000000",
     "form_total_cost_placeholder": "0,000",
-    "action_submit": "Ouvrir",
-    "success_created": "Solde d'ouverture enregistré avec succès."
+    "action_submit": "Ajouter",
+    "success_created": "Position ajoutée."
   },
   "price_history": {
     "title": "Historique des prix",
