@@ -13,7 +13,7 @@ type ClosedHoldingRowProps = {
 };
 
 export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
   const handleViewTransactions = useCallback(() => {
@@ -36,7 +36,7 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
         <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
       </td>
       <td className="m3-td text-right text-m3-on-surface-variant">
-        {formatIsoDate(row.lastSoldDate)}
+        {formatIsoDate(row.lastSoldDate, i18n.language)}
       </td>
       {/* ACD-049 — inspect action only; Buy/Sell omitted for closed positions */}
       <td className="m3-td">

@@ -12,7 +12,6 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components/button/IconButton";
-import { formatIsoDate } from "../shared/formatDate";
 import { PnlCell } from "../shared/PnlCell";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
@@ -144,13 +143,6 @@ export function HoldingRow({
         {row.currentPrice !== "—" ? (
           <div className="flex flex-col items-end gap-0.5">
             <span>{row.currentPrice}</span>
-            {row.currentPriceDate && (
-              <span className="text-xs text-m3-on-surface-variant">
-                {t("account_details.price_as_of", {
-                  date: formatIsoDate(row.currentPriceDate ?? ""),
-                })}
-              </span>
-            )}
             <div className="flex items-center gap-1.5">
               {row.sourceLabel && (
                 <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-m3-surface-container-highest text-m3-on-surface-variant">

@@ -16,4 +16,18 @@ describe("formatIsoDate", () => {
   it("returns the raw input unchanged for an empty string", () => {
     expect(formatIsoDate("")).toBe("");
   });
+
+  it("formats according to the supplied locale", () => {
+    const en = formatIsoDate("2024-01-15", "en-US");
+    const fr = formatIsoDate("2024-01-15", "fr-FR");
+    expect(en).not.toBe(fr);
+    expect(en).toContain("Jan");
+    expect(fr).toContain("janv");
+  });
+
+  it("falls back to system locale when locale is undefined (backwards-compat)", () => {
+    // Explicit undefined must match omitted-arg behavior so legacy callers
+    // that haven't been migrated to thread i18n.language still render dates.
+    expect(formatIsoDate("2024-01-15", undefined)).toBe(formatIsoDate("2024-01-15"));
+  });
 });
