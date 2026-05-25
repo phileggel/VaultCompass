@@ -139,8 +139,12 @@ The v4.5 error pipeline runs gateway → hook → presenter → component, each 
 ### Cross-feature imports (F23 navigation + F26 imports)
 
 - Inter-feature navigation NOT through the router (`useNavigate`, route paths) — flag direct cross-feature page-component renders (🔴, F23)
-- **Behaviour import** from a sibling feature (hook, store) — code smell; promote to `ui/hooks/` or `shell/` instead (🟡, F26)
+- **Behaviour import** from a sibling feature (hook, store) — code smell; promote per F26 (hooks → `ui/hooks/`; stores → `infra/cache/` or `infra/settings/`) (🟡, F26)
 - **Primitive import** from a sibling feature (type, pure function, presentational component) — fine; do not flag (F26)
+- **Cross-feature store import** (specific F26 case) (🟡, F26):
+  - _Grep_: `grep -rP 'import\s+\{[^}]*\buse(?:[A-Z][A-Za-z0-9]*)?Store\b[^}]*\}\s+from\s+"@/features/' src/features/` — the optional `(?:[A-Z][A-Za-z0-9]*)?` middle catches both `usePatientStore` and bare `useStore` (Zustand single-store-per-feature convention).
+  - _Path scope_: flag only when the importing file is under `src/features/<self>/` AND `<self> != <other>`. `App.tsx` and `shell/` legitimately import feature stores — do not flag those.
+  - _Remediation_: the imported store is behaviour, not a primitive. Two valid fixes: (a) promote the shared cache to `infra/cache/` and have each feature's gateway expose its own selectors over it (per F28's Store kinds table); (b) keep the data backend-side and orchestrate via a use-case command.
 
 ### Top-level `src/` bucket compliance (F28)
 
@@ -151,7 +155,7 @@ The v4.5 four-bucket layout has both inclusion AND exclusion rules. Flag misclas
 - A domain term in a file under `ui/` (🟡 — `ui/` is domain-agnostic)
 - A pure helper or formatter in `infra/` instead of `ui/format/` (🟡)
 - A generic UI hook in `infra/` instead of `ui/hooks/` (🟡)
-- A stateful UI runtime in `infra/` instead of colocated with its widget in `ui/components/` (🟡)
+- A widget-local UI runtime in `infra/` instead of colocated with its widget in `ui/components/` (🟡 — `infra/` holds app-wide singletons per F28's Store kinds; widget-local runtime belongs with the widget)
 - Stale path: `src/hooks/` instead of `src/ui/hooks/` (🟡 — F28 rename)
 
 ### Accessibility — i18n labels (F24)
