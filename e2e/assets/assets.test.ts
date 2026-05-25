@@ -32,7 +32,7 @@ describe("assets", () => {
     const ASSET_NAME = "E2E Asset Create";
     await seedCategory("E2E Cat Create");
 
-    const fab = await $('button[aria-label="Add asset"]');
+    const fab = await $("#fab-add-asset");
     await fab.click();
 
     // WebLookupModal opens first — click Fill manually to go to the form.
@@ -66,10 +66,10 @@ describe("assets", () => {
     // stale loading state caused by the concurrent AssetUpdated event fetch.
     await form.waitForExist({ timeout: 8000, reverse: true });
 
-    const accountsNav = await $('button[aria-label="Accounts"]');
+    const accountsNav = await $("#nav-accounts");
     await accountsNav.waitForExist({ timeout: 10000 });
     await accountsNav.click();
-    await $('button[aria-label="Add account"]').waitForExist({
+    await $("#fab-add-account").waitForExist({
       timeout: 10000,
     });
     await navigateToAssets();
@@ -89,14 +89,10 @@ describe("assets", () => {
   it("archiving an asset removes it from the active list", async () => {
     const ASSET_NAME = "E2E Asset Archive";
     const categoryId = await seedCategory("E2E Cat Archive");
-    await seedAsset(ASSET_NAME, categoryId);
+    const assetId = await seedAsset(ASSET_NAME, categoryId);
     await navigateToAssets();
 
-    // Find and click the Archive icon button scoped to the asset's row,
-    // to avoid matching a button in another row when multiple assets are present.
-    const archiveBtn = await $(
-      `//tr[.//td[contains(., "${ASSET_NAME}")]]//button[@aria-label="Archive"]`,
-    );
+    const archiveBtn = await $(`#action-archive-asset-${assetId}`);
     await archiveBtn.waitForExist({ timeout: 8000 });
     await archiveBtn.click();
 
@@ -145,10 +141,7 @@ describe("assets", () => {
     const assetCell = await $(`//td[normalize-space(text())="${ASSET_NAME}"]`);
     await assetCell.waitForExist({ timeout: 10000 });
 
-    // Click Unarchive — scoped to the asset's row.
-    const unarchiveBtn = await $(
-      `//tr[.//td[contains(., "${ASSET_NAME}")]]//button[@aria-label="Unarchive"]`,
-    );
+    const unarchiveBtn = await $(`#action-unarchive-asset-${assetId}`);
     await unarchiveBtn.waitForExist({ timeout: 5000 });
     await unarchiveBtn.click();
 

@@ -46,7 +46,11 @@ export function AccountManager() {
         table={<AccountTable searchTerm={query} onAccountClick={handleAccountClick} />}
       />
       {/* R14 — FAB opens add modal */}
-      <FAB onClick={() => setIsAddModalOpen(true)} label={t("account.fab_label")} />
+      <FAB
+        id="fab-add-account"
+        onClick={() => setIsAddModalOpen(true)}
+        label={t("account.fab_label")}
+      />
       <AddAccountModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
     </>
   );

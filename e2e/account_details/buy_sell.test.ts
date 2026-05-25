@@ -27,15 +27,15 @@ async function navigateToAccountDetails(accountName: string): Promise<void> {
   // Navigate to Assets first so the Accounts component unmounts.
   // On the way back the component remounts and re-fetches, picking up any
   // IPC-seeded accounts that were added after the initial page load.
-  const assetsNav = await $('button[aria-label="Assets"]');
+  const assetsNav = await $("#nav-assets");
   await assetsNav.waitForExist({ timeout: 15000 });
   await assetsNav.click();
-  await $('button[aria-label="Add asset"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
 
-  const accountsNav = await $('button[aria-label="Accounts"]');
+  const accountsNav = await $("#nav-accounts");
   await accountsNav.waitForExist({ timeout: 10000 });
   await accountsNav.click();
-  await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-account").waitForExist({ timeout: 10000 });
 
   // Account rows are <tr aria-label="Open account NAME"> — click the name span
   // inside the first <td> (language-invariant: the account name is user data).
@@ -87,7 +87,7 @@ describe("buy_sell", () => {
 
     // Holding row exists — click its Buy button to open BuyTransactionModal.
     // Asset is pre-populated as read-only (no combobox interaction needed).
-    const buyBtn = await $('button[aria-label="Buy"]');
+    const buyBtn = await $("#action-buy-" + astId);
     await buyBtn.waitForExist({ timeout: 10000 });
     await buyBtn.click();
 
@@ -105,7 +105,7 @@ describe("buy_sell", () => {
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // Holding row (Buy button) must still be present after buying more.
-    const buyBtnAfter = await $('button[aria-label="Buy"]');
+    const buyBtnAfter = await $("#action-buy-" + astId);
     await buyBtnAfter.waitForExist({ timeout: 8000 });
     assert.ok(
       await buyBtnAfter.isExisting(),
@@ -127,7 +127,7 @@ describe("buy_sell", () => {
     await navigateToAccountDetails(ACCOUNT_NAME);
 
     // Holding row exists — click Sell.
-    const sellBtn = await $('button[aria-label="Sell"]');
+    const sellBtn = await $("#action-sell-" + astId);
     await sellBtn.waitForExist({ timeout: 10000 });
     await sellBtn.click();
 
@@ -145,7 +145,7 @@ describe("buy_sell", () => {
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // Remaining holding (6 units) must still be displayed.
-    const holdingRow = await $('button[aria-label="Sell"]');
+    const holdingRow = await $("#action-sell-" + astId);
     await holdingRow.waitForExist({ timeout: 8000 });
     assert.ok(
       await holdingRow.isExisting(),
@@ -172,7 +172,7 @@ describe("buy_sell", () => {
 
     await navigateToAccountDetails(ACCOUNT_NAME);
 
-    const sellBtn = await $('button[aria-label="Sell"]');
+    const sellBtn = await $("#action-sell-" + astId);
     await sellBtn.waitForExist({ timeout: 10000 });
     await sellBtn.click();
 

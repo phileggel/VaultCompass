@@ -6,7 +6,7 @@ describe("smoke", () => {
     // update availability. The "Accounts" nav button is a BASE_NAV_ITEM
     // (never gated by import.meta.env.DEV) with aria-label driven by
     // t("nav.accounts") → "Accounts" in en/common.json.
-    const accountsNav = await $('button[aria-label="Accounts"]');
+    const accountsNav = await $("#nav-accounts");
     await accountsNav.waitForExist({ timeout: 15000 });
   });
 });

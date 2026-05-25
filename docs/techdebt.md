@@ -149,14 +149,6 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
 ---
 
-## 2026-05-18 — E2E nav selectors are locale-coupled (E4 violation)
-
-- Found by: reviewer-e2e
-- Where: `e2e/account_details/auto_fetch.test.ts`, `e2e/account_details/buy_sell.test.ts`, `e2e/account_details/cash.test.ts`, `e2e/accounts/accounts.test.ts` (all use aria-label-based nav selectors)
-- Context: branch `feat/mkt-stooq-autofetch-e2e` @ `da7471f`
-- Severity: low
-- Observation: E2E nav selectors target `button[aria-label="Assets"]`, `aria-label="Accounts"`, `aria-label="Settings"`, `aria-label="Price history"` — all locale-coupled per E4. `wdio.conf.ts` forces English so they work today, but rename of any i18n key or non-English run silently breaks navigation. Pattern is established across 4+ E2E files and not introduced by any single PR.
-
 ---
 
 ## 2026-05-23 — snackbarStore lives in src/lib/ instead of src/ui/components/snackbar/ (F28)

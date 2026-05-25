@@ -75,17 +75,17 @@ import {
  * by buy_sell.test.ts and cash.test.ts.
  */
 async function navigateToAccounts(): Promise<void> {
-  const assetsNav = await $('button[aria-label="Assets"]');
+  const assetsNav = await $("#nav-assets");
   await assetsNav.waitForExist({ timeout: 15000 });
   await assetsNav.click();
   // Wait for the Assets page FAB as a reliable "page ready" signal.
-  await $('button[aria-label="Add asset"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
 
-  const accountsNav = await $('button[aria-label="Accounts"]');
+  const accountsNav = await $("#nav-accounts");
   await accountsNav.waitForExist({ timeout: 10000 });
   await accountsNav.click();
   // Wait for the Accounts page FAB as a reliable "page ready" signal.
-  await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-account").waitForExist({ timeout: 10000 });
 }
 
 /**
@@ -154,8 +154,8 @@ describe("MKT auto-fetch", () => {
   // This is a pure UI + localStorage test — no IPC calls involved.
   // -------------------------------------------------------------------------
   it("MKT-120: Settings auto-fetch toggle persists to localStorage", async () => {
-    // Navigate to Settings via the sidebar button (aria-label="Settings").
-    const settingsNav = await $('button[aria-label="Settings"]');
+    // Navigate to Settings via the sidebar button (id="nav-settings").
+    const settingsNav = await $("#nav-settings");
     await settingsNav.waitForExist({ timeout: 15000 });
     await settingsNav.click();
 
@@ -241,8 +241,8 @@ describe("MKT auto-fetch", () => {
     // MKT-141 — Source column in PriceHistoryModal
     // -----------------------------------------------------------------------
     // Open the Price History modal via the History (clock) icon button in the
-    // holding row. The button's aria-label comes from the "Price history" i18n key.
-    const priceHistoryBtn = await $('button[aria-label="Price history"]');
+    // holding row (stable id `action-price-history-{assetId}`).
+    const priceHistoryBtn = await $(`#action-price-history-${assetId}`);
     await priceHistoryBtn.waitForExist({ timeout: 10000 });
     await priceHistoryBtn.click();
 

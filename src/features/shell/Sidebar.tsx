@@ -63,6 +63,7 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
             <button
               type="button"
               key={item.path}
+              id={`nav-${item.path.slice(1).replace(/\//g, "-")}`}
               onClick={() => navigate({ to: item.path })}
               aria-label={label}
               className={`
@@ -79,6 +80,7 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
 
         <button
           type="button"
+          id="nav-about"
           onClick={() => setAboutOpen(true)}
           aria-label={t("nav.about")}
           className={`w-full m3-navigation-item ${!isOpen && "justify-center px-0"}`}
@@ -91,6 +93,7 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
       <nav aria-label={t("nav.settings")} className="px-3 pb-2">
         <button
           type="button"
+          id="nav-settings"
           onClick={() => navigate({ to: "/settings" })}
           aria-label={t("nav.settings")}
           className={`

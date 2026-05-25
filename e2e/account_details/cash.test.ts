@@ -26,15 +26,15 @@ import { seedAccount, seedDeposit } from "../helpers/seed";
 async function navigateToAccountDetails(accountName: string): Promise<void> {
   // Round-trip via Assets so the Accounts component remounts and re-fetches
   // (matches the existing buy_sell.test.ts navigation pattern).
-  const assetsNav = await $('button[aria-label="Assets"]');
+  const assetsNav = await $("#nav-assets");
   await assetsNav.waitForExist({ timeout: 15000 });
   await assetsNav.click();
-  await $('button[aria-label="Add asset"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
 
-  const accountsNav = await $('button[aria-label="Accounts"]');
+  const accountsNav = await $("#nav-accounts");
   await accountsNav.waitForExist({ timeout: 10000 });
   await accountsNav.click();
-  await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-account").waitForExist({ timeout: 10000 });
 
   const accountNameSpan = await $(
     `tr[aria-label="Open account ${accountName}"] td:first-child span`,
@@ -66,7 +66,7 @@ describe("cash", () => {
     // Header Deposit button is always visible (CSH-019). The Button component
     // wraps its children in a <span>, so we match by span text — same XPath
     // pattern used by `e2e/open_balance/open_balance.test.ts` for "Open Balance".
-    const headerDeposit = await $('//button[.//span[normalize-space()="Deposit"]]');
+    const headerDeposit = await $("#action-deposit");
     await headerDeposit.waitForExist({ timeout: 10000 });
     await headerDeposit.click();
 
@@ -85,7 +85,7 @@ describe("cash", () => {
 
     // Cash row exposes the inline Deposit / Withdraw action buttons (CSH-091).
     // Their aria-labels come from cash.action_record_deposit / _withdrawal.
-    const inlineDepositBtn = await $('button[aria-label="Record deposit"]');
+    const inlineDepositBtn = await $("#action-record-deposit-system-cash-eur");
     await inlineDepositBtn.waitForExist({ timeout: 8000 });
     assert.ok(
       await inlineDepositBtn.isExisting(),
@@ -105,7 +105,7 @@ describe("cash", () => {
     await navigateToAccountDetails(ACCOUNT_NAME);
 
     // Header Withdraw button only renders when the cash row is visible (CSH-019).
-    const headerWithdraw = await $('//button[.//span[normalize-space()="Withdraw"]]');
+    const headerWithdraw = await $("#action-withdraw");
     await headerWithdraw.waitForExist({ timeout: 10000 });
     await headerWithdraw.click();
 
@@ -122,7 +122,7 @@ describe("cash", () => {
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // Cash row stays visible (1000 - 200 = 800 EUR > 0, CSH-097 hide-at-0 guard not triggered).
-    const inlineWithdrawBtn = await $('button[aria-label="Record withdrawal"]');
+    const inlineWithdrawBtn = await $("#action-record-withdrawal-system-cash-eur");
     await inlineWithdrawBtn.waitForExist({ timeout: 8000 });
     assert.ok(
       await inlineWithdrawBtn.isExisting(),
@@ -143,7 +143,7 @@ describe("cash", () => {
 
     await navigateToAccountDetails(ACCOUNT_NAME);
 
-    const headerWithdraw = await $('//button[.//span[normalize-space()="Withdraw"]]');
+    const headerWithdraw = await $("#action-withdraw");
     await headerWithdraw.waitForExist({ timeout: 10000 });
     await headerWithdraw.click();
 
@@ -187,7 +187,7 @@ describe("cash", () => {
     // surrounding paragraph that contains the localised Global Value label.
     // Both EN ("Global Value") and FR ("Valeur globale") strings are matched
     // permissively to keep this test locale-resilient.
-    const cashRow = await $('button[aria-label="Record withdrawal"]');
+    const cashRow = await $("#action-record-withdrawal-system-cash-eur");
     await cashRow.waitForExist({ timeout: 10000 });
 
     const headerText = await $("body").getText();
