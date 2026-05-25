@@ -307,7 +307,11 @@
     "source_manual": "Manuel",
     "source_stooq": "Stooq",
     "staleness_today": "Mis à jour aujourd'hui",
-    "staleness_days_ago": "Mis à jour il y a {{days}} j"
+    "staleness_days_ago": "Mis à jour il y a {{days}} j",
+    "price_state": {
+      "missing_ticker": "Ticker manquant",
+      "no_price_available": "Pas de prix disponible"
+    }
   },
   "cash": {
     "deposit_modal_title": "Enregistrer un dépôt",

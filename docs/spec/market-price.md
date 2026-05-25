@@ -92,7 +92,14 @@ The `AccountDetailsResponse` DTO gains one new field.
 
 **MKT-031 — Latest price resolution (backend)**: The `AccountDetailsUseCase` retrieves the most recently dated `AssetPrice` for each active holding's asset via `AssetService`, per ADR-004 (use cases inject services, not repositories). If no record exists for an asset, `current_price` and `current_price_date` are `None`. A failure in the price lookup does not abort the overall `get_account_details` response; it degrades gracefully by returning `None` for the affected holding's price fields.
 
-**MKT-032 — No-price placeholder (frontend)**: When `current_price` is `None` for a holding, the "Current Price", "Unrealized P&L", and "Performance %" columns display "—" for that row.
+**MKT-032 — No-price diagnostic (frontend)**: When `current_price` is `None` for a holding, the "Current Price" column displays a typed diagnostic state derived from the holding's data, so the user can see _why_ a price is unavailable. Two states:
+
+- **"Missing ticker"** — when `asset_reference` is empty (no identifier the price-fetch path can query). Signals that adding a ticker is the action that would unlock price fetch.
+- **"No price available"** — when `asset_reference` is non-empty but `current_price` is `None`. The two upstream causes ("provider returned N/D" and "no fetch has run yet under a manual-update-frequency account") are intentionally merged into this single state in this phase; `update_frequency` is not consulted by the presenter. Disambiguation is deferred — see Open Questions.
+
+**Cell composition.** The diagnostic string occupies the primary price slot. No secondary staleness label (MKT-140 is skipped — there is no `current_price_date` to label) and no source badge (MKT-142 is skipped — there is no `AssetPrice.source` to badge) are rendered alongside it. Both states are informational-only — rendered as subdued text, non-interactive (click-to-edit is deferred — see Open Questions).
+
+**Other columns unchanged.** The "Unrealized P&L" and "Performance %" columns continue to display "—" when `current_price` is `None`, regardless of which diagnostic state the Current Price column shows (consistent with MKT-034's currency-mismatch placeholder behavior).
 
 **MKT-033 — Unrealized P&L — same currency (backend)**: When the asset's native currency equals the account's currency (the gate condition defined in MKT-034), the backend computes `unrealized_pnl = (current_price − average_price) × quantity` using i128 intermediates before scaling back to i64, consistent with ACD-024. Both `current_price` and `average_price` are expressed in the same currency under this condition, making the subtraction valid. The result is included in `HoldingDetail.unrealized_pnl`. A zero result is returned as `0`, not `None`.
 
@@ -260,7 +267,7 @@ The launch auto-fetch (MKT-121) is silent (no snackbar).
 
 #### Display (140–149)
 
-**MKT-140 — Staleness indicator (frontend)**: The "Current Price" column's secondary label shows "Updated today" when the most recent `AssetPrice.date` for the asset equals today's local date, "Updated Nd ago" otherwise (N integer day delta), "—" when no price exists.
+**MKT-140 — Staleness indicator (frontend)**: The "Current Price" column's secondary label shows "Updated today" when the most recent `AssetPrice.date` for the asset equals today's local date, "Updated Nd ago" otherwise (N integer day delta). When no price exists, the secondary label is omitted and MKT-032's diagnostic state occupies the primary cell instead.
 
 **MKT-141 — Source badge in price history (frontend)**: Each row in the price-history modal (MKT-071) displays a badge with the row's `source` value.
 
@@ -416,7 +423,8 @@ Small modal dialog. No navigation — stays within Account Details.
 - **Submit in-flight** (MKT-027): Submit button disabled + spinner while persisting.
 - **Validation / backend error** (MKT-029): Inline error adjacent to the invalid field; modal stays open.
 - **Success** (MKT-028): Modal closes; snackbar "Price recorded."
-- **No price (holding row)**: "—" in Current Price, Unrealized P&L, Performance % columns.
+- **No price — missing ticker (holding row)** (MKT-032): "Missing ticker" diagnostic in Current Price; "—" in Unrealized P&L, Performance %.
+- **No price — fetch unavailable (holding row)** (MKT-032): "No price available" diagnostic in Current Price; "—" in Unrealized P&L, Performance %.
 - **Currency mismatch (holding row)**: Current Price shown in asset currency; Unrealized P&L and Performance % show "—".
 
 ### User Flow
@@ -577,3 +585,9 @@ Each row in the price-history list (MKT-071) gains a small badge to the right of
 4. Backend writes `AssetPrice(AAPL, 2026-05-17) = $189, source: Manual` — overwrites the Stooq row (per ADR-012; MKT-025, MKT-101).
 5. Account Details shows $189; the badge becomes "Manual".
 6. On the next launch, auto-fetch will overwrite $189 with the new day's Stooq value (per ADR-012). The user's correction is for today; tomorrow brings tomorrow's price.
+
+## Open Questions / Deferred
+
+**MKT-032 — disambiguating the "No price available" state.** The current rule merges two upstream causes (provider returned N/D vs no fetch has run yet under a manual-update-frequency account) into one diagnostic. Distinguishing them requires BE telemetry (per-asset last-fetch-attempt + outcome) not currently exposed on `HoldingDetail`. Defer until a real user-pain signal warrants the BE surface change.
+
+**MKT-032 — click-to-edit affordance.** Making the "Missing ticker" diagnostic clickable (opening Edit Asset with the ticker field focused) is a cross-feature UX win deferred to a separate iteration. The decision turns on a broader architectural choice (cross-feature import vs URL-driven modal pattern in `shell/`) tracked outside this spec.

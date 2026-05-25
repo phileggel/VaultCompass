@@ -307,7 +307,11 @@
     "source_manual": "Manual",
     "source_stooq": "Stooq",
     "staleness_today": "Updated today",
-    "staleness_days_ago": "Updated {{days}}d ago"
+    "staleness_days_ago": "Updated {{days}}d ago",
+    "price_state": {
+      "missing_ticker": "Missing ticker",
+      "no_price_available": "No price available"
+    }
   },
   "cash": {
     "deposit_modal_title": "Record a deposit",
