@@ -11,8 +11,8 @@ import {
   microToDecimal,
   microToFormatted,
 } from "@/lib/microUnits";
-import { useSnackbar } from "@/lib/snackbarStore";
 import { useAppStore } from "@/lib/store";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 

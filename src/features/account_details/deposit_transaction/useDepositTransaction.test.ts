@@ -14,7 +14,7 @@ vi.mock("../gateway", () => ({
   },
 }));
 
-vi.mock("@/lib/snackbarStore", () => ({
+vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
   useSnackbar: () => mockShowSnackbar,
 }));
 

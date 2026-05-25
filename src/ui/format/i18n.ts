@@ -16,7 +16,7 @@ export type I18nMessage = {
  * snackbar instead of component-rendered error state. Carries the i18n key + vars
  * plus a severity dimension the snackbar needs.
  *
- * `severity` is intentionally narrower than `SnackbarVariant` in @/lib/snackbarStore
+ * `severity` is intentionally narrower than `SnackbarVariant` in @/ui/components/snackbar/snackbarStore
  * (no `"success"`) because error presenters never return success — narrowing here
  * documents that constraint at the type level.
  */

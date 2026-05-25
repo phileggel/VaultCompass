@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
-import { useSnackbar } from "@/lib/snackbarStore";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 import { assetPriceMutationErrorToI18n } from "../shared/presenter";

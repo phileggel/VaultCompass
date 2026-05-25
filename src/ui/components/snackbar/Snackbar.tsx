@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle, Info, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { type SnackbarVariant, useSnackbarStore } from "@/lib/snackbarStore";
+import { type SnackbarVariant, useSnackbarStore } from "@/ui/components/snackbar/snackbarStore";
 
 const ICONS: Record<SnackbarVariant, React.ElementType> = {
   success: CheckCircle,

@@ -12,7 +12,7 @@ vi.mock("../gateway", () => ({
 
 // Mock the snackbar store — the hook dispatches snackbar messages on all branches.
 const mockShowSnackbar = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/snackbarStore", () => ({
+vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
   useSnackbar: () => mockShowSnackbar,
 }));
 

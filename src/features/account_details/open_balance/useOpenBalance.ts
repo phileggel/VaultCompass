@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { transactionMutationErrorToI18n } from "@/features/transactions/shared/presenter";
 import { logger } from "@/lib/logger";
 import { decimalToMicro } from "@/lib/microUnits";
-import { useSnackbar } from "@/lib/snackbarStore";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 

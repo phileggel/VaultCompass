@@ -18,7 +18,7 @@ vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), info: vi.fn() },
 }));
 
-vi.mock("@/lib/snackbarStore", () => ({
+vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
   useSnackbar: () => vi.fn(),
 }));
 

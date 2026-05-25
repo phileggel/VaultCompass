@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchPriceErrorToI18n } from "@/features/accounts/shared/presenter";
-import { useSnackbar } from "@/lib/snackbarStore";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
 
 /**

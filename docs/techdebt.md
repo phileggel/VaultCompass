@@ -139,16 +139,6 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
 ---
 
----
-
-## 2026-05-23 — snackbarStore lives in src/lib/ instead of src/ui/components/snackbar/ (F28)
-
-- Found by: reviewer-frontend + reviewer-arch (during F27 cleanup for refresh-prices hooks)
-- Where: `src/lib/snackbarStore.ts` (imported as `@/lib/snackbarStore` by 15+ hooks/components across `features/account_details`, `features/accounts`, `features/transactions`, `features/assets`)
-- Context: branch `fix/f27-refresh-prices-hooks` @ `a2c022c`
-- Severity: 🟡
-- Observation: `snackbarStore` is a stateful UI runtime; per F28 it belongs under `src/ui/components/snackbar/snackbarStore.ts` (colocated with its widget), not in the pre-gold `src/lib/` bucket. Move is mechanical (file rename + path-alias update across ~15 callers) but spans many features outside any single PR's scope. Same pattern as the broader `src/lib/` → F28-bucket migration already tracked above; this entry just calls out snackbarStore specifically since it surfaces on every snackbar-dispatching feature.
-
 ## 2026-05-24 — Dialog dialog/close-button lack stable F25 ids
 
 - Found by: reviewer-frontend (during Dialog viewport-clip fix review)
