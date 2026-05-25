@@ -55,6 +55,22 @@ Once the KEY spec ships (BYOK + OS keychain per ADR-011), Finnhub's `/api/v1/sto
 
 Surfaced 2026-05-24 (post-PR #41 follow-up).
 
+## (account_details) — Price column should explain WHY a price is missing
+
+Today the holdings price column shows `—` whenever a current price is absent, with no signal as to the cause. Three distinct failure modes collapse into the same `—`: (a) the asset has no `reference` or `isin` so no fetch is attempted, (b) fetch ran but the provider returned N/D, (c) fetch never ran (manual-only update frequency). The user must inspect each asset to diagnose, and the most common cause — a missing identifier — is invisible until they open the edit form.
+
+UX fix: disambiguate the `—` cell into typed states that map directly to the cause:
+
+- `Missing ISIN` (or `Missing ticker`) — actionable: click navigates to Edit Asset with the identifier field focused.
+- `Provider returned no data` — informational; offer a "Retry fetch" affordance.
+- `Awaiting manual update` — informational; explain the account's update-frequency setting.
+
+Scope: presenter-level work on the `current_price` cell in `account_details/account_details_view/HoldingRow.tsx` + `presenter.ts` + i18n keys. Backend already returns `current_price: Option<i64>` per holding; the new states are derived from the asset's `reference`/`isin` presence and the account's `update_frequency`.
+
+This is **an alternative to** the Finnhub auto-fill path above — both address the same pain (the user doesn't know an ISIN is missing), but this one ships entirely in the FE with no external dependency or BYOK. Finnhub remains the stronger long-term answer (automation > education), but this UX gap can land now and is independently valuable.
+
+Surfaced 2026-05-25 by user feedback during IE-venue triage.
+
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.

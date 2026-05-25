@@ -35,9 +35,9 @@
 > `get_account_summaries` is implemented in `use_cases/account_summary/` — it reads from both the
 > account and asset BCs (price lookups for each account's holdings) but mutates neither.
 
-| Command                 | Args | Return                | Errors                                                                                |
-| ----------------------- | ---- | --------------------- | ------------------------------------------------------------------------------------- |
-| `get_account_summaries` | —    | `Vec<AccountSummary>` | `DatabaseError`; price lookup failures silently contribute 0 to the value (MKT-031)   |
+| Command                 | Args | Return                | Errors                                                                              |
+| ----------------------- | ---- | --------------------- | ----------------------------------------------------------------------------------- |
+| `get_account_summaries` | —    | `Vec<AccountSummary>` | `DatabaseError`; price lookup failures silently contribute 0 to the value (MKT-031) |
 
 ### Holdings & Transactions
 
@@ -46,15 +46,15 @@
 > single FE-visible surface. Mutation commands coordinate across the account and asset BCs
 > (cash-asset seeding, archived-asset guards, etc.).
 
-| Command                     | Args                                                    | Return             | Errors                                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------- | ------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_asset_ids_for_account` | `account_id: String`                                    | `Vec<String>`      | `DatabaseError` (TXL-054) — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                                 |
-| `get_transactions`          | `account_id: String, asset_id: String`                  | `Vec<Transaction>` | `DatabaseError` (TXL-020)                                                                                                                                                                                                                                                                                                                                             |
-| `buy_holding`               | `BuyHoldingDTO`                                         | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (TRX-020), `TotalAmountNotPositive` (TRX-020), `InsufficientCash { current_balance_micros, currency }` (CSH-041), `DatabaseError`                         |
-| `sell_holding`              | `SellHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (SEL-020), `TotalAmountNotPositive` (TRX-020), `ClosedPosition` (SEL-012), `Oversell { available, requested }` (SEL-021), `DatabaseError`                 |
+| Command                     | Args                                                    | Return             | Errors                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_asset_ids_for_account` | `account_id: String`                                    | `Vec<String>`      | `DatabaseError` (TXL-054) — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                                                                                                                  |
+| `get_transactions`          | `account_id: String, asset_id: String`                  | `Vec<Transaction>` | `DatabaseError` (TXL-020)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `buy_holding`               | `BuyHoldingDTO`                                         | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (TRX-020), `TotalAmountNotPositive` (TRX-020), `InsufficientCash { current_balance_micros, currency }` (CSH-041), `DatabaseError`                                                                           |
+| `sell_holding`              | `SellHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (SEL-020), `TotalAmountNotPositive` (TRX-020), `ClosedPosition` (SEL-012), `Oversell { available, requested }` (SEL-021), `DatabaseError`                                                                   |
 | `correct_transaction`       | `id: String, account_id: String, CorrectTransactionDTO` | `Transaction`      | `TransactionNotFound` (TRX-031), `AccountNotFound { account_id }` (TRX-031), `InvalidDate` (TRX-033), `DateInFuture` (TRX-033), `DateTooOld` (TRX-033), `QuantityNotPositive` (TRX-033), `UnitPriceNegative` (TRX-033), `ExchangeRateNotPositive` (TRX-033), `FeesNegative` (TRX-033), `TotalAmountNotPositive` (TRX-033), `CascadingOversell` (SEL-032), `InsufficientCash { current_balance_micros, currency }` (CSH-042 / CSH-051), `DatabaseError` |
-| `cancel_transaction`        | `id: String, account_id: String`                        | `()`               | `TransactionNotFound` (TRX-034), `AccountNotFound { account_id }` (TRX-034), `CascadingOversell` (SEL-033 — replay after cancel can leave a later sell oversold), `InsufficientCash { current_balance_micros, currency }` (CSH-024 / CSH-051), `DatabaseError`                                                                                                       |
-| `open_holding`              | `OpenHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-056), `AssetNotFound` (TRX-056), `ArchivedAsset` (TRX-050), `OpeningBalanceOnCashAsset` (CSH-061), `QuantityNotPositive` (TRX-044), `InvalidTotalCost` (TRX-045), `InvalidDate` (TRX-046), `DateInFuture` (TRX-046), `DateTooOld` (TRX-046), `DatabaseError`                                                                     |
+| `cancel_transaction`        | `id: String, account_id: String`                        | `()`               | `TransactionNotFound` (TRX-034), `AccountNotFound { account_id }` (TRX-034), `CascadingOversell` (SEL-033 — replay after cancel can leave a later sell oversold), `InsufficientCash { current_balance_micros, currency }` (CSH-024 / CSH-051), `DatabaseError`                                                                                                                                                                                         |
+| `open_holding`              | `OpenHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-056), `AssetNotFound` (TRX-056), `ArchivedAsset` (TRX-050), `OpeningBalanceOnCashAsset` (CSH-061), `QuantityNotPositive` (TRX-044), `InvalidTotalCost` (TRX-045), `InvalidDate` (TRX-046), `DateInFuture` (TRX-046), `DateTooOld` (TRX-046), `DatabaseError`                                                                                                                                                     |
 
 ### Cash Transactions
 
@@ -65,9 +65,9 @@
 > `transaction_type` and run the chronological replay across all cash-affecting transactions for
 > the account.
 
-| Command             | Args                                                                                           | Return        | Errors                                                                                                                                                                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `record_deposit`    | `DepositDTO { account_id: String, date: String, amount_micros: i64, note: Option<String> }`    | `Transaction` | `AccountNotFound { account_id }` (CSH-021), `AmountNotPositive` (CSH-021), `InvalidDate` (CSH-021), `DateInFuture` (CSH-021), `DateTooOld` (CSH-021), `DatabaseError`                                                                 |
+| Command             | Args                                                                                           | Return        | Errors                                                                                                                                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record_deposit`    | `DepositDTO { account_id: String, date: String, amount_micros: i64, note: Option<String> }`    | `Transaction` | `AccountNotFound { account_id }` (CSH-021), `AmountNotPositive` (CSH-021), `InvalidDate` (CSH-021), `DateInFuture` (CSH-021), `DateTooOld` (CSH-021), `DatabaseError`                                                                    |
 | `record_withdrawal` | `WithdrawalDTO { account_id: String, date: String, amount_micros: i64, note: Option<String> }` | `Transaction` | `AccountNotFound { account_id }` (CSH-031), `AmountNotPositive` (CSH-031), `InvalidDate` (CSH-031), `DateInFuture` (CSH-031), `DateTooOld` (CSH-031), `InsufficientCash { current_balance_micros, currency }` (CSH-080), `DatabaseError` |
 
 ---
@@ -250,16 +250,16 @@ struct AccountSummary {
 
 ### Published
 
-| Event                | Payload | Rule                                                  |
-| -------------------- | ------- | ----------------------------------------------------- |
+| Event                | Payload | Rule                                                                                                              |
+| -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
 | `AccountUpdated`     | —       | _emitted by `AccountService::create`/`update`/`delete` (ACC-001/002/003, ACC-005/006); no formal definition rule_ |
-| `TransactionUpdated` | —       | TRX-037                                               |
+| `TransactionUpdated` | —       | TRX-037                                                                                                           |
 
 ### Subscribed (frontend re-fetch triggers)
 
-| Event                | Payload | Rule    |
-| -------------------- | ------- | ------- |
-| `AccountUpdated`     | —       | ACC-021 |
+| Event                | Payload | Rule             |
+| -------------------- | ------- | ---------------- |
+| `AccountUpdated`     | —       | ACC-021          |
 | `TransactionUpdated` | —       | ACD-039, ACC-021 |
-| `AssetUpdated`       | —       | ACD-040 |
-| `AssetPriceUpdated`  | —       | MKT-036 |
+| `AssetUpdated`       | —       | ACD-040          |
+| `AssetPriceUpdated`  | —       | MKT-036          |
