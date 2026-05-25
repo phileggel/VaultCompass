@@ -132,6 +132,8 @@ In all cases the "Fill manually" bypass (WEB-013) remains accessible. No navigat
 
 If no entry of the share-class group matches the priority list (only possible on the keyword path — the ISIN path's `/v3/mapping` response is already filtered to the ISIN's known listings and the priority list always contains at least the global venue universe), the first entry from OpenFIGI's order is kept as a fallback so the share class is not lost.
 
+A country prefix may map to multiple home venues when the same prefix covers structurally different instrument types — e.g. `IE → [ID, LO, NA, GY]`: Dublin (`ID`) wins for Irish equities (Ryanair, CRH, Kerry Group), and London/Amsterdam/Xetra cover the Irish-domiciled UCITS ETF case, where the asset is registered in Ireland for tax/regulatory reasons but trades primarily abroad.
+
 **WEB-050f — Final cap (backend)**: The combined result list across all share classes is truncated to the WEB-022 cap (30 entries).
 
 ---
