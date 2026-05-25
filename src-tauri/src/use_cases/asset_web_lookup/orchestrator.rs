@@ -53,8 +53,8 @@ pub trait OpenFigiClient: Send + Sync {
     /// `/v3/mapping` with `idType=ID_ISIN` (WEB-014).
     async fn map_isin(&self, isin: &str) -> Result<Vec<RawFigiHit>>;
 
-    /// `/v3/search` keyword endpoint, with `securityType: "Common Stock"` filter
-    /// applied (WEB-050 step 1).
+    /// `/v3/search` keyword endpoint. No request-time securityType filter —
+    /// hits are classified post-response and ranked by the priority sort.
     async fn search_keyword(&self, query: &str) -> Result<Vec<RawFigiHit>>;
 
     /// Batched `/v3/mapping` call with `idType=ID_BB_GLOBAL_SHARE_CLASS_LEVEL`,
@@ -268,11 +268,12 @@ impl OpenFigiClient for ReqwestOpenFigiClient {
     }
 
     async fn search_keyword(&self, query: &str) -> Result<Vec<RawFigiHit>> {
-        // WEB-050 step 1: filter to Common Stock so bonds, futures, structured
-        // products and warrants don't crowd out the equity rows we care about.
+        // OpenFIGI's search accepts only a single securityType string (not an
+        // array), so post-classification via map_security_type plus the
+        // priority sort handles the broader asset-class coverage instead of
+        // a request-time filter.
         let body = serde_json::json!({
             "query": query,
-            "securityType": "Common Stock",
         });
         let resp = self
             .client

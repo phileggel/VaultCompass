@@ -98,16 +98,6 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
 ---
 
-## 2026-05-24 — WEB-050a keyword filter narrower than WEB-023 mapping
-
-- Found by: spec-reviewer
-- Where: docs/spec/asset-web-lookup.md (WEB-050a + WEB-023)
-- Context: branch `feat/explicit-isin-lookup` @ `30ec513`
-- Severity: 🟡
-- Observation: WEB-050a restricts the keyword `/v3/search` request to `securityType: "Common Stock"`, but WEB-023 publishes a broader asset-class mapping (ETF, MutualFunds, Bonds, DigitalAsset, RealEstate, Cash, Derivatives). Practical effect: on the keyword path only stocks can surface; ETFs, bonds, mutual funds, etc. are reachable only via the ISIN path. Pre-existing inconsistency introduced by 4fd0f2e; surfaced by spec-reviewer during the ISIN-lookup-split amendment, out of scope for that amendment.
-
----
-
 ## 2026-05-16 — ADR status vocabulary lacks an "amends" relationship
 
 - Found by: adr-reviewer (during review of ADRs 008/009/010/011)

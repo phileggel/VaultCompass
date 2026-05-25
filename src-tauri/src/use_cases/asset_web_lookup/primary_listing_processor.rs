@@ -293,22 +293,28 @@ pub fn resolve_canonical_exchange(hit: &RawFigiHit) -> Option<Exchange> {
 // Public helpers (used by the orchestrator's HTTP layer)
 // ---------------------------------------------------------------------------
 
-/// Maps an OpenFIGI `securityType` string to an `AssetClass` variant (WEB-023).
-/// Returns `None` for unrecognised types.
+/// Maps an OpenFIGI `securityType` string to an `AssetClass` variant. The
+/// recognised values are the subset of OpenFIGI's `/v3/mapping/values/securityType`
+/// vocabulary that the project surfaces as a typed asset class. Returns `None`
+/// for anything else (Structured Product, Certificate, ADR, MTN, futures
+/// sub-types not listed here, etc.).
 pub fn map_security_type(s: &str) -> Option<AssetClass> {
     match s {
         "Common Stock" => Some(AssetClass::Stocks),
-        "ETF" => Some(AssetClass::ETF),
         // OpenFIGI uses "ETP" as the umbrella for ETF + ETN + ETC; the
-        // distinction isn't exposed at the securityType level. Mapped to the
-        // ETP class so the user sees a real label instead of "Unknown".
+        // structural distinction isn't exposed at the securityType level.
         "ETP" => Some(AssetClass::ETP),
-        "Mutual Fund" => Some(AssetClass::MutualFunds),
-        "Corporate Bond" | "Government Bond" => Some(AssetClass::Bonds),
-        "Cryptocurrency" | "Digital Currency" => Some(AssetClass::DigitalAsset),
-        "REIT" | "Real Estate Investment Trust" => Some(AssetClass::RealEstate),
-        "Cash" => Some(AssetClass::Cash),
-        "Warrant" | "Option" | "Future" | "Rights" => Some(AssetClass::Derivatives),
+        "Mutual Fund" | "Open-End Fund" | "Closed-End Fund" | "Fund of Funds" | "Pvt Eqty Fund" => {
+            Some(AssetClass::MutualFunds)
+        }
+        "Bond" | "Conv Bond" => Some(AssetClass::Bonds),
+        "Crypto" => Some(AssetClass::DigitalAsset),
+        "REIT" => Some(AssetClass::RealEstate),
+        "Warrant"
+        | "Equity Option"
+        | "Index Option"
+        | "SINGLE STOCK FUTURE"
+        | "SINGLE STOCK DIVIDEND FUTURE" => Some(AssetClass::Derivatives),
         _ => None,
     }
 }
@@ -1012,17 +1018,92 @@ mod tests {
 
     #[test]
     fn map_security_type_etp_returns_etp_class() {
-        // OpenFIGI uses "ETP" as the umbrella for ETF/ETN/ETC. Without this
-        // mapping the user's example (Amundi PEA MSCI World, ISIN FR001400U5Q4)
-        // rendered as "Unknown type".
+        // OpenFIGI uses "ETP" as the umbrella for ETF/ETN/ETC and does not
+        // emit "ETF" as a securityType (verified via /v3/mapping/values/securityType).
         assert_eq!(map_security_type("ETP"), Some(AssetClass::ETP));
+        assert_eq!(map_security_type("ETF"), None);
     }
 
     #[test]
-    fn map_security_type_etf_returns_etf_class() {
-        // "ETF" is a separate OpenFIGI value from "ETP" and must continue to
-        // resolve to ETF, not ETP.
-        assert_eq!(map_security_type("ETF"), Some(AssetClass::ETF));
+    fn map_security_type_mutual_fund_variants_return_mutualfunds() {
+        assert_eq!(
+            map_security_type("Mutual Fund"),
+            Some(AssetClass::MutualFunds)
+        );
+        assert_eq!(
+            map_security_type("Open-End Fund"),
+            Some(AssetClass::MutualFunds)
+        );
+        assert_eq!(
+            map_security_type("Closed-End Fund"),
+            Some(AssetClass::MutualFunds)
+        );
+        assert_eq!(
+            map_security_type("Fund of Funds"),
+            Some(AssetClass::MutualFunds)
+        );
+        assert_eq!(
+            map_security_type("Pvt Eqty Fund"),
+            Some(AssetClass::MutualFunds)
+        );
+    }
+
+    #[test]
+    fn map_security_type_bond_variants_return_bonds() {
+        assert_eq!(map_security_type("Bond"), Some(AssetClass::Bonds));
+        assert_eq!(map_security_type("Conv Bond"), Some(AssetClass::Bonds));
+        // Old vocabulary that does not exist in OpenFIGI's actual list.
+        assert_eq!(map_security_type("Corporate Bond"), None);
+        assert_eq!(map_security_type("Government Bond"), None);
+    }
+
+    #[test]
+    fn map_security_type_crypto_returns_digital_asset() {
+        assert_eq!(map_security_type("Crypto"), Some(AssetClass::DigitalAsset));
+        // Old vocabulary that does not exist in OpenFIGI's actual list.
+        assert_eq!(map_security_type("Cryptocurrency"), None);
+        assert_eq!(map_security_type("Digital Currency"), None);
+    }
+
+    #[test]
+    fn map_security_type_reit_returns_real_estate() {
+        assert_eq!(map_security_type("REIT"), Some(AssetClass::RealEstate));
+        // Old vocabulary that does not exist in OpenFIGI's actual list.
+        assert_eq!(map_security_type("Real Estate Investment Trust"), None);
+    }
+
+    #[test]
+    fn map_security_type_derivatives_variants_return_derivatives() {
+        assert_eq!(map_security_type("Warrant"), Some(AssetClass::Derivatives));
+        assert_eq!(
+            map_security_type("Equity Option"),
+            Some(AssetClass::Derivatives)
+        );
+        assert_eq!(
+            map_security_type("Index Option"),
+            Some(AssetClass::Derivatives)
+        );
+        assert_eq!(
+            map_security_type("SINGLE STOCK FUTURE"),
+            Some(AssetClass::Derivatives)
+        );
+        assert_eq!(
+            map_security_type("SINGLE STOCK DIVIDEND FUTURE"),
+            Some(AssetClass::Derivatives)
+        );
+        // Old generic vocabulary that does not exist in OpenFIGI's actual list.
+        assert_eq!(map_security_type("Option"), None);
+        assert_eq!(map_security_type("Future"), None);
+        assert_eq!(map_security_type("Rights"), None);
+    }
+
+    #[test]
+    fn map_security_type_unrecognised_returns_none() {
+        // Real OpenFIGI values that the project intentionally does not map.
+        assert_eq!(map_security_type("ADR"), None);
+        assert_eq!(map_security_type("Calendar Spread Option"), None);
+        assert_eq!(map_security_type("EURO MTN"), None);
+        assert_eq!(map_security_type(""), None);
     }
 
     #[test]
