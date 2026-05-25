@@ -1,11 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "@/lib/store";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import { HoldingRow } from "./HoldingRow";
 
+const navigateMock = vi.fn();
 vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -56,6 +57,7 @@ const renderInTable = (row: HoldingRowViewModel) =>
 describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
   beforeEach(() => {
     useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
   });
 
   it("renders the current price and the source + staleness sub-line", () => {
@@ -98,15 +100,47 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     expect(screen.queryByText("mkt.staleness_today")).not.toBeInTheDocument();
   });
 
-  it("price-state diagnostics are non-interactive (no button affordance)", () => {
+  it("'Missing ticker' is a clickable button with stable id (MKT-032 / E1)", () => {
     renderInTable({
       ...baseRow,
+      assetId: "asset-42",
       currentPrice: { kind: "missing_ticker" },
       staleness: null,
       sourceLabel: null,
     });
-    // The diagnostic is rendered as <span>, not <button>/<a> — no role-button affordance.
-    expect(screen.queryByRole("button", { name: "mkt.price_state.missing_ticker" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "mkt.price_state.missing_ticker" })).toBeNull();
+    const button = screen.getByRole("button", { name: "mkt.price_state.missing_ticker" });
+    expect(button).toBeInTheDocument();
+    expect(button.id).toBe("action-edit-missing-ticker-asset-42");
+  });
+
+  it("clicking 'Missing ticker' navigates with modal+editAssetId+focusField search params", () => {
+    renderInTable({
+      ...baseRow,
+      assetId: "asset-42",
+      currentPrice: { kind: "missing_ticker" },
+      staleness: null,
+      sourceLabel: null,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "mkt.price_state.missing_ticker" }));
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const firstCall = navigateMock.mock.calls[0];
+    if (!firstCall) throw new Error("expected navigate to be called");
+    const arg = firstCall[0] as { search: (prev: object) => object };
+    expect(arg.search({})).toEqual({
+      modal: "edit-asset",
+      editAssetId: "asset-42",
+      focusField: "reference",
+    });
+  });
+
+  it("'No price available' diagnostic stays non-interactive", () => {
+    renderInTable({
+      ...baseRow,
+      currentPrice: { kind: "no_price_available" },
+      staleness: null,
+      sourceLabel: null,
+    });
+    expect(screen.queryByRole("button", { name: "mkt.price_state.no_price_available" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "mkt.price_state.no_price_available" })).toBeNull();
   });
 });
