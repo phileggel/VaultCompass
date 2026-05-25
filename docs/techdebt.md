@@ -10,6 +10,26 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-05-25 — `AccountUpdated` event has no formal definition rule
+
+- Found by: contract-reconciliation triage during /whats-next
+- Where: `docs/spec/account.md` (no ACC-NNN rule defines event publication); event is referenced parenthetically in `docs/spec/financial-asset-transaction.md:95` (TRX-037), `docs/spec/market-price.md:81` (MKT-026), and `docs/spec/market-price.md:105` (MKT-037), and emitted by `src-tauri/src/context/account/service.rs:80,103,114` from `create`/`update`/`delete`.
+- Context: branch `fix/account-contract-wire-gaps` @ HEAD
+- Severity: 🔵
+- Observation: Every other event in the system has a canonical "event (backend)" rule: `TRX-037` for `TransactionUpdated`, `MKT-026` for `AssetPriceUpdated`. `AccountUpdated` predates that convention and was never given an explicit rule. The contract's Published Events row cannot cite a single authoritative source — today it points at the CRUD rules that happen to emit it (`ACC-001/002/003`, `ACC-005/006`) and a prose note. Worth either adding a fresh `ACC-NNN` rule in `docs/spec/account.md` formalising publication (mirroring TRX-037's shape) or accepting the prose form as the project's convention for legacy events. Spec-only fix; no code or wire-shape change.
+
+---
+
+## 2026-05-25 — Per-BC error split violates error-model gold (anti-pattern #1) — audit + collapse
+
+- Found by: triage discussion during /whats-next (account-contract reconciliation)
+- Where: `src-tauri/src/context/account/` (split into `AccountDomainError`, `AccountApplicationError`, `AccountOperationError`, `OpeningBalanceDomainError`, `TransactionDomainError`) + service-layer composites `HoldingTransactionError` / `AccountCrudError` in `account/application/error.rs` + use-case composite `OpenHoldingError` in `use_cases/holding_transaction/error.rs` (4 wrappers because the BC is split 4 ways). Other BCs (`asset/`, future BCs) not yet audited.
+- Context: branch `main` @ `e0097f1`
+- Severity: 🟡
+- Observation: `docs/error-model.md` § Anti-patterns explicitly lists "Per-BC `*ApplicationError` / `*DomainError` split — collapse into a single `{BC}Error`" as anti-pattern #1. Gold mandates ONE flat `{BC}Error` per bounded context holding every variant (aggregate-invariant + service-layer + infra translation), with composites living ONLY in `use_cases/{name}/error.rs` wrapping one BC enum per touched BC plus a `{UseCase}Task` sub-enum. The `account/` BC violates this in three ways: (1) split into 5 leaf enums; (2) service-layer composites (`HoldingTransactionError`, `AccountCrudError`) exist inside the BC purely to glue the splits back together — under gold they wouldn't exist; (3) `OpenHoldingError` wraps 4 leaves where gold would have 2. **Wire shape is unaffected** — every leaf carries `#[serde(tag="code")]` and composites are `#[serde(untagged)]`, so the FE today receives flat `{ code: "...", ... }` correctly; the split is purely internal. Collapse is mechanical (rename variants, fold enums, update `?` call sites, remove glue composites) but spans 6+ files in `account/` alone and may break ~315 test functions that reference the split variants. **Pre-work needed before the collapse PR**: audit each BC (`account/`, `asset/`, …) for the gold anti-pattern and produce a per-BC inventory of split enums + glue composites + variant name collisions, so the collapse can be sequenced (one BC per PR) with each PR sized and self-contained. Audit itself is read-only (~1h); the collapse PRs are 3–6h each depending on test fanout.
+
+---
+
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)
