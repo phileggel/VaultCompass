@@ -19,6 +19,7 @@ export function assetPriceMutationErrorToI18n(err: AssetPriceError): I18nMessage
     case "InvalidDateFormat":
       return { key: "error.InvalidDateFormat", vars: { date: err.date } };
     case "NotFound":
+    case "Archived":
     case "DatabaseError":
     case "PriceNotFound":
     case "NotPositive":

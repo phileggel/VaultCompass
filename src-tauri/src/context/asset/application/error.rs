@@ -98,6 +98,10 @@ pub enum AssetPriceApplicationError {
         /// Date the caller asked to update or delete.
         date: String,
     },
+    /// The target asset is archived (AST-006). Mutating price commands
+    /// (record / update / delete) reject; reads remain allowed.
+    #[error("Cannot mutate price of an archived asset")]
+    Archived,
     /// Application-layer translation of any infrastructure failure from a
     /// price-repo call. Unit variant — no `hint` payload on the wire; the full
     /// diagnostic chain is preserved server-side via `tracing::error!` at the
