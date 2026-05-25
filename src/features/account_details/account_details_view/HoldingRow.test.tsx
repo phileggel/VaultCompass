@@ -27,7 +27,7 @@ const baseRow: HoldingRowViewModel = {
   realizedPnl: "0.00",
   realizedPnlRaw: 0,
   canEnterPrice: true,
-  currentPrice: "150.00",
+  currentPrice: { kind: "present", formatted: "150.00" },
   currentPriceDate: "2024-01-15",
   unrealizedPnl: "100.00",
   unrealizedPnlRaw: 100_000_000,
@@ -73,10 +73,40 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     expect(screen.queryByText(/as of 2024-01-15/)).not.toBeInTheDocument();
   });
 
-  it("renders dash placeholder when currentPrice is '—'", () => {
-    renderInTable({ ...baseRow, currentPrice: "—", staleness: null, sourceLabel: null });
-    expect(screen.getByText("—")).toBeInTheDocument();
+  it("renders 'Missing ticker' diagnostic when asset_reference is empty (MKT-032)", () => {
+    renderInTable({
+      ...baseRow,
+      currentPrice: { kind: "missing_ticker" },
+      staleness: null,
+      sourceLabel: null,
+    });
+    expect(screen.getByText("mkt.price_state.missing_ticker")).toBeInTheDocument();
     // No source or staleness when there's no price
     expect(screen.queryByText("mkt.source_stooq")).not.toBeInTheDocument();
+    expect(screen.queryByText("mkt.staleness_today")).not.toBeInTheDocument();
+  });
+
+  it("renders 'No price available' diagnostic when reference present but no price (MKT-032)", () => {
+    renderInTable({
+      ...baseRow,
+      currentPrice: { kind: "no_price_available" },
+      staleness: null,
+      sourceLabel: null,
+    });
+    expect(screen.getByText("mkt.price_state.no_price_available")).toBeInTheDocument();
+    expect(screen.queryByText("mkt.source_stooq")).not.toBeInTheDocument();
+    expect(screen.queryByText("mkt.staleness_today")).not.toBeInTheDocument();
+  });
+
+  it("price-state diagnostics are non-interactive (no button affordance)", () => {
+    renderInTable({
+      ...baseRow,
+      currentPrice: { kind: "missing_ticker" },
+      staleness: null,
+      sourceLabel: null,
+    });
+    // The diagnostic is rendered as <span>, not <button>/<a> — no role-button affordance.
+    expect(screen.queryByRole("button", { name: "mkt.price_state.missing_ticker" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "mkt.price_state.missing_ticker" })).toBeNull();
   });
 });

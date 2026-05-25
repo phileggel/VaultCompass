@@ -188,15 +188,21 @@ describe("toHoldingRow — market price fields (MKT)", () => {
   });
 
   // MKT-030 — current price column: formatted price with 2 decimals
-  it("MKT-030 — currentPrice is formatted with 2 decimals when current_price is set", () => {
+  it("MKT-030 — currentPrice is 'present' with formatted value when current_price is set", () => {
     const row = toHoldingRow(makeHolding({ current_price: 150_500_000 }));
-    expect(row.currentPrice).toBe("150,50");
+    expect(row.currentPrice).toEqual({ kind: "present", formatted: "150,50" });
   });
 
-  // MKT-030 — "—" sentinel when current_price is null
-  it("MKT-030 — currentPrice is '—' when current_price is null", () => {
-    const row = toHoldingRow(makeHolding({ current_price: null }));
-    expect(row.currentPrice).toBe("—");
+  // MKT-032 — diagnostic 'missing_ticker' when asset_reference is empty
+  it("MKT-032 — currentPrice is 'missing_ticker' when current_price is null and asset_reference is empty", () => {
+    const row = toHoldingRow(makeHolding({ current_price: null, asset_reference: "" }));
+    expect(row.currentPrice).toEqual({ kind: "missing_ticker" });
+  });
+
+  // MKT-032 — diagnostic 'no_price_available' when reference present but no price
+  it("MKT-032 — currentPrice is 'no_price_available' when current_price is null and asset_reference is set", () => {
+    const row = toHoldingRow(makeHolding({ current_price: null, asset_reference: "AAPL" }));
+    expect(row.currentPrice).toEqual({ kind: "no_price_available" });
   });
 
   // MKT-030 — currentPriceDate passed through for "as of {date}" label; null when no price
@@ -235,7 +241,7 @@ describe("toHoldingRow — market price fields (MKT)", () => {
   // MKT-034 — currentPrice still formatted on currency mismatch
   it("MKT-034 — currentPrice is formatted even when unrealized_pnl is null (currency mismatch)", () => {
     const row = toHoldingRow(makeHolding({ current_price: 110_000_000, unrealized_pnl: null }));
-    expect(row.currentPrice).toBe("110,00");
+    expect(row.currentPrice).toEqual({ kind: "present", formatted: "110,00" });
   });
 });
 
@@ -298,7 +304,7 @@ describe("toHoldingRow — cash variant (CSH-090/091)", () => {
   it("cash row disables canEnterPrice and clears market-price cells", () => {
     const row = toHoldingRow(makeCashHolding());
     expect(row.canEnterPrice).toBe(false);
-    expect(row.currentPrice).toBe("");
+    expect(row.currentPrice).toEqual({ kind: "present", formatted: "" });
     expect(row.unrealizedPnl).toBe("");
     expect(row.performancePct).toBe("");
   });

@@ -57,8 +57,8 @@ export interface HoldingRowViewModel {
   realizedPnlRaw: number;
   /** Always true — active holding rows can trigger the price entry modal (MKT-010). */
   canEnterPrice: boolean;
-  /** Formatted current market price (2 decimal places) or "—" when no price recorded (MKT-030). */
-  currentPrice: string;
+  /** Current price state — formatted price or typed diagnostic (MKT-030, MKT-032). */
+  currentPrice: CurrentPriceState;
   /** ISO date of the price observation, or null when no price recorded (MKT-030). */
   currentPriceDate: string | null;
   /** Formatted unrealized P&L (2 decimal places) or "—" when not computable (MKT-032/034). */
@@ -77,6 +77,24 @@ export interface HoldingRowViewModel {
 
 /** i18n key + optional interpolation params for the price staleness label (MKT-140). */
 export type StalenessLabel = { key: string; params?: { days: number } };
+
+/**
+ * MKT-032 — Discriminated state for the Current Price cell. When `current_price`
+ * is `None`, the cell renders a typed diagnostic so the user can see _why_ a
+ * price is unavailable (instead of an unannotated "—").
+ *
+ * - `present`: a recorded price; `formatted` holds the displayable string.
+ * - `missing_ticker`: `asset_reference` is empty — adding a ticker would unlock fetch.
+ * - `no_price_available`: reference is non-empty but no price recorded (provider
+ *   returned N/D, or no fetch has run yet — intentionally merged per spec).
+ *
+ * Cash-row variant uses `{ kind: "present", formatted: "" }`; the HoldingRow
+ * cash branch never reads this field (renders empty cells).
+ */
+export type CurrentPriceState =
+  | { kind: "present"; formatted: string }
+  | { kind: "missing_ticker" }
+  | { kind: "no_price_available" };
 
 export interface ClosedHoldingRowViewModel {
   assetId: string;
@@ -134,6 +152,20 @@ export function formatStaleness(
 }
 
 /**
+ * MKT-032 — Derives the Current Price cell state from a holding's data.
+ * Pure function: no i18n, no formatting policy beyond `microToFormatted`.
+ */
+export function derivePriceState(detail: HoldingDetail): CurrentPriceState {
+  if (detail.current_price !== null) {
+    return { kind: "present", formatted: microToFormatted(detail.current_price, 2) };
+  }
+  if (detail.asset_reference.trim() === "") {
+    return { kind: "missing_ticker" };
+  }
+  return { kind: "no_price_available" };
+}
+
+/**
  * MKT-141 / MKT-142 — Maps an AssetPriceSource to its i18n label key, or null when source is null.
  */
 export function formatSource(source: AssetPriceSource | null): string | null {
@@ -164,7 +196,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       realizedPnl: "",
       realizedPnlRaw: 0,
       canEnterPrice: false,
-      currentPrice: "",
+      currentPrice: { kind: "present", formatted: "" },
       currentPriceDate: null,
       unrealizedPnl: "",
       unrealizedPnlRaw: null,
@@ -186,7 +218,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     realizedPnl: microToFormatted(detail.realized_pnl, 2),
     realizedPnlRaw: detail.realized_pnl,
     canEnterPrice: true,
-    currentPrice: detail.current_price !== null ? microToFormatted(detail.current_price, 2) : DASH,
+    currentPrice: derivePriceState(detail),
     currentPriceDate: detail.current_price_date,
     unrealizedPnl:
       detail.unrealized_pnl !== null ? microToFormatted(detail.unrealized_pnl, 2) : DASH,
