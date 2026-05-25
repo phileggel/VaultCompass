@@ -90,7 +90,7 @@ The default value is `Cash`. `Derivatives` covers leveraged or contingent instru
 
 **AST-005 (was R5) — Asset update (backend)**: All asset fields are editable after creation. The validation rules (AST-001) and reference normalization (AST-004) apply to modification as well as creation.
 
-**AST-006 (was R6) — Asset archival (backend)**: Archiving an asset sets `is_archived = true`. The asset disappears from active lists but all associated data is preserved (operations, prices, holdings). An archived asset can no longer receive new prices or be modified.
+**AST-006 (was R6) — Asset archival (backend)**: Archiving an asset sets `is_archived = true`. The asset disappears from active lists but all associated data is preserved (operations, prices, holdings). An archived asset can no longer receive new prices or be modified. The price-mutation commands enforce this: `record_asset_price`, `update_asset_price`, and `delete_asset_price` reject with the `Archived` error when the target asset is archived. Read paths (`get_asset_prices`, the price-display chain MKT-031) remain available — archive blocks mutations, not visibility of historical data.
 
 **AST-018 (was R18) — Asset unarchival (backend)**: Unarchiving an asset sets `is_archived = false`. The asset becomes active again, reappears in active lists, and can again be modified and receive new prices.
 

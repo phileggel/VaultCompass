@@ -347,16 +347,16 @@ impl AssetService {
     }
 
     /// Records (or overwrites) a market price for an asset on a given date (MKT-025).
-    /// Validates asset exists (MKT-043), price > 0 (MKT-021), date not in future (MKT-022).
-    /// Publishes AssetPriceUpdated on success (MKT-026).
+    /// Validates asset exists (MKT-043), is not archived (AST-006), price > 0 (MKT-021),
+    /// date not in future (MKT-022). Publishes AssetPriceUpdated on success (MKT-026).
     pub async fn record_asset_price(
         &self,
         asset_id: &str,
         date: &str,
         price_f64: f64,
     ) -> StdResult<(), AssetPriceError> {
-        // MKT-043 — reject unknown asset (cross-aggregate check)
-        ensure_asset_exists_for_price(&*self.asset_repo, asset_id).await?;
+        // MKT-043 + AST-006 — reject unknown or archived asset
+        ensure_asset_writable_for_price(&*self.asset_repo, asset_id).await?;
         // MKT-024 — convert f64 decimal to i64 micros at the IPC boundary
         if !price_f64.is_finite() {
             return Err(AssetPriceDomainError::NonFinite.into());
@@ -428,6 +428,8 @@ impl AssetService {
             price_micros,
             AssetPriceSource::Manual,
         )?;
+        // AST-006 — reject mutation on archived asset
+        ensure_asset_writable_for_price(&*self.asset_repo, asset_id).await?;
         // MKT-083 — reject if original record absent
         ensure_price_exists_for(&*self.price_repo, asset_id, original_date).await?;
         if original_date == new_date {
@@ -460,6 +462,8 @@ impl AssetService {
         asset_id: &str,
         date: &str,
     ) -> StdResult<(), AssetPriceError> {
+        // AST-006 — reject mutation on archived asset
+        ensure_asset_writable_for_price(&*self.asset_repo, asset_id).await?;
         ensure_price_exists_for(&*self.price_repo, asset_id, date).await?;
         self.price_repo.delete(asset_id, date).await.map_err(|e| {
             tracing::error!(target: BACKEND, asset_id = %asset_id, date = %date, err = ?e, "delete_asset_price: repository failure");
@@ -540,8 +544,8 @@ async fn load_asset_for_crud(
     }
 }
 
-/// Cross-aggregate asset-existence check used by the AssetPrice family
-/// (`record_asset_price`, `get_asset_prices`). Translates `Ok(None)` into
+/// Cross-aggregate asset-existence check used by read-only price reads
+/// (`get_asset_prices`). Translates `Ok(None)` into
 /// `AssetApplicationError::NotFound { id }` and any repository error into
 /// `AssetApplicationError::DatabaseError` after preserving the diagnostic chain
 /// via `tracing::error!`. Both propagate verbatim through
@@ -559,6 +563,35 @@ async fn ensure_asset_exists_for_price(
         .into()),
         Err(e) => {
             tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "ensure_asset_exists_for_price: repository failure");
+            Err(AssetApplicationError::DatabaseError.into())
+        }
+    }
+}
+
+/// Cross-aggregate writable-asset check used by mutating price commands
+/// (`record_asset_price`, `update_asset_price`, `delete_asset_price`). Adds
+/// the AST-006 archive guard on top of the existence check: rejects when the
+/// asset is archived with `AssetPriceApplicationError::Archived`. Read paths
+/// keep using `ensure_asset_exists_for_price` since AST-006 only blocks
+/// mutations, not reads.
+async fn ensure_asset_writable_for_price(
+    repo: &dyn AssetRepository,
+    asset_id: &str,
+) -> StdResult<(), AssetPriceError> {
+    match repo.get_by_id(asset_id).await {
+        Ok(Some(asset)) => {
+            if asset.is_archived {
+                Err(AssetPriceApplicationError::Archived.into())
+            } else {
+                Ok(())
+            }
+        }
+        Ok(None) => Err(AssetApplicationError::NotFound {
+            id: asset_id.to_string(),
+        }
+        .into()),
+        Err(e) => {
+            tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "ensure_asset_writable_for_price: repository failure");
             Err(AssetApplicationError::DatabaseError.into())
         }
     }
@@ -674,6 +707,16 @@ mod tests {
             price,
             AssetPriceSource::Manual,
         )
+    }
+
+    /// Mock asset_repo wired to satisfy `ensure_asset_writable_for_price` for
+    /// the price-mutation tests: returns a non-archived asset on `get_by_id`.
+    fn ar_with_writable_asset(id: &'static str) -> MockAssetRepository {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(move |_| Ok(Some(make_asset(id, false))));
+        ar
     }
 
     fn base_dto(name: &str) -> CreateAssetDTO {
@@ -1135,6 +1178,31 @@ mod tests {
         );
     }
 
+    // AST-006 — record_asset_price rejects archived asset
+    #[tokio::test]
+    async fn test_record_asset_price_rejects_archived_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("archived-id", true))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let err = svc
+            .record_asset_price("archived-id", "2026-01-01", 100.0)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AssetPriceError::Application(AssetPriceApplicationError::Archived)
+            ),
+            "got: {err:?}"
+        );
+    }
+
     // MKT-021 — record_asset_price rejects price <= 0
     #[tokio::test]
     async fn test_record_asset_price_rejects_non_positive_price() {
@@ -1285,6 +1353,22 @@ mod tests {
         );
     }
 
+    // AST-006 — archive blocks mutations only; reads stay available.
+    #[tokio::test]
+    async fn test_get_asset_prices_succeeds_for_archived_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("archived-id", true))));
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset()
+            .times(1)
+            .return_once(|_| Ok(vec![make_price("archived-id", "2026-01-01", 100_000_000)]));
+        let svc = make_svc(ar, MockAssetCategoryRepository::new(), pr);
+        let prices = svc.get_asset_prices("archived-id").await.unwrap();
+        assert_eq!(prices.len(), 1);
+    }
+
     // MKT-072 — get_asset_prices returns an empty list when the asset exists but has no prices
     #[tokio::test]
     async fn test_get_asset_prices_returns_empty_list_when_no_prices() {
@@ -1413,6 +1497,31 @@ mod tests {
         );
     }
 
+    // AST-006 — update_asset_price rejects archived asset
+    #[tokio::test]
+    async fn test_update_asset_price_rejects_archived_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("archived-id", true))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let err = svc
+            .update_asset_price("archived-id", "2026-01-01", "2026-01-01", 100.0)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AssetPriceError::Application(AssetPriceApplicationError::Archived)
+            ),
+            "got: {err:?}"
+        );
+    }
+
     // MKT-083 — returns NotFound when get_by_asset_and_date returns None
     #[tokio::test]
     async fn test_update_asset_price_returns_not_found_for_missing_record() {
@@ -1421,7 +1530,7 @@ mod tests {
             .times(1)
             .return_once(|_, _| Ok(None));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1451,7 +1560,7 @@ mod tests {
             .times(1)
             .return_once(|_| Ok(()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1477,7 +1586,7 @@ mod tests {
             .times(1)
             .return_once(|_, _, _| Ok(()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1503,7 +1612,7 @@ mod tests {
             .times(1)
             .return_once(|_, _, _| Ok(()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1523,7 +1632,7 @@ mod tests {
             .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
         pr.expect_upsert().times(1).return_once(|_| Ok(()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         )
@@ -1542,6 +1651,31 @@ mod tests {
     // delete_asset_price (MKT-090, MKT-091)
     // -------------------------------------------------------------------------
 
+    // AST-006 — delete_asset_price rejects archived asset
+    #[tokio::test]
+    async fn test_delete_asset_price_rejects_archived_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_asset("archived-id", true))));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let err = svc
+            .delete_asset_price("archived-id", "2026-01-01")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AssetPriceError::Application(AssetPriceApplicationError::Archived)
+            ),
+            "got: {err:?}"
+        );
+    }
+
     // MKT-090 — returns NotFound when get_by_asset_and_date returns None
     #[tokio::test]
     async fn delete_asset_price_returns_not_found_for_missing_record() {
@@ -1550,7 +1684,7 @@ mod tests {
             .times(1)
             .return_once(|_, _| Ok(None));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1580,7 +1714,7 @@ mod tests {
             .times(1)
             .return_once(|_, _| Ok(()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1600,7 +1734,7 @@ mod tests {
             .return_once(|_, _| Ok(Some(make_price("asset-id", "2026-01-01", 100_000_000))));
         pr.expect_delete().times(1).return_once(|_, _| Ok(()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         )
@@ -1704,7 +1838,7 @@ mod tests {
             .times(1)
             .return_once(|_, _, _| Err(db_err()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );
@@ -1732,7 +1866,7 @@ mod tests {
             .times(1)
             .return_once(|_, _| Err(db_err()));
         let svc = make_svc(
-            MockAssetRepository::new(),
+            ar_with_writable_asset("asset-id"),
             MockAssetCategoryRepository::new(),
             pr,
         );

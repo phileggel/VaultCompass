@@ -2,17 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (asset) — Asset-price commands do not surface `Archived` per AST-006
-
-AST-006 states "An archived asset can no longer receive new prices." But `record_asset_price`, `update_asset_price`, and `delete_asset_price` in `docs/contracts/asset-contract.md` list only `NotFound` / `PriceNotFound` / `DatabaseError` — no `Archived` variant. The BE likely does not enforce the archived guard for these commands today (predates the MKT auto-fetch amendment).
-
-**Two paths**:
-
-- **If AST-006 intent is enforced**: add archive guards in `AssetService::record_asset_price` / `update_asset_price` / `delete_asset_price`, surface `Archived` variant in the contract for all three, add covering tests. Code change.
-- **If AST-006 intent is "price ops are independent of archive state"** (matching current behaviour): amend AST-006 in `docs/spec/asset.md` to carve out price recording, no contract change.
-
-Surfaced 2026-05-17 by `contract-reviewer` after the MKT auto-fetch amendment. Out of scope for that amendment but worth resolving before the next asset-domain feature.
-
 ## (mkt) — Surface fetch-task completion to FE for end-of-task user feedback
 
 `fetch_all_asset_prices` and `fetch_account_asset_prices` return synchronously on dispatch; per-asset results stream via `AssetPriceUpdated` events. The user has no signal for "task finished" — whether successfully, with partial failures, or with full provider outage. Per-asset failures are currently logged BE-side per MKT-114 with no FE surface; the task-level summary is the missing layer.
