@@ -26,12 +26,12 @@ import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 async function navigateToAccountDetails(accountName: string): Promise<void> {
   // Navigate to the Accounts section via the sidebar nav button.
-  const accountsNav = await $('button[aria-label="Accounts"]');
+  const accountsNav = await $("#nav-accounts");
   await accountsNav.waitForExist({ timeout: 15000 });
   await accountsNav.click();
 
   // Confirm Accounts page is active — wait for the FAB.
-  const fab = await $('button[aria-label="Add account"]');
+  const fab = await $("#fab-add-account");
   await fab.waitForExist({ timeout: 10000 });
 
   // Click the named account row — aria-label is "Open account {name}"

@@ -98,6 +98,7 @@ export function AccountDetailsView() {
                 </Button>
                 {/* CSH-019 — Deposit always visible */}
                 <Button
+                  id="action-deposit"
                   variant="secondary"
                   size="sm"
                   icon={<ArrowDownToLine size={14} />}
@@ -108,6 +109,7 @@ export function AccountDetailsView() {
                 {/* CSH-019 — Withdraw only when there is cash to withdraw */}
                 {view.hasVisibleCashRow && (
                   <Button
+                    id="action-withdraw"
                     variant="secondary"
                     size="sm"
                     icon={<ArrowUpFromLine size={14} />}

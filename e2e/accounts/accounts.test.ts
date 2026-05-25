@@ -20,10 +20,10 @@ import { seedAccount } from "../helpers/seed";
 // ---------------------------------------------------------------------------
 
 async function navigateToAccounts(): Promise<void> {
-  const nav = await $('button[aria-label="Accounts"]');
+  const nav = await $("#nav-accounts");
   await nav.waitForExist({ timeout: 15000 });
   await nav.click();
-  const fab = await $('button[aria-label="Add account"]');
+  const fab = await $("#fab-add-account");
   await fab.waitForExist({ timeout: 10000 });
 }
 
@@ -31,10 +31,10 @@ async function navigateToAccounts(): Promise<void> {
 // component to remount and re-fetch from the store. Use this after IPC
 // seeding when the accounts page is already mounted.
 async function forceRefreshToAccounts(): Promise<void> {
-  const assetsNav = await $('button[aria-label="Assets"]');
+  const assetsNav = await $("#nav-assets");
   await assetsNav.waitForExist({ timeout: 15000 });
   await assetsNav.click();
-  await $('button[aria-label="Add asset"]').waitForExist({ timeout: 10000 });
+  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
   await navigateToAccounts();
 }
 
@@ -61,7 +61,7 @@ describe("accounts", () => {
   it("ACC-001: creating an account shows it in the account list", async () => {
     const ACCOUNT_NAME = "E2E ACC-001 Account";
 
-    const fab = await $('button[aria-label="Add account"]');
+    const fab = await $("#fab-add-account");
     await fab.click();
 
     const form = await $("form#add-account-form");
@@ -95,17 +95,13 @@ describe("accounts", () => {
     const ORIGINAL_NAME = "E2E ACC-002 Original";
     const UPDATED_NAME = "E2E ACC-002 Updated";
 
-    await seedAccount(ORIGINAL_NAME);
+    const editAccountId = await seedAccount(ORIGINAL_NAME);
 
     // Navigate away and back to force the accounts list to remount and pick
     // up the IPC-seeded account from the store.
     await forceRefreshToAccounts();
 
-    // Scope to the row for this account (tr aria-label contains the account name)
-    // to avoid matching another row's Edit button.
-    const editBtn = await $(
-      `//tr[contains(@aria-label, "${ORIGINAL_NAME}")]//button[@aria-label="Edit"]`,
-    );
+    const editBtn = await $(`#action-edit-account-${editAccountId}`);
     await editBtn.waitForExist({ timeout: 8000 });
     await editBtn.click();
 
@@ -134,7 +130,7 @@ describe("accounts", () => {
   it("ACC-003: deleting an account removes it from the list", async () => {
     const ACCOUNT_NAME = "E2E ACC-003 Delete";
 
-    await seedAccount(ACCOUNT_NAME);
+    const deleteAccountId = await seedAccount(ACCOUNT_NAME);
 
     // Force remount so the seeded account appears in the list.
     await forceRefreshToAccounts();
@@ -142,11 +138,7 @@ describe("accounts", () => {
     const accountRow = await findAccountRow(ACCOUNT_NAME);
     await accountRow.waitForExist({ timeout: 8000 });
 
-    // Scope to the row for this account (tr aria-label contains the account name)
-    // to avoid matching another row's Delete button.
-    const deleteBtn = await $(
-      `//tr[contains(@aria-label, "${ACCOUNT_NAME}")]//button[@aria-label="Delete"]`,
-    );
+    const deleteBtn = await $(`#action-delete-account-${deleteAccountId}`);
     await deleteBtn.waitForExist({ timeout: 5000 });
     await deleteBtn.click();
 
@@ -172,7 +164,7 @@ describe("accounts", () => {
     await seedAccount(DUPLICATE_NAME);
     await forceRefreshToAccounts();
 
-    const fab = await $('button[aria-label="Add account"]');
+    const fab = await $("#fab-add-account");
     await fab.click();
 
     const form = await $("form#add-account-form");

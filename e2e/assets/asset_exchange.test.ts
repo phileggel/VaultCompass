@@ -19,14 +19,7 @@
  *   - form#add-asset-form / form#edit-asset-form         (E1)
  *   - #add-asset-exchange-picker / #edit-asset-exchange-picker (E2, via idPrefix)
  *   - button[type="submit"][form="add-asset-form"]        (E3)
- *   - button[aria-label="Edit"] scoped to asset row       (E4 gap — see note below)
- *
- * Note on Edit button selector: AssetTable renders the Edit IconButton with
- * aria-label={t("asset.action_edit")} but no stable `id`. The en-US locale is
- * forced by wdio.conf.ts beforeSession (LANG=en_US.UTF-8), so the translated
- * value is "Edit" and the XPath scope prevents cross-row collision. This is
- * noted as an E4 gap — a stable `id` per row (e.g. `asset-edit-{id}`) would
- * be preferred but is not yet implemented.
+ *   - button[id^="action-edit-asset-"] scoped to asset row (locale-invariant; per-row id)
  */
 
 import assert from "node:assert";
@@ -61,7 +54,7 @@ describe("asset_exchange", () => {
     const ASSET_NAME = "E2E Exchange Add XPAR";
 
     // Open the Add Asset flow via the FAB.
-    const fab = await $('button[aria-label="Add asset"]');
+    const fab = await $("#fab-add-asset");
     await fab.click();
 
     // WebLookupModal opens first — skip to the manual form.
@@ -96,15 +89,15 @@ describe("asset_exchange", () => {
 
     // Navigate away and back to defeat any stale loading state from the
     // AssetUpdated event re-fetch (same pattern as assets.test.ts).
-    const accountsNav = await $('button[aria-label="Accounts"]');
+    const accountsNav = await $("#nav-accounts");
     await accountsNav.waitForExist({ timeout: 10000 });
     await accountsNav.click();
-    await $('button[aria-label="Add account"]').waitForExist({ timeout: 10000 });
+    await $("#fab-add-account").waitForExist({ timeout: 10000 });
     await navigateToAssets();
 
     // Open the Edit form for the newly created asset to verify exchange persisted.
     const editBtn = await $(
-      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[@aria-label="Edit"]`,
+      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[starts-with(@id, "action-edit-asset-")]`,
     );
     await editBtn.waitForExist({ timeout: 10000 });
     await editBtn.click();
@@ -162,7 +155,7 @@ describe("asset_exchange", () => {
 
     // Open Edit for the seeded asset.
     const editBtn = await $(
-      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[@aria-label="Edit"]`,
+      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[starts-with(@id, "action-edit-asset-")]`,
     );
     await editBtn.waitForExist({ timeout: 10000 });
     await editBtn.click();
@@ -192,7 +185,7 @@ describe("asset_exchange", () => {
 
     // Reopen Edit and verify the new exchange is persisted.
     const editBtnAfter = await $(
-      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[@aria-label="Edit"]`,
+      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[starts-with(@id, "action-edit-asset-")]`,
     );
     await editBtnAfter.waitForExist({ timeout: 10000 });
     await editBtnAfter.click();
@@ -248,7 +241,7 @@ describe("asset_exchange", () => {
 
     // Open Edit.
     const editBtn = await $(
-      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[@aria-label="Edit"]`,
+      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[starts-with(@id, "action-edit-asset-")]`,
     );
     await editBtn.waitForExist({ timeout: 10000 });
     await editBtn.click();
@@ -278,7 +271,7 @@ describe("asset_exchange", () => {
 
     // Reopen Edit and verify exchange is cleared (picker value = "").
     const editBtnAfter = await $(
-      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[@aria-label="Edit"]`,
+      `//tr[.//td[normalize-space(text())="${ASSET_NAME}"]]//button[starts-with(@id, "action-edit-asset-")]`,
     );
     await editBtnAfter.waitForExist({ timeout: 10000 });
     await editBtnAfter.click();

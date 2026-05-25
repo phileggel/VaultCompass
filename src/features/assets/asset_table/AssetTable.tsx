@@ -231,6 +231,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                     <IconButton
                       icon={<Edit2 size={16} />}
                       size="sm"
+                      id={`action-edit-asset-${asset.id}`}
                       disabled={asset.is_archived}
                       aria-label={t("asset.action_edit")}
                       onClick={(e) => {
@@ -243,6 +244,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                       <IconButton
                         icon={<ArchiveRestore size={16} />}
                         size="sm"
+                        id={`action-unarchive-asset-${asset.id}`}
                         aria-label={t("asset.action_unarchive")}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -257,6 +259,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                       <IconButton
                         icon={<Archive size={16} />}
                         size="sm"
+                        id={`action-archive-asset-${asset.id}`}
                         aria-label={t("asset.action_archive")}
                         onClick={(e) => {
                           e.stopPropagation();

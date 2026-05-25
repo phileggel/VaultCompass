@@ -121,6 +121,7 @@ export function HoldingRow({
               icon={<ArrowDownToLine size={16} />}
               variant="success"
               size="sm"
+              id={`action-record-deposit-${row.assetId}`}
               aria-label={t("cash.action_record_deposit")}
               onClick={onDeposit}
             />
@@ -128,6 +129,7 @@ export function HoldingRow({
               icon={<ArrowUpFromLine size={16} />}
               variant="error"
               size="sm"
+              id={`action-record-withdrawal-${row.assetId}`}
               aria-label={t("cash.action_record_withdrawal")}
               onClick={onWithdraw}
               disabled={row.quantityMicro <= 0}
@@ -217,6 +219,7 @@ export function HoldingRow({
             icon={<Plus size={16} />}
             variant="success"
             size="sm"
+            id={`action-buy-${row.assetId}`}
             aria-label={t("transaction.action_buy")}
             onClick={handleBuy}
           />
@@ -225,6 +228,7 @@ export function HoldingRow({
             icon={<Minus size={16} />}
             variant="error"
             size="sm"
+            id={`action-sell-${row.assetId}`}
             aria-label={t("transaction.action_sell")}
             onClick={handleSell}
             disabled={isArchived}
@@ -243,6 +247,7 @@ export function HoldingRow({
             <IconButton
               icon={<History size={16} />}
               size="sm"
+              id={`action-price-history-${row.assetId}`}
               aria-label={t("account_details.action_price_history")}
               onClick={handlePriceHistory}
             />

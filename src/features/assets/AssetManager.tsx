@@ -108,7 +108,7 @@ export function AssetManager() {
         searchExtra={<ArchivedToggle checked={showArchived} onChange={setShowArchived} />}
         table={<AssetTable searchTerm={query} showArchived={showArchived} />}
       />
-      <FAB onClick={handleOpenAddModal} label={t("asset.fab_label")} />
+      <FAB id="fab-add-asset" onClick={handleOpenAddModal} label={t("asset.fab_label")} />
       {isAddModalOpen && (
         <WebLookupModal
           isOpen={true}

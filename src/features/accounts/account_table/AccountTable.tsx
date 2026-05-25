@@ -225,12 +225,14 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                     <IconButton
                       icon={<Edit2 size={16} />}
                       variant="ghost"
+                      id={`action-edit-account-${account.id}`}
                       aria-label={t("action.edit")}
                       onClick={(e) => handleEditClick(e, account)}
                     />
                     <IconButton
                       icon={<Trash2 size={16} />}
                       variant="danger"
+                      id={`action-delete-account-${account.id}`}
                       aria-label={t("action.delete")}
                       disabled={fetchingSummaryFor === account.id}
                       onClick={(e) => handleDeleteClick(e, account.id, account.name)}
