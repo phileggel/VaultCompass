@@ -76,6 +76,21 @@ export function HoldingRow({
     onEnterPrice(row.assetId);
   }, [onEnterPrice, row.assetId]);
 
+  const handleEditMissingTicker = useCallback(() => {
+    // Per-route search schemas don't declare these shell-level modal params;
+    // the cast lets the URL-driven AssetEditModalMount pick them up without
+    // forcing every route's validateSearch to include them.
+    navigate({
+      // biome-ignore lint/suspicious/noExplicitAny: shell-level URL modal params bypass per-route typing
+      search: ((prev: Record<string, unknown>) => ({
+        ...prev,
+        modal: "edit-asset",
+        editAssetId: row.assetId,
+        focusField: "reference",
+      })) as any,
+    });
+  }, [navigate, row.assetId]);
+
   const handlePriceHistory = useCallback(() => {
     onPriceHistory(row.assetId);
   }, [onPriceHistory, row.assetId]);
@@ -157,9 +172,14 @@ export function HoldingRow({
             </div>
           </div>
         ) : row.currentPrice.kind === "missing_ticker" ? (
-          <span className="text-m3-on-surface-variant text-sm">
+          <button
+            type="button"
+            id={`action-edit-missing-ticker-${row.assetId}`}
+            onClick={handleEditMissingTicker}
+            className="text-m3-primary text-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
+          >
             {t("mkt.price_state.missing_ticker")}
-          </span>
+          </button>
         ) : (
           <span className="text-m3-on-surface-variant text-sm">
             {t("mkt.price_state.no_price_available")}

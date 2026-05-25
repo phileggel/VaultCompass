@@ -11,14 +11,26 @@ interface EditAssetModalProps {
   isOpen: boolean;
   onClose: () => void;
   asset: Asset | null;
+  /** When set, the matching form input is focused after the modal opens. */
+  focusField?: "reference" | "isin";
 }
 
-export function EditAssetModal({ isOpen, onClose, asset }: EditAssetModalProps) {
+export function EditAssetModal({ isOpen, onClose, asset, focusField }: EditAssetModalProps) {
   const { t } = useTranslation();
 
   useEffect(() => {
     logger.info("[EditAssetModal] mounted");
   }, []);
+
+  // The 0ms timeout defers .focus() past the modal's mount + zoom-in
+  // animation so the input is reachable in the DOM before focus runs.
+  useEffect(() => {
+    if (!isOpen || !focusField) return;
+    const handle = window.setTimeout(() => {
+      document.getElementById(`edit-asset-${focusField}`)?.focus();
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [isOpen, focusField]);
   const {
     formData,
     error,
