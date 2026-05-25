@@ -399,7 +399,11 @@ const ISIN_COUNTRY_TO_PRIMARY_VENUES: &[(&str, &[&str])] = &[
     ("IT", &["IM"]),
     ("ES", &["SQ"]),
     ("PT", &["PL"]),
-    ("IE", &["ID"]),
+    // Dublin (ID) wins for Irish equities (Ryanair, CRH, Kerry Group). UCITS
+    // ETFs are also domiciled in Ireland for tax/regulatory reasons but trade
+    // primarily on LSE / Amsterdam / Xetra — falling through in that order
+    // surfaces a coherent default when Dublin has no entry.
+    ("IE", &["ID", "LO", "NA", "GY"]),
     ("CH", &["SE"]),
     ("AT", &["AV"]),
     ("DK", &["DC"]),
@@ -1192,6 +1196,66 @@ mod tests {
         let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_ISIN);
         // FR ISIN promotes FP to position 0; UN and GY remain selectable.
         assert_eq!(picked[0].exchange_code.as_deref(), Some("FP"));
+    }
+
+    #[test]
+    fn isin_path_ie_ucits_etf_falls_through_to_lo_na_gy_in_order() {
+        // IE00B53L3W79 (iShares Core S&P 500 UCITS ETF): Irish-domiciled but
+        // no Dublin listing — trades primarily on LSE / Amsterdam / Xetra.
+        let group = vec![
+            hit(
+                "ISHARES CORE SP500 UCITS",
+                Some("SC1"),
+                Some("GY"),
+                None,
+                None,
+                None,
+            ),
+            hit(
+                "ISHARES CORE SP500 UCITS",
+                Some("SC1"),
+                Some("NA"),
+                None,
+                None,
+                None,
+            ),
+            hit(
+                "ISHARES CORE SP500 UCITS",
+                Some("SC1"),
+                Some("LO"),
+                None,
+                None,
+                None,
+            ),
+        ];
+        let ctx = QueryContext {
+            isin: Some("IE00B53L3W79".to_string()),
+        };
+        let priority = priority_for(&ctx);
+        let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_ISIN);
+        // ID is prepended but has no hit; LO/NA/GY follow in that prepended order.
+        assert_eq!(picked.len(), 3);
+        assert_eq!(picked[0].exchange_code.as_deref(), Some("LO"));
+        assert_eq!(picked[1].exchange_code.as_deref(), Some("NA"));
+        assert_eq!(picked[2].exchange_code.as_deref(), Some("GY"));
+    }
+
+    #[test]
+    fn isin_path_ie_equity_still_picks_dublin_first() {
+        // IE-prefixed equity (e.g. Kerry Group, CRH) with a real Dublin
+        // listing — Dublin must still win even after IE was extended to
+        // also cover UCITS-ETF fallthrough venues.
+        let group = vec![
+            hit("KERRY GROUP PLC", Some("SC1"), Some("LO"), None, None, None),
+            hit("KERRY GROUP PLC", Some("SC1"), Some("ID"), None, None, None),
+            hit("KERRY GROUP PLC", Some("SC1"), Some("GY"), None, None, None),
+        ];
+        let ctx = QueryContext {
+            isin: Some("IE0004906560".to_string()),
+        };
+        let priority = priority_for(&ctx);
+        let picked = pick_primary_entries(&group, &priority, MAX_ENTRIES_PER_SHARE_CLASS_ISIN);
+        assert_eq!(picked[0].exchange_code.as_deref(), Some("ID"));
     }
 
     // ------------------------------------------------------------------
