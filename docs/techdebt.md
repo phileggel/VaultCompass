@@ -23,10 +23,68 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 ## 2026-05-25 — Per-BC error split violates error-model gold (anti-pattern #1) — audit + collapse
 
 - Found by: triage discussion during /whats-next (account-contract reconciliation)
-- Where: `src-tauri/src/context/account/` (split into `AccountDomainError`, `AccountApplicationError`, `AccountOperationError`, `OpeningBalanceDomainError`, `TransactionDomainError`) + service-layer composites `HoldingTransactionError` / `AccountCrudError` in `account/application/error.rs` + use-case composite `OpenHoldingError` in `use_cases/holding_transaction/error.rs` (4 wrappers because the BC is split 4 ways). Other BCs (`asset/`, future BCs) not yet audited.
-- Context: branch `main` @ `e0097f1`
+- Where: see per-BC inventory below
+- Context: branch `docs/bc-error-gold-audit` @ HEAD
 - Severity: 🟡
-- Observation: `docs/error-model.md` § Anti-patterns explicitly lists "Per-BC `*ApplicationError` / `*DomainError` split — collapse into a single `{BC}Error`" as anti-pattern #1. Gold mandates ONE flat `{BC}Error` per bounded context holding every variant (aggregate-invariant + service-layer + infra translation), with composites living ONLY in `use_cases/{name}/error.rs` wrapping one BC enum per touched BC plus a `{UseCase}Task` sub-enum. The `account/` BC violates this in three ways: (1) split into 5 leaf enums; (2) service-layer composites (`HoldingTransactionError`, `AccountCrudError`) exist inside the BC purely to glue the splits back together — under gold they wouldn't exist; (3) `OpenHoldingError` wraps 4 leaves where gold would have 2. **Wire shape is unaffected** — every leaf carries `#[serde(tag="code")]` and composites are `#[serde(untagged)]`, so the FE today receives flat `{ code: "...", ... }` correctly; the split is purely internal. Collapse is mechanical (rename variants, fold enums, update `?` call sites, remove glue composites) but spans 6+ files in `account/` alone and may break ~315 test functions that reference the split variants. **Pre-work needed before the collapse PR**: audit each BC (`account/`, `asset/`, …) for the gold anti-pattern and produce a per-BC inventory of split enums + glue composites + variant name collisions, so the collapse can be sequenced (one BC per PR) with each PR sized and self-contained. Audit itself is read-only (~1h); the collapse PRs are 3–6h each depending on test fanout.
+- Observation: `docs/error-model.md` § Anti-patterns explicitly lists "Per-BC `*ApplicationError` / `*DomainError` split — collapse into a single `{BC}Error`" as anti-pattern #1. Gold mandates ONE flat `{BC}Error` per bounded context holding every variant (aggregate-invariant + service-layer + infra translation), with composites living ONLY in `use_cases/{name}/error.rs` wrapping one BC enum per touched BC plus a `{UseCase}Task` sub-enum. **Wire shape is unaffected today** — every leaf carries `#[serde(tag="code")]` and composites are `#[serde(untagged)]`, so the FE receives flat `{ code: "...", ... }` correctly; the split is purely internal Rust organization.
+
+### Per-BC inventory (audit 2026-05-25)
+
+**`context/account/` — 🟡 not gold (6 leaf enums + 2 in-BC composites)**
+
+| Location | Type | Variants | Under gold |
+|---|---|---|---|
+| `domain/error.rs` | `AccountDomainError` | `NameEmpty`, `InvalidCurrency{currency}` | merged into `AccountError` |
+| `domain/error.rs` | `HoldingDomainError` | `NegativeQuantity`, `NegativeAveragePrice` | merged into `AccountError` |
+| `domain/error.rs` | `OpeningBalanceDomainError` | `InvalidTotalCost` | merged into `AccountError` |
+| `domain/error.rs` | `AccountOperationError` | `ClosedPosition`, `Oversell{available,requested}`, `CascadingOversell`, `TransactionNotFound`, `InsufficientCash{current_balance_micros,currency}` | merged into `AccountError` |
+| `domain/transaction_error.rs` | `TransactionDomainError` | `InvalidDate`, `DateInFuture`, `DateTooOld`, `QuantityNotPositive`, `AmountNotPositive`, `UnitPriceNegative`, `FeesNegative`, `ExchangeRateNotPositive`, `TotalAmountNotPositive` | merged into `AccountError` |
+| `application/error.rs` | `AccountApplicationError` | `AccountNotFound{account_id}`, `NameAlreadyExists`, `DatabaseError` | merged into `AccountError` |
+| `application/error.rs` | `HoldingTransactionError` (in-BC composite, 3 wrappers) | — | **deleted** (gold has no in-BC composites) |
+| `application/error.rs` | `AccountCrudError` (in-BC composite, 2 wrappers) | — | **deleted** (gold has no in-BC composites) |
+
+- Total wire-reachable variants: 22 → single `AccountError` with 22 variants.
+- Variant name collisions within BC on collapse: **none**.
+
+**`context/asset/` — 🟡 not gold (7 leaf enums + 3 in-BC composites; partial gold via `error.rs::AssetError` on fetch surface only)**
+
+| Location | Type | Variants | Under gold |
+|---|---|---|---|
+| `error.rs` | `AssetError` (fetch-surface only) | `DatabaseError` | extended to hold all asset variants |
+| `application/error.rs` | `AssetApplicationError` | `NotFound{id}`, `DatabaseError` | merged into `AssetError` (variant renamed `AssetNotFound{id}` — see collisions) |
+| `application/error.rs` | `AssetPriceApplicationError` | `PriceNotFound{asset_id,date}`, `DatabaseError` | merged into `AssetError` |
+| `application/error.rs` | `CategoryApplicationError` | `NotFound{id}`, `DuplicateName`, `DatabaseError` | merged into `AssetError` (variant renamed `CategoryNotFound{id}` — see collisions) |
+| `domain/error.rs` | `AssetDomainError` | `NameEmpty`, `ReferenceEmpty`, `InvalidRiskLevel{received}`, `InvalidCurrency{currency}`, `Archived`, `CashAssetNotEditable`, `InvalidExchange{exchange_code}`, `InvalidIsinFormat` | merged into `AssetError` |
+| `domain/error.rs` | `AssetPriceDomainError` | `NotPositive`, `NonFinite`, `DateInFuture`, `InvalidDateFormat{date}` | merged into `AssetError` (`DateInFuture` collides only across BC → no issue) |
+| `domain/error.rs` | `CategoryDomainError` | `LabelEmpty`, `SystemReadonly`, `SystemProtected` | merged into `AssetError` |
+| `application/error.rs` | `AssetPriceError` (in-BC composite, 3 wrappers) | — | **deleted** |
+| `application/error.rs` | `AssetCrudError` (in-BC composite, 3 wrappers) | — | **deleted** |
+| `application/error.rs` | `CategoryCrudError` (in-BC composite, 2 wrappers) | — | **deleted** |
+
+- Total wire-reachable variants: ~23 → single `AssetError`.
+- Variant name collisions within BC on collapse: `NotFound{id}` appears in `AssetApplicationError` AND `CategoryApplicationError` — both struct variants with identical shape. **Wire-visible rename required**: `AssetNotFound{id}` + `CategoryNotFound{id}`. This breaks the FE narrowing in the gateway/presenter pipeline → contract update + i18n key update + FE switch-arm updates accompany the BC-2 PR. Other duplicates (`DatabaseError`, `DateInFuture` across BCs) are not collisions because they live in distinct enums on the wire.
+
+**`use_cases/*/error.rs` composites**
+
+| File | Composite | Wrappers (gold = BC enums + 1 Task) | Task sub-enum | Naming gold? | Notes |
+|---|---|---|---|---|---|
+| `holding_transaction/error.rs` | `OpenHoldingError` | 4 (Account.Application, Account.Domain, Account.OpeningBalance, Account.TxValidation) | `OpenHoldingApplicationError` (3 variants: AssetNotFound, ArchivedAsset, OpeningBalanceOnCashAsset) | ❌ task should be `OpenHoldingTask` | Collapses to 2 wrappers (AccountError + OpenHoldingTask) once account/ BC collapses. |
+| `asset_price_fetch/error.rs` | `FetchAllAssetPricesError` + `FetchAccountAssetPricesError` | 3 (Asset, Account, Failure) | `FetchPriceTask` (3 variants) | ✅ gold-conformant | Reference shape. |
+| `delete_asset/error.rs` | `DeleteAssetError` | 3 (Asset.Crud, Account, Application) | `DeleteAssetApplicationError` (1 variant: ExistingTransactions) | ❌ task should be `DeleteAssetTask` | Collapses to 2 wrappers once asset/ BC collapses. |
+| `archive_asset/error.rs` | `ArchiveAssetError` | 3 (Asset.Crud, Account, Application) | `ArchiveAssetApplicationError` (1 variant: ActiveHoldings) | ❌ task should be `ArchiveAssetTask` | Same shape as DeleteAssetError. |
+| `asset_web_lookup/error.rs` | _(no composite — `WebLookupApplicationError` returned directly)_ | n/a | `WebLookupApplicationError` (3 variants) | ⚠ rename to `WebLookupError` (no BC wrappers needed) | Use-case-only failure surface; trivial rename. |
+
+Use cases without their own `error.rs` (return a BC enum directly, gold-conformant by transitivity once the BC collapses): `account_deletion`, `account_details`, `account_summary`, `update_checker`.
+
+### Sequenced collapse plan
+
+| PR | Scope | Wire change | Files touched | Estimate |
+|---|---|---|---|---|
+| **BC-1** | Collapse `account/` BC: fold 6 leafs + 2 in-BC composites into single `AccountError` | none (variants keep `code` discriminant) | `account/domain/`, `account/application/`, `account/service.rs`, callsites in `use_cases/holding_transaction/` + tests (~315 test fns may reference variants) | 3–6h |
+| **BC-2** | Collapse `asset/` BC: fold 7 leafs + 3 in-BC composites into single `AssetError`; rename `NotFound{id}` → `AssetNotFound{id}` / `CategoryNotFound{id}` | **yes** — variant rename | `asset/domain/`, `asset/application/`, `asset/service.rs`, asset/account contracts, FE switch arms in gateway/presenter, i18n keys (en + fr), use_cases that wrap AssetCrudError | 4–6h |
+| **UC-1** | Rename use-case task sub-enums to gold convention: `OpenHoldingApplicationError` → `OpenHoldingTask`, `DeleteAssetApplicationError` → `DeleteAssetTask`, `ArchiveAssetApplicationError` → `ArchiveAssetTask`, `WebLookupApplicationError` → `WebLookupError` | none | each file under `use_cases/{name}/error.rs` + callsites | ≤1h |
+
+**Ordering**: BC-1 first (internal-only, low blast radius). UC-1 can ship any time (mechanical rename). BC-2 last (the wire-visible variant rename forces contract + FE coordination — easier to batch once the project is comfortable with the BC-1 pattern).
 
 ---
 
@@ -126,14 +184,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
 - Severity: 🔵
 - Observation: F25 mandates stable `id` attributes on dialog containers and prefers `id` over `data-testid` for E2E selectors. Dialog's `role="dialog"` surface has no `id`, and the close button is selectable only via `data-testid="modal-close-btn"`. Migration would touch every Dialog consumer (8+ feature modals) plus the `dismissLeftoverModal` E2E helper which queries the testid — multi-file fanout outside any single fix's scope.
-
-## 2026-05-24 — contract — account: event-naming and error-coverage gaps vs wire surface
-
-- Found by: contract-reviewer
-- Where: `docs/contracts/account-contract.md`
-- Context: branch `docs/contracts-wire-only-account-update` @ `c90eb5e`
-- Severity: 🟡
-- Observation: Five gaps between the contract and the actual wire surface, surfaced during the wire-only framing migration. (1) Published `AccountUpdated` row cites TRX-037 which actually defines `TransactionUpdated`; the BE emits two distinct events (`AccountUpdated` on CRUD via `AccountService::emit_account_updated`, `TransactionUpdated` on transaction ops via `emit_transaction_updated` — see `src-tauri/src/context/account/service.rs:453-461`) but the published `TransactionUpdated` event is entirely missing from the contract. (2) Subscribed `AccountUpdated` row cites ACD-039 incorrectly — ACD-039 in `docs/spec/account-details.md` reacts to `TransactionUpdated`, not `AccountUpdated`; confirmed in `src/features/account_details/account_details_view/useAccountDetails.ts:65`. (3) `correct_transaction` and `cancel_transaction` Errors columns omit `AccountNotFound { account_id }`, reachable via the shared `load_account` helper at `src-tauri/src/context/account/service.rs:470`. (4) `UnitPriceNegative` (TransactionDomainError) wire-reachable for all HoldingTransactionError mutating commands (`src-tauri/src/context/account/domain/transaction.rs:291`) but absent from every command's Errors column. (5) `open_holding` Errors column omits `InvalidDate` (TRX-046), part of OpenHoldingError via TxValidation (`src-tauri/src/use_cases/holding_transaction/error.rs:61`). Shared root cause: the contract was never reconciled against the actual wire surface after the BE landed.
 
 ## 2026-05-24 — ISIN country prefix `IE` → only Dublin (`ID`) in primary-venue table
 
