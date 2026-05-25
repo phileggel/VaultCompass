@@ -92,6 +92,10 @@ The account section title is displayed in the application shell header, not in t
 
 **ACC-021 — Account summaries with global value (backend + frontend)** _(new)_: A backend command `get_account_summaries()` returns a list of `AccountSummary` records — each `Account` enriched with its `total_global_value` (micros, computed in the account's own currency per CSH-094: `cash_holding.quantity + Σ_h (h.quantity × latest_price(h))` over same-currency priced active non-cash holdings; unpriced or foreign-currency non-cash holdings contribute 0; empty accounts return 0). This read spans `context/account/` and `context/asset/`, so it lives as a use case in `use_cases/` per ADR-003 and ADR-004. The Accounts table (ACC-008) renders the value in a Global Value column formatted in the account's own currency.
 
+### Events
+
+**ACC-022 — AccountUpdated event (backend)** _(new)_: After any successful account mutation (create per ACC-001/002/003, update per ACC-001/002/003, delete per ACC-005/006), the `AccountService` (owned by the `account/` bounded context) publishes an `AccountUpdated` event on the event bus. The service owns the event publication (B8 compliance). This event is distinct from `TransactionUpdated`: `AccountUpdated` signals structural account changes; `TransactionUpdated` signals position-data changes.
+
 ---
 
 ## User Workflow

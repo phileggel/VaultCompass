@@ -250,10 +250,10 @@ struct AccountSummary {
 
 ### Published
 
-| Event                | Payload | Rule                                                                                                              |
-| -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `AccountUpdated`     | —       | _emitted by `AccountService::create`/`update`/`delete` (ACC-001/002/003, ACC-005/006); no formal definition rule_ |
-| `TransactionUpdated` | —       | TRX-037                                                                                                           |
+| Event                | Payload | Rule    |
+| -------------------- | ------- | ------- |
+| `AccountUpdated`     | —       | ACC-022 |
+| `TransactionUpdated` | —       | TRX-037 |
 
 ### Subscribed (frontend re-fetch triggers)
 

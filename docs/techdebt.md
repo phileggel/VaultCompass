@@ -10,16 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-25 — `AccountUpdated` event has no formal definition rule
-
-- Found by: contract-reconciliation triage during /whats-next
-- Where: `docs/spec/account.md` (no ACC-NNN rule defines event publication); event is referenced parenthetically in `docs/spec/financial-asset-transaction.md:95` (TRX-037), `docs/spec/market-price.md:81` (MKT-026), and `docs/spec/market-price.md:105` (MKT-037), and emitted by `src-tauri/src/context/account/service.rs:80,103,114` from `create`/`update`/`delete`.
-- Context: branch `fix/account-contract-wire-gaps` @ HEAD
-- Severity: 🔵
-- Observation: Every other event in the system has a canonical "event (backend)" rule: `TRX-037` for `TransactionUpdated`, `MKT-026` for `AssetPriceUpdated`. `AccountUpdated` predates that convention and was never given an explicit rule. The contract's Published Events row cannot cite a single authoritative source — today it points at the CRUD rules that happen to emit it (`ACC-001/002/003`, `ACC-005/006`) and a prose note. Worth either adding a fresh `ACC-NNN` rule in `docs/spec/account.md` formalising publication (mirroring TRX-037's shape) or accepting the prose form as the project's convention for legacy events. Spec-only fix; no code or wire-shape change.
-
----
-
 ## 2026-05-25 — Per-BC error split violates error-model gold (anti-pattern #1) — audit + collapse
 
 - Found by: triage discussion during /whats-next (account-contract reconciliation)
