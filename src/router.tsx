@@ -6,6 +6,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { AccountDetailsView } from "@/features/account_details";
+import { AccountPerformancePage } from "@/features/account_performance";
 import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
@@ -54,6 +55,12 @@ const accountDetailsRoute = createRoute({
   component: AccountDetailsView,
 });
 
+const accountPerformanceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/accounts/$accountId/performance",
+  component: AccountPerformancePage,
+});
+
 const transactionListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts/$accountId/transactions/$assetId",
@@ -100,6 +107,7 @@ const routeTree = rootRoute.addChildren([
   assetsRoute,
   accountsRoute,
   accountDetailsRoute,
+  accountPerformanceRoute,
   transactionListRoute,
   addTransactionRoute,
   categoriesRoute,

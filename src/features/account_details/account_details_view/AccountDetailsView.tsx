@@ -1,5 +1,5 @@
-import { useParams } from "@tanstack/react-router";
-import { ArrowDownToLine, ArrowUpFromLine, Plus, RefreshCw } from "lucide-react";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { ArrowDownToLine, ArrowUpFromLine, Plus, RefreshCw, TrendingUp } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -20,6 +20,7 @@ import { useAccountDetailsView } from "./useAccountDetailsView";
 export function AccountDetailsView() {
   const { t } = useTranslation();
   const { accountId } = useParams({ from: "/accounts/$accountId" });
+  const navigate = useNavigate();
   const view = useAccountDetailsView(accountId);
   const { isPending: isRefreshPending, refresh: refreshPrices } =
     useRefreshAccountPrices(accountId);
@@ -76,6 +77,22 @@ export function AccountDetailsView() {
               {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
               {/* ACD-036 — add transaction only when active holdings exist */}
               <div className="flex gap-2">
+                {/* PRF-010 — per-account "Performance" entry point (navigates via router path) */}
+                <Button
+                  id="account-details-performance"
+                  variant="secondary"
+                  size="sm"
+                  icon={<TrendingUp size={14} />}
+                  onClick={() =>
+                    void navigate({
+                      to: "/accounts/$accountId/performance",
+                      params: { accountId },
+                    })
+                  }
+                  aria-label={t("account_details.action_performance")}
+                >
+                  {t("account_details.action_performance")}
+                </Button>
                 {/* MKT-131 — per-account "Refresh prices" entry point */}
                 <Button
                   id="account-details-refresh-prices"
