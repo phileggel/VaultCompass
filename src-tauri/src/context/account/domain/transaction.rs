@@ -322,6 +322,9 @@ pub trait TransactionRepository: Send + Sync {
         account_id: &str,
         asset_id: &str,
     ) -> Result<Vec<Transaction>>;
+    /// Fetches every transaction for an account across all assets (including cash),
+    /// ordered chronologically by `(date, created_at)` (PRF-021).
+    async fn get_all_for_account(&self, account_id: &str) -> Result<Vec<Transaction>>;
     /// Returns distinct asset IDs that have transactions for the given account (TXL-013).
     async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>>;
     /// Returns sum of realized_pnl grouped by asset_id for Sell transactions in the account (SEL-038).

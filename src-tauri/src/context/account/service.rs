@@ -175,6 +175,22 @@ impl AccountService {
             })
     }
 
+    /// Retrieves every transaction for an account across all assets, ordered
+    /// chronologically by `(date, created_at)` (PRF-021). Used by the
+    /// account-performance use case to replay holdings and cash as of any past date.
+    pub async fn get_all_transactions_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<Transaction>, AccountApplicationError> {
+        self.transaction_repo
+            .get_all_for_account(account_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_all_transactions_for_account: repository failure");
+                AccountApplicationError::DatabaseError
+            })
+    }
+
     /// Returns distinct asset IDs that have transactions for the given account (TXL-013).
     pub async fn get_asset_ids_for_account(
         &self,

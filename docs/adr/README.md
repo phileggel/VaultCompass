@@ -14,3 +14,4 @@
 | [ADR-010](010-source-qualifier-precedence.md)                | Source-Qualifier Precedence: Manual Overrides External            | Superseded by ADR-012         |
 | [ADR-011](011-byok-api-keys-os-keychain.md)                  | User-Supplied API Keys via OS Keychain (3-Tier Linux Fallback)    | Accepted                      |
 | [ADR-012](012-latest-write-wins-source-as-metadata.md)       | Latest-Write-Wins; Source Field is Metadata (supersedes ADR-010)  | Accepted — supersedes ADR-010 |
+| [ADR-013](013-recompute-account-performance-on-read.md)      | Recompute Account Performance on Read                             | Accepted                      |

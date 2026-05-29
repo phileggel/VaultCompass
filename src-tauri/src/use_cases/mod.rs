@@ -7,6 +7,8 @@
 pub mod account_deletion;
 /// Account Details: cross-context read of holdings + asset metadata (ACD feature).
 pub mod account_details;
+/// Account Performance: recompute-on-read per-period values and Simple Dietz metrics (PRF spec, ADR-013).
+pub mod account_performance;
 /// Account Summary: per-account global value for the Accounts list (ACC-021).
 pub mod account_summary;
 /// Archive asset: guards archiving against active holdings across bounded contexts (OQ-6).
