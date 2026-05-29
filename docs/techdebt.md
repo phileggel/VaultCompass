@@ -10,6 +10,14 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-05-29 — release-manual.yml GitHub Action versions not SHA-pinned
+
+- Found by: reviewer-infra (during CI gold-alignment review)
+- Where: `.github/workflows/release-manual.yml` (`actions/checkout@v4`, `actions/setup-node@v4`, `Swatinem/rust-cache@v2`, `tauri-apps/tauri-action@v0`)
+- Context: branch `chore/ci-gold-alignment` @ HEAD
+- Severity: 🔵
+- Observation: After the gold-CI alignment, `quality.yml` / `e2e.yml` / `release-windows.yml` / `security-audit.yml` pin every action to a full commit SHA (supply-chain hardening). `release-manual.yml` still uses mutable major tags (`@v4`, `@v2`, `@v0`), so it's now the lone inconsistency. Pin its four actions to the same SHAs already used in `release-windows.yml`. Deferred from the alignment PR to avoid speculative edits to a release workflow beyond the `releaseDraft` change the alignment required.
+
 ## 2026-05-29 — E2E account navigation: shared helper + #id row selector
 
 - Found by: reviewer-e2e (during PRF E2E review)

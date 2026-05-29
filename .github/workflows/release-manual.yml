@@ -100,7 +100,7 @@ jobs:
           tagName: ${{ inputs.tag }}
           releaseName: "VaultCompass ${{ inputs.tag }}"
           releaseBody: "See the release assets to download and install this version."
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
 
