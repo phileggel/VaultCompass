@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { patchModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { PnlCell } from "../shared/PnlCell";
@@ -77,17 +78,10 @@ export function HoldingRow({
   }, [onEnterPrice, row.assetId]);
 
   const handleEditMissingTicker = useCallback(() => {
-    // Per-route search schemas don't declare these shell-level modal params;
-    // the cast lets the URL-driven AssetEditModalMount pick them up without
-    // forcing every route's validateSearch to include them.
-    navigate({
-      search: ((prev: Record<string, unknown>) => ({
-        ...prev,
-        modal: "edit-asset",
-        editAssetId: row.assetId,
-        focusField: "reference",
-        // biome-ignore lint/suspicious/noExplicitAny: shell-level URL modal params bypass per-route typing
-      })) as any,
+    patchModalSearch(navigate, {
+      modal: "edit-asset",
+      editAssetId: row.assetId,
+      focusField: "reference",
     });
   }, [navigate, row.assetId]);
 
