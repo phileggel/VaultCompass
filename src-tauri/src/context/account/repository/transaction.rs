@@ -103,6 +103,24 @@ impl TransactionRepository for SqliteTransactionRepository {
             .collect::<Result<Vec<_>>>()
     }
 
+    async fn get_all_for_account(&self, account_id: &str) -> Result<Vec<Transaction>> {
+        let rows = sqlx::query_as!(
+            TransactionRow,
+            r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at
+               FROM transactions
+               WHERE account_id = ?
+               ORDER BY date ASC, created_at ASC"#,
+            account_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| format!("Failed to fetch all transactions for account {}", account_id))?;
+
+        rows.into_iter()
+            .map(Transaction::try_from)
+            .collect::<Result<Vec<_>>>()
+    }
+
     async fn create(&self, tx: Transaction) -> Result<Transaction> {
         let transaction_type = tx.transaction_type.to_string();
         sqlx::query!(

@@ -39,6 +39,17 @@
 | ----------------------- | ---- | --------------------- | ----------------------------------------------------------------------------------- |
 | `get_account_summaries` | —    | `Vec<AccountSummary>` | `DatabaseError`; price lookup failures silently contribute 0 to the value (MKT-031) |
 
+### Account Performance
+
+> `get_account_performance` is implemented in `use_cases/account_performance/` — it reads from
+> both the account BC (transaction replay → as-of-date holdings + cash) and the asset BC (price
+> history) but mutates neither; owned here as the account aggregate is the primary subject. Period
+> values and metrics are recomputed on read per ADR-013; nothing is persisted.
+
+| Command                   | Args                 | Return                       | Errors                                                                                                                       |
+| ------------------------- | -------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `get_account_performance` | `account_id: String` | `AccountPerformanceResponse` | `AccountNotFound { account_id }` (PRF-016), `DatabaseError` (PRF-027); price-lookup failures silently contribute 0 (PRF-022) |
+
 ### Holdings & Transactions
 
 > Read paths (`get_asset_ids_for_account`, `get_transactions`) and mutation paths (`buy_holding`,
@@ -244,6 +255,33 @@ struct AccountSummary {
 }
 ```
 
+```rust
+// Net-of-flows performance for one period; Simple Dietz percentage (PRF-031, PRF-032)
+struct PerformanceMetric {
+    gain: i64,          // micros, account currency
+    pct: Option<i64>,   // micro-percent (8.00% = 8_000_000); None when the Dietz denominator is 0 (PRF-032)
+}
+
+// One calendar period row — a month or a year (PRF-020, PRF-040)
+struct PerformancePeriod {
+    year: i32,
+    month: Option<u8>,                              // Some(1..=12) for month rows; None for year rows (PRF-011)
+    end_value: i64,                                 // micros, account currency; Global Value at period end (PRF-020)
+    period_over_period: Option<PerformanceMetric>,  // None when no preceding period exists (PRF-033, PRF-042)
+    year_to_date: Option<PerformanceMetric>,        // None for year rows (PRF-037); always Some for month rows — inception-year months use baseline 0, equal to since-inception (PRF-034)
+    since_inception: Option<PerformanceMetric>,     // measured from net invested; inception baseline value 0 (PRF-035)
+}
+
+// Top-level response for get_account_performance — recomputed on read (ADR-013)
+struct AccountPerformanceResponse {
+    account_name: String,
+    currency: String,                   // account's own ISO 4217 currency
+    month_view_available: bool,         // true only for Automatic/ManualDay/ManualWeek (PRF-013)
+    yearly: Vec<PerformancePeriod>,     // one per year, most-recent first (PRF-041); month is None
+    monthly: Vec<PerformancePeriod>,    // one per month over the full span, most-recent first; empty when month_view_available is false (PRF-013, PRF-015)
+}
+```
+
 ---
 
 ## Events
@@ -257,9 +295,15 @@ struct AccountSummary {
 
 ### Subscribed (frontend re-fetch triggers)
 
-| Event                | Payload | Rule             |
-| -------------------- | ------- | ---------------- |
-| `AccountUpdated`     | —       | ACC-021          |
-| `TransactionUpdated` | —       | ACD-039, ACC-021 |
-| `AssetUpdated`       | —       | ACD-040          |
-| `AssetPriceUpdated`  | —       | MKT-036          |
+| Event                | Payload | Rule                      |
+| -------------------- | ------- | ------------------------- |
+| `AccountUpdated`     | —       | ACC-021, PRF-060          |
+| `TransactionUpdated` | —       | ACD-039, ACC-021, PRF-060 |
+| `AssetUpdated`       | —       | ACD-040                   |
+| `AssetPriceUpdated`  | —       | MKT-036, PRF-060          |
+
+---
+
+## Changelog
+
+- 2026-05-29 — Added by `account-performance` spec: `get_account_performance` (+ `AccountPerformanceResponse`, `PerformancePeriod`, `PerformanceMetric` types; PRF-060 re-uses existing subscribed events)

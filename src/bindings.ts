@@ -356,6 +356,17 @@ async getAccountSummaries() : Promise<Result<AccountSummary[], AccountApplicatio
 }
 },
 /**
+ * Returns per-period performance figures for a single account (PRF spec).
+ */
+async getAccountPerformance(accountId: string) : Promise<Result<AccountPerformanceResponse, AccountApplicationError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_account_performance", { accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the number of active holdings and transactions for an account (ACC-020).
  * 
  * Used by the frontend to decide whether to show the standard or reinforced
@@ -648,6 +659,31 @@ export type AccountOperationError =
  * Attempted cash debit (or chronological replay step) would drive the cash holding strictly negative (CSH-080).
  */
 { code: "InsufficientCash"; current_balance_micros: number; currency: string }
+/**
+ * Top-level response for `get_account_performance` — recomputed on read (ADR-013).
+ */
+export type AccountPerformanceResponse = { 
+/**
+ * Display name of the account.
+ */
+account_name: string; 
+/**
+ * ISO 4217 currency code of the account.
+ */
+currency: string; 
+/**
+ * True only for Automatic/ManualDay/ManualWeek (PRF-013).
+ */
+month_view_available: boolean; 
+/**
+ * One row per year, most-recent first (PRF-041). month is None for each row.
+ */
+yearly: PerformancePeriod[]; 
+/**
+ * One row per month over the full span, most-recent first.
+ * Empty when month_view_available is false (PRF-013, PRF-015).
+ */
+monthly: PerformancePeriod[] }
 /**
  * Row returned by `get_account_summaries` (ACC-021). Pairs each `Account` with its
  * computed `total_global_value` so the Accounts list can render the value column
@@ -1733,6 +1769,49 @@ export type OpeningBalanceDomainError =
  * total_cost was zero or negative (TRX-045).
  */
 { code: "InvalidTotalCost" }
+/**
+ * Net-of-flows performance figures for one period (PRF-031, PRF-032).
+ */
+export type PerformanceMetric = { 
+/**
+ * Net-of-flows gain in account-currency micros (PRF-031).
+ */
+gain: number; 
+/**
+ * Simple Dietz percentage as micro-percent (8.00% = 8_000_000).
+ * None when the Dietz denominator is 0 (PRF-032).
+ */
+pct: number | null }
+/**
+ * One calendar period row (PRF-020, PRF-040).
+ */
+export type PerformancePeriod = { 
+/**
+ * Calendar year of this row.
+ */
+year: number; 
+/**
+ * Some(1..=12) for month rows; None for year rows (PRF-011).
+ */
+month: number | null; 
+/**
+ * Global Value at period end in account-currency micros (PRF-020).
+ */
+end_value: number; 
+/**
+ * Performance vs the preceding period of the same granularity (PRF-033).
+ * None when no preceding period exists (PRF-042).
+ */
+period_over_period: PerformanceMetric | null; 
+/**
+ * Performance from the start of the calendar year to this period end (PRF-034).
+ * None for year rows (PRF-037) or when the year-start baseline is absent (PRF-034).
+ */
+year_to_date: PerformanceMetric | null; 
+/**
+ * Performance from inception to this period end, vs net invested (PRF-035).
+ */
+since_inception: PerformanceMetric | null }
 /**
  * Parameters for recording a sale of an asset from an account.
  */

@@ -24,6 +24,7 @@ use crate::core::{
 };
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
+use crate::use_cases::account_performance::AccountPerformanceUseCase;
 use crate::use_cases::account_summary::AccountSummaryUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::asset_price_fetch::dispatcher::Dispatcher as PriceFetchDispatcher;
@@ -170,6 +171,11 @@ pub fn run() {
                     Arc::clone(&asset_service),
                 );
 
+                let account_performance_uc = AccountPerformanceUseCase::new(
+                    Arc::clone(&account_service),
+                    Arc::clone(&asset_service),
+                );
+
                 let archive_asset_uc = ArchiveAssetUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
@@ -190,6 +196,7 @@ pub fn run() {
 
                 app_handle.manage(account_details_uc);
                 app_handle.manage(account_summary_uc);
+                app_handle.manage(account_performance_uc);
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
                 app_handle.manage(account_deletion_uc);
