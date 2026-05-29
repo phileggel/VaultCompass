@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-05-29
+
+### Added
+
+- performance page UI (PRF)
+  Consumes the get_account_performance bindings merged in #53; no FE caching —
+  the page just renders the recomputed series (ADR-013).
+  Container/presentational split (AccountPerformanceTable) mirrors account_details
+  for visual-proofability; errors flow through the I18nMessage F27 pipeline.
+  Also drops the N+1 tech-debt note (triaged to non-issue: one-time O(assets) lookup).
+- account performance backend (PRF)
+  Per-account value-over-time computed on read (ADR-013) — no snapshot table,
+  so backdated prices/transactions can never leave stale rows.
+  Performance is net of deposits/withdrawals via Simple Dietz (PRF-030/032);
+  foreign-currency holdings contribute 0 until FX ships.
+  Bindings regenerated but not yet consumed (BE-first of a 3-PR split).
+- widen keyword lookup to ETP, bonds, funds, crypto, REIT
+  OpenFIGI /v3/search accepts only a single securityType string, so the
+  old "Common Stock" filter blocked ETPs, bonds, mutual funds, REITs, and
+  crypto from keyword results. Dropped the request-time filter; relies on
+  post-classification (WEB-023) + priority sort (WEB-048) for relevance.
+  Also corrected map_security_type vocabulary to OpenFIGI's actual values.
+- click-to-edit on missing-ticker diagnostic
+  MKT-032 Interactivity: "Missing ticker" becomes a stable-id button
+  (action-edit-missing-ticker-{assetId}) that fires URL search params.
+  A shell-level AssetEditModalMount reads modal/editAssetId/focusField
+  from the URL and overlays EditAssetModal with the reference input
+  focused — no cross-feature import from account_details to assets.
+- typed price-missing states (MKT-032)
+  Replaces unannotated "—" in the holdings price cell with typed
+  diagnostics: "Missing ticker" when asset_reference is empty,
+  "No price available" otherwise. Informational-only (non-interactive);
+  click-to-edit deferred pending the URL-driven modal pattern.
+  Amends MKT-032; reconciles MKT-140 cell-composition.
+
+### Fixed
+
+- stable ids on nav, FABs, row actions, and header buttons
+  Sweeps locale-coupled aria-label/XPath selectors across 9 e2e files,
+  replacing them with stable id selectors per E1. FE additions:
+  nav-{path} on Sidebar items, fab-add-{asset,account} on FABs,
+  per-row action-{verb}-{entity}-{id} on HoldingRow, AssetTable, and
+  AccountTable. Resolves the 2026-05-18 + 2026-05-25 E4 techdebt entries.
+- enforce AST-006 archive guard on price-mutation commands
+  record_asset_price, update_asset_price, and delete_asset_price now
+  reject archived assets with the typed Archived variant. Reads
+  (get_asset_prices) stay available — archive blocks mutations only.
+  Resolves the long-parked AST-006 enforcement decision via the
+  shipping path (new helper ensure_asset_writable_for_price).
+- IE country prefix covers UCITS ETF venues
+  ISIN_COUNTRY_TO_PRIMARY_VENUES["IE"] extended from ["ID"] to
+  ["ID", "LO", "NA", "GY"]. Dublin still wins for Irish equities
+  (Ryanair, CRH, Kerry Group); UCITS ETFs (domiciled in Ireland but
+  trading on LSE / Amsterdam / Xetra) now get a coherent fallthrough
+  instead of landing on GLOBAL_VENUE_PRIORITY's Amsterdam-first default.
+- stable id selectors + pre-release E2E gate guardrail
+  The E2E was broken on main since two earlier renames (Open Balance → Add a
+  position; two-field web lookup) but stayed green at PR time because the
+  workflow only fires on `main` push. Patching the text-XPath would just rerun
+  the same fragility class on the next rename; stable ids fix it durably.
+  CLAUDE.md update ensures the release tag doesn't hide future breakage.
+
 ## [0.14.0] - 2026-05-24
 
 ### Added
