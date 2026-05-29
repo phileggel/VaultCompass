@@ -106,6 +106,7 @@ export function AccountPerformancePage() {
           ) : view.isEmpty ? (
             /* PRF-051 — empty state with Add Transaction affordance */
             <div
+              id="account-performance-empty"
               data-testid="account-performance-empty"
               className="flex flex-col items-center justify-center h-full gap-4 py-12"
             >

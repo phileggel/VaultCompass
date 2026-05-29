@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountPerformanceResponse, PerformancePeriod } from "@/bindings";
@@ -292,5 +292,33 @@ describe("AccountPerformancePage", () => {
     expect(gateway.accountPerformanceGateway.getAccountPerformance).toHaveBeenCalledWith(
       "account-1",
     );
+  });
+
+  // PRF-060 — an emitted TransactionUpdated event triggers a re-fetch
+  it("re-fetches when a TransactionUpdated event is received (PRF-060)", async () => {
+    let capturedCallback: ((type: string) => void) | null = null;
+    vi.mocked(gateway.accountPerformanceGateway.subscribeToEvents).mockImplementation(
+      (cb: (type: string) => void) => {
+        capturedCallback = cb;
+        return Promise.resolve(() => {});
+      },
+    );
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse(),
+    });
+
+    render(<AccountPerformancePage />);
+    await screen.findByTestId("account-performance-table");
+    const callsBefore = vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mock
+      .calls.length;
+
+    await act(async () => {
+      capturedCallback?.("TransactionUpdated");
+    });
+
+    expect(
+      vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mock.calls.length,
+    ).toBeGreaterThan(callsBefore);
   });
 });
