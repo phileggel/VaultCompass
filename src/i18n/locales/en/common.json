@@ -298,7 +298,42 @@
     "action_deposit": "Deposit",
     "action_withdraw": "Withdraw",
     "action_refresh_prices": "Refresh prices",
+    "action_performance": "Performance",
     "total_global_value": "Global Value"
+  },
+  "account_performance": {
+    "title": "Performance",
+    "back": "Back to account details",
+    "retry": "Retry",
+    "empty": "No transactions yet",
+    "add_transaction": "Add Transaction",
+    "view_toggle_label": "Performance view granularity",
+    "view_month": "Monthly",
+    "view_year": "Yearly",
+    "year_selector_label": "Select year",
+    "column_period": "Period",
+    "column_end_value": "End Value",
+    "column_period_over_period": "Period Change",
+    "column_year_to_date": "Year to Date",
+    "column_since_inception": "Since Inception",
+    "error": {
+      "account_not_found": "Account not found.",
+      "database_error": "An unexpected error occurred while computing performance. Please try again."
+    },
+    "month": {
+      "january": "January",
+      "february": "February",
+      "march": "March",
+      "april": "April",
+      "may": "May",
+      "june": "June",
+      "july": "July",
+      "august": "August",
+      "september": "September",
+      "october": "October",
+      "november": "November",
+      "december": "December"
+    }
   },
   "mkt": {
     "fetch_dispatched": "Fetching prices…",

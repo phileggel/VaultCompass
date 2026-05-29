@@ -10,14 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-29 — Account performance N+1 asset existence checks in load_priced_assets
-
-- Found by: reviewer-arch (during PRF backend review)
-- Where: `src-tauri/src/use_cases/account_performance/orchestrator.rs` (`load_priced_assets`)
-- Context: branch `feat/account-performance` @ `bedb999`
-- Severity: 🟡
-- Observation: `load_priced_assets` calls `AssetService::get_asset_by_id` per distinct held asset and then `AssetService::get_asset_prices` per non-cash asset; the latter internally re-runs `ensure_asset_exists_for_price`, so each non-cash asset incurs two existence-check round-trips. Not a layering violation (both go through the service), but the recompute-on-read rationale (ADR-013) is weakened by the redundant query when an account holds many distinct assets. Resolution direction: add an `AssetService::get_asset_with_prices(asset_id) -> Option<(Asset, Vec<AssetPrice>)>` that fetches metadata + prices in one pass and drops the duplicate existence check. Deferred — a new service-API method is a design change outside the minimal PRF scope.
-
 ## 2026-05-25 — Per-BC error split violates error-model gold (anti-pattern #1) — audit + collapse
 
 - Found by: triage discussion during /whats-next (account-contract reconciliation)

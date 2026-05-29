@@ -298,7 +298,42 @@
     "action_deposit": "Dépôt",
     "action_withdraw": "Retrait",
     "action_refresh_prices": "Actualiser les prix",
+    "action_performance": "Performance",
     "total_global_value": "Valeur globale"
+  },
+  "account_performance": {
+    "title": "Performance",
+    "back": "Retour aux détails du compte",
+    "retry": "Réessayer",
+    "empty": "Aucune transaction pour le moment",
+    "add_transaction": "Ajouter une transaction",
+    "view_toggle_label": "Granularité de la vue performance",
+    "view_month": "Mensuelle",
+    "view_year": "Annuelle",
+    "year_selector_label": "Sélectionner l'année",
+    "column_period": "Période",
+    "column_end_value": "Valeur finale",
+    "column_period_over_period": "Variation période",
+    "column_year_to_date": "Depuis le début de l'année",
+    "column_since_inception": "Depuis l'origine",
+    "error": {
+      "account_not_found": "Compte introuvable.",
+      "database_error": "Une erreur inattendue s'est produite lors du calcul de la performance. Veuillez réessayer."
+    },
+    "month": {
+      "january": "Janvier",
+      "february": "Février",
+      "march": "Mars",
+      "april": "Avril",
+      "may": "Mai",
+      "june": "Juin",
+      "july": "Juillet",
+      "august": "Août",
+      "september": "Septembre",
+      "october": "Octobre",
+      "november": "Novembre",
+      "december": "Décembre"
+    }
   },
   "mkt": {
     "fetch_dispatched": "Récupération des prix…",
