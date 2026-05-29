@@ -11,7 +11,11 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
 
   return (
     <div className="m3-table-container">
-      <table data-testid="account-performance-table" className="w-full border-collapse">
+      <table
+        id="account-performance-table"
+        data-testid="account-performance-table"
+        className="w-full border-collapse"
+      >
         <thead className="sticky top-0 bg-m3-surface-container z-10">
           <tr>
             <th className="m3-th">{t("account_performance.column_period")}</th>
@@ -21,7 +25,11 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
             </th>
             {/* PRF-037 — YTD column present only in month view */}
             {showYtd && (
-              <th data-testid="account-performance-col-ytd" className="m3-th text-right">
+              <th
+                id="account-performance-col-ytd"
+                data-testid="account-performance-col-ytd"
+                className="m3-th text-right"
+              >
                 {t("account_performance.column_year_to_date")}
               </th>
             )}
@@ -31,7 +39,11 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
         <tbody>
           {/* PRF-041 — rows rendered in backend order (most-recent first) */}
           {rows.map((row) => (
-            <tr key={row.rowKey} data-testid={`account-performance-row-${row.rowKey}`}>
+            <tr
+              key={row.rowKey}
+              id={`account-performance-row-${row.rowKey}`}
+              data-testid={`account-performance-row-${row.rowKey}`}
+            >
               <td className="m3-td">{row.month !== null ? t(row.periodLabel) : row.periodLabel}</td>
               <td className="m3-td text-right">{row.endValueFormatted}</td>
               <td className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}>

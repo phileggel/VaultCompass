@@ -82,13 +82,13 @@ lib.rs                composition root — wires services, use cases, dispatcher
 
 Backend publishes events on every state change. Frontend listens via a single `events.event.listen()` subscription in `src/lib/store.ts:init()` and dispatches to the right fetcher.
 
-| Event                | Published by                                                   | Frontend re-fetches                          |
-| -------------------- | -------------------------------------------------------------- | -------------------------------------------- |
-| `AssetUpdated`       | `context/asset/` writes                                        | `assets`                                     |
-| `CategoryUpdated`    | `context/asset/` category writes                               | `categories`                                 |
-| `AssetPriceUpdated`  | `context/asset/` price writes + `use_cases/asset_price_fetch/` | `account_details` (per-page)                 |
-| `AccountUpdated`     | `context/account/` account writes                              | `accounts`                                   |
-| `TransactionUpdated` | `context/account/` holding / transaction writes                | `account_details`, `transactions` (per-page) |
+| Event                | Published by                                                   | Frontend re-fetches                                                 |
+| -------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `AssetUpdated`       | `context/asset/` writes                                        | `assets`                                                            |
+| `CategoryUpdated`    | `context/asset/` category writes                               | `categories`                                                        |
+| `AssetPriceUpdated`  | `context/asset/` price writes + `use_cases/asset_price_fetch/` | `account_details`, `account_performance` (per-page)                 |
+| `AccountUpdated`     | `context/account/` account writes                              | `accounts`, `account_performance` (per-page)                        |
+| `TransactionUpdated` | `context/account/` holding / transaction writes                | `account_details`, `transactions`, `account_performance` (per-page) |
 
 Adding a new event: declare the variant in `core/event_bus/event.rs`, publish from the service after persistence (`bus.publish(Event::Foo)`), subscribe in the relevant feature hook.
 

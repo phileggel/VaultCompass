@@ -189,6 +189,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
             sortedAndFilteredAccounts.map((account) => (
               <tr
                 key={account.id}
+                id={`account-row-${account.id}`}
                 className="m3-tr cursor-pointer group hover:bg-m3-primary/5"
                 tabIndex={0}
                 aria-label={t("account.open_account", { name: account.name })}

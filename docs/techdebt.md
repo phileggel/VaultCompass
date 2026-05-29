@@ -10,6 +10,14 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-05-29 — E2E account navigation: shared helper + #id row selector
+
+- Found by: reviewer-e2e (during PRF E2E review)
+- Where: `e2e/account_details/buy_sell.test.ts`, `e2e/account_details/cash.test.ts`, `e2e/account_details/auto_fetch.test.ts` (and previously `e2e/account_performance/account_performance.test.ts`)
+- Context: branch `feat/account-performance-e2e` @ `4bb7056`
+- Severity: 🔵
+- Observation: `navigateToAccounts()` and `navigateToAccountDetails()` are duplicated verbatim across four E2E suites; `e2e/helpers/navigation.ts` only exports `navigateToAssets`. Separately, the three `account_details/*` suites still select the account row via `tr[aria-label="Open account …"]` rather than the stable `#account-row-{id}` id (the PRF E2E was migrated to `#id` this branch, and `AccountTable` now carries the row id). Resolution: promote both navigation helpers to `e2e/helpers/navigation.ts` and migrate the three `account_details` suites to the `#account-row-{id}` selector. Deferred — multi-file change across suites not otherwise touched by the PRF work.
+
 ## 2026-05-25 — Per-BC error split violates error-model gold (anti-pattern #1) — audit + collapse
 
 - Found by: triage discussion during /whats-next (account-contract reconciliation)
