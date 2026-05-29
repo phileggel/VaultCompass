@@ -34,12 +34,12 @@ export function AssetEditModalMount() {
     // Per-route search schemas don't declare these shell-level modal params;
     // the cast lets the close handler clear them without per-route typing.
     navigate({
-      // biome-ignore lint/suspicious/noExplicitAny: shell-level URL modal params bypass per-route typing
       search: ((prev: Record<string, unknown>) => ({
         ...prev,
         modal: undefined,
         editAssetId: undefined,
         focusField: undefined,
+        // biome-ignore lint/suspicious/noExplicitAny: shell-level URL modal params bypass per-route typing
       })) as any,
       replace: true,
     });

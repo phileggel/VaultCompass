@@ -87,7 +87,7 @@ describe("buy_sell", () => {
 
     // Holding row exists — click its Buy button to open BuyTransactionModal.
     // Asset is pre-populated as read-only (no combobox interaction needed).
-    const buyBtn = await $("#action-buy-" + astId);
+    const buyBtn = await $(`#action-buy-${astId}`);
     await buyBtn.waitForExist({ timeout: 10000 });
     await buyBtn.click();
 
@@ -105,7 +105,7 @@ describe("buy_sell", () => {
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // Holding row (Buy button) must still be present after buying more.
-    const buyBtnAfter = await $("#action-buy-" + astId);
+    const buyBtnAfter = await $(`#action-buy-${astId}`);
     await buyBtnAfter.waitForExist({ timeout: 8000 });
     assert.ok(
       await buyBtnAfter.isExisting(),
@@ -127,7 +127,7 @@ describe("buy_sell", () => {
     await navigateToAccountDetails(ACCOUNT_NAME);
 
     // Holding row exists — click Sell.
-    const sellBtn = await $("#action-sell-" + astId);
+    const sellBtn = await $(`#action-sell-${astId}`);
     await sellBtn.waitForExist({ timeout: 10000 });
     await sellBtn.click();
 
@@ -145,7 +145,7 @@ describe("buy_sell", () => {
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // Remaining holding (6 units) must still be displayed.
-    const holdingRow = await $("#action-sell-" + astId);
+    const holdingRow = await $(`#action-sell-${astId}`);
     await holdingRow.waitForExist({ timeout: 8000 });
     assert.ok(
       await holdingRow.isExisting(),
@@ -172,7 +172,7 @@ describe("buy_sell", () => {
 
     await navigateToAccountDetails(ACCOUNT_NAME);
 
-    const sellBtn = await $("#action-sell-" + astId);
+    const sellBtn = await $(`#action-sell-${astId}`);
     await sellBtn.waitForExist({ timeout: 10000 });
     await sellBtn.click();
 

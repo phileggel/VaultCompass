@@ -81,12 +81,12 @@ export function HoldingRow({
     // the cast lets the URL-driven AssetEditModalMount pick them up without
     // forcing every route's validateSearch to include them.
     navigate({
-      // biome-ignore lint/suspicious/noExplicitAny: shell-level URL modal params bypass per-route typing
       search: ((prev: Record<string, unknown>) => ({
         ...prev,
         modal: "edit-asset",
         editAssetId: row.assetId,
         focusField: "reference",
+        // biome-ignore lint/suspicious/noExplicitAny: shell-level URL modal params bypass per-route typing
       })) as any,
     });
   }, [navigate, row.assetId]);
