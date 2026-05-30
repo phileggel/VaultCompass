@@ -1,13 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  DollarSign,
-  History,
-  Minus,
-  Plus,
-  Search,
-} from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, History, Minus, Plus, Search } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { patchModalSearch } from "@/lib/modalSearch";
@@ -22,7 +14,6 @@ type HoldingRowProps = {
   accountId: string;
   onBuy: (target: ModalTarget) => void;
   onSell: (target: SellTarget) => void;
-  onEnterPrice: (assetId: string) => void;
   onPriceHistory: (assetId: string) => void;
   /** Cash variant — open Deposit modal (CSH-091). */
   onDeposit?: () => void;
@@ -35,7 +26,6 @@ export function HoldingRow({
   accountId,
   onBuy,
   onSell,
-  onEnterPrice,
   onPriceHistory,
   onDeposit,
   onWithdraw,
@@ -72,10 +62,6 @@ export function HoldingRow({
       search: { pendingTransactionAssetId: undefined },
     });
   }, [navigate, accountId, row.assetId]);
-
-  const handleEnterPrice = useCallback(() => {
-    onEnterPrice(row.assetId);
-  }, [onEnterPrice, row.assetId]);
 
   const handleEditMissingTicker = useCallback(() => {
     patchModalSearch(navigate, {
@@ -227,16 +213,7 @@ export function HoldingRow({
             onClick={handleSell}
             disabled={isArchived}
           />
-          {/* MKT-010 — Enter price button (active holdings only) */}
-          {row.canEnterPrice && (
-            <IconButton
-              icon={<DollarSign size={16} />}
-              size="sm"
-              aria-label={t("account_details.action_enter_price")}
-              onClick={handleEnterPrice}
-            />
-          )}
-          {/* MKT-070 — Price history button (active holdings only) */}
+          {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}
           {row.canEnterPrice && (
             <IconButton
               icon={<History size={16} />}

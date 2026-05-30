@@ -14,7 +14,6 @@ import { WithdrawalTransactionModal } from "../withdrawal_transaction/Withdrawal
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
 import { NoCashBanner } from "./NoCashBanner";
-import { PriceModal } from "./PriceModal";
 import { useAccountDetailsView } from "./useAccountDetailsView";
 
 export function AccountDetailsView() {
@@ -232,7 +231,6 @@ export function AccountDetailsView() {
                           accountId={accountId}
                           onBuy={view.handleBuyOpen}
                           onSell={view.handleSellOpen}
-                          onEnterPrice={view.handleEnterPrice}
                           onPriceHistory={view.handlePriceHistory}
                           onDeposit={view.handleDepositOpen}
                           onWithdraw={view.handleWithdrawalOpen}
@@ -326,17 +324,7 @@ export function AccountDetailsView() {
         />
       )}
 
-      {/* MKT-010 — Enter price modal */}
-      {view.priceTarget && (
-        <PriceModal
-          isOpen
-          onClose={view.handlePriceClose}
-          holding={view.priceTarget}
-          onSubmitSuccess={view.handlePriceSuccess}
-        />
-      )}
-
-      {/* MKT-072 — Price history modal */}
+      {/* MKT-072 — Price history modal (price entry lives inside via "Add price") */}
       {view.historyTarget && (
         <PriceHistoryModal isOpen onClose={view.handleHistoryClose} holding={view.historyTarget} />
       )}
