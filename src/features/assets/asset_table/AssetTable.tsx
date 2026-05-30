@@ -2,14 +2,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { Archive, ArchiveRestore, Edit2, ShoppingCart, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Asset } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { patchModalSearch } from "@/lib/modalSearch";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { SortIcon } from "@/ui/components/SortIcon";
 import type { I18nMessage } from "@/ui/format/i18n";
-import { EditAssetModal } from "../edit_asset_modal/EditAssetModal";
 import { getRiskBadgeClasses } from "../shared/presenter";
 import { useAssets } from "../useAssets";
 import { useAssetTable } from "./useAssetTable";
@@ -50,9 +49,11 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
     name: string;
   } | null>(null);
 
-  // Edit state
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
+  // Edit opens the router-driven Edit Asset modal (shell-mounted), so it overlays
+  // in the current route context and no cross-feature modal import is needed here.
+  const openEditAsset = (assetId: string) => {
+    patchModalSearch(navigate, { modal: "edit-asset", editAssetId: assetId });
+  };
 
   const handleArchiveConfirm = async () => {
     if (!assetToArchive) return;
@@ -178,6 +179,9 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                 key={asset.id}
                 tabIndex={0}
                 onClick={() => setSelectedAssetId(asset.id)}
+                onDoubleClick={() => {
+                  if (!asset.is_archived) openEditAsset(asset.id);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -236,8 +240,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
                       aria-label={t("asset.action_edit")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setAssetToEdit(asset);
-                        setIsEditModalOpen(true);
+                        openEditAsset(asset.id);
                       }}
                     />
                     {asset.is_archived ? (
@@ -275,16 +278,6 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
           )}
         </tbody>
       </table>
-
-      {/* Edit Asset Modal */}
-      <EditAssetModal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setAssetToEdit(null);
-        }}
-        asset={assetToEdit}
-      />
 
       {/* Archive Confirmation Dialog — R13 */}
       <ConfirmationDialog
