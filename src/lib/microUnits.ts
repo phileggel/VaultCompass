@@ -68,6 +68,19 @@ export function microToFormattedPrice(micros: number): string {
 }
 
 /**
+ * Converts a quantity in micro-units to a locale-aware display string, trimming
+ * trailing zero decimals: a whole number shows no fraction, otherwise up to 6
+ * fractional digits are kept.
+ * e.g. 2_000_000 → "2", 1_500_000 → "1.5", 1_250_000 → "1.25"
+ */
+export function microToFormattedQuantity(micros: number): string {
+  return new Intl.NumberFormat(_displayLocale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 6,
+  }).format(micros / MICRO);
+}
+
+/**
  * Computes total amount from micro-unit values (TRX-026 formula).
  * Formula: floor(floor(qty × price / MICRO) × rate / MICRO) + fees
  *
