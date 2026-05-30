@@ -377,3 +377,100 @@ async fn fetch_for_account_skips_locked_asset() {
         "MKT-151: a locked asset must be excluded from fetch scope → NoFetchableHoldings, got: {result:?}"
     );
 }
+
+/// MKT-156 — unblocking re-admits an asset to fetch scope. After locking then
+/// unblocking the account's only holding, `fetch_for_account` dispatches
+/// successfully (scope is non-empty again), exercising the unblock repo path.
+#[tokio::test]
+async fn fetch_for_account_includes_unblocked_asset() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, AssetPriceRepository, CreateAssetDTO, PriceProvider, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+
+    struct NoOpProvider;
+    #[async_trait::async_trait]
+    impl PriceProvider for NoOpProvider {
+        async fn fetch_price(&self, _symbol: &str) -> anyhow::Result<Option<i64>> {
+            Ok(Some(100_000_000))
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(AccountService::new(
+        Box::new(SqliteAccountRepository::new(pool.clone())),
+        Box::new(SqliteHoldingRepository::new(pool.clone())),
+        Box::new(SqliteTransactionRepository::new(pool.clone())),
+    ));
+    let asset_service = Arc::new(AssetService::new(
+        Box::new(SqliteAssetRepository::new(pool.clone())),
+        Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+        Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+    ));
+
+    let asset = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Apple".to_string(),
+            reference: "AAPL".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 4,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset");
+
+    // Lock then unblock (MKT-156) — the asset must be fetchable again.
+    asset_service
+        .block_price_refresh(&asset.id)
+        .await
+        .expect("lock asset");
+    asset_service
+        .unblock_price_refresh(&asset.id)
+        .await
+        .expect("unlock asset");
+
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "USD".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    account_service
+        .open_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-01".to_string(),
+            1_000_000,
+            100_000_000,
+        )
+        .await
+        .expect("seed holding");
+
+    let price_repo: Arc<dyn AssetPriceRepository> =
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone()));
+    let dispatcher = Arc::new(Dispatcher::new(
+        Arc::new(NoOpProvider),
+        price_repo,
+        Arc::clone(&bus),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+    let use_case = AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(FetchGuard::new()),
+        dispatcher,
+    );
+
+    // Scope is non-empty (asset unblocked) → dispatch succeeds, not NoFetchableHoldings.
+    use_case
+        .fetch_for_account(&account.id)
+        .await
+        .expect("MKT-156: an unblocked asset must re-enter fetch scope and dispatch");
+}
