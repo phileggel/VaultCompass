@@ -1,6 +1,7 @@
 import type {
   AccountApplicationError,
   AccountDetailsResponse,
+  AssetCrudError,
   AssetPrice,
   AssetPriceError,
   DepositDTO,
@@ -64,6 +65,14 @@ export const accountDetailsGateway = {
     accountId: string,
   ): Promise<Result<null, FetchAccountAssetPricesError>> {
     return commands.fetchAccountAssetPrices(accountId);
+  },
+
+  async blockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetCrudError>> {
+    return commands.blockAssetPriceRefresh(assetId);
+  },
+
+  async unblockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetCrudError>> {
+    return commands.unblockAssetPriceRefresh(assetId);
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

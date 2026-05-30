@@ -9,6 +9,7 @@ import {
   assetPriceMutationErrorToI18n,
   formatSource,
   formatStaleness,
+  priceRefreshLockErrorToI18n,
   toAccountSummary,
   toClosedHoldingRow,
   toHoldingRow,
@@ -520,5 +521,21 @@ describe("assetPriceMutationErrorToI18n", () => {
     "DateInFuture",
   ] as const)("%s unit variant maps to its flat error key", (code) => {
     expect(assetPriceMutationErrorToI18n({ code })).toEqual({ key: `error.${code}` });
+  });
+});
+
+// MKT-156 — F27 presenter for the price-refresh lock commands' error surface
+describe("priceRefreshLockErrorToI18n", () => {
+  it("NotFound (carries id payload) maps to its flat key", () => {
+    expect(priceRefreshLockErrorToI18n({ code: "NotFound", id: "asset-1" })).toEqual({
+      key: "error.NotFound",
+    });
+  });
+
+  it.each([
+    "CashAssetNotEditable",
+    "DatabaseError",
+  ] as const)("%s unit variant maps to its flat error key", (code) => {
+    expect(priceRefreshLockErrorToI18n({ code })).toEqual({ key: `error.${code}` });
   });
 });

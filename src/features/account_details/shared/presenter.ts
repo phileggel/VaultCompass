@@ -1,5 +1,6 @@
 import type {
   AccountDetailsResponse,
+  AssetCrudError,
   AssetPriceError,
   AssetPriceSource,
   ClosedHoldingDetail,
@@ -34,6 +35,25 @@ export function assetPriceMutationErrorToI18n(err: AssetPriceError): I18nMessage
       const _exhaustive: never = err;
       return _exhaustive;
     }
+  }
+}
+
+/**
+ * F27 — Maps the AssetCrudError variants reachable by the price-refresh lock
+ * toggle commands (MKT-156) to an i18n key. Narrowed exhaustive switch over
+ * the three reachable codes per the asset contract: `NotFound`,
+ * `CashAssetNotEditable`, `DatabaseError`. Other AssetCrudError variants
+ * cannot be produced by `block_asset_price_refresh` / `unblock_asset_price_refresh`
+ * so they map to a generic key without triggering the exhaustiveness check.
+ */
+export function priceRefreshLockErrorToI18n(err: AssetCrudError): I18nMessage {
+  switch (err.code) {
+    case "NotFound":
+    case "CashAssetNotEditable":
+    case "DatabaseError":
+      return { key: `error.${err.code}` };
+    default:
+      return { key: "error.Unknown" };
   }
 }
 

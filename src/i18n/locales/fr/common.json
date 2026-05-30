@@ -345,6 +345,12 @@
     "price_state": {
       "missing_ticker": "Ticker manquant",
       "no_price_available": "Pas de prix disponible"
+    },
+    "lock": {
+      "action_block": "Bloquer les mises à jour automatiques pour cet actif",
+      "action_unblock": "Réactiver les mises à jour automatiques pour cet actif",
+      "success_blocked": "Mises à jour automatiques bloquées pour cet actif.",
+      "success_unblocked": "Mises à jour automatiques réactivées pour cet actif."
     }
   },
   "cash": {
