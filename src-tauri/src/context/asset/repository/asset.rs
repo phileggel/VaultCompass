@@ -221,3 +221,68 @@ impl AssetRepository for SqliteAssetRepository {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn setup_pool() -> Pool<Sqlite> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    /// Inserts a minimal active asset (FK-satisfied by the migration-seeded
+    /// `default-uncategorized` category) so the column-update methods have a row.
+    async fn seed_asset(pool: &Pool<Sqlite>, id: &str) {
+        sqlx::query!(
+            "INSERT INTO assets (id, name, reference, asset_class, currency, risk_level, category_id, is_archived)
+             VALUES (?, 'Test Asset', 'REF', 'Stocks', 'USD', 3, 'default-uncategorized', 0)",
+            id,
+        )
+        .execute(pool)
+        .await
+        .expect("seed asset");
+    }
+
+    // MKT-150 — block_price_refresh sets the flag; get_by_id reflects it.
+    #[tokio::test]
+    async fn block_price_refresh_sets_flag_and_round_trips() {
+        let pool = setup_pool().await;
+        seed_asset(&pool, "a1").await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        let before = repo.get_by_id("a1").await.unwrap().unwrap();
+        assert!(
+            !before.price_refresh_blocked,
+            "seeded asset starts unlocked"
+        );
+
+        repo.block_price_refresh("a1").await.unwrap();
+
+        let after = repo.get_by_id("a1").await.unwrap().unwrap();
+        assert!(after.price_refresh_blocked);
+    }
+
+    // MKT-156 — unblock_price_refresh clears the flag set by block.
+    #[tokio::test]
+    async fn unblock_price_refresh_clears_flag() {
+        let pool = setup_pool().await;
+        seed_asset(&pool, "a1").await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        repo.block_price_refresh("a1").await.unwrap();
+        repo.unblock_price_refresh("a1").await.unwrap();
+
+        let after = repo.get_by_id("a1").await.unwrap().unwrap();
+        assert!(!after.price_refresh_blocked);
+    }
+}
