@@ -50,6 +50,14 @@ The `AccountDetailsResponse` DTO gains one new field.
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `total_unrealized_pnl` | Sum of `unrealized_pnl` (i64 micros) across all active holdings where a value is computable (same-currency with a recorded price). `None` when no holding has a computable value. |
 
+### Asset (extended)
+
+The `Asset` entity (owned by the AST spec) gains one field for this feature.
+
+| Field                   | Business meaning                                                                                                                                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `price_refresh_blocked` | Whether automated price fetches are blocked for this asset (the asset is "locked"). When true, every fetch task skips the asset (MKT-151), preserving its most recently recorded price. Defaults to `false` (not locked). Independent of archive state; unchanged by an asset edit. |
+
 ---
 
 ## Business Rules
@@ -275,6 +283,28 @@ The launch auto-fetch (MKT-121) is silent (no snackbar).
 
 **MKT-142 — Source badge in Current Price column (frontend)**: The Account Details "Current Price" column displays a badge alongside the price (or near the staleness label MKT-140) showing the source of the most recent `AssetPrice` record. Same styling as MKT-141.
 
+### Price Refresh Lock (150–169)
+
+This section lets the user pin an asset's recorded price against automated overwrites. By default every fetch task (MKT-122/130/132) overwrites the asset's same-day price under the latest-write-wins policy ([ADR-012](../adr/012-latest-write-wins-source-as-metadata.md)); a manual correction is therefore replaced on the next refresh (see the MKT-100+ "manual override" flow). Locking an asset excludes it from all fetch tasks, so its most recently recorded price — typically a manual correction — is preserved until the user unlocks it. The lock is a property of the asset (prices are per asset, not per holding), so it applies across every account that holds the asset. The decision to implement the pin as fetch-scope exclusion (rather than reintroducing the write-time precedence ADR-012 removed) is recorded in [ADR-014](../adr/014-price-refresh-lock-scope-exclusion.md), which fulfills ADR-012's deferral.
+
+**MKT-150 — Lock flag on Asset (backend)**: The `Asset` entity gains a `price_refresh_blocked` boolean (owned by the `asset` bounded context; see AST spec). It defaults to not-locked for new and existing assets, is persisted, and is exposed on the asset wire surface so the frontend can render the lock state. It is independent of `is_archived` and is not modified by an asset edit (MKT-155).
+
+**MKT-151 — Locked asset excluded from fetch scope (backend)**: In every fetch task (launch MKT-122, global refresh MKT-130, account refresh MKT-132), an asset whose `price_refresh_blocked` is true is excluded from the task scope — no symbol is derived (MKT-110), no provider call is made, and no `AssetPrice` row is written for it. This is the same kind of scope exclusion as the system-cash rule (MKT-116); all other assets in the task proceed normally. A locked asset does not count toward the fetchable set of MKT-111: a task whose only candidates are locked (or system-cash) assets is rejected with the no-fetchable-holdings error, exactly as for a cash-only scope. Because the lock is a property of the asset, locking an asset held in one account also excludes it from another account's refresh (MKT-132).
+
+**MKT-152 — Lock applies only to provider fetches (frontend + backend)**: The lock suppresses only automated provider fetches (MKT-151). It does not restrict user-driven price writes: manual entry (MKT-020+), price-history add / edit / delete (MKT-070+), and transaction auto-record (MKT-050+) all remain available on a locked asset — the backend accepts those writes unchanged, and on the frontend the Enter price (MKT-010) and Price history (MKT-070) actions stay visible and usable on a locked holding row. Locking is the mechanism for keeping a deliberately-entered price; it never prevents the user from changing that price themselves.
+
+**MKT-153 — Lock toggle entry point (frontend)**: A lock / unlock action is available on each active, non-cash holding row in Account Details, alongside the existing Buy, Sell, Enter price, and Price history actions. The action's icon reflects the asset's current `price_refresh_blocked` state (locked vs unlocked). It is not shown on the system cash row (MKT-154) nor on closed holdings.
+
+**MKT-154 — System cash cannot be locked (backend)**: Setting or clearing the lock on the system Cash Asset is rejected with a specific error, consistent with the cash-not-editable invariant (CSH-016). The cash row does not expose the toggle (MKT-153), so this guard is for API-level correctness.
+
+**MKT-155 — Lock independent of edit and archive (backend)**: Editing an asset (the AST update flow) leaves `price_refresh_blocked` unchanged, and archiving or unarchiving an asset does not change it either. Notwithstanding AST-005 ("all asset fields are editable after creation"), `price_refresh_blocked` is not part of the Edit Asset form's editable field set — it is toggled exclusively by its dedicated action (MKT-156), mirroring how `is_archived` is governed by the archive / unarchive actions rather than the edit form.
+
+**MKT-156 — Toggle commands (backend)**: The `asset` bounded context exposes commands to set and to clear `price_refresh_blocked` for a given `asset_id`, each acknowledged synchronously and returning `()` on success. On success the backend publishes the `AssetUpdated` event, consistent with every other asset-state write (create, update, archive, unarchive, delete). A command targeting an unknown asset is rejected with a specific error (consistent with MKT-043). Locking an already-locked asset, or unlocking an already-unlocked one, is idempotent and succeeds without error.
+
+**MKT-157 — Toggle reactivity and feedback (frontend)**: After a successful toggle, the frontend re-reads the asset list once the command returns (mirroring the archive / unarchive flow; the `AssetUpdated` event published per MKT-156 keeps other views in sync). The holding row sources `price_refresh_blocked` from that asset slice — the same store it already uses for archive state — so its lock icon reflects the new state, and `HoldingDetail` is not extended with the flag. A snackbar confirms the change, and a subsequent refresh (MKT-130 / MKT-131) then skips or includes the asset per MKT-151.
+
+**MKT-158 — Locked state preserves the displayed price (frontend + backend)**: While an asset is locked, its Current Price column continues to display the most recently recorded `AssetPrice` (MKT-030); because fetches skip the asset (MKT-151), the staleness label (MKT-140) may age ("Updated Nd ago") without being refreshed. The source badge (MKT-142) keeps reflecting the recorded row's source (typically `Manual`).
+
 ---
 
 ## Workflow
@@ -397,6 +427,28 @@ User-triggered refresh feedback (FE)
     → snackbar on dispatch success ("Fetching prices…")                   (MKT-115)
     → snackbar on in-flight rejection ("Fetch already in progress")       (MKT-115)
     → snackbar on no-fetchable-holdings rejection ("No holdings to fetch") (MKT-115)
+```
+
+### Workflow — Price refresh lock (MKT-150+)
+
+```
+Account Details (active, non-cash holding row)
+    → lock / unlock icon button (MKT-153), icon reflects price_refresh_blocked
+    → user clicks to lock
+        backend: set price_refresh_blocked = true for asset_id          (MKT-156)
+                 reject if asset unknown (MKT-156) or system cash (MKT-154)
+                 publish AssetUpdated                                    (MKT-156)
+    → frontend re-reads assets; row icon flips to "locked"; snackbar     (MKT-157)
+
+Next refresh (global MKT-130 / account MKT-131)
+    → build scope across active, derivable, non-cash holdings
+        └─ skip every asset with price_refresh_blocked = true           (MKT-151)
+    → locked asset is not fetched; its recorded price is preserved       (MKT-158)
+        (staleness label keeps aging; source badge unchanged)
+
+User unlocks (same toggle)
+    → backend: set price_refresh_blocked = false                         (MKT-156)
+    → asset re-enters fetch scope on the next refresh                    (MKT-151)
 ```
 
 ---
@@ -588,6 +640,35 @@ Each row in the price-history list (MKT-071) gains a small badge to the right of
 5. Account Details shows $189; the badge becomes "Manual".
 6. On the next launch, auto-fetch will overwrite $189 with the new day's Stooq value (per ADR-012). The user's correction is for today; tomorrow brings tomorrow's price.
 
+### UX Draft — Price refresh lock (MKT-150+)
+
+#### Entry Point
+
+A lock / unlock icon button on each active, non-cash holding row in Account Details, in the actions column alongside Buy, Sell, Enter price, and Price history (MKT-153). The icon shows the asset's current state: an open padlock when fetches are allowed, a closed padlock when locked. Not shown on the system cash row nor on closed holdings.
+
+#### States
+
+- **Unlocked (default)**: open-padlock icon; the asset participates in every fetch (MKT-151 does not skip it). Tooltip conveys "Block automatic price updates".
+- **Locked**: closed-padlock icon; the asset is skipped by every fetch (MKT-151) and its recorded price is preserved (MKT-158). Tooltip conveys "Allow automatic price updates".
+- **Toggle in-flight**: the button is briefly disabled while the command is acknowledged; on success the icon flips and a snackbar confirms (MKT-157).
+- **Asset-wide scope reminder**: because the lock is per asset (not per holding), the tooltip notes that locking affects the asset everywhere it is held.
+
+#### User flow — pin a manual correction
+
+1. A fetch wrote `AssetPrice(DCAM, today) = 6.000, source: Stooq`, but the official close was `5.993`.
+2. The user records `5.993` manually via "Enter price" (MKT-010) → the row now shows the manual value with a "Manual" badge.
+3. The user clicks the lock icon on the holding row (MKT-153). The asset is now locked (MKT-156); a snackbar confirms (MKT-157).
+4. On every subsequent refresh, the asset is skipped (MKT-151); the `5.993` value persists.
+5. When the user no longer needs the pin, they click the icon again to unlock; the asset re-enters fetch scope (MKT-151).
+
+---
+
 ## Open Questions / Deferred
 
 **MKT-032 — disambiguating the "No price available" state.** The current rule merges two upstream causes (provider returned N/D vs no fetch has run yet under a manual-update-frequency account) into one diagnostic. Distinguishing them requires BE telemetry (per-asset last-fetch-attempt + outcome) not currently exposed on `HoldingDetail`. Defer until a real user-pain signal warrants the BE surface change.
+
+**MKT-153 — toggling the lock from the Asset management table.** This phase exposes the lock only from the Account Details holding row, where the price discrepancy is observed. Surfacing the same toggle in the Asset management table (assets view) — so an asset can be locked without holding it in an open account — is deferred until a need surfaces; the flag and commands (MKT-150, MKT-156) already support it.
+
+- [x] **Companion ADR for the price-refresh lock** — resolved: [ADR-014](../adr/014-price-refresh-lock-scope-exclusion.md) records the decision, fulfilling [ADR-012](../adr/012-latest-write-wins-source-as-metadata.md)'s decision-point-4 deferral. The pin is implemented as fetch-scope exclusion, leaving ADR-012's latest-write-wins write path intact.
+
+None — all questions have been resolved.

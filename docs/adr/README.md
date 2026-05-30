@@ -15,3 +15,4 @@
 | [ADR-011](011-byok-api-keys-os-keychain.md)                  | User-Supplied API Keys via OS Keychain (3-Tier Linux Fallback)    | Accepted                      |
 | [ADR-012](012-latest-write-wins-source-as-metadata.md)       | Latest-Write-Wins; Source Field is Metadata (supersedes ADR-010)  | Accepted — supersedes ADR-010 |
 | [ADR-013](013-recompute-account-performance-on-read.md)      | Recompute Account Performance on Read                             | Accepted                      |
+| [ADR-014](014-price-refresh-lock-scope-exclusion.md)         | Per-Asset Price-Refresh Lock via Fetch-Scope Exclusion            | Accepted                      |
