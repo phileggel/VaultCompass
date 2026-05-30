@@ -78,6 +78,13 @@ export function HoldingRow({
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
 
+  // Double-click a holding row to open the (router-driven) Edit Asset modal;
+  // archived assets are not editable, mirroring the disabled edit affordance.
+  const handleOpenAssetDetail = useCallback(() => {
+    if (isArchived) return;
+    patchModalSearch(navigate, { modal: "edit-asset", editAssetId: row.assetId });
+  }, [navigate, row.assetId, isArchived]);
+
   // CSH-091 — cash row variant: no Buy/Sell/Inspect, only Deposit/Withdraw.
   if (row.isCash) {
     return (
@@ -121,7 +128,7 @@ export function HoldingRow({
   }
 
   return (
-    <tr className="m3-tr">
+    <tr className="m3-tr" onDoubleClick={handleOpenAssetDetail}>
       <td className="m3-td">
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
