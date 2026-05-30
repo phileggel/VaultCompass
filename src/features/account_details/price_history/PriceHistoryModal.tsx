@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AssetPrice, HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
-import { microToFormatted } from "@/lib/microUnits";
+import { microToFormattedPrice } from "@/lib/microUnits";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
@@ -143,7 +143,7 @@ export function PriceHistoryModal({ isOpen, onClose, holding }: PriceHistoryModa
                   <tr key={row.date} className="m3-tr">
                     <td className="m3-td">{formatIsoDate(row.date, i18n.language)}</td>
                     <td className="m3-td text-right tabular-nums">
-                      {microToFormatted(row.price, 2)}
+                      {microToFormattedPrice(row.price)}
                     </td>
                     <td className="m3-td">
                       {sourceLabel && (

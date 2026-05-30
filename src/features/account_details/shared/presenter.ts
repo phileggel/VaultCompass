@@ -5,7 +5,7 @@ import type {
   ClosedHoldingDetail,
   HoldingDetail,
 } from "@/bindings";
-import { microToFormatted } from "@/lib/microUnits";
+import { microToFormatted, microToFormattedPrice } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 
 /**
@@ -158,7 +158,7 @@ export function formatStaleness(
  */
 export function derivePriceState(detail: HoldingDetail): CurrentPriceState {
   if (detail.current_price !== null) {
-    return { kind: "present", formatted: microToFormatted(detail.current_price, 2) };
+    return { kind: "present", formatted: microToFormattedPrice(detail.current_price) };
   }
   if (detail.asset_reference.trim() === "") {
     return { kind: "missing_ticker" };
@@ -214,7 +214,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     assetCurrency: detail.asset_currency,
     quantity: microToFormatted(detail.quantity, 6),
     quantityMicro: detail.quantity,
-    averagePrice: microToFormatted(detail.average_price, 2),
+    averagePrice: microToFormattedPrice(detail.average_price),
     costBasis: microToFormatted(detail.cost_basis, 2),
     realizedPnl: microToFormatted(detail.realized_pnl, 2),
     realizedPnlRaw: detail.realized_pnl,
