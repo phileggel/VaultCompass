@@ -158,7 +158,7 @@ export function formatStaleness(
 
 /**
  * MKT-032 — Derives the Current Price cell state from a holding's data.
- * Pure function: no i18n, no formatting policy beyond `microToFormatted`.
+ * Pure function: no i18n; price formatting delegates to `microToFormattedPrice`.
  */
 export function derivePriceState(detail: HoldingDetail): CurrentPriceState {
   if (detail.current_price !== null) {

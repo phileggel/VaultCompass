@@ -73,6 +73,11 @@ describe("toHoldingRow", () => {
     expect(row.averagePrice).toBe("7,125");
   });
 
+  it("formats averagePrice with 2 decimals at exactly 10 (boundary)", () => {
+    const row = toHoldingRow(makeHolding({ average_price: 10_000_000 }));
+    expect(row.averagePrice).toBe("10,00");
+  });
+
   it("formats costBasis with 2 decimals", () => {
     const row = toHoldingRow(makeHolding({ cost_basis: 300_000_000 }));
     expect(row.costBasis).toBe("300,00");

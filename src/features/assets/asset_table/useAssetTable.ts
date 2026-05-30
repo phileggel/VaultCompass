@@ -1,5 +1,7 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import type { Asset } from "@/bindings";
+import { patchModalSearch } from "@/lib/modalSearch";
 
 export type SortConfig = {
   key: "name" | "reference" | "class" | "category" | "currency" | "risk_level";
@@ -7,6 +9,7 @@ export type SortConfig = {
 };
 
 export function useAssetTable(assets: Asset[], searchTerm: string, showArchived: boolean) {
+  const navigate = useNavigate();
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: "name",
     direction: "asc",
@@ -17,6 +20,12 @@ export function useAssetTable(assets: Asset[], searchTerm: string, showArchived:
       key,
       direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
     }));
+  };
+
+  // Opens the router-driven Edit Asset modal (shell-mounted) so it overlays in
+  // the current route context without a cross-feature modal import.
+  const openEditAsset = (assetId: string) => {
+    patchModalSearch(navigate, { modal: "edit-asset", editAssetId: assetId });
   };
 
   const sortedAndFilteredAssets = useMemo(() => {
@@ -61,5 +70,6 @@ export function useAssetTable(assets: Asset[], searchTerm: string, showArchived:
     sortedAndFilteredAssets,
     sortConfig,
     handleSort,
+    openEditAsset,
   };
 }
