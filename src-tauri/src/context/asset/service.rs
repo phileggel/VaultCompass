@@ -120,6 +120,7 @@ impl AssetService {
             None,
             false,
             None,
+            false,
         )?;
         let asset = self.asset_repo.create(asset).await?;
         tracing::info!(target: BACKEND, asset_id = %asset.id, currency = %currency, "Seeded Cash Asset");

@@ -146,6 +146,7 @@ impl Asset {
         isin: Option<String>,
         is_archived: bool,
         exchange: Option<Exchange>,
+        price_refresh_blocked: bool,
     ) -> StdResult<Self, AssetDomainError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
@@ -163,7 +164,7 @@ impl Asset {
             isin,
             is_archived,
             exchange,
-            price_refresh_blocked: false,
+            price_refresh_blocked,
         })
     }
 
