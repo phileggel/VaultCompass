@@ -5,7 +5,11 @@ import type {
   ClosedHoldingDetail,
   HoldingDetail,
 } from "@/bindings";
-import { microToFormatted, microToFormattedPrice } from "@/lib/microUnits";
+import {
+  microToFormatted,
+  microToFormattedPrice,
+  microToFormattedQuantity,
+} from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 
 /**
@@ -212,7 +216,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     assetName: detail.asset_name,
     assetReference: detail.asset_reference,
     assetCurrency: detail.asset_currency,
-    quantity: microToFormatted(detail.quantity, 6),
+    quantity: microToFormattedQuantity(detail.quantity),
     quantityMicro: detail.quantity,
     averagePrice: microToFormattedPrice(detail.average_price),
     costBasis: microToFormatted(detail.cost_basis, 2),

@@ -53,9 +53,14 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
 });
 
 describe("toHoldingRow", () => {
-  it("formats quantity with 6 decimals", () => {
+  it("formats fractional quantity trimming trailing zeros", () => {
     const row = toHoldingRow(makeHolding({ quantity: 1_500_000 }));
-    expect(row.quantity).toBe("1,500000");
+    expect(row.quantity).toBe("1,5");
+  });
+
+  it("formats a whole quantity with no decimals", () => {
+    const row = toHoldingRow(makeHolding({ quantity: 12_000_000 }));
+    expect(row.quantity).toBe("12");
   });
 
   it("formats averagePrice with 2 decimals when value is 10 or above", () => {
