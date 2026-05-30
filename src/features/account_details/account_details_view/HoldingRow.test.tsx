@@ -173,3 +173,76 @@ describe("HoldingRow — double-click opens Edit Asset modal", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 });
+
+// MKT-153/156 — price-refresh lock IconButton on the holding row.
+describe("HoldingRow — price-refresh lock toggle", () => {
+  const renderWithToggle = (
+    row: HoldingRowViewModel,
+    onTogglePriceRefreshLock: (assetId: string, currentlyBlocked: boolean) => void,
+  ) =>
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={row}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onTogglePriceRefreshLock={onTogglePriceRefreshLock}
+          />
+        </tbody>
+      </table>,
+    );
+
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+  });
+
+  it("renders the unlock affordance and calls the handler with currentlyBlocked=false when the asset is unlocked", () => {
+    useAppStore.setState({
+      assets: [
+        { id: "asset-1", is_archived: false, price_refresh_blocked: false, currency: "USD" },
+      ] as unknown as Asset[],
+      accounts: [],
+    });
+    const toggle = vi.fn();
+    renderWithToggle(baseRow, toggle);
+    const button = screen.getByRole("button", { name: "mkt.lock.action_block" });
+    expect(button.id).toBe("action-toggle-price-refresh-asset-1");
+    fireEvent.click(button);
+    expect(toggle).toHaveBeenCalledWith("asset-1", false);
+  });
+
+  it("renders the lock affordance and calls the handler with currentlyBlocked=true when the asset is locked", () => {
+    useAppStore.setState({
+      assets: [
+        { id: "asset-1", is_archived: false, price_refresh_blocked: true, currency: "USD" },
+      ] as unknown as Asset[],
+      accounts: [],
+    });
+    const toggle = vi.fn();
+    renderWithToggle(baseRow, toggle);
+    const button = screen.getByRole("button", { name: "mkt.lock.action_unblock" });
+    fireEvent.click(button);
+    expect(toggle).toHaveBeenCalledWith("asset-1", true);
+  });
+
+  it("omits the lock button entirely when no handler is provided (backward-compatible)", () => {
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={baseRow}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    expect(screen.queryByRole("button", { name: "mkt.lock.action_block" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "mkt.lock.action_unblock" })).toBeNull();
+  });
+});

@@ -234,6 +234,7 @@ export function AccountDetailsView() {
                           onPriceHistory={view.handlePriceHistory}
                           onDeposit={view.handleDepositOpen}
                           onWithdraw={view.handleWithdrawalOpen}
+                          onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
                         />
                       ))}
                     </tbody>

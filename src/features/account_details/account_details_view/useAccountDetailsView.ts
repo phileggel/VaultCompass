@@ -1,7 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
+import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
+import { accountDetailsGateway } from "../gateway";
+import { priceRefreshLockErrorToI18n } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
@@ -19,6 +24,9 @@ export function useAccountDetailsView(accountId: string) {
   const navigate = useNavigate();
   const data = useAccountDetails(accountId);
   const accounts = useAppStore((state) => state.accounts);
+  const fetchAssets = useAppStore((state) => state.fetchAssets);
+  const showSnackbar = useSnackbar();
+  const { t } = useTranslation();
   const accountCurrency = accounts.find((a) => a.id === accountId)?.currency ?? "";
 
   // ---------------------------------------------------------------------------
@@ -86,6 +94,34 @@ export function useAccountDetailsView(accountId: string) {
     data.retry();
   }, [data]);
 
+  // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
+  // block/unblock command, then re-reads the asset list (so the row's lock
+  // icon flips from the store, mirroring archive/unarchive) and confirms
+  // with a snackbar. Errors surface via the snackbar's i18n pipeline.
+  const handleTogglePriceRefreshLock = useCallback(
+    async (assetId: string, currentlyBlocked: boolean) => {
+      try {
+        const res = currentlyBlocked
+          ? await accountDetailsGateway.unblockAssetPriceRefresh(assetId)
+          : await accountDetailsGateway.blockAssetPriceRefresh(assetId);
+        if (res.status === "ok") {
+          await fetchAssets();
+          showSnackbar(
+            t(currentlyBlocked ? "mkt.lock.success_unblocked" : "mkt.lock.success_blocked"),
+            "success",
+          );
+        } else {
+          const msg = priceRefreshLockErrorToI18n(res.error);
+          showSnackbar(t(msg.key, msg.vars), "error");
+        }
+      } catch (e) {
+        logger.error("Failed to toggle price-refresh lock", { error: e, assetId });
+        showSnackbar(t("error.Unknown"), "error");
+      }
+    },
+    [fetchAssets, showSnackbar, t],
+  );
+
   // ---------------------------------------------------------------------------
   // Derived flags
   // ---------------------------------------------------------------------------
@@ -136,5 +172,6 @@ export function useAccountDetailsView(accountId: string) {
     handleWithdrawalOpen,
     handleWithdrawalClose,
     handleWithdrawalSuccess,
+    handleTogglePriceRefreshLock,
   };
 }

@@ -1,5 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowDownToLine, ArrowUpFromLine, History, Minus, Plus, Search } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  History,
+  Lock,
+  LockOpen,
+  Minus,
+  Plus,
+  Search,
+} from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { patchModalSearch } from "@/lib/modalSearch";
@@ -19,6 +28,8 @@ type HoldingRowProps = {
   onDeposit?: () => void;
   /** Cash variant — open Withdrawal modal (CSH-091). */
   onWithdraw?: () => void;
+  /** MKT-153/156 — toggle the asset's price-refresh lock. */
+  onTogglePriceRefreshLock?: (assetId: string, currentlyBlocked: boolean) => void;
 };
 
 export function HoldingRow({
@@ -29,6 +40,7 @@ export function HoldingRow({
   onPriceHistory,
   onDeposit,
   onWithdraw,
+  onTogglePriceRefreshLock,
 }: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -77,6 +89,11 @@ export function HoldingRow({
 
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
+  const isPriceRefreshBlocked = asset?.price_refresh_blocked ?? false;
+
+  const handleTogglePriceRefreshLock = useCallback(() => {
+    onTogglePriceRefreshLock?.(row.assetId, isPriceRefreshBlocked);
+  }, [onTogglePriceRefreshLock, row.assetId, isPriceRefreshBlocked]);
 
   // Double-click a holding row to open the (router-driven) Edit Asset modal;
   // archived assets are not editable, mirroring the disabled edit affordance.
@@ -228,6 +245,18 @@ export function HoldingRow({
               id={`action-price-history-${row.assetId}`}
               aria-label={t("account_details.action_price_history")}
               onClick={handlePriceHistory}
+            />
+          )}
+          {/* MKT-153 — Lock toggle: blocks/allows automated price fetches (ADR-014) */}
+          {onTogglePriceRefreshLock && (
+            <IconButton
+              icon={isPriceRefreshBlocked ? <Lock size={16} /> : <LockOpen size={16} />}
+              size="sm"
+              id={`action-toggle-price-refresh-${row.assetId}`}
+              aria-label={t(
+                isPriceRefreshBlocked ? "mkt.lock.action_unblock" : "mkt.lock.action_block",
+              )}
+              onClick={handleTogglePriceRefreshLock}
             />
           )}
           <IconButton

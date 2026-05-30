@@ -345,6 +345,12 @@
     "price_state": {
       "missing_ticker": "Missing ticker",
       "no_price_available": "No price available"
+    },
+    "lock": {
+      "action_block": "Block automatic price updates for this asset",
+      "action_unblock": "Allow automatic price updates for this asset",
+      "success_blocked": "Automatic price updates blocked for this asset.",
+      "success_unblocked": "Automatic price updates re-enabled for this asset."
     }
   },
   "cash": {

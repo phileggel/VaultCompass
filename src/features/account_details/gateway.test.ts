@@ -409,4 +409,25 @@ describe("accountDetailsGateway — recordWithdrawal (CSH-032)", () => {
 
     expect(result).toEqual({ status: "error", error: err });
   });
+
+  // MKT-156 — block toggle invokes the right command and returns ok payload
+  it("blockAssetPriceRefresh invokes block_asset_price_refresh with the asset id", async () => {
+    mockInvoke.mockResolvedValue(null);
+    const result = await accountDetailsGateway.blockAssetPriceRefresh("asset-1");
+    expect(mockInvoke).toHaveBeenCalledWith("block_asset_price_refresh", { id: "asset-1" });
+    expect(result).toEqual({ status: "ok", data: null });
+  });
+
+  it("unblockAssetPriceRefresh invokes unblock_asset_price_refresh with the asset id", async () => {
+    mockInvoke.mockResolvedValue(null);
+    const result = await accountDetailsGateway.unblockAssetPriceRefresh("asset-1");
+    expect(mockInvoke).toHaveBeenCalledWith("unblock_asset_price_refresh", { id: "asset-1" });
+    expect(result).toEqual({ status: "ok", data: null });
+  });
+
+  it("blockAssetPriceRefresh surfaces a typed error", async () => {
+    mockInvoke.mockRejectedValue({ code: "CashAssetNotEditable" });
+    const result = await accountDetailsGateway.blockAssetPriceRefresh("cash-id");
+    expect(result).toEqual({ status: "error", error: { code: "CashAssetNotEditable" } });
+  });
 });
