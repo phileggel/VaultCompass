@@ -54,6 +54,7 @@ const seedAsset: Asset = {
   class: "Stocks",
   isin: null,
   is_archived: false,
+  price_refresh_blocked: false,
   exchange: null,
 };
 

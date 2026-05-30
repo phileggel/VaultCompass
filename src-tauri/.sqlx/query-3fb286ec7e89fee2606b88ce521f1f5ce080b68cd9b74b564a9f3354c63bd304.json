@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE assets SET price_refresh_blocked = 0 WHERE id = ? AND is_deleted = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3fb286ec7e89fee2606b88ce521f1f5ce080b68cd9b74b564a9f3354c63bd304"
+}

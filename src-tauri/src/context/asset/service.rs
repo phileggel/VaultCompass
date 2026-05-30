@@ -226,6 +226,42 @@ impl AssetService {
         Ok(())
     }
 
+    /// Blocks automated price fetches for an asset (the lock — MKT-150/156,
+    /// ADR-014). The system-asset invariant (CSH-016 / MKT-154) is enforced
+    /// inside `Asset::block_price_refresh`.
+    pub async fn block_price_refresh(&self, asset_id: &str) -> StdResult<(), AssetCrudError> {
+        let existing = load_asset_for_crud(&*self.asset_repo, asset_id).await?;
+        // See `archive_asset` for the rationale on discarding the returned aggregate.
+        existing.block_price_refresh()?;
+        self.asset_repo.block_price_refresh(asset_id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "block_price_refresh: repository failure");
+            AssetApplicationError::DatabaseError
+        })?;
+        tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset price refresh blocked");
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetUpdated);
+        }
+        Ok(())
+    }
+
+    /// Re-allows automated price fetches for an asset (MKT-156). The
+    /// system-asset invariant (CSH-016 / MKT-154) is enforced inside
+    /// `Asset::unblock_price_refresh`.
+    pub async fn unblock_price_refresh(&self, asset_id: &str) -> StdResult<(), AssetCrudError> {
+        let existing = load_asset_for_crud(&*self.asset_repo, asset_id).await?;
+        // See `archive_asset` for the rationale on discarding the returned aggregate.
+        existing.unblock_price_refresh()?;
+        self.asset_repo.unblock_price_refresh(asset_id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "unblock_price_refresh: repository failure");
+            AssetApplicationError::DatabaseError
+        })?;
+        tracing::info!(target: BACKEND, asset_id = %asset_id, "Asset price refresh unblocked");
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetUpdated);
+        }
+        Ok(())
+    }
+
     /// Soft-deletes an asset and publishes an AssetUpdated event. The
     /// system-asset invariant (CSH-016) is enforced inside
     /// `Asset::ensure_user_managed` on the loaded aggregate.
@@ -675,6 +711,7 @@ mod tests {
             None,
             archived,
             None,
+            false,
         )
     }
 
@@ -690,6 +727,7 @@ mod tests {
             None,
             false,
             None,
+            false,
         )
     }
 
@@ -958,6 +996,61 @@ mod tests {
             MockAssetPriceRepository::new(),
         );
         svc.unarchive_asset("asset-id").await.unwrap();
+    }
+
+    // MKT-156 — service calls asset_repo.block_price_refresh with the correct id
+    #[tokio::test]
+    async fn test_block_price_refresh_delegates_to_repo() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        ar.expect_block_price_refresh()
+            .withf(|id| id == "asset-id")
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        svc.block_price_refresh("asset-id").await.unwrap();
+    }
+
+    // MKT-156 — service calls asset_repo.unblock_price_refresh with the correct id
+    #[tokio::test]
+    async fn test_unblock_price_refresh_delegates_to_repo() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_asset("asset-id", false))));
+        ar.expect_unblock_price_refresh()
+            .withf(|id| id == "asset-id")
+            .times(1)
+            .return_once(|_| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        svc.unblock_price_refresh("asset-id").await.unwrap();
+    }
+
+    // MKT-154 / CSH-016 — service rejects locking the system Cash Asset; no repo write
+    #[tokio::test]
+    async fn test_block_price_refresh_rejects_cash_asset() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_get_by_id()
+            .return_once(|_| Ok(Some(make_cash_asset("cash-usd"))));
+        ar.expect_block_price_refresh().times(0);
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let err = svc.block_price_refresh("cash-usd").await.unwrap_err();
+        assert!(matches!(
+            err,
+            AssetCrudError::Validation(AssetDomainError::CashAssetNotEditable)
+        ));
     }
 
     // R7 — get_all_assets delegates to asset_repo.get_all (not get_all_including_archived)

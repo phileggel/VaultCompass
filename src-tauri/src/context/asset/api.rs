@@ -102,6 +102,26 @@ pub async fn unarchive_asset(state: State<'_, AppState>, id: String) -> Result<(
     state.asset_service.unarchive_asset(&id).await
 }
 
+/// Blocks automated price fetches for an asset (the lock — MKT-156, ADR-014).
+#[tauri::command]
+#[specta::specta]
+pub async fn block_asset_price_refresh(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), AssetCrudError> {
+    state.asset_service.block_price_refresh(&id).await
+}
+
+/// Re-allows automated price fetches for an asset (MKT-156).
+#[tauri::command]
+#[specta::specta]
+pub async fn unblock_asset_price_refresh(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), AssetCrudError> {
+    state.asset_service.unblock_price_refresh(&id).await
+}
+
 /// Returns the canonical curated set of supported trading venues (AST-021).
 /// Infallible — backed by an in-binary constant.
 #[tauri::command]

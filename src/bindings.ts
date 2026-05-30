@@ -64,6 +64,28 @@ async unarchiveAsset(id: string) : Promise<Result<null, AssetCrudError>> {
 }
 },
 /**
+ * Blocks automated price fetches for an asset (the lock — MKT-156, ADR-014).
+ */
+async blockAssetPriceRefresh(id: string) : Promise<Result<null, AssetCrudError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("block_asset_price_refresh", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Re-allows automated price fetches for an asset (MKT-156).
+ */
+async unblockAssetPriceRefresh(id: string) : Promise<Result<null, AssetCrudError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("unblock_asset_price_refresh", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the canonical curated set of supported trading venues (AST-021).
  * Infallible — backed by an in-binary constant.
  */
@@ -811,7 +833,14 @@ is_archived: boolean;
 /**
  * Optional canonical trading venue (AST-021).
  */
-exchange: Exchange | null }
+exchange: Exchange | null; 
+/**
+ * When true, the asset is excluded from every price-fetch task scope
+ * (MKT-150 / MKT-151, ADR-014), preserving its most recently recorded
+ * price. Independent of `is_archived`; toggled only by the dedicated
+ * `block_price_refresh` / `unblock_price_refresh` actions.
+ */
+price_refresh_blocked: boolean }
 /**
  * Application-layer rejections for the Asset aggregate of the Asset BC —
  * concerns raised at the service layer rather than by an aggregate method on

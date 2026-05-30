@@ -143,6 +143,12 @@ impl AssetPriceFetchUseCase {
                     return Err(translate_asset_application_error(application_error));
                 }
             };
+            // MKT-151 / ADR-014 — a locked asset is excluded from fetch scope,
+            // preserving its most recently recorded price (same shape as the
+            // system-cash exclusion above).
+            if asset.price_refresh_blocked {
+                continue;
+            }
             let Some(symbol) =
                 derive_stooq_symbol_with_exchange(&asset.reference, asset.exchange.as_ref())
             else {
