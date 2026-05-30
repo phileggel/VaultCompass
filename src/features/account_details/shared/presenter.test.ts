@@ -58,9 +58,14 @@ describe("toHoldingRow", () => {
     expect(row.quantity).toBe("1,500000");
   });
 
-  it("formats averagePrice with 2 decimals", () => {
+  it("formats averagePrice with 2 decimals when value is 10 or above", () => {
     const row = toHoldingRow(makeHolding({ average_price: 150_000_000 }));
     expect(row.averagePrice).toBe("150,00");
+  });
+
+  it("formats averagePrice with 3 decimals when value is below 10", () => {
+    const row = toHoldingRow(makeHolding({ average_price: 7_125_000 }));
+    expect(row.averagePrice).toBe("7,125");
   });
 
   it("formats costBasis with 2 decimals", () => {
@@ -187,10 +192,15 @@ describe("toHoldingRow — market price fields (MKT)", () => {
     expect(row.canEnterPrice).toBe(true);
   });
 
-  // MKT-030 — current price column: formatted price with 2 decimals
+  // MKT-030 — current price column: formatted price with adaptive precision
   it("MKT-030 — currentPrice is 'present' with formatted value when current_price is set", () => {
     const row = toHoldingRow(makeHolding({ current_price: 150_500_000 }));
     expect(row.currentPrice).toEqual({ kind: "present", formatted: "150,50" });
+  });
+
+  it("MKT-030 — currentPrice uses 3 decimals when value is below 10", () => {
+    const row = toHoldingRow(makeHolding({ current_price: 4_500_000 }));
+    expect(row.currentPrice).toEqual({ kind: "present", formatted: "4,500" });
   });
 
   // MKT-032 — diagnostic 'missing_ticker' when asset_reference is empty

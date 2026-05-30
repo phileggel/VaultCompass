@@ -58,6 +58,16 @@ export function microToFormatted(micros: number, decimals = 3): string {
 }
 
 /**
+ * Converts a price in micro-units to a locale-aware display string with adaptive
+ * precision: 3 decimal places when the absolute value is below 10, 2 otherwise.
+ * e.g. 7_500_000 → "7.500", 150_000_000 → "150.00"
+ */
+export function microToFormattedPrice(micros: number): string {
+  const decimals = Math.abs(micros) < 10 * MICRO ? 3 : 2;
+  return microToFormatted(micros, decimals);
+}
+
+/**
  * Computes total amount from micro-unit values (TRX-026 formula).
  * Formula: floor(floor(qty × price / MICRO) × rate / MICRO) + fees
  *
