@@ -32,6 +32,7 @@ const makeAsset = (): Asset => ({
   currency: "USD",
   risk_level: 3,
   is_archived: false,
+  price_refresh_blocked: false,
   exchange: null,
 });
 

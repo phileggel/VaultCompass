@@ -70,6 +70,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset::add_asset,
             asset::update_asset,
             asset::unarchive_asset,
+            asset::block_asset_price_refresh,
+            asset::unblock_asset_price_refresh,
             asset::get_supported_exchanges,
             asset::get_categories,
             asset::add_category,

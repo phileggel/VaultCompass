@@ -93,6 +93,11 @@ pub struct Asset {
     pub is_archived: bool,
     /// Optional canonical trading venue (AST-021).
     pub exchange: Option<Exchange>,
+    /// When true, the asset is excluded from every price-fetch task scope
+    /// (MKT-150 / MKT-151, ADR-014), preserving its most recently recorded
+    /// price. Independent of `is_archived`; toggled only by the dedicated
+    /// `block_price_refresh` / `unblock_price_refresh` actions.
+    pub price_refresh_blocked: bool,
 }
 
 impl Asset {
@@ -124,6 +129,7 @@ impl Asset {
             isin,
             is_archived: false,
             exchange,
+            price_refresh_blocked: false,
         })
     }
 
@@ -157,6 +163,7 @@ impl Asset {
             isin,
             is_archived,
             exchange,
+            price_refresh_blocked: false,
         })
     }
 
@@ -206,6 +213,7 @@ impl Asset {
         isin: Option<String>,
         is_archived: bool,
         exchange: Option<Exchange>,
+        price_refresh_blocked: bool,
     ) -> Self {
         Self {
             id: asset_id,
@@ -218,6 +226,7 @@ impl Asset {
             isin,
             is_archived,
             exchange,
+            price_refresh_blocked,
         }
     }
 
@@ -279,6 +288,7 @@ impl Asset {
             isin,
             is_archived: self.is_archived,
             exchange,
+            price_refresh_blocked: self.price_refresh_blocked,
         })
     }
 
@@ -298,6 +308,28 @@ impl Asset {
         self.ensure_user_managed()?;
         Ok(Self {
             is_archived: false,
+            ..self
+        })
+    }
+
+    /// Aggregate root method: blocks automated price fetches for this asset
+    /// (MKT-150 / MKT-151, ADR-014 — the lock). Enforces the system-asset
+    /// invariant (CSH-016 / MKT-154). Idempotent.
+    pub fn block_price_refresh(self) -> Result<Self, AssetDomainError> {
+        self.ensure_user_managed()?;
+        Ok(Self {
+            price_refresh_blocked: true,
+            ..self
+        })
+    }
+
+    /// Aggregate root method: re-allows automated price fetches for this asset
+    /// (MKT-156). Enforces the system-asset invariant (CSH-016 / MKT-154).
+    /// Idempotent.
+    pub fn unblock_price_refresh(self) -> Result<Self, AssetDomainError> {
+        self.ensure_user_managed()?;
+        Ok(Self {
+            price_refresh_blocked: false,
             ..self
         })
     }
@@ -339,6 +371,7 @@ mod aggregate_tests {
             None,
             archived,
             None,
+            false,
         )
     }
 
@@ -354,6 +387,7 @@ mod aggregate_tests {
             None,
             false,
             None,
+            false,
         )
     }
 
@@ -443,6 +477,69 @@ mod aggregate_tests {
         assert!(!unarchived.is_archived);
     }
 
+    // MKT-150 — block_price_refresh sets the lock on a regular asset.
+    #[test]
+    fn block_price_refresh_sets_flag_on_user_asset() {
+        let locked = equity("a1", false).block_price_refresh().unwrap();
+        assert!(locked.price_refresh_blocked);
+    }
+
+    // MKT-156 — unblock_price_refresh clears the lock on a regular asset.
+    #[test]
+    fn unblock_price_refresh_clears_flag_on_user_asset() {
+        let locked = equity("a1", false).block_price_refresh().unwrap();
+        let unlocked = locked.unblock_price_refresh().unwrap();
+        assert!(!unlocked.price_refresh_blocked);
+    }
+
+    // MKT-154 / CSH-016 — system Cash Asset cannot be locked.
+    #[test]
+    fn block_price_refresh_rejects_system_cash_asset() {
+        assert!(matches!(
+            cash().block_price_refresh().unwrap_err(),
+            AssetDomainError::CashAssetNotEditable
+        ));
+    }
+
+    // MKT-154 / CSH-016 — system Cash Asset cannot be unlocked.
+    #[test]
+    fn unblock_price_refresh_rejects_system_cash_asset() {
+        assert!(matches!(
+            cash().unblock_price_refresh().unwrap_err(),
+            AssetDomainError::CashAssetNotEditable
+        ));
+    }
+
+    // MKT-150 — block_price_refresh preserves all other fields (only the lock flips).
+    #[test]
+    fn block_price_refresh_preserves_other_fields() {
+        let before = equity("a1", false);
+        let after = before.clone().block_price_refresh().unwrap();
+        assert_eq!(after.id, before.id);
+        assert_eq!(after.name, before.name);
+        assert_eq!(after.is_archived, before.is_archived);
+        assert_eq!(after.reference, before.reference);
+    }
+
+    // MKT-155 — update_from preserves the price-refresh lock across an edit.
+    #[test]
+    fn update_from_preserves_price_refresh_lock() {
+        let locked = equity("a1", false).block_price_refresh().unwrap();
+        let updated = locked
+            .update_from(
+                "Renamed".into(),
+                AssetClass::Stocks,
+                AssetCategory::default(),
+                "USD".into(),
+                3,
+                "AAPL".into(),
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(updated.price_refresh_blocked);
+    }
+
     // ensure_user_managed rejects the system Cash Asset (used by delete service path).
     #[test]
     fn ensure_user_managed_rejects_system_cash_asset() {
@@ -510,6 +607,7 @@ mod aggregate_tests {
             None,
             true,
             None,
+            false,
         );
         let err = archived_cash
             .update_from(
@@ -708,6 +806,7 @@ mod exchange_tests {
             None,
             false,
             exchange,
+            false,
         )
     }
 
@@ -890,4 +989,8 @@ pub trait AssetRepository: Send + Sync {
     async fn archive(&self, id: &str) -> Result<()>;
     /// Unarchives an asset.
     async fn unarchive(&self, id: &str) -> Result<()>;
+    /// Sets the price-refresh lock on an asset (MKT-150).
+    async fn block_price_refresh(&self, id: &str) -> Result<()>;
+    /// Clears the price-refresh lock on an asset (MKT-150).
+    async fn unblock_price_refresh(&self, id: &str) -> Result<()>;
 }

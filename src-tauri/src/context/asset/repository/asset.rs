@@ -17,6 +17,7 @@ struct AssetRow {
     category_name: String,
     is_archived: bool,
     exchange_code: Option<String>,
+    price_refresh_blocked: bool,
 }
 
 impl From<AssetRow> for Asset {
@@ -34,6 +35,7 @@ impl From<AssetRow> for Asset {
             row.isin,
             row.is_archived,
             exchange,
+            row.price_refresh_blocked,
         )
     }
 }
@@ -62,7 +64,8 @@ impl AssetRepository for SqliteAssetRepository {
                 c.id as category_id,
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
-                a.exchange_code
+                a.exchange_code,
+                a.price_refresh_blocked as "price_refresh_blocked: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
             WHERE a.is_deleted = 0 AND a.is_archived = 0 AND c.is_deleted = 0
@@ -84,7 +87,8 @@ impl AssetRepository for SqliteAssetRepository {
                 c.id as category_id,
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
-                a.exchange_code
+                a.exchange_code,
+                a.price_refresh_blocked as "price_refresh_blocked: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
             WHERE a.is_deleted = 0 AND c.is_deleted = 0
@@ -106,7 +110,8 @@ impl AssetRepository for SqliteAssetRepository {
                 c.id as category_id,
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
-                a.exchange_code
+                a.exchange_code,
+                a.price_refresh_blocked as "price_refresh_blocked: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
             WHERE a.id = ?
@@ -191,6 +196,28 @@ impl AssetRepository for SqliteAssetRepository {
         .execute(&self.pool)
         .await
         .with_context(|| format!("Failed to unarchive asset with id: {}", id))?;
+        Ok(())
+    }
+
+    async fn block_price_refresh(&self, id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"UPDATE assets SET price_refresh_blocked = 1 WHERE id = ? AND is_deleted = 0"#,
+            id
+        )
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("Failed to block price refresh for asset with id: {}", id))?;
+        Ok(())
+    }
+
+    async fn unblock_price_refresh(&self, id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"UPDATE assets SET price_refresh_blocked = 0 WHERE id = ? AND is_deleted = 0"#,
+            id
+        )
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("Failed to unblock price refresh for asset with id: {}", id))?;
         Ok(())
     }
 }
