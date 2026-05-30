@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Asset } from "@/bindings";
 import { useAppStore } from "@/lib/store";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import { HoldingRow } from "./HoldingRow";
@@ -141,5 +142,34 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     });
     expect(screen.queryByRole("button", { name: "mkt.price_state.no_price_available" })).toBeNull();
     expect(screen.queryByRole("link", { name: "mkt.price_state.no_price_available" })).toBeNull();
+  });
+});
+
+describe("HoldingRow — double-click opens Edit Asset modal", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  it("double-clicking a holding row navigates with modal=edit-asset+editAssetId", () => {
+    renderInTable(baseRow);
+    const row = screen.getByText("Apple Inc").closest("tr");
+    if (!row) throw new Error("expected a holding row");
+    fireEvent.doubleClick(row);
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const arg = navigateMock.mock.calls[0]?.[0] as { search: (prev: object) => object };
+    expect(arg.search({})).toEqual({ modal: "edit-asset", editAssetId: "asset-1" });
+  });
+
+  it("does not open the modal when the asset is archived", () => {
+    useAppStore.setState({
+      assets: [{ id: "asset-1", is_archived: true, currency: "USD" }] as unknown as Asset[],
+      accounts: [],
+    });
+    renderInTable(baseRow);
+    const row = screen.getByText("Apple Inc").closest("tr");
+    if (!row) throw new Error("expected a holding row");
+    fireEvent.doubleClick(row);
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });
