@@ -1,7 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset } from "@/bindings";
 import { useAssetTable } from "./useAssetTable";
+
+const navigateMock = vi.fn();
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => navigateMock,
+}));
 
 const makeAsset = (overrides: Partial<Asset> = {}): Asset => ({
   id: "a1",
@@ -33,6 +38,19 @@ const archivedAsset = makeAsset({
 });
 
 describe("useAssetTable", () => {
+  beforeEach(() => {
+    navigateMock.mockClear();
+  });
+
+  // F10 — navigation lives in the hook; openEditAsset drives the router-mounted modal
+  it("openEditAsset navigates with modal=edit-asset and the asset id", () => {
+    const { result } = renderHook(() => useAssetTable([activeAsset], "", false));
+    act(() => result.current.openEditAsset("active"));
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const arg = navigateMock.mock.calls[0]?.[0] as { search: (prev: object) => object };
+    expect(arg.search({})).toEqual({ modal: "edit-asset", editAssetId: "active" });
+  });
+
   // R7/R19 — filters out archived assets when showArchived is false
   it("filters out archived assets when showArchived is false", () => {
     const { result } = renderHook(() => useAssetTable([activeAsset, archivedAsset], "", false));

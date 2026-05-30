@@ -3,7 +3,6 @@ import { Archive, ArchiveRestore, Edit2, ShoppingCart, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
-import { patchModalSearch } from "@/lib/modalSearch";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
@@ -29,7 +28,7 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
     logger.info("[AssetTable] mounted");
   }, []);
 
-  const { sortedAndFilteredAssets, sortConfig, handleSort } = useAssetTable(
+  const { sortedAndFilteredAssets, sortConfig, handleSort, openEditAsset } = useAssetTable(
     assets,
     searchTerm,
     showArchived,
@@ -48,12 +47,6 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
     id: string;
     name: string;
   } | null>(null);
-
-  // Edit opens the router-driven Edit Asset modal (shell-mounted), so it overlays
-  // in the current route context and no cross-feature modal import is needed here.
-  const openEditAsset = (assetId: string) => {
-    patchModalSearch(navigate, { modal: "edit-asset", editAssetId: assetId });
-  };
 
   const handleArchiveConfirm = async () => {
     if (!assetToArchive) return;

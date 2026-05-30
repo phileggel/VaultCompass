@@ -162,3 +162,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
 - Severity: 🔵
 - Observation: F25 mandates stable `id` attributes on dialog containers and prefers `id` over `data-testid` for E2E selectors. Dialog's `role="dialog"` surface has no `id`, and the close button is selectable only via `data-testid="modal-close-btn"`. Migration would touch every Dialog consumer (8+ feature modals) plus the `dismissLeftoverModal` E2E helper which queries the testid — multi-file fanout outside any single fix's scope.
+
+## 2026-05-30 — Row-level "edit asset" affordance is mouse-only
+
+- Found by: reviewer-frontend
+- Where: `src/features/account_details/account_details_view/HoldingRow.tsx:131` (holding row), `src/features/assets/asset_table/AssetTable.tsx:182` (asset row)
+- Context: branch `feat/ui-tweaks-account-asset` @ `8d904a1`
+- Severity: 🟡
+- Observation: The row-level "edit asset" affordance (double-click on a holding row, and the analogous AssetTable row) is mouse-only; there is no keyboard equivalent. Designing keyboard parity (e.g. Enter-to-edit) needs a consistent decision across both tables, since AssetTable's Enter/Space currently selects the row rather than opening edit.
