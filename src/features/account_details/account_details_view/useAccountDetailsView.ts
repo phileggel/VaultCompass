@@ -26,7 +26,6 @@ export function useAccountDetailsView(accountId: string) {
   // ---------------------------------------------------------------------------
   const [buyTarget, setBuyTarget] = useState<ModalTarget | null>(null);
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
-  const [priceTarget, setPriceTarget] = useState<HoldingDetail | null>(null);
   const [historyTarget, setHistoryTarget] = useState<HoldingDetail | null>(null);
   const [openBalanceOpen, setOpenBalanceOpen] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
@@ -55,18 +54,6 @@ export function useAccountDetailsView(accountId: string) {
     setSellTarget(null);
     data.retry();
   }, [data]);
-
-  // MKT-010/013 — find the raw HoldingDetail (no extra fetch) for the price modal
-  const handleEnterPrice = useCallback(
-    (assetId: string) => {
-      const holding = data.holdingDetails.find((h) => h.asset_id === assetId);
-      if (holding) setPriceTarget(holding);
-    },
-    [data.holdingDetails],
-  );
-  const handlePriceClose = useCallback(() => setPriceTarget(null), []);
-  // MKT-028 — close modal on success; re-fetch happens via AssetPriceUpdated event (MKT-036)
-  const handlePriceSuccess = useCallback(() => setPriceTarget(null), []);
 
   // MKT-072 — open price history modal for a holding
   const handlePriceHistory = useCallback(
@@ -126,7 +113,6 @@ export function useAccountDetailsView(accountId: string) {
     // Modal targets / flags
     buyTarget,
     sellTarget,
-    priceTarget,
     historyTarget,
     openBalanceOpen,
     depositOpen,
@@ -139,9 +125,6 @@ export function useAccountDetailsView(accountId: string) {
     handleSellOpen,
     handleSellClose,
     handleSellSuccess,
-    handleEnterPrice,
-    handlePriceClose,
-    handlePriceSuccess,
     handlePriceHistory,
     handleHistoryClose,
     handleOpenBalanceOpen,

@@ -47,7 +47,6 @@ const renderInTable = (row: HoldingRowViewModel) =>
           accountId="account-1"
           onBuy={vi.fn()}
           onSell={vi.fn()}
-          onEnterPrice={vi.fn()}
           onPriceHistory={vi.fn()}
         />
       </tbody>
