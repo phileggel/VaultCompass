@@ -82,13 +82,14 @@ A canonical reference to a trading venue, independent of any market-data provide
 
 ## Transaction Types
 
-| Name             | Intent                                                                               | Status    |
-| ---------------- | ------------------------------------------------------------------------------------ | --------- |
-| `Purchase`       | A regular buy transaction — quantity, unit price, exchange rate, fees                | confirmed |
-| `Sell`           | A regular sell transaction — quantity, unit price, exchange rate, fees, realized P&L | confirmed |
-| `OpeningBalance` | A position seed entry — quantity and total cost paid directly, no fee breakdown      | confirmed |
-| `Deposit`        | A cash inflow from outside the application's tracked world (CSH-022)                 | confirmed |
-| `Withdrawal`     | A cash outflow to outside the application's tracked world (CSH-032)                  | confirmed |
+| Name             | Intent                                                                                   | Status    |
+| ---------------- | ---------------------------------------------------------------------------------------- | --------- |
+| `Purchase`       | A regular buy transaction — quantity, unit price, exchange rate, fees                    | confirmed |
+| `Sell`           | A regular sell transaction — quantity, unit price, exchange rate, fees, realized P&L     | confirmed |
+| `OpeningBalance` | A position seed entry — quantity and total cost paid directly, no fee breakdown          | confirmed |
+| `Deposit`        | A cash inflow from outside the application's tracked world (CSH-022)                     | confirmed |
+| `Withdrawal`     | A cash outflow to outside the application's tracked world (CSH-032)                      | confirmed |
+| `Dividend`       | Cash income paid by a held asset; credits cash, attributed to the paying asset (DIV-023) | confirmed |
 
 ## Cash Domain Concepts (introduced by CSH spec)
 
