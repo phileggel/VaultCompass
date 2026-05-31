@@ -1,4 +1,6 @@
-use super::error::{OpenHoldingApplicationError, OpenHoldingError};
+use super::error::{
+    DividendApplicationError, DividendError, OpenHoldingApplicationError, OpenHoldingError,
+};
 use super::shared::ensure_cash_asset;
 use crate::context::account::{
     AccountApplicationError, AccountService, HoldingTransactionError, Transaction,
@@ -208,6 +210,86 @@ impl HoldingTransactionUseCase {
         self.account_service
             .record_withdrawal(account_id, date, amount, note)
             .await
+    }
+
+    /// Records a cash Dividend attributed to the paying asset (DIV-023).
+    ///
+    /// Cross-BC guards (DIV-011): rejects if account is unknown, asset is unknown,
+    /// asset is not currently held (quantity = 0), or asset is a Cash Asset.
+    /// Seeds the system Cash Asset (CSH-010) before delegating; the aggregate
+    /// credits the Cash Holding by `total_amount = amount_micros × exchange_rate`
+    /// (account currency), lazy-creating it if absent (CSH-012/CSH-050).
+    /// The paying asset's holding quantity, average cost, and cost basis are
+    /// unchanged (DIV-024). Does not create or modify any AssetPrice row (DIV-027).
+    /// Returns `DividendError` — no `InsufficientCash` variant (credit-only).
+    pub async fn record_dividend(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        amount_micros: i64,
+        exchange_rate: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, DividendError> {
+        // DIV-011 — account must exist (checked before any asset work).
+        let account = self
+            .account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+
+        // DIV-011 — asset must exist and must not be a Cash Asset.
+        let asset = self
+            .asset_service
+            .get_asset_by_id(&asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_dividend: get_asset_by_id failed");
+                AccountApplicationError::DatabaseError
+            })?;
+        match asset {
+            None => return Err(DividendApplicationError::AssetNotFound.into()),
+            Some(a) if a.class == AssetClass::Cash => {
+                return Err(DividendApplicationError::DividendOnCashAsset.into())
+            }
+            Some(_) => {}
+        }
+
+        // DIV-011 — asset must be currently held (quantity > 0). A repository
+        // failure here is surfaced as `DatabaseError` by the service layer.
+        let held = self
+            .account_service
+            .get_holding_by_account_asset(account_id, &asset_id)
+            .await?;
+        match held {
+            Some(h) if h.quantity > 0 => {}
+            _ => return Err(DividendApplicationError::AssetNotHeld.into()),
+        }
+
+        // CSH-010 — ensure the system Cash Asset for the account's currency exists.
+        ensure_cash_asset(&self.asset_service, &account.currency)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "record_dividend: ensure_cash_asset failed");
+                AccountApplicationError::DatabaseError
+            })?;
+
+        // Delegate the credit + persistence to the account BC; map its composite
+        // error into the dividend surface (Operation is unreachable — credit-only).
+        let asset_id_for_log = asset_id.clone();
+        self.account_service
+            .record_dividend(account_id, asset_id, date, amount_micros, exchange_rate, note)
+            .await
+            .map_err(|e| match e {
+                HoldingTransactionError::Application(a) => DividendError::Application(a),
+                HoldingTransactionError::Validation(v) => DividendError::Validation(v),
+                HoldingTransactionError::Operation(op) => {
+                    tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id_for_log, amount_micros, exchange_rate, err = ?op, "record_dividend: unexpected operation error on a credit-only path");
+                    DividendError::Application(AccountApplicationError::DatabaseError)
+                }
+            })
     }
 
     /// Loads the account, then ensures the system Cash Asset for its currency
@@ -557,5 +639,439 @@ mod tests {
 
         assert_eq!(tx.transaction_type, TransactionType::Deposit);
         assert_eq!(tx.total_amount, micro(500));
+    }
+
+    // -------------------------------------------------------------------------
+    // record_dividend — orchestrator unit tests (DIV-011, DIV-021, DIV-022,
+    // DIV-023, DIV-024, DIV-026, DIV-027)
+    // -------------------------------------------------------------------------
+
+    // DIV-023 — happy path: dividend credited to cash, paying-asset holding unchanged.
+    #[tokio::test]
+    async fn record_dividend_happy_path() {
+        use crate::context::account::TransactionType;
+
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(), // match asset currency so rate=1
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        // Buy some of the asset first so the holding exists (DIV-011 eligibility).
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let tx = uc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(200), // 200 USD dividend
+                micro(1),   // exchange_rate = 1 (same currency)
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(tx.transaction_type, TransactionType::Dividend);
+        assert_eq!(tx.asset_id, asset.id, "asset_id must be the paying asset");
+        assert_eq!(tx.total_amount, micro(200));
+        assert_eq!(tx.fees, 0);
+        assert!(
+            tx.realized_pnl.is_none(),
+            "dividend must have no realized_pnl"
+        );
+
+        // Verify paying-asset holding is unchanged (DIV-024)
+        let holdings = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let paying_holding = holdings
+            .iter()
+            .find(|h| h.asset_id == asset.id)
+            .expect("paying asset holding must still exist");
+        assert_eq!(
+            paying_holding.quantity,
+            micro(10),
+            "quantity must be unchanged"
+        );
+    }
+
+    // DIV-011 — AccountNotFound: unknown account is rejected before any asset check.
+    #[tokio::test]
+    async fn record_dividend_rejects_unknown_account() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_dividend(
+                "nonexistent-account",
+                asset.id,
+                "2024-06-15".to_string(),
+                micro(100),
+                micro(1),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::AccountApplicationError;
+        use crate::use_cases::holding_transaction::DividendError;
+        assert!(
+            matches!(
+                err,
+                DividendError::Application(AccountApplicationError::AccountNotFound { .. })
+            ),
+            "expected Application(AccountNotFound), got: {err:?}"
+        );
+    }
+
+    // DIV-011 — AssetNotFound: unknown asset_id is rejected.
+    #[tokio::test]
+    async fn record_dividend_rejects_unknown_asset() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_dividend(
+                &account.id,
+                "nonexistent-asset".to_string(),
+                "2024-06-15".to_string(),
+                micro(100),
+                micro(1),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{DividendApplicationError, DividendError};
+        assert!(
+            matches!(
+                err,
+                DividendError::UseCase(DividendApplicationError::AssetNotFound)
+            ),
+            "expected UseCase(AssetNotFound), got: {err:?}"
+        );
+    }
+
+    // DIV-011 — AssetNotHeld: asset exists but is not held (never bought).
+    #[tokio::test]
+    async fn record_dividend_rejects_asset_not_held() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(100),
+                micro(1),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{DividendApplicationError, DividendError};
+        assert!(
+            matches!(
+                err,
+                DividendError::UseCase(DividendApplicationError::AssetNotHeld)
+            ),
+            "expected UseCase(AssetNotHeld), got: {err:?}"
+        );
+    }
+
+    // DIV-011 — DividendOnCashAsset: the paying asset is a Cash Asset.
+    #[tokio::test]
+    async fn record_dividend_rejects_cash_asset() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let cash_asset = asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_dividend(
+                &account.id,
+                cash_asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(100),
+                micro(1),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{DividendApplicationError, DividendError};
+        assert!(
+            matches!(
+                err,
+                DividendError::UseCase(DividendApplicationError::DividendOnCashAsset)
+            ),
+            "expected UseCase(DividendOnCashAsset), got: {err:?}"
+        );
+    }
+
+    // DIV-021 — AmountNotPositive: amount_micros = 0.
+    #[tokio::test]
+    async fn record_dividend_rejects_zero_amount() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                0,
+                micro(1),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::TransactionDomainError;
+        use crate::use_cases::holding_transaction::DividendError;
+        assert!(
+            matches!(
+                err,
+                DividendError::Validation(TransactionDomainError::AmountNotPositive)
+            ),
+            "expected Validation(AmountNotPositive), got: {err:?}"
+        );
+    }
+
+    // DIV-022 — ExchangeRateNotPositive: exchange_rate = 0.
+    #[tokio::test]
+    async fn record_dividend_rejects_zero_exchange_rate() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(100),
+                0, // invalid
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::TransactionDomainError;
+        use crate::use_cases::holding_transaction::DividendError;
+        assert!(
+            matches!(
+                err,
+                DividendError::Validation(TransactionDomainError::ExchangeRateNotPositive)
+            ),
+            "expected Validation(ExchangeRateNotPositive), got: {err:?}"
+        );
+    }
+
+    // DIV-027 — recording a dividend must NOT create or modify an AssetPrice row.
+    #[tokio::test]
+    async fn record_dividend_does_not_create_asset_price() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), Arc::clone(&asset_svc));
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        uc.record_dividend(
+            &account.id,
+            asset.id.clone(),
+            "2024-06-15".to_string(),
+            micro(200),
+            micro(1),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // After the dividend, no AssetPrice row must exist for the paying asset.
+        let latest_price = asset_svc.get_latest_price(&asset.id).await.unwrap();
+        assert!(
+            latest_price.is_none(),
+            "recording a dividend must not create an AssetPrice row (DIV-027)"
+        );
+    }
+
+    // DIV-023 — currency conversion: amount in asset ccy × exchange_rate = account ccy total.
+    #[tokio::test]
+    async fn record_dividend_converts_amount_at_exchange_rate() {
+        use crate::context::account::TransactionType;
+
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        // Asset is USD, account is EUR → exchange_rate = 0.9 (EUR per USD)
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap(); // USD asset
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            900_000, // 0.9 EUR/USD
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let amount_micros = 100_000_000i64; // 100 USD
+        let exchange_rate = 900_000i64; // 0.9 EUR/USD
+        let tx = uc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                amount_micros,
+                exchange_rate,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(tx.transaction_type, TransactionType::Dividend);
+        // total_amount = floor(100_000_000 × 900_000 / 1_000_000) = 90_000_000
+        assert_eq!(
+            tx.total_amount, 90_000_000,
+            "total_amount must equal floor(amount × rate / MICRO)"
+        );
     }
 }

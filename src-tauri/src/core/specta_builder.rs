@@ -48,6 +48,9 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<holding_transaction::OpenHoldingApplicationError>()
         .typ::<holding_transaction::DepositDTO>()
         .typ::<holding_transaction::WithdrawalDTO>()
+        .typ::<holding_transaction::DividendDTO>()
+        .typ::<holding_transaction::DividendError>()
+        .typ::<holding_transaction::DividendApplicationError>()
         .typ::<account_details::HoldingDetail>()
         .typ::<account_details::ClosedHoldingDetail>()
         .typ::<account_details::AccountDetailsResponse>()
@@ -98,6 +101,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             holding_transaction::cancel_transaction,
             holding_transaction::record_deposit,
             holding_transaction::record_withdrawal,
+            holding_transaction::record_dividend,
             account_details::get_account_details,
             account_summary::get_account_summaries,
             account_performance::get_account_performance,

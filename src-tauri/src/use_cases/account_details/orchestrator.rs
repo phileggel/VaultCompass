@@ -3,6 +3,7 @@ use crate::context::asset::{AssetPriceSource, AssetService};
 use crate::core::logger::BACKEND;
 use serde::Serialize;
 use specta::Type;
+use std::collections::HashMap;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -37,6 +38,12 @@ pub struct HoldingDetail {
     /// Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
     /// 0 (not None) when unrealized_pnl is 0 (MKT-035).
     pub performance_pct: Option<i64>,
+    /// Sum of dividend cash credited for this (account, asset), in account currency (i64 micros).
+    /// 0 when no dividends recorded; always computable (DIV-070).
+    pub dividends_received: i64,
+    /// Dividend-inclusive total return: (unrealized_pnl + dividends_received) × 100 / cost_basis.
+    /// None under the same conditions as performance_pct (DIV-071).
+    pub total_return_pct: Option<i64>,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -76,6 +83,9 @@ pub struct AccountDetailsResponse {
     /// Unpriced non-cash holdings contribute 0 (no fallback to `average_price`).
     /// Returns 0 when no Cash Holding and no priced non-cash holdings.
     pub total_global_value: i64,
+    /// Sum of dividend cash credited across all of the account's dividend transactions, in account
+    /// currency (i64 micros). 0 when none (DIV-073).
+    pub total_dividends_received: i64,
 }
 
 /// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
@@ -125,6 +135,22 @@ impl AccountDetailsUseCase {
         // CSH-094 — accumulate the Global Value as we go: cash quantity + Σ priced non-cash holdings.
         // CSH-093 — accumulate the total cost basis from non-cash holdings only (cash has no
         // cost basis by spec; its `cost_basis` field is set to 0 below so the row stays blank).
+        // DIV-070/073 — sum Dividend cash per (account, asset) and across the whole account,
+        // from a single transaction fetch. Dividends are stored in account currency.
+        let all_txs = self
+            .account_service
+            .get_all_transactions_for_account(account_id)
+            .await?;
+        let mut dividends_by_asset: HashMap<String, i64> = HashMap::new();
+        let mut total_dividends_received: i64 = 0;
+        for t in &all_txs {
+            if t.transaction_type == crate::context::account::TransactionType::Dividend {
+                let entry = dividends_by_asset.entry(t.asset_id.clone()).or_insert(0);
+                *entry = entry.saturating_add(t.total_amount);
+                total_dividends_received = total_dividends_received.saturating_add(t.total_amount);
+            }
+        }
+
         let mut details: Vec<HoldingDetail> = Vec::with_capacity(active_holdings.len());
         let mut total_global_value: i64 = 0;
         let mut total_cost_basis: i64 = 0;
@@ -217,6 +243,17 @@ impl AccountDetailsUseCase {
                 }
             }
 
+            // DIV-070 — dividends_received: sum of Dividend total_amount for this (account, asset).
+            let dividends_received: i64 = *dividends_by_asset.get(&holding.asset_id).unwrap_or(&0);
+            // DIV-071 — total_return_pct: (unrealized_pnl + dividends_received) × 100 / cost_basis;
+            // None under the same conditions as performance_pct (no price / currency mismatch / zero cost basis).
+            let total_return_pct: Option<i64> = match unrealized_pnl {
+                Some(upnl) if cost_basis != 0 => Some(
+                    ((upnl as i128 + dividends_received as i128) * 100_000_000 / cost_basis as i128)
+                        as i64,
+                ),
+                _ => None,
+            };
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -231,6 +268,8 @@ impl AccountDetailsUseCase {
                 current_price_source,
                 unrealized_pnl,
                 performance_pct,
+                dividends_received,
+                total_return_pct,
             });
         }
 
@@ -279,6 +318,8 @@ impl AccountDetailsUseCase {
         // ACD-046 — sort closed holdings by asset_name ascending
         closed_details.sort_by(|a, b| a.asset_name.cmp(&b.asset_name));
 
+        // DIV-073 — total_dividends_received computed above from the single transaction fetch.
+
         Ok(AccountDetailsResponse {
             account_name: account.name,
             holdings: details,
@@ -288,6 +329,7 @@ impl AccountDetailsUseCase {
             total_realized_pnl,
             total_unrealized_pnl,
             total_global_value,
+            total_dividends_received,
         })
     }
 }
