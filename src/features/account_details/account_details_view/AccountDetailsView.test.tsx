@@ -1,0 +1,199 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AccountDetailsView } from "./AccountDetailsView";
+
+// ── Controlled orchestration hook ───────────────────────────────────────────
+const { mockUseAccountDetailsView, mockUseRefreshAccountPrices } = vi.hoisted(() => ({
+  mockUseAccountDetailsView: vi.fn(),
+  mockUseRefreshAccountPrices: vi.fn(),
+}));
+
+vi.mock("./useAccountDetailsView", () => ({
+  useAccountDetailsView: () => mockUseAccountDetailsView(),
+}));
+
+vi.mock("../refresh_prices/useRefreshAccountPrices", () => ({
+  useRefreshAccountPrices: () => mockUseRefreshAccountPrices(),
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useParams: () => ({ accountId: "acc-1" }),
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
+}));
+
+vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
+
+// Stub the child modals / rows so the view renders in isolation (no gateway,
+// no Tauri, no nested hooks) — this test exercises AccountDetailsView's own JSX.
+vi.mock("../buy_transaction/BuyTransactionModal", () => ({ BuyTransactionModal: () => null }));
+vi.mock("../sell_transaction/SellTransactionModal", () => ({ SellTransactionModal: () => null }));
+vi.mock("../deposit_transaction/DepositTransactionModal", () => ({
+  DepositTransactionModal: () => null,
+}));
+vi.mock("../withdrawal_transaction/WithdrawalTransactionModal", () => ({
+  WithdrawalTransactionModal: () => null,
+}));
+vi.mock("../open_balance/OpenBalanceModal", () => ({ OpenBalanceModal: () => null }));
+vi.mock("../price_history/PriceHistoryModal", () => ({ PriceHistoryModal: () => null }));
+vi.mock("../dividend_transaction/DividendTransactionModal", () => ({
+  DividendTransactionModal: () => <div data-testid="dividend-modal-mounted" />,
+}));
+vi.mock("./HoldingRow", () => ({ HoldingRow: () => <tr data-testid="holding-row" /> }));
+vi.mock("./ClosedHoldingRow", () => ({ ClosedHoldingRow: () => <tr /> }));
+vi.mock("./NoCashBanner", () => ({ NoCashBanner: () => null }));
+
+const handlers = {
+  handleDepositOpen: vi.fn(),
+  handleWithdrawalOpen: vi.fn(),
+  handleOpenBalanceOpen: vi.fn(),
+  handleDividendOpen: vi.fn(),
+  handleAddTransaction: vi.fn(),
+};
+
+const makeView = (overrides: Record<string, unknown> = {}) => ({
+  isLoading: false,
+  error: null,
+  retry: vi.fn(),
+  summary: {
+    accountName: "Main",
+    totalCostBasis: "1.000,00",
+    totalRealizedPnl: "0,00",
+    totalRealizedPnlRaw: 0,
+    totalUnrealizedPnl: "—",
+    totalGlobalValue: "1.100,00",
+    totalDividendsReceived: "100,00",
+    totalDividendsReceivedRaw: 100_000_000,
+    isEmpty: false,
+    isAllClosed: false,
+    hasClosedHoldings: false,
+  },
+  holdings: [],
+  closedHoldings: [],
+  hasVisibleCashRow: true,
+  accountCurrency: "EUR",
+  hasActiveHoldings: false,
+  hasClosedHoldings: false,
+  showNoCashBanner: false,
+  dividendPayingAssets: [],
+  buyTarget: null,
+  sellTarget: null,
+  historyTarget: null,
+  openBalanceOpen: false,
+  depositOpen: false,
+  withdrawalOpen: false,
+  dividendOpen: false,
+  ...handlers,
+  handleBuyOpen: vi.fn(),
+  handleBuyClose: vi.fn(),
+  handleBuySuccess: vi.fn(),
+  handleSellOpen: vi.fn(),
+  handleSellClose: vi.fn(),
+  handleSellSuccess: vi.fn(),
+  handlePriceHistory: vi.fn(),
+  handleHistoryClose: vi.fn(),
+  handleOpenBalanceClose: vi.fn(),
+  handleOpenBalanceSuccess: vi.fn(),
+  handleDepositClose: vi.fn(),
+  handleDepositSuccess: vi.fn(),
+  handleWithdrawalClose: vi.fn(),
+  handleWithdrawalSuccess: vi.fn(),
+  handleDividendClose: vi.fn(),
+  handleDividendSuccess: vi.fn(),
+  handleTogglePriceRefreshLock: vi.fn(),
+  ...overrides,
+});
+
+describe("AccountDetailsView — header Record menu (DIV-012)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+  });
+
+  it("renders the consolidated Record menu trigger and hides items until opened", () => {
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#account-details-add-menu")).toBeInTheDocument();
+    // Closed by default — items absent.
+    expect(document.querySelector("#add-menu-dividend")).toBeNull();
+  });
+
+  it("opens the menu showing Deposit / Withdraw / Open balance / Dividend (DIV-012)", () => {
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    expect(document.querySelector("#add-menu-deposit")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-withdraw")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-open-balance")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
+  });
+
+  it("hides the Withdraw item when there is no cash row (CSH-019 visibility)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ hasVisibleCashRow: false }));
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    expect(document.querySelector("#add-menu-withdraw")).toBeNull();
+    // The other three remain.
+    expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
+  });
+
+  it("invokes the dividend handler and closes the menu when Dividend is chosen (DIV-010)", () => {
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    fireEvent.click(document.querySelector("#add-menu-dividend")!);
+    expect(handlers.handleDividendOpen).toHaveBeenCalledTimes(1);
+    // Menu closes after selection.
+    expect(document.querySelector("#add-menu-dividend")).toBeNull();
+  });
+
+  it("routes the other menu items to their handlers", () => {
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    fireEvent.click(document.querySelector("#add-menu-deposit")!);
+    expect(handlers.handleDepositOpen).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    fireEvent.click(document.querySelector("#add-menu-open-balance")!);
+    expect(handlers.handleOpenBalanceOpen).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    fireEvent.click(document.querySelector("#add-menu-withdraw")!);
+    expect(handlers.handleWithdrawalOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("mounts the dividend modal only when dividendOpen is true (DIV-010/020)", () => {
+    const { rerender } = render(<AccountDetailsView />);
+    expect(screen.queryByTestId("dividend-modal-mounted")).toBeNull();
+
+    mockUseAccountDetailsView.mockReturnValue(makeView({ dividendOpen: true }));
+    rerender(<AccountDetailsView />);
+    expect(screen.getByTestId("dividend-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("surfaces the total dividends received in the header when non-zero (DIV-073)", () => {
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#account-details-total-dividends")).toBeInTheDocument();
+  });
+
+  it("hides the total-dividends tile when none recorded (DIV-073)", () => {
+    mockUseAccountDetailsView.mockReturnValue(
+      makeView({
+        summary: { ...makeView().summary, totalDividendsReceivedRaw: 0 },
+      }),
+    );
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#account-details-total-dividends")).toBeNull();
+  });
+
+  it("renders the Dividends and Total Return column headers when holdings exist (DIV-072)", () => {
+    mockUseAccountDetailsView.mockReturnValue(
+      makeView({ hasActiveHoldings: true, holdings: [{ assetId: "a1" }] }),
+    );
+    render(<AccountDetailsView />);
+    expect(screen.getByText("account_details.column_dividends_received")).toBeInTheDocument();
+    expect(screen.getByText("account_details.column_total_return_pct")).toBeInTheDocument();
+    expect(screen.getByTestId("holding-row")).toBeInTheDocument();
+  });
+});

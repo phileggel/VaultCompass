@@ -249,3 +249,38 @@ describe("HoldingRow — price-refresh lock toggle", () => {
     expect(screen.queryByRole("button", { name: "mkt.lock.action_unblock" })).toBeNull();
   });
 });
+
+describe("HoldingRow — dividend columns (DIV-072)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  it("renders the dividends-received amount and the total-return %", () => {
+    renderInTable({
+      ...baseRow,
+      dividendsReceived: "42.50",
+      totalReturnPct: "12.75%",
+      totalReturnPctRaw: 12_750_000,
+    });
+    expect(screen.getByText("42.50")).toBeInTheDocument();
+    expect(screen.getByText("12.75%")).toBeInTheDocument();
+  });
+
+  it("renders an em dash for total return when not computable", () => {
+    renderInTable({ ...baseRow, totalReturnPct: "—", totalReturnPctRaw: null });
+    // The dividends cell still shows its (zero) amount; total-return is the dash.
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("colors a negative total return with the error style", () => {
+    renderInTable({
+      ...baseRow,
+      totalReturnPct: "-8.25%",
+      totalReturnPctRaw: -8_250_000,
+    });
+    const cell = screen.getByText("-8.25%");
+    expect(cell).toBeInTheDocument();
+    expect(cell.className).toContain("text-m3-error");
+  });
+});

@@ -82,7 +82,10 @@ export function AccountDetailsView() {
                 </p>
                 {/* DIV-073 — total dividends received (shown only when any recorded) */}
                 {view.summary.totalDividendsReceivedRaw !== 0 && (
-                  <p className="text-sm text-m3-on-surface-variant">
+                  <p
+                    id="account-details-total-dividends"
+                    className="text-sm text-m3-on-surface-variant"
+                  >
                     {t("account_details.total_dividends_received")}:{" "}
                     <span className="font-semibold text-m3-on-surface">
                       {view.summary.totalDividendsReceived}

@@ -7,6 +7,11 @@ const mockBlock = vi.fn();
 const mockUnblock = vi.fn();
 const mockShowSnackbar = vi.fn();
 const mockFetchAssets = vi.fn().mockResolvedValue(undefined);
+// Defaults to an error response (most tests don't need holdings); individual
+// tests override per-call via `mockResolvedValueOnce` to supply holdings.
+const mockGetAccountDetails = vi.fn((..._args: unknown[]) =>
+  Promise.resolve({ status: "error", error: { code: "DatabaseError" } }),
+);
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
@@ -28,9 +33,7 @@ vi.mock("../gateway", () => ({
   accountDetailsGateway: {
     blockAssetPriceRefresh: (...args: unknown[]) => mockBlock(...args),
     unblockAssetPriceRefresh: (...args: unknown[]) => mockUnblock(...args),
-    getAccountDetails: vi.fn(() =>
-      Promise.resolve({ status: "error", error: { code: "DatabaseError" } }),
-    ),
+    getAccountDetails: (...args: unknown[]) => mockGetAccountDetails(...args),
     subscribeToEvents: vi.fn(() => Promise.resolve(() => {})),
   },
 }));
@@ -100,12 +103,11 @@ describe("useAccountDetailsView — price-refresh lock toggle (MKT-156/157)", ()
 });
 
 // ---------------------------------------------------------------------------
-// DIV-012 — Header "Add" menu: dividend modal state in useAccountDetailsView
+// DIV-012 — Header "Record" menu: dividend modal state in useAccountDetailsView.
 // The AccountDetailsView component replaces three standalone header buttons
-// with a consolidated "Add" dropdown; the dividend modal open/close/success
-// state is managed here. The view-level menu-composition (button ids) is
-// a render concern tested at the AccountDetailsView.test.tsx level (not yet
-// created — no router-mocked sibling test exists to copy the setup from).
+// with a consolidated "Record" dropdown; the dividend modal open/close/success
+// state is managed here. The view-level menu composition (button ids, item
+// routing) is a render concern covered in AccountDetailsView.test.tsx.
 // ---------------------------------------------------------------------------
 
 describe("useAccountDetailsView — dividend modal state (DIV-012)", () => {
@@ -149,5 +151,75 @@ describe("useAccountDetailsView — dividend modal state (DIV-012)", () => {
     act(() => result.current.handleDividendSuccess());
 
     expect(result.current.dividendOpen).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DIV-011/020 — dividendPayingAssets exposes only active, non-cash holdings
+// (quantity > 0) as candidates for the dividend modal's asset selector.
+// ---------------------------------------------------------------------------
+const makeHoldingDetail = (overrides: Record<string, unknown> = {}) => ({
+  asset_id: "asset-1",
+  asset_name: "Asset One",
+  asset_reference: "A1",
+  quantity: 1_000_000,
+  average_price: 1_000_000,
+  cost_basis: 1_000_000,
+  realized_pnl: 0,
+  asset_currency: "EUR",
+  current_price: null,
+  current_price_date: null,
+  current_price_source: null,
+  unrealized_pnl: null,
+  performance_pct: null,
+  dividends_received: 0,
+  total_return_pct: null,
+  ...overrides,
+});
+
+describe("useAccountDetailsView — dividendPayingAssets filter (DIV-011/020)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("includes only active non-cash holdings (excludes cash + zero-quantity)", async () => {
+    mockGetAccountDetails.mockResolvedValueOnce({
+      status: "ok",
+      data: {
+        account_name: "Main",
+        holdings: [
+          makeHoldingDetail({
+            asset_id: "system-cash-eur",
+            asset_name: "Cash EUR",
+            quantity: 500_000_000,
+          }),
+          makeHoldingDetail({ asset_id: "asset-zero", asset_name: "Zero Co", quantity: 0 }),
+          makeHoldingDetail({
+            asset_id: "asset-active",
+            asset_name: "Active Co",
+            asset_currency: "USD",
+            quantity: 2_000_000,
+          }),
+        ],
+        closed_holdings: [],
+        total_holding_count: 3,
+        total_cost_basis: 0,
+        total_realized_pnl: 0,
+        total_unrealized_pnl: null,
+        total_global_value: 0,
+        total_dividends_received: 0,
+      },
+    } as never);
+
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    expect(result.current.dividendPayingAssets).toEqual([
+      { assetId: "asset-active", assetName: "Active Co", assetCurrency: "USD" },
+    ]);
   });
 });
