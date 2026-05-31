@@ -298,7 +298,12 @@
     "action_withdraw": "Retrait",
     "action_refresh_prices": "Actualiser les prix",
     "action_performance": "Performance",
-    "total_global_value": "Valeur globale"
+    "total_global_value": "Valeur globale",
+    "total_dividends_received": "Total dividendes",
+    "column_dividends_received": "Dividendes",
+    "column_total_return_pct": "Rendement total",
+    "action_add_menu": "Ajouter",
+    "action_record_dividend": "Enregistrer un dividende"
   },
   "account_performance": {
     "title": "Performance",
@@ -369,6 +374,15 @@
     "no_cash_banner_message": "Aucune trésorerie enregistrée pour ce compte.",
     "no_cash_banner_cta": "Enregistrer un dépôt",
     "insufficient_cash_inline": "Trésorerie insuffisante. Solde disponible : {{balance}} {{currency}}."
+  },
+  "dividend": {
+    "modal_title": "Enregistrer un dividende",
+    "form_asset_label": "Actif payeur",
+    "form_select_asset": "Sélectionner un actif…",
+    "form_amount_label": "Montant net",
+    "form_amount_placeholder": "0.00",
+    "action_record": "Enregistrer le dividende",
+    "recorded": "Dividende enregistré."
   },
   "validation": {
     "amount_not_positive": "Le montant doit être supérieur à 0.",
@@ -443,6 +457,8 @@
     "AccountNotFound": "Compte introuvable.",
     "TransactionNotFound": "Transaction introuvable.",
     "AssetNotFound": "Actif introuvable.",
+    "AssetNotHeld": "Cet actif n'est pas actuellement détenu dans ce compte.",
+    "DividendOnCashAsset": "Impossible d'enregistrer un dividende sur une position de liquidités.",
     "InvalidType": "Type de transaction inconnu.",
     "TypeImmutable": "Impossible de modifier le type d'une transaction existante.",
     "ArchivedAssetSell": "Impossible de vendre un actif archivé.",

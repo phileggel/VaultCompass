@@ -111,6 +111,20 @@ A `Holding` whose asset is a Cash Asset. Represents the cash balance held in the
 
 The full economic value of an account: cash balance + Σ (market value of non-cash active holdings). Surfaced as `AccountDetailsResponse.total_global_value` (CSH-094). Used as the canonical "what is this account worth right now?" metric across the Account Details header and (later) the portfolio dashboard.
 
+## Dividend Domain Concepts (introduced by DIV spec)
+
+### Dividends Received
+
+> Status: confirmed
+
+Cumulative cash dividend income attributed to a holding, in the account's reference currency. Per-holding (`HoldingDetail.dividends_received`, Σ of `Dividend` total_amount for the `(account, asset)` pair, DIV-070) and per-account (`AccountDetailsResponse.total_dividends_received`, Σ across all dividends, DIV-073). Reported separately from realized P&L — a dividend is income, not a capital gain.
+
+### Total Return
+
+> Status: confirmed
+
+A holding's combined return from price appreciation and dividend income, expressed as a percentage of cost basis: `(unrealized_pnl + dividends_received) / cost_basis`. Surfaced as `HoldingDetail.total_return_pct` (DIV-071); `null` under the same conditions as `performance_pct` (no recorded price, or zero cost basis — MKT-034/035).
+
 ---
 
 ## Domain Events

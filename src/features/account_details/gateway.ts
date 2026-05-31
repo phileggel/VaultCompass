@@ -5,6 +5,8 @@ import type {
   AssetPrice,
   AssetPriceError,
   DepositDTO,
+  DividendDTO,
+  DividendError,
   FetchAccountAssetPricesError,
   HoldingTransactionError,
   OpenHoldingDTO,
@@ -59,6 +61,10 @@ export const accountDetailsGateway = {
     dto: WithdrawalDTO,
   ): Promise<Result<Transaction, HoldingTransactionError>> {
     return commands.recordWithdrawal(dto);
+  },
+
+  async recordDividend(dto: DividendDTO): Promise<Result<Transaction, DividendError>> {
+    return commands.recordDividend(dto);
   },
 
   async fetchAccountAssetPrices(

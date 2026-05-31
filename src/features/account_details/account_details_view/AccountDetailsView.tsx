@@ -1,11 +1,12 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowDownToLine, ArrowUpFromLine, Plus, RefreshCw, TrendingUp } from "lucide-react";
-import { useEffect } from "react";
+import { ChevronDown, Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
+import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
@@ -23,6 +24,13 @@ export function AccountDetailsView() {
   const view = useAccountDetailsView(accountId);
   const { isPending: isRefreshPending, refresh: refreshPrices } =
     useRefreshAccountPrices(accountId);
+  // DIV-012 — consolidated header "Add" dropdown open/close state.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+
+  const runFromAddMenu = useCallback((action: () => void) => {
+    setAddMenuOpen(false);
+    action();
+  }, []);
 
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
@@ -72,6 +80,15 @@ export function AccountDetailsView() {
                     {view.summary.totalGlobalValue}
                   </span>
                 </p>
+                {/* DIV-073 — total dividends received (shown only when any recorded) */}
+                {view.summary.totalDividendsReceivedRaw !== 0 && (
+                  <p className="text-sm text-m3-on-surface-variant">
+                    {t("account_details.total_dividends_received")}:{" "}
+                    <span className="font-semibold text-m3-on-surface">
+                      {view.summary.totalDividendsReceived}
+                    </span>
+                  </p>
+                )}
               </div>
               {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
               {/* ACD-036 — add transaction only when active holdings exist */}
@@ -104,36 +121,88 @@ export function AccountDetailsView() {
                 >
                   {t("account_details.action_refresh_prices")}
                 </Button>
-                <Button
-                  id="action-open-balance"
-                  variant="secondary"
-                  size="sm"
-                  onClick={view.handleOpenBalanceOpen}
-                >
-                  {t("account_details.action_open_balance")}
-                </Button>
-                {/* CSH-019 — Deposit always visible */}
-                <Button
-                  id="action-deposit"
-                  variant="secondary"
-                  size="sm"
-                  icon={<ArrowDownToLine size={14} />}
-                  onClick={view.handleDepositOpen}
-                >
-                  {t("account_details.action_deposit")}
-                </Button>
-                {/* CSH-019 — Withdraw only when there is cash to withdraw */}
-                {view.hasVisibleCashRow && (
+                {/* DIV-012 — consolidated "Add" dropdown (Deposit / Withdraw /
+                    Open balance / Record dividend); supersedes the standalone
+                    CSH-019 and TRX-055 header buttons. */}
+                <div className="relative">
                   <Button
-                    id="action-withdraw"
+                    id="account-details-add-menu"
                     variant="secondary"
                     size="sm"
-                    icon={<ArrowUpFromLine size={14} />}
-                    onClick={view.handleWithdrawalOpen}
+                    icon={<ChevronDown size={14} />}
+                    aria-haspopup="menu"
+                    aria-expanded={addMenuOpen}
+                    onClick={() => setAddMenuOpen((open) => !open)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setAddMenuOpen(false);
+                    }}
                   >
-                    {t("account_details.action_withdraw")}
+                    {t("account_details.action_add_menu")}
                   </Button>
-                )}
+                  {addMenuOpen && (
+                    <>
+                      {/* click-away backdrop */}
+                      <button
+                        type="button"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        className="fixed inset-0 z-20 cursor-default"
+                        onClick={() => setAddMenuOpen(false)}
+                      />
+                      <div
+                        role="menu"
+                        aria-label={t("account_details.action_add_menu")}
+                        className="absolute right-0 mt-1 z-30 min-w-[200px] rounded-2xl bg-m3-surface-container-high shadow-elevation-2 py-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setAddMenuOpen(false);
+                        }}
+                      >
+                        {/* CSH-019 — Deposit always available */}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          id="add-menu-deposit"
+                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                          onClick={() => runFromAddMenu(view.handleDepositOpen)}
+                        >
+                          {t("account_details.action_deposit")}
+                        </button>
+                        {/* CSH-019 — Withdraw only when there is cash to withdraw */}
+                        {view.hasVisibleCashRow && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            id="add-menu-withdraw"
+                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                            onClick={() => runFromAddMenu(view.handleWithdrawalOpen)}
+                          >
+                            {t("account_details.action_withdraw")}
+                          </button>
+                        )}
+                        {/* TRX-055 — Open balance (keeps its shipped "Add a position" label) */}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          id="add-menu-open-balance"
+                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                          onClick={() => runFromAddMenu(view.handleOpenBalanceOpen)}
+                        >
+                          {t("account_details.action_open_balance")}
+                        </button>
+                        {/* DIV-010 — Record dividend */}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          id="add-menu-dividend"
+                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                          onClick={() => runFromAddMenu(view.handleDividendOpen)}
+                        >
+                          {t("account_details.action_record_dividend")}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
                 {!view.summary.isEmpty && !view.summary.isAllClosed && (
                   <Button
                     variant="tonal"
@@ -219,6 +288,14 @@ export function AccountDetailsView() {
                         {/* MKT-035 — Performance % column */}
                         <th className="m3-th text-right">
                           {t("account_details.column_performance_pct")}
+                        </th>
+                        {/* DIV-072 — Dividends received column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_dividends_received")}
+                        </th>
+                        {/* DIV-072 — Total return % column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_total_return_pct")}
                         </th>
                         <th className="m3-th">{t("transaction.column_actions")}</th>
                       </tr>
@@ -360,6 +437,18 @@ export function AccountDetailsView() {
         accountCurrency={view.accountCurrency}
         onSubmitSuccess={view.handleWithdrawalSuccess}
       />
+
+      {/* DIV-010/020 — Dividend modal (paying asset chosen inside) */}
+      {view.dividendOpen && (
+        <DividendTransactionModal
+          isOpen
+          onClose={view.handleDividendClose}
+          accountId={accountId}
+          accountCurrency={view.accountCurrency}
+          heldAssets={view.dividendPayingAssets}
+          onSubmitSuccess={view.handleDividendSuccess}
+        />
+      )}
     </div>
   );
 }

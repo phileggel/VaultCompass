@@ -1,12 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
-import { priceRefreshLockErrorToI18n } from "../shared/presenter";
+import { isCashAsset, priceRefreshLockErrorToI18n } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
@@ -38,6 +38,7 @@ export function useAccountDetailsView(accountId: string) {
   const [openBalanceOpen, setOpenBalanceOpen] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
+  const [dividendOpen, setDividendOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -94,6 +95,14 @@ export function useAccountDetailsView(accountId: string) {
     data.retry();
   }, [data]);
 
+  // DIV-012 — dividend modal state (entered from the header "Add" menu)
+  const handleDividendOpen = useCallback(() => setDividendOpen(true), []);
+  const handleDividendClose = useCallback(() => setDividendOpen(false), []);
+  const handleDividendSuccess = useCallback(() => {
+    setDividendOpen(false);
+    data.retry();
+  }, [data]);
+
   // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
   // block/unblock command, then re-reads the asset list (so the row's lock
   // icon flips from the store, mirroring archive/unarchive) and confirms
@@ -127,6 +136,20 @@ export function useAccountDetailsView(accountId: string) {
   // ---------------------------------------------------------------------------
   const hasActiveHoldings = data.holdings.length > 0;
   const hasClosedHoldings = data.summary?.hasClosedHoldings ?? false;
+  // DIV-011/020 — paying-asset candidates for the dividend modal: active,
+  // non-cash holdings (quantity > 0). Memoized so the stable reference does not
+  // invalidate the modal's `assetOptions` memo on every parent render.
+  const dividendPayingAssets = useMemo(
+    () =>
+      data.holdingDetails
+        .filter((h) => !isCashAsset(h.asset_id) && h.quantity > 0)
+        .map((h) => ({
+          assetId: h.asset_id,
+          assetName: h.asset_name,
+          assetCurrency: h.asset_currency,
+        })),
+    [data.holdingDetails],
+  );
   // CSH-095 — banner only fires when other holdings exist (or all-closed) and no cash row.
   const showNoCashBanner =
     data.summary !== null && !data.hasVisibleCashRow && !data.summary.isEmpty;
@@ -146,6 +169,7 @@ export function useAccountDetailsView(accountId: string) {
     hasActiveHoldings,
     hasClosedHoldings,
     showNoCashBanner,
+    dividendPayingAssets,
     // Modal targets / flags
     buyTarget,
     sellTarget,
@@ -153,6 +177,7 @@ export function useAccountDetailsView(accountId: string) {
     openBalanceOpen,
     depositOpen,
     withdrawalOpen,
+    dividendOpen,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -172,6 +197,9 @@ export function useAccountDetailsView(accountId: string) {
     handleWithdrawalOpen,
     handleWithdrawalClose,
     handleWithdrawalSuccess,
+    handleDividendOpen,
+    handleDividendClose,
+    handleDividendSuccess,
     handleTogglePriceRefreshLock,
   };
 }

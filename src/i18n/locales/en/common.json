@@ -298,7 +298,12 @@
     "action_withdraw": "Withdraw",
     "action_refresh_prices": "Refresh prices",
     "action_performance": "Performance",
-    "total_global_value": "Global Value"
+    "total_global_value": "Global Value",
+    "total_dividends_received": "Total Dividends",
+    "column_dividends_received": "Dividends",
+    "column_total_return_pct": "Total Return",
+    "action_add_menu": "Add",
+    "action_record_dividend": "Record dividend"
   },
   "account_performance": {
     "title": "Performance",
@@ -369,6 +374,15 @@
     "no_cash_banner_message": "No cash recorded for this account yet.",
     "no_cash_banner_cta": "Record a deposit",
     "insufficient_cash_inline": "Not enough cash. Available balance: {{balance}} {{currency}}."
+  },
+  "dividend": {
+    "modal_title": "Record a dividend",
+    "form_asset_label": "Paying asset",
+    "form_select_asset": "Select an asset…",
+    "form_amount_label": "Net amount",
+    "form_amount_placeholder": "0.00",
+    "action_record": "Record dividend",
+    "recorded": "Dividend recorded."
   },
   "validation": {
     "amount_not_positive": "Amount must be greater than 0.",
@@ -443,6 +457,8 @@
     "AccountNotFound": "Account not found.",
     "TransactionNotFound": "Transaction not found.",
     "AssetNotFound": "Asset not found.",
+    "AssetNotHeld": "This asset is not currently held in this account.",
+    "DividendOnCashAsset": "Dividends cannot be recorded on a cash holding.",
     "InvalidType": "Unknown transaction type.",
     "TypeImmutable": "Cannot change the type of an existing transaction.",
     "ArchivedAssetSell": "Cannot sell an archived asset.",
