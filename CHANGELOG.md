@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-05-31
+
+### Added
+
+- cash dividend frontend (DIV)
+  Adds the dividend modal (paying-asset picker + conditional FX) reached from a
+  new consolidated header "Add" menu that absorbs Deposit / Withdraw / Open
+  balance (DIV-012). Surfaces per-holding dividends + total return and a
+  per-account dividend total. Registers the new UL terms in the dictionary.
+- add cash dividend transaction backend (DIV)
+  Dividend credits the account cash holding like Sell but leaves the paying
+  asset's quantity and cost-basis untouched (DIV-024) and records no
+  AssetPrice (DIV-027). Adds per-holding dividends_received / total_return_pct
+  and per-account total_dividends_received to the account-details read model.
+- price-refresh lock toggle on holding row
+  Adds a Lock/LockOpen IconButton on each non-cash holding row (MKT-153)
+  that calls the block/unblock command via the gateway, refetches assets
+  (mirroring archive/unarchive), and confirms via snackbar. Icon state
+  reads asset.price_refresh_blocked from the store. Stable id
+  action-toggle-price-refresh-${assetId} for E2E. Adds i18n + tests.
+- aggregate
+  block/unblock methods, repo + service + two Tauri commands, and the
+  build_scope exclusion (MKT-151) so a locked asset is never fetched.
+  Regenerates bindings; existing FE Asset fixtures gain the new field.
+- add price_refresh_blocked column (MKT-150)
+  Adds the per-asset price-refresh lock flag (ADR-014). Bare ALTER matching
+  the existing is_archived / isin migration style; defaults to not-locked.
+- router-driven edit modal + row double-click
+  The edit button and a new row double-click now open the shell-mounted
+  Edit Asset modal via URL params, so it overlays in the asset-view
+  context; drops the table's local modal mount and state. Double-click is
+  a no-op on archived rows; the action-edit-asset id is preserved for E2E.
+- edit asset on holding row double-click
+  Double-clicking a holding opens the router-driven Edit Asset modal so it
+  overlays in the account-details context. No-op on archived assets and
+  cash rows, matching where editing is otherwise disallowed.
+- trim trailing zeros on holding quantity
+  Whole-share holdings rendered as "12.000000" are noisy; show "12" for
+  whole numbers and only the significant fractional digits otherwise.
+  Cash balances stay at fixed 2 decimals (a currency amount).
+- show 3 price decimals below 10, 2 otherwise
+  Sub-10 prices (penny stocks, low-value units) lose meaningful precision
+  at 2 decimals; larger prices don't need a noisy third digit. Applies to
+  average price, current price, and the price-history list.
+
 ## [0.15.0] - 2026-05-29
 
 ### Added
