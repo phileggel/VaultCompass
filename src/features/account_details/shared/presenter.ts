@@ -4,6 +4,7 @@ import type {
   AssetPriceError,
   AssetPriceSource,
   ClosedHoldingDetail,
+  DividendError,
   HoldingDetail,
 } from "@/bindings";
 import {
@@ -57,6 +58,33 @@ export function priceRefreshLockErrorToI18n(err: AssetCrudError): I18nMessage {
   }
 }
 
+/**
+ * F27 — Maps the `record_dividend` error surface to an i18n key. `DividendError`
+ * is an untagged union of three tagged leaves (`AccountApplicationError` |
+ * `DividendApplicationError` | `TransactionDomainError`) whose combined `code`
+ * set is wider than what the command can actually raise, so this switch lists
+ * the reachable codes (per the account contract) and falls back to a generic
+ * key for any other — mirroring `priceRefreshLockErrorToI18n` rather than the
+ * `never`-exhaustive style used for narrow single-type errors.
+ */
+export function dividendErrorToI18n(err: DividendError): I18nMessage {
+  switch (err.code) {
+    case "AccountNotFound":
+    case "DatabaseError":
+    case "AssetNotFound":
+    case "AssetNotHeld":
+    case "DividendOnCashAsset":
+    case "AmountNotPositive":
+    case "ExchangeRateNotPositive":
+    case "DateInFuture":
+    case "DateTooOld":
+    case "InvalidDate":
+      return { key: `error.${err.code}` };
+    default:
+      return { key: "error.Unknown" };
+  }
+}
+
 const DASH = "—";
 const CASH_ASSET_PREFIX = "system-cash-";
 
@@ -92,6 +120,12 @@ export interface HoldingRowViewModel {
   unrealizedPnlRaw: number | null;
   /** Formatted performance % (e.g. "5.25%") or "—" when not computable (MKT-032/035). */
   performancePct: string;
+  /** Formatted cumulative dividends received for this holding, account currency (DIV-072). Always shown ("0,00" when none). */
+  dividendsReceived: string;
+  /** Formatted total return % (price + dividends) or "—" when not computable (DIV-071/072). */
+  totalReturnPct: string;
+  /** Raw total return % in micro-units, or null when not computable — used for sign-based color styling (DIV-072). */
+  totalReturnPctRaw: number | null;
   /** True when this row is the system Cash Holding (CSH-090). Drives the cash variant in HoldingRow. */
   isCash: boolean;
   /** Staleness label for the current price (MKT-140); null when no price is recorded. */
@@ -151,6 +185,10 @@ export interface AccountSummaryViewModel {
   totalGlobalValue: string;
   /** Raw total Global Value in micro-units (CSH-094). */
   totalGlobalValueRaw: number;
+  /** Formatted cumulative dividends received across the account, account currency (DIV-073). */
+  totalDividendsReceived: string;
+  /** Raw cumulative dividends received in micro-units — used to gate header display (DIV-073). */
+  totalDividendsReceivedRaw: number;
   /** True when the account currently holds a non-zero cash balance (CSH-019/095). */
   hasCashHolding: boolean;
 }
@@ -226,6 +264,9 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       unrealizedPnl: "",
       unrealizedPnlRaw: null,
       performancePct: "",
+      dividendsReceived: "",
+      totalReturnPct: "",
+      totalReturnPctRaw: null,
       isCash: true,
       staleness: null,
       sourceLabel: null,
@@ -250,6 +291,10 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     unrealizedPnlRaw: detail.unrealized_pnl,
     performancePct:
       detail.performance_pct !== null ? `${microToFormatted(detail.performance_pct, 2)}%` : DASH,
+    dividendsReceived: microToFormatted(detail.dividends_received, 2),
+    totalReturnPct:
+      detail.total_return_pct !== null ? `${microToFormatted(detail.total_return_pct, 2)}%` : DASH,
+    totalReturnPctRaw: detail.total_return_pct,
     isCash: false,
     staleness: formatStaleness(detail.current_price_date, new Date()),
     sourceLabel: formatSource(detail.current_price_source),
@@ -290,6 +335,8 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
         : DASH,
     totalGlobalValue: microToFormatted(response.total_global_value, 2),
     totalGlobalValueRaw: response.total_global_value,
+    totalDividendsReceived: microToFormatted(response.total_dividends_received, 2),
+    totalDividendsReceivedRaw: response.total_dividends_received,
     hasCashHolding,
   };
 }

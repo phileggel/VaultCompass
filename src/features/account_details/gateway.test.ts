@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   DepositDTO,
+  DividendDTO,
   HoldingTransactionError,
   OpenHoldingDTO,
   OpenHoldingError,
@@ -429,5 +430,189 @@ describe("accountDetailsGateway — recordWithdrawal (CSH-032)", () => {
     mockInvoke.mockRejectedValue({ code: "CashAssetNotEditable" });
     const result = await accountDetailsGateway.blockAssetPriceRefresh("cash-id");
     expect(result).toEqual({ status: "error", error: { code: "CashAssetNotEditable" } });
+  });
+});
+
+describe("accountDetailsGateway — recordDividend (DIV-023)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // DIV-023 — happy path: recordDividend passes DTO through and returns Transaction
+  it("recordDividend returns Transaction on success", async () => {
+    const dto: DividendDTO = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const mockTransaction: Transaction = {
+      id: "tx-div-1",
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      transaction_type: "Dividend",
+      date: "2026-05-31",
+      quantity: 1_000_000,
+      unit_price: 1_000_000,
+      exchange_rate: 1_000_000,
+      fees: 0,
+      total_amount: 100_000_000,
+      note: null,
+      realized_pnl: null,
+      created_at: "2026-05-31T10:00:00Z",
+    };
+    mockInvoke.mockResolvedValue(mockTransaction);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "ok", data: mockTransaction });
+    expect(mockInvoke).toHaveBeenCalledWith("record_dividend", { dto });
+  });
+
+  // DIV-011 — AccountNotFound: unknown account
+  it("recordDividend surfaces AccountNotFound", async () => {
+    const dto = {
+      account_id: "no-such",
+      asset_id: "asset-equity-1",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "AccountNotFound", account_id: "no-such" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+    expect(mockInvoke).toHaveBeenCalledWith("record_dividend", { dto });
+  });
+
+  // DIV-011 — AssetNotFound: unknown paying asset
+  it("recordDividend surfaces AssetNotFound", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "no-such-asset",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "AssetNotFound" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DIV-011 — AssetNotHeld: asset exists but no active holding
+  it("recordDividend surfaces AssetNotHeld", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-not-held",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "AssetNotHeld" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DIV-011 — DividendOnCashAsset: paying asset is a Cash Asset
+  it("recordDividend surfaces DividendOnCashAsset", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "system-cash-eur",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "DividendOnCashAsset" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DIV-021 — AmountNotPositive: amount is zero
+  it("recordDividend surfaces AmountNotPositive", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-05-31",
+      amount_micros: 0,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "AmountNotPositive" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DIV-022 — ExchangeRateNotPositive: rate is zero
+  it("recordDividend surfaces ExchangeRateNotPositive", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 0,
+      note: null,
+    };
+    const err = { code: "ExchangeRateNotPositive" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DIV-021 — DateInFuture
+  it("recordDividend surfaces DateInFuture", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2099-12-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "DateInFuture" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DatabaseError — infrastructure failure
+  it("recordDividend surfaces DatabaseError on infrastructure failure", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-05-31",
+      amount_micros: 100_000_000,
+      exchange_rate: 1_000_000,
+      note: null,
+    };
+    const err = { code: "DatabaseError" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordDividend(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
   });
 });

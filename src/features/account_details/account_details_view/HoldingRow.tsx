@@ -119,6 +119,9 @@ export function HoldingRow({
         <td className="m3-td" />
         <td className="m3-td" />
         <td className="m3-td" />
+        {/* DIV-072 — dividends / total-return columns are blank for the cash row */}
+        <td className="m3-td" />
+        <td className="m3-td" />
         <td className="m3-td">
           <div className="flex items-center gap-1">
             <IconButton
@@ -214,6 +217,24 @@ export function HoldingRow({
           </span>
         ) : (
           <span className="text-m3-on-surface-variant">{row.performancePct}</span>
+        )}
+      </td>
+      {/* DIV-072 — Dividends received (always shown) */}
+      <td className="m3-td text-right tabular-nums">{row.dividendsReceived}</td>
+      {/* DIV-072 — Total return % (price + dividends); "—" when not computable */}
+      <td className="m3-td text-right tabular-nums">
+        {row.totalReturnPct !== "—" ? (
+          <span
+            className={
+              row.totalReturnPctRaw !== null && row.totalReturnPctRaw < 0
+                ? "text-m3-error"
+                : "text-m3-success"
+            }
+          >
+            {row.totalReturnPct}
+          </span>
+        ) : (
+          <span className="text-m3-on-surface-variant">{row.totalReturnPct}</span>
         )}
       </td>
       <td className="m3-td">

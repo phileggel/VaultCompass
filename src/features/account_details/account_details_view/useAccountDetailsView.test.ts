@@ -98,3 +98,56 @@ describe("useAccountDetailsView — price-refresh lock toggle (MKT-156/157)", ()
     expect(mockShowSnackbar).toHaveBeenCalledWith("error.Unknown", "error");
   });
 });
+
+// ---------------------------------------------------------------------------
+// DIV-012 — Header "Add" menu: dividend modal state in useAccountDetailsView
+// The AccountDetailsView component replaces three standalone header buttons
+// with a consolidated "Add" dropdown; the dividend modal open/close/success
+// state is managed here. The view-level menu-composition (button ids) is
+// a render concern tested at the AccountDetailsView.test.tsx level (not yet
+// created — no router-mocked sibling test exists to copy the setup from).
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetailsView — dividend modal state (DIV-012)", () => {
+  beforeEach(() => {
+    mockBlock.mockReset();
+    mockUnblock.mockReset();
+    mockShowSnackbar.mockReset();
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  // DIV-012 — dividendOpen is initially false
+  it("dividendOpen starts as false", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.dividendOpen).toBe(false);
+  });
+
+  // DIV-012 — handleDividendOpen sets dividendOpen to true
+  it("handleDividendOpen sets dividendOpen to true (DIV-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleDividendOpen());
+    expect(result.current.dividendOpen).toBe(true);
+  });
+
+  // DIV-012 — handleDividendClose resets dividendOpen to false
+  it("handleDividendClose resets dividendOpen to false (DIV-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleDividendOpen());
+    act(() => result.current.handleDividendClose());
+    expect(result.current.dividendOpen).toBe(false);
+  });
+
+  // DIV-012 — handleDividendSuccess closes the modal and triggers a data re-fetch
+  it("handleDividendSuccess closes modal and calls retry (DIV-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleDividendOpen());
+
+    act(() => result.current.handleDividendSuccess());
+
+    expect(result.current.dividendOpen).toBe(false);
+  });
+});

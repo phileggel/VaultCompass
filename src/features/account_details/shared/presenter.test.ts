@@ -7,6 +7,7 @@ import type {
 } from "@/bindings";
 import {
   assetPriceMutationErrorToI18n,
+  dividendErrorToI18n,
   formatSource,
   formatStaleness,
   priceRefreshLockErrorToI18n,
@@ -540,5 +541,97 @@ describe("priceRefreshLockErrorToI18n", () => {
     "DatabaseError",
   ] as const)("%s unit variant maps to its flat error key", (code) => {
     expect(priceRefreshLockErrorToI18n({ code })).toEqual({ key: `error.${code}` });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dividendErrorToI18n — F27 presenter for record_dividend error surface (DIV)
+// Reachable codes per contract: AccountNotFound, DatabaseError (AccountApplicationError);
+// AssetNotFound, AssetNotHeld, DividendOnCashAsset (DividendApplicationError);
+// AmountNotPositive, ExchangeRateNotPositive, DateInFuture, DateTooOld, InvalidDate
+// (TransactionDomainError). Unknown codes fall to error.Unknown.
+// ---------------------------------------------------------------------------
+
+describe("dividendErrorToI18n", () => {
+  it("AccountNotFound (carries account_id payload) maps to error.AccountNotFound", () => {
+    expect(dividendErrorToI18n({ code: "AccountNotFound", account_id: "acc-1" })).toEqual({
+      key: "error.AccountNotFound",
+    });
+  });
+
+  it.each([
+    "DatabaseError",
+    "AssetNotFound",
+    "AssetNotHeld",
+    "DividendOnCashAsset",
+    "AmountNotPositive",
+    "ExchangeRateNotPositive",
+    "DateInFuture",
+    "DateTooOld",
+    "InvalidDate",
+  ] as const)("%s maps to its flat error key", (code) => {
+    expect(dividendErrorToI18n({ code })).toEqual({ key: `error.${code}` });
+  });
+
+  it("an unrecognised code falls through to error.Unknown", () => {
+    // Cast needed because TypeScript narrows to known union members — this
+    // exercises the default branch that guards against future wire codes.
+    expect(dividendErrorToI18n({ code: "SomeUnknownCode" } as never)).toEqual({
+      key: "error.Unknown",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toHoldingRow — DIV-072: dividendsReceived and totalReturnPct new fields
+// ---------------------------------------------------------------------------
+
+describe("toHoldingRow — dividend fields (DIV-072)", () => {
+  // DIV-072 — dividendsReceived always shown, formatted with 2 decimals
+  it("formats dividendsReceived with 2 decimals when non-zero (DIV-072)", () => {
+    const row = toHoldingRow(makeHolding({ dividends_received: 50_000_000 }));
+    expect(row.dividendsReceived).toBe("50,00");
+  });
+
+  it("formats dividendsReceived as '0,00' when zero (DIV-070)", () => {
+    const row = toHoldingRow(makeHolding({ dividends_received: 0 }));
+    expect(row.dividendsReceived).toBe("0,00");
+  });
+
+  // DIV-072 — totalReturnPct: formatted with 2 decimals + % suffix when non-null
+  it("formats totalReturnPct with 2 decimals and % suffix when non-null (DIV-071)", () => {
+    const row = toHoldingRow(makeHolding({ total_return_pct: 8_250_000 }));
+    expect(row.totalReturnPct).toBe("8,25%");
+  });
+
+  // DIV-072 — totalReturnPct: '—' when null (same conditions as performance_pct)
+  it("totalReturnPct is '—' when total_return_pct is null (DIV-072)", () => {
+    const row = toHoldingRow(makeHolding({ total_return_pct: null }));
+    expect(row.totalReturnPct).toBe("—");
+  });
+
+  // Cash row — dividendsReceived and totalReturnPct are blank (not applicable)
+  it("cash row has blank dividendsReceived and totalReturnPct", () => {
+    const row = toHoldingRow(makeCashHolding());
+    expect(row.dividendsReceived).toBe("");
+    expect(row.totalReturnPct).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toAccountSummary — DIV-073: totalDividendsReceived new field
+// ---------------------------------------------------------------------------
+
+describe("toAccountSummary — dividend total (DIV-073)", () => {
+  // DIV-073 — totalDividendsReceived formatted with 2 decimals when non-zero
+  it("formats totalDividendsReceived with 2 decimals when non-zero (DIV-073)", () => {
+    const summary = toAccountSummary(makeResponse({ total_dividends_received: 120_000_000 }));
+    expect(summary.totalDividendsReceived).toBe("120,00");
+  });
+
+  // DIV-073 — totalDividendsReceived is '0,00' when no dividends recorded
+  it("formats totalDividendsReceived as '0,00' when no dividends (DIV-073)", () => {
+    const summary = toAccountSummary(makeResponse({ total_dividends_received: 0 }));
+    expect(summary.totalDividendsReceived).toBe("0,00");
   });
 });
