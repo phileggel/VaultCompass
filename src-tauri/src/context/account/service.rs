@@ -462,6 +462,37 @@ impl AccountService {
         })
     }
 
+    /// Records a cash Dividend attributed to a held paying asset (DIV-023).
+    ///
+    /// Application-layer composition: loads the Account, builds the Transaction
+    /// via `Transaction::new_dividend` (DIV-021/022 enforced by the factory),
+    /// applies it via `Account::apply_dividend` (credit-only; no InsufficientCash),
+    /// then saves atomically. Returns a typed `HoldingTransactionError`.
+    pub async fn record_dividend(
+        &self,
+        account_id: &str,
+        paying_asset_id: String,
+        date: String,
+        amount_micros: i64,
+        exchange_rate: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, HoldingTransactionError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %paying_asset_id, amount = amount_micros, "record_dividend");
+        let mut account = load_account(&*self.account_repo, account_id).await?;
+        let tx = Transaction::new_dividend(
+            account.id.clone(),
+            paying_asset_id,
+            date,
+            amount_micros,
+            exchange_rate,
+            note,
+        )?;
+        let tx = account.apply_dividend(tx)?;
+        save_account(&*self.account_repo, &mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::error::OpenHoldingError;
+use super::error::{DividendError, OpenHoldingError};
 use super::HoldingTransactionUseCase;
 use crate::context::account::{HoldingTransactionError, Transaction};
 use serde::{Deserialize, Serialize};
@@ -235,4 +235,43 @@ pub async fn record_withdrawal(
 ) -> Result<Transaction, HoldingTransactionError> {
     uc.record_withdrawal(&dto.account_id, dto.date, dto.amount_micros, dto.note)
         .await
+}
+
+// =============================================================================
+// Dividend — DTO + command (DIV-020/023)
+// =============================================================================
+
+/// Parameters for recording a cash dividend attributed to a held asset (DIV-020).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct DividendDTO {
+    /// Account receiving the dividend.
+    pub account_id: String,
+    /// The paying asset — must be actively held (quantity > 0) and not a Cash Asset (DIV-011).
+    pub asset_id: String,
+    /// Business date the dividend was received (YYYY-MM-DD, DIV-021).
+    pub date: String,
+    /// Net dividend in the asset's native currency (micro-units, strictly positive, DIV-021).
+    pub amount_micros: i64,
+    /// Asset→account conversion rate (micro-units, strictly positive; 1_000_000 when currencies match, DIV-022).
+    pub exchange_rate: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Records a cash dividend attributed to a held asset (DIV-023).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_dividend(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: DividendDTO,
+) -> Result<Transaction, DividendError> {
+    uc.record_dividend(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.amount_micros,
+        dto.exchange_rate,
+        dto.note,
+    )
+    .await
 }

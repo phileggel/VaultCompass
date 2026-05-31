@@ -33,6 +33,8 @@ pub enum TransactionType {
     Deposit,
     /// A cash outflow to outside the application's tracked world (CSH-032).
     Withdrawal,
+    /// A cash dividend paid by a held asset; credited to the Cash Holding (DIV-023).
+    Dividend,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -219,6 +221,47 @@ impl Transaction {
             1_000_000,
             0,
             amount,
+            note,
+            None,
+        )
+    }
+
+    /// Factory: builds a Dividend transaction (DIV-023).
+    ///
+    /// `total_amount = floor(amount_micros × exchange_rate / MICRO)` in account currency.
+    /// Carries `transaction_type = Dividend`, `asset_id = paying asset` (not the Cash Asset),
+    /// `fees = 0`, `realized_pnl = None` (income, not a capital gain — DIV-024).
+    ///
+    /// DIV-021 — `amount_micros <= 0` is rejected as `AmountNotPositive` before the
+    /// generic validator so the FE sees the cash-specific code.
+    /// DIV-022 — `exchange_rate <= 0` is rejected as `ExchangeRateNotPositive`.
+    pub fn new_dividend(
+        account_id: String,
+        paying_asset_id: String,
+        date: String,
+        amount_micros: i64,
+        exchange_rate: i64,
+        note: Option<String>,
+    ) -> StdResult<Self, TransactionDomainError> {
+        // DIV-021/022 — cash-specific codes fire before the generic validator.
+        if amount_micros <= 0 {
+            return Err(TransactionDomainError::AmountNotPositive);
+        }
+        if exchange_rate <= 0 {
+            return Err(TransactionDomainError::ExchangeRateNotPositive);
+        }
+        // total_amount in account currency = amount × rate (i128 intermediate, ADR-001).
+        let total_amount = ((amount_micros as i128 * exchange_rate as i128) / 1_000_000) as i64;
+        Self::new(
+            account_id,
+            paying_asset_id,
+            TransactionType::Dividend,
+            date,
+            amount_micros,
+            1_000_000,
+            exchange_rate,
+            0,
+            total_amount,
             note,
             None,
         )
@@ -525,5 +568,179 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, TransactionDomainError::DateTooOld));
+    }
+
+    // -------------------------------------------------------------------------
+    // DIV-023 / DIV-024 — Transaction::new_dividend factory
+    // -------------------------------------------------------------------------
+
+    // DIV-023 — new_dividend sets transaction_type = Dividend, asset_id = paying
+    // asset (not cash asset), realized_pnl = None.
+    #[test]
+    fn new_dividend_sets_dividend_defaults() {
+        let total_amount = 500_000_000i64; // 500.0 account-currency
+        let exchange_rate = 1_000_000i64; // 1.0 (same currency)
+        let tx = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            500_000_000, // amount_micros in asset currency
+            exchange_rate,
+            None,
+        )
+        .unwrap();
+        assert_eq!(tx.transaction_type, TransactionType::Dividend);
+        assert_eq!(tx.account_id, "acc-1");
+        assert_eq!(tx.asset_id, "asset-aapl");
+        assert_eq!(tx.exchange_rate, exchange_rate);
+        assert_eq!(tx.total_amount, total_amount);
+        assert_eq!(tx.fees, 0);
+        assert!(
+            tx.realized_pnl.is_none(),
+            "dividend realized_pnl must be None"
+        );
+    }
+
+    // DIV-022 — total_amount = amount_micros × exchange_rate / MICRO.
+    #[test]
+    fn new_dividend_converts_amount_at_exchange_rate() {
+        // amount = 100 USD, rate = 0.9 EUR/USD → total = 90 EUR
+        let amount_micros = 100_000_000i64; // 100.0 asset ccy
+        let exchange_rate = 900_000i64; // 0.9 account ccy per asset ccy
+        let tx = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            amount_micros,
+            exchange_rate,
+            None,
+        )
+        .unwrap();
+        // total_amount = floor(100_000_000 × 900_000 / 1_000_000) = 90_000_000
+        assert_eq!(tx.total_amount, 90_000_000);
+    }
+
+    // DIV-021 — amount_micros ≤ 0 is rejected as AmountNotPositive.
+    #[test]
+    fn new_dividend_rejects_zero_amount() {
+        let err = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            0,
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::AmountNotPositive),
+            "expected AmountNotPositive, got: {err:?}"
+        );
+    }
+
+    // DIV-021 — negative amount_micros is rejected as AmountNotPositive.
+    #[test]
+    fn new_dividend_rejects_negative_amount() {
+        let err = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            -1_000_000,
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::AmountNotPositive),
+            "expected AmountNotPositive, got: {err:?}"
+        );
+    }
+
+    // DIV-022 — exchange_rate ≤ 0 is rejected as ExchangeRateNotPositive.
+    #[test]
+    fn new_dividend_rejects_zero_exchange_rate() {
+        let err = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            100_000_000,
+            0,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::ExchangeRateNotPositive),
+            "expected ExchangeRateNotPositive, got: {err:?}"
+        );
+    }
+
+    // DIV-021 — future date is rejected.
+    #[test]
+    fn new_dividend_rejects_future_date() {
+        let err = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2099-01-01".to_string(),
+            100_000_000,
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::DateInFuture),
+            "expected DateInFuture, got: {err:?}"
+        );
+    }
+
+    // DIV-021 — date before 1900-01-01 is rejected as DateTooOld.
+    #[test]
+    fn new_dividend_rejects_date_too_old() {
+        let err = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "1899-12-31".to_string(),
+            100_000_000,
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::DateTooOld),
+            "expected DateTooOld, got: {err:?}"
+        );
+    }
+
+    // DIV-021 — invalid date string is rejected as InvalidDate.
+    #[test]
+    fn new_dividend_rejects_invalid_date_string() {
+        let err = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "not-a-date".to_string(),
+            100_000_000,
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::InvalidDate),
+            "expected InvalidDate, got: {err:?}"
+        );
+    }
+
+    // DIV-024 — new_dividend carries no realized_pnl (income, not capital gain).
+    #[test]
+    fn new_dividend_realized_pnl_is_none() {
+        let tx = Transaction::new_dividend(
+            "acc-1".to_string(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            100_000_000,
+            1_000_000,
+            Some("Q2 dividend".to_string()),
+        )
+        .unwrap();
+        assert!(tx.realized_pnl.is_none());
+        assert_eq!(tx.note.as_deref(), Some("Q2 dividend"));
     }
 }

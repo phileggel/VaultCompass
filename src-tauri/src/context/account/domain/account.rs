@@ -353,6 +353,11 @@ impl Account {
             }
             // CSH-022 / CSH-032: cash transactions carry total_amount == quantity (no fees, no FX).
             TransactionType::Deposit | TransactionType::Withdrawal => quantity,
+            // DIV-040: dividend total_amount = floor(quantity × exchange_rate / MICRO).
+            // quantity holds amount_micros in asset currency on a Dividend correction.
+            TransactionType::Dividend => {
+                ((quantity as i128 * exchange_rate as i128) / 1_000_000) as i64
+            }
         };
 
         let updated_tx = Transaction::with_id(
@@ -620,6 +625,30 @@ impl Account {
         Ok(tx)
     }
 
+    /// Aggregate-root method: applies a pre-built Dividend transaction to this
+    /// account (DIV-023). The transaction must have been built via
+    /// `Transaction::new_dividend`. Pushes to history, queues the
+    /// `TransactionInserted` change for the dividend, and replays the cash
+    /// holding (CSH-012 lazy-creates the Cash Holding on the first credit).
+    ///
+    /// The paying asset's holding (`asset_id`) is left untouched (DIV-024):
+    /// only the Cash Holding is updated. Never raises `InsufficientCash` —
+    /// dividends are credit-only.
+    pub fn apply_dividend(
+        &mut self,
+        tx: Transaction,
+    ) -> StdResult<Transaction, AccountOperationError> {
+        // DIV-023/024 — credit-only, identical to a Deposit: push to history,
+        // queue the insert, replay the cash holding (lazy-creates per CSH-012).
+        // The paying asset's holding is intentionally not recomputed — a dividend
+        // never affects its quantity or cost basis.
+        self.transactions.push(tx.clone());
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.replay_cash_holding()?;
+        Ok(tx)
+    }
+
     // Cash deposit / withdrawal recording is composed at the application layer
     // (see `AccountService::record_deposit` / `record_withdrawal`) by chaining
     // `Transaction::new_deposit` / `new_withdrawal` (TRX-020) and `apply_deposit`
@@ -655,6 +684,7 @@ impl Account {
                         | TransactionType::Withdrawal
                         | TransactionType::Purchase
                         | TransactionType::Sell
+                        | TransactionType::Dividend
                 )
             })
             .collect();
@@ -667,7 +697,7 @@ impl Account {
         let mut running: i64 = 0;
         for t in &cash_txs {
             match t.transaction_type {
-                TransactionType::Deposit | TransactionType::Sell => {
+                TransactionType::Deposit | TransactionType::Sell | TransactionType::Dividend => {
                     running = running.saturating_add(t.total_amount);
                 }
                 TransactionType::Withdrawal | TransactionType::Purchase => {
@@ -690,7 +720,7 @@ impl Account {
         let cash_pair_remains = self.transactions.iter().any(|t| {
             matches!(
                 t.transaction_type,
-                TransactionType::Deposit | TransactionType::Withdrawal
+                TransactionType::Deposit | TransactionType::Withdrawal | TransactionType::Dividend
             )
         });
         let existing_cash_holding = self.holdings.iter().find(|h| h.asset_id == cash_asset_id);
@@ -808,6 +838,20 @@ impl Account {
                     let qty = t.quantity as i128;
                     total_quantity += qty;
                     vwap_numerator += t.total_amount as i128 * MICRO;
+                }
+                // DIV-024 — a Dividend has no effect on the paying asset's holding
+                // quantity, average cost, or cost basis. The Dividend type ONLY appears
+                // in `replay_cash_holding` (where it credits cash). It is NOT part of
+                // any non-cash (account, asset) pair, so `recalculate_holding` never
+                // receives Dividend transactions for non-cash assets. If encountered
+                // here it is a bug; we skip it to prevent a non-exhaustive match.
+                TransactionType::Dividend => {
+                    // DIV-024 — a Dividend never affects the paying asset's holding. A Dividend
+                    // IS legitimately present in `pair_txs` (which is filtered by `asset_id`
+                    // only, and a Dividend's `asset_id` is the paying asset), so this arm is
+                    // reached on any correct/cancel replay of a dividend-bearing asset. It is a
+                    // deliberate no-op: quantity, VWAP, and realized P&L are left untouched; the
+                    // dividend's only effect (the cash credit) lives in `replay_cash_holding`.
                 }
                 // CSH-032: a Withdrawal debits cash quantity by total_amount; never realises P&L
                 // and never tracks last_sold_date. CSH-080's eligibility guard runs in
@@ -2130,6 +2174,282 @@ mod tests {
         .unwrap();
         acc.apply_withdrawal(tx).unwrap();
         assert_eq!(acc.cash_holding_quantity(), before - micro(200));
+    }
+
+    // -------------------------------------------------------------------------
+    // DIV-023 / DIV-024 — apply_dividend aggregate-root method
+    // -------------------------------------------------------------------------
+
+    // DIV-023 — apply_dividend credits the cash holding by total_amount and
+    // lazy-creates the Cash Holding when absent (first cash event, CSH-012).
+    #[test]
+    fn div_023_apply_dividend_credits_cash_and_lazy_creates_holding() {
+        let mut acc = base_account();
+        // Open a non-cash position so the paying asset has a holding.
+        acc.open_holding(
+            "asset-aapl".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(1_000),
+        )
+        .unwrap();
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            0,
+            "no cash before the dividend"
+        );
+
+        let tx = Transaction::new_dividend(
+            acc.id.clone(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            micro(200), // 200 in asset ccy, rate=1 → 200 account ccy
+            1_000_000,
+            None,
+        )
+        .unwrap();
+        acc.apply_dividend(tx.clone()).unwrap();
+
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            micro(200),
+            "dividend must credit cash by total_amount"
+        );
+    }
+
+    // DIV-024 — apply_dividend does NOT change the paying asset's holding
+    // quantity, average_price, or total_realized_pnl.
+    #[test]
+    fn div_024_apply_dividend_leaves_paying_asset_holding_unchanged() {
+        let mut acc = base_account();
+        acc.open_holding(
+            "asset-aapl".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(1_000),
+        )
+        .unwrap();
+        let holding_before = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-aapl")
+            .unwrap()
+            .clone();
+
+        let tx = Transaction::new_dividend(
+            acc.id.clone(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            micro(200),
+            1_000_000,
+            None,
+        )
+        .unwrap();
+        acc.apply_dividend(tx).unwrap();
+
+        let holding_after = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-aapl")
+            .unwrap();
+        assert_eq!(
+            holding_after.quantity, holding_before.quantity,
+            "dividend must not change paying asset quantity"
+        );
+        assert_eq!(
+            holding_after.average_price, holding_before.average_price,
+            "dividend must not change paying asset average_price"
+        );
+        assert_eq!(
+            holding_after.total_realized_pnl, holding_before.total_realized_pnl,
+            "dividend must not change paying asset realized_pnl"
+        );
+    }
+
+    // DIV-023 — apply_dividend queues TransactionInserted and HoldingUpserted
+    // (for the cash holding) in pending_changes — no change for paying asset.
+    #[test]
+    fn div_023_apply_dividend_queues_correct_pending_changes() {
+        let mut acc = base_account();
+        acc.open_holding(
+            "asset-aapl".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(1_000),
+        )
+        .unwrap();
+        acc.pending_changes.clear(); // isolate from open_holding changes
+
+        let tx = Transaction::new_dividend(
+            acc.id.clone(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            micro(200),
+            1_000_000,
+            None,
+        )
+        .unwrap();
+        let tx_id = tx.id.clone();
+        acc.apply_dividend(tx).unwrap();
+
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::TransactionInserted(t) if t.id == tx_id
+            )),
+            "TransactionInserted must be queued for the dividend"
+        );
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::HoldingUpserted(h) if h.asset_id == acc.cash_asset_id()
+            )),
+            "HoldingUpserted must be queued for the cash holding"
+        );
+        // No HoldingUpserted for the paying asset
+        assert!(
+            !acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::HoldingUpserted(h) if h.asset_id == "asset-aapl"
+            )),
+            "paying asset holding must NOT be updated by a dividend"
+        );
+    }
+
+    // DIV-023 — replay across mixed transactions: Deposit → Dividend → Withdrawal.
+    // Cash after: deposit(500) + dividend(200) - withdrawal(300) = 400.
+    #[test]
+    fn div_023_replay_with_mixed_transactions_including_dividend() {
+        let mut acc = base_account();
+        acc.open_holding(
+            "asset-aapl".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(1_000),
+        )
+        .unwrap();
+        acc.record_deposit("2024-03-01".to_string(), micro(500), None)
+            .unwrap();
+
+        let div_tx = Transaction::new_dividend(
+            acc.id.clone(),
+            "asset-aapl".to_string(),
+            "2024-06-01".to_string(),
+            micro(200),
+            1_000_000,
+            None,
+        )
+        .unwrap();
+        acc.apply_dividend(div_tx).unwrap();
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            micro(700),
+            "deposit(500) + dividend(200) = 700"
+        );
+
+        acc.record_withdrawal("2024-09-01".to_string(), micro(300), None)
+            .unwrap();
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            micro(400),
+            "deposit(500) + dividend(200) - withdrawal(300) = 400"
+        );
+    }
+
+    // DIV-041 — deleting a dividend removes its cash credit; if the running
+    // balance would go strictly negative for a later debit, InsufficientCash
+    // is returned. (cancel_transaction must handle Dividend type in replay.)
+    #[test]
+    fn div_041_cancel_dividend_rejects_when_replay_would_overdraw() {
+        let mut acc = base_account();
+        acc.open_holding(
+            "asset-aapl".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(1_000),
+        )
+        .unwrap();
+        // Deposit 100, dividend 50 → cash = 150; then withdraw 120.
+        acc.record_deposit("2024-03-01".to_string(), micro(100), None)
+            .unwrap();
+        let div_tx = Transaction::new_dividend(
+            acc.id.clone(),
+            "asset-aapl".to_string(),
+            "2024-04-01".to_string(),
+            micro(50),
+            1_000_000,
+            None,
+        )
+        .unwrap();
+        let div_id = div_tx.id.clone();
+        acc.apply_dividend(div_tx).unwrap();
+        acc.record_withdrawal("2024-06-01".to_string(), micro(120), None)
+            .unwrap();
+        // Cash = 100 + 50 - 120 = 30. Cancelling the dividend would replay as
+        // 100 - 120 = -20 → InsufficientCash.
+        let err = acc.cancel_transaction(&div_id).unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AccountOperationError>(),
+                Some(AccountOperationError::InsufficientCash { .. })
+            ),
+            "expected InsufficientCash when cancelling dividend would overdraw, got: {err}"
+        );
+    }
+
+    // DIV-040 — correcting a dividend recomputes total_amount from the new
+    // amount (held in `quantity`) and exchange_rate; the cash holding then
+    // reflects the corrected account-currency credit on replay.
+    #[test]
+    fn div_040_correct_dividend_recomputes_total_and_cash() {
+        let mut acc = base_account();
+        acc.open_holding(
+            "asset-aapl".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(1_000),
+        )
+        .unwrap();
+        let div_tx = Transaction::new_dividend(
+            acc.id.clone(),
+            "asset-aapl".to_string(),
+            "2024-06-15".to_string(),
+            micro(200), // 200 asset ccy at rate 1 → 200 account ccy
+            1_000_000,
+            None,
+        )
+        .unwrap();
+        let div_id = div_tx.id.clone();
+        acc.apply_dividend(div_tx).unwrap();
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            micro(200),
+            "cash credited 200 before correction"
+        );
+
+        // Correct to 300 in asset ccy at rate 2 → 600 account ccy.
+        acc.correct_transaction(
+            &div_id,
+            "2024-06-15".to_string(),
+            micro(300),
+            0,
+            2_000_000,
+            0,
+            None,
+        )
+        .unwrap();
+
+        let corrected = acc.transactions.iter().find(|t| t.id == div_id).unwrap();
+        assert_eq!(
+            corrected.total_amount,
+            micro(600),
+            "DIV-040: dividend total_amount = amount(300) × rate(2)"
+        );
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            micro(600),
+            "cash holding reflects the corrected dividend credit on replay"
+        );
     }
 
     // CSH-080 — apply_withdrawal rolls back the pushed tx + pending_change when

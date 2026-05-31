@@ -29,6 +29,8 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   current_price_source: null,
   unrealized_pnl: null,
   performance_pct: null,
+  dividends_received: 0,
+  total_return_pct: null,
   ...overrides,
 });
 
@@ -50,6 +52,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   total_realized_pnl: 0,
   total_unrealized_pnl: null,
   total_global_value: 0,
+  total_dividends_received: 0,
   ...overrides,
 });
 

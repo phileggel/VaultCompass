@@ -356,6 +356,17 @@ async recordWithdrawal(dto: WithdrawalDTO) : Promise<Result<Transaction, Holding
 }
 },
 /**
+ * Records a cash dividend attributed to a held asset (DIV-023).
+ */
+async recordDividend(dto: DividendDTO) : Promise<Result<Transaction, DividendError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_dividend", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
  */
 async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountApplicationError>> {
@@ -633,7 +644,12 @@ total_unrealized_pnl: number | null;
  * Unpriced non-cash holdings contribute 0 (no fallback to `average_price`).
  * Returns 0 when no Cash Holding and no priced non-cash holdings.
  */
-total_global_value: number }
+total_global_value: number; 
+/**
+ * Sum of dividend cash credited across all of the account's dividend transactions, in account
+ * currency (i64 micros). 0 when none (DIV-073).
+ */
+total_dividends_received: number }
 /**
  * Typed errors for the account bounded context.
  * 
@@ -1470,6 +1486,80 @@ amount_micros: number;
  */
 note: string | null }
 /**
+ * Application-layer rejections specific to the `record_dividend` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_dividend`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type DividendApplicationError = 
+/**
+ * No asset exists with the requested ID (DIV-011).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The asset is not currently held (quantity = 0 or no holding) (DIV-011).
+ */
+{ code: "AssetNotHeld" } | 
+/**
+ * Target asset is a system Cash Asset — dividends must be on non-cash
+ * holdings (DIV-011).
+ */
+{ code: "DividendOnCashAsset" }
+/**
+ * Parameters for recording a cash dividend attributed to a held asset (DIV-020).
+ */
+export type DividendDTO = { 
+/**
+ * Account receiving the dividend.
+ */
+account_id: string; 
+/**
+ * The paying asset — must be actively held (quantity > 0) and not a Cash Asset (DIV-011).
+ */
+asset_id: string; 
+/**
+ * Business date the dividend was received (YYYY-MM-DD, DIV-021).
+ */
+date: string; 
+/**
+ * Net dividend in the asset's native currency (micro-units, strictly positive, DIV-021).
+ */
+amount_micros: number; 
+/**
+ * Asset→account conversion rate (micro-units, strictly positive; 1_000_000 when currencies match, DIV-022).
+ */
+exchange_rate: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
+ * Use-case composite for the **record dividend** failure surface.
+ * 
+ * Each leaf lives in its rightful layer:
+ * - `AccountApplicationError` — application layer, raises `AccountNotFound`
+ * and `DatabaseError`.
+ * - `DividendApplicationError` — use-case-owned (this file), raises the
+ * cross-BC asset/holding checks.
+ * - `TransactionDomainError` — domain layer, raises date / amount / rate
+ * validation errors.
+ */
+export type DividendError = 
+/**
+ * Account-side rejection (`AccountNotFound`, `DatabaseError`).
+ */
+AccountApplicationError | 
+/**
+ * Use-case-layer rejection (cross-BC asset checks).
+ */
+DividendApplicationError | 
+/**
+ * Transaction-factory / domain validation rejection.
+ */
+TransactionDomainError
+/**
  * All possible side-effect events that can be published across the application.
  * Each variant represents a specific business event that features may need to react to.
  */
@@ -1660,7 +1750,17 @@ unrealized_pnl: number | null;
  * Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
  * 0 (not None) when unrealized_pnl is 0 (MKT-035).
  */
-performance_pct: number | null }
+performance_pct: number | null; 
+/**
+ * Sum of dividend cash credited for this (account, asset), in account currency (i64 micros).
+ * 0 when no dividends recorded; always computable (DIV-070).
+ */
+dividends_received: number; 
+/**
+ * Dividend-inclusive total return: (unrealized_pnl + dividends_received) × 100 / cost_basis.
+ * None under the same conditions as performance_pct (DIV-071).
+ */
+total_return_pct: number | null }
 /**
  * Service-layer composite for the **holding-transaction** failure surface —
  * every operation that mutates an Account's holdings ledger:
@@ -2005,7 +2105,11 @@ export type TransactionType =
 /**
  * A cash outflow to outside the application's tracked world (CSH-032).
  */
-"Withdrawal"
+"Withdrawal" | 
+/**
+ * A cash dividend paid by a held asset; credited to the Cash Holding (DIV-023).
+ */
+"Dividend"
 /**
  * Parameters for updating an existing account.
  */

@@ -15,5 +15,7 @@ mod orchestrator;
 mod shared;
 
 pub use api::*;
-pub use error::{OpenHoldingApplicationError, OpenHoldingError};
+pub use error::{
+    DividendApplicationError, DividendError, OpenHoldingApplicationError, OpenHoldingError,
+};
 pub use orchestrator::HoldingTransactionUseCase;

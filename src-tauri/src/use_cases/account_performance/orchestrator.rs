@@ -419,7 +419,7 @@ fn end_value_as_of(
             _ => continue,
         }
         match transaction.transaction_type {
-            TransactionType::Deposit | TransactionType::Sell => {
+            TransactionType::Deposit | TransactionType::Sell | TransactionType::Dividend => {
                 cash_balance += transaction.total_amount as i128;
             }
             TransactionType::Withdrawal | TransactionType::Purchase => {
@@ -496,7 +496,9 @@ fn net_external_flow_in_range(
             TransactionType::Withdrawal => {
                 total -= transaction.total_amount as i128;
             }
-            TransactionType::Purchase | TransactionType::Sell => {}
+            // DIV-023: Dividend credits cash (internal income), not an external flow — excluded
+            // from Simple Dietz net external flow (PRF-031) like Purchase/Sell.
+            TransactionType::Purchase | TransactionType::Sell | TransactionType::Dividend => {}
         }
     }
     debug_assert!(
@@ -533,7 +535,11 @@ fn metric_for_span(
                     transaction.total_amount as i128
                 }
                 TransactionType::Withdrawal => -(transaction.total_amount as i128),
-                TransactionType::Purchase | TransactionType::Sell => continue,
+                // DIV-023: Dividend is internal income (credit-only), not an external flow —
+                // excluded from Simple Dietz weighted flow (PRF-031) like Purchase/Sell.
+                TransactionType::Purchase | TransactionType::Sell | TransactionType::Dividend => {
+                    continue
+                }
             };
             let days_remaining = (period_end - date).num_days() as i128;
             weighted_flow += signed_flow * days_remaining / days_in_period as i128;
@@ -1444,6 +1450,86 @@ mod tests {
         assert_eq!(
             since_inception.gain, 200_000_000,
             "gain must be 200 EUR (sell profit); Purchase/Sell must not affect net_flow"
+        );
+    }
+
+    // DIV-023 / PRF-031 — a dividend credits the cash balance (raising end
+    // value) but is internal income, excluded from net external flow. The
+    // paying asset stays unpriced and contributes 0 to end value.
+    #[tokio::test]
+    async fn dividend_credits_end_value_but_excluded_from_net_external_flow() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Dividend Flow".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Div Stock".to_string(),
+                reference: "DVS".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-05".to_string(), 2_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-01-10".to_string(),
+                1_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Dividend of 100 EUR (rate 1) credits cash; the holding stays unpriced.
+        account_svc
+            .record_dividend(
+                &account.id,
+                stock.id.clone(),
+                "2024-01-20".to_string(),
+                100_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        // end_value = cash[deposit 2000 − purchase 1000 + dividend 100 = 1100]
+        //             + unpriced stock(0) = 1100.
+        // net_flow  = deposit 2000 only (Purchase + Dividend excluded).
+        // gain      = 1100 − 0 − 2000 = −900 EUR. The −900 (vs −1000) proves the
+        // dividend both raised end value AND stayed out of net_flow.
+        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let jan_2024 = resp
+            .monthly
+            .iter()
+            .find(|p| p.year == 2024 && p.month == Some(1))
+            .expect("Jan 2024 row");
+        let since_inception = jan_2024
+            .since_inception
+            .as_ref()
+            .expect("since_inception present for first period");
+        assert_eq!(
+            since_inception.gain, -900_000_000,
+            "dividend (+100) raises end value via cash but must stay out of net_flow"
         );
     }
 
