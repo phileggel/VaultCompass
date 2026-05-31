@@ -20,6 +20,7 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
+import { openAddMenuItem } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedDeposit } from "../helpers/seed";
 
@@ -63,12 +64,9 @@ describe("cash", () => {
 
     await navigateToAccountDetails(ACCOUNT_NAME);
 
-    // Header Deposit button is always visible (CSH-019). The Button component
-    // wraps its children in a <span>, so we match by span text — same XPath
-    // pattern used by `e2e/open_balance/open_balance.test.ts` for "Open Balance".
-    const headerDeposit = await $("#action-deposit");
-    await headerDeposit.waitForExist({ timeout: 10000 });
-    await headerDeposit.click();
+    // Deposit lives in the consolidated header "Add" menu (DIV-012); always
+    // available (CSH-019 visibility preserved).
+    await openAddMenuItem("add-menu-deposit");
 
     const form = await $("form#deposit-transaction-form");
     await form.waitForExist({ timeout: 8000 });
@@ -104,10 +102,9 @@ describe("cash", () => {
 
     await navigateToAccountDetails(ACCOUNT_NAME);
 
-    // Header Withdraw button only renders when the cash row is visible (CSH-019).
-    const headerWithdraw = await $("#action-withdraw");
-    await headerWithdraw.waitForExist({ timeout: 10000 });
-    await headerWithdraw.click();
+    // Withdraw lives in the header "Add" menu (DIV-012); the item renders only
+    // when the cash row is visible (CSH-019 visibility preserved).
+    await openAddMenuItem("add-menu-withdraw");
 
     const form = await $("form#withdrawal-transaction-form");
     await form.waitForExist({ timeout: 8000 });
@@ -143,9 +140,8 @@ describe("cash", () => {
 
     await navigateToAccountDetails(ACCOUNT_NAME);
 
-    const headerWithdraw = await $("#action-withdraw");
-    await headerWithdraw.waitForExist({ timeout: 10000 });
-    await headerWithdraw.click();
+    // Withdraw lives in the header "Add" menu (DIV-012).
+    await openAddMenuItem("add-menu-withdraw");
 
     const form = await $("form#withdrawal-transaction-form");
     await form.waitForExist({ timeout: 8000 });

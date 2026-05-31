@@ -3,7 +3,7 @@
  *
  * Contract: docs/contracts/record_transaction-contract.md (open_holding command)
  * Spec rules covered:
- *   TRX-055 — modal accessible from Account Details header open-balance trigger button (#action-open-balance)
+ *   TRX-055 — modal accessible from the Account Details header "Add" menu (DIV-012, #add-menu-open-balance)
  *   TRX-042 — form exposes date, quantity, total-cost only (no fees/exchange-rate/unit-price)
  *   TRX-043 — happy path: fill all fields + select asset → submit → transaction created, modal closes
  *   TRX-046 — future date keeps submit button disabled (frontend guard in useOpenBalance.isFormValid)
@@ -17,6 +17,7 @@
 import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
+import { openAddMenuItem } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
@@ -51,10 +52,11 @@ async function navigateToAccountDetails(accountName: string): Promise<void> {
   const summaryHeader = await $("div.px-6.py-4.bg-m3-surface-container-high");
   await summaryHeader.waitForExist({ timeout: 10000 });
 
-  // Stable id selector (E1, F25) — locale- and rename-independent. Mirrors the
-  // i18n key `account_details.action_open_balance` (visible label may differ).
-  const openBalanceBtn = await $("#action-open-balance");
-  await openBalanceBtn.waitForExist({ timeout: 15000 });
+  // Stable id selector (E1, F25) — locale- and rename-independent. The
+  // open-balance action now lives inside the consolidated header "Add" menu
+  // (DIV-012); wait for the menu trigger to confirm the header has rendered.
+  const addMenuBtn = await $("#account-details-add-menu");
+  await addMenuBtn.waitForExist({ timeout: 15000 });
 }
 
 // ---------------------------------------------------------------------------
@@ -102,15 +104,13 @@ describe("open_balance", () => {
   // TRX-055 — open-balance trigger in Account Details header opens the modal
   // -------------------------------------------------------------------------
   it("TRX-055: clicking the open-balance trigger opens ob-form modal", async () => {
-    const openBalanceBtn = await $("#action-open-balance");
-    await openBalanceBtn.waitForExist({ timeout: 10000 });
-    await openBalanceBtn.click();
+    await openAddMenuItem("add-menu-open-balance");
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });
     assert.ok(
       await form.isExisting(),
-      "form#ob-form must be present after clicking #action-open-balance",
+      "form#ob-form must be present after selecting Add → open balance (DIV-012)",
     );
   });
 
@@ -118,9 +118,7 @@ describe("open_balance", () => {
   // TRX-042 — form contains date, quantity, total-cost; no fees/exchange-rate
   // -------------------------------------------------------------------------
   it("TRX-042: ob-form exposes account, asset-select, date, quantity, total-cost — no fees", async () => {
-    const openBalanceBtn = await $("#action-open-balance");
-    await openBalanceBtn.waitForExist({ timeout: 10000 });
-    await openBalanceBtn.click();
+    await openAddMenuItem("add-menu-open-balance");
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });
@@ -159,9 +157,7 @@ describe("open_balance", () => {
   // composite isFormValid check. Full form validation is covered by RTL tests.
   // -------------------------------------------------------------------------
   it("TRX-046: submit button stays disabled when date is in the future", async () => {
-    const openBalanceBtn = await $("#action-open-balance");
-    await openBalanceBtn.waitForExist({ timeout: 10000 });
-    await openBalanceBtn.click();
+    await openAddMenuItem("add-menu-open-balance");
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });

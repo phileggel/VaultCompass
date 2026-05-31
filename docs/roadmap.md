@@ -149,5 +149,5 @@ Based on value and dependency chain:
 6. ~~**Archive eligibility guard**~~ — ✅ done (`ArchiveAssetUseCase`, OQ-6)
 7. ~~**Current market price**~~ — ✅ done (manual entry, MKT spec)
 8. ~~**Unrealized P&L + performance %**~~ — ✅ done
-9. **Corporate events (dividends, splits)** — standalone spec; relatively independent
+9. **Corporate events (dividends, splits)** — cash dividends ✅ done (DIV spec); stock dividends / DRIP / splits / return-of-capital / withholding-tax breakdown remain deferred (see `docs/spec/cash-dividend.md` § Deferred)
 10. **Portfolio dashboard** — aggregation of phases 3–6; last to implement

@@ -53,11 +53,11 @@ The `AccountDetailsResponse` DTO (owned by ACD) gains one field.
 
 ### Eligibility and Initiation (010–019)
 
-**DIV-010 — Entry point (frontend)**: The dividend recording flow is initiated from the Account Details header's consolidated "Add" menu (DIV-012), via a "Record dividend" item that opens the dividend modal (DIV-020). The paying asset is chosen inside the modal (DIV-020), not derived from a holding row. v1 does **not** add a per-holding-row dividend action (deferred — see Open Questions / Deferred).
+**DIV-010 — Entry point (frontend)**: The dividend recording flow is initiated from the Account Details header's consolidated "Record" menu (DIV-012), via a "Dividend" item that opens the dividend modal (DIV-020). The paying asset is chosen inside the modal (DIV-020), not derived from a holding row. v1 does **not** add a per-holding-row dividend action (deferred — see Open Questions / Deferred).
 
 **DIV-011 — Eligibility (backend)**: A dividend may be recorded only for an `(account, asset)` pair where the account currently holds the asset with `quantity > 0` and the asset is not a Cash Asset. The action is rejected with a specific error when the account is unknown, the asset is unknown, the asset is not currently held in that account (no active holding), or the asset is a Cash Asset.
 
-**DIV-012 — Header "Add" menu consolidation (frontend)**: The Account Details header groups its "add an entry" actions under a single "Add" dropdown menu rather than separate buttons. The menu's items are: Deposit, Withdraw (shown only when withdrawing is possible, preserving CSH-019's existing visibility condition), the existing Opening-balance action (keeping its shipped "Add a position" label, TRX-055 — no new term introduced), and Record dividend (DIV-010). Each item opens its existing dedicated modal. This **supersedes the standalone-button header placement** of CSH-019 (Deposit/Withdraw) and TRX-055 (Add a position) — see the reciprocal back-references in those rules. It does **not** touch the Cash _row's_ inline Deposit/Withdraw actions (CSH-091), which remain. The Performance and Refresh-prices header actions, and the primary "Add transaction" (buy/sell) action, are unchanged and remain outside this menu.
+**DIV-012 — Header "Record" menu consolidation (frontend)**: The Account Details header groups its "record an entry" actions under a single "Record" dropdown menu rather than separate buttons. The menu's items are: Cash deposit, Cash withdrawal (shown only when withdrawing is possible, preserving CSH-019's existing visibility condition), New position (the Opening-balance action, TRX-055), and Dividend (DIV-010). The item labels are reworded for consistency under the "Record" header — the underlying actions and modals are unchanged. Each item opens its existing dedicated modal. This **supersedes the standalone-button header placement** of CSH-019 (Deposit/Withdraw) and TRX-055 (Add a position) — see the reciprocal back-references in those rules. It does **not** touch the Cash _row's_ inline Deposit/Withdraw actions (CSH-091), which remain. The Performance and Refresh-prices header actions, and the primary "Add transaction" (buy/sell) action, are unchanged and remain outside this menu.
 
 ### Recording a Dividend (020–029)
 
@@ -104,7 +104,7 @@ The `AccountDetailsResponse` DTO (owned by ACD) gains one field.
 ## Workflow
 
 ```
-Account Details header → "Add" menu → "Record dividend" (DIV-010/012)
+Account Details header → "Record" menu → "Dividend" (DIV-010/012)
   → modal: asset selector (active non-cash holdings), date (today),
            net amount (selected-asset currency), exchange rate (if currencies differ), note (DIV-020)
   → submit
@@ -129,7 +129,7 @@ Transaction list (filtered by the paying asset)
 
 ### Entry Point
 
-A "Record dividend" item in the Account Details header's consolidated "Add" dropdown menu (DIV-012), which also hosts Deposit, Withdraw, and Open balance. Selecting it opens the dividend modal. (A per-holding-row dividend action is deferred — DIV-010.)
+A "Dividend" item in the Account Details header's consolidated "Record" dropdown menu (DIV-012), which also hosts Cash deposit, Cash withdrawal, and New position. Selecting it opens the dividend modal. (A per-holding-row dividend action is deferred — DIV-010.)
 
 ### Main Component
 
@@ -152,7 +152,7 @@ A small `FormModal` — `DividendTransactionModal`:
 ### User Flow
 
 1. User opens Account Details for an account holding 50 shares of an asset.
-2. User opens the header "Add" menu and chooses "Record dividend".
+2. User opens the header "Record" menu and chooses "Dividend".
 3. Modal opens; user picks the paying asset from their active holdings, enters the net amount received (asset currency), adjusts the date if needed, supplies an exchange rate if the asset trades in another currency.
 4. User submits.
 5. Backend validates, credits the cash holding, leaves the position unchanged, persists the dividend, publishes `TransactionUpdated`.
@@ -171,6 +171,6 @@ A small `FormModal` — `DividendTransactionModal`:
 - **Richer dividend reporting** — dividend **yield**, per-period income statements, and a dividend **timeline**. (v1 _does_ include a per-`(account, asset)` dividends-received total, a dividend-inclusive total-return % per holding, and a per-account dividends-received total — DIV-070–073.)
 - **Dividends-received on closed positions in the holdings view** — v1 sums _all_ the account's dividends into `total_dividends_received` (DIV-073), but the per-holding `dividends_received` row figure surfaces on active holdings only; showing it on closed-position rows is deferred.
 - **Dividends on closed positions** — recording a _new_ dividend declared while held but paid after the position was fully sold (v1 allows recording only on actively-held positions, `quantity > 0`).
-- **Per-holding-row dividend action** — a contextual "Record dividend" action directly on a holding row (asset pre-selected). v1 initiates the flow from the header "Add" menu with an in-modal asset picker (DIV-010/012); a row-level shortcut is to be designed later.
+- **Per-holding-row dividend action** — a contextual "Record dividend" action directly on a holding row (asset pre-selected). v1 initiates the flow from the header "Record" menu with an in-modal asset picker (DIV-010/012); a row-level shortcut is to be designed later.
 
 None — all questions have been resolved.

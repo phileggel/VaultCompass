@@ -179,6 +179,46 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     expect(handleChange).toHaveBeenCalledWith("assetId", "asset-eur-1");
   });
 
+  // Field onChange wiring: amount / note fire handleChange with their field key.
+  it("fires handleChange for the amount and note fields", () => {
+    const handleChange = vi.fn();
+    mockUseDividendTransaction.mockReturnValue(makeHookReturn({ handleChange }));
+    render(<DividendTransactionModal {...BASE_PROPS} />);
+
+    fireEvent.change(screen.getByTestId("dividend-trx-amount"), { target: { value: "12.50" } });
+    expect(handleChange).toHaveBeenCalledWith("amount", "12.50");
+
+    fireEvent.change(screen.getByTestId("dividend-trx-note"), { target: { value: "Q2" } });
+    expect(handleChange).toHaveBeenCalledWith("note", "Q2");
+  });
+
+  // DIV-022 — the exchange-rate field (shown for a foreign-currency asset) fires
+  // handleChange, and the amount label reflects the selected asset's currency.
+  it("fires handleChange for the exchange-rate field and labels the amount in the asset currency (DIV-022)", () => {
+    const handleChange = vi.fn();
+    mockUseDividendTransaction.mockReturnValue(
+      makeHookReturn({
+        handleChange,
+        showExchangeRate: true,
+        formData: {
+          assetId: "asset-usd-1",
+          date: TODAY,
+          amount: "50",
+          exchangeRate: "1.08",
+          note: "",
+        },
+      }),
+    );
+    render(<DividendTransactionModal {...BASE_PROPS} />);
+
+    fireEvent.change(screen.getByTestId("dividend-trx-exchange-rate"), {
+      target: { value: "1.10" },
+    });
+    expect(handleChange).toHaveBeenCalledWith("exchangeRate", "1.10");
+    // selectedCurrency resolves from the chosen asset (USD), not the account (EUR).
+    expect(screen.getByText(/USD/)).toBeInTheDocument();
+  });
+
   // UI → gateway: form submit calls handleSubmit (F25 stable form id)
   it("calls handleSubmit when form is submitted (F25)", () => {
     const handleSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());

@@ -105,7 +105,7 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 **CSH-019 — Account Details header cash actions (frontend)**: The Account Details header renders a "Deposit" button at all times next to the existing "Add Transaction" button. The "Withdraw" button is rendered only when the account has a Cash Holding with `quantity > 0` (i.e. the cash row is visible per CSH-097). The buttons open `DepositTransactionModal` and `WithdrawalTransactionModal` respectively (per CSH-020 / CSH-030).
 
-> **Superseded by DIV-012**: the standalone Deposit/Withdraw header buttons are consolidated into the header "Add" dropdown menu (the Withdraw visibility condition above is preserved inside the menu). The Cash-row inline Deposit/Withdraw actions (CSH-091) are unaffected.
+> **Superseded by DIV-012**: the standalone Deposit/Withdraw header buttons are consolidated into the header "Record" dropdown menu, relabeled "Cash deposit" / "Cash withdrawal" (the Withdraw visibility condition above is preserved inside the menu). The Cash-row inline Deposit/Withdraw actions (CSH-091) are unaffected.
 
 **CSH-012 — Cash Holding lazy creation (backend)**: An account does not have a Cash Holding until a cash-credit transaction is recorded for it. Two transaction types create the Cash Holding lazily: Deposit (CSH-022) and Sell (CSH-050). Cash-debit transactions (Buy, Withdrawal) cannot create a Cash Holding — they instead fail the insufficient-cash guard (CSH-080) when no Cash Holding exists. After creation, the Cash Holding's `quantity` reflects the full credit from the triggering transaction (i.e. the deposited amount or the sell proceeds in account currency).
 
