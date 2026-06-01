@@ -2,16 +2,24 @@ use crate::context::account::{
     AccountApplicationError, AccountService, Transaction, TransactionType, UpdateFrequency,
 };
 use crate::context::asset::{AssetClass, AssetPrice, AssetService};
+use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
 /// Micro-unit scale shared by every monetary field (ADR-001).
 const MICRO: i128 = 1_000_000;
+
+/// FX conversion rates pre-resolved per `(asset_currency, valuation_date)` in
+/// account-currency micros (FXR-035/042). Only foreign pairs with a usable rate
+/// on or before the date appear; a missing entry means "no usable rate" → the
+/// holding contributes 0 (FXR-034). Pre-resolved up front because the per-period
+/// valuation runs in a synchronous loop.
+type RateMap = HashMap<(String, NaiveDate), i64>;
 /// Percentage scale applied to the Simple Dietz numerator (PRF-032): `× 100`
 /// turns a ratio into percent, `× 1_000_000` into micro-percent.
 const PERCENT_SCALE: i128 = 100_000_000;
@@ -75,14 +83,21 @@ pub struct AccountPerformanceResponse {
 pub struct AccountPerformanceUseCase {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
+    currency_service: Arc<CurrencyService>,
 }
 
 impl AccountPerformanceUseCase {
-    /// Creates a new use case bound to the account and asset services.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    /// Creates a new use case instance. The currency service is the valuation
+    /// read port for foreign-currency holdings (FXR-042/035).
+    pub fn new(
+        account_service: Arc<AccountService>,
+        asset_service: Arc<AssetService>,
+        currency_service: Arc<CurrencyService>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
+            currency_service,
         }
     }
 
@@ -130,9 +145,21 @@ impl AccountPerformanceUseCase {
         let priced_assets = self.load_priced_assets(&transactions).await?;
 
         let today = Local::now().date_naive();
+        // FXR-042/035 — pre-resolve FX rates for every foreign holding currency at
+        // each period-end the synchronous valuation loop will visit.
+        let rate_map = self
+            .load_rate_map(
+                &priced_assets,
+                &account.currency,
+                month_view_available,
+                earliest_date,
+                today,
+            )
+            .await?;
         let yearly = self.build_yearly(
             &transactions,
             &priced_assets,
+            &rate_map,
             &account.currency,
             earliest_date,
             today,
@@ -141,6 +168,7 @@ impl AccountPerformanceUseCase {
             self.build_monthly(
                 &transactions,
                 &priced_assets,
+                &rate_map,
                 &account.currency,
                 earliest_date,
                 today,
@@ -216,11 +244,55 @@ impl AccountPerformanceUseCase {
         Ok(priced_assets)
     }
 
+    /// Pre-resolves FX rates for each foreign holding currency at every period-end
+    /// the synchronous valuation loop will visit (FXR-035/042). Identity pairs are
+    /// excluded — same-currency holdings need no conversion.
+    async fn load_rate_map(
+        &self,
+        priced_assets: &HashMap<String, PricedAsset>,
+        account_currency: &str,
+        month_view_available: bool,
+        earliest_date: NaiveDate,
+        today: NaiveDate,
+    ) -> StdResult<RateMap, AccountApplicationError> {
+        let mut foreign_currencies: Vec<String> = priced_assets
+            .values()
+            .filter(|p| p.class != AssetClass::Cash && p.currency != account_currency)
+            .map(|p| p.currency.clone())
+            .collect();
+        foreign_currencies.sort();
+        foreign_currencies.dedup();
+
+        let mut rate_map: RateMap = HashMap::new();
+        if foreign_currencies.is_empty() {
+            return Ok(rate_map);
+        }
+
+        for period_end in period_end_dates(month_view_available, earliest_date, today) {
+            let as_of = period_end.format("%Y-%m-%d").to_string();
+            for currency in &foreign_currencies {
+                if let Some(rate) = self
+                    .currency_service
+                    .resolve_rate_micros(currency, account_currency, &as_of)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(target: BACKEND, currency = %currency, err = ?e, "get_account_performance: resolve_rate_micros failed");
+                        AccountApplicationError::DatabaseError
+                    })?
+                {
+                    rate_map.insert((currency.clone(), period_end), rate);
+                }
+            }
+        }
+        Ok(rate_map)
+    }
+
     /// Builds the yearly series, most-recent first (PRF-012, PRF-040, PRF-041).
     fn build_yearly(
         &self,
         transactions: &[Transaction],
         priced_assets: &HashMap<String, PricedAsset>,
+        rate_map: &RateMap,
         account_currency: &str,
         earliest_date: NaiveDate,
         today: NaiveDate,
@@ -238,8 +310,13 @@ impl AccountPerformanceUseCase {
             } else {
                 last_day_of_year(year)
             };
-            let end_value =
-                end_value_as_of(transactions, priced_assets, account_currency, period_end);
+            let end_value = end_value_as_of(
+                transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
+                period_end,
+            );
 
             let period_over_period = if year == first_year {
                 None
@@ -279,6 +356,7 @@ impl AccountPerformanceUseCase {
         &self,
         transactions: &[Transaction],
         priced_assets: &HashMap<String, PricedAsset>,
+        rate_map: &RateMap,
         account_currency: &str,
         earliest_date: NaiveDate,
         today: NaiveDate,
@@ -298,8 +376,13 @@ impl AccountPerformanceUseCase {
             let period_start = first_day_of_month(year, month);
             let last_day = last_day_of_month(year, month);
             let period_end = if last_day > today { today } else { last_day };
-            let end_value =
-                end_value_as_of(transactions, priced_assets, account_currency, period_end);
+            let end_value = end_value_as_of(
+                transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
+                period_end,
+            );
 
             let is_first_period = year == first_year && month == first_month;
             let period_over_period = if is_first_period {
@@ -318,6 +401,7 @@ impl AccountPerformanceUseCase {
             let year_start_baseline = end_value_as_of(
                 transactions,
                 priced_assets,
+                rate_map,
                 account_currency,
                 last_day_of_year(year - 1),
             );
@@ -367,6 +451,46 @@ fn parse_date(raw: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok()
 }
 
+/// Enumerates every period-end date the valuation loop visits — mirrors the
+/// year/month iteration in `build_yearly` and `build_monthly` (including the
+/// prior-year-end YTD baseline) so FX rates can be pre-resolved for the
+/// synchronous valuation (FXR-035/042).
+fn period_end_dates(
+    month_view_available: bool,
+    earliest_date: NaiveDate,
+    today: NaiveDate,
+) -> BTreeSet<NaiveDate> {
+    // A set deduplicates the prior-year-end baselines (one per month in a year)
+    // and any overlap between the yearly and monthly series.
+    let mut dates = BTreeSet::new();
+    for year in earliest_date.year()..=today.year() {
+        dates.insert(if year == today.year() {
+            today
+        } else {
+            last_day_of_year(year)
+        });
+    }
+    if month_view_available {
+        let (first_year, first_month) = (earliest_date.year(), earliest_date.month());
+        let (mut year, mut month) = (first_year, first_month);
+        loop {
+            let last_day = last_day_of_month(year, month);
+            dates.insert(if last_day > today { today } else { last_day });
+            dates.insert(last_day_of_year(year - 1));
+            if year == today.year() && month == today.month() {
+                break;
+            }
+            if month == 12 {
+                year += 1;
+                month = 1;
+            } else {
+                month += 1;
+            }
+        }
+    }
+    dates
+}
+
 fn first_day_of_year(year: i32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, 1, 1).unwrap_or_else(|| {
         tracing::error!(target: BACKEND, year, "first_day_of_year: unreachable invalid date");
@@ -407,6 +531,7 @@ fn last_day_of_month(year: i32, month: u32) -> NaiveDate {
 fn end_value_as_of(
     transactions: &[Transaction],
     priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
     account_currency: &str,
     period_end: NaiveDate,
 ) -> i64 {
@@ -453,20 +578,25 @@ fn end_value_as_of(
         if priced.class == AssetClass::Cash {
             continue;
         }
-        // PRF-024 — foreign-currency holdings contribute 0 (no FX conversion yet).
-        if priced.currency != account_currency {
-            continue;
-        }
         // PRF-022 — carry-forward: most recent recorded price with date ≤ period_end.
-        let price = priced
+        let Some(price) = priced
             .prices
             .iter()
             .rev()
             .find(|p| parse_date(&p.date).is_some_and(|d| d <= period_end))
-            .map(|p| p.price as i128);
-        if let Some(price) = price {
+            .map(|p| p.price as i128)
+        else {
+            continue;
+        };
+        if priced.currency == account_currency {
+            // Same-currency holding — no conversion (PRF-020/024 pre-FXR behaviour).
             total += quantity * price / MICRO;
+        } else if let Some(rate) = rate_map.get(&(priced.currency.clone(), period_end)) {
+            // FXR-042 — value the foreign holding using the rate as of period_end.
+            let converted_price = price * (*rate as i128) / MICRO;
+            total += quantity * converted_price / MICRO;
         }
+        // FXR-034 — a foreign holding with no usable rate as-of period_end contributes 0.
     }
     debug_assert!(
         total <= i64::MAX as i128 && total >= i64::MIN as i128,
@@ -614,7 +744,11 @@ mod tests {
     async fn unknown_account_returns_account_not_found() {
         let pool = make_pool().await;
         let (account_svc, asset_svc) = setup(&pool).await;
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let err = uc
             .get_account_performance("nonexistent-id")
             .await
@@ -642,7 +776,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(resp.yearly.is_empty(), "no transactions → empty yearly");
         assert!(resp.monthly.is_empty(), "no transactions → empty monthly");
@@ -661,7 +799,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             resp.month_view_available,
@@ -682,7 +824,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             resp.month_view_available,
@@ -703,7 +849,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             resp.month_view_available,
@@ -724,7 +874,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             !resp.month_view_available,
@@ -745,7 +899,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             !resp.month_view_available,
@@ -771,7 +929,11 @@ mod tests {
             .record_deposit(&account.id, "2024-01-15".to_string(), 1_000_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             resp.monthly.is_empty(),
@@ -798,7 +960,11 @@ mod tests {
             .record_deposit(&account.id, "2024-03-15".to_string(), 1_000_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         // Year row for 2024 must have end_value >= 1_000_000_000 (deposit is included)
         let year_2024 = resp
@@ -836,7 +1002,11 @@ mod tests {
             .record_deposit(&account.id, "2024-01-10".to_string(), 300_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let years: Vec<i32> = resp.yearly.iter().map(|p| p.year).collect();
         assert!(
@@ -872,7 +1042,11 @@ mod tests {
             .record_deposit(&account.id, "2024-06-01".to_string(), 200_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let years: Vec<i32> = resp.yearly.iter().map(|p| p.year).collect();
         // Verify descending order
@@ -905,7 +1079,11 @@ mod tests {
             .record_deposit(&account.id, "2024-03-10".to_string(), 200_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let pairs: Vec<(i32, u8)> = resp
             .monthly
@@ -939,7 +1117,11 @@ mod tests {
             .record_deposit(&account.id, "2024-06-01".to_string(), 500_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         for row in &resp.yearly {
             assert!(
@@ -969,7 +1151,11 @@ mod tests {
             .record_deposit(&account.id, "2024-06-01".to_string(), 1_000_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let year_2024 = resp
             .yearly
@@ -1051,7 +1237,11 @@ mod tests {
             .record_asset_price(&stock.id, "2024-03-31", 1350.0)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let march_row = resp
             .monthly
@@ -1106,7 +1296,11 @@ mod tests {
             .record_deposit(&account.id, "2024-01-31".to_string(), 1_000_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let january = resp
             .monthly
@@ -1141,7 +1335,11 @@ mod tests {
             .record_deposit(&account.id, "2024-06-01".to_string(), 500_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         // The earliest year row has no preceding period
         let earliest_year = resp.yearly.iter().min_by_key(|p| p.year).unwrap();
@@ -1173,7 +1371,11 @@ mod tests {
             .record_deposit(&account.id, "2024-06-01".to_string(), 200_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let year_2024 = resp
             .yearly
@@ -1205,7 +1407,11 @@ mod tests {
             .record_deposit(&account.id, "2024-01-15".to_string(), 1_000_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let jan = resp
             .monthly
@@ -1239,7 +1445,11 @@ mod tests {
             .record_deposit(&account.id, "2024-05-10".to_string(), 800_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         for row in &resp.yearly {
             assert!(
@@ -1297,7 +1507,11 @@ mod tests {
             .unwrap();
         // No price recorded for the stock → it contributes 0.
         // end_value for 2024 = cash(2000−1000=1000 EUR) + stock(0) = 1_000_000_000 micros.
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let year_2024 = resp
             .yearly
@@ -1310,7 +1524,7 @@ mod tests {
         );
     }
 
-    // PRF-024 — foreign-currency non-cash holding contributes 0 to end_value
+    // FXR-034 — foreign-currency non-cash holding with no usable rate contributes 0 to end_value
     #[tokio::test]
     async fn foreign_currency_holding_contributes_zero_to_end_value() {
         let pool = make_pool().await;
@@ -1360,7 +1574,11 @@ mod tests {
             .await
             .unwrap();
         // end_value = cash(2000−1000=1000 EUR) + usd_stock(0) = 1_000_000_000
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let year_2024 = resp
             .yearly
@@ -1436,7 +1654,11 @@ mod tests {
             .unwrap();
         // After sell: cash = 2000 − 1000 + 1200 = 2200 EUR.
         // gain = end_value(2200) − start(0) − net_flow(2000 deposit only) = 200 EUR.
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let jan_2024 = resp
             .monthly
@@ -1516,7 +1738,11 @@ mod tests {
         // net_flow  = deposit 2000 only (Purchase + Dividend excluded).
         // gain      = 1100 − 0 − 2000 = −900 EUR. The −900 (vs −1000) proves the
         // dividend both raised end value AND stayed out of net_flow.
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let jan_2024 = resp
             .monthly
@@ -1573,7 +1799,11 @@ mod tests {
         // No price → end_value = 0 for the stock (PRF-022).
         // gain = 0 − 0 − 1000 = −1000 EUR (invested but not valued yet).
         // We just verify the flow is counted (gain ≠ end_value − 0).
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let feb_2024 = resp
             .monthly
@@ -1645,7 +1875,11 @@ mod tests {
             .record_deposit(&account.id, "2024-04-05".to_string(), 100_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let apr = resp
             .monthly
@@ -1718,7 +1952,11 @@ mod tests {
         // seed an account with a transaction in December only, and check that
         // a subsequent month in the data span (which has holdings but no price) carries 0.
         // We skip to the assertion that months BETWEEN transactions are included in the span.
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         // Feb 2023 should be in the span (between Jan first-tx and current).
         let feb_2023 = resp
@@ -1755,7 +1993,11 @@ mod tests {
             .record_deposit(&account.id, "2024-02-10".to_string(), 500_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         let jan = resp
             .monthly
@@ -1786,7 +2028,11 @@ mod tests {
             .record_deposit(&account.id, "2024-06-01".to_string(), 1_000_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert!(
             !resp.yearly.is_empty(),
@@ -1812,7 +2058,11 @@ mod tests {
             .record_deposit(&account.id, "2024-05-01".to_string(), 500_000_000, None)
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         for row in &resp.yearly {
             assert!(
@@ -1840,9 +2090,230 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc);
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_performance(&account.id).await.unwrap();
         assert_eq!(resp.account_name, "My Portfolio");
         assert_eq!(resp.currency, "CHF");
+    }
+
+    // -------------------------------------------------------------------------
+    // FXR-042 / PRF-024 — period end_value uses FX rate for foreign holdings
+    // -------------------------------------------------------------------------
+    //
+    // Setup:
+    //   account currency = EUR
+    //   asset currency   = USD
+    //   Buy 1 unit at 2024-01-10 price 100.00 USD (exchange_rate 1:1, fees 0)
+    //   Asset price at 2024-12-31 = 110.00 USD
+    //   rate (USD→EUR) at 2024-12-31 = 1_080_000
+    //
+    // end_value_as_of 2024-12-31:
+    //   cash_balance = -100_000_000 (purchase debit)
+    //   USD holding quantity = 1_000_000 (1 unit)
+    //   price carry-forward = 110_000_000 (most-recent ≤ 2024-12-31)
+    //   converted_price = (110_000_000 * 1_080_000) / 1_000_000 = 118_800_000
+    //   market_value = (1_000_000 * 118_800_000) / 1_000_000 = 118_800_000
+    //   end_value = -100_000_000 + 118_800_000 = 18_800_000
+    //
+    // When no rate exists, the foreign holding contributes 0:
+    //   end_value = -100_000_000 + 0 = -100_000_000
+
+    use crate::context::currency::{
+        application::service::CurrencyService,
+        domain::{MockCurrencyPairRepository, MockCurrencyRateRepository},
+    };
+
+    fn make_currency_service_with_fixed_rate(rate_micros: i64) -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(move |_, _, _| {
+                Ok(Some(
+                    crate::context::currency::domain::CurrencyRate::from_storage(
+                        "USD".to_string(),
+                        "EUR".to_string(),
+                        "2024-12-31".to_string(),
+                        rate_micros,
+                        crate::context::currency::domain::CurrencyRateSource::Manual,
+                    ),
+                ))
+            });
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    fn make_currency_service_with_no_rate() -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(0..)
+            .returning(|_, _, _| Ok(None));
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    // FXR-042/PRF-024 — a foreign non-cash holding contributes its converted market value
+    // to a period's end_value when a rate is available as-of the period end.
+    #[tokio::test]
+    async fn foreign_holding_contributes_converted_market_value_to_period_end_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "FX Perf".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+            )
+            .await
+            .unwrap();
+
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+
+        // Deposit 100 EUR as the cash component of the purchase
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock".to_string(),
+                reference: "USX".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        // Buy 1 unit at 100.00 USD on 2024-01-10; exchange_rate 1:1, fees 0
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-01-10".to_string(),
+                1_000_000,   // 1 unit
+                100_000_000, // 100.00 USD unit price
+                1_000_000,   // exchange_rate 1:1
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Asset price at 2024-12-31 = 110.00 USD
+        asset_svc
+            .record_asset_price(&stock.id, "2024-12-31", 110.0)
+            .await
+            .unwrap();
+
+        let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
+        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+
+        let year_2024 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 year row");
+
+        // end_value = cash_balance(0 after deposit+buy cancel) + converted market value
+        // cash_balance = 100_000_000 (deposit) - 100_000_000 (buy) = 0
+        // converted_price = (110_000_000 * 1_080_000) / 1_000_000 = 118_800_000
+        // market_value = (1_000_000 * 118_800_000) / 1_000_000 = 118_800_000
+        // end_value = 0 + 118_800_000 = 118_800_000
+        assert_eq!(
+            year_2024.end_value, 118_800_000,
+            "end_value mismatch; got {}",
+            year_2024.end_value
+        );
+    }
+
+    // FXR-034/PRF-024 — when no rate exists as-of the period end, the foreign holding
+    // contributes 0 to end_value.
+    #[tokio::test]
+    async fn foreign_holding_without_rate_contributes_zero_to_period_end_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "No FX Rate Perf".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+            )
+            .await
+            .unwrap();
+
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock 2".to_string(),
+                reference: "USX2".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-01-10".to_string(),
+                1_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        asset_svc
+            .record_asset_price(&stock.id, "2024-12-31", 110.0)
+            .await
+            .unwrap();
+
+        let currency_svc = make_currency_service_with_no_rate();
+        let uc = AccountPerformanceUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+
+        let year_2024 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 year row");
+
+        // cash_balance = 0 (deposit - buy cancel), holding contributes 0 → end_value = 0
+        assert_eq!(
+            year_2024.end_value, 0,
+            "end_value must be 0 when no rate for foreign holding; got {}",
+            year_2024.end_value
+        );
     }
 }

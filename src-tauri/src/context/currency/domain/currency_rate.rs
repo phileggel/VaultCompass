@@ -126,6 +126,16 @@ pub trait CurrencyRateRepository: Send + Sync {
         to_currency: &str,
         date: &str,
     ) -> Result<Option<CurrencyRate>>;
+
+    /// Returns the most-recent rate for the pair whose date is on or before
+    /// `as_of`, or `None` when the pair has no such rate (FXR-035). Used by the
+    /// valuation lift to value a foreign holding as of a given date.
+    async fn latest_rate_on_or_before(
+        &self,
+        from_currency: &str,
+        to_currency: &str,
+        as_of: &str,
+    ) -> Result<Option<CurrencyRate>>;
 }
 
 #[cfg(test)]

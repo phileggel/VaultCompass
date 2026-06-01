@@ -1,5 +1,6 @@
 use crate::context::account::{Account, AccountApplicationError, AccountService, UpdateFrequency};
 use crate::context::asset::{AssetClass, AssetService};
+use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
 use serde::Serialize;
 use specta::Type;
@@ -19,9 +20,10 @@ pub struct AccountSummary {
     pub currency: String,
     /// Manual / Automatic update cadence (purely informational, ACC-004).
     pub update_frequency: UpdateFrequency,
-    /// Total economic value in account-currency micros (CSH-094): cash quantity
-    /// plus the sum of `quantity × latest_price` over same-currency priced active
-    /// non-cash holdings. Unpriced or foreign-currency non-cash holdings contribute 0.
+    /// Total economic value in account-currency micros (CSH-094 / FXR-041): cash
+    /// quantity plus the sum of `quantity × latest_price` over priced active non-cash
+    /// holdings, with foreign holdings converted to account currency. Unpriced holdings,
+    /// or foreign holdings with no usable rate (FXR-034), contribute 0.
     pub total_global_value: i64,
 }
 
@@ -30,14 +32,21 @@ pub struct AccountSummary {
 pub struct AccountSummaryUseCase {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
+    currency_service: Arc<CurrencyService>,
 }
 
 impl AccountSummaryUseCase {
-    /// Creates a new use case instance bound to the account and asset services.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    /// Creates a new use case instance. The currency service is the valuation
+    /// read port for foreign-currency holdings (FXR-041/035).
+    pub fn new(
+        account_service: Arc<AccountService>,
+        asset_service: Arc<AssetService>,
+        currency_service: Arc<CurrencyService>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
+            currency_service,
         }
     }
 
@@ -72,6 +81,12 @@ impl AccountSummaryUseCase {
             .account_service
             .get_holdings_for_account(&account.id)
             .await?;
+        // FXR-035 — valuation date is "today"; future-dated rates are forbidden
+        // (FXR-022), so the latest rate on or before today is the latest rate.
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
         let mut total: i64 = 0;
         for holding in holdings.into_iter().filter(|h| h.quantity > 0) {
             let asset = self
@@ -91,9 +106,19 @@ impl AccountSummaryUseCase {
                 total = total.saturating_add(holding.quantity);
                 continue;
             }
-            if asset.currency != account.currency {
+            // FXR-041/035 — resolve the conversion rate (identity → 1.0). A foreign
+            // pair with no usable rate contributes 0 to the Global Value (FXR-034).
+            let Some(rate) = self
+                .currency_service
+                .resolve_rate_micros(&asset.currency, &account.currency, &today)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: resolve_rate_micros failed");
+                    AccountApplicationError::DatabaseError
+                })?
+            else {
                 continue;
-            }
+            };
             if let Some(latest) = self
                 .asset_service
                 .get_latest_price(&holding.asset_id)
@@ -101,8 +126,9 @@ impl AccountSummaryUseCase {
                 .ok()
                 .flatten()
             {
+                let converted_price = (latest.price as i128 * rate as i128 / 1_000_000) as i64;
                 let market_value =
-                    (holding.quantity as i128 * latest.price as i128 / 1_000_000) as i64;
+                    (holding.quantity as i128 * converted_price as i128 / 1_000_000) as i64;
                 total = total.saturating_add(market_value);
             }
         }
@@ -163,7 +189,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountSummaryUseCase::new(account_svc, asset_svc);
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let summaries = uc.get_account_summaries().await.unwrap();
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, account.id);
@@ -232,7 +262,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountSummaryUseCase::new(account_svc, asset_svc);
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let summaries = uc.get_account_summaries().await.unwrap();
         assert_eq!(summaries.len(), 2);
 
@@ -244,7 +278,7 @@ mod tests {
         assert_eq!(row_b.currency, "USD");
     }
 
-    // CSH-094 — foreign-currency non-cash holding contributes 0 (no FX conversion in v1)
+    // FXR-034 — foreign-currency non-cash holding with no usable rate contributes 0
     #[tokio::test]
     async fn foreign_currency_holding_contributes_zero() {
         let pool = make_pool().await;
@@ -257,7 +291,7 @@ mod tests {
             )
             .await
             .unwrap();
-        // USD-denominated asset held in EUR account → excluded
+        // USD-denominated asset held in EUR account; no rate recorded → contributes 0
         let asset = asset_svc
             .create_asset(CreateAssetDTO {
                 name: "US Stock".to_string(),
@@ -290,7 +324,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountSummaryUseCase::new(account_svc, asset_svc);
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let summaries = uc.get_account_summaries().await.unwrap();
         assert_eq!(summaries[0].total_global_value, 0);
     }
@@ -337,9 +375,257 @@ mod tests {
             .unwrap();
         // No record_asset_price → unpriced
 
-        let uc = AccountSummaryUseCase::new(account_svc, asset_svc);
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let summaries = uc.get_account_summaries().await.unwrap();
         assert_eq!(summaries[0].total_global_value, 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // FXR-041/ACC-021 — multi-currency global value lift
+    // -------------------------------------------------------------------------
+    //
+    // Setup (mirrors account_details tests):
+    //   account currency = EUR, asset currency = USD
+    //   quantity = 1_000_000 (1.0 unit), current_price = 110_000_000 USD
+    //   rate (USD→EUR) = 1_080_000
+    //
+    // converted market value = (1_000_000 × 118_800_000) / 1_000_000 = 118_800_000
+    //   (where converted_price = (110_000_000 * 1_080_000) / 1_000_000 = 118_800_000)
+
+    use crate::context::currency::{
+        application::service::CurrencyService,
+        domain::{MockCurrencyPairRepository, MockCurrencyRateRepository},
+    };
+
+    fn make_currency_service_with_fixed_rate(rate_micros: i64) -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(move |_, _, _| {
+                Ok(Some(
+                    crate::context::currency::domain::CurrencyRate::from_storage(
+                        "USD".to_string(),
+                        "EUR".to_string(),
+                        "2026-01-01".to_string(),
+                        rate_micros,
+                        crate::context::currency::domain::CurrencyRateSource::Manual,
+                    ),
+                ))
+            });
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    fn make_currency_service_with_no_rate() -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(0..)
+            .returning(|_, _, _| Ok(None));
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    // FXR-041/ACC-021 — a foreign holding's converted market value is included in
+    // total_global_value when a rate is available.
+    #[tokio::test]
+    async fn foreign_holding_with_rate_included_in_total_global_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "FX Summary".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock".to_string(),
+                reference: "USX".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    1_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // current_price = 110.00 USD
+        asset_svc
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
+        let uc = AccountSummaryUseCase::new(account_svc, asset_svc, currency_svc);
+        let summaries = uc.get_account_summaries().await.unwrap();
+
+        // converted_price = (110_000_000 * 1_080_000) / 1_000_000 = 118_800_000
+        // market_value = (1_000_000 * 118_800_000) / 1_000_000 = 118_800_000
+        assert_eq!(
+            summaries[0].total_global_value, 118_800_000,
+            "got {}",
+            summaries[0].total_global_value
+        );
+    }
+
+    // Regression — same-currency holding contributes unchanged after FXR lift.
+    #[tokio::test]
+    async fn same_currency_holding_unchanged_in_summary() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "Same CCY".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let bond = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Bond".to_string(),
+                reference: "BOND".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Bonds,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    bond.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        asset_svc
+            .record_asset_price(&bond.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        // currency service: no call expected for EUR→EUR
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(0)
+            .returning(|_, _, _| Ok(None));
+        let currency_svc = Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ));
+
+        let uc = AccountSummaryUseCase::new(account_svc, asset_svc, currency_svc);
+        let summaries = uc.get_account_summaries().await.unwrap();
+
+        // 2 units × 110 EUR = 220 EUR = 220_000_000 micros (same as before FXR lift)
+        assert_eq!(summaries[0].total_global_value, 220_000_000);
+    }
+
+    // FXR-034 — foreign holding with no rate contributes 0 to total_global_value.
+    #[tokio::test]
+    async fn foreign_holding_without_rate_contributes_zero_to_global_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "No Rate".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock".to_string(),
+                reference: "USX".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    1_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        asset_svc
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let currency_svc = make_currency_service_with_no_rate();
+        let uc = AccountSummaryUseCase::new(account_svc, asset_svc, currency_svc);
+        let summaries = uc.get_account_summaries().await.unwrap();
+
+        assert_eq!(
+            summaries[0].total_global_value, 0,
+            "foreign holding with no rate must contribute 0; got {}",
+            summaries[0].total_global_value
+        );
     }
 
     // CSH-094 — closed holdings (quantity == 0) are excluded
@@ -388,7 +674,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountSummaryUseCase::new(account_svc, asset_svc);
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let summaries = uc.get_account_summaries().await.unwrap();
         assert_eq!(
             summaries[0].total_global_value, 0,

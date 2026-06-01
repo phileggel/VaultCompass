@@ -1,5 +1,6 @@
 use crate::context::account::{AccountApplicationError, AccountService};
 use crate::context::asset::{AssetPriceSource, AssetService};
+use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
 use serde::Serialize;
 use specta::Type;
@@ -32,7 +33,8 @@ pub struct HoldingDetail {
     pub current_price_date: Option<String>,
     /// Provenance of `current_price`. None when current_price is None (MKT-142).
     pub current_price_source: Option<AssetPriceSource>,
-    /// Unrealized gain/loss in account currency (i64 micros). None on currency mismatch or no price (MKT-033/034).
+    /// Unrealized gain/loss in account currency (i64 micros). None when no price exists, or
+    /// when a foreign holding has no usable rate (MKT-033/034, FXR-031/034).
     /// 0 (not None) when current price equals average price (MKT-033).
     pub unrealized_pnl: Option<i64>,
     /// Performance percentage as i64 micros (5.25% = 5_250_000). None when unrealized_pnl is None or cost_basis = 0 (MKT-035).
@@ -76,7 +78,8 @@ pub struct AccountDetailsResponse {
     pub total_cost_basis: i64,
     /// Sum of total_realized_pnl across ALL holdings (active + closed), 0 if none (ACD-047).
     pub total_realized_pnl: i64,
-    /// Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
+    /// Sum of unrealized_pnl across priced active holdings (foreign holdings converted to
+    /// account currency, FXR-040). None when none qualify (MKT-040).
     pub total_unrealized_pnl: Option<i64>,
     /// Total economic value of the account in account-currency micros (CSH-094):
     /// `cash_holding.quantity + Σ_h (h.quantity × latest_price(h))` over non-cash active holdings.
@@ -92,14 +95,21 @@ pub struct AccountDetailsResponse {
 pub struct AccountDetailsUseCase {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
+    currency_service: Arc<CurrencyService>,
 }
 
 impl AccountDetailsUseCase {
-    /// Creates a new use case instance.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    /// Creates a new use case instance. The currency service is the valuation
+    /// read port for foreign-currency holdings (FXR-030/035).
+    pub fn new(
+        account_service: Arc<AccountService>,
+        asset_service: Arc<AssetService>,
+        currency_service: Arc<CurrencyService>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
+            currency_service,
         }
     }
 
@@ -151,6 +161,14 @@ impl AccountDetailsUseCase {
             }
         }
 
+        // FXR-035 — valuation date for resolving FX rates is "today"; the
+        // write-guard (FXR-022) forbids future-dated rates, so the latest rate
+        // on or before today is simply the latest recorded rate.
+        let today = chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+
         let mut details: Vec<HoldingDetail> = Vec::with_capacity(active_holdings.len());
         let mut total_global_value: i64 = 0;
         let mut total_cost_basis: i64 = 0;
@@ -170,10 +188,11 @@ impl AccountDetailsUseCase {
 
             let is_cash = asset.class == crate::context::asset::AssetClass::Cash;
 
-            // CSH-094 — Cash Holding contributes its raw quantity (already in account currency).
-            // Other holdings contribute `quantity × latest_price` only when priced and currencies
-            // match (no FX conversion in v1 — mirrors the MKT-033 same-currency guard for
-            // unrealized_pnl). Unpriced or foreign-currency non-cash holdings contribute 0.
+            // CSH-094 / FXR-041 — Cash Holding contributes its raw quantity (already in
+            // account currency). Non-cash holdings contribute their market value converted
+            // to account currency (FXR-030); unpriced holdings, or foreign holdings with no
+            // usable rate (FXR-034), contribute 0. The conversion happens further down once
+            // the rate and price are known.
             if is_cash {
                 total_global_value = total_global_value.saturating_add(holding.quantity);
             }
@@ -187,6 +206,22 @@ impl AccountDetailsUseCase {
                     (holding.quantity as i128 * holding.average_price as i128 / 1_000_000) as i64;
                 total_cost_basis = total_cost_basis.saturating_add(computed);
                 computed
+            };
+
+            // FXR-030/035 — resolve the rate to value this non-cash holding in the
+            // account currency. An identity pair resolves to 1.0 without a lookup
+            // (same-currency unchanged, MKT-033); a foreign pair with no usable rate
+            // yields None and the holding falls back to the FXR-034 mismatch path.
+            let conversion_rate: Option<i64> = if is_cash {
+                None
+            } else {
+                self.currency_service
+                    .resolve_rate_micros(&asset.currency, &account.currency, &today)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_details: resolve_rate_micros failed");
+                        AccountApplicationError::DatabaseError
+                    })?
             };
 
             // MKT-031 — fetch latest price, degrade gracefully on failure
@@ -207,20 +242,27 @@ impl AccountDetailsUseCase {
                 let current_price = latest.price;
                 let current_price_date = latest.date.clone();
                 let current_price_source = latest.source.clone();
-                // MKT-033/034 — only compute P&L when currencies match
-                let (unrealized_pnl, performance_pct) = if asset.currency == account.currency {
-                    // MKT-033 — widen to i128 before subtraction to prevent i64 overflow
-                    let unrealized_pnl = ((current_price as i128 - holding.average_price as i128)
-                        * holding.quantity as i128
-                        / 1_000_000) as i64;
-                    let performance_pct = if cost_basis != 0 {
-                        Some((unrealized_pnl as i128 * 100_000_000 / cost_basis as i128) as i64)
-                    } else {
-                        None
-                    };
-                    (Some(unrealized_pnl), performance_pct)
-                } else {
-                    (None, None)
+                // FXR-030/031/032 — value the holding in account currency using the
+                // resolved rate. Same-currency holdings resolve to rate 1.0 so the
+                // arithmetic is unchanged (MKT-033/034). When no usable rate exists
+                // for a foreign pair, P&L stays None (FXR-034).
+                let (unrealized_pnl, performance_pct) = match conversion_rate {
+                    Some(rate) => {
+                        // FXR-030 — current_price × rate, i128 intermediates (ACD-024)
+                        let converted_price =
+                            (current_price as i128 * rate as i128 / 1_000_000) as i64;
+                        let unrealized_pnl = ((converted_price as i128
+                            - holding.average_price as i128)
+                            * holding.quantity as i128
+                            / 1_000_000) as i64;
+                        let performance_pct = if cost_basis != 0 {
+                            Some((unrealized_pnl as i128 * 100_000_000 / cost_basis as i128) as i64)
+                        } else {
+                            None
+                        };
+                        (Some(unrealized_pnl), performance_pct)
+                    }
+                    None => (None, None),
                 };
                 (
                     Some(current_price),
@@ -233,12 +275,14 @@ impl AccountDetailsUseCase {
                 (None, None, None, None, None)
             };
 
-            // CSH-094 — same-currency priced non-cash holding contributes its market value.
-            if asset.class != crate::context::asset::AssetClass::Cash
-                && asset.currency == account.currency
-            {
-                if let Some(cp) = current_price {
-                    let market_value = (holding.quantity as i128 * cp as i128 / 1_000_000) as i64;
+            // CSH-094 / FXR-041 — a priced non-cash holding contributes its market
+            // value (converted to account currency) to the Global Value. A foreign
+            // holding with no usable rate contributes 0 (FXR-034).
+            if !is_cash {
+                if let (Some(cp), Some(rate)) = (current_price, conversion_rate) {
+                    let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
+                    let market_value =
+                        (holding.quantity as i128 * converted_price as i128 / 1_000_000) as i64;
                     total_global_value = total_global_value.saturating_add(market_value);
                 }
             }
@@ -246,7 +290,7 @@ impl AccountDetailsUseCase {
             // DIV-070 — dividends_received: sum of Dividend total_amount for this (account, asset).
             let dividends_received: i64 = *dividends_by_asset.get(&holding.asset_id).unwrap_or(&0);
             // DIV-071 — total_return_pct: (unrealized_pnl + dividends_received) × 100 / cost_basis;
-            // None under the same conditions as performance_pct (no price / currency mismatch / zero cost basis).
+            // None under the same conditions as performance_pct (no price / no usable rate / zero cost basis).
             let total_return_pct: Option<i64> = match unrealized_pnl {
                 Some(upnl) if cost_basis != 0 => Some(
                     ((upnl as i128 + dividends_received as i128) * 100_000_000 / cost_basis as i128)
@@ -382,7 +426,11 @@ mod tests {
     async fn unknown_account_returns_error() {
         let pool = make_pool().await;
         let (account_svc, asset_svc) = setup(&pool).await;
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let err = uc.get_account_details("nonexistent-id").await.unwrap_err();
         assert!(
             matches!(
@@ -429,7 +477,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 0, "active holdings should be empty");
@@ -485,7 +537,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 1);
@@ -541,7 +597,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert_eq!(
@@ -565,7 +625,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.account_name, "My Account");
     }
@@ -660,7 +724,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.holdings.len(), 0);
         assert_eq!(resp.closed_holdings.len(), 1);
@@ -709,7 +777,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.closed_holdings[0].asset_name, "Meta Inc");
         assert_eq!(resp.closed_holdings[0].asset_reference, "META");
@@ -757,7 +829,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.closed_holdings[0].realized_pnl, 42_000_000);
     }
@@ -804,7 +880,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.closed_holdings[0].last_sold_date, "2025-11-30");
     }
@@ -842,7 +922,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.closed_holdings.len(), 0);
     }
@@ -891,7 +975,11 @@ mod tests {
                 .unwrap();
         }
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         let names: Vec<&str> = resp
             .closed_holdings
@@ -974,7 +1062,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.total_realized_pnl, 35_000_000);
     }
@@ -992,7 +1084,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.total_realized_pnl, 0);
     }
@@ -1010,7 +1106,11 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert!(resp.closed_holdings.is_empty());
     }
@@ -1056,7 +1156,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert!(resp.holdings[0].unrealized_pnl.is_none());
         assert!(resp.holdings[0].current_price.is_none());
@@ -1109,12 +1213,17 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.holdings[0].unrealized_pnl, Some(20_000_000));
     }
 
-    // MKT-034 — unrealized_pnl is None when asset currency differs from account currency
+    // FXR-034 — unrealized_pnl is None when a foreign holding has no usable rate
+    // (amends MKT-034: mismatch alone no longer forces None — only rate absence does)
     #[tokio::test]
     async fn holding_detail_unrealized_pnl_is_none_on_currency_mismatch() {
         let pool = make_pool().await;
@@ -1159,9 +1268,13 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
-        // current_price present, but P&L is None due to mismatch
+        // current_price present (raw asset-currency price), but P&L is None — no usable rate
         assert!(resp.holdings[0].current_price.is_some());
         assert!(resp.holdings[0].unrealized_pnl.is_none());
         assert!(resp.holdings[0].performance_pct.is_none());
@@ -1205,7 +1318,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert!(resp.holdings[0].performance_pct.is_none());
     }
@@ -1257,7 +1374,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.holdings[0].performance_pct, Some(10_000_000));
     }
@@ -1309,7 +1430,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.holdings[0].unrealized_pnl, Some(0));
     }
@@ -1361,7 +1486,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.holdings[0].unrealized_pnl, Some(0));
         assert_eq!(resp.holdings[0].performance_pct, Some(0));
@@ -1381,7 +1510,11 @@ mod tests {
             .await
             .unwrap();
         // No holdings at all → None
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert!(resp.total_unrealized_pnl.is_none());
     }
@@ -1466,7 +1599,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         // Only holding 1 qualifies: unrealized_pnl = 20_000_000
         assert_eq!(resp.total_unrealized_pnl, Some(20_000_000));
@@ -1515,7 +1652,11 @@ mod tests {
                 .unwrap();
         }
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         let names: Vec<&str> = resp
@@ -1581,7 +1722,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         // Two active holdings: cash + bond.
@@ -1641,7 +1786,11 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
         assert!(
@@ -1774,7 +1923,11 @@ mod tests {
             ar.expect_get_by_id()
                 .returning(|_| Err(anyhow::anyhow!("simulated asset repo failure")));
         });
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
         assert!(
@@ -1794,7 +1947,11 @@ mod tests {
         let asset_svc = failing_asset_svc(|ar| {
             ar.expect_get_by_id().returning(|_| Ok(None));
         });
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
         assert!(
@@ -1815,7 +1972,11 @@ mod tests {
             ar.expect_get_by_id()
                 .returning(|_| Err(anyhow::anyhow!("simulated asset repo failure")));
         });
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
         assert!(
@@ -1835,12 +1996,348 @@ mod tests {
         let asset_svc = failing_asset_svc(|ar| {
             ar.expect_get_by_id().returning(|_| Ok(None));
         });
-        let uc = AccountDetailsUseCase::new(account_svc, asset_svc);
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
         assert!(
             matches!(err, AccountApplicationError::DatabaseError),
             "got: {err:?}"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // FXR multi-currency valuation lift (FXR-030–035/040/041)
+    // -------------------------------------------------------------------------
+    //
+    // Setup:
+    //   account currency = EUR
+    //   asset currency   = USD
+    //   quantity         = 2_000_000  (2.0 units)
+    //   average_price    = 100_000_000 (100.00 EUR — cost basis in account currency)
+    //   current_price    = 110_000_000 (110.00 USD — asset's market price in USD)
+    //   rate (USD→EUR)   = 1_080_000   (1.08 EUR per USD)
+    //
+    // Conversion formula (FXR-030):
+    //   converted_current_price = (110_000_000 as i128 * 1_080_000 as i128 / 1_000_000) as i64
+    //                           = 118_800_000 (118.80 EUR)
+    //
+    // unrealized_pnl (FXR-031):
+    //   (converted_current_price - average_price) × quantity / MICRO
+    //   = (118_800_000 - 100_000_000) × 2_000_000 / 1_000_000
+    //   = 18_800_000 × 2 = 37_600_000 (37.60 EUR)
+    //
+    // cost_basis (ACD-023):
+    //   quantity × average_price / MICRO = 2_000_000 × 100_000_000 / 1_000_000 = 200_000_000
+    //
+    // performance_pct (FXR-032):
+    //   unrealized_pnl × 100_000_000 / cost_basis
+    //   = 37_600_000 × 100_000_000 / 200_000_000 = 18_800_000  (18.80%)
+    //
+    // total_return_pct (FXR-033, dividends_received=0):
+    //   (37_600_000 + 0) × 100_000_000 / 200_000_000 = 18_800_000  (18.80%)
+    //
+    // total_global_value contribution (FXR-041):
+    //   quantity × converted_current_price / MICRO
+    //   = 2_000_000 × 118_800_000 / 1_000_000 = 237_600_000
+
+    use crate::context::currency::{
+        application::service::CurrencyService,
+        domain::{MockCurrencyPairRepository, MockCurrencyRateRepository},
+    };
+
+    fn make_currency_service_with_fixed_rate(rate_micros: i64) -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(move |_, _, _| {
+                Ok(Some(
+                    crate::context::currency::domain::CurrencyRate::from_storage(
+                        "USD".to_string(),
+                        "EUR".to_string(),
+                        "2026-01-01".to_string(),
+                        rate_micros,
+                        crate::context::currency::domain::CurrencyRateSource::Manual,
+                    ),
+                ))
+            });
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    fn make_currency_service_with_no_rate() -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(0..)
+            .returning(|_, _, _| Ok(None));
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    // FXR-030/031/032/033/041 — FOREIGN holding WITH a resolvable rate: unrealized_pnl,
+    // performance_pct, total_return_pct are Some and use the converted price; the
+    // converted market value is included in total_global_value and total_unrealized_pnl.
+    #[tokio::test]
+    async fn foreign_holding_with_rate_computes_converted_pnl_and_global_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        // EUR account
+        let account = account_svc
+            .create(
+                "FX Test".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        // USD-denominated asset
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock".to_string(),
+                reference: "USX".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        // 2 units, avg_price = 100.00 EUR (cost basis already in account currency)
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // current_price = 110.00 USD
+        asset_svc
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+
+        assert_eq!(resp.holdings.len(), 1);
+        let holding = &resp.holdings[0];
+
+        // FXR-031 — unrealized_pnl = Some(37_600_000)
+        assert_eq!(
+            holding.unrealized_pnl,
+            Some(37_600_000),
+            "unrealized_pnl mismatch; got {:?}",
+            holding.unrealized_pnl
+        );
+
+        // FXR-032 — performance_pct = Some(18_800_000)
+        assert_eq!(
+            holding.performance_pct,
+            Some(18_800_000),
+            "performance_pct mismatch; got {:?}",
+            holding.performance_pct
+        );
+
+        // FXR-033 — total_return_pct = Some(18_800_000) (dividends_received = 0)
+        assert_eq!(
+            holding.total_return_pct,
+            Some(18_800_000),
+            "total_return_pct mismatch; got {:?}",
+            holding.total_return_pct
+        );
+
+        // FXR-041 — total_global_value includes converted market value
+        assert_eq!(
+            resp.total_global_value, 237_600_000,
+            "total_global_value mismatch; got {}",
+            resp.total_global_value
+        );
+
+        // FXR-040 — total_unrealized_pnl includes converted holding
+        assert_eq!(
+            resp.total_unrealized_pnl,
+            Some(37_600_000),
+            "total_unrealized_pnl mismatch; got {:?}",
+            resp.total_unrealized_pnl
+        );
+    }
+
+    // FXR-034 — FOREIGN holding with NO resolvable rate: unrealized_pnl/performance_pct/
+    // total_return_pct stay None; market value NOT added to total_global_value.
+    #[tokio::test]
+    async fn foreign_holding_without_rate_preserves_none_pnl_and_excludes_from_global_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "No FX Rate".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock".to_string(),
+                reference: "USX".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        asset_svc
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let currency_svc = make_currency_service_with_no_rate();
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+
+        let holding = &resp.holdings[0];
+        assert!(
+            holding.unrealized_pnl.is_none(),
+            "unrealized_pnl must be None when no rate; got {:?}",
+            holding.unrealized_pnl
+        );
+        assert!(
+            holding.performance_pct.is_none(),
+            "performance_pct must be None when no rate; got {:?}",
+            holding.performance_pct
+        );
+        assert!(
+            holding.total_return_pct.is_none(),
+            "total_return_pct must be None when no rate; got {:?}",
+            holding.total_return_pct
+        );
+        assert_eq!(
+            resp.total_global_value, 0,
+            "total_global_value must be 0 when no rate for foreign holding"
+        );
+        assert!(
+            resp.total_unrealized_pnl.is_none(),
+            "total_unrealized_pnl must be None when no qualifying holding; got {:?}",
+            resp.total_unrealized_pnl
+        );
+    }
+
+    // Regression guard — SAME-currency holding behaviour is unchanged after the FXR lift.
+    // EUR account, EUR asset, price 110.00, avg_price 100.00, qty 2 → same as pre-FXR.
+    #[tokio::test]
+    async fn same_currency_holding_behaviour_unchanged_after_fxr_lift() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+
+        let account = account_svc
+            .create(
+                "Same CCY".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "EUR Bond".to_string(),
+                reference: "EURBND".to_string(),
+                isin: None,
+                class: AssetClass::Bonds,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // current_price = 110.00 EUR → unrealized_pnl = (110 - 100) × 2 = 20.00 EUR
+        asset_svc
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        // The currency service mock expects 0 calls for same-currency holdings.
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(0)
+            .returning(|_, _, _| Ok(None));
+        let currency_svc = Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ));
+
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+
+        let holding = &resp.holdings[0];
+        assert_eq!(holding.unrealized_pnl, Some(20_000_000));
+        assert_eq!(holding.performance_pct, Some(10_000_000));
+        assert_eq!(holding.total_return_pct, Some(10_000_000));
+        assert_eq!(resp.total_global_value, 220_000_000);
+        assert_eq!(resp.total_unrealized_pnl, Some(20_000_000));
     }
 }

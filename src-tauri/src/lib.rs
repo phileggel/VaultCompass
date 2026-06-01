@@ -164,19 +164,33 @@ pub fn run() {
                     .with_event_bus(event_bus.clone()),
                 );
 
+                // ----- currency BC (FXR) -----
+                // Built before the account use cases so it can be injected as the
+                // valuation read port (FXR-035) for foreign-currency holdings.
+                let currency_service = Arc::new(
+                    CurrencyService::new(
+                        Box::new(SqliteCurrencyPairRepository::new(db.pool.clone())),
+                        Box::new(SqliteCurrencyRateRepository::new(db.pool.clone())),
+                    )
+                    .with_event_bus(event_bus.clone()),
+                );
+
                 let account_details_uc = AccountDetailsUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
+                    Arc::clone(&currency_service),
                 );
 
                 let account_summary_uc = AccountSummaryUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
+                    Arc::clone(&currency_service),
                 );
 
                 let account_performance_uc = AccountPerformanceUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
+                    Arc::clone(&currency_service),
                 );
 
                 let archive_asset_uc = ArchiveAssetUseCase::new(
@@ -224,13 +238,7 @@ pub fn run() {
                 app_handle.manage(asset_price_fetch_uc);
                 app_handle.manage(Arc::clone(&fetch_guard));
 
-                // ----- currency BC (FXR) -----
-                let currency_service = CurrencyService::new(
-                    Box::new(SqliteCurrencyPairRepository::new(db.pool.clone())),
-                    Box::new(SqliteCurrencyRateRepository::new(db.pool.clone())),
-                )
-                .with_event_bus(event_bus.clone());
-                app_handle.manage(currency_service);
+                app_handle.manage(Arc::clone(&currency_service));
 
                 let transaction_manager =
                     Arc::new(SqlxTransactionManager::new(db.pool.clone()));

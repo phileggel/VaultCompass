@@ -205,6 +205,32 @@ impl CurrencyService {
                 CurrencyError::DatabaseError
             })
     }
+
+    /// Resolves the conversion rate (in micros) for valuing a holding priced in
+    /// `from_currency` into `to_currency`, as of `as_of` (FXR-035). Returns the
+    /// most-recent rate on or before that date, or `None` when no usable rate
+    /// exists (FXR-034). An identity pair (`from == to`) resolves to `1.0`
+    /// (1_000_000 micros) without touching the repository. Read-only: never
+    /// writes or publishes events.
+    pub async fn resolve_rate_micros(
+        &self,
+        from_currency: &str,
+        to_currency: &str,
+        as_of: &str,
+    ) -> StdResult<Option<i64>, CurrencyError> {
+        if from_currency == to_currency {
+            return Ok(Some(1_000_000));
+        }
+        let rate = self
+            .rate_repo
+            .latest_rate_on_or_before(from_currency, to_currency, as_of)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "resolve_rate_micros: repository failure");
+                CurrencyError::DatabaseError
+            })?;
+        Ok(rate.map(|r| r.rate))
+    }
 }
 
 #[cfg(test)]
@@ -1028,6 +1054,87 @@ mod tests {
             .list_currency_rates("USD".into(), "EUR".into())
             .await
             .unwrap_err();
+        assert!(matches!(err, CurrencyError::DatabaseError), "got: {err:?}");
+    }
+
+    // -------------------------------------------------------------------------
+    // resolve_rate_micros — FXR-011 / FXR-034 / FXR-035
+    // -------------------------------------------------------------------------
+
+    // FXR-011 — identity pair (from == to) returns Ok(Some(1_000_000)) without
+    // consulting the repository (0 calls to latest_rate_on_or_before)
+    #[tokio::test]
+    async fn resolve_rate_micros_identity_pair_returns_one_without_repo_call() {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        // The mock will fail the test if latest_rate_on_or_before is called at all.
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(0)
+            .returning(|_, _, _| Ok(None));
+
+        let svc = make_service(pair_repo, rate_repo);
+        let result = svc.resolve_rate_micros("EUR", "EUR", "2026-06-01").await;
+
+        assert_eq!(
+            result.expect("identity resolve should succeed"),
+            Some(1_000_000)
+        );
+    }
+
+    // FXR-035 — rate found: returns Ok(Some(rate.rate))
+    #[tokio::test]
+    async fn resolve_rate_micros_returns_rate_when_found() {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(|_, _, _| {
+                Ok(Some(make_rate(
+                    "USD",
+                    "EUR",
+                    "2026-05-30",
+                    1_080_000,
+                    CurrencyRateSource::Manual,
+                )))
+            });
+
+        let svc = make_service(pair_repo, rate_repo);
+        let result = svc.resolve_rate_micros("USD", "EUR", "2026-06-01").await;
+
+        assert_eq!(result.expect("resolve should succeed"), Some(1_080_000));
+    }
+
+    // FXR-034 — repo returns Ok(None): resolve_rate_micros returns Ok(None)
+    #[tokio::test]
+    async fn resolve_rate_micros_returns_none_when_no_rate_found() {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(|_, _, _| Ok(None));
+
+        let svc = make_service(pair_repo, rate_repo);
+        let result = svc.resolve_rate_micros("USD", "EUR", "2026-06-01").await;
+
+        assert_eq!(result.expect("resolve should succeed"), None);
+    }
+
+    // repo returns Err → mapped to Err(CurrencyError::DatabaseError)
+    #[tokio::test]
+    async fn resolve_rate_micros_maps_repo_failure_to_database_error() {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(|_, _, _| Err(db_err()));
+
+        let svc = make_service(pair_repo, rate_repo);
+        let err = svc
+            .resolve_rate_micros("USD", "EUR", "2026-06-01")
+            .await
+            .unwrap_err();
+
         assert!(matches!(err, CurrencyError::DatabaseError), "got: {err:?}");
     }
 }

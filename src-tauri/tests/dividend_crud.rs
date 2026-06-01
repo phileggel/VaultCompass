@@ -13,6 +13,9 @@ use vault_compass_lib::context::asset::{
     AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
     SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
 };
+use vault_compass_lib::context::currency::{
+    CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+};
 use vault_compass_lib::core::SideEffectEventBus;
 use vault_compass_lib::use_cases::account_details::AccountDetailsUseCase;
 use vault_compass_lib::use_cases::holding_transaction::HoldingTransactionUseCase;
@@ -62,10 +65,17 @@ async fn build_ctx() -> Ctx {
         .with_event_bus(Arc::clone(&bus)),
     );
 
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
     let use_case =
         HoldingTransactionUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
-    let details_use_case =
-        AccountDetailsUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
+    let details_use_case = AccountDetailsUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        currency_service,
+    );
 
     Ctx {
         use_case,
