@@ -8,6 +8,7 @@ use crate::context::currency::domain::{CurrencyPair, CurrencyPairSummary, Curren
 use crate::context::currency::error::CurrencyError;
 
 use std::result::Result as StdResult;
+use std::sync::Arc;
 
 /// Converts a human-readable decimal rate (`f64`) to i64 micros at the IPC
 /// boundary (FXR-024, ADR-001). Returns `CurrencyError::NonFinite` when the
@@ -30,7 +31,7 @@ fn rate_f64_to_micros(rate: f64) -> StdResult<i64, CurrencyError> {
 #[tauri::command]
 #[specta::specta]
 pub async fn declare_currency_pair(
-    svc: tauri::State<'_, CurrencyService>,
+    svc: tauri::State<'_, Arc<CurrencyService>>,
     from_currency: String,
     to_currency: String,
 ) -> StdResult<CurrencyPair, CurrencyError> {
@@ -43,7 +44,7 @@ pub async fn declare_currency_pair(
 #[tauri::command]
 #[specta::specta]
 pub async fn record_currency_rate(
-    svc: tauri::State<'_, CurrencyService>,
+    svc: tauri::State<'_, Arc<CurrencyService>>,
     from_currency: String,
     to_currency: String,
     date: String,
@@ -60,7 +61,7 @@ pub async fn record_currency_rate(
 #[tauri::command]
 #[specta::specta]
 pub async fn update_currency_rate(
-    svc: tauri::State<'_, CurrencyService>,
+    svc: tauri::State<'_, Arc<CurrencyService>>,
     from_currency: String,
     to_currency: String,
     original_date: String,
@@ -83,7 +84,7 @@ pub async fn update_currency_rate(
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_currency_rate(
-    svc: tauri::State<'_, CurrencyService>,
+    svc: tauri::State<'_, Arc<CurrencyService>>,
     from_currency: String,
     to_currency: String,
     date: String,
@@ -96,7 +97,7 @@ pub async fn delete_currency_rate(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_currency_pairs(
-    svc: tauri::State<'_, CurrencyService>,
+    svc: tauri::State<'_, Arc<CurrencyService>>,
 ) -> StdResult<Vec<CurrencyPairSummary>, CurrencyError> {
     svc.list_currency_pairs().await
 }
@@ -106,7 +107,7 @@ pub async fn get_currency_pairs(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_currency_rates(
-    svc: tauri::State<'_, CurrencyService>,
+    svc: tauri::State<'_, Arc<CurrencyService>>,
     from_currency: String,
     to_currency: String,
 ) -> StdResult<Vec<CurrencyRate>, CurrencyError> {

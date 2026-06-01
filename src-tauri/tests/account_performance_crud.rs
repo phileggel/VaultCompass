@@ -13,6 +13,9 @@ use vault_compass_lib::context::asset::{
     AssetService, CreateAssetDTO, SqliteAssetCategoryRepository, SqliteAssetPriceRepository,
     SqliteAssetRepository, SYSTEM_CATEGORY_ID,
 };
+use vault_compass_lib::context::currency::{
+    CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+};
 use vault_compass_lib::use_cases::account_performance::{
     AccountPerformanceResponse, AccountPerformanceUseCase,
 };
@@ -47,7 +50,15 @@ async fn build_ctx(pool: &sqlx::Pool<sqlx::Sqlite>) -> Ctx {
         Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
         Box::new(SqliteAssetPriceRepository::new(pool.clone())),
     ));
-    let use_case = AccountPerformanceUseCase::new(account_service.clone(), asset_service.clone());
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
+    let use_case = AccountPerformanceUseCase::new(
+        account_service.clone(),
+        asset_service.clone(),
+        currency_service,
+    );
     Ctx {
         use_case,
         account_service,

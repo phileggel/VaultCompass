@@ -121,6 +121,29 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
 
         Ok(row.map(CurrencyRate::from))
     }
+
+    async fn latest_rate_on_or_before(
+        &self,
+        from_currency: &str,
+        to_currency: &str,
+        as_of: &str,
+    ) -> Result<Option<CurrencyRate>> {
+        let row = sqlx::query_as!(
+            RateRow,
+            "SELECT from_currency, to_currency, date, rate, source FROM currency_rates
+             WHERE from_currency = ? AND to_currency = ? AND date <= ?
+             ORDER BY date DESC
+             LIMIT 1",
+            from_currency,
+            to_currency,
+            as_of,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch latest currency rate on or before date")?;
+
+        Ok(row.map(CurrencyRate::from))
+    }
 }
 
 #[cfg(test)]
@@ -252,5 +275,90 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // latest_rate_on_or_before — FXR-035
+    // -------------------------------------------------------------------------
+
+    // FXR-035 — returns the most-recent rate whose date is ≤ as_of when multiple
+    // rates exist across different dates
+    #[tokio::test]
+    async fn latest_rate_on_or_before_returns_most_recent_le_as_of() {
+        let repo = SqliteCurrencyRateRepository::new(setup_pool().await);
+        // Seed three rates: 2026-01-01, 2026-01-10, 2026-01-20
+        repo.upsert_rate(rate("2026-01-01", 900_000, CurrencyRateSource::Manual))
+            .await
+            .unwrap();
+        repo.upsert_rate(rate("2026-01-10", 920_000, CurrencyRateSource::Manual))
+            .await
+            .unwrap();
+        repo.upsert_rate(rate("2026-01-20", 950_000, CurrencyRateSource::Manual))
+            .await
+            .unwrap();
+
+        // as_of = 2026-01-15: the 2026-01-10 row is the latest ≤ 2026-01-15
+        let got = repo
+            .latest_rate_on_or_before("USD", "EUR", "2026-01-15")
+            .await
+            .unwrap()
+            .expect("should find a rate");
+        assert_eq!(got.date, "2026-01-10");
+        assert_eq!(got.rate, 920_000);
+    }
+
+    // FXR-035 — returns None when all seeded rates are strictly AFTER as_of
+    #[tokio::test]
+    async fn latest_rate_on_or_before_returns_none_when_all_rates_are_future() {
+        let repo = SqliteCurrencyRateRepository::new(setup_pool().await);
+        // All rates dated after the query date
+        repo.upsert_rate(rate("2026-06-01", 920_000, CurrencyRateSource::Manual))
+            .await
+            .unwrap();
+        repo.upsert_rate(rate("2026-07-01", 930_000, CurrencyRateSource::Manual))
+            .await
+            .unwrap();
+
+        let got = repo
+            .latest_rate_on_or_before("USD", "EUR", "2026-01-01")
+            .await
+            .unwrap();
+        assert!(
+            got.is_none(),
+            "expected None when all rates are after as_of"
+        );
+    }
+
+    // FXR-035 — returns None when the pair has no rates at all
+    #[tokio::test]
+    async fn latest_rate_on_or_before_returns_none_when_pair_has_no_rates() {
+        let repo = SqliteCurrencyRateRepository::new(setup_pool().await);
+        // No rates inserted at all
+
+        let got = repo
+            .latest_rate_on_or_before("USD", "EUR", "2026-06-01")
+            .await
+            .unwrap();
+        assert!(
+            got.is_none(),
+            "expected None when the pair has no rates at all"
+        );
+    }
+
+    // FXR-035 — exact-date match: a rate dated exactly as_of is returned
+    #[tokio::test]
+    async fn latest_rate_on_or_before_returns_exact_date_match() {
+        let repo = SqliteCurrencyRateRepository::new(setup_pool().await);
+        repo.upsert_rate(rate("2026-05-15", 940_000, CurrencyRateSource::Manual))
+            .await
+            .unwrap();
+
+        let got = repo
+            .latest_rate_on_or_before("USD", "EUR", "2026-05-15")
+            .await
+            .unwrap()
+            .expect("exact-date match should be returned");
+        assert_eq!(got.date, "2026-05-15");
+        assert_eq!(got.rate, 940_000);
     }
 }

@@ -179,3 +179,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Severity: 🟡
 - Observation: `cargo tarpaulin` runs with `--lib` in both local (`coverage-be`) and CI, in both VaultCompass and PatientManager (a kit-shipped pattern). `--lib` measures only inline `#[cfg(test)]` unit tests, not the `tests/*.rs` integration binaries — so code reachable only via integration tests reports 0% coverage despite those tests passing under `cargo test` + the pre-push suite. Contributors must duplicate integration coverage as inline unit tests to satisfy codecov, and true coverage is silently under-reported.
 - Proposed fix (for triage): `--lib` → `--lib --tests` so integration binaries are measured (still excludes the Tauri app bin + doctests, the likely reason for bare `--lib`). The committed `.sqlx` cache + `SQLX_OFFLINE=true` already enable offline integration runs; cost is slower CI. Belongs in claude-kit so it syncs to both projects — a per-repo patch is overwritten on `just sync-kit`.
+
+## 2026-06-01 — `period_end_dates` mirrors the build_yearly/build_monthly period iteration
+
+- Found by: reviewer-backend
+- Where: `src-tauri/src/use_cases/account_performance/orchestrator.rs:462-493`
+- Context: branch `feat/fx-rate-valuation` @ `b358b4e`
+- Severity: 🟡
+- Observation: `period_end_dates` enumerates the valuation period-ends by re-deriving the year iteration in `build_yearly` and the month iteration + prior-year-end YTD baseline in `build_monthly`. The three loops must stay in lockstep — if a new valuation point is ever added to a build method but not to `period_end_dates`, the pre-resolved FX `rate_map` misses that date and `end_value_as_of` degrades foreign holdings to 0 (FXR-034) rather than erroring, so the resulting performance drift is silent. The duplication is currently correct and commented; the risk is future divergence, not a present bug.

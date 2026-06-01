@@ -708,7 +708,8 @@ total_cost_basis: number;
  */
 total_realized_pnl: number; 
 /**
- * Sum of unrealized_pnl across same-currency priced active holdings. None when none qualify (MKT-040).
+ * Sum of unrealized_pnl across priced active holdings (foreign holdings converted to
+ * account currency, FXR-040). None when none qualify (MKT-040).
  */
 total_unrealized_pnl: number | null; 
 /**
@@ -818,9 +819,10 @@ currency: string;
  */
 update_frequency: UpdateFrequency; 
 /**
- * Total economic value in account-currency micros (CSH-094): cash quantity
- * plus the sum of `quantity × latest_price` over same-currency priced active
- * non-cash holdings. Unpriced or foreign-currency non-cash holdings contribute 0.
+ * Total economic value in account-currency micros (CSH-094 / FXR-041): cash
+ * quantity plus the sum of `quantity × latest_price` over priced active non-cash
+ * holdings, with foreign holdings converted to account currency. Unpriced holdings,
+ * or foreign holdings with no usable rate (FXR-034), contribute 0.
  */
 total_global_value: number }
 /**
@@ -1944,7 +1946,8 @@ current_price_date: string | null;
  */
 current_price_source: AssetPriceSource | null; 
 /**
- * Unrealized gain/loss in account currency (i64 micros). None on currency mismatch or no price (MKT-033/034).
+ * Unrealized gain/loss in account currency (i64 micros). None when no price exists, or
+ * when a foreign holding has no usable rate (MKT-033/034, FXR-031/034).
  * 0 (not None) when current price equals average price (MKT-033).
  */
 unrealized_pnl: number | null; 

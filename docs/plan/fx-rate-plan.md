@@ -14,33 +14,44 @@
 
 ### Setup _(read once before coding)_
 
-- [ ] 📖 Read spec: `docs/spec/fx-rate.md`
-- [ ] 📖 Read contract: `docs/contracts/currency-contract.md`
-- [ ] 📖 Read constraining ADRs: `docs/adr/001-use-i64-for-monetary-amounts.md`, `docs/adr/003-cross-context-use-case-orchestration.md`, `docs/adr/004-use-cases-inject-services-not-repositories.md`, `docs/adr/006-unit-of-work.md` (only if a command does a multi-aggregate write), `docs/adr/009-fx-rate-provider-chain.md`, `docs/adr/012-latest-write-wins-source-as-metadata.md`
-- [ ] 📖 Read conventions: `ARCHITECTURE.md`, `docs/test_convention.md` (always); `docs/backend-rules.md` + `docs/ddd-reference.md` + `docs/error-model.md` + `docs/backend-patterns.md` (BE); `docs/frontend-rules.md` + `docs/i18n-rules.md` + `docs/frontend-visual-proof.md` (FE)
-- [ ] 📖 Reference the analog: `context/asset/` (AssetPrice domain + repo), `use_cases/asset_price_fetch/` (the fetch task to piggyback), `use_cases/account_details/orchestrator.rs` (valuation), `src/features/shell/AssetEditModalMount.tsx` (URL-modal mount)
+- [x] 📖 Read spec: `docs/spec/fx-rate.md`
+- [x] 📖 Read contract: `docs/contracts/currency-contract.md`
+- [x] 📖 Read constraining ADRs: `docs/adr/001-use-i64-for-monetary-amounts.md`, `docs/adr/003-cross-context-use-case-orchestration.md`, `docs/adr/004-use-cases-inject-services-not-repositories.md`, `docs/adr/006-unit-of-work.md` (only if a command does a multi-aggregate write), `docs/adr/009-fx-rate-provider-chain.md`, `docs/adr/012-latest-write-wins-source-as-metadata.md`
+- [x] 📖 Read conventions: `ARCHITECTURE.md`, `docs/test_convention.md` (always); `docs/backend-rules.md` + `docs/ddd-reference.md` + `docs/error-model.md` + `docs/backend-patterns.md` (BE); `docs/frontend-rules.md` + `docs/i18n-rules.md` + `docs/frontend-visual-proof.md` (FE)
+- [x] 📖 Reference the analog: `context/asset/` (AssetPrice domain + repo), `use_cases/asset_price_fetch/` (the fetch task to piggyback), `use_cases/account_details/orchestrator.rs` (valuation), `src/features/shell/AssetEditModalMount.tsx` (URL-modal mount)
 
 ### Backend phase A — currency BC (PR 1)
 
-- [ ] 🗄️ Migration: create `currency_pairs` + `currency_rates` tables (`just migrate` + `just prepare-sqlx`)
-- [ ] ✍️ Backend test stubs (`test-writer-backend` — from `currency-contract.md`: 6 commands; red confirmed)
-- [ ] 🏗️ Backend implementation (minimal — make failing tests pass; no defensive/anticipatory code)
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-sql` in parallel → `/review-triage` → apply Follow-ups; halt on (b)/(c))
-- [ ] 🔗 `just generate-types` → updates `src/bindings.ts`
-- [ ] 🔧 `npx tsc --noEmit` → fix TS errors from new bindings only (no UI work)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(currency): currency bounded context + manual rate CRUD` via `/smart-commit`
-- [ ] 🔀 `/create-pr` (PR 1 — BC backend). After merge, branch PR 2 off updated `main`.
+- [x] 🗄️ Migration: create `currency_pairs` + `currency_rates` tables (`just migrate` + `just prepare-sqlx`)
+- [x] ✍️ Backend test stubs (`test-writer-backend` — from `currency-contract.md`: 6 commands; red confirmed)
+- [x] 🏗️ Backend implementation (minimal — make failing tests pass; no defensive/anticipatory code)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-sql` in parallel → `/review-triage` → apply Follow-ups; halt on (b)/(c))
+- [x] 🔗 `just generate-types` → updates `src/bindings.ts`
+- [x] 🔧 `npx tsc --noEmit` → fix TS errors from new bindings only (no UI work)
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(currency): currency bounded context + manual rate CRUD` via `/smart-commit`
+- [x] 🔀 `/create-pr` (PR 1 — BC backend). After merge, branch PR 2 off updated `main`. ✅ merged as PR #63 (`b358b4e`)
 
-### Backend phase B — provider fetch + valuation lift (PR 2)
+### Backend phase B1 — multi-currency valuation lift (PR 2a)
 
-- [ ] ✍️ Backend test stubs (`test-writer-backend` — cross-rate math, provider-chain fallback, the 3 orchestrators' conversion paths; red confirmed)
-- [ ] 🏗️ Implementation (implement only what makes failing tests pass — no defensive code, no anticipation of future rules): Frankfurter/ECB clients + EUR cross-rate; piggyback into `asset_price_fetch`; inject currency-rate read into the 3 orchestrators; register `CurrencyRateUpdated` subscription
+> Split from the original PR 2 (2026-06-01): the valuation lift and the provider fetch are two independent stories. The lift depends only on stored rates → works on manually-entered rates and is the user-visible payoff. Provider fetch follows as PR 2b.
+
+- [x] ✍️ Backend test stubs (`test-writer-backend` — `latest_rate_on_or_before` repo method, `resolve_rate_micros` read port, the 3 orchestrators' conversion paths; red confirmed)
+- [x] 🏗️ Implementation (implement only what makes failing tests pass — no defensive code): reintroduce `latest_rate_on_or_before` on `CurrencyRateRepository` + impl; add `CurrencyService::resolve_rate_micros`; `Arc`-ify `CurrencyService` (+ update `api.rs` `State` signatures); inject into the 3 orchestrators; lift the 4 currency guards (FXR-030–035/040–042)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` in parallel → `/review-triage` → apply Follow-ups; halt on (b)/(c)) — 3× B14 import + BTreeSet dedup applied; `period_end_dates` duplication filed to `docs/techdebt.md`
+- [x] 🔗 `just generate-types` (valuation lift reuses existing `HoldingDetail`/`AccountDetailsResponse` shapes → doc-comment-only diff in `bindings.ts`, no wire change)
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(currency): multi-currency valuation lift` via `/smart-commit` (`255c8f1`)
+- [ ] 🔀 `/create-pr` (PR 2a — valuation lift). After merge, branch PR 2b off updated `main`.
+
+### Backend phase B2 — FX provider fetch (PR 2b)
+
+- [ ] ✍️ Backend test stubs (`test-writer-backend` — cross-rate math, provider-chain fallback, fetch-then-store paths; red confirmed)
+- [ ] 🏗️ Implementation (minimal): `RateProvider` trait + Frankfurter/ECB clients + EUR cross-rate (FXR-080–083); `CurrencyService::fetch_rates_for_pairs` (provider field added); piggyback into `asset_price_fetch` (ensure-then-fetch, shares MKT-113 guard)
 - [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` _(new external HTTP client — FX provider fetch)_ in parallel → `/review-triage`)
-- [ ] 🔗 `just generate-types` (only if any wire type changed — valuation lift reuses existing `HoldingDetail`/`AccountDetailsResponse` shapes, so likely a no-op; run to confirm)
 - [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(currency): FX provider fetch + multi-currency valuation lift` via `/smart-commit`
-- [ ] 🔀 `/create-pr` (PR 2 — fetch + valuation). After merge, branch PR 3 off updated `main`.
+- [ ] 💾 Commit: `feat(currency): FX provider fetch (Frankfurter + ECB)` via `/smart-commit`
+- [ ] 🔀 `/create-pr` (PR 2b — provider fetch). After merge, branch PR 3 off updated `main`.
 
 ### Frontend phase — currency feature (PR 3)
 
@@ -202,12 +213,13 @@ These are existing-function edits (no contract command) that would otherwise get
 
 ## 3. PR Plan
 
-- **Strategy**: **4 PRs**
-- **Estimate**: BC backend ~14 files / ~750 LOC · fetch + valuation lift ~9 files / ~600 LOC · frontend ~22 files / ~950 LOC · E2E + closure ~6 files / ~300 LOC. Each PR is one story and under the ~1000-LOC churn target.
+- **Strategy**: **5 PRs** (original PR 2 split into 2a + 2b on 2026-06-01 — see Backend phase B1/B2)
+- **Estimate**: BC backend ~14 files / ~750 LOC · valuation lift ~7 files / ~450 LOC · provider fetch ~8 files / ~500 LOC · frontend ~22 files / ~950 LOC · E2E + closure ~6 files / ~300 LOC. Each PR is one story and under the ~1000-LOC churn target.
 
-| PR  | Title                                                               | Scope                                                                                                                                                                                                                                                                                                  | Dependency                          | Branch                                        |
-| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | --------------------------------------------- |
-| 1   | `feat(currency): currency bounded context + manual rate CRUD`       | Migration + `context/currency/` (domain/infra/service/api/error) + 6 commands + `CurrencyRateUpdated` enum + specta registration + bindings. Manual CRUD only — **no valuation change**, FE-invisible but bindings present (mergeable alone). Terminates at the Backend-phase-A `/create-pr`.          | none                                | `feat/fx-rate` (current) or `feat/fx-rate-be` |
-| 2   | `feat(currency): FX provider fetch + multi-currency valuation lift` | Frankfurter/ECB clients + EUR cross-rate; piggyback into `asset_price_fetch`; valuation lift in `account_details` / `account_summary` / `account_performance` orchestrators; `reviewer-security` on the new HTTP client. The riskiest slice, isolated. Terminates at the Backend-phase-B `/create-pr`. | rebase off `main` after PR 1 merges | `feat/fx-rate-valuation`                      |
-| 3   | `feat(currency): Currency Rates view + holding-row FX shortcut`     | `src/features/currency/` (gateway/hooks/view/modals/presenter) + i18n + route/nav + `shell/CurrencyRateEditMount` + `modalSearch` params + account_details shortcut/staleness/subscription. Terminates at the Frontend-phase `/create-pr`.                                                             | rebase off `main` after PR 2 merges | `feat/fx-rate-fe`                             |
-| 4   | `test(currency): FX E2E + spec closure`                             | E2E scenarios + `reviewer-e2e` + docs (ARCHITECTURE, account-contract subscribed event, ubiquitous-language, todo, roadmap) + `spec-checker` HARD GATE. Terminates at the Closure-phase `/create-pr`.                                                                                                  | rebase off `main` after PR 3 merges | `feat/fx-rate-e2e`                            |
+| PR  | Title                                                           | Scope                                                                                                                                                                                                                                                                                | Dependency                           | Branch                             |
+| --- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------- |
+| 1   | `feat(currency): currency bounded context + manual rate CRUD`   | Migration + `context/currency/` (domain/infra/service/api/error) + 6 commands + `CurrencyRateUpdated` enum + specta registration + bindings. Manual CRUD only. ✅ merged as PR #63 (`b358b4e`).                                                                                      | none                                 | `feat/fx-rate` ✅                  |
+| 2a  | `feat(currency): multi-currency valuation lift`                 | Reintroduce `latest_rate_on_or_before` + `CurrencyService::resolve_rate_micros` read port; `Arc`-ify `CurrencyService`; inject into `account_details` / `account_summary` / `account_performance`; lift the 4 currency guards. Works on manual rates. Terminates at B1 `/create-pr`. | rebase off `main` after PR 1 merges  | `feat/fx-rate-valuation` (current) |
+| 2b  | `feat(currency): FX provider fetch (Frankfurter + ECB)`         | `RateProvider` trait + Frankfurter/ECB clients + EUR cross-rate; `fetch_rates_for_pairs`; piggyback into `asset_price_fetch`; `reviewer-security` on the new HTTP client. Terminates at B2 `/create-pr`.                                                                             | rebase off `main` after PR 2a merges | `feat/fx-rate-fetch`               |
+| 3   | `feat(currency): Currency Rates view + holding-row FX shortcut` | `src/features/currency/` (gateway/hooks/view/modals/presenter) + i18n + route/nav + `shell/CurrencyRateEditMount` + `modalSearch` params + account_details shortcut/staleness/subscription. Terminates at the Frontend-phase `/create-pr`.                                           | rebase off `main` after PR 2b merges | `feat/fx-rate-fe`                  |
+| 4   | `test(currency): FX E2E + spec closure`                         | E2E scenarios + `reviewer-e2e` + docs (ARCHITECTURE, account-contract subscribed event, ubiquitous-language, todo, roadmap) + `spec-checker` HARD GATE. Terminates at the Closure-phase `/create-pr`.                                                                                | rebase off `main` after PR 3 merges  | `feat/fx-rate-e2e`                 |
