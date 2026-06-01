@@ -18,7 +18,10 @@ pub use api::*;
 pub use application::CurrencyService;
 pub use domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRate,
-    CurrencyRateRepository, CurrencyRateSource,
+    CurrencyRateRepository, CurrencyRateSource, EurSnapshot, RateProvider,
 };
 pub use error::CurrencyError;
-pub use infrastructure::{SqliteCurrencyPairRepository, SqliteCurrencyRateRepository};
+pub use infrastructure::{
+    ChainedRateProvider, ReqwestEcbClient, ReqwestFrankfurterClient, SqliteCurrencyPairRepository,
+    SqliteCurrencyRateRepository,
+};

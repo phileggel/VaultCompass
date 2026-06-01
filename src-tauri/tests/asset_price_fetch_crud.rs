@@ -10,6 +10,9 @@ use vault_compass_lib::context::account::{
 use vault_compass_lib::context::asset::{
     AssetService, SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
+use vault_compass_lib::context::currency::{
+    CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+};
 use vault_compass_lib::core::SideEffectEventBus;
 use vault_compass_lib::use_cases::asset_price_fetch::{AssetPriceFetchUseCase, FetchGuard};
 
@@ -71,6 +74,10 @@ async fn build_ctx() -> Ctx {
             Arc::new(NoOpProvider),
             price_repo,
             Arc::clone(&bus),
+            Arc::new(CurrencyService::new(
+                Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+                Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+            )),
             Arc::new(|| chrono::Local::now().date_naive()),
         ));
 
@@ -246,6 +253,10 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
         provider,
         price_repo,
         Arc::clone(&bus),
+        Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        )),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -357,6 +368,10 @@ async fn fetch_for_account_skips_locked_asset() {
         Arc::new(NoOpProvider),
         price_repo,
         Arc::clone(&bus),
+        Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        )),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -459,6 +474,10 @@ async fn fetch_for_account_includes_unblocked_asset() {
         Arc::new(NoOpProvider),
         price_repo,
         Arc::clone(&bus),
+        Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        )),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(

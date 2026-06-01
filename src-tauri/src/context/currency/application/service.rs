@@ -1,3 +1,5 @@
+use crate::context::currency::domain::cross_rate::cross_rate_micros;
+use crate::context::currency::domain::rate_provider::RateProvider;
 use crate::context::currency::domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRate,
     CurrencyRateRepository, CurrencyRateSource,
@@ -7,11 +9,16 @@ use crate::core::{Event, SideEffectEventBus, BACKEND};
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
+/// Micros representation of `1.0` — the EUR→EUR identity leg used in cross-rate
+/// computation (FXR-080).
+const ONE_UNIT_MICROS: i64 = 1_000_000;
+
 /// Orchestrates the manual rate CRUD operations for the `currency` bounded context.
 pub struct CurrencyService {
     pair_repo: Box<dyn CurrencyPairRepository>,
     rate_repo: Box<dyn CurrencyRateRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
+    rate_provider: Option<Arc<dyn RateProvider>>,
 }
 
 impl CurrencyService {
@@ -24,12 +31,20 @@ impl CurrencyService {
             pair_repo,
             rate_repo,
             event_bus: None,
+            rate_provider: None,
         }
     }
 
     /// Attaches an event bus for side-effect notifications.
     pub fn with_event_bus(mut self, bus: Arc<SideEffectEventBus>) -> Self {
         self.event_bus = Some(bus);
+        self
+    }
+
+    /// Attaches the external rate provider chain used by `refresh_all_rates`
+    /// (ADR-009, FXR-070). Without it, the auto-fetch path is a no-op.
+    pub fn with_rate_provider(mut self, provider: Arc<dyn RateProvider>) -> Self {
+        self.rate_provider = Some(provider);
         self
     }
 
@@ -230,6 +245,83 @@ impl CurrencyService {
                 CurrencyError::DatabaseError
             })?;
         Ok(rate.map(|r| r.rate))
+    }
+
+    /// Auto-fetches and stores current rates for every persisted pair (FXR-070–074).
+    ///
+    /// Ensures each `scope_pairs` entry persists first (FXR-071/013), then refreshes
+    /// all persisted pairs from one EUR-base snapshot (FXR-080/081). A pair whose
+    /// EUR leg is absent is skipped (FXR-073/083); a total provider failure or an
+    /// empty pair set leaves the stored rates untouched and is not an error
+    /// (FXR-070/072). Each stored rate publishes `CurrencyRateUpdated` (FXR-074).
+    pub async fn refresh_all_rates(
+        &self,
+        scope_pairs: Vec<CurrencyPair>,
+    ) -> StdResult<(), CurrencyError> {
+        for pair in scope_pairs {
+            self.pair_repo.upsert_pair(pair).await.map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "refresh_all_rates: pair ensure failure");
+                CurrencyError::DatabaseError
+            })?;
+        }
+
+        let pairs = self
+            .pair_repo
+            .list_pairs_with_latest_rate()
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "refresh_all_rates: list pairs failure");
+                CurrencyError::DatabaseError
+            })?;
+        if pairs.is_empty() {
+            return Ok(()); // FXR-072 — nothing to fetch
+        }
+
+        let Some(provider) = &self.rate_provider else {
+            tracing::warn!(target: BACKEND, "refresh_all_rates: no rate provider configured; skipping fetch");
+            return Ok(());
+        };
+
+        let snapshot = match provider.fetch_eur_snapshot().await {
+            Ok(snapshot) => snapshot,
+            Err(e) => {
+                // FXR-070 — total external failure: keep cached rates, no error.
+                tracing::warn!(target: BACKEND, err = ?e, "refresh_all_rates: all providers failed; keeping cached rates");
+                return Ok(());
+            }
+        };
+
+        let eur_leg = |currency: &str| -> Option<i64> {
+            if currency == "EUR" {
+                Some(ONE_UNIT_MICROS)
+            } else {
+                snapshot.rates.get(currency).copied()
+            }
+        };
+
+        for pair in pairs {
+            let Some(rate_micros) =
+                cross_rate_micros(eur_leg(&pair.from_currency), eur_leg(&pair.to_currency))
+            else {
+                // FXR-073/083 — a missing EUR leg makes the pair unfetchable; skip it.
+                continue;
+            };
+            let rate = CurrencyRate::from_storage(
+                pair.from_currency,
+                pair.to_currency,
+                snapshot.date.clone(),
+                rate_micros,
+                snapshot.source.clone(),
+            );
+            match self.rate_repo.upsert_rate(rate).await {
+                Ok(_) => self.notify_rate_updated(),
+                Err(e) => {
+                    // FXR-073 — a per-pair write failure is logged and skipped.
+                    tracing::warn!(target: BACKEND, err = ?e, "refresh_all_rates: rate upsert failed; skipping pair");
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1136,5 +1228,326 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, CurrencyError::DatabaseError), "got: {err:?}");
+    }
+
+    // -------------------------------------------------------------------------
+    // refresh_all_rates — FXR-071/072/073/074/102
+    // -------------------------------------------------------------------------
+
+    fn make_service_with_provider(
+        pair_repo: MockCurrencyPairRepository,
+        rate_repo: MockCurrencyRateRepository,
+        provider: Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>,
+    ) -> CurrencyService {
+        CurrencyService::new(Box::new(pair_repo), Box::new(rate_repo)).with_rate_provider(provider)
+    }
+
+    // FXR-072 — empty persisted-pair set (scope_pairs empty, list returns empty) →
+    // provider's fetch_eur_snapshot expected 0 times; Ok returned
+    #[tokio::test]
+    async fn refresh_all_rates_empty_pair_set_does_not_call_provider() {
+        use crate::context::currency::domain::rate_provider::MockRateProvider;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| Ok(vec![]));
+        let rate_repo = MockCurrencyRateRepository::new();
+
+        let mut mock_provider = MockRateProvider::new();
+        mock_provider.expect_fetch_eur_snapshot().times(0);
+
+        let svc = make_service_with_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(mock_provider)
+                as Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>,
+        );
+
+        let result = svc.refresh_all_rates(vec![]).await;
+        assert!(result.is_ok(), "empty scope must return Ok: {result:?}");
+    }
+
+    // FXR-071/074/102 — happy path: scope_pairs=[USD→EUR], list returns [USD→EUR];
+    // provider returns snapshot {USD:1_164_600, date:"2026-06-01", source:Frankfurter};
+    // upsert_rate called once with CurrencyRate(USD,EUR,"2026-06-01",858_663,Frankfurter);
+    // CurrencyRateUpdated published.
+    #[tokio::test]
+    async fn refresh_all_rates_happy_path_upserts_rate_and_publishes_event() {
+        use crate::context::currency::domain::rate_provider::{EurSnapshot, MockRateProvider};
+        use std::collections::HashMap;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_upsert_rate()
+            .times(1)
+            .withf(|r: &CurrencyRate| {
+                r.from_currency == "USD"
+                    && r.to_currency == "EUR"
+                    && r.date == "2026-06-01"
+                    && r.rate == 858_663
+                    && r.source == CurrencyRateSource::Frankfurter
+            })
+            .returning(Ok);
+
+        let mut mock_provider = MockRateProvider::new();
+        mock_provider
+            .expect_fetch_eur_snapshot()
+            .times(1)
+            .returning(|| {
+                Ok(EurSnapshot {
+                    date: "2026-06-01".to_string(),
+                    rates: HashMap::from([("USD".to_string(), 1_164_600i64)]),
+                    source: CurrencyRateSource::Frankfurter,
+                })
+            });
+
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+
+        let svc = CurrencyService::new(Box::new(pair_repo), Box::new(rate_repo))
+            .with_event_bus(Arc::clone(&bus))
+            .with_rate_provider(Arc::new(mock_provider)
+                as Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>);
+
+        let result = svc.refresh_all_rates(vec![make_pair("USD", "EUR")]).await;
+        assert!(result.is_ok(), "happy path must return Ok: {result:?}");
+
+        assert!(
+            rx.changed().await.is_ok(),
+            "expected CurrencyRateUpdated event on the bus"
+        );
+        assert_eq!(*rx.borrow(), Event::CurrencyRateUpdated);
+    }
+
+    // FXR-073/083 — missing-leg skip: pair JPY→KRW but snapshot lacks KRW →
+    // upsert_rate NOT called for that pair; no error returned
+    #[tokio::test]
+    async fn refresh_all_rates_missing_leg_skips_pair_without_error() {
+        use crate::context::currency::domain::rate_provider::{EurSnapshot, MockRateProvider};
+        use std::collections::HashMap;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "JPY".to_string(),
+                    to_currency: "KRW".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        // upsert_rate must NOT be called because KRW is absent from the snapshot
+        rate_repo.expect_upsert_rate().times(0);
+
+        let mut mock_provider = MockRateProvider::new();
+        mock_provider
+            .expect_fetch_eur_snapshot()
+            .times(1)
+            .returning(|| {
+                Ok(EurSnapshot {
+                    date: "2026-06-01".to_string(),
+                    // KRW is absent; JPY is present but the KRW leg is missing
+                    rates: HashMap::from([("JPY".to_string(), 185_740_000i64)]),
+                    source: CurrencyRateSource::Frankfurter,
+                })
+            });
+
+        let svc = make_service_with_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(mock_provider)
+                as Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>,
+        );
+
+        let result = svc.refresh_all_rates(vec![make_pair("JPY", "KRW")]).await;
+        assert!(
+            result.is_ok(),
+            "missing-leg skip must not surface as error: {result:?}"
+        );
+    }
+
+    // FXR-070 — provider failure: fetch_eur_snapshot returns Err →
+    // upsert_rate is never called; method returns Ok (total-failure degrade)
+    #[tokio::test]
+    async fn refresh_all_rates_provider_failure_returns_ok_without_upsert() {
+        use crate::context::currency::domain::rate_provider::MockRateProvider;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo.expect_upsert_rate().times(0);
+
+        let mut mock_provider = MockRateProvider::new();
+        mock_provider
+            .expect_fetch_eur_snapshot()
+            .times(1)
+            .returning(|| Err(anyhow::anyhow!("provider unreachable")));
+
+        let svc = make_service_with_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(mock_provider)
+                as Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>,
+        );
+
+        let result = svc.refresh_all_rates(vec![make_pair("USD", "EUR")]).await;
+        assert!(
+            result.is_ok(),
+            "provider failure must degrade gracefully (Ok): {result:?}"
+        );
+    }
+
+    // FXR-071/013 — pair-ensure: scope_pairs=[CHF→EUR] → upsert_pair called for it
+    // before listing (the ensure step runs first per FXR-071)
+    #[tokio::test]
+    async fn refresh_all_rates_ensures_scope_pairs_before_listing() {
+        use crate::context::currency::domain::rate_provider::MockRateProvider;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo
+            .expect_upsert_pair()
+            .times(1)
+            .withf(|p: &CurrencyPair| p.from_currency == "CHF" && p.to_currency == "EUR")
+            .returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| Ok(vec![]));
+        let rate_repo = MockCurrencyRateRepository::new();
+
+        let mut mock_provider = MockRateProvider::new();
+        mock_provider.expect_fetch_eur_snapshot().times(0);
+
+        let svc = make_service_with_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(mock_provider)
+                as Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>,
+        );
+
+        let result = svc.refresh_all_rates(vec![make_pair("CHF", "EUR")]).await;
+        assert!(
+            result.is_ok(),
+            "pair-ensure path must return Ok: {result:?}"
+        );
+        // mockall validates the times(1) expectation on drop — test fails if
+        // upsert_pair was not called exactly once with CHF→EUR.
+    }
+
+    // No provider configured (CRUD-only construction) → refresh is a no-op: pairs
+    // are listed but no fetch/upsert happens. Guards the `else` arm of the provider
+    // lookup so a misconfigured service degrades quietly rather than panicking.
+    #[tokio::test]
+    async fn refresh_all_rates_without_provider_is_noop() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo.expect_upsert_rate().times(0);
+
+        // Built WITHOUT with_rate_provider — no external tier attached.
+        let svc = make_service(pair_repo, rate_repo);
+
+        let result = svc.refresh_all_rates(vec![]).await;
+        assert!(
+            result.is_ok(),
+            "no-provider refresh must be a quiet no-op: {result:?}"
+        );
+    }
+
+    // FXR-073 — a per-pair upsert failure is logged and skipped; the task still
+    // returns Ok rather than aborting the remaining pairs.
+    #[tokio::test]
+    async fn refresh_all_rates_skips_pair_when_upsert_fails() {
+        use crate::context::currency::domain::rate_provider::{EurSnapshot, MockRateProvider};
+        use std::collections::HashMap;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_upsert_rate()
+            .times(1)
+            .returning(|_| Err(db_err()));
+
+        let mut mock_provider = MockRateProvider::new();
+        mock_provider
+            .expect_fetch_eur_snapshot()
+            .times(1)
+            .returning(|| {
+                Ok(EurSnapshot {
+                    date: "2026-06-01".to_string(),
+                    rates: HashMap::from([("USD".to_string(), 1_164_600i64)]),
+                    source: CurrencyRateSource::Frankfurter,
+                })
+            });
+
+        let svc = make_service_with_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(mock_provider)
+                as Arc<dyn crate::context::currency::domain::rate_provider::RateProvider>,
+        );
+
+        let result = svc.refresh_all_rates(vec![make_pair("USD", "EUR")]).await;
+        assert!(
+            result.is_ok(),
+            "a per-pair upsert failure must be skipped, not surfaced: {result:?}"
+        );
     }
 }

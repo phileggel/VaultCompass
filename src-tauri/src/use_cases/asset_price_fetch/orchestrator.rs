@@ -2,9 +2,10 @@ use crate::context::account::{AccountApplicationError, AccountService};
 use crate::context::asset::{
     derive_stooq_symbol_with_exchange, Asset, AssetApplicationError, AssetError, AssetService,
 };
+use crate::context::currency::CurrencyPair;
 use crate::core::cash::system_cash_asset_id;
 use crate::core::logger::BACKEND;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::dispatcher::Dispatcher;
@@ -53,6 +54,9 @@ impl AssetPriceFetchUseCase {
         let accounts = self.account_service.get_all().await?;
 
         let mut asset_ids: HashSet<String> = HashSet::new();
+        // FXR-071 — collect (account_currency, asset_id) for every active holding so
+        // foreign pairs can be derived, including assets with no fetchable price.
+        let mut fx_inputs: Vec<(String, String)> = Vec::new();
         for account in &accounts {
             let holdings = self
                 .account_service
@@ -60,6 +64,7 @@ impl AssetPriceFetchUseCase {
                 .await?;
             for holding in holdings {
                 if holding.quantity > 0 {
+                    fx_inputs.push((account.currency.clone(), holding.asset_id.clone()));
                     asset_ids.insert(holding.asset_id);
                 }
             }
@@ -70,7 +75,8 @@ impl AssetPriceFetchUseCase {
             return Err(FetchPriceTask::NoFetchableHoldings.into());
         }
 
-        Arc::clone(&self.dispatcher).spawn(scope, lease);
+        let fx_pairs = self.build_fx_pairs(fx_inputs).await?;
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
         Ok(())
     }
 
@@ -105,18 +111,21 @@ impl AssetPriceFetchUseCase {
             .account_service
             .get_holdings_for_account(&account.id)
             .await?;
-        let asset_ids: HashSet<String> = holdings
-            .into_iter()
-            .filter(|holding| holding.quantity > 0)
-            .map(|holding| holding.asset_id)
-            .collect();
+        let mut asset_ids: HashSet<String> = HashSet::new();
+        // FXR-071 — pairs for this account's active foreign holdings.
+        let mut fx_inputs: Vec<(String, String)> = Vec::new();
+        for holding in holdings.into_iter().filter(|holding| holding.quantity > 0) {
+            fx_inputs.push((account.currency.clone(), holding.asset_id.clone()));
+            asset_ids.insert(holding.asset_id);
+        }
 
         let scope = self.build_scope(asset_ids).await?;
         if scope.is_empty() {
             return Err(FetchPriceTask::NoFetchableHoldings.into());
         }
 
-        Arc::clone(&self.dispatcher).spawn(scope, lease);
+        let fx_pairs = self.build_fx_pairs(fx_inputs).await?;
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
         Ok(())
     }
 
@@ -157,6 +166,57 @@ impl AssetPriceFetchUseCase {
             scope.push((asset, symbol));
         }
         Ok(scope)
+    }
+
+    /// Derives the distinct foreign-currency `CurrencyPair`s (`asset_currency →
+    /// account_currency`) for the active holdings in `inputs` (FXR-071/013). Cash
+    /// holdings and same-currency holdings are excluded; a missing asset is skipped.
+    /// Independent of `build_scope` because a foreign holding still needs its pair
+    /// followed even when its price is not auto-fetchable.
+    async fn build_fx_pairs(
+        &self,
+        inputs: Vec<(String, String)>,
+    ) -> Result<Vec<CurrencyPair>, AssetError> {
+        let cash_prefix = system_cash_asset_id("");
+        let mut currency_by_asset: HashMap<String, Option<String>> = HashMap::new();
+        let mut seen: HashSet<(String, String)> = HashSet::new();
+        let mut pairs: Vec<CurrencyPair> = Vec::new();
+
+        for (account_currency, asset_id) in inputs {
+            if asset_id.starts_with(&cash_prefix) {
+                continue;
+            }
+            let asset_currency = match currency_by_asset.get(&asset_id) {
+                Some(cached) => cached.clone(),
+                None => {
+                    let loaded = match self.asset_service.get_asset_by_id(&asset_id).await {
+                        Ok(Some(asset)) => Some(asset.currency),
+                        Ok(None) => None,
+                        Err(application_error) => {
+                            tracing::error!(
+                                target: BACKEND,
+                                asset_id = %asset_id,
+                                err = ?application_error,
+                                "build_fx_pairs: get_asset_by_id failed"
+                            );
+                            return Err(translate_asset_application_error(application_error));
+                        }
+                    };
+                    currency_by_asset.insert(asset_id.clone(), loaded.clone());
+                    loaded
+                }
+            };
+            let Some(asset_currency) = asset_currency else {
+                continue;
+            };
+            if asset_currency == account_currency {
+                continue;
+            }
+            if seen.insert((asset_currency.clone(), account_currency.clone())) {
+                pairs.push(CurrencyPair::from_storage(asset_currency, account_currency));
+            }
+        }
+        Ok(pairs)
     }
 }
 

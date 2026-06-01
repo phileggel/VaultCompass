@@ -19,7 +19,8 @@ use crate::context::asset::{
     SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
 use crate::context::currency::{
-    CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+    ChainedRateProvider, CurrencyService, RateProvider, ReqwestEcbClient, ReqwestFrankfurterClient,
+    SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
 };
 use crate::core::event_bus::Event;
 use crate::core::{
@@ -166,13 +167,22 @@ pub fn run() {
 
                 // ----- currency BC (FXR) -----
                 // Built before the account use cases so it can be injected as the
-                // valuation read port (FXR-035) for foreign-currency holdings.
+                // valuation read port (FXR-035) for foreign-currency holdings, and
+                // carries the ADR-009 provider chain (Frankfurter → ECB) used by the
+                // piggybacked auto-fetch (FXR-070).
+                let rate_provider_chain: Arc<dyn RateProvider> = Arc::new(ChainedRateProvider::new(
+                    vec![
+                        Arc::new(ReqwestFrankfurterClient::new()) as Arc<dyn RateProvider>,
+                        Arc::new(ReqwestEcbClient::new()) as Arc<dyn RateProvider>,
+                    ],
+                ));
                 let currency_service = Arc::new(
                     CurrencyService::new(
                         Box::new(SqliteCurrencyPairRepository::new(db.pool.clone())),
                         Box::new(SqliteCurrencyRateRepository::new(db.pool.clone())),
                     )
-                    .with_event_bus(event_bus.clone()),
+                    .with_event_bus(event_bus.clone())
+                    .with_rate_provider(rate_provider_chain),
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(
@@ -227,6 +237,7 @@ pub fn run() {
                     price_provider,
                     price_repo_for_fetch,
                     Arc::clone(&event_bus),
+                    Arc::clone(&currency_service),
                     Arc::new(|| chrono::Local::now().date_naive()),
                 ));
                 let asset_price_fetch_uc = Arc::new(AssetPriceFetchUseCase::new(
