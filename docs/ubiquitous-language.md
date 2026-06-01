@@ -127,15 +127,38 @@ A holding's combined return from price appreciation and dividend income, express
 
 ---
 
+## Currency Context (introduced by FXR spec)
+
+### CurrencyPair
+
+A directed currency pair the system follows, e.g. USD → EUR. Used to value a holding whose currency differs from its account's. Created when first needed and kept thereafter.
+
+> Status: confirmed
+
+### CurrencyRate
+
+What one unit of a currency is worth in another on a given day. Used to convert a foreign holding's current value into the account's currency. Distinct from a transaction's `exchange rate`, which is fixed at trade time for cost basis — a currency rate is current and changes over time.
+
+> Status: confirmed
+
+### CurrencyRateSource
+
+Where a currency rate came from: `Manual` (entered by the user), or `Frankfurter` / `Ecb` (fetched from a provider). Informational only — it does not change which rate applies.
+
+> Status: confirmed
+
+---
+
 ## Domain Events
 
-| Name                 | Raised by  | Intent                                                      | Status    |
-| -------------------- | ---------- | ----------------------------------------------------------- | --------- |
-| `AccountUpdated`     | Account BC | Any state change in the account or its holdings             | confirmed |
-| `TransactionUpdated` | Account BC | A holding or transaction was created, updated, or cancelled | confirmed |
-| `AssetUpdated`       | Asset BC   | Any state change in an asset or category                    | confirmed |
-| `CategoryUpdated`    | Asset BC   | Any state change in a category                              | confirmed |
-| `AssetPriceUpdated`  | Asset BC   | An AssetPrice record was created, updated, or deleted       | confirmed |
+| Name                  | Raised by   | Intent                                                      | Status    |
+| --------------------- | ----------- | ----------------------------------------------------------- | --------- |
+| `AccountUpdated`      | Account BC  | Any state change in the account or its holdings             | confirmed |
+| `TransactionUpdated`  | Account BC  | A holding or transaction was created, updated, or cancelled | confirmed |
+| `AssetUpdated`        | Asset BC    | Any state change in an asset or category                    | confirmed |
+| `CategoryUpdated`     | Asset BC    | Any state change in a category                              | confirmed |
+| `AssetPriceUpdated`   | Asset BC    | An AssetPrice record was created, updated, or deleted       | confirmed |
+| `CurrencyRateUpdated` | Currency BC | A currency rate was recorded, updated, or deleted           | confirmed |
 
 ---
 
