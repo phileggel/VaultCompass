@@ -18,6 +18,9 @@ use crate::context::asset::{
     AssetPriceRepository, AssetService, PriceProvider, ReqwestStooqClient,
     SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
+use crate::context::currency::{
+    CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+};
 use crate::core::event_bus::Event;
 use crate::core::{
     create_specta_builder, Database, SideEffectEventBus, SqlxTransactionManager, BACKEND,
@@ -220,6 +223,14 @@ pub fn run() {
                 ));
                 app_handle.manage(asset_price_fetch_uc);
                 app_handle.manage(Arc::clone(&fetch_guard));
+
+                // ----- currency BC (FXR) -----
+                let currency_service = CurrencyService::new(
+                    Box::new(SqliteCurrencyPairRepository::new(db.pool.clone())),
+                    Box::new(SqliteCurrencyRateRepository::new(db.pool.clone())),
+                )
+                .with_event_bus(event_bus.clone());
+                app_handle.manage(currency_service);
 
                 let transaction_manager =
                     Arc::new(SqlxTransactionManager::new(db.pool.clone()));

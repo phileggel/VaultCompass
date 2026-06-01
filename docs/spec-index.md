@@ -16,6 +16,7 @@
 | CSH     | Cash Tracking               | Cash-as-Holding (one per currency); Deposit/Withdrawal; Buy/Sell re-linked to cash        | active   |
 | PRF     | Account Performance         | Per-account value-over-time table: month/year rows, net-of-flows perf (MoM/YTD/all-time)  | planning |
 | DIV     | Cash Dividend               | Cash dividend transaction: income credited to cash, attributed to the paying asset        | active   |
+| FXR     | Foreign Exchange Rate       | Currency-pair rates (fetch + manual) for live multi-currency holding valuation            | planning |
 
 ---
 

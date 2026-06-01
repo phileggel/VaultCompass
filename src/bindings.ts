@@ -257,6 +257,79 @@ async getTransactions(accountId: string, assetId: string) : Promise<Result<Trans
 }
 },
 /**
+ * Declares a currency pair (FXR-054). Idempotent: returns the existing pair
+ * rather than duplicating it.
+ */
+async declareCurrencyPair(fromCurrency: string, toCurrency: string) : Promise<Result<CurrencyPair, CurrencyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("declare_currency_pair", { fromCurrency, toCurrency }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Records a rate for a pair (FXR-025). Converts `rate: f64` to i64 micros
+ * at the IPC boundary (FXR-024). Sets `source = Manual` (FXR-101).
+ * Ensures the pair exists as a side-effect (FXR-013).
+ */
+async recordCurrencyRate(fromCurrency: string, toCurrency: string, date: string, rate: number) : Promise<Result<CurrencyRate, CurrencyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_currency_rate", { fromCurrency, toCurrency, date, rate }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Updates an existing rate (FXR-052). Same-date = in-place overwrite;
+ * changed-date = delete-old + upsert-new. Returns `RateNotFound` when the
+ * original record does not exist.
+ */
+async updateCurrencyRate(fromCurrency: string, toCurrency: string, originalDate: string, newDate: string, newRate: number) : Promise<Result<null, CurrencyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_currency_rate", { fromCurrency, toCurrency, originalDate, newDate, newRate }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes the rate at `(from_currency, to_currency, date)` (FXR-053).
+ * Returns `RateNotFound` when absent; never removes the pair (FXR-014).
+ */
+async deleteCurrencyRate(fromCurrency: string, toCurrency: string, date: string) : Promise<Result<null, CurrencyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_currency_rate", { fromCurrency, toCurrency, date }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Returns all pairs enriched with their most-recent rate (FXR-051).
+ */
+async getCurrencyPairs() : Promise<Result<CurrencyPairSummary[], CurrencyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_currency_pairs") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Returns all rates for the given pair ordered by date descending (FXR-050).
+ * Returns an empty list for an unknown pair — never `RateNotFound`.
+ */
+async getCurrencyRates(fromCurrency: string, toCurrency: string) : Promise<Result<CurrencyRate[], CurrencyError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_currency_rates", { fromCurrency, toCurrency }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Archives an asset, guarded against active holdings (OQ-6).
  */
 async archiveAsset(id: string) : Promise<Result<null, ArchiveAssetError>> {
@@ -1413,6 +1486,131 @@ category_id: string;
  */
 exchange: Exchange | null }
 /**
+ * Single flat error enum for the `currency` bounded context (gold error model).
+ * 
+ * Every failure the BC can raise — validation, lookup, and infrastructure —
+ * lives in this one type. `#[serde(tag = "code")]` makes each variant
+ * serialize as `{ "code": "VariantName", ...payload }` on the wire.
+ */
+export type CurrencyError = 
+/**
+ * The rate value is zero or negative (FXR-021).
+ */
+{ code: "NotPositive" } | 
+/**
+ * The rate value is not a finite floating-point number (FXR-021). Raised
+ * only at the IPC boundary by `api::rate_f64_to_micros`, before the `f64`
+ * is converted to the i64 micros the domain factory accepts.
+ */
+{ code: "NonFinite" } | 
+/**
+ * The supplied date is in the future (FXR-022).
+ */
+{ code: "DateInFuture" } | 
+/**
+ * The supplied date string is not parseable as ISO 8601 `YYYY-MM-DD` (FXR-022).
+ */
+{ code: "InvalidDateFormat"; date: string } | 
+/**
+ * The supplied currency code is not a recognised ISO 4217 code (FXR-023).
+ */
+{ code: "InvalidCurrency"; currency: string } | 
+/**
+ * Both sides of a pair are the same currency — the identity rate is
+ * implicit and is never stored (FXR-011/023).
+ */
+{ code: "IdentityPair" } | 
+/**
+ * No rate exists for the given pair on the given date (FXR-052/053).
+ */
+{ code: "RateNotFound"; from_currency: string; to_currency: string; date: string } | 
+/**
+ * An infrastructure / database failure occurred. The full diagnostic is
+ * preserved server-side via `tracing::error!`; the wire surface carries
+ * no hint.
+ */
+{ code: "DatabaseError" }
+/**
+ * A directed currency pair the system follows for valuation (FXR-013/014).
+ * `(from_currency, to_currency)` is unique; the two currencies must differ (FXR-011).
+ */
+export type CurrencyPair = { 
+/**
+ * ISO 4217 source currency (e.g. `"USD"`).
+ */
+from_currency: string; 
+/**
+ * ISO 4217 target currency (e.g. `"EUR"`).
+ */
+to_currency: string }
+/**
+ * Row returned by `get_currency_pairs` (FXR-051): a pair enriched with its
+ * most-recent rate (per FXR-035). The `latest_*` fields are `None` when no
+ * rate has been recorded for the pair yet.
+ */
+export type CurrencyPairSummary = { 
+/**
+ * ISO 4217 source currency.
+ */
+from_currency: string; 
+/**
+ * ISO 4217 target currency.
+ */
+to_currency: string; 
+/**
+ * Micros of the most-recent rate; `None` when no rate has been recorded.
+ */
+latest_rate: number | null; 
+/**
+ * ISO date of the most-recent rate; `None` when `latest_rate` is `None`.
+ */
+latest_rate_date: string | null; 
+/**
+ * Provenance of the most-recent rate; `None` when `latest_rate` is `None`.
+ */
+latest_rate_source: CurrencyRateSource | null }
+/**
+ * A dated rate observation for a directed currency pair (FXR entity).
+ * Unique by `(from_currency, to_currency, date)`.
+ */
+export type CurrencyRate = { 
+/**
+ * ISO 4217 source currency.
+ */
+from_currency: string; 
+/**
+ * ISO 4217 target currency.
+ */
+to_currency: string; 
+/**
+ * ISO 8601 date `YYYY-MM-DD` of this observation.
+ */
+date: string; 
+/**
+ * Units of `to_currency` per one unit of `from_currency`, as i64 micros (ADR-001, FXR-010).
+ */
+rate: number; 
+/**
+ * Provenance of this rate (FXR-100).
+ */
+source: CurrencyRateSource }
+/**
+ * Provenance qualifier for a CurrencyRate record (FXR-100).
+ */
+export type CurrencyRateSource = 
+/**
+ * User-driven write: manual entry or edit (FXR-101).
+ */
+"Manual" | 
+/**
+ * Auto-fetched from the Frankfurter provider (FXR-102).
+ */
+"Frankfurter" | 
+/**
+ * Auto-fetched from the ECB XML feed fallback (FXR-102).
+ */
+"Ecb"
+/**
  * Application-layer rejection specific to the `delete_asset` use case —
  * the cross-BC transaction-history check performed by the orchestrator
  * before delegating to `AssetService::delete_asset`.
@@ -1587,7 +1785,11 @@ export type Event =
 /**
  * A market price was recorded or updated for an asset (MKT-026)
  */
-{ type: "AssetPriceUpdated" }
+{ type: "AssetPriceUpdated" } | 
+/**
+ * A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
+ */
+{ type: "CurrencyRateUpdated" }
 /**
  * A canonical trading venue identified by its ISO 10383 MIC code.
  */
