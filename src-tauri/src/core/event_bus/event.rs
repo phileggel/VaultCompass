@@ -19,4 +19,6 @@ pub enum Event {
     TransactionUpdated,
     /// A market price was recorded or updated for an asset (MKT-026)
     AssetPriceUpdated,
+    /// A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
+    CurrencyRateUpdated,
 }

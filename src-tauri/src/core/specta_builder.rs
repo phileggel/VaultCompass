@@ -1,5 +1,5 @@
 use crate::{
-    context::{account, asset},
+    context::{account, asset, currency},
     core::{logger, Event},
     use_cases::{
         account_deletion, account_details, account_performance, account_summary, archive_asset,
@@ -35,6 +35,12 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::Transaction>()
         .typ::<account::TransactionType>()
         .typ::<account::HoldingTransactionError>()
+        // ----- currency BC (FXR) -----
+        .typ::<currency::CurrencyPair>()
+        .typ::<currency::CurrencyRate>()
+        .typ::<currency::CurrencyRateSource>()
+        .typ::<currency::CurrencyPairSummary>()
+        .typ::<currency::CurrencyError>()
         // ----- use cases -----
         .typ::<archive_asset::ArchiveAssetApplicationError>()
         .typ::<archive_asset::ArchiveAssetError>()
@@ -91,6 +97,13 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::delete_account,
             account::get_asset_ids_for_account,
             account::get_transactions,
+            // ----- currency BC (FXR) -----
+            currency::declare_currency_pair,
+            currency::record_currency_rate,
+            currency::update_currency_rate,
+            currency::delete_currency_rate,
+            currency::get_currency_pairs,
+            currency::get_currency_rates,
             // ----- use cases -----
             archive_asset::archive_asset,
             delete_asset::delete_asset,
