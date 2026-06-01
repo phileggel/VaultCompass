@@ -52,7 +52,7 @@ The feature lives within the `transaction` bounded context (`features/transactio
 
 ### Edit (030–039)
 
-**TXL-030 — Edit action (frontend)**: Each transaction row exposes an edit action. Clicking it opens the Edit Transaction modal pre-filled with the transaction's data, per TRX-031 and TRX-033. The TXL view owns the trigger and the post-success refresh; the modal owns all validation, submission logic, and success snackbar.
+**TXL-030 — Edit action (frontend)**: Each transaction row exposes an edit action. Clicking it opens an edit modal pre-filled with the transaction's data, per TRX-031 and TRX-033. For Purchase / Sell / OpeningBalance rows this is the generic Edit Transaction modal. For **Deposit / Withdrawal rows** (Cash Asset) it is instead the dedicated `DepositTransactionModal` / `WithdrawalTransactionModal` in edit mode (CSH-111) — the generic modal is cash-excluded (CSH-018). The TXL view owns the trigger and the post-success refresh; the modal owns all validation, submission logic, and success snackbar. The cash-modal trigger goes through the URL-driven modal-mount convention so the `transactions` feature does not import the account-details feature (CSH-111 / B13).
 
 **TXL-031 — Edit success (frontend)**: On successful edit, the modal closes and the transaction list refreshes (TXL-026).
 
