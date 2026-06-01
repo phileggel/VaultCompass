@@ -80,14 +80,14 @@ Specs: `docs/spec/account-details.md`, `docs/spec/market-price.md`
 
 Non-trade events that alter quantity or value without a cash exchange at the position level.
 
-| Operation            | Status     | Notes                                                               |
-| -------------------- | ---------- | ------------------------------------------------------------------- |
-| Dividend             | 🔲 Planned | Cash income; does not change quantity; new transaction type needed  |
-| Stock split          | 🔲 Planned | Multiplies quantity, divides price; requires dedicated operation    |
-| Reverse split        | 🔲 Planned | Divides quantity, multiplies price                                  |
-| Merger / acquisition | 🔲 Planned | Asset substitution; complex; out of scope until sell is implemented |
+| Operation            | Status     | Notes                                                                            |
+| -------------------- | ---------- | -------------------------------------------------------------------------------- |
+| Cash dividend        | ✅ Done    | `TransactionType::Dividend`; credits cash, holding untouched (DIV spec, v0.16.0) |
+| Stock split          | 🔲 Planned | Multiplies quantity, divides price; requires dedicated operation                 |
+| Reverse split        | 🔲 Planned | Divides quantity, multiplies price                                               |
+| Merger / acquisition | 🔲 Planned | Asset substitution; complex; out of scope until sell is implemented              |
 
-> None of these are specced yet. They require a new `transaction_type` enum and dedicated backend logic distinct from purchases and sales.
+> Cash dividends shipped (DIV). The remaining events (splits, reverse splits, merger, plus stock dividends / DRIP / return-of-capital — see `docs/spec/cash-dividend.md` § Deferred) are not specced yet.
 
 ---
 
