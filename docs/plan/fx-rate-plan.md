@@ -46,11 +46,11 @@
 
 ### Backend phase B2 — FX provider fetch (PR 2b)
 
-- [ ] ✍️ Backend test stubs (`test-writer-backend` — cross-rate math, provider-chain fallback, fetch-then-store paths; red confirmed)
-- [ ] 🏗️ Implementation (minimal): `RateProvider` trait + Frankfurter/ECB clients + EUR cross-rate (FXR-080–083); `CurrencyService::fetch_rates_for_pairs` (provider field added); piggyback into `asset_price_fetch` (ensure-then-fetch, shares MKT-113 guard)
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` _(new external HTTP client — FX provider fetch)_ in parallel → `/review-triage`)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(currency): FX provider fetch (Frankfurter + ECB)` via `/smart-commit`
+- [x] ✍️ Backend test stubs (`test-writer-backend` — cross-rate math, provider-chain fallback, fetch-then-store paths; red confirmed)
+- [x] 🏗️ Implementation (minimal): `RateProvider` trait + Frankfurter/ECB clients + EUR cross-rate (FXR-080–083); `CurrencyService::refresh_all_rates` (provider field added via `with_rate_provider`); piggyback into `asset_price_fetch` (ensure-then-fetch, shares MKT-113 guard)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` + `reviewer-infra` _(new dep)_ → `/dep-audit` → `/review-triage`) — 5 (a) hardening fixes (finite/positive guards, cross-rate `i64::try_from`, version pin, test assert); 2 (b) → `docs/techdebt.md`; quick-xml CVE-clean
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(currency): FX provider fetch (Frankfurter + ECB)` via `/smart-commit` (`433a6ea`)
 - [ ] 🔀 `/create-pr` (PR 2b — provider fetch). After merge, branch PR 3 off updated `main`.
 
 ### Frontend phase — currency feature (PR 3)
