@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { Transaction } from "@/bindings";
 import { transactionMutationErrorToI18n } from "@/features/transactions/shared/presenter";
 import { logger } from "@/lib/logger";
-import { decimalToMicro } from "@/lib/microUnits";
+import { decimalToMicro, microToDecimal } from "@/lib/microUnits";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
@@ -10,6 +11,8 @@ import { validateAmount, validateDate } from "../shared/validateCashForm";
 
 interface UseWithdrawalTransactionProps {
   accountId: string;
+  /** When present, the modal edits this existing Withdrawal via correct_transaction (CSH-111). */
+  editTransaction?: Transaction | null;
   onSubmitSuccess?: () => void;
 }
 
@@ -24,16 +27,22 @@ const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export function useWithdrawalTransaction({
   accountId,
+  editTransaction,
   onSubmitSuccess,
 }: UseWithdrawalTransactionProps) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
+  const isEdit = editTransaction != null;
 
-  const [formData, setFormData] = useState<WithdrawalFormData>(() => ({
-    date: today(),
-    amount: "",
-    note: "",
-  }));
+  const [formData, setFormData] = useState<WithdrawalFormData>(() =>
+    editTransaction
+      ? {
+          date: editTransaction.date,
+          amount: microToDecimal(editTransaction.total_amount),
+          note: editTransaction.note ?? "",
+        }
+      : { date: today(), amount: "", note: "" },
+  );
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -60,29 +69,40 @@ export function useWithdrawalTransaction({
       setError(null);
       setIsSubmitting(true);
       try {
-        const result = await accountDetailsGateway.recordWithdrawal({
-          account_id: accountId,
-          date: formData.date,
-          amount_micros: decimalToMicro(formData.amount),
-          note: formData.note || null,
-        });
+        const amountMicros = decimalToMicro(formData.amount);
+        // CSH-111 — edit reuses correct_transaction; create uses record_withdrawal.
+        const result = editTransaction
+          ? await accountDetailsGateway.correctTransaction(editTransaction.id, accountId, {
+              date: formData.date,
+              quantity: amountMicros,
+              unit_price: editTransaction.unit_price,
+              exchange_rate: editTransaction.exchange_rate,
+              fees: editTransaction.fees,
+              note: formData.note || null,
+            })
+          : await accountDetailsGateway.recordWithdrawal({
+              account_id: accountId,
+              date: formData.date,
+              amount_micros: amountMicros,
+              note: formData.note || null,
+            });
         if (result.status === "error") {
-          logger.error("[useWithdrawalTransaction] recordWithdrawal failed", {
+          logger.error("[useWithdrawalTransaction] submit failed", {
             error: result.error,
           });
           setError(transactionMutationErrorToI18n(result.error));
           return;
         }
-        showSnackbar(t("cash.withdrawal_recorded"), "success");
+        showSnackbar(t(isEdit ? "cash.withdrawal_updated" : "cash.withdrawal_recorded"), "success");
         onSubmitSuccess?.();
       } catch (e) {
-        logger.error("Failed to record withdrawal", { error: e });
+        logger.error("Failed to save withdrawal", { error: e });
         setError(UNKNOWN_ERROR);
       } finally {
         setIsSubmitting(false);
       }
     },
-    [accountId, formData, t, showSnackbar, onSubmitSuccess],
+    [accountId, editTransaction, isEdit, formData, t, showSnackbar, onSubmitSuccess],
   );
 
   return {

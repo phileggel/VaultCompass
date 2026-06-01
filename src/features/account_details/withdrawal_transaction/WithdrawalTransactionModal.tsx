@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { DateField } from "@/ui/components/field/DateField";
@@ -14,6 +15,8 @@ interface WithdrawalTransactionModalProps {
   accountId: string;
   accountName: string;
   accountCurrency: string;
+  /** When present, the modal edits this existing Withdrawal (CSH-111) instead of recording a new one. */
+  editTransaction?: Transaction | null;
   onSubmitSuccess: () => void;
 }
 
@@ -23,16 +26,18 @@ export function WithdrawalTransactionModal({
   accountId,
   accountName,
   accountCurrency,
+  editTransaction,
   onSubmitSuccess,
 }: WithdrawalTransactionModalProps) {
   const { t } = useTranslation();
+  const isEdit = editTransaction != null;
 
   useEffect(() => {
     logger.info("[WithdrawalTransactionModal] mounted");
   }, []);
 
   const { formData, error, isSubmitting, isFormValid, handleChange, handleSubmit } =
-    useWithdrawalTransaction({ accountId, onSubmitSuccess });
+    useWithdrawalTransaction({ accountId, editTransaction, onSubmitSuccess });
 
   const footer = useMemo(
     () => (
@@ -47,18 +52,18 @@ export function WithdrawalTransactionModal({
           loading={isSubmitting}
           disabled={isSubmitting || !isFormValid}
         >
-          {t("cash.action_record_withdrawal")}
+          {t(isEdit ? "action.save" : "cash.action_record_withdrawal")}
         </Button>
       </div>
     ),
-    [isSubmitting, isFormValid, t, onClose],
+    [isSubmitting, isFormValid, isEdit, t, onClose],
   );
 
   return (
     <FormModal
       isOpen={isOpen}
       onClose={onClose}
-      title={t("cash.withdrawal_modal_title")}
+      title={t(isEdit ? "cash.withdrawal_edit_modal_title" : "cash.withdrawal_modal_title")}
       footer={footer}
       maxWidth="max-w-2xl"
     >

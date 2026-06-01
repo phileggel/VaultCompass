@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { logger } from "@/lib/logger";
 import { useDepositTransaction } from "./useDepositTransaction";
 
-const { mockRecordDeposit, mockShowSnackbar } = vi.hoisted(() => ({
+const { mockRecordDeposit, mockCorrectTransaction, mockShowSnackbar } = vi.hoisted(() => ({
   mockRecordDeposit: vi.fn(),
+  mockCorrectTransaction: vi.fn(),
   mockShowSnackbar: vi.fn(),
 }));
 
 vi.mock("../gateway", () => ({
   accountDetailsGateway: {
     recordDeposit: mockRecordDeposit,
+    correctTransaction: mockCorrectTransaction,
   },
 }));
 
@@ -34,6 +36,7 @@ const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
 describe("useDepositTransaction (CSH-020/021/022/025)", () => {
   beforeEach(() => {
     mockRecordDeposit.mockReset();
+    mockCorrectTransaction.mockReset();
     mockShowSnackbar.mockReset();
     vi.mocked(logger.error).mockClear();
   });
@@ -115,9 +118,115 @@ describe("useDepositTransaction (CSH-020/021/022/025)", () => {
     });
 
     expect(result.current.error).toEqual({ key: "error.DatabaseError" });
-    expect(logger.error).toHaveBeenCalledWith("[useDepositTransaction] recordDeposit failed", {
+    expect(logger.error).toHaveBeenCalledWith("[useDepositTransaction] submit failed", {
       error: { code: "DatabaseError" },
     });
     expect(mockShowSnackbar).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CSH-111 — edit mode: prefill from the existing Deposit + persist via
+// correct_transaction (not record_deposit), with the "updated" snackbar.
+// ---------------------------------------------------------------------------
+const editDeposit = {
+  id: "tx-dep-1",
+  account_id: "account-1",
+  asset_id: "system-cash-eur",
+  transaction_type: "Deposit",
+  date: "2026-05-01",
+  quantity: 500_000_000,
+  unit_price: 1_000_000,
+  exchange_rate: 1_000_000,
+  fees: 0,
+  total_amount: 500_000_000,
+  note: "rent",
+  realized_pnl: null,
+  created_at: "2026-05-01T00:00:00Z",
+} as const;
+
+describe("useDepositTransaction — edit mode (CSH-111)", () => {
+  beforeEach(() => {
+    mockRecordDeposit.mockReset();
+    mockCorrectTransaction.mockReset();
+    mockShowSnackbar.mockReset();
+  });
+
+  it("prefills the form from the edited Deposit (date, amount, note)", () => {
+    const { result } = renderHook(() =>
+      useDepositTransaction({ accountId: "account-1", editTransaction: editDeposit }),
+    );
+    expect(result.current.formData.date).toBe("2026-05-01");
+    expect(result.current.formData.amount).toBe("500.000");
+    expect(result.current.formData.note).toBe("rent");
+  });
+
+  it("submits via correctTransaction (not recordDeposit) and shows the updated snackbar", async () => {
+    mockCorrectTransaction.mockResolvedValue({ status: "ok", data: { id: "tx-dep-1" } });
+    const { result } = renderHook(() =>
+      useDepositTransaction({ accountId: "account-1", editTransaction: editDeposit }),
+    );
+
+    act(() => result.current.handleChange("amount", "650"));
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockRecordDeposit).not.toHaveBeenCalled();
+    expect(mockCorrectTransaction).toHaveBeenCalledWith(
+      "tx-dep-1",
+      "account-1",
+      expect.objectContaining({ date: "2026-05-01", quantity: 650_000_000, note: "rent" }),
+    );
+    expect(mockShowSnackbar).toHaveBeenCalledWith("cash.deposit_updated", "success");
+  });
+});
+
+describe("useDepositTransaction — edit mode error path (CSH-111)", () => {
+  beforeEach(() => {
+    mockRecordDeposit.mockReset();
+    mockCorrectTransaction.mockReset();
+    mockShowSnackbar.mockReset();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("surfaces the backend error inline and does not snackbar when correctTransaction fails", async () => {
+    mockCorrectTransaction.mockResolvedValue({
+      status: "error",
+      error: { code: "InsufficientCash", current_balance_micros: 10_000_000, currency: "EUR" },
+    });
+    const { result } = renderHook(() =>
+      useDepositTransaction({ accountId: "account-1", editTransaction: editDeposit }),
+    );
+
+    act(() => result.current.handleChange("amount", "999"));
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockRecordDeposit).not.toHaveBeenCalled();
+    expect(result.current.error).toEqual({
+      key: "cash.insufficient_cash_inline",
+      vars: { balance: "10,00", currency: "EUR" },
+    });
+    expect(mockShowSnackbar).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      "[useDepositTransaction] submit failed",
+      expect.objectContaining({ error: expect.objectContaining({ code: "InsufficientCash" }) }),
+    );
+  });
+
+  it("falls back to the Unknown error when the gateway throws", async () => {
+    mockCorrectTransaction.mockRejectedValue(new Error("ipc down"));
+    const { result } = renderHook(() =>
+      useDepositTransaction({ accountId: "account-1", editTransaction: editDeposit }),
+    );
+
+    act(() => result.current.handleChange("amount", "10"));
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.error).toEqual({ key: "error.Unknown" });
   });
 });

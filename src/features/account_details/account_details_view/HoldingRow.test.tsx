@@ -284,3 +284,60 @@ describe("HoldingRow — dividend columns (DIV-072)", () => {
     expect(cell.className).toContain("text-m3-error");
   });
 });
+
+describe("HoldingRow — cash row (CSH-110 view transactions)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  const cashRow: HoldingRowViewModel = {
+    ...baseRow,
+    assetId: "system-cash-eur",
+    assetName: "Cash EUR",
+    assetReference: "EUR",
+    isCash: true,
+    quantityMicro: 500_000_000,
+  };
+
+  it("renders a View-transactions inspect action on the cash row (CSH-110)", () => {
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={cashRow}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onDeposit={vi.fn()}
+            onWithdraw={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    expect(document.querySelector("#action-view-transactions-system-cash-eur")).toBeInTheDocument();
+  });
+
+  it("navigates to the cash asset's transaction list when inspect is clicked (CSH-110)", () => {
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={cashRow}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onDeposit={vi.fn()}
+            onWithdraw={vi.fn()}
+          />
+        </tbody>
+      </table>,
+    );
+    fireEvent.click(document.querySelector("#action-view-transactions-system-cash-eur")!);
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const arg = navigateMock.mock.calls[0]?.[0] as { params: { assetId: string } };
+    expect(arg.params.assetId).toBe("system-cash-eur");
+  });
+});

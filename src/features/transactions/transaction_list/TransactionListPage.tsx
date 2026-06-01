@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { patchModalSearch } from "@/lib/modalSearch";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { SelectField } from "@/ui/components/field/SelectField";
@@ -240,7 +241,27 @@ export function TransactionListPage() {
                             aria-label={t("action.edit")}
                             onClick={() => {
                               const raw = transactionById.get(row.id);
-                              if (raw) setEditingTransaction(raw);
+                              if (!raw) return;
+                              // CSH-111 — cash Deposit/Withdrawal edits use the dedicated
+                              // cash modals (the generic modal is cash-excluded, CSH-018),
+                              // opened via the URL-driven modal mount (no cross-feature import).
+                              if (raw.transaction_type === "Deposit") {
+                                patchModalSearch(navigate, {
+                                  modal: "edit-cash-deposit",
+                                  editTxId: raw.id,
+                                  editTxAccountId: raw.account_id,
+                                  editTxAssetId: raw.asset_id,
+                                });
+                              } else if (raw.transaction_type === "Withdrawal") {
+                                patchModalSearch(navigate, {
+                                  modal: "edit-cash-withdrawal",
+                                  editTxId: raw.id,
+                                  editTxAccountId: raw.account_id,
+                                  editTxAssetId: raw.asset_id,
+                                });
+                              } else {
+                                setEditingTransaction(raw);
+                              }
                             }}
                           />
                           <IconButton

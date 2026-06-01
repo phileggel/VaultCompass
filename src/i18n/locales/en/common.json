@@ -362,6 +362,8 @@
   "cash": {
     "deposit_modal_title": "Record a deposit",
     "withdrawal_modal_title": "Record a withdrawal",
+    "deposit_edit_modal_title": "Edit deposit",
+    "withdrawal_edit_modal_title": "Edit withdrawal",
     "form_amount_label": "Amount",
     "form_amount_placeholder": "0.00",
     "action_record_deposit": "Record deposit",
