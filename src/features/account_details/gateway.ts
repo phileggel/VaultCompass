@@ -4,6 +4,7 @@ import type {
   AssetCrudError,
   AssetPrice,
   AssetPriceError,
+  CorrectTransactionDTO,
   DepositDTO,
   DividendDTO,
   DividendError,
@@ -65,6 +66,15 @@ export const accountDetailsGateway = {
 
   async recordDividend(dto: DividendDTO): Promise<Result<Transaction, DividendError>> {
     return commands.recordDividend(dto);
+  },
+
+  // CSH-111 — editing a cash Deposit/Withdrawal persists via correct_transaction.
+  async correctTransaction(
+    id: string,
+    accountId: string,
+    dto: CorrectTransactionDTO,
+  ): Promise<Result<Transaction, HoldingTransactionError>> {
+    return commands.correctTransaction(id, accountId, dto);
   },
 
   async fetchAccountAssetPrices(

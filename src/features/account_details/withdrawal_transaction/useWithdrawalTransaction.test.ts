@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { logger } from "@/lib/logger";
 import { useWithdrawalTransaction } from "./useWithdrawalTransaction";
 
-const { mockRecordWithdrawal, mockShowSnackbar } = vi.hoisted(() => ({
+const { mockRecordWithdrawal, mockCorrectTransaction, mockShowSnackbar } = vi.hoisted(() => ({
   mockRecordWithdrawal: vi.fn(),
+  mockCorrectTransaction: vi.fn(),
   mockShowSnackbar: vi.fn(),
 }));
 
 vi.mock("../gateway", () => ({
   accountDetailsGateway: {
     recordWithdrawal: mockRecordWithdrawal,
+    correctTransaction: mockCorrectTransaction,
   },
 }));
 
@@ -129,10 +131,80 @@ describe("useWithdrawalTransaction (CSH-030/031/032/035/081)", () => {
     });
 
     expect(result.current.error).toEqual({ key: "error.DatabaseError" });
-    expect(logger.error).toHaveBeenCalledWith(
-      "[useWithdrawalTransaction] recordWithdrawal failed",
-      { error: { code: "DatabaseError" } },
-    );
+    expect(logger.error).toHaveBeenCalledWith("[useWithdrawalTransaction] submit failed", {
+      error: { code: "DatabaseError" },
+    });
     expect(mockShowSnackbar).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CSH-111 — edit mode: prefill from the existing Withdrawal + persist via
+// correct_transaction (not record_withdrawal), with the "updated" snackbar.
+// ---------------------------------------------------------------------------
+const editWithdrawal = {
+  id: "tx-wd-1",
+  account_id: "account-1",
+  asset_id: "system-cash-eur",
+  transaction_type: "Withdrawal",
+  date: "2026-05-10",
+  quantity: 120_000_000,
+  unit_price: 1_000_000,
+  exchange_rate: 1_000_000,
+  fees: 0,
+  total_amount: 120_000_000,
+  note: null,
+  realized_pnl: null,
+  created_at: "2026-05-10T00:00:00Z",
+} as const;
+
+describe("useWithdrawalTransaction — edit mode (CSH-111)", () => {
+  beforeEach(() => {
+    mockRecordWithdrawal.mockReset();
+    mockCorrectTransaction.mockReset();
+    mockShowSnackbar.mockReset();
+  });
+
+  it("prefills the form from the edited Withdrawal (date, amount)", () => {
+    const { result } = renderHook(() =>
+      useWithdrawalTransaction({ accountId: "account-1", editTransaction: editWithdrawal }),
+    );
+    expect(result.current.formData.date).toBe("2026-05-10");
+    expect(result.current.formData.amount).toBe("120.000");
+    expect(result.current.formData.note).toBe("");
+  });
+
+  it("submits via correctTransaction (not recordWithdrawal) and shows the updated snackbar", async () => {
+    mockCorrectTransaction.mockResolvedValue({ status: "ok", data: { id: "tx-wd-1" } });
+    const { result } = renderHook(() =>
+      useWithdrawalTransaction({ accountId: "account-1", editTransaction: editWithdrawal }),
+    );
+
+    act(() => result.current.handleChange("amount", "90"));
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockRecordWithdrawal).not.toHaveBeenCalled();
+    expect(mockCorrectTransaction).toHaveBeenCalledWith(
+      "tx-wd-1",
+      "account-1",
+      expect.objectContaining({ date: "2026-05-10", quantity: 90_000_000 }),
+    );
+    expect(mockShowSnackbar).toHaveBeenCalledWith("cash.withdrawal_updated", "success");
+  });
+
+  it("falls back to the Unknown error when the gateway throws", async () => {
+    mockCorrectTransaction.mockRejectedValue(new Error("ipc down"));
+    const { result } = renderHook(() =>
+      useWithdrawalTransaction({ accountId: "account-1", editTransaction: editWithdrawal }),
+    );
+
+    act(() => result.current.handleChange("amount", "10"));
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.error).toEqual({ key: "error.Unknown" });
   });
 });

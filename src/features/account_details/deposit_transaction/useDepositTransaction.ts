@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { Transaction } from "@/bindings";
 import { transactionMutationErrorToI18n } from "@/features/transactions/shared/presenter";
 import { logger } from "@/lib/logger";
-import { decimalToMicro } from "@/lib/microUnits";
+import { decimalToMicro, microToDecimal } from "@/lib/microUnits";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
@@ -12,6 +13,8 @@ const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 interface UseDepositTransactionProps {
   accountId: string;
+  /** When present, the modal edits this existing Deposit via correct_transaction (CSH-111). */
+  editTransaction?: Transaction | null;
   onSubmitSuccess?: () => void;
 }
 
@@ -23,15 +26,24 @@ interface DepositFormData {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function useDepositTransaction({ accountId, onSubmitSuccess }: UseDepositTransactionProps) {
+export function useDepositTransaction({
+  accountId,
+  editTransaction,
+  onSubmitSuccess,
+}: UseDepositTransactionProps) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
+  const isEdit = editTransaction != null;
 
-  const [formData, setFormData] = useState<DepositFormData>(() => ({
-    date: today(),
-    amount: "",
-    note: "",
-  }));
+  const [formData, setFormData] = useState<DepositFormData>(() =>
+    editTransaction
+      ? {
+          date: editTransaction.date,
+          amount: microToDecimal(editTransaction.total_amount),
+          note: editTransaction.note ?? "",
+        }
+      : { date: today(), amount: "", note: "" },
+  );
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -58,27 +70,38 @@ export function useDepositTransaction({ accountId, onSubmitSuccess }: UseDeposit
       setError(null);
       setIsSubmitting(true);
       try {
-        const result = await accountDetailsGateway.recordDeposit({
-          account_id: accountId,
-          date: formData.date,
-          amount_micros: decimalToMicro(formData.amount),
-          note: formData.note || null,
-        });
+        const amountMicros = decimalToMicro(formData.amount);
+        // CSH-111 — edit reuses correct_transaction; create uses record_deposit.
+        const result = editTransaction
+          ? await accountDetailsGateway.correctTransaction(editTransaction.id, accountId, {
+              date: formData.date,
+              quantity: amountMicros,
+              unit_price: editTransaction.unit_price,
+              exchange_rate: editTransaction.exchange_rate,
+              fees: editTransaction.fees,
+              note: formData.note || null,
+            })
+          : await accountDetailsGateway.recordDeposit({
+              account_id: accountId,
+              date: formData.date,
+              amount_micros: amountMicros,
+              note: formData.note || null,
+            });
         if (result.status === "error") {
-          logger.error("[useDepositTransaction] recordDeposit failed", { error: result.error });
+          logger.error("[useDepositTransaction] submit failed", { error: result.error });
           setError(transactionMutationErrorToI18n(result.error));
           return;
         }
-        showSnackbar(t("cash.deposit_recorded"), "success");
+        showSnackbar(t(isEdit ? "cash.deposit_updated" : "cash.deposit_recorded"), "success");
         onSubmitSuccess?.();
       } catch (e) {
-        logger.error("Failed to record deposit", { error: e });
+        logger.error("Failed to save deposit", { error: e });
         setError(UNKNOWN_ERROR);
       } finally {
         setIsSubmitting(false);
       }
     },
-    [accountId, formData, t, showSnackbar, onSubmitSuccess],
+    [accountId, editTransaction, isEdit, formData, t, showSnackbar, onSubmitSuccess],
   );
 
   return {

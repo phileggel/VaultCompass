@@ -362,6 +362,8 @@
   "cash": {
     "deposit_modal_title": "Enregistrer un dépôt",
     "withdrawal_modal_title": "Enregistrer un retrait",
+    "deposit_edit_modal_title": "Modifier le dépôt",
+    "withdrawal_edit_modal_title": "Modifier le retrait",
     "form_amount_label": "Montant",
     "form_amount_placeholder": "0,00",
     "action_record_deposit": "Enregistrer le dépôt",

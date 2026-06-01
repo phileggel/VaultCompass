@@ -11,6 +11,10 @@ export type ModalSearchParams = {
   modal?: string;
   editAssetId?: string;
   focusField?: string;
+  /** Cash-transaction edit (CSH-111): the transaction id + the (account, asset) needed to refetch it. */
+  editTxId?: string;
+  editTxAccountId?: string;
+  editTxAssetId?: string;
 };
 
 /**

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { DateField } from "@/ui/components/field/DateField";
@@ -14,6 +15,8 @@ interface DepositTransactionModalProps {
   accountId: string;
   accountName: string;
   accountCurrency: string;
+  /** When present, the modal edits this existing Deposit (CSH-111) instead of recording a new one. */
+  editTransaction?: Transaction | null;
   onSubmitSuccess: () => void;
 }
 
@@ -23,16 +26,18 @@ export function DepositTransactionModal({
   accountId,
   accountName,
   accountCurrency,
+  editTransaction,
   onSubmitSuccess,
 }: DepositTransactionModalProps) {
   const { t } = useTranslation();
+  const isEdit = editTransaction != null;
 
   useEffect(() => {
     logger.info("[DepositTransactionModal] mounted");
   }, []);
 
   const { formData, error, isSubmitting, isFormValid, handleChange, handleSubmit } =
-    useDepositTransaction({ accountId, onSubmitSuccess });
+    useDepositTransaction({ accountId, editTransaction, onSubmitSuccess });
 
   const footer = useMemo(
     () => (
@@ -47,18 +52,18 @@ export function DepositTransactionModal({
           loading={isSubmitting}
           disabled={isSubmitting || !isFormValid}
         >
-          {t("cash.action_record_deposit")}
+          {t(isEdit ? "action.save" : "cash.action_record_deposit")}
         </Button>
       </div>
     ),
-    [isSubmitting, isFormValid, t, onClose],
+    [isSubmitting, isFormValid, isEdit, t, onClose],
   );
 
   return (
     <FormModal
       isOpen={isOpen}
       onClose={onClose}
-      title={t("cash.deposit_modal_title")}
+      title={t(isEdit ? "cash.deposit_edit_modal_title" : "cash.deposit_modal_title")}
       footer={footer}
       maxWidth="max-w-2xl"
     >
