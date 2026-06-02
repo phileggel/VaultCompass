@@ -15,6 +15,9 @@ export type ModalSearchParams = {
   editTxId?: string;
   editTxAccountId?: string;
   editTxAssetId?: string;
+  /** Record-FX-rate shortcut (FXR-012): the directed pair to pre-fill (`modal=record-fx-rate`). */
+  fxFrom?: string;
+  fxTo?: string;
 };
 
 /**

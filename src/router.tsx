@@ -10,6 +10,7 @@ import { AccountPerformancePage } from "@/features/account_performance";
 import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
+import { CurrencyRatesView } from "@/features/currency";
 import { DesignSystemPage } from "@/features/design-system";
 import { SettingsPage } from "@/features/settings";
 import { AddTransactionPage, TransactionListPage } from "@/features/transactions";
@@ -90,6 +91,12 @@ const categoriesRoute = createRoute({
   component: CategoryManager,
 });
 
+const currencyRatesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/currency-rates",
+  component: CurrencyRatesView,
+});
+
 const designSystemRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/design-system",
@@ -111,6 +118,7 @@ const routeTree = rootRoute.addChildren([
   transactionListRoute,
   addTransactionRoute,
   categoriesRoute,
+  currencyRatesRoute,
   designSystemRoute,
   settingsRoute,
 ]);

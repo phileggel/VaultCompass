@@ -183,7 +183,8 @@
     "categories": "Categories",
     "about": "About",
     "settings": "Settings",
-    "design_system": "Design System"
+    "design_system": "Design System",
+    "currency_rates": "Currency Rates"
   },
   "settings": {
     "title": "Settings",
@@ -432,7 +433,54 @@
     "error_future_date": "Date cannot be in the future",
     "form_price_placeholder": "0.00"
   },
+  "currency": {
+    "view_title": "Currency Rates",
+    "loading": "Loading currency pairs…",
+    "empty": "No currency pairs followed yet.",
+    "action_add_pair": "Add pair",
+    "action_record_rate": "Record rate",
+    "action_record_fx_rate": "Add FX rate",
+    "declare_pair_title": "Add a currency pair",
+    "record_rate_title": "Record rate {{from}} → {{to}}",
+    "edit_rate_title": "Edit rate {{from}} → {{to}}",
+    "delete_rate_title": "Delete rate",
+    "delete_rate_message": "Delete the {{from}} → {{to}} rate recorded on {{date}}? This action cannot be undone.",
+    "form_from_label": "From currency",
+    "form_to_label": "To currency",
+    "form_date_label": "Date",
+    "form_date_placeholder": "YYYY-MM-DD",
+    "form_rate_label": "Rate ({{to}} per 1 {{from}})",
+    "form_rate_placeholder": "0.000000",
+    "rate_recorded": "Rate recorded.",
+    "rate_updated": "Rate updated.",
+    "rate_deleted": "Rate deleted.",
+    "rate_staleness_today": "Rate as of today",
+    "rate_staleness_days_old": "Rate {{days}}d old",
+    "source_manual": "Manual",
+    "source_frankfurter": "Frankfurter",
+    "source_ecb": "ECB",
+    "error": {
+      "from_required": "Source currency is required.",
+      "to_required": "Target currency is required.",
+      "date_required": "Date is required.",
+      "rate_required": "Rate is required.",
+      "identity_pair": "Source and target currencies must differ.",
+      "rate_not_positive": "Rate must be greater than 0.",
+      "invalid_date": "Date must be a valid YYYY-MM-DD.",
+      "date_in_future": "Date cannot be in the future."
+    }
+  },
   "error": {
+    "currency": {
+      "NotPositive": "Rate must be greater than 0.",
+      "NonFinite": "Rate must be a finite number.",
+      "DateInFuture": "Date cannot be in the future.",
+      "InvalidDateFormat": "\"{{date}}\" is not a valid date — expected YYYY-MM-DD.",
+      "InvalidCurrency": "Not a valid ISO 4217 currency code.",
+      "IdentityPair": "Source and target currencies must differ.",
+      "RateNotFound": "The rate record was not found.",
+      "DatabaseError": "An unexpected database error occurred. Please try again."
+    },
     "InvalidExchange": "The selected exchange \"{{exchange_code}}\" is not in the supported list.",
     "Unknown": "An unexpected error occurred. Please try again.",
     "DatabaseError": "An unexpected database error occurred. Please try again.",

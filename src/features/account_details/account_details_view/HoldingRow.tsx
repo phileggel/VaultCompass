@@ -83,6 +83,18 @@ export function HoldingRow({
     });
   }, [navigate, row.assetId]);
 
+  // FXR-012 — open the Record-FX-rate modal pre-filled with the foreign asset's
+  // currency → the account currency, via the shell URL-modal mount (no cross-
+  // feature import). `fxFrom` is the asset currency; `fxTo` the account currency.
+  const handleRecordFxRate = useCallback(() => {
+    const account = accounts.find((a) => a.id === accountId);
+    patchModalSearch(navigate, {
+      modal: "record-fx-rate",
+      fxFrom: row.assetCurrency,
+      fxTo: account?.currency ?? "",
+    });
+  }, [navigate, accounts, accountId, row.assetCurrency]);
+
   const handlePriceHistory = useCallback(() => {
     onPriceHistory(row.assetId);
   }, [onPriceHistory, row.assetId]);
@@ -203,10 +215,27 @@ export function HoldingRow({
           </span>
         )}
       </td>
-      {/* MKT-032/034 — Unrealized P&L */}
+      {/* MKT-032/034 — Unrealized P&L; FXR-012 — foreign-currency holdings with a
+          price but no usable rate show a Record-FX-rate shortcut instead of "—" */}
       <td className="m3-td text-right">
         {row.unrealizedPnl !== "—" ? (
-          <PnlCell value={row.unrealizedPnl} raw={row.unrealizedPnlRaw ?? 0} />
+          <div className="flex flex-col items-end gap-0.5">
+            <PnlCell value={row.unrealizedPnl} raw={row.unrealizedPnlRaw ?? 0} />
+            {row.fxStaleness && (
+              <span className="text-[10px] text-m3-on-surface-variant">
+                {t(row.fxStaleness.key, row.fxStaleness.params)}
+              </span>
+            )}
+          </div>
+        ) : row.currentPrice.kind === "present" ? (
+          <button
+            type="button"
+            data-testid={`action-record-fx-rate-${row.assetId}`}
+            onClick={handleRecordFxRate}
+            className="text-m3-primary text-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
+          >
+            {t("currency.action_record_fx_rate")}
+          </button>
         ) : (
           <span className="text-m3-on-surface-variant">{row.unrealizedPnl}</span>
         )}

@@ -183,7 +183,8 @@
     "categories": "Catégories",
     "about": "À propos",
     "settings": "Paramètres",
-    "design_system": "Design System"
+    "design_system": "Design System",
+    "currency_rates": "Taux de change"
   },
   "settings": {
     "title": "Paramètres",
@@ -432,7 +433,54 @@
     "error_future_date": "La date ne peut pas être dans le futur",
     "form_price_placeholder": "0,00"
   },
+  "currency": {
+    "view_title": "Taux de change",
+    "loading": "Chargement des paires de devises…",
+    "empty": "Aucune paire de devises suivie pour l'instant.",
+    "action_add_pair": "Ajouter une paire",
+    "action_record_rate": "Saisir un taux",
+    "action_record_fx_rate": "Ajouter un taux de change",
+    "declare_pair_title": "Ajouter une paire de devises",
+    "record_rate_title": "Saisir le taux {{from}} → {{to}}",
+    "edit_rate_title": "Modifier le taux {{from}} → {{to}}",
+    "delete_rate_title": "Supprimer le taux",
+    "delete_rate_message": "Supprimer le taux {{from}} → {{to}} enregistré le {{date}} ? Cette action est irréversible.",
+    "form_from_label": "Devise source",
+    "form_to_label": "Devise cible",
+    "form_date_label": "Date",
+    "form_date_placeholder": "AAAA-MM-JJ",
+    "form_rate_label": "Taux ({{to}} pour 1 {{from}})",
+    "form_rate_placeholder": "0,000000",
+    "rate_recorded": "Taux enregistré.",
+    "rate_updated": "Taux mis à jour.",
+    "rate_deleted": "Taux supprimé.",
+    "rate_staleness_today": "Taux du jour",
+    "rate_staleness_days_old": "Taux datant de {{days}} j",
+    "source_manual": "Manuel",
+    "source_frankfurter": "Frankfurter",
+    "source_ecb": "BCE",
+    "error": {
+      "from_required": "La devise source est requise.",
+      "to_required": "La devise cible est requise.",
+      "date_required": "La date est requise.",
+      "rate_required": "Le taux est requis.",
+      "identity_pair": "Les devises source et cible doivent être différentes.",
+      "rate_not_positive": "Le taux doit être supérieur à 0.",
+      "invalid_date": "La date doit être au format AAAA-MM-JJ.",
+      "date_in_future": "La date ne peut pas être dans le futur."
+    }
+  },
   "error": {
+    "currency": {
+      "NotPositive": "Le taux doit être supérieur à 0.",
+      "NonFinite": "Le taux doit être un nombre fini.",
+      "DateInFuture": "La date ne peut pas être dans le futur.",
+      "InvalidDateFormat": "\"{{date}}\" n'est pas une date valide — format attendu AAAA-MM-JJ.",
+      "InvalidCurrency": "Code de devise ISO 4217 invalide.",
+      "IdentityPair": "Les devises source et cible doivent être différentes.",
+      "RateNotFound": "L'enregistrement du taux est introuvable.",
+      "DatabaseError": "Une erreur de base de données inattendue est survenue. Veuillez réessayer."
+    },
     "InvalidExchange": "La place de cotation \"{{exchange_code}}\" sélectionnée n'est pas dans la liste prise en charge.",
     "Unknown": "Une erreur inattendue est survenue. Veuillez réessayer.",
     "DatabaseError": "Une erreur de base de données inattendue est survenue. Veuillez réessayer.",

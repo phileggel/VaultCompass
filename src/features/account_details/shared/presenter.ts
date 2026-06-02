@@ -132,6 +132,8 @@ export interface HoldingRowViewModel {
   staleness: StalenessLabel | null;
   /** i18n key for the price source badge (MKT-142), or null when no price is recorded. */
   sourceLabel: string | null;
+  /** FX-rate staleness label (FXR-090); null/absent unless a converted value is shown. */
+  fxStaleness?: StalenessLabel | null;
 }
 
 /** i18n key + optional interpolation params for the price staleness label (MKT-140). */
@@ -270,6 +272,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       isCash: true,
       staleness: null,
       sourceLabel: null,
+      fxStaleness: null,
     };
   }
   return {
@@ -298,6 +301,9 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     isCash: false,
     staleness: formatStaleness(detail.current_price_date, new Date()),
     sourceLabel: formatSource(detail.current_price_source),
+    // FXR-090 — the backend does not yet surface the resolved FX-rate date on
+    // HoldingDetail, so no staleness label is derived here yet.
+    fxStaleness: null,
   };
 }
 
