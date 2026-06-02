@@ -171,15 +171,6 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Severity: 🟡
 - Observation: The row-level "edit asset" affordance (double-click on a holding row, and the analogous AssetTable row) is mouse-only; there is no keyboard equivalent. Designing keyboard parity (e.g. Enter-to-edit) needs a consistent decision across both tables, since AssetTable's Enter/Space currently selects the row rather than opening edit.
 
-## 2026-06-01 — Backend coverage (tarpaulin `--lib`) ignores integration tests
-
-- Found by: manual (user-flagged during FXR PR #63 codecov review)
-- Where: `.github/workflows/quality.yml` (~L171) + `justfile` `coverage-be` — kit-managed
-- Context: branch `feat/fx-rate` @ `ca7ff88`
-- Severity: 🟡
-- Observation: `cargo tarpaulin` runs with `--lib` in both local (`coverage-be`) and CI, in both VaultCompass and PatientManager (a kit-shipped pattern). `--lib` measures only inline `#[cfg(test)]` unit tests, not the `tests/*.rs` integration binaries — so code reachable only via integration tests reports 0% coverage despite those tests passing under `cargo test` + the pre-push suite. Contributors must duplicate integration coverage as inline unit tests to satisfy codecov, and true coverage is silently under-reported.
-- Proposed fix (for triage): `--lib` → `--lib --tests` so integration binaries are measured (still excludes the Tauri app bin + doctests, the likely reason for bare `--lib`). The committed `.sqlx` cache + `SQLX_OFFLINE=true` already enable offline integration runs; cost is slower CI. Belongs in claude-kit so it syncs to both projects — a per-repo patch is overwritten on `just sync-kit`.
-
 ## 2026-06-01 — `period_end_dates` mirrors the build_yearly/build_monthly period iteration
 
 - Found by: reviewer-backend

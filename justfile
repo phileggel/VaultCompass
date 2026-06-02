@@ -37,7 +37,7 @@ coverage-fe:
 
 # Run backend tests with coverage (output: coverage/backend/lcov.info + tarpaulin-report.html); requires: cargo install cargo-tarpaulin
 coverage-be:
-    cd src-tauri && cargo tarpaulin --out Lcov Html --output-dir ../coverage/backend --lib --exclude-files "build.rs" --exclude-files "dev/generate_bindings.rs"
+    cd src-tauri && cargo tarpaulin --out Lcov Html --output-dir ../coverage/backend --lib --tests --exclude-files "build.rs" --exclude-files "dev/generate_bindings.rs"
 
 # Run E2E tests against the built binary (opens a window)
 test-e2e:
