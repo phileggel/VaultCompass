@@ -1,9 +1,17 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as gateway from "../gateway";
 
 vi.mock("../gateway");
+
+// DateField stores ISO (YYYY-MM-DD) but renders + parses the locale display
+// format. With the mocked i18n language pinned to "en", the effective locale is
+// en-US (M/D/YYYY). Driving the field through a single `change` event with the
+// display string avoids the controlled-sync churn that per-keystroke `type`
+// would trigger. `2026-06-01` (ISO) ↔ `06/01/2026` (en-US display).
+const setDate = (displayValue: string) =>
+  fireEvent.change(screen.getByTestId("record-rate-date"), { target: { value: displayValue } });
 
 const mockShowSnackbar = vi.hoisted(() => vi.fn());
 vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
@@ -47,7 +55,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2026-06-01");
+    setDate("06/01/2026");
     await userEvent.type(screen.getByTestId("record-rate-rate"), "0.92");
     await userEvent.click(screen.getByTestId("record-rate-submit"));
 
@@ -89,7 +97,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2026-06-01");
+    setDate("06/01/2026");
     await userEvent.type(screen.getByTestId("record-rate-rate"), "0.92");
     await userEvent.click(screen.getByTestId("record-rate-submit"));
 
@@ -116,7 +124,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2026-06-01");
+    setDate("06/01/2026");
     await userEvent.type(screen.getByTestId("record-rate-rate"), "0");
     await userEvent.click(screen.getByTestId("record-rate-submit"));
 
@@ -141,7 +149,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2099-12-31");
+    setDate("12/31/2099");
     await userEvent.type(screen.getByTestId("record-rate-rate"), "0.92");
     await userEvent.click(screen.getByTestId("record-rate-submit"));
 
@@ -165,8 +173,10 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
     expect(screen.getByTestId("record-rate-rate-hint")).toBeInTheDocument();
   });
 
-  // FXR-022 — inline non-blocking hint renders for a malformed date
-  it("renders an inline date hint when the typed date is malformed (FXR-022)", async () => {
+  // FXR-022 — inline non-blocking hint renders for a future date. DateField only
+  // ever emits a well-formed ISO date (or ""), so the malformed-date branch is no
+  // longer reachable through the field; a future date still trips the hint.
+  it("renders an inline date hint when the selected date is in the future (FXR-022)", () => {
     render(
       <RecordRateModal
         isOpen
@@ -177,7 +187,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "not-a-date");
+    setDate("12/31/2099");
 
     expect(screen.getByTestId("record-rate-date-hint")).toBeInTheDocument();
   });
@@ -199,7 +209,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2026-06-01");
+    setDate("06/01/2026");
     await userEvent.type(screen.getByTestId("record-rate-rate"), "0");
     // Inline hint visible, but submit must still round-trip to the gateway.
     expect(screen.getByTestId("record-rate-rate-hint")).toBeInTheDocument();
@@ -231,7 +241,7 @@ describe("RecordRateModal — create mode (FXR-025/027/028/029)", () => {
       />,
     );
 
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2026-06-01");
+    setDate("06/01/2026");
     await userEvent.type(screen.getByTestId("record-rate-rate"), "0.92");
     await userEvent.click(screen.getByTestId("record-rate-submit"));
 
@@ -270,7 +280,8 @@ describe("RecordRateModal — edit mode (FXR-052)", () => {
       />,
     );
 
-    expect((screen.getByTestId("record-rate-date") as HTMLInputElement).value).toBe("2026-06-01");
+    // DateField renders the stored ISO date in the locale display format (en-US).
+    expect((screen.getByTestId("record-rate-date") as HTMLInputElement).value).toBe("6/1/2026");
     // Rate shown as human-readable decimal pre-fill
     expect((screen.getByTestId("record-rate-rate") as HTMLInputElement).value).not.toBe("");
   });
@@ -290,9 +301,8 @@ describe("RecordRateModal — edit mode (FXR-052)", () => {
       />,
     );
 
-    // Clear the date and retype a new date to trigger a date change
-    await userEvent.clear(screen.getByTestId("record-rate-date"));
-    await userEvent.type(screen.getByTestId("record-rate-date"), "2026-06-02");
+    // Change the date to trigger a new ISO value (en-US display → ISO 2026-06-02)
+    setDate("06/02/2026");
     await userEvent.click(screen.getByTestId("record-rate-submit"));
 
     expect(gateway.updateCurrencyRate).toHaveBeenCalledWith(

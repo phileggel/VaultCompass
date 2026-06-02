@@ -155,6 +155,18 @@ describe("CurrencyRatesView interactions", () => {
     expect(selectPair).toHaveBeenCalledWith("USD", "EUR");
   });
 
+  // FXR-051 — the pair row is keyboard-accessible (Enter drills in)
+  it("selects a pair when Enter is pressed on its row", async () => {
+    const user = userEvent.setup();
+    const selectPair = vi.fn();
+    mockHook({ selectPair });
+    render(<CurrencyRatesView />);
+
+    screen.getByTestId("pair-row-USD-EUR").focus();
+    await user.keyboard("{Enter}");
+    expect(selectPair).toHaveBeenCalledWith("USD", "EUR");
+  });
+
   // FXR-050 — the drill-in close button clears the selection
   it("clears the selection from the drill-in header", async () => {
     const user = userEvent.setup();

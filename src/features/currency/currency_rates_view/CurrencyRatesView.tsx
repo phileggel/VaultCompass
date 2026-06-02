@@ -52,8 +52,20 @@ export function CurrencyRatesView() {
               <tr
                 key={key}
                 className="m3-tr cursor-pointer"
+                id={`pair-row-${key}`}
                 data-testid={`pair-row-${key}`}
+                tabIndex={0}
+                aria-label={t("currency.open_pair", {
+                  from: pair.from_currency,
+                  to: pair.to_currency,
+                })}
                 onClick={() => selectPair(pair.from_currency, pair.to_currency)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectPair(pair.from_currency, pair.to_currency);
+                  }
+                }}
               >
                 <td className="m3-td font-medium">{pair.from_currency}</td>
                 <td className="m3-td font-medium">{pair.to_currency}</td>
@@ -92,6 +104,7 @@ export function CurrencyRatesView() {
           <Button
             variant="tonal"
             size="sm"
+            id="action-add-pair"
             data-testid="action-add-pair"
             onClick={() => setIsAddPairOpen(true)}
           >
@@ -137,7 +150,12 @@ export function CurrencyRatesView() {
               {rates.map((rate) => {
                 const rateKey = `${rate.from_currency}-${rate.to_currency}-${rate.date}`;
                 return (
-                  <tr key={rateKey} className="m3-tr" data-testid={`rate-row-${rateKey}`}>
+                  <tr
+                    key={rateKey}
+                    id={`rate-row-${rateKey}`}
+                    className="m3-tr"
+                    data-testid={`rate-row-${rateKey}`}
+                  >
                     <td className="m3-td">{rate.date}</td>
                     <td className="m3-td text-right tabular-nums">{formatRateMicros(rate.rate)}</td>
                     <td className="m3-td text-right text-xs text-m3-on-surface-variant">

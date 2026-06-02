@@ -172,3 +172,41 @@ export async function seedAssetPrice(assetId: string, date: string, price: numbe
     `seedAssetPrice failed: ${JSON.stringify(result)}`,
   );
 }
+
+/**
+ * Records a manual currency rate via IPC (`record_currency_rate`). The written
+ * record carries source=Manual (FXR-025).
+ *
+ * Argument shape is flat (`{ fromCurrency, toCurrency, date, rate }`) — the
+ * Tauri command takes positional args, not a `dto` envelope. Other seed helpers
+ * wrap in `{ dto: {...} }` because their commands take DTO structs.
+ *
+ * @param fromCurrency - ISO 4217 source currency (e.g. "USD")
+ * @param toCurrency   - ISO 4217 target currency (e.g. "EUR")
+ * @param date         - ISO 8601 date string (e.g. "2020-04-10")
+ * @param rate         - human-readable decimal (e.g. 1.08); backend converts to micros
+ */
+export async function seedCurrencyRate(
+  fromCurrency: string,
+  toCurrency: string,
+  date: string,
+  rate: number,
+): Promise<void> {
+  const result = (await browser.executeAsync(
+    (from: string, to: string, d: string, r: number, done: (res: unknown) => void) => {
+      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
+      window.__TAURI_INTERNALS__
+        .invoke("record_currency_rate", { fromCurrency: from, toCurrency: to, date: d, rate: r })
+        .then(done)
+        .catch((err: unknown) => done({ __error: String(err) }));
+    },
+    fromCurrency,
+    toCurrency,
+    date,
+    rate,
+  )) as { __error?: string } | null;
+  assert.ok(
+    !(result !== null && typeof result === "object" && "__error" in result),
+    `seedCurrencyRate failed: ${JSON.stringify(result)}`,
+  );
+}

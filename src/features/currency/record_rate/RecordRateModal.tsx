@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CurrencyRate } from "@/bindings";
 import { Button } from "@/ui/components/button/Button";
+import { DateField } from "@/ui/components/field/DateField";
 import { TextField } from "@/ui/components/field/TextField";
 import { Dialog } from "@/ui/components/modal/Dialog";
 import type { I18nMessage } from "@/ui/format/i18n";
@@ -52,6 +53,7 @@ export function RecordRateModal({
       <Button
         type="button"
         variant="primary"
+        id="record-rate-submit"
         data-testid="record-rate-submit"
         loading={isSubmitting}
         disabled={isSubmitting}
@@ -75,13 +77,11 @@ export function RecordRateModal({
     >
       <div className="flex flex-col gap-4 py-2">
         <div className="flex flex-col gap-1">
-          <TextField
+          <DateField
             id="record-rate-date"
             data-testid="record-rate-date"
-            type="text"
             label={t("currency.form_date_label")}
             value={date}
-            placeholder={t("currency.form_date_placeholder")}
             onChange={(e) => setDate(e.target.value)}
           />
           {dateHint && (
@@ -163,6 +163,7 @@ export function DeleteRateConfirmation({
       <Button
         type="button"
         variant="danger"
+        id="delete-rate-confirm"
         data-testid="delete-rate-confirm"
         loading={isSubmitting}
         disabled={isSubmitting}
