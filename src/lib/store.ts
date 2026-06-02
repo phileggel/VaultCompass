@@ -125,7 +125,7 @@ export const useAppStore = create<AppState>((set, get) => {
       };
 
       // Events handled locally by feature hooks (e.g. useAccountDetails) — not global store concerns
-      const locallyHandledEvents = new Set(["TransactionUpdated"]);
+      const locallyHandledEvents = new Set(["TransactionUpdated", "CurrencyRateUpdated"]);
 
       // Setup event listeners
       const unlistenPromise = events.event.listen((event) => {

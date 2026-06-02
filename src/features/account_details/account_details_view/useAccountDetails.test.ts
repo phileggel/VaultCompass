@@ -240,6 +240,45 @@ describe("useAccountDetails — market price events (MKT)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// FXR-036 — re-fetch on CurrencyRateUpdated event
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetails — CurrencyRateUpdated event (FXR-036)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("FXR-036 — re-fetches when CurrencyRateUpdated event is received", async () => {
+    let capturedCallback: ((type: string) => void) | null = null;
+    const mockSubscribe = vi.fn((cb: (type: string) => void) => {
+      capturedCallback = cb;
+      return Promise.resolve(() => {});
+    });
+
+    const { accountDetailsGateway } = await import("../gateway");
+    (accountDetailsGateway.subscribeToEvents as ReturnType<typeof vi.fn>).mockImplementation(
+      mockSubscribe,
+    );
+
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse(),
+    });
+
+    renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+
+    const firstCallCount = mockGetAccountDetails.mock.calls.length;
+
+    await act(async () => {
+      capturedCallback?.("CurrencyRateUpdated");
+    });
+
+    expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
+  });
+});
+
 describe("useAccountDetails — gateway throw fallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -285,6 +285,79 @@ describe("HoldingRow — dividend columns (DIV-072)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// FXR-012 — foreign-currency "—" cell becomes a clickable shortcut
+// FXR-090 — staleness label renders when a converted value is shown
+// ---------------------------------------------------------------------------
+
+describe("HoldingRow — FX shortcut on foreign-currency holding (FXR-012)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  const foreignRow: HoldingRowViewModel = {
+    ...baseRow,
+    assetId: "asset-usd-1",
+    assetCurrency: "USD",
+    // unrealizedPnl "—" signals no usable rate (FXR-034/091)
+    unrealizedPnl: "—",
+    unrealizedPnlRaw: null,
+    performancePct: "—",
+    currentPrice: { kind: "present", formatted: "150.00" },
+  };
+
+  it("renders the FX shortcut button on a foreign-currency holding row (FXR-012)", () => {
+    renderInTable(foreignRow);
+    expect(screen.getByTestId("action-record-fx-rate-asset-usd-1")).toBeInTheDocument();
+  });
+
+  it("clicking the FX shortcut navigates with modal=record-fx-rate plus fxFrom/fxTo (FXR-012)", () => {
+    useAppStore.setState({
+      assets: [
+        { id: "asset-usd-1", currency: "USD", is_archived: false },
+      ] as unknown as import("@/bindings").Asset[],
+      accounts: [{ id: "account-1", currency: "EUR" }] as unknown as import("@/bindings").Account[],
+    });
+
+    renderInTable({ ...foreignRow, accountId: "account-1" } as HoldingRowViewModel & {
+      accountId: string;
+    });
+    fireEvent.click(screen.getByTestId("action-record-fx-rate-asset-usd-1"));
+
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const arg = navigateMock.mock.calls[0]?.[0] as { search: (prev: object) => object };
+    expect(arg.search({})).toEqual({
+      modal: "record-fx-rate",
+      fxFrom: "USD",
+      fxTo: "EUR",
+    });
+  });
+});
+
+describe("HoldingRow — FX rate staleness label (FXR-090)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  it("renders the FX staleness label when a converted value is shown (FXR-090)", () => {
+    renderInTable({
+      ...baseRow,
+      fxStaleness: { key: "currency.rate_staleness_today" },
+    } as HoldingRowViewModel & { fxStaleness: unknown });
+    expect(screen.getByText("currency.rate_staleness_today")).toBeInTheDocument();
+  });
+
+  it("does not render FX staleness when no converted value (FXR-090)", () => {
+    renderInTable({
+      ...baseRow,
+      fxStaleness: null,
+    } as HoldingRowViewModel & { fxStaleness: unknown });
+    expect(screen.queryByText(/currency\.rate_staleness/)).not.toBeInTheDocument();
+  });
+});
+
 describe("HoldingRow — cash row (CSH-110 view transactions)", () => {
   beforeEach(() => {
     useAppStore.setState({ assets: [], accounts: [] });
