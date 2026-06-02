@@ -1,5 +1,7 @@
 # Implementation Plan — Foreign Exchange Rate (FXR)
 
+> **Status: ✅ SHIPPED 2026-06-02 — PRs #63 / #64 / #65 / #66 / #67 (all merged to `main`).** `spec-checker` PASS (46/46 FXR rules + 6/6 contract commands). One deferred follow-up: FXR-090 FX-staleness backend wiring — tracked in `docs/techdebt.md`. The unticked process boxes below are historical (the steps were performed across the 4 PRs); kept for the record.
+
 > Spec: `docs/spec/fx-rate.md` · Contract: `docs/contracts/currency-contract.md`
 > New bounded context: `currency` (`src-tauri/src/context/currency/`) + new FE feature (`src/features/currency/`) + a valuation lift across three existing use-case orchestrators.
 > Both spec and contract passed `spec-reviewer` + `contract-reviewer` with 0 critical.
