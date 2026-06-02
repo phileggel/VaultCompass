@@ -32,6 +32,7 @@ export function DeclarePairModal({ isOpen, onClose, onSuccess }: DeclarePairModa
       <Button
         type="button"
         variant="primary"
+        id="declare-pair-submit"
         data-testid="declare-pair-submit"
         loading={isSubmitting}
         disabled={isSubmitDisabled || isSubmitting}

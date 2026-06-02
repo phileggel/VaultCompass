@@ -435,6 +435,7 @@
   },
   "currency": {
     "view_title": "Currency Rates",
+    "open_pair": "Open {{from}} → {{to}} rate history",
     "loading": "Loading currency pairs…",
     "empty": "No currency pairs followed yet.",
     "action_add_pair": "Add pair",
@@ -448,7 +449,6 @@
     "form_from_label": "From currency",
     "form_to_label": "To currency",
     "form_date_label": "Date",
-    "form_date_placeholder": "YYYY-MM-DD",
     "form_rate_label": "Rate ({{to}} per 1 {{from}})",
     "form_rate_placeholder": "0.000000",
     "rate_recorded": "Rate recorded.",

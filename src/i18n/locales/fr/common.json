@@ -435,6 +435,7 @@
   },
   "currency": {
     "view_title": "Taux de change",
+    "open_pair": "Ouvrir l'historique des taux {{from}} → {{to}}",
     "loading": "Chargement des paires de devises…",
     "empty": "Aucune paire de devises suivie pour l'instant.",
     "action_add_pair": "Ajouter une paire",
@@ -448,7 +449,6 @@
     "form_from_label": "Devise source",
     "form_to_label": "Devise cible",
     "form_date_label": "Date",
-    "form_date_placeholder": "AAAA-MM-JJ",
     "form_rate_label": "Taux ({{to}} pour 1 {{from}})",
     "form_rate_placeholder": "0,000000",
     "rate_recorded": "Taux enregistré.",

@@ -10,6 +10,14 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-06-02 — FX-staleness (FXR-090) render path present but no backend rate-date value
+
+- Found by: reviewer-frontend (during FXR PR 3 review)
+- Where: `src/features/account_details/shared/presenter.ts` (`HoldingRowViewModel.fxStaleness`, hard-set to `null`) + the rate resolution in `src-tauri/src/use_cases/account_details/orchestrator.rs`
+- Context: branch `feat/fx-rate-e2e` @ `85dc9b0`
+- Severity: 🟡
+- Observation: The FXR-090 staleness indicator is fully built on the frontend — `formatRateStaleness` in the currency presenter, the `HoldingRow` render path, and unit tests covering both the null and "Nd old" branches all exist. But the account_details valuation lift resolves a holding's FX rate without surfacing that rate's `date` on `HoldingDetail`, so the account_details presenter has no value to compute staleness from and returns `null`. The label therefore never displays live. Completing FXR-090 means threading the resolved rate's date from the orchestrator through the wire type to the presenter — a backend + bindings + FE touch deferred out of the frontend PR to keep it one story.
+
 ## 2026-05-29 — release-manual.yml GitHub Action versions not SHA-pinned
 
 - Found by: reviewer-infra (during CI gold-alignment review)

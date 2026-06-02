@@ -76,19 +76,22 @@ lib.rs                composition root — wires services, use cases, dispatcher
 - Repositories return `Result<T, anyhow::Error>`. Services translate to typed `{BC}Error`. Use cases compose via `#[from]`. See `docs/error-model.md`.
 - See [`docs/backend-patterns.md`](docs/backend-patterns.md) for the row-mapping recipe and orchestrator shape.
 
+> Contexts: `account/`, `asset/`, `currency/`. The newer `currency/` BC (FX-rate manual CRUD + Frankfurter/ECB provider fetch) follows the gold `application/domain/infrastructure` trio with `api.rs` + `error.rs`, rather than the `repository/` + `service.rs` shape shown in the template above.
+
 ---
 
 ## Event bus
 
 Backend publishes events on every state change. Frontend listens via a single `events.event.listen()` subscription in `src/lib/store.ts:init()` and dispatches to the right fetcher.
 
-| Event                | Published by                                                   | Frontend re-fetches                                                 |
-| -------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `AssetUpdated`       | `context/asset/` writes                                        | `assets`                                                            |
-| `CategoryUpdated`    | `context/asset/` category writes                               | `categories`                                                        |
-| `AssetPriceUpdated`  | `context/asset/` price writes + `use_cases/asset_price_fetch/` | `account_details`, `account_performance` (per-page)                 |
-| `AccountUpdated`     | `context/account/` account writes                              | `accounts`, `account_performance` (per-page)                        |
-| `TransactionUpdated` | `context/account/` holding / transaction writes                | `account_details`, `transactions`, `account_performance` (per-page) |
+| Event                 | Published by                                                   | Frontend re-fetches                                                        |
+| --------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `AssetUpdated`        | `context/asset/` writes                                        | `assets`                                                                   |
+| `CategoryUpdated`     | `context/asset/` category writes                               | `categories`                                                               |
+| `AssetPriceUpdated`   | `context/asset/` price writes + `use_cases/asset_price_fetch/` | `account_details`, `account_performance` (per-page)                        |
+| `AccountUpdated`      | `context/account/` account writes                              | `accounts`, `account_performance` (per-page)                               |
+| `TransactionUpdated`  | `context/account/` holding / transaction writes                | `account_details`, `transactions`, `account_performance` (per-page)        |
+| `CurrencyRateUpdated` | `context/currency/` rate writes + provider fetch               | `account_details`, `account_performance` (per-page), `currency_rates_view` |
 
 Adding a new event: declare the variant in `core/event_bus/event.rs`, publish from the service after persistence (`bus.publish(Event::Foo)`), subscribe in the relevant feature hook.
 
@@ -148,6 +151,8 @@ Hard rules:
 - Hooks colocated next to their component inside the sub-feature folder.
 - `presenter.ts` is pure — no `commands.*`, no `useEffect`.
 - See [`docs/frontend-rules.md`](docs/frontend-rules.md) for the full rule set (F1–F28).
+
+> The `features/currency/` feature (FX-rate manual entry CRUD + the Currency Rates view) follows this layout: `gateway.ts` at root, `declare_pair/`, `record_rate/`, and `currency_rates_view/` sub-features, and `shared/`.
 
 ---
 

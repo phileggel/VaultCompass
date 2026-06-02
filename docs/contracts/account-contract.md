@@ -329,12 +329,13 @@ struct AccountPerformanceResponse {
 
 ### Subscribed (frontend re-fetch triggers)
 
-| Event                | Payload | Rule                      |
-| -------------------- | ------- | ------------------------- |
-| `AccountUpdated`     | —       | ACC-021, PRF-060          |
-| `TransactionUpdated` | —       | ACD-039, ACC-021, PRF-060 |
-| `AssetUpdated`       | —       | ACD-040                   |
-| `AssetPriceUpdated`  | —       | MKT-036, PRF-060          |
+| Event                 | Payload | Rule                      |
+| --------------------- | ------- | ------------------------- |
+| `AccountUpdated`      | —       | ACC-021, PRF-060          |
+| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060 |
+| `AssetUpdated`        | —       | ACD-040                   |
+| `AssetPriceUpdated`   | —       | MKT-036, PRF-060          |
+| `CurrencyRateUpdated` | —       | FXR-037                   |
 
 ---
 
@@ -343,3 +344,4 @@ struct AccountPerformanceResponse {
 - 2026-05-29 — Added by `account-performance` spec: `get_account_performance` (+ `AccountPerformanceResponse`, `PerformancePeriod`, `PerformanceMetric` types; PRF-060 re-uses existing subscribed events)
 - 2026-05-31 — Added by `cash-dividend` spec: `record_dividend` (+ `DividendDTO`); `TransactionType::Dividend` variant; `HoldingDetail.dividends_received` + `.total_return_pct`; `AccountDetailsResponse.total_dividends_received`; edit/delete reuse `correct_transaction`/`cancel_transaction` (DIV-040/041)
 - 2026-05-31 — `cash-transaction-history` (CSH-110/111): no command change — cash Deposit/Withdrawal edit reuses `correct_transaction` and delete reuses `cancel_transaction` (both already accept the cash `TransactionType`s); the feature is a frontend entry point (cash-row inspect action + dedicated cash modals in edit mode). Contract surface unchanged.
+- 2026-06-02 — Added by `fx-rate` spec: `CurrencyRateUpdated` subscribed event (FXR-037) — the `account_details` and `account_performance` views re-fetch when an FX rate changes so foreign-currency holdings revalue. No command change.

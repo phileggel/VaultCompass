@@ -20,7 +20,7 @@ Workflow-A: `/spec-writer api-key-management` → `/contract` → `feature-plann
 
 Surfaced 2026-05-16 during the asset-valuation ADR thread.
 
-## (spec) — Write FXR spec (Foreign Exchange Rate)
+## (spec) — Write FXR spec (Foreign Exchange Rate) — ✅ Done
 
 ADR-009 introduces a new `CurrencyRate` entity, but no spec defines its bounded context, repository contract, or read path. Trigram `FXR`. Covers the entity definition, EUR-base + cross-rate computation algorithm, source qualifier (per ADR-010), Frankfurter primary + ECB XML fallback flow, manual entry CRUD, and the cache/refresh policy that parallels MKT's.
 
@@ -29,6 +29,8 @@ Prerequisite for PFD (cross-currency rollup needs current FX).
 Workflow-A: `/spec-writer fx-rate` → `/contract` → `feature-planner` → implementation.
 
 Surfaced 2026-05-16 by `adr-reviewer` after ADR-009 was written.
+
+**Shipped** (PRs #63–#66): `currency` bounded context (manual rate CRUD + Frankfurter/ECB provider fetch), multi-currency valuation lift (foreign holdings now value into the account currency), and the Currency Rates view. Only the FX-staleness wiring (FXR-090) remains, tracked in `docs/techdebt.md`.
 
 ## (asset) — Auto-fill ISIN ↔ ticker via Finnhub (BYOK)
 
