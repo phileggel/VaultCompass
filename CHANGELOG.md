@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-06-05
+
+### Added
+
+- wire live FX-staleness label (FXR-090)
+  Completes the lone deferred FXR rule — the FX-staleness label was render-ready
+  but always null because the valuation lift didn't surface the resolved rate's
+  date. resolve*rate now carries the date through HoldingDetail.fx_rate_date to
+  the account_details presenter (F26-safe: currency.rate_staleness*\* are i18n
+  key strings, not a cross-feature import). spec-checker: FXR-090 PASS, 46/46.
+- Currency Rates view + holding-row FX shortcut
+  Frontend for the FXR feature — consumes the currency BC + valuation lift
+  already on main. New currency feature (gateway/presenter/view/record+declare+
+  delete modals); the account_details holding-row FX shortcut reaches the
+  record-rate modal via URL params + a shell mount (no cross-feature import, F26);
+  views subscribe to CurrencyRateUpdated; validateRateForm wired as inline hints.
+- FX provider fetch (Frankfurter + ECB)
+  Auto-fetches current FX rates for persisted pairs via the ADR-009 chain
+  (Frankfurter JSON → ECB XML), computing non-EUR pairs by EUR cross-rate
+  (FXR-080-083). The refresh piggybacks the existing asset price-fetch task
+  and its in-flight guard (FXR-075/076). Provider responses are hardened
+  against non-finite/negative values and i64 overflow before storage.
+- multi-currency valuation lift
+  Foreign-currency holdings are now valued live in account currency across
+  account_details/summary/performance. Adds latest_rate_on_or_before (FXR-035)
+  and CurrencyService::resolve_rate_micros, injected into the three orchestrators
+  to lift the asset.currency==account.currency guards (FXR-030-035/040-042).
+  Works on manual rates; provider fetch lands in PR2b.
+- currency bounded context + manual rate CRUD
+  First PR of the FX-rate feature (FXR). New `currency` BC in full gold
+  layout (application/domain/infrastructure) with CurrencyPair + CurrencyRate
+  aggregates, six manual-CRUD commands, latest-write-wins upsert (ADR-012),
+  i64 micros (ADR-001), and the CurrencyRateUpdated event. Provider fetch and
+  the valuation lift land in later PRs.
+- view + edit cash transactions (CSH-110/111)
+  Cash rows gain a View-transactions inspect action (CSH-110) reaching the
+  existing per-asset list. Editing a Deposit/Withdrawal there reuses the
+  dedicated cash modals in edit mode via correct_transaction, opened through a
+  URL-driven shell mount so the transactions feature stays import-free of
+  account-details (CSH-111). Delete already worked via cancel_transaction.
+
+### Fixed
+
+- the E2E critical path
+  (declare/record/edit/delete) + docs closure (spec-checker PASS). The E2E
+  surfaced two real defects fixed here — the pair-row drill-in was a mouse-only
+  non-keyboard-accessible <tr> (now role/tabIndex/onKeyDown like AccountTable),
+  and record-rate date used a raw text field, not the shared DateField.
+
 ## [0.16.0] - 2026-05-31
 
 ### Added
