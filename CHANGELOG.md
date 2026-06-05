@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - 2026-06-05
+
+### Fixed
+
+- set Stooq User-Agent to bypass anti-bot challenge
+  Stooq serves a JS anti-bot challenge page (HTTP 200, text/csv) to
+  clients without a browser User-Agent, which the CSV parser misread as
+  a "close not numeric" error so prices silently stopped updating. Also
+  guard against non-CSV bodies and document the failure mode (L-003).
+  Refs: #69
+
 ## [0.17.0] - 2026-06-05
 
 ### Added
