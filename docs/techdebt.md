@@ -202,3 +202,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `feat/fx-rate-fetch` @ `0bbbe28`
 - Severity: 🔵
 - Observation: `translate_asset_application_error` maps every `AssetApplicationError` to `AssetError::DatabaseError` via a `_ =>` catch-all (pre-existing; PR2b's `build_fx_pairs` adds a second call-site). If a new `AssetApplicationError` variant is introduced later (e.g. `AssetLocked`), it will silently translate to `DatabaseError` on both the price-scope and FX-pair paths with no log line, obscuring the real cause. An exhaustive match (or a `tracing::warn!` on the `_` arm) would make unmapped variants visible.
+
+## 2026-06-05 — Stooq response body read without a size cap
+
+- Found by: reviewer-security
+- Where: `src-tauri/src/context/asset/repository/stooq_client.rs:59-62` (`resp.text().await`)
+- Context: branch `fix/stooq-anti-bot-user-agent` @ 8d324fd
+- Severity: 🔵
+- Observation: `fetch_price` reads the entire Stooq response into a `String` via `resp.text().await` with no explicit size cap. A malicious or slow server could stream a large body until the 10s timeout fires, growing memory proportional to `network_speed * timeout`. A valid Stooq CSV quote is well under 1 KiB, so a streaming read capped at a sane ceiling (e.g. 64 KiB) would bound the exposure. Same shape applies to the Frankfurter/ECB clients. Not introduced by this branch.

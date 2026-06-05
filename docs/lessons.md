@@ -47,3 +47,22 @@ Append-only; supersede in place if the underlying ecosystem changes.
 **Root cause** — `sqlx-cli` 0.9.0 (released between v0.12.0 and v0.12.1 CI runs) requires `DATABASE_URL` for `prepare --check` even when `SQLX_OFFLINE=true`. v0.8.6 honoured the offline flag. The action SHA is pinned for supply-chain safety; the tool name is not.
 
 **Mitigation** — Always pin tool versions to match the runtime dependency: `tool: sqlx-cli@0.8.6` matches `sqlx = "0.8"` in `Cargo.toml`. Bump deliberately when the dependency moves. Same discipline applies to any other tool installed via `taiki-e/install-action` (`cargo-tarpaulin`, etc.) — currently uses default; consider pinning when next surprise lands.
+
+---
+
+## L-003 — Stooq serves an anti-bot challenge to clients without a browser `User-Agent`
+
+**First observed**: 2026-06-05 (v0.17.0 prod, GH #69)
+**Resolved by**: this commit (Stooq client sends a browser `User-Agent` + non-CSV body guard)
+
+**Symptom** — Asset prices silently fail to update after a price fetch (FX rates update fine). Backend logs show, per symbol:
+
+> `asset_price_fetch: provider fetch failed; skipping (MKT-114) … err=Stooq response parse failed … Caused by: close not numeric ("\"0\")).join(\"\");if(x.startsWith(t))break;n++}const r=await fetch(\"/__verify\""): invalid float literal`
+
+Intermittent — a restart can appear to "fix" it.
+
+**Trigger** — A Stooq CSV request (`stooq.com/q/l/?s=…&e=csv`) sent without a browser-like `User-Agent`. `reqwest` sends no `User-Agent` by default, so every Stooq request was exposed.
+
+**Root cause** — Stooq returns a JavaScript proof-of-work anti-bot challenge page **with HTTP 200 and content-type `text/csv`** when it suspects a bot. The body is HTML/JS (`…const r=await fetch("/__verify")…`), not CSV. The status and content-type both look healthy, so the CSV parser ran and grabbed line 2 / column 6 of the _JavaScript_, failing the float parse with a misleading "close not numeric" error. The gate is heuristic, not purely UA-based, which is why a restart sometimes slipped through — masking the real cause. FX providers (Frankfurter/ECB) have no such gate, so they were unaffected.
+
+**Mitigation** — Send a real browser `User-Agent` on the Stooq `reqwest::Client` (`STOOQ_USER_AGENT` in `stooq_client.rs`). Verified live: empty UA → challenge page; browser UA → CSV. Belt-and-suspenders: `parse_close_micros` rejects any body not starting with the `Symbol,Date,Time` CSV header up front, so a future challenge surfaces as a clear "non-CSV response (likely an anti-bot challenge page)" error instead of a float-parse red herring. **Content-type cannot be trusted to detect this — the challenge is also served as `text/csv`; gate on the body.**

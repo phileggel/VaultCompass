@@ -8,6 +8,16 @@ const REQUEST_TIMEOUT_SECS: u64 = 10;
 const MICROS_PER_UNIT: f64 = 1_000_000.0;
 const CSV_CLOSE_COLUMN_INDEX: usize = 6;
 
+/// Stooq serves a JavaScript anti-bot challenge page (still as `text/csv`) to
+/// clients without a browser-like `User-Agent`, so the request carries one.
+const STOOQ_USER_AGENT: &str =
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+/// First bytes of a genuine Stooq CSV response. The anti-bot challenge page is
+/// also served as `text/csv`, so the body — not the content type — distinguishes
+/// a real quote from a challenge.
+const CSV_HEADER_PREFIX: &str = "Symbol,Date,Time";
+
 /// Production [`PriceProvider`] backed by Stooq's CSV endpoint (ADR-008).
 pub struct ReqwestStooqClient {
     client: reqwest::Client,
@@ -24,6 +34,7 @@ impl ReqwestStooqClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+            .user_agent(STOOQ_USER_AGENT)
             .build()
             .expect("reqwest client build");
         Self { client }
@@ -59,6 +70,11 @@ impl PriceProvider for ReqwestStooqClient {
 const NO_DATA_SENTINEL: &str = "N/D";
 
 fn parse_close_micros(csv: &str) -> Result<Option<i64>> {
+    if !csv.trim_start().starts_with(CSV_HEADER_PREFIX) {
+        return Err(anyhow!(
+            "Stooq returned a non-CSV response (likely an anti-bot challenge page)"
+        ));
+    }
     let data_row = csv
         .lines()
         .nth(1)
@@ -107,6 +123,24 @@ mod tests {
                    FR0000120073,N/D,N/D,N/D,N/D,N/D,N/D,N/D";
         let result = parse_close_micros(csv).unwrap();
         assert_eq!(result, None);
+    }
+
+    // Stooq serves a JavaScript anti-bot challenge page (HTTP 200, typed
+    // `text/csv`) to clients it suspects are bots. The header-prefix guard
+    // rejects such a body before CSV parsing begins, with a clear message.
+    #[test]
+    fn rejects_anti_bot_challenge_page() {
+        let challenge = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>\
+                         <noscript>This site requires JavaScript to verify your browser.</noscript>\
+                         <script>(async()=>{const c=\"AAAA\",d=4,t=\"0\".repeat(d);let n=0;\
+                         while(1){const x=(\"\"+n).split(\"\")).join(\"\");if(x.startsWith(t))break;n++}\
+                         const r=await fetch(\"/__verify\");})()</script></body></html>";
+        let error =
+            parse_close_micros(challenge).expect_err("anti-bot challenge page must be rejected");
+        assert!(
+            error.to_string().contains("non-CSV"),
+            "expected a non-CSV challenge error, got: {error}"
+        );
     }
 
     #[test]
