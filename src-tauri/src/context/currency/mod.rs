@@ -15,7 +15,7 @@ pub mod infrastructure;
 // The boundary helper `rate_f64_to_micros` is private, so only the six commands
 // surface here.
 pub use api::*;
-pub use application::CurrencyService;
+pub use application::{CurrencyService, ResolvedRate};
 pub use domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRate,
     CurrencyRateRepository, CurrencyRateSource, EurSnapshot, RateProvider,

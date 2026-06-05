@@ -10,13 +10,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-06-02 — FX-staleness (FXR-090) render path present but no backend rate-date value
+## 2026-06-05 — Staleness day-delta + label formatting duplicated across features
 
-- Found by: reviewer-frontend (during FXR PR 3 review)
-- Where: `src/features/account_details/shared/presenter.ts` (`HoldingRowViewModel.fxStaleness`, hard-set to `null`) + the rate resolution in `src-tauri/src/use_cases/account_details/orchestrator.rs`
-- Context: branch `feat/fx-rate-e2e` @ `85dc9b0`
-- Severity: 🟡
-- Observation: The FXR-090 staleness indicator is fully built on the frontend — `formatRateStaleness` in the currency presenter, the `HoldingRow` render path, and unit tests covering both the null and "Nd old" branches all exist. But the account_details valuation lift resolves a holding's FX rate without surfacing that rate's `date` on `HoldingDetail`, so the account_details presenter has no value to compute staleness from and returns `null`. The label therefore never displays live. Completing FXR-090 means threading the resolved rate's date from the orchestrator through the wire type to the presenter — a backend + bindings + FE touch deferred out of the frontend PR to keep it one story.
+- Found by: reviewer-arch (during FXR-090 wiring review)
+- Where: `src/features/account_details/shared/presenter.ts` (`computeDayDelta` + `formatStaleness` + `formatFxStaleness`) and `src/features/currency/shared/presenter.ts` (`formatRateStaleness`)
+- Context: branch `feat/fxr-staleness` @ HEAD
+- Severity: 🔵
+- Observation: Three functions across two features compute the same whole-day delta between an ISO date and `today` and emit `{ key, params: { days } }` staleness descriptors — `formatStaleness` (price, MKT-140), `formatFxStaleness` (FX rate, FXR-090), and the currency BC's `formatRateStaleness` (FXR-090). The day-delta math is now shared within account_details via the private `computeDayDelta`, but the currency presenter keeps its own inline copy. F26 permits importing a pure helper across feature boundaries, so a shared `src/ui/format/staleness.ts` (consumed by both features) would remove the duplication without coupling. Deferred to keep the FXR-090 wiring PR from expanding into a cross-feature refactor (it would touch the currency presenter + its tests).
 
 ## 2026-05-29 — release-manual.yml GitHub Action versions not SHA-pinned
 

@@ -1965,7 +1965,14 @@ dividends_received: number;
  * Dividend-inclusive total return: (unrealized_pnl + dividends_received) × 100 / cost_basis.
  * None under the same conditions as performance_pct (DIV-071).
  */
-total_return_pct: number | null }
+total_return_pct: number | null; 
+/**
+ * ISO date of the FX rate used to value a foreign holding in the account
+ * currency (FXR-090). `None` for a same-currency holding (no conversion),
+ * a foreign holding with no usable rate, or cash — i.e. present only when a
+ * converted value backed by a real rate is shown.
+ */
+fx_rate_date: string | null }
 /**
  * Service-layer composite for the **holding-transaction** failure surface —
  * every operation that mutates an Account's holdings ledger:

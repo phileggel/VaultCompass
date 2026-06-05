@@ -8,6 +8,7 @@ import type {
 import {
   assetPriceMutationErrorToI18n,
   dividendErrorToI18n,
+  formatFxStaleness,
   formatSource,
   formatStaleness,
   priceRefreshLockErrorToI18n,
@@ -32,6 +33,7 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   performance_pct: null,
   dividends_received: 0,
   total_return_pct: null,
+  fx_rate_date: null,
   ...overrides,
 });
 
@@ -104,6 +106,18 @@ describe("toHoldingRow", () => {
   it("passes quantityMicro as raw value for sell modal (SEL-010)", () => {
     const row = toHoldingRow(makeHolding({ quantity: 3_500_000 }));
     expect(row.quantityMicro).toBe(3_500_000);
+  });
+
+  // FXR-090 — no FX rate date → no staleness label
+  it("derives no fxStaleness when fx_rate_date is null", () => {
+    const row = toHoldingRow(makeHolding({ fx_rate_date: null }));
+    expect(row.fxStaleness).toBeNull();
+  });
+
+  // FXR-090 — an FX rate date → a currency staleness label
+  it("derives an fxStaleness label from fx_rate_date", () => {
+    const row = toHoldingRow(makeHolding({ fx_rate_date: "2020-01-01" }));
+    expect(row.fxStaleness?.key).toMatch(/^currency\.rate_staleness_/);
   });
 });
 
@@ -429,6 +443,39 @@ describe("formatStaleness", () => {
       key: "mkt.staleness_days_ago",
       params: { days: 30 },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatFxStaleness — pure helper (FXR-090)
+// ---------------------------------------------------------------------------
+
+describe("formatFxStaleness", () => {
+  const today = new Date("2026-05-17");
+
+  // FXR-090 — no FX rate date → null (no staleness label shown)
+  it("returns null when fxRateDate is null", () => {
+    expect(formatFxStaleness(null, today)).toBeNull();
+  });
+
+  // FXR-090 — rate dated today → the currency "today" key
+  it("returns the rate_staleness_today key when the rate is from today", () => {
+    expect(formatFxStaleness("2026-05-17", today)).toEqual({
+      key: "currency.rate_staleness_today",
+    });
+  });
+
+  // FXR-090 — older rate → the days_old key with the day delta
+  it("returns the rate_staleness_days_old key with days=4 when the rate is four days old", () => {
+    expect(formatFxStaleness("2026-05-13", today)).toEqual({
+      key: "currency.rate_staleness_days_old",
+      params: { days: 4 },
+    });
+  });
+
+  // FXR-090 — unparseable date → null
+  it("returns null when fxRateDate is not a valid date", () => {
+    expect(formatFxStaleness("not-a-date", today)).toBeNull();
   });
 });
 

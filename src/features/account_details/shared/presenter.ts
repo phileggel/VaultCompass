@@ -195,6 +195,16 @@ export interface AccountSummaryViewModel {
   hasCashHolding: boolean;
 }
 
+/** Whole-day delta between an ISO date and `today`; null for a null/unparseable date. */
+function computeDayDelta(isoDate: string | null, today: Date): number | null {
+  if (isoDate === null) return null;
+  const observed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(observed.getTime())) return null;
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const millisPerDay = 24 * 60 * 60 * 1000;
+  return Math.floor((startOfToday.getTime() - observed.getTime()) / millisPerDay);
+}
+
 /**
  * MKT-140 — Returns an i18n descriptor for the staleness of the current price.
  * `null` when no date is recorded; `{ key: "mkt.staleness_today" }` when the price is from today;
@@ -206,14 +216,23 @@ export function formatStaleness(
   currentPriceDate: string | null,
   today: Date,
 ): StalenessLabel | null {
-  if (currentPriceDate === null) return null;
-  const observed = new Date(`${currentPriceDate}T00:00:00`);
-  if (Number.isNaN(observed.getTime())) return null;
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const millisPerDay = 24 * 60 * 60 * 1000;
-  const dayDelta = Math.floor((startOfToday.getTime() - observed.getTime()) / millisPerDay);
+  const dayDelta = computeDayDelta(currentPriceDate, today);
+  if (dayDelta === null) return null;
   if (dayDelta <= 0) return { key: "mkt.staleness_today" };
   return { key: "mkt.staleness_days_ago", params: { days: dayDelta } };
+}
+
+/**
+ * FXR-090 — Staleness label for the FX rate used to value a foreign holding in
+ * the account currency. `null` when no FX rate date is present (same-currency,
+ * no usable rate, or cash). Emits the `currency.rate_staleness_*` i18n keys
+ * shared with the currency feature (key strings only — no cross-feature import).
+ */
+export function formatFxStaleness(fxRateDate: string | null, today: Date): StalenessLabel | null {
+  const dayDelta = computeDayDelta(fxRateDate, today);
+  if (dayDelta === null) return null;
+  if (dayDelta <= 0) return { key: "currency.rate_staleness_today" };
+  return { key: "currency.rate_staleness_days_old", params: { days: dayDelta } };
 }
 
 /**
@@ -301,9 +320,9 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     isCash: false,
     staleness: formatStaleness(detail.current_price_date, new Date()),
     sourceLabel: formatSource(detail.current_price_source),
-    // FXR-090 — the backend does not yet surface the resolved FX-rate date on
-    // HoldingDetail, so no staleness label is derived here yet.
-    fxStaleness: null,
+    // FXR-090 — staleness of the FX rate used to value this holding; null for
+    // same-currency / no-rate holdings (fx_rate_date is None).
+    fxStaleness: formatFxStaleness(detail.fx_rate_date, new Date()),
   };
 }
 

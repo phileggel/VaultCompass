@@ -46,6 +46,11 @@ pub struct HoldingDetail {
     /// Dividend-inclusive total return: (unrealized_pnl + dividends_received) × 100 / cost_basis.
     /// None under the same conditions as performance_pct (DIV-071).
     pub total_return_pct: Option<i64>,
+    /// ISO date of the FX rate used to value a foreign holding in the account
+    /// currency (FXR-090). `None` for a same-currency holding (no conversion),
+    /// a foreign holding with no usable rate, or cash — i.e. present only when a
+    /// converted value backed by a real rate is shown.
+    pub fx_rate_date: Option<String>,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -212,17 +217,24 @@ impl AccountDetailsUseCase {
             // account currency. An identity pair resolves to 1.0 without a lookup
             // (same-currency unchanged, MKT-033); a foreign pair with no usable rate
             // yields None and the holding falls back to the FXR-034 mismatch path.
-            let conversion_rate: Option<i64> = if is_cash {
+            let resolved_rate = if is_cash {
                 None
             } else {
                 self.currency_service
-                    .resolve_rate_micros(&asset.currency, &account.currency, &today)
+                    .resolve_rate(&asset.currency, &account.currency, &today)
                     .await
                     .map_err(|e| {
-                        tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_details: resolve_rate_micros failed");
+                        tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_details: resolve_rate failed");
                         AccountApplicationError::DatabaseError
                     })?
             };
+            let conversion_rate: Option<i64> =
+                resolved_rate.as_ref().map(|resolved| resolved.rate_micros);
+            // FXR-090 — date of the FX rate used; None for identity (same-currency)
+            // and no-rate holdings, so the staleness label shows only on a
+            // converted foreign value.
+            let fx_rate_date: Option<String> =
+                resolved_rate.and_then(|resolved| resolved.rate_date);
 
             // MKT-031 — fetch latest price, degrade gracefully on failure
             let latest_price = self
@@ -314,6 +326,7 @@ impl AccountDetailsUseCase {
                 performance_pct,
                 dividends_received,
                 total_return_pct,
+                fx_rate_date,
             });
         }
 
@@ -2184,6 +2197,14 @@ mod tests {
             "total_unrealized_pnl mismatch; got {:?}",
             resp.total_unrealized_pnl
         );
+
+        // FXR-090 — fx_rate_date carries the date of the rate used for conversion.
+        assert_eq!(
+            holding.fx_rate_date.as_deref(),
+            Some("2026-01-01"),
+            "fx_rate_date mismatch; got {:?}",
+            holding.fx_rate_date
+        );
     }
 
     // FXR-034 — FOREIGN holding with NO resolvable rate: unrealized_pnl/performance_pct/
@@ -2265,6 +2286,12 @@ mod tests {
             "total_unrealized_pnl must be None when no qualifying holding; got {:?}",
             resp.total_unrealized_pnl
         );
+        // FXR-090 — no usable rate → no FX date, so no staleness label is shown.
+        assert!(
+            holding.fx_rate_date.is_none(),
+            "fx_rate_date must be None when no rate; got {:?}",
+            holding.fx_rate_date
+        );
     }
 
     // Regression guard — SAME-currency holding behaviour is unchanged after the FXR lift.
@@ -2339,5 +2366,10 @@ mod tests {
         assert_eq!(holding.total_return_pct, Some(10_000_000));
         assert_eq!(resp.total_global_value, 220_000_000);
         assert_eq!(resp.total_unrealized_pnl, Some(20_000_000));
+        // FXR-090 — a same-currency holding has no FX conversion, so no FX date.
+        assert!(
+            holding.fx_rate_date.is_none(),
+            "same-currency must have no fx_rate_date"
+        );
     }
 }
