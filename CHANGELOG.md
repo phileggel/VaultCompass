@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2] - 2026-06-06
+
+### Fixed
+
+- solve Stooq proof-of-work anti-bot challenge
+  Stooq replaced its User-Agent gate (L-003) with a JavaScript
+  proof-of-work challenge served to all clients. Solve it, POST
+  /\_\_verify for the auth cookie, retry once (cookie reused per launch).
+  Bounded difficulty/token guard the solver against hostile input.
+  Refs: #73
+- make asset error translation exhaustive
+  translate*asset_application_error used a `* =>` arm that would silently
+  map any future AssetApplicationError variant to DatabaseError. An
+  exhaustive match makes a new variant a compile error instead. Behavior
+  unchanged today (AssetError exposes only DatabaseError).
+
 ## [0.17.1] - 2026-06-05
 
 ### Fixed
