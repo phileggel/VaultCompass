@@ -13,6 +13,7 @@ import {
   microToFormattedQuantity,
 } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
+import { formatStalenessLabel, type StalenessLabel } from "@/ui/format/staleness";
 
 /**
  * F27 — Maps any asset-price mutation error (record / update / delete /
@@ -136,9 +137,6 @@ export interface HoldingRowViewModel {
   fxStaleness?: StalenessLabel | null;
 }
 
-/** i18n key + optional interpolation params for the price staleness label (MKT-140). */
-export type StalenessLabel = { key: string; params?: { days: number } };
-
 /**
  * MKT-032 — Discriminated state for the Current Price cell. When `current_price`
  * is `None`, the cell renders a typed diagnostic so the user can see _why_ a
@@ -195,31 +193,18 @@ export interface AccountSummaryViewModel {
   hasCashHolding: boolean;
 }
 
-/** Whole-day delta between an ISO date and `today`; null for a null/unparseable date. */
-function computeDayDelta(isoDate: string | null, today: Date): number | null {
-  if (isoDate === null) return null;
-  const observed = new Date(`${isoDate}T00:00:00`);
-  if (Number.isNaN(observed.getTime())) return null;
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const millisPerDay = 24 * 60 * 60 * 1000;
-  return Math.floor((startOfToday.getTime() - observed.getTime()) / millisPerDay);
-}
-
 /**
- * MKT-140 — Returns an i18n descriptor for the staleness of the current price.
- * `null` when no date is recorded; `{ key: "mkt.staleness_today" }` when the price is from today;
- * `{ key: "mkt.staleness_days_ago", params: { days } }` otherwise.
- *
- * The caller renders via `t(label.key, label.params)`.
+ * MKT-140 — i18n descriptor for the staleness of the current price, via the
+ * shared `formatStalenessLabel` with the price-specific `mkt.staleness_*` keys.
  */
 export function formatStaleness(
   currentPriceDate: string | null,
   today: Date,
 ): StalenessLabel | null {
-  const dayDelta = computeDayDelta(currentPriceDate, today);
-  if (dayDelta === null) return null;
-  if (dayDelta <= 0) return { key: "mkt.staleness_today" };
-  return { key: "mkt.staleness_days_ago", params: { days: dayDelta } };
+  return formatStalenessLabel(currentPriceDate, today, {
+    today: "mkt.staleness_today",
+    daysAgo: "mkt.staleness_days_ago",
+  });
 }
 
 /**
@@ -229,10 +214,10 @@ export function formatStaleness(
  * shared with the currency feature (key strings only — no cross-feature import).
  */
 export function formatFxStaleness(fxRateDate: string | null, today: Date): StalenessLabel | null {
-  const dayDelta = computeDayDelta(fxRateDate, today);
-  if (dayDelta === null) return null;
-  if (dayDelta <= 0) return { key: "currency.rate_staleness_today" };
-  return { key: "currency.rate_staleness_days_old", params: { days: dayDelta } };
+  return formatStalenessLabel(fxRateDate, today, {
+    today: "currency.rate_staleness_today",
+    daysAgo: "currency.rate_staleness_days_old",
+  });
 }
 
 /**
