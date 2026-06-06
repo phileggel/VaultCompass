@@ -55,6 +55,7 @@
 import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
+import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import {
   seedAccount,
   seedAsset,
@@ -63,43 +64,6 @@ import {
   seedCategory,
   seedDeposit,
 } from "../helpers/seed";
-
-// ---------------------------------------------------------------------------
-// Navigation helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Navigate to AccountManager (Accounts list). The round-trip through Assets
- * forces the Accounts component to remount and re-fetch, picking up any
- * IPC-seeded data added after the initial load. This pattern is established
- * by buy_sell.test.ts and cash.test.ts.
- */
-async function navigateToAccounts(): Promise<void> {
-  const assetsNav = await $("#nav-assets");
-  await assetsNav.waitForExist({ timeout: 15000 });
-  await assetsNav.click();
-  // Wait for the Assets page FAB as a reliable "page ready" signal.
-  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
-
-  const accountsNav = await $("#nav-accounts");
-  await accountsNav.waitForExist({ timeout: 10000 });
-  await accountsNav.click();
-  // Wait for the Accounts page FAB as a reliable "page ready" signal.
-  await $("#fab-add-account").waitForExist({ timeout: 10000 });
-}
-
-/**
- * Navigate from the AccountManager to a specific account's details view.
- * Assumes navigateToAccounts() (or equivalent) was already called so the
- * account row is visible.
- */
-async function navigateToAccountDetails(accountName: string): Promise<void> {
-  const accountRow = await $(`tr[aria-label="Open account ${accountName}"] td:first-child span`);
-  await accountRow.waitForExist({ timeout: 10000 });
-  await accountRow.click();
-  // Wait for the Refresh prices button in the AccountDetailsView header.
-  await $("#account-details-refresh-prices").waitForExist({ timeout: 10000 });
-}
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -126,7 +90,7 @@ describe("MKT auto-fetch", () => {
     await seedDeposit(accountId, "2019-01-10", 500_000_000); // 500 EUR
 
     await navigateToAccounts();
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccountDetails(accountId);
 
     const refreshBtn = await $("#account-details-refresh-prices");
     await refreshBtn.waitForExist({ timeout: 10000 });
@@ -217,7 +181,7 @@ describe("MKT auto-fetch", () => {
     await seedAssetPrice(assetId, "2020-03-15", 55.0);
 
     await navigateToAccounts();
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccountDetails(accountId);
 
     // -----------------------------------------------------------------------
     // MKT-142 — source badge in the Current Price cell of the HoldingRow

@@ -26,32 +26,9 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
+import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
-
-// ---------------------------------------------------------------------------
-// Navigation (same round-trip pattern as buy_sell.test.ts and cash.test.ts)
-// ---------------------------------------------------------------------------
-
-async function navigateToAccountDetails(accountName: string): Promise<void> {
-  // Navigate to Assets first so the Accounts component unmounts and remounts,
-  // picking up IPC-seeded data that arrived after the initial load.
-  const assetsNav = await $("#nav-assets");
-  await assetsNav.waitForExist({ timeout: 15000 });
-  await assetsNav.click();
-  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
-
-  const accountsNav = await $("#nav-accounts");
-  await accountsNav.waitForExist({ timeout: 10000 });
-  await accountsNav.click();
-  await $("#fab-add-account").waitForExist({ timeout: 10000 });
-
-  const accountNameSpan = await $(
-    `tr[aria-label="Open account ${accountName}"] td:first-child span`,
-  );
-  await accountNameSpan.waitForExist({ timeout: 10000 });
-  await accountNameSpan.click();
-}
 
 // ---------------------------------------------------------------------------
 // Fixed past dates — one per write operation (E2E rule E9)
@@ -68,12 +45,13 @@ describe("dividend", () => {
   const ACCOUNT_NAME = "E2E Dividend DIV-023";
   const ASSET_NAME = "E2E Asset DIV023";
   let astId: string;
+  let accId: string;
 
   // Seed prerequisites once via IPC — no UI interaction needed for setup
   // (mirrors open_balance.test.ts: seed in before(), not inside it()).
   before(async () => {
     const catId = await seedCategory("E2E Cat DIV023");
-    const accId = await seedAccount(ACCOUNT_NAME);
+    accId = await seedAccount(ACCOUNT_NAME);
     astId = await seedAsset(ASSET_NAME, catId);
     // Open a 10-unit position so the asset qualifies for dividend recording
     // (DIV-011: quantity > 0). seedBuy internally seeds a deposit for cash.
@@ -90,7 +68,8 @@ describe("dividend", () => {
   //   surfaces the total dividends received.
   // -------------------------------------------------------------------------
   it("DIV-023/072/073: recording a dividend credits cash and surfaces the dividend totals", async () => {
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // -----------------------------------------------------------------------
     // Step 1 — Open the consolidated "Add" menu (DIV-012), then "Record

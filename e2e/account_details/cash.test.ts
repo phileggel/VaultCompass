@@ -20,29 +20,13 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
-import { openAddMenuItem } from "../helpers/navigation";
+import {
+  navigateToAccountDetails,
+  navigateToAccounts,
+  openAddMenuItem,
+} from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedDeposit } from "../helpers/seed";
-
-async function navigateToAccountDetails(accountName: string): Promise<void> {
-  // Round-trip via Assets so the Accounts component remounts and re-fetches
-  // (matches the existing buy_sell.test.ts navigation pattern).
-  const assetsNav = await $("#nav-assets");
-  await assetsNav.waitForExist({ timeout: 15000 });
-  await assetsNav.click();
-  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
-
-  const accountsNav = await $("#nav-accounts");
-  await accountsNav.waitForExist({ timeout: 10000 });
-  await accountsNav.click();
-  await $("#fab-add-account").waitForExist({ timeout: 10000 });
-
-  const accountNameSpan = await $(
-    `tr[aria-label="Open account ${accountName}"] td:first-child span`,
-  );
-  await accountNameSpan.waitForExist({ timeout: 10000 });
-  await accountNameSpan.click();
-}
 
 const DATES = {
   deposit: isoToDisplayDate("2019-03-10"),
@@ -60,9 +44,10 @@ describe("cash", () => {
   // -------------------------------------------------------------------------
   it("CSH-022: recording a deposit via the UI creates a cash holding row", async () => {
     const ACCOUNT_NAME = "E2E Deposit CSH-022";
-    await seedAccount(ACCOUNT_NAME);
+    const accId = await seedAccount(ACCOUNT_NAME);
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // Deposit lives in the consolidated header "Add" menu (DIV-012); always
     // available (CSH-019 visibility preserved).
@@ -100,7 +85,8 @@ describe("cash", () => {
     // Pre-seed 1 000 EUR so the Withdraw button is reachable (CSH-019 gating).
     await seedDeposit(accId, "2019-04-01", 1_000_000_000); // 1 000 EUR in micros
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // Withdraw lives in the header "Add" menu (DIV-012); the item renders only
     // when the cash row is visible (CSH-019 visibility preserved).
@@ -138,7 +124,8 @@ describe("cash", () => {
     const accId = await seedAccount(ACCOUNT_NAME);
     await seedDeposit(accId, "2019-05-01", 100_000_000); // 100 EUR available
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // Withdraw lives in the header "Add" menu (DIV-012).
     await openAddMenuItem("add-menu-withdraw");
@@ -177,7 +164,8 @@ describe("cash", () => {
     const accId = await seedAccount(ACCOUNT_NAME);
     await seedDeposit(accId, "2019-06-01", 250_000_000); // 250 EUR
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // The header tile renders "{label}: {value}" — locate the value via the
     // surrounding paragraph that contains the localised Global Value label.

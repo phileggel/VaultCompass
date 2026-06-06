@@ -44,47 +44,13 @@
 import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
+import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { seedAccount, seedDeposit } from "../helpers/seed";
 
 // Fixed past dates (E2E rule E9 — never today's date).
 const FIXTURE_DATES = {
   deposit: "2020-03-15",
 } as const;
-
-// ---------------------------------------------------------------------------
-// Navigation helpers (mirrors buy_sell.test.ts / cash.test.ts pattern)
-// ---------------------------------------------------------------------------
-
-/**
- * Round-trip through the Assets page so the Accounts component remounts and
- * re-fetches, picking up any IPC-seeded accounts added after the initial load.
- */
-async function navigateToAccounts(): Promise<void> {
-  const assetsNav = await $("#nav-assets");
-  await assetsNav.waitForExist({ timeout: 15000 });
-  await assetsNav.click();
-  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
-
-  const accountsNav = await $("#nav-accounts");
-  await accountsNav.waitForExist({ timeout: 10000 });
-  await accountsNav.click();
-  await $("#fab-add-account").waitForExist({ timeout: 10000 });
-}
-
-/**
- * Clicks the account row in the Accounts table to open AccountDetailsView,
- * selecting by the row's stable `id` (E1/E4).
- */
-async function navigateToAccountDetails(accountId: string): Promise<void> {
-  // Click the name cell (first column) of the id-anchored row, not the <tr> itself:
-  // the row's centre overlaps the action buttons, which stopPropagation and would
-  // swallow the navigation click. The name cell bubbles to the row's onClick.
-  const nameCell = await $(`#account-row-${accountId} td:first-child`);
-  await nameCell.waitForExist({ timeout: 10000 });
-  await nameCell.click();
-  // Wait for the Performance button in the AccountDetailsView header (PRF-010).
-  await $("#account-details-performance").waitForExist({ timeout: 10000 });
-}
 
 // ---------------------------------------------------------------------------
 // Suite

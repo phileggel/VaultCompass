@@ -16,35 +16,9 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
+import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
-
-// ---------------------------------------------------------------------------
-// Navigation
-// ---------------------------------------------------------------------------
-
-async function navigateToAccountDetails(accountName: string): Promise<void> {
-  // Navigate to Assets first so the Accounts component unmounts.
-  // On the way back the component remounts and re-fetches, picking up any
-  // IPC-seeded accounts that were added after the initial page load.
-  const assetsNav = await $("#nav-assets");
-  await assetsNav.waitForExist({ timeout: 15000 });
-  await assetsNav.click();
-  await $("#fab-add-asset").waitForExist({ timeout: 10000 });
-
-  const accountsNav = await $("#nav-accounts");
-  await accountsNav.waitForExist({ timeout: 10000 });
-  await accountsNav.click();
-  await $("#fab-add-account").waitForExist({ timeout: 10000 });
-
-  // Account rows are <tr aria-label="Open account NAME"> — click the name span
-  // inside the first <td> (language-invariant: the account name is user data).
-  const accountNameSpan = await $(
-    `tr[aria-label="Open account ${accountName}"] td:first-child span`,
-  );
-  await accountNameSpan.waitForExist({ timeout: 10000 });
-  await accountNameSpan.click();
-}
 
 // ---------------------------------------------------------------------------
 // Fixed past dates — one per write op (E2E rule E9)
@@ -83,7 +57,8 @@ describe("buy_sell", () => {
     // Seed one buy so the holding row (and its Buy button) is visible.
     await seedBuy(accId, astId, "2019-03-10", 5_000_000); // 5 units
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // Holding row exists — click its Buy button to open BuyTransactionModal.
     // Asset is pre-populated as read-only (no combobox interaction needed).
@@ -124,7 +99,8 @@ describe("buy_sell", () => {
     const astId = await seedAsset(ASSET_NAME, catId);
     await seedBuy(accId, astId, "2019-04-01", 10_000_000); // 10 units
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     // Holding row exists — click Sell.
     const sellBtn = await $(`#action-sell-${astId}`);
@@ -170,7 +146,8 @@ describe("buy_sell", () => {
     const astId = await seedAsset(ASSET_NAME, catId);
     await seedBuy(accId, astId, "2019-06-01", 2_000_000); // 2 units
 
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
 
     const sellBtn = await $(`#action-sell-${astId}`);
     await sellBtn.waitForExist({ timeout: 10000 });

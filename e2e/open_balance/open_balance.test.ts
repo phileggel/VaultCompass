@@ -17,47 +17,13 @@
 import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
-import { openAddMenuItem } from "../helpers/navigation";
+import {
+  navigateToAccountDetails,
+  navigateToAccounts,
+  openAddMenuItem,
+} from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
-
-// ---------------------------------------------------------------------------
-// Navigation helper — Accounts list → Account Details (E2E rule E8: no browser.url())
-// ---------------------------------------------------------------------------
-
-async function navigateToAccountDetails(accountName: string): Promise<void> {
-  // Navigate to the Accounts section via the sidebar nav button.
-  const accountsNav = await $("#nav-accounts");
-  await accountsNav.waitForExist({ timeout: 15000 });
-  await accountsNav.click();
-
-  // Confirm Accounts page is active — wait for the FAB.
-  const fab = await $("#fab-add-account");
-  await fab.waitForExist({ timeout: 10000 });
-
-  // Click the named account row — aria-label is "Open account {name}"
-  // (en/common.json key account.open_account = "Open account {{name}}"; AccountTable.tsx:165).
-  // WebKitGTK: <tr> elements are not interactable via .click(); click the span inside td.
-  const accountNameSpan = await $(
-    `tr[aria-label="Open account ${accountName}"] td:first-child span`,
-  );
-  await accountNameSpan.waitForExist({ timeout: 10000 });
-  await accountNameSpan.click();
-
-  // Confirm Account Details view has loaded — the account details container div
-  // is always rendered once the route activates (before the async fetch resolves).
-  // Wait for the summary header area which holds the open-balance trigger button.
-  // The account has an active holding (seeded via buy_holding), so the button renders
-  // once get_account_details resolves with isEmpty=false && isAllClosed=false.
-  const summaryHeader = await $("div.px-6.py-4.bg-m3-surface-container-high");
-  await summaryHeader.waitForExist({ timeout: 10000 });
-
-  // Stable id selector (E1, F25) — locale- and rename-independent. The
-  // open-balance action now lives inside the consolidated header "Add" menu
-  // (DIV-012); wait for the menu trigger to confirm the header has rendered.
-  const addMenuBtn = await $("#account-details-add-menu");
-  await addMenuBtn.waitForExist({ timeout: 15000 });
-}
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -97,7 +63,8 @@ describe("open_balance", () => {
       await browser.keys(["Escape"]);
       await closeBtn.waitForExist({ timeout: 3000, reverse: true });
     }
-    await navigateToAccountDetails(ACCOUNT_NAME);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accountId);
   });
 
   // -------------------------------------------------------------------------
