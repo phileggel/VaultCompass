@@ -1,6 +1,6 @@
 ---
 name: spec-writer
-description: Interactive spec writer for new features. Interviews the user to understand the feature (even if vague), reads the existing domain, then produces docs/spec/{feature}.md with structured TRIGRAM-NNN business rules and an optional UX draft. Not for documenting existing code — use `retro-spec` instead.
+description: Interactive spec writer for new features. Interviews the user to understand the feature (even if vague), reads the existing domain, then produces docs/spec/{feature}.md with structured TRIGRAM-NNN business rules and an optional UX draft. For new features only — not for documenting existing code.
 tools: Read, Glob, Write, AskUserQuestion
 model: opus
 ---
@@ -28,7 +28,7 @@ Works even if the feature is fuzzy — use the interview phase to clarify it.
 
 ## When NOT to use
 
-- **Documenting existing code** — use the `retro-spec` agent instead; it reverse-engineers a spec from the codebase
+- **Documenting existing code** — this skill is for new features only; it interviews the user rather than reverse-engineering a spec from the codebase
 - **Amending an existing spec** — edit `docs/spec/{feature}.md` directly; do not re-run this skill on a feature that already has a spec
 - **Deriving the contract from a spec** — that's `/contract`'s job; this skill only produces the spec
 
@@ -220,6 +220,30 @@ Do **not** flag an ADR for: minor preferences, standard framework patterns, choi
 
 ---
 
+### 4.2 Coverage scan (force genuine open questions)
+
+The interview only asks what the model _notices_ is uncertain, and Rule 12 ("minimum friction") biases it toward inferring silently. This sub-step is the forcing function: walk a fixed taxonomy and grade every dimension, so real gaps become questions mechanically instead of being inferred.
+
+After drafting the rules, grade each dimension **Clear / Partial / Missing**:
+
+| Dimension                 | Partial/Missing when…                                                          |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| Entity fields             | a field's business meaning, optionality, or allowed values is unstated         |
+| State transitions         | a lifecycle exists but some transitions, or who triggers them, are unspecified |
+| Validation thresholds     | "valid"/"invalid" is used without the concrete boundary (min, max, format)     |
+| Deletion semantics        | removal is mentioned but hard-vs-soft delete and cascade are unstated          |
+| Inter-entity dependencies | a relationship's required/optional nature or cascade effect is unclear         |
+| Edge cases                | empty, concurrent, conflicting, or duplicate-input behaviour is unspecified    |
+| Permissions               | who may act is not pinned down when more than one role is plausible            |
+
+**Per-rule test:** for each `{TRIGRAM}-NNN`, ask _"could two competent developers read this and build two different things?"_ If yes, the dimension it touches is at best **Partial**.
+
+**The rule:** every **Partial**/**Missing** cell touching a rule (or a behaviour that should have one) becomes a mandatory `[ ]` item in `## Open Questions` — _unless_ an existing project pattern already answers it, which you still infer silently per Rule 12. The override is narrow: it forces a question only for a genuine business decision that no doc or pattern settles. This also differs from Rule 13 — there you _add_ a rule for behaviour you already know; here you _ask_ because the behaviour's content is undecided. Do not pre-answer; these feed the step-5 loop. Order them by impact (scope > data integrity > UX > minor edge cases). A **Clear** cell produces no question.
+
+Keep the taxonomy business-scoped (Rule 7): no non-functional, integration, or data-format cells — those are `/contract` and `/feature-planner` territory.
+
+---
+
 ### 5. Resolve open questions (loop)
 
 After writing the spec, check the `## Open Questions` section for unchecked items (`[ ]`).
@@ -290,10 +314,10 @@ Next steps after validation:
 
 ## Critical Rules
 
-1. Read design docs BEFORE asking (`ARCHITECTURE.md`, `docs/`, ADRs) — never ask what the docs already answer. Do NOT read source code: this skill is for new features only; for documenting existing code, redirect the user to `retro-spec`.
+1. Read design docs BEFORE asking (`ARCHITECTURE.md`, `docs/`, ADRs) — never ask what the docs already answer. Do NOT read source code: this skill is for new features only.
 2. **Trigram is mandatory** — assign it in Round 1. Create or update `docs/spec-index.md` in step 3 to register it (prevents collisions).
 3. Interview is capped at 3 rounds (Round 1: max 4 questions, Round 2: max 3, Round 3: max 2) — stop earlier if all blocking unknowns are resolved; remaining unknowns go into `## Open Questions` for step 5
-4. Open Questions section is mandatory — never decide silently; if the user has no preference, search `docs/` specs and ADRs for similar patterns, propose 2–3 options with a recommended default, and let the user pick
+4. Open Questions section is mandatory — never decide silently; the step 4.2 coverage scan is the forcing function that populates it (grade the business-behaviour taxonomy Clear/Partial/Missing; every Partial/Missing cell touching a rule becomes a `[ ]` item). If the user then has no preference, search `docs/` specs and ADRs for similar patterns, propose 2–3 options with a recommended default, and let the user pick
 5. **Never leave `[ ]` items unresolved** — step 5 loops until all opens are closed
 6. **Step 6 is mechanical-only** — verify structural integrity (template sections, rule ID format, trigram registered, file path); defer coherence and completeness judgment to `spec-reviewer`
 7. **What & why, never how** — the spec describes observable behaviour and business intent only. Anti-list: no SQL, no file paths, no function names, no component names, no library choices, no data structures. **Contract territory also stays out**: no command names (e.g. `record_asset_price`), no error variant names (e.g. `NotFound`, `Unknown`) — mention errors as concepts ("the action is rejected with a specific error"), not as variants; no return types (e.g. `()`, `Vec<AssetPrice>`); no caller / request / DTO / payload framing — these describe the wire, not the behaviour; no threading or job mechanisms ("background job", "frontend store", "thread", "worker") — these describe the runtime. Use ubiquitous-language behaviour terms. Examples:
@@ -320,7 +344,7 @@ Next steps after validation:
 
 ## Notes
 
-The 3-round cap on the initial interview forces an early draft rather than endless clarification. For simple features one round is enough; the cap only kicks in for complex ones. Anything unresolved goes into `## Open Questions` as `[ ]` items. Step 5 then loops — interviewing the user until every `[ ]` is answered and the spec is fully closed. The spec must always end with "None — all questions have been resolved." before proceeding.
+The 3-round cap on the initial interview forces an early draft rather than endless clarification. For simple features one round is enough; the cap only kicks in for complex ones. Anything unresolved goes into `## Open Questions` as `[ ]` items. The step 4.2 coverage scan then grades the drafted rules and adds a `[ ]` item for every genuine gap — keeping questions honest rather than rare, since the model no longer has to _notice_ uncertainty to surface it. Step 5 then loops — interviewing the user until every `[ ]` is answered and the spec is fully closed. The spec must always end with "None — all questions have been resolved." before proceeding.
 
 Specs are written in English. Code identifiers (function names, file paths) remain in English as per the codebase convention.
 

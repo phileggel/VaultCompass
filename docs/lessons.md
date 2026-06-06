@@ -66,3 +66,20 @@ Intermittent — a restart can appear to "fix" it.
 **Root cause** — Stooq returns a JavaScript proof-of-work anti-bot challenge page **with HTTP 200 and content-type `text/csv`** when it suspects a bot. The body is HTML/JS (`…const r=await fetch("/__verify")…`), not CSV. The status and content-type both look healthy, so the CSV parser ran and grabbed line 2 / column 6 of the _JavaScript_, failing the float parse with a misleading "close not numeric" error. The gate is heuristic, not purely UA-based, which is why a restart sometimes slipped through — masking the real cause. FX providers (Frankfurter/ECB) have no such gate, so they were unaffected.
 
 **Mitigation** — Send a real browser `User-Agent` on the Stooq `reqwest::Client` (`STOOQ_USER_AGENT` in `stooq_client.rs`). Verified live: empty UA → challenge page; browser UA → CSV. Belt-and-suspenders: `parse_close_micros` rejects any body not starting with the `Symbol,Date,Time` CSV header up front, so a future challenge surfaces as a clear "non-CSV response (likely an anti-bot challenge page)" error instead of a float-parse red herring. **Content-type cannot be trusted to detect this — the challenge is also served as `text/csv`; gate on the body.**
+
+---
+
+## L-004 — `just sync-kit` ships a tab-indented `visual-proof-capture.mjs` that fails the project's biome
+
+**First observed**: 2026-06-06 (sync to claude-kit v4.18.0)
+**Resolved by**: `just format` after every sync (the kit-sync workflow already includes this step)
+
+**Symptom** — Immediately after `just sync-kit`, `just check` / the pre-commit hook fails with a single biome **error** (amid unrelated pre-existing warnings):
+
+> `× Some errors were emitted` — a formatter diff on `scripts/visual-proof-capture.mjs` (`- → await·…` tab vs `+ ··await·…` two spaces).
+
+**Trigger** — Syncing a kit version whose `scripts/visual-proof-capture.mjs` is tab-indented, into this project whose `biome.json` sets `formatter.indentStyle: "space"` and includes `scripts/**`.
+
+**Root cause** — The kit ships that `.mjs` with tab indentation, but the downstream biome config (which the kit also ships the convention for) mandates spaces. biome scans `scripts/*.mjs`, so the synced file is flagged. The change is **purely cosmetic** — reformatting to spaces reverts the file exactly to the prior version, so the fix is net-zero in the commit.
+
+**Mitigation** — Run `just format` after `just sync-kit` (already a step in the kit-update workflow); it reformats the file to spaces and `just check` goes green. Self-healing but **recurs every sync** until the kit ships the file space-indented (or adds a biome override for `scripts/`). Don't burn time re-diagnosing — if biome errors on that one `.mjs` right after a sync, just run `just format`.
