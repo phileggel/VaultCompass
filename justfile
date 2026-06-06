@@ -50,6 +50,15 @@ test-e2e-headless:
 # Run unit tests only (excludes E2E and coverage; see test-e2e and coverage-fe/coverage-be)
 test-unit: test test-rust
 
+# Resource-capped check-full: runs the full quality suite in a memory-throttled, low-priority
+# cgroup so heavy builds stay responsive on low-RAM machines (requires a systemd user session)
+check-safe:
+    systemd-run --user --scope -p MemoryHigh=4G -p CPUWeight=20 nice -n19 just check-full
+
+# Resource-capped release: same memory guard around the full release flow
+release-safe *ARGS:
+    systemd-run --user --scope -p MemoryHigh=4G -p CPUWeight=20 nice -n19 just release {{ARGS}}
+
 # Collect logs for debugging
 collect-logs:
     ./scripts/collect-logs.sh
