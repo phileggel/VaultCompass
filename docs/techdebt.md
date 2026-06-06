@@ -171,14 +171,6 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Severity: 🟡
 - Observation: `period_end_dates` enumerates the valuation period-ends by re-deriving the year iteration in `build_yearly` and the month iteration + prior-year-end YTD baseline in `build_monthly`. The three loops must stay in lockstep — if a new valuation point is ever added to a build method but not to `period_end_dates`, the pre-resolved FX `rate_map` misses that date and `end_value_as_of` degrades foreign holdings to 0 (FXR-034) rather than erroring, so the resulting performance drift is silent. The duplication is currently correct and commented; the risk is future divergence, not a present bug.
 
-## 2026-06-01 — `build_fx_pairs` re-loads assets already fetched by `build_scope`
-
-- Found by: reviewer-backend
-- Where: `src-tauri/src/use_cases/asset_price_fetch/orchestrator.rs:171-220`
-- Context: branch `feat/fx-rate-fetch` @ `0bbbe28`
-- Severity: 🔵
-- Observation: `build_fx_pairs` issues `get_asset_by_id` for each active holding's asset to read its currency, but `build_scope` (run just before, in the same pre-spawn path) already loaded those same `Asset` rows. The per-call `currency_by_asset` cache prevents intra-function duplicates but not the cross-function double query. Refactoring `build_scope` to also yield an `asset_id → currency` map would eliminate the redundant round-trips. Perf-only; holdings are few by construction so impact is small.
-
 ## 2026-06-06 — `expect()` in reqwest client constructors
 
 - Found by: reviewer-backend
