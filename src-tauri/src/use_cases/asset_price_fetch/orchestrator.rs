@@ -221,9 +221,12 @@ impl AssetPriceFetchUseCase {
 }
 
 fn translate_asset_application_error(error: AssetApplicationError) -> AssetError {
+    // The fetch wire-surface (`AssetError`) exposes only `DatabaseError`; a holding
+    // referencing a missing asset mid-fetch is an internal inconsistency surfaced
+    // generically, so every variant maps to it.
     match error {
+        AssetApplicationError::NotFound { .. } => AssetError::DatabaseError,
         AssetApplicationError::DatabaseError => AssetError::DatabaseError,
-        _ => AssetError::DatabaseError,
     }
 }
 
@@ -244,6 +247,20 @@ mod tests {
     use crate::core::SideEffectEventBus;
     use chrono::NaiveDate;
     use sqlx::sqlite::SqlitePoolOptions;
+
+    // Both AssetApplicationError variants map to the single AssetError::DatabaseError
+    // the fetch surface exposes; locks the NotFound → DatabaseError mapping.
+    #[test]
+    fn translate_asset_application_error_maps_every_variant_to_database_error() {
+        assert!(matches!(
+            translate_asset_application_error(AssetApplicationError::NotFound { id: "x".into() }),
+            AssetError::DatabaseError
+        ));
+        assert!(matches!(
+            translate_asset_application_error(AssetApplicationError::DatabaseError),
+            AssetError::DatabaseError
+        ));
+    }
 
     async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
         let pool = SqlitePoolOptions::new()
