@@ -18,14 +18,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Severity: 🔵
 - Observation: Three functions across two features compute the same whole-day delta between an ISO date and `today` and emit `{ key, params: { days } }` staleness descriptors — `formatStaleness` (price, MKT-140), `formatFxStaleness` (FX rate, FXR-090), and the currency BC's `formatRateStaleness` (FXR-090). The day-delta math is now shared within account_details via the private `computeDayDelta`, but the currency presenter keeps its own inline copy. F26 permits importing a pure helper across feature boundaries, so a shared `src/ui/format/staleness.ts` (consumed by both features) would remove the duplication without coupling. Deferred to keep the FXR-090 wiring PR from expanding into a cross-feature refactor (it would touch the currency presenter + its tests).
 
-## 2026-05-29 — release-manual.yml GitHub Action versions not SHA-pinned
-
-- Found by: reviewer-infra (during CI gold-alignment review)
-- Where: `.github/workflows/release-manual.yml` (`actions/checkout@v4`, `actions/setup-node@v4`, `Swatinem/rust-cache@v2`, `tauri-apps/tauri-action@v0`)
-- Context: branch `chore/ci-gold-alignment` @ HEAD
-- Severity: 🔵
-- Observation: After the gold-CI alignment, `quality.yml` / `e2e.yml` / `release-windows.yml` / `security-audit.yml` pin every action to a full commit SHA (supply-chain hardening). `release-manual.yml` still uses mutable major tags (`@v4`, `@v2`, `@v0`), so it's now the lone inconsistency. Pin its four actions to the same SHAs already used in `release-windows.yml`. Deferred from the alignment PR to avoid speculative edits to a release workflow beyond the `releaseDraft` change the alignment required.
-
 ## 2026-05-29 — E2E account navigation: shared helper + #id row selector
 
 - Found by: reviewer-e2e (during PRF E2E review)
