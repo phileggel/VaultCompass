@@ -67,6 +67,8 @@ Intermittent — a restart can appear to "fix" it.
 
 **Mitigation** — Send a real browser `User-Agent` on the Stooq `reqwest::Client` (`STOOQ_USER_AGENT` in `stooq_client.rs`). Verified live: empty UA → challenge page; browser UA → CSV. Belt-and-suspenders: `parse_close_micros` rejects any body not starting with the `Symbol,Date,Time` CSV header up front, so a future challenge surfaces as a clear "non-CSV response (likely an anti-bot challenge page)" error instead of a float-parse red herring. **Content-type cannot be trusted to detect this — the challenge is also served as `text/csv`; gate on the body.**
 
+**Update (2026-06-06)**: the browser-`User-Agent` mitigation no longer suffices — Stooq now serves the proof-of-work challenge to _every_ client regardless of `User-Agent`. See **L-005** for the escalation and the current mitigation (solve the proof-of-work in-client).
+
 ---
 
 ## L-004 — `just sync-kit` ships a tab-indented `visual-proof-capture.mjs` that fails the project's biome
@@ -83,3 +85,30 @@ Intermittent — a restart can appear to "fix" it.
 **Root cause** — The kit ships that `.mjs` with tab indentation, but the downstream biome config (which the kit also ships the convention for) mandates spaces. biome scans `scripts/*.mjs`, so the synced file is flagged. The change is **purely cosmetic** — reformatting to spaces reverts the file exactly to the prior version, so the fix is net-zero in the commit.
 
 **Mitigation** — Run `just format` after `just sync-kit` (already a step in the kit-update workflow); it reformats the file to spaces and `just check` goes green. Self-healing but **recurs every sync** until the kit ships the file space-indented (or adds a biome override for `scripts/`). Don't burn time re-diagnosing — if biome errors on that one `.mjs` right after a sync, just run `just format`.
+
+---
+
+## L-005 — Stooq escalated the anti-bot gate to a JavaScript proof-of-work challenge (User-Agent no longer enough)
+
+**First observed**: 2026-06-06 (prod, GH #73)
+**Supersedes the mitigation in**: L-003 (browser `User-Agent` no longer bypasses the gate)
+
+**Symptom** — _Every_ asset price silently fails to update (FX rates still fine). Backend logs show, for every symbol:
+
+> `asset_price_fetch: provider fetch failed; skipping (MKT-114) … err=Stooq response parse failed … Caused by: Stooq returned a non-CSV response (likely an anti-bot challenge page)`
+
+Unlike L-003 this is **not intermittent** — it fails for all symbols, every launch.
+
+**Trigger** — Any Stooq CSV request, regardless of `User-Agent`. Verified live 2026-06-06: empty UA, a Chrome UA, and the `stooq.pl` mirror all return the challenge page (HTTP 200) — the L-003 UA workaround is fully defeated.
+
+**Root cause** — Stooq replaced the heuristic UA gate with a **JavaScript proof-of-work challenge** served to all clients. The page hands the client a challenge string `c` and difficulty `d` (=4), and requires finding an `n` such that `SHA-256(c + n)` starts with `d` hex zeros, POSTing `{c, n}` to `/__verify` (which sets an `auth` cookie), then reloading to receive the CSV. An HTTP-only client that doesn't solve the challenge only ever sees the HTML page.
+
+**Mitigation** — Solve the proof-of-work in-client: on a non-CSV (challenge) response, parse `c`/`d`, brute-force the SHA-256 nonce (≈100k iterations, instant), POST `/__verify` with a `reqwest` cookie store enabled, then retry the original request with the now-set `auth` cookie. The cookie is reusable, so solve **once per app launch** and let every subsequent symbol ride the cookie — this also keeps request volume down (see surprises below). Verified live: solving the PoW yields real CSV (`MSFT.US,2026-06-05,…,416.67,…`).
+
+**Surprises from the wider web (2026-06-06 research) — Stooq is actively tightening, treat as borrowed time:**
+
+- **No official API, by design** — the CSV endpoint is an unsupported scrape of the web UI; no contract, no SLA. ([QuantStart](https://www.quantstart.com/articles/an-introduction-to-stooq-pricing-data/))
+- **Low daily-hits quota** — returns `Exceeded the daily hits limit` after a relatively small number of requests/day; multi-symbol launch loops can trip it. Minimize requests (cookie reuse, no redundant fetches). ([AmiBroker forum](https://forum.amibroker.com/t/stooq-download-range-control-and-download-limit-violation/1167))
+- **Drifting toward API keys** — as of March 2026 some users are served an HTML page directing them to _request an API key_ instead of CSV. ([pandas-datareader #1012](https://github.com/pydata/pandas-datareader/issues/1012)) Same direction as our own backlogged Finnhub-BYOK plan (ADR-008 + the unwritten KEY spec).
+
+**Strategic note** — The PoW solver is a **short-term restoration**, not a durable fix. The daily cap + API-key drift mean the durable answer is a key-based provider (ADR-008 / KEY spec). Do not over-invest in the Stooq scrape; keep the fix scoped.
