@@ -6,7 +6,6 @@
       "Bash(git diff *)",
       "Bash(git show *)",
       "Bash(git rev-parse *)",
-      "Bash(bash scripts/branch-files.sh *)",
       "Bash(bash scripts/branch.sh *)",
       "Bash(bash scripts/review-path.sh *)",
       "Bash(just check *)",
