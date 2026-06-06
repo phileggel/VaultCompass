@@ -45,7 +45,9 @@ impl RateProvider for ReqwestEcbClient {
         if !response.status().is_success() {
             anyhow::bail!("ECB returned status {}", response.status());
         }
-        let body = response.text().await.context("ECB response read failed")?;
+        let body = crate::shared::infrastructure::http::read_capped_text(response)
+            .await
+            .context("ECB response read failed")?;
         parse_ecb_snapshot(&body)
     }
 }

@@ -56,8 +56,7 @@ impl PriceProvider for ReqwestStooqClient {
             anyhow::bail!("Stooq returned {} for symbol {symbol}", resp.status());
         }
 
-        let body = resp
-            .text()
+        let body = crate::shared::infrastructure::http::read_capped_text(resp)
             .await
             .with_context(|| format!("Stooq response read failed for symbol: {symbol}"))?;
 

@@ -43,8 +43,7 @@ impl RateProvider for ReqwestFrankfurterClient {
         if !response.status().is_success() {
             anyhow::bail!("Frankfurter returned status {}", response.status());
         }
-        let body = response
-            .text()
+        let body = crate::shared::infrastructure::http::read_capped_text(response)
             .await
             .context("Frankfurter response read failed")?;
         parse_frankfurter_snapshot(&body)

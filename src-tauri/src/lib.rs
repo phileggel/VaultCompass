@@ -47,6 +47,8 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 pub mod context;
 /// Shared core utilities
 pub mod core;
+/// Cross-cutting infrastructure shared across bounded contexts (gold layout)
+pub mod shared;
 /// Application use cases
 pub mod use_cases;
 

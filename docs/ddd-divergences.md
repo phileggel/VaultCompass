@@ -142,6 +142,18 @@ Read this when:
 
 ---
 
+## 12. `shared/` seeded infrastructure-first (no empty layer trio)
+
+**Pattern**: B43 keeps the `application/ domain/ infrastructure/` layer folders present even when empty, to document the layering and reserve the spot.
+
+**Practice**: `shared/` currently holds only `shared/infrastructure/` (its first resident, `http::read_capped_text`). `shared/application/` and `shared/domain/` are not created until they have a real resident.
+
+**Trade**: Empty placeholder modules are speculative scaffolding (YAGNI) — they add module-tree noise with no consumer. The layer a cross-cutting util belongs to is obvious from its single populated folder; reserving the other two buys nothing until shared application/domain logic actually exists.
+
+**When to revisit**: Add `shared/application/` or `shared/domain/` the moment the first cross-BC application or domain helper lands there — created together with its resident, not ahead of it.
+
+---
+
 ## What we follow strictly (not divergences)
 
 For reference, the patterns this codebase enforces tightly:
