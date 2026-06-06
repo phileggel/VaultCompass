@@ -70,12 +70,12 @@ impl AssetPriceFetchUseCase {
             }
         }
 
-        let scope = self.build_scope(asset_ids).await?;
+        let (scope, currency_by_asset) = self.build_scope(asset_ids).await?;
         if scope.is_empty() {
             return Err(FetchPriceTask::NoFetchableHoldings.into());
         }
 
-        let fx_pairs = self.build_fx_pairs(fx_inputs).await?;
+        let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
         Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
         Ok(())
     }
@@ -119,22 +119,28 @@ impl AssetPriceFetchUseCase {
             asset_ids.insert(holding.asset_id);
         }
 
-        let scope = self.build_scope(asset_ids).await?;
+        let (scope, currency_by_asset) = self.build_scope(asset_ids).await?;
         if scope.is_empty() {
             return Err(FetchPriceTask::NoFetchableHoldings.into());
         }
 
-        let fx_pairs = self.build_fx_pairs(fx_inputs).await?;
+        let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
         Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
         Ok(())
     }
 
+    /// Loads every non-cash asset once and returns the auto-fetch `scope` (assets
+    /// with a derivable Stooq symbol and an unlocked price refresh) alongside an
+    /// `asset_id → currency` map covering all loaded assets — including locked and
+    /// non-derivable ones, which are excluded from scope but still need their FX
+    /// pair followed by `build_fx_pairs`.
     async fn build_scope(
         &self,
         asset_ids: HashSet<String>,
-    ) -> Result<Vec<(Asset, String)>, AssetError> {
+    ) -> Result<(Vec<(Asset, String)>, HashMap<String, String>), AssetError> {
         let cash_prefix = system_cash_asset_id("");
         let mut scope: Vec<(Asset, String)> = Vec::new();
+        let mut currency_by_asset: HashMap<String, String> = HashMap::new();
         for asset_id in asset_ids {
             if asset_id.starts_with(&cash_prefix) {
                 continue;
@@ -152,6 +158,7 @@ impl AssetPriceFetchUseCase {
                     return Err(translate_asset_application_error(application_error));
                 }
             };
+            currency_by_asset.insert(asset_id, asset.currency.clone());
             // MKT-151 / ADR-014 — a locked asset is excluded from fetch scope,
             // preserving its most recently recorded price (same shape as the
             // system-cash exclusion above).
@@ -165,59 +172,41 @@ impl AssetPriceFetchUseCase {
             };
             scope.push((asset, symbol));
         }
-        Ok(scope)
+        Ok((scope, currency_by_asset))
     }
+}
 
-    /// Derives the distinct foreign-currency `CurrencyPair`s (`asset_currency →
-    /// account_currency`) for the active holdings in `inputs` (FXR-071/013). Cash
-    /// holdings and same-currency holdings are excluded; a missing asset is skipped.
-    /// Independent of `build_scope` because a foreign holding still needs its pair
-    /// followed even when its price is not auto-fetchable.
-    async fn build_fx_pairs(
-        &self,
-        inputs: Vec<(String, String)>,
-    ) -> Result<Vec<CurrencyPair>, AssetError> {
-        let cash_prefix = system_cash_asset_id("");
-        let mut currency_by_asset: HashMap<String, Option<String>> = HashMap::new();
-        let mut seen: HashSet<(String, String)> = HashSet::new();
-        let mut pairs: Vec<CurrencyPair> = Vec::new();
+/// Derives the distinct foreign-currency `CurrencyPair`s (`asset_currency →
+/// account_currency`) for the active holdings in `inputs` (FXR-071/013), reading
+/// each asset's currency from the `currency_by_asset` map produced by
+/// `build_scope`. Cash holdings and same-currency holdings are excluded; an asset
+/// absent from the map (cash, not found) is skipped.
+fn build_fx_pairs(
+    inputs: Vec<(String, String)>,
+    currency_by_asset: &HashMap<String, String>,
+) -> Vec<CurrencyPair> {
+    let cash_prefix = system_cash_asset_id("");
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+    let mut pairs: Vec<CurrencyPair> = Vec::new();
 
-        for (account_currency, asset_id) in inputs {
-            if asset_id.starts_with(&cash_prefix) {
-                continue;
-            }
-            let asset_currency = match currency_by_asset.get(&asset_id) {
-                Some(cached) => cached.clone(),
-                None => {
-                    let loaded = match self.asset_service.get_asset_by_id(&asset_id).await {
-                        Ok(Some(asset)) => Some(asset.currency),
-                        Ok(None) => None,
-                        Err(application_error) => {
-                            tracing::error!(
-                                target: BACKEND,
-                                asset_id = %asset_id,
-                                err = ?application_error,
-                                "build_fx_pairs: get_asset_by_id failed"
-                            );
-                            return Err(translate_asset_application_error(application_error));
-                        }
-                    };
-                    currency_by_asset.insert(asset_id.clone(), loaded.clone());
-                    loaded
-                }
-            };
-            let Some(asset_currency) = asset_currency else {
-                continue;
-            };
-            if asset_currency == account_currency {
-                continue;
-            }
-            if seen.insert((asset_currency.clone(), account_currency.clone())) {
-                pairs.push(CurrencyPair::from_storage(asset_currency, account_currency));
-            }
+    for (account_currency, asset_id) in inputs {
+        if asset_id.starts_with(&cash_prefix) {
+            continue;
         }
-        Ok(pairs)
+        let Some(asset_currency) = currency_by_asset.get(&asset_id) else {
+            continue;
+        };
+        if *asset_currency == account_currency {
+            continue;
+        }
+        if seen.insert((asset_currency.clone(), account_currency.clone())) {
+            pairs.push(CurrencyPair::from_storage(
+                asset_currency.clone(),
+                account_currency,
+            ));
+        }
     }
+    pairs
 }
 
 fn translate_asset_application_error(error: AssetApplicationError) -> AssetError {
@@ -238,8 +227,8 @@ mod tests {
         SqliteTransactionRepository,
     };
     use crate::context::asset::{
-        AssetCategory, AssetClass, MockAssetRepository, MockPriceProvider,
-        SqliteAssetCategoryRepository, SqliteAssetPriceRepository,
+        MockAssetRepository, MockPriceProvider, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository,
     };
     use crate::context::currency::{
         CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
@@ -275,22 +264,8 @@ mod tests {
         pool
     }
 
-    fn stock_asset(currency: &str) -> Asset {
-        Asset::new(
-            "Test Asset".to_string(),
-            AssetClass::Stocks,
-            AssetCategory::default(),
-            currency.to_string(),
-            2,
-            "TST".to_string(),
-            None,
-            None,
-        )
-        .expect("valid test asset")
-    }
-
     /// Builds a use case whose asset lookups are driven by `asset_repo`. The account
-    /// service and dispatcher are real but inert — `build_fx_pairs` only touches the
+    /// service and dispatcher are real but inert — `build_scope` only touches the
     /// asset service, so a mocked asset repository fully controls every branch.
     fn build_use_case(
         pool: &sqlx::Pool<sqlx::Sqlite>,
@@ -333,20 +308,13 @@ mod tests {
     }
 
     // FXR-071 — a foreign holding yields one (asset_currency → account_currency) pair.
-    #[tokio::test]
-    async fn build_fx_pairs_creates_pair_for_foreign_holding() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo
-            .expect_get_by_id()
-            .returning(|_| Ok(Some(stock_asset("USD"))));
-        let use_case = build_use_case(&pool, asset_repo);
-
-        let pairs = use_case
-            .build_fx_pairs(vec![("EUR".to_string(), "asset-usd".to_string())])
-            .await
-            .expect("ok");
-
+    #[test]
+    fn build_fx_pairs_creates_pair_for_foreign_holding() {
+        let currency_by_asset = HashMap::from([("asset-usd".to_string(), "USD".to_string())]);
+        let pairs = build_fx_pairs(
+            vec![("EUR".to_string(), "asset-usd".to_string())],
+            &currency_by_asset,
+        );
         assert_eq!(
             pairs_as_tuples(&pairs),
             vec![("USD".to_string(), "EUR".to_string())]
@@ -354,108 +322,55 @@ mod tests {
     }
 
     // FXR-013 — a holding whose currency equals the account currency yields no pair.
-    #[tokio::test]
-    async fn build_fx_pairs_skips_same_currency_holding() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo
-            .expect_get_by_id()
-            .returning(|_| Ok(Some(stock_asset("EUR"))));
-        let use_case = build_use_case(&pool, asset_repo);
-
-        let pairs = use_case
-            .build_fx_pairs(vec![("EUR".to_string(), "asset-eur".to_string())])
-            .await
-            .expect("ok");
-
+    #[test]
+    fn build_fx_pairs_skips_same_currency_holding() {
+        let currency_by_asset = HashMap::from([("asset-eur".to_string(), "EUR".to_string())]);
+        let pairs = build_fx_pairs(
+            vec![("EUR".to_string(), "asset-eur".to_string())],
+            &currency_by_asset,
+        );
         assert!(
             pairs.is_empty(),
             "same-currency holding must not yield a pair"
         );
     }
 
-    // FXR-071 — a cash holding is filtered before any asset lookup occurs.
-    #[tokio::test]
-    async fn build_fx_pairs_skips_cash_holding() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo.expect_get_by_id().never();
-        let use_case = build_use_case(&pool, asset_repo);
-
+    // FXR-071 — a cash holding is filtered before the currency map is consulted.
+    #[test]
+    fn build_fx_pairs_skips_cash_holding() {
         let cash_id = system_cash_asset_id("USD");
-        let pairs = use_case
-            .build_fx_pairs(vec![("EUR".to_string(), cash_id)])
-            .await
-            .expect("ok");
-
+        let pairs = build_fx_pairs(vec![("EUR".to_string(), cash_id)], &HashMap::new());
         assert!(pairs.is_empty(), "cash holding must not yield a pair");
     }
 
-    // FXR-071 — a holding whose asset no longer exists is skipped without error.
-    #[tokio::test]
-    async fn build_fx_pairs_skips_missing_asset() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo.expect_get_by_id().returning(|_| Ok(None));
-        let use_case = build_use_case(&pool, asset_repo);
-
-        let pairs = use_case
-            .build_fx_pairs(vec![("EUR".to_string(), "ghost".to_string())])
-            .await
-            .expect("ok");
-
+    // FXR-071 — a holding whose asset is absent from the map is skipped without error.
+    #[test]
+    fn build_fx_pairs_skips_missing_asset() {
+        let pairs = build_fx_pairs(
+            vec![("EUR".to_string(), "ghost".to_string())],
+            &HashMap::new(),
+        );
         assert!(pairs.is_empty(), "missing asset must not yield a pair");
     }
 
     // FXR-071 — two foreign holdings resolving to the same pair are de-duplicated.
-    #[tokio::test]
-    async fn build_fx_pairs_dedups_repeated_pair() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo
-            .expect_get_by_id()
-            .times(2)
-            .returning(|_| Ok(Some(stock_asset("USD"))));
-        let use_case = build_use_case(&pool, asset_repo);
-
-        let pairs = use_case
-            .build_fx_pairs(vec![
+    #[test]
+    fn build_fx_pairs_dedups_repeated_pair() {
+        let currency_by_asset = HashMap::from([
+            ("asset-a".to_string(), "USD".to_string()),
+            ("asset-b".to_string(), "USD".to_string()),
+        ]);
+        let pairs = build_fx_pairs(
+            vec![
                 ("EUR".to_string(), "asset-a".to_string()),
                 ("EUR".to_string(), "asset-b".to_string()),
-            ])
-            .await
-            .expect("ok");
-
+            ],
+            &currency_by_asset,
+        );
         assert_eq!(
             pairs_as_tuples(&pairs),
             vec![("USD".to_string(), "EUR".to_string())],
             "the same pair from two assets must appear once"
-        );
-    }
-
-    // FXR-071 — a repeated asset_id reuses the cached currency (a single lookup).
-    #[tokio::test]
-    async fn build_fx_pairs_reuses_cached_currency() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo
-            .expect_get_by_id()
-            .times(1)
-            .returning(|_| Ok(Some(stock_asset("USD"))));
-        let use_case = build_use_case(&pool, asset_repo);
-
-        let pairs = use_case
-            .build_fx_pairs(vec![
-                ("EUR".to_string(), "asset-a".to_string()),
-                ("EUR".to_string(), "asset-a".to_string()),
-            ])
-            .await
-            .expect("ok");
-
-        assert_eq!(
-            pairs_as_tuples(&pairs),
-            vec![("USD".to_string(), "EUR".to_string())],
-            "a repeated asset_id must produce exactly one lookup and one pair"
         );
     }
 
@@ -474,27 +389,6 @@ mod tests {
         asset_ids.insert("asset-x".to_string());
         let error = use_case
             .build_scope(asset_ids)
-            .await
-            .expect_err("must surface a typed error");
-
-        assert!(
-            matches!(error, AssetError::DatabaseError),
-            "repository failure must map to DatabaseError, got: {error:?}"
-        );
-    }
-
-    // FXR-071 — a repository failure surfaces as a typed DatabaseError.
-    #[tokio::test]
-    async fn build_fx_pairs_returns_database_error_when_load_fails() {
-        let pool = make_pool().await;
-        let mut asset_repo = MockAssetRepository::new();
-        asset_repo
-            .expect_get_by_id()
-            .returning(|_| Err(anyhow::anyhow!("simulated repository failure")));
-        let use_case = build_use_case(&pool, asset_repo);
-
-        let error = use_case
-            .build_fx_pairs(vec![("EUR".to_string(), "asset-a".to_string())])
             .await
             .expect_err("must surface a typed error");
 
