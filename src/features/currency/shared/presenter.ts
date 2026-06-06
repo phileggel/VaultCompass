@@ -1,5 +1,6 @@
 import type { CurrencyError, CurrencyRateSource } from "@/bindings";
 import type { I18nMessage } from "@/ui/format/i18n";
+import { formatStalenessLabel, type StalenessLabel } from "@/ui/format/staleness";
 
 /**
  * F27 — Maps a `CurrencyError` to an i18n key (+ optional interpolation vars).
@@ -42,26 +43,15 @@ export function formatRateMicros(rateMicros: number): string {
   return value.toFixed(2);
 }
 
-/** i18n descriptor for the FX-rate staleness label (FXR-090). */
-export type RateStalenessLabel = { key: string; params?: { days: number } };
-
 /**
- * FXR-090 — Returns an i18n descriptor for how stale the latest rate is.
- * `null` when no rate date; the `today` key when the rate is dated today;
- * otherwise the `days_old` key with the whole-day delta.
+ * FXR-090 — i18n descriptor for how stale the latest rate is, via the shared
+ * `formatStalenessLabel` with the `currency.rate_staleness_*` keys.
  */
-export function formatRateStaleness(
-  rateDate: string | null,
-  today: Date,
-): RateStalenessLabel | null {
-  if (rateDate === null) return null;
-  const observed = new Date(`${rateDate}T00:00:00`);
-  if (Number.isNaN(observed.getTime())) return null;
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const millisPerDay = 24 * 60 * 60 * 1000;
-  const dayDelta = Math.floor((startOfToday.getTime() - observed.getTime()) / millisPerDay);
-  if (dayDelta <= 0) return { key: "currency.rate_staleness_today" };
-  return { key: "currency.rate_staleness_days_old", params: { days: dayDelta } };
+export function formatRateStaleness(rateDate: string | null, today: Date): StalenessLabel | null {
+  return formatStalenessLabel(rateDate, today, {
+    today: "currency.rate_staleness_today",
+    daysAgo: "currency.rate_staleness_days_old",
+  });
 }
 
 /**

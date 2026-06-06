@@ -10,14 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-06-05 — Staleness day-delta + label formatting duplicated across features
-
-- Found by: reviewer-arch (during FXR-090 wiring review)
-- Where: `src/features/account_details/shared/presenter.ts` (`computeDayDelta` + `formatStaleness` + `formatFxStaleness`) and `src/features/currency/shared/presenter.ts` (`formatRateStaleness`)
-- Context: branch `feat/fxr-staleness` @ HEAD
-- Severity: 🔵
-- Observation: Three functions across two features compute the same whole-day delta between an ISO date and `today` and emit `{ key, params: { days } }` staleness descriptors — `formatStaleness` (price, MKT-140), `formatFxStaleness` (FX rate, FXR-090), and the currency BC's `formatRateStaleness` (FXR-090). The day-delta math is now shared within account_details via the private `computeDayDelta`, but the currency presenter keeps its own inline copy. F26 permits importing a pure helper across feature boundaries, so a shared `src/ui/format/staleness.ts` (consumed by both features) would remove the duplication without coupling. Deferred to keep the FXR-090 wiring PR from expanding into a cross-feature refactor (it would touch the currency presenter + its tests).
-
 ## 2026-05-29 — E2E account navigation: shared helper + #id row selector
 
 - Found by: reviewer-e2e (during PRF E2E review)
