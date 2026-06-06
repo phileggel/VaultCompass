@@ -178,3 +178,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `feat/fx-rate-fetch` @ `0bbbe28`
 - Severity: 🔵
 - Observation: `build_fx_pairs` issues `get_asset_by_id` for each active holding's asset to read its currency, but `build_scope` (run just before, in the same pre-spawn path) already loaded those same `Asset` rows. The per-call `currency_by_asset` cache prevents intra-function duplicates but not the cross-function double query. Refactoring `build_scope` to also yield an `asset_id → currency` map would eliminate the redundant round-trips. Perf-only; holdings are few by construction so impact is small.
+
+## 2026-06-06 — `expect()` in reqwest client constructors
+
+- Found by: reviewer-backend
+- Where: `src-tauri/src/context/asset/repository/stooq_client.rs` + `context/currency/infrastructure/{frankfurter,ecb}_client.rs`
+- Context: branch `docs/techdebt-reqwest-expect` @ `51a27df`
+- Severity: 🔵
+- Observation: All three reqwest client constructors (`ReqwestStooqClient` / `ReqwestFrankfurterClient` / `ReqwestEcbClient`) call `.expect("reqwest client build")`, an `expect()` on a production path. The `lib.rs` lint set denies `clippy::unwrap_used` but not `clippy::expect_used`, so it passes CI. Practically unreachable — the builder fails only on invalid TLS config from a compile-time-constant setup, which surfaces in dev — but it is the lone `expect()`-family call in those constructors.
