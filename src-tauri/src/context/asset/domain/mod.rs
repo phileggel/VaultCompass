@@ -18,7 +18,7 @@ pub mod stooq_exchange_mapper;
 pub mod stooq_symbol;
 
 pub use asset::*;
-pub use asset_price::{AssetPrice, AssetPriceRepository, AssetPriceSource, PriceProvider};
+pub use asset_price::{AssetPrice, AssetPriceRepository, AssetPriceSource, PriceProvider, Quote};
 pub use category::*;
 pub use error::{AssetDomainError, AssetPriceDomainError, CategoryDomainError};
 pub use exchange::Exchange;

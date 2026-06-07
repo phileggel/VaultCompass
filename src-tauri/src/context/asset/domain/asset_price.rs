@@ -79,20 +79,32 @@ pub enum AssetPriceSource {
     Stooq,
 }
 
+/// A quote returned by a [`PriceProvider`]: the price plus the provider's
+/// observation date (MKT-117) — the date the quote is _for_, not the fetch time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Quote {
+    /// Market price per unit in the asset's native currency (i64 micros, ADR-001).
+    pub price: i64,
+    /// Observation date as the provider reported it, ISO `yyyy-mm-dd`. `None` when
+    /// the provider supplies no date; the dispatcher then falls back to today (MKT-118).
+    pub date: Option<String>,
+}
+
 /// External price-data provider trait (MKT-110, ADR-008).
-/// Returns the latest price as i64 micros (ADR-001).
+/// Returns the latest price as i64 micros (ADR-001) with its observation date (MKT-117).
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait PriceProvider: Send + Sync {
-    /// Fetches the latest price for the given provider symbol.
+    /// Fetches the latest quote for the given provider symbol.
     ///
-    /// - `Ok(Some(price_micros))` — the provider returned a usable quote.
+    /// - `Ok(Some(quote))` — the provider returned a usable price and (optionally) its
+    ///   observation date.
     /// - `Ok(None)` — the provider explicitly reports "no data" for this symbol
     ///   (e.g. Stooq's `N/D` sentinel). Treated as a quiet per-asset skip with a
     ///   `tracing::debug!` line; not a fetch failure.
     /// - `Err(_)` — transient HTTP / parse / IO failure. The dispatcher logs at
     ///   `tracing::warn!` and continues with the next asset (MKT-114).
-    async fn fetch_price(&self, symbol: &str) -> anyhow::Result<Option<i64>>;
+    async fn fetch_price(&self, symbol: &str) -> anyhow::Result<Option<Quote>>;
 }
 
 /// Interface for AssetPrice persistence (upsert by (asset_id, date), MKT-025).

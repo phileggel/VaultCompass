@@ -257,6 +257,10 @@ The launch auto-fetch (MKT-121) is silent (no snackbar).
 
 **MKT-116 — System cash assets excluded (backend)**: System cash assets (per CSH spec, identified by their `system-cash-*` reference) are excluded from every fetch task scope (launch MKT-122, global refresh MKT-130, account refresh MKT-132). They have no external market price.
 
+**MKT-117 — Provider returns the observation date (backend)**: `PriceProvider::fetch_price` returns the provider's observation date alongside the price (the date the quote is _for_, not the time of the fetch). The Stooq adapter reads this from the CSV `Date` column (already requested via the `d2` field in `f=sd2t2ohlcv`). A provider that does not supply a date returns it as absent.
+
+**MKT-118 — Fetched price is dated by the observation date, with a today fallback (backend)**: When a fetch writes an `AssetPrice`, it uses the provider's observation date (MKT-117) as `AssetPrice.date` — keyed and upserted by `(asset_id, observation_date)` per MKT-025 — provided that date is a well-formed ISO `yyyy-mm-dd` not in the future. When the observation date is absent, malformed, or in the future, it falls back to the current local date. The price is always recorded; an unusable observation date never causes a skip (contrast MKT-114, which skips only on price/network/parse failure). Effect: a fetch on a non-trading day dates the row at the last trading day, so the staleness label (MKT-140) reads honestly (e.g. "Updated 2d ago" on a Sunday), and repeated non-trading-day fetches are idempotent on that row rather than minting a new current-dated row.
+
 #### Auto-fetch (120–125)
 
 **MKT-120 — Auto-fetch setting (frontend)**: An auto-fetch setting is present on the Settings page. The setting defaults to `OFF` and persists across sessions on the current device. When `ON`, the auto-fetch feature is enabled; when `OFF`, it is disabled.

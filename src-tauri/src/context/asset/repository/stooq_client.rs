@@ -1,4 +1,4 @@
-use crate::context::asset::domain::PriceProvider;
+use crate::context::asset::domain::{PriceProvider, Quote};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
@@ -10,6 +10,7 @@ const STOOQ_URL_TEMPLATE: &str = "https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcv
 const STOOQ_VERIFY_URL: &str = "https://stooq.com/__verify";
 const REQUEST_TIMEOUT_SECS: u64 = 10;
 const MICROS_PER_UNIT: f64 = 1_000_000.0;
+const CSV_DATE_COLUMN_INDEX: usize = 1;
 const CSV_CLOSE_COLUMN_INDEX: usize = 6;
 
 /// Browser-like `User-Agent` sent on every Stooq request. Necessary but no
@@ -121,7 +122,7 @@ impl ReqwestStooqClient {
 
 #[async_trait]
 impl PriceProvider for ReqwestStooqClient {
-    async fn fetch_price(&self, symbol: &str) -> Result<Option<i64>> {
+    async fn fetch_price(&self, symbol: &str) -> Result<Option<Quote>> {
         let url = STOOQ_URL_TEMPLATE.replace("{symbol}", symbol);
         let mut body = self.fetch_body(&url, symbol).await?;
 
@@ -135,7 +136,7 @@ impl PriceProvider for ReqwestStooqClient {
             }
         }
 
-        parse_close_micros(&body)
+        parse_quote(&body)
             .with_context(|| format!("Stooq response parse failed for symbol: {symbol}"))
     }
 }
@@ -206,19 +207,20 @@ fn has_leading_hex_zeros(digest: &[u8], count: usize) -> bool {
 /// Stooq's CSV sentinel for "no data available for this symbol".
 const NO_DATA_SENTINEL: &str = "N/D";
 
-fn parse_close_micros(csv: &str) -> Result<Option<i64>> {
+fn parse_quote(csv: &str) -> Result<Option<Quote>> {
     if !is_csv(csv) {
         return Err(anyhow!(
             "Stooq returned a non-CSV response (likely an anti-bot challenge page)"
         ));
     }
-    let data_row = csv
+    let columns: Vec<&str> = csv
         .lines()
         .nth(1)
-        .ok_or_else(|| anyhow!("missing data row"))?;
-    let close = data_row
+        .ok_or_else(|| anyhow!("missing data row"))?
         .split(',')
-        .nth(CSV_CLOSE_COLUMN_INDEX)
+        .collect();
+    let close = columns
+        .get(CSV_CLOSE_COLUMN_INDEX)
         .ok_or_else(|| anyhow!("missing close column"))?
         .trim();
     if close == NO_DATA_SENTINEL {
@@ -230,7 +232,17 @@ fn parse_close_micros(csv: &str) -> Result<Option<i64>> {
     if !price.is_finite() || price <= 0.0 {
         return Err(anyhow!("close is non-finite or non-positive: {price}"));
     }
-    Ok(Some((price * MICROS_PER_UNIT).round() as i64))
+    // Observation date (MKT-117). Validation/fallback is the dispatcher's job
+    // (MKT-118), so this only forwards the raw value, dropping an empty/N/D cell.
+    let date = columns
+        .get(CSV_DATE_COLUMN_INDEX)
+        .map(|cell| cell.trim())
+        .filter(|cell| !cell.is_empty() && *cell != NO_DATA_SENTINEL)
+        .map(str::to_string);
+    Ok(Some(Quote {
+        price: (price * MICROS_PER_UNIT).round() as i64,
+        date,
+    }))
 }
 
 #[cfg(test)]
@@ -238,17 +250,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_close_from_well_formed_csv() {
+    fn parses_close_and_date_from_well_formed_csv() {
         let csv = "Symbol,Date,Time,Open,High,Low,Close,Volume\n\
                    AAPL.US,2026-05-16,21:55:00,189.50,190.20,188.75,189.95,12345678";
-        let micros = parse_close_micros(csv).unwrap();
-        assert_eq!(micros, Some(189_950_000));
+        let quote = parse_quote(csv).unwrap().expect("a usable quote");
+        assert_eq!(quote.price, 189_950_000);
+        assert_eq!(quote.date.as_deref(), Some("2026-05-16"));
     }
 
     #[test]
     fn rejects_missing_data_row() {
         let csv = "Symbol,Date,Time,Open,High,Low,Close,Volume\n";
-        assert!(parse_close_micros(csv).is_err());
+        assert!(parse_quote(csv).is_err());
     }
 
     // Stooq returns the N/D sentinel for symbols it does not recognize. This is a
@@ -258,7 +271,7 @@ mod tests {
     fn returns_ok_none_when_close_is_no_data_sentinel() {
         let csv = "Symbol,Date,Time,Open,High,Low,Close,Volume\n\
                    FR0000120073,N/D,N/D,N/D,N/D,N/D,N/D,N/D";
-        let result = parse_close_micros(csv).unwrap();
+        let result = parse_quote(csv).unwrap();
         assert_eq!(result, None);
     }
 
@@ -272,8 +285,7 @@ mod tests {
                          <script>(async()=>{const c=\"AAAA\",d=4,t=\"0\".repeat(d);let n=0;\
                          while(1){const x=(\"\"+n).split(\"\")).join(\"\");if(x.startsWith(t))break;n++}\
                          const r=await fetch(\"/__verify\");})()</script></body></html>";
-        let error =
-            parse_close_micros(challenge).expect_err("anti-bot challenge page must be rejected");
+        let error = parse_quote(challenge).expect_err("anti-bot challenge page must be rejected");
         assert!(
             error.to_string().contains("non-CSV"),
             "expected a non-CSV challenge error, got: {error}"
@@ -284,14 +296,14 @@ mod tests {
     fn rejects_non_numeric_close() {
         let csv = "Symbol,Date,Time,Open,High,Low,Close,Volume\n\
                    AAPL.US,2026-05-16,21:55:00,189.50,190.20,188.75,bogus,0";
-        assert!(parse_close_micros(csv).is_err());
+        assert!(parse_quote(csv).is_err());
     }
 
     #[test]
     fn rejects_non_positive_close() {
         let csv = "Symbol,Date,Time,Open,High,Low,Close,Volume\n\
                    AAPL.US,2026-05-16,21:55:00,0,0,0,0,0";
-        assert!(parse_close_micros(csv).is_err());
+        assert!(parse_quote(csv).is_err());
     }
 
     // A real challenge page embeds the proof-of-work parameters as

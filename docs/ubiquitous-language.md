@@ -56,6 +56,12 @@ An internal entity of `Asset`. A price observation for an asset on a given date,
 
 > Status: confirmed
 
+### Observation date
+
+The date a price is _for_ — the trading day its value reflects — as distinct from when the price was fetched or recorded. An auto-fetched price uses the provider's reported date (e.g. Friday's close still seen on a Sunday); a manually entered price uses the date the user picks.
+
+> Status: confirmed
+
 ### AssetPriceSource
 
 A value-object enum qualifying the provenance of an `AssetPrice` record. Variants in v1: `Manual` (user-entered via manual entry or transaction auto-record), `Stooq` (auto-fetched from the Stooq provider). `Finnhub` reserved for the KEY spec. Metadata for traceability per ADR-012 — does not influence read/write precedence (latest-write-wins).
@@ -193,6 +199,12 @@ to pre-fill the Add Asset form.
 ### Fetch task
 
 A backend job that retrieves current prices from an external provider and upserts `AssetPrice` records. Umbrella term for the three named instances below.
+
+> Status: confirmed
+
+### Quote
+
+A single price reading returned by a price provider during a fetch: the market price together with its observation date. Transient — it becomes an `AssetPrice` before being stored.
 
 > Status: confirmed
 

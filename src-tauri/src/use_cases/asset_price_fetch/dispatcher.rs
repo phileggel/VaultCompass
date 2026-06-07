@@ -54,14 +54,13 @@ impl Dispatcher {
         tokio::spawn(async move {
             let _lease = lease;
             let today = (self.clock)();
-            let date_string = today.format("%Y-%m-%d").to_string();
             for (asset, symbol) in scope {
                 match self.provider.fetch_price(&symbol).await {
-                    Ok(Some(price_micros)) => {
+                    Ok(Some(quote)) => {
                         let record = AssetPrice::restore(
                             asset.id.clone(),
-                            date_string.clone(),
-                            price_micros,
+                            resolve_observation_date(quote.date.as_deref(), today),
+                            quote.price,
                             AssetPriceSource::Stooq,
                         );
                         if let Err(e) = self.price_repo.upsert(record).await {
@@ -107,5 +106,68 @@ impl Dispatcher {
                 );
             }
         });
+    }
+}
+
+/// Resolves the date a fetched price is stored under (MKT-118): the provider's
+/// observation date when it is a well-formed ISO `yyyy-mm-dd` not after `today`,
+/// otherwise `today`. Always returns a valid, non-future ISO date.
+fn resolve_observation_date(provider_date: Option<&str>, today: NaiveDate) -> String {
+    provider_date
+        .and_then(|raw| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok())
+        .filter(|parsed| *parsed <= today)
+        .unwrap_or(today)
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_observation_date;
+    use chrono::NaiveDate;
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 6, 7).expect("valid date")
+    }
+
+    #[test]
+    fn uses_a_valid_past_observation_date() {
+        assert_eq!(
+            resolve_observation_date(Some("2026-06-05"), today()),
+            "2026-06-05"
+        );
+    }
+
+    #[test]
+    fn uses_an_observation_date_equal_to_today() {
+        assert_eq!(
+            resolve_observation_date(Some("2026-06-07"), today()),
+            "2026-06-07"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_today_when_date_absent() {
+        assert_eq!(resolve_observation_date(None, today()), "2026-06-07");
+    }
+
+    #[test]
+    fn falls_back_to_today_when_date_malformed() {
+        assert_eq!(
+            resolve_observation_date(Some("not-a-date"), today()),
+            "2026-06-07"
+        );
+        assert_eq!(
+            resolve_observation_date(Some("2026-13-40"), today()),
+            "2026-06-07"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_today_when_date_in_future() {
+        assert_eq!(
+            resolve_observation_date(Some("2026-06-08"), today()),
+            "2026-06-07"
+        );
     }
 }
