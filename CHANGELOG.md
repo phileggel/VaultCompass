@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.3] - 2026-06-07
+
+### Fixed
+
+- date auto-fetched prices by their quote date
+  Auto-fetch stamped every price with today's date, so a weekend sync of
+  Friday's close read "Updated today". The fetch now uses Stooq's quote
+  date (MKT-117/118), falling back to today when it is absent, malformed,
+  or in the future. Repeat non-trading-day syncs become idempotent.
+
 ## [0.17.2] - 2026-06-06
 
 ### Fixed
