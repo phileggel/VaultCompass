@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.4] - 2026-06-07
+
+### Fixed
+
+- normalize class-share slash for Stooq symbols
+  OpenFIGI spells class shares with a slash (BRK/B), but Stooq resolves
+  only the hyphen form (BRK-B.US) and returns N/D for the slash. The
+  Stooq symbol derivation now translates / to -; the stored reference
+  stays the canonical OpenFIGI ticker.
+
 ## [0.17.3] - 2026-06-07
 
 ### Fixed
