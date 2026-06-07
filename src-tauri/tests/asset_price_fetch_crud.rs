@@ -62,8 +62,14 @@ async fn build_ctx() -> Ctx {
         struct NoOpProvider;
         #[async_trait::async_trait]
         impl vault_compass_lib::context::asset::PriceProvider for NoOpProvider {
-            async fn fetch_price(&self, _symbol: &str) -> anyhow::Result<Option<i64>> {
-                Ok(Some(100_000_000))
+            async fn fetch_price(
+                &self,
+                _symbol: &str,
+            ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+                Ok(Some(vault_compass_lib::context::asset::Quote {
+                    price: 100_000_000,
+                    date: None,
+                }))
             }
         }
 
@@ -188,9 +194,15 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
     }
     #[async_trait::async_trait]
     impl PriceProvider for CapturingProvider {
-        async fn fetch_price(&self, symbol: &str) -> anyhow::Result<Option<i64>> {
+        async fn fetch_price(
+            &self,
+            symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
             self.seen.lock().unwrap().push(symbol.to_string());
-            Ok(Some(100_000_000))
+            Ok(Some(vault_compass_lib::context::asset::Quote {
+                price: 100_000_000,
+                date: None,
+            }))
         }
     }
 
@@ -305,8 +317,14 @@ async fn fetch_for_account_skips_locked_asset() {
     struct NoOpProvider;
     #[async_trait::async_trait]
     impl PriceProvider for NoOpProvider {
-        async fn fetch_price(&self, _symbol: &str) -> anyhow::Result<Option<i64>> {
-            Ok(Some(100_000_000))
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(Some(vault_compass_lib::context::asset::Quote {
+                price: 100_000_000,
+                date: None,
+            }))
         }
     }
 
@@ -407,8 +425,14 @@ async fn fetch_for_account_includes_unblocked_asset() {
     struct NoOpProvider;
     #[async_trait::async_trait]
     impl PriceProvider for NoOpProvider {
-        async fn fetch_price(&self, _symbol: &str) -> anyhow::Result<Option<i64>> {
-            Ok(Some(100_000_000))
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(Some(vault_compass_lib::context::asset::Quote {
+                price: 100_000_000,
+                date: None,
+            }))
         }
     }
 
