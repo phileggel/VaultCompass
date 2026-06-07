@@ -28,6 +28,8 @@ pub fn derive_stooq_symbol_with_exchange(
 /// Returns `Some(symbol)` with the lowercased symbol on success.
 /// If the reference already contains a `.` (Stooq-style `ticker.exchange`) it is
 /// passed through lowercased without modification.
+/// A class-share `/` separator (OpenFIGI spells Berkshire B as `BRK/B`) is
+/// translated to Stooq's `-` convention (`brk-b`), which is what Stooq resolves.
 pub fn derive_stooq_symbol(reference: &str) -> Option<String> {
     let trimmed = reference.trim();
     if trimmed.is_empty() {
@@ -36,7 +38,7 @@ pub fn derive_stooq_symbol(reference: &str) -> Option<String> {
     if !trimmed.is_ascii() {
         return None;
     }
-    Some(trimmed.to_lowercase())
+    Some(trimmed.replace('/', "-").to_lowercase())
 }
 
 #[cfg(test)]
@@ -55,6 +57,14 @@ mod tests {
     fn already_lowercase_bare_ticker_unchanged() {
         let result = derive_stooq_symbol("msft");
         assert_eq!(result, Some("msft".to_string()));
+    }
+
+    // MKT-110 — OpenFIGI class-share slash (e.g. "BRK/B") is normalized to Stooq's
+    // hyphen convention ("brk-b"); the slash form returns N/D from Stooq.
+    #[test]
+    fn class_share_slash_is_normalized_to_hyphen() {
+        let result = derive_stooq_symbol("BRK/B");
+        assert_eq!(result, Some("brk-b".to_string()));
     }
 
     // MKT-110 — reference containing '.' (already Stooq-style) passes through lowercased
@@ -184,10 +194,10 @@ mod tests {
     #[test]
     fn us_ticker_without_exchange_returns_some() {
         let result = derive_stooq_symbol_with_exchange("AAPL", None);
-        assert!(
-            result.is_some(),
+        assert_eq!(
+            result.as_deref(),
+            Some("aapl"),
             "US ticker without exchange must return Some via legacy fallback"
         );
-        assert_eq!(result.unwrap(), "aapl");
     }
 }

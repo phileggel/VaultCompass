@@ -239,6 +239,8 @@ This section adds an automated price-update mechanism that complements the exist
 2. If `Asset.exchange` is unset, the symbol is the lowercased `Asset.reference`. This branch preserves the US-ticker happy path and covers legacy assets created before the exchange field existed.
 3. If the mapper returns no suffix for the chosen exchange, or the resolved string is empty, the asset is skipped per MKT-114.
 
+In all branches a class-share `/` separator in the reference is translated to Stooq's `-` convention before lowercasing: OpenFIGI spells Berkshire Hathaway B as `BRK/B`, but Stooq resolves only `BRK-B.US` (the slash form returns the `N/D` no-data sentinel). The reference itself is left unchanged — the translation is local to the Stooq symbol so other providers keep the canonical ticker.
+
 **MKT-111 — Empty-holdings rejection (backend)**: When the task's scope contains no holding asset that is both active (quantity > 0) and has a derivable provider symbol (MKT-110), the fetch task is rejected with a specific error so the frontend can give feedback. No external calls are made. Applies to every fetch task path (launch MKT-122, global refresh MKT-130, account refresh MKT-132).
 
 **MKT-112 — `AssetPriceUpdated` on fetch success (backend)**: Every successful `AssetPrice` write produced by a fetch publishes `AssetPriceUpdated` per MKT-026.
