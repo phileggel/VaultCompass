@@ -112,3 +112,24 @@ Unlike L-003 this is **not intermittent** — it fails for all symbols, every la
 - **Drifting toward API keys** — as of March 2026 some users are served an HTML page directing them to _request an API key_ instead of CSV. ([pandas-datareader #1012](https://github.com/pydata/pandas-datareader/issues/1012)) Same direction as our own backlogged Finnhub-BYOK plan (ADR-008 + the unwritten KEY spec).
 
 **Strategic note** — The PoW solver is a **short-term restoration**, not a durable fix. The daily cap + API-key drift mean the durable answer is a key-based provider (ADR-008 / KEY spec). Do not over-invest in the Stooq scrape; keep the fix scoped.
+
+**Update (2026-06-08)**: borrowed time ran out — Stooq removed the quote endpoint entirely and now requires an API key. The PoW solver targets an endpoint that no longer exists. See **L-006**.
+
+---
+
+## L-006 — Stooq removed the free quote endpoint (404) and now requires a captcha-acquired API key
+
+**First observed**: 2026-06-08 (prod, v0.17.4)
+**Supersedes the mitigation in**: L-005 (the proof-of-work solver — the `q/l/` endpoint it targeted is gone)
+
+**Symptom** — Every price fetch fails; FX rates still fine. Backend logs show, per symbol:
+
+> `asset_price_fetch: provider fetch failed; skipping (MKT-114) … Stooq returned 404 Not Found for symbol …`
+
+The frontend shows no error — the per-asset failure is silently skipped (MKT-114), so prices just stay stale and the user must read logs to discover it.
+
+**Trigger** — Any request to the light-quote endpoint `stooq.com/q/l/?s=…&e=csv` (the one this app used).
+
+**Root cause** — Stooq **retired the `q/l/` endpoint**: it now returns `HTTP 404` with the body _"The page you requested does not exist or has been moved"_. Verified live 2026-06-08 on both `stooq.com` and `stooq.pl`, with and without a browser `User-Agent`, with and without the `f=` param. The only surviving data endpoint, `q/d/l/` (daily download), responds (still behind the L-005 proof-of-work) with `Get your apikey: … https://stooq.com/q/d/l/?s=…&i=d&apikey=XXXX` — i.e. a **free API key is now mandatory**. This confirms the L-005 "drifting toward API keys" prediction; anonymous free scrape access is fully closed. The lockdown ladder: anonymous CSV → User-Agent gate (L-003) → JS proof-of-work (L-005) → endpoint removal + key requirement (this).
+
+**Mitigation** — None without a key; the PoW solver cannot help (its endpoint is gone). The durable fix is the **KEY / BYOK** feature (ADR-011): the user obtains their own free Stooq key via the captcha page (`https://stooq.com/q/d/?s=spy.us&get_apikey`) and pastes it; the app then calls `q/d/l/?s=SYM&i=d&apikey=KEY` and takes the latest row's close. The key is free but **human-gated by a captcha**, so it cannot be automated — it is genuinely BYOK-shaped. Finnhub (ADR-008) is the documented fallback provider. Until BYOK ships there is no working price source; the immediate user-facing mitigation is to **surface the fetch failure on the frontend** instead of leaving prices silently stale.

@@ -345,6 +345,8 @@
     "fetch_dispatched": "Récupération des prix…",
     "fetch_already_running": "Une récupération de prix est déjà en cours.",
     "fetch_no_holdings": "Aucune position à actualiser.",
+    "fetch_completed_partial": "{{ok}} mis à jour · {{skipped}} en échec",
+    "fetch_completed_failed": "Échec de la mise à jour des prix ({{skipped}})",
     "source_manual": "Manuel",
     "source_stooq": "Stooq",
     "staleness_today": "Mis à jour aujourd'hui",

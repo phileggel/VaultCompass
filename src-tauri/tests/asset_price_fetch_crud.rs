@@ -517,3 +517,114 @@ async fn fetch_for_account_includes_unblocked_asset() {
         .await
         .expect("MKT-156: an unblocked asset must re-enter fetch scope and dispatch");
 }
+
+/// MKT-119 — a fetch task publishes `AssetPriceFetchCompleted` carrying outcome
+/// counts. With one fetchable holding and a provider that returns a usable quote,
+/// the terminal event reports `ok = 1, skipped = 0`.
+#[tokio::test]
+async fn fetch_publishes_completion_event_with_counts() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, CreateAssetDTO, PriceProvider, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::core::event_bus::Event;
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+
+    struct OkProvider;
+    #[async_trait::async_trait]
+    impl PriceProvider for OkProvider {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(Some(vault_compass_lib::context::asset::Quote {
+                price: 100_000_000,
+                date: Some("2026-01-02".to_string()),
+            }))
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(AccountService::new(
+        Box::new(SqliteAccountRepository::new(pool.clone())),
+        Box::new(SqliteHoldingRepository::new(pool.clone())),
+        Box::new(SqliteTransactionRepository::new(pool.clone())),
+    ));
+    let asset_service = Arc::new(AssetService::new(
+        Box::new(SqliteAssetRepository::new(pool.clone())),
+        Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+        Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+    ));
+
+    let asset = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Apple".to_string(),
+            reference: "AAPL".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 4,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset");
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "USD".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    account_service
+        .open_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-01".to_string(),
+            1_000_000,
+            100_000_000,
+        )
+        .await
+        .expect("seed holding");
+
+    let dispatcher = Arc::new(Dispatcher::new(
+        Arc::new(OkProvider),
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+        Arc::clone(&bus),
+        Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        )),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+    let use_case = AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(FetchGuard::new()),
+        dispatcher,
+    );
+
+    let mut rx = bus.subscribe();
+    use_case
+        .fetch_for_account(&account.id)
+        .await
+        .expect("dispatch");
+
+    // The fetch runs in a detached task; wait for the terminal completion event.
+    let counts = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            rx.changed()
+                .await
+                .expect("bus closed before AssetPriceFetchCompleted arrived");
+            if let Event::AssetPriceFetchCompleted { ok, skipped } = *rx.borrow() {
+                return (ok, skipped);
+            }
+        }
+    })
+    .await
+    .expect("AssetPriceFetchCompleted within timeout");
+
+    assert_eq!(counts, (1, 0), "one holding fetched ok, none skipped");
+}

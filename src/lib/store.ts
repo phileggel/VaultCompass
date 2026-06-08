@@ -1,10 +1,26 @@
 import { getName, getVersion } from "@tauri-apps/api/app";
+import i18next from "i18next";
 import { create } from "zustand";
 import { type Account, type Asset, type AssetCategory, events } from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
 import { assetGateway } from "../features/assets/gateway";
 import { categoryGateway } from "../features/categories/gateway";
+import { type SnackbarVariant, useSnackbarStore } from "../ui/components/snackbar/snackbarStore";
 import { logger } from "./logger";
+
+/**
+ * Builds the snackbar for a finished price-fetch task (MKT-145), or `null` when
+ * the task fully succeeded (`skipped === 0`) and nothing should be shown.
+ */
+export function buildPriceFetchFeedback(
+  ok: number,
+  skipped: number,
+): { message: string; variant: SnackbarVariant } | null {
+  if (skipped === 0) return null;
+  return ok > 0
+    ? { message: i18next.t("mkt.fetch_completed_partial", { ok, skipped }), variant: "info" }
+    : { message: i18next.t("mkt.fetch_completed_failed", { skipped }), variant: "error" };
+}
 
 interface AppState {
   // Application metadata
@@ -129,11 +145,21 @@ export const useAppStore = create<AppState>((set, get) => {
 
       // Setup event listeners
       const unlistenPromise = events.event.listen((event) => {
-        const handler = eventMap[event.payload.type];
+        const payload = event.payload;
+        // The global store is the app's single always-on event sink, so a
+        // launch-time fetch-failure snackbar surfaces regardless of the open view.
+        if (payload.type === "AssetPriceFetchCompleted") {
+          const feedback = buildPriceFetchFeedback(payload.ok, payload.skipped);
+          if (feedback) {
+            useSnackbarStore.getState().show(feedback.message, feedback.variant);
+          }
+          return;
+        }
+        const handler = eventMap[payload.type];
         if (handler) {
           handler();
-        } else if (!locallyHandledEvents.has(event.payload.type)) {
-          logger.debug("[store] unhandled event", { type: event.payload.type });
+        } else if (!locallyHandledEvents.has(payload.type)) {
+          logger.debug("[store] unhandled event", { type: payload.type });
         }
       });
 

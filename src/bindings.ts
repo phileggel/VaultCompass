@@ -1789,6 +1789,12 @@ export type Event =
  */
 { type: "AssetPriceUpdated" } | 
 /**
+ * A price-fetch task finished: `ok` assets were updated, `skipped` were not
+ * (no data or fetch failure). Carries counts so the frontend can summarize
+ * the outcome (MKT-119). Distinct from the per-asset `AssetPriceUpdated`.
+ */
+{ type: "AssetPriceFetchCompleted"; ok: number; skipped: number } | 
+/**
  * A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
  */
 { type: "CurrencyRateUpdated" }

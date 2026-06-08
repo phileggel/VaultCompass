@@ -54,6 +54,9 @@ impl Dispatcher {
         tokio::spawn(async move {
             let _lease = lease;
             let today = (self.clock)();
+            // MKT-119 — tally the task outcome so the frontend can summarize it.
+            let mut ok: u32 = 0;
+            let mut skipped: u32 = 0;
             for (asset, symbol) in scope {
                 match self.provider.fetch_price(&symbol).await {
                     Ok(Some(quote)) => {
@@ -64,6 +67,7 @@ impl Dispatcher {
                             AssetPriceSource::Stooq,
                         );
                         if let Err(e) = self.price_repo.upsert(record).await {
+                            skipped += 1;
                             tracing::warn!(
                                 target: BACKEND,
                                 asset_id = %asset.id,
@@ -73,9 +77,11 @@ impl Dispatcher {
                             );
                             continue;
                         }
+                        ok += 1;
                         self.event_bus.publish(Event::AssetPriceUpdated);
                     }
                     Ok(None) => {
+                        skipped += 1;
                         tracing::debug!(
                             target: BACKEND,
                             asset_id = %asset.id,
@@ -84,6 +90,7 @@ impl Dispatcher {
                         );
                     }
                     Err(e) => {
+                        skipped += 1;
                         tracing::warn!(
                             target: BACKEND,
                             asset_id = %asset.id,
@@ -94,6 +101,11 @@ impl Dispatcher {
                     }
                 }
             }
+
+            // MKT-119 — task-completion signal carrying the outcome counts. The
+            // frontend surfaces a snackbar when `skipped > 0` (MKT-145).
+            self.event_bus
+                .publish(Event::AssetPriceFetchCompleted { ok, skipped });
 
             // FXR-075/076 — piggyback FX rate refresh on the same task and lease.
             // refresh_all_rates degrades internally (per-pair skips, provider

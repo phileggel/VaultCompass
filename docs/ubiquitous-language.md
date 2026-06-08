@@ -157,14 +157,15 @@ Where a currency rate came from: `Manual` (entered by the user), or `Frankfurter
 
 ## Domain Events
 
-| Name                  | Raised by   | Intent                                                      | Status    |
-| --------------------- | ----------- | ----------------------------------------------------------- | --------- |
-| `AccountUpdated`      | Account BC  | Any state change in the account or its holdings             | confirmed |
-| `TransactionUpdated`  | Account BC  | A holding or transaction was created, updated, or cancelled | confirmed |
-| `AssetUpdated`        | Asset BC    | Any state change in an asset or category                    | confirmed |
-| `CategoryUpdated`     | Asset BC    | Any state change in a category                              | confirmed |
-| `AssetPriceUpdated`   | Asset BC    | An AssetPrice record was created, updated, or deleted       | confirmed |
-| `CurrencyRateUpdated` | Currency BC | A currency rate was recorded, updated, or deleted           | confirmed |
+| Name                       | Raised by              | Intent                                                                                     | Status    |
+| -------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ | --------- |
+| `AccountUpdated`           | Account BC             | Any state change in the account or its holdings                                            | confirmed |
+| `TransactionUpdated`       | Account BC             | A holding or transaction was created, updated, or cancelled                                | confirmed |
+| `AssetUpdated`             | Asset BC               | Any state change in an asset or category                                                   | confirmed |
+| `CategoryUpdated`          | Asset BC               | Any state change in a category                                                             | confirmed |
+| `AssetPriceUpdated`        | Asset BC               | An AssetPrice record was created, updated, or deleted                                      | confirmed |
+| `AssetPriceFetchCompleted` | Asset price fetch task | A fetch task finished; carries `ok` / `skipped` counts so the UI can summarize the outcome | confirmed |
+| `CurrencyRateUpdated`      | Currency BC            | A currency rate was recorded, updated, or deleted                                          | confirmed |
 
 ---
 

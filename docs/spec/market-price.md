@@ -255,13 +255,15 @@ In all branches a class-share `/` separator in the reference is translated to St
 - On in-flight rejection (MKT-113): a snackbar indicates a fetch is already in progress; the user's action is rejected without disrupting the ongoing fetch.
 - On no-fetchable-holdings rejection (MKT-111): a snackbar indicates there are no holdings to fetch.
 
-The launch auto-fetch (MKT-121) is silent (no snackbar).
+The launch auto-fetch (MKT-121) shows no dispatch snackbar; its outcome is silent on success but surfaces failures via the completion snackbar (MKT-145).
 
 **MKT-116 — System cash assets excluded (backend)**: System cash assets (per CSH spec, identified by their `system-cash-*` reference) are excluded from every fetch task scope (launch MKT-122, global refresh MKT-130, account refresh MKT-132). They have no external market price.
 
 **MKT-117 — Provider returns the observation date (backend)**: `PriceProvider::fetch_price` returns the provider's observation date alongside the price (the date the quote is _for_, not the time of the fetch). The Stooq adapter reads this from the CSV `Date` column (already requested via the `d2` field in `f=sd2t2ohlcv`). A provider that does not supply a date returns it as absent.
 
 **MKT-118 — Fetched price is dated by the observation date, with a today fallback (backend)**: When a fetch writes an `AssetPrice`, it uses the provider's observation date (MKT-117) as `AssetPrice.date` — keyed and upserted by `(asset_id, observation_date)` per MKT-025 — provided that date is a well-formed ISO `yyyy-mm-dd` not in the future. When the observation date is absent, malformed, or in the future, it falls back to the current local date. The price is always recorded; an unusable observation date never causes a skip (contrast MKT-114, which skips only on price/network/parse failure). Effect: a fetch on a non-trading day dates the row at the last trading day, so the staleness label (MKT-140) reads honestly (e.g. "Updated 2d ago" on a Sunday), and repeated non-trading-day fetches are idempotent on that row rather than minting a new current-dated row.
+
+**MKT-119 — Fetch task-completion signal (backend)**: When a fetch task finishes, the backend publishes an `AssetPriceFetchCompleted { ok, skipped }` event carrying the outcome counts — `ok` = assets whose price was updated, `skipped` = assets with no data or a fetch/upsert failure (MKT-114). It is published once per task, after the per-asset loop, for every entry point (launch MKT-122, global refresh MKT-130, account refresh MKT-132). Distinct from the per-asset `AssetPriceUpdated` (MKT-026).
 
 #### Auto-fetch (120–125)
 
@@ -288,6 +290,8 @@ The launch auto-fetch (MKT-121) is silent (no snackbar).
 **MKT-141 — Source badge in price history (frontend)**: Each row in the price-history modal (MKT-071) displays a badge with the row's `source` value.
 
 **MKT-142 — Source badge in Current Price column (frontend)**: The Account Details "Current Price" column displays a badge alongside the price (or near the staleness label MKT-140) showing the source of the most recent `AssetPrice` record. Same styling as MKT-141.
+
+**MKT-145 — Fetch-outcome snackbar (frontend)**: On `AssetPriceFetchCompleted` (MKT-119), the frontend shows a snackbar only when `skipped > 0`: an error snackbar ("Couldn't update prices (N)") when `ok == 0`, otherwise an info snackbar summarizing the partial result ("Updated N · M couldn't be updated"). A fully successful fetch (`skipped == 0`) shows nothing, so the launch auto-fetch (MKT-121) stays silent on the happy path while failures surface from any entry point. Handled globally (the event is not correlated to a specific trigger).
 
 ### Price Refresh Lock (150–169)
 
