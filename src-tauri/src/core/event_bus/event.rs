@@ -19,6 +19,15 @@ pub enum Event {
     TransactionUpdated,
     /// A market price was recorded or updated for an asset (MKT-026)
     AssetPriceUpdated,
+    /// A price-fetch task finished: `ok` assets were updated, `skipped` were not
+    /// (no data or fetch failure). Carries counts so the frontend can summarize
+    /// the outcome (MKT-119). Distinct from the per-asset `AssetPriceUpdated`.
+    AssetPriceFetchCompleted {
+        /// Count of assets whose price was successfully updated.
+        ok: u32,
+        /// Count of assets skipped — no data, or a fetch/upsert failure.
+        skipped: u32,
+    },
     /// A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
     CurrencyRateUpdated,
 }

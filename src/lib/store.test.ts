@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDebug = vi.hoisted(() => vi.fn());
+const mockShow = vi.hoisted(() => vi.fn());
+
+// Snackbar + i18n are used by the AssetPriceFetchCompleted handler (MKT-145).
+vi.mock("../ui/components/snackbar/snackbarStore", () => ({
+  useSnackbarStore: { getState: () => ({ show: mockShow }) },
+}));
+vi.mock("i18next", () => ({
+  default: {
+    t: (key: string, vars?: Record<string, unknown>) => `${key}:${JSON.stringify(vars ?? {})}`,
+  },
+}));
 
 // Mock all gateways that store.ts imports so the module loads cleanly in tests
 vi.mock("../features/accounts/gateway", () => ({
@@ -22,12 +33,13 @@ vi.mock("./logger", () => ({
 }));
 
 // Capture the events.event.listen callback so tests can fire synthetic events
-let capturedEventListener: ((event: { payload: { type: string } }) => void) | null = null;
+type CapturedEvent = { payload: { type: string; ok?: number; skipped?: number } };
+let capturedEventListener: ((event: CapturedEvent) => void) | null = null;
 
 vi.mock("../bindings", () => ({
   events: {
     event: {
-      listen: vi.fn((cb: (event: { payload: { type: string } }) => void) => {
+      listen: vi.fn((cb: (event: CapturedEvent) => void) => {
         capturedEventListener = cb;
         return Promise.resolve(() => {});
       }),
@@ -106,6 +118,52 @@ describe("store — locallyHandledEvents (FXR-037)", () => {
       callsBefore,
     );
 
+    cleanup();
+  });
+});
+
+describe("store — AssetPriceFetchCompleted snackbar (MKT-145)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEventListener = null;
+    useAppStore.setState({ isInitialized: false });
+  });
+
+  it("stays silent when nothing was skipped (success)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    capturedEventListener?.({ payload: { type: "AssetPriceFetchCompleted", ok: 5, skipped: 0 } });
+
+    expect(mockShow).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("shows an error snackbar when every asset was skipped (ok == 0)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    capturedEventListener?.({ payload: { type: "AssetPriceFetchCompleted", ok: 0, skipped: 3 } });
+
+    expect(mockShow).toHaveBeenCalledTimes(1);
+    expect(mockShow).toHaveBeenCalledWith(
+      expect.stringMatching(/mkt\.fetch_completed_failed.*"skipped":3/),
+      "error",
+    );
+    cleanup();
+  });
+
+  it("shows an info snackbar on partial success (ok > 0 and skipped > 0)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    capturedEventListener?.({ payload: { type: "AssetPriceFetchCompleted", ok: 2, skipped: 1 } });
+
+    expect(mockShow).toHaveBeenCalledTimes(1);
+    expect(mockShow).toHaveBeenCalledWith(
+      expect.stringMatching(/mkt\.fetch_completed_partial.*"ok":2.*"skipped":1/),
+      "info",
+    );
     cleanup();
   });
 });

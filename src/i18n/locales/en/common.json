@@ -345,6 +345,8 @@
     "fetch_dispatched": "Fetching prices…",
     "fetch_already_running": "A price fetch is already running.",
     "fetch_no_holdings": "No holdings to fetch prices for.",
+    "fetch_completed_partial": "Updated {{ok}} · {{skipped}} couldn't be updated",
+    "fetch_completed_failed": "Couldn't update prices ({{skipped}})",
     "source_manual": "Manual",
     "source_stooq": "Stooq",
     "staleness_today": "Updated today",

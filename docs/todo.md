@@ -2,23 +2,17 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (mkt) — Surface fetch-task completion to FE for end-of-task user feedback
+## (spec) — Write KEY spec (User API Key Management) — 🔴 NOW BLOCKING price fetch
 
-`fetch_all_asset_prices` and `fetch_account_asset_prices` return synchronously on dispatch; per-asset results stream via `AssetPriceUpdated` events. The user has no signal for "task finished" — whether successfully, with partial failures, or with full provider outage. Per-asset failures are currently logged BE-side per MKT-114 with no FE surface; the task-level summary is the missing layer.
-
-**Proposed**: emit a task-completion signal (e.g. `FetchTaskCompleted { scope, ok: u32, skipped: u32 }`) and an FE snackbar/banner that summarizes — "12 prices updated, 3 skipped". Distinct from `AssetPriceUpdated` (which is per-asset) and complements MKT-115 (which currently only covers dispatch-time feedback).
-
-Surfaced 2026-05-17 during `/contract market-price` triage. Spec amendment to MKT-114 (or a new MKT-117+) will be needed.
-
-## (spec) — Write KEY spec (User API Key Management)
+**Escalated 2026-06-08 (v0.17.4)**: Stooq removed all free programmatic access — the `q/l/` quote endpoint 404s and the surviving `q/d/l/` endpoint requires a captcha-acquired API key (see L-006). **Price fetching is dead until a key-based provider ships.** This makes KEY the next feature, not a someday-enabler.
 
 ADR-011 captures the BYOK + OS keychain + 3-tier fallback decision. The spec to write — trigram `KEY` — covers the Tauri command surface, state machine, Connections settings panel UX, link-out to provider signup, "test connection" probe, and the Linux-without-keyring detection + UX flow.
 
-Cross-cutting enabler: every current and future external-provider feature depends on this. First downstream consumers (in expected build order): Finnhub price fallback per ADR-008 (`/quote`), Finnhub ISIN ↔ ticker enrichment for `Asset` (see `(asset) — Auto-fill ISIN ↔ ticker via Finnhub` below — uses `/stock/profile2`), and the OpenFIGI free-key uplift that lifts the WEB lookup search rate from ~5/min to ~100/min.
+Cross-cutting enabler: every current and future external-provider feature depends on this. **First consumer is now Stooq-with-apikey** (the user pastes a free key obtained via Stooq's captcha page `https://stooq.com/q/d/?s=spy.us&get_apikey`; the provider switches from `q/l/` to `q/d/l/?s=SYM&i=d&apikey=KEY`, taking the latest daily row's close — this also retires the L-005 PoW solver and the L-006 404). Lowest friction (no account signup, same symbol scheme already in use). Subsequent consumers: Finnhub price fallback per ADR-008 (`/quote`), Finnhub ISIN ↔ ticker enrichment (`/stock/profile2`), and the OpenFIGI free-key WEB-lookup uplift (~5/min → ~100/min).
 
-Workflow-A: `/spec-writer api-key-management` → `/contract` → `feature-planner` → implementation. ~1-2 day feature.
+Workflow-A: `/spec-writer api-key-management` → `/contract` → `feature-planner` → implementation. ~1-2 day feature. Consider scoping a Stooq-only first slice to restore prices fastest.
 
-Surfaced 2026-05-16 during the asset-valuation ADR thread.
+Surfaced 2026-05-16 during the asset-valuation ADR thread; escalated to blocking 2026-06-08 (L-006).
 
 ## (spec) — Write FXR spec (Foreign Exchange Rate) — ✅ Done
 
