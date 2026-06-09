@@ -1,13 +1,15 @@
 use crate::context::asset::domain::{PriceProvider, Quote};
-use crate::shared::infrastructure::stooq::StooqGate;
+use crate::shared::infrastructure::stooq::{recent_daily_window, StooqGate};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use chrono::Local;
 
 /// Base URL of Stooq's keyed daily-download endpoint (ADR-015). The light `q/l/`
-/// single-quote endpoint was withdrawn (404s even with a key), so the full daily
-/// history is downloaded and the latest row taken. A BYOK apikey is required and,
-/// per a 2026-06-08 live probe, does NOT bypass the proof-of-work gate — the
-/// shared [`StooqGate`] clears that before this endpoint returns CSV.
+/// single-quote endpoint was withdrawn (404s even with a key), so a recent date
+/// window of the daily series is downloaded (`d1`/`d2`, see `recent_daily_window`)
+/// and the latest settled row taken — a few rows instead of the full history. A
+/// BYOK apikey is required and, per a 2026-06-08 live probe, does NOT bypass the
+/// proof-of-work gate — the shared [`StooqGate`] clears that before CSV returns.
 const STOOQ_DOWNLOAD_URL: &str = "https://stooq.com/q/d/l/";
 const MICROS_PER_UNIT: f64 = 1_000_000.0;
 
@@ -46,9 +48,12 @@ impl ReqwestStooqClient {
 #[async_trait]
 impl PriceProvider for ReqwestStooqClient {
     async fn fetch_price(&self, symbol: &str, api_key: &str) -> Result<Option<Quote>> {
-        // The key is in the URL but never in the error label (KEY-014): the label
-        // carries only the symbol.
-        let url = format!("{STOOQ_DOWNLOAD_URL}?s={symbol}&i=d&apikey={api_key}");
+        // Request only a recent date window (a handful of rows) rather than the
+        // full multi-decade history; the latest row is the most recent settled
+        // close. The key is in the URL but never in the error label (KEY-014) —
+        // the label carries only the symbol.
+        let (from, to) = recent_daily_window(Local::now().date_naive());
+        let url = format!("{STOOQ_DOWNLOAD_URL}?s={symbol}&i=d&d1={from}&d2={to}&apikey={api_key}");
         let body = self.gate.get_text(&url, symbol).await?;
         parse_quote(&body)
             .with_context(|| format!("Stooq response parse failed for symbol: {symbol}"))

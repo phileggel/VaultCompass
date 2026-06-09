@@ -12,8 +12,9 @@
 //! the asset price fetcher and the connection key-probe must clear this gate; they
 //! share [`StooqGate`] rather than each carrying a copy of the solver.
 
-use crate::shared::infrastructure::http::read_capped_text_with_limit;
+use crate::shared::infrastructure::http::read_capped_text;
 use anyhow::{anyhow, Context, Result};
+use chrono::NaiveDate;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 
@@ -21,12 +22,6 @@ use std::time::Duration;
 /// `auth` cookie the data endpoints then honour.
 const STOOQ_VERIFY_URL: &str = "https://stooq.com/__verify";
 const REQUEST_TIMEOUT_SECS: u64 = 15;
-
-/// Upper bound on a Stooq response body. The daily-download endpoint returns a
-/// symbol's full price history (hundreds of KiB for decades of data), far above
-/// the shared 64 KiB default; 8 MiB bounds a malicious/runaway body while holding
-/// any realistic single-symbol history.
-const STOOQ_MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
 /// Browser-like `User-Agent` sent on every Stooq request.
 const STOOQ_USER_AGENT: &str =
@@ -43,6 +38,26 @@ const MAX_POW_ITERATIONS: u64 = 50_000_000;
 /// Upper bound on the challenge token length. Real tokens are ~60 chars; this caps
 /// the per-iteration allocation against a hostile multi-KiB token.
 const MAX_TOKEN_LEN: usize = 256;
+
+/// How many calendar days back the daily-price request spans. A bounded date
+/// window keeps the download to a handful of rows (instead of a symbol's full
+/// multi-decade history), while 10 days always covers at least one trading day
+/// across weekends and holidays.
+const RECENT_WINDOW_DAYS: i64 = 10;
+
+/// Builds the `(d1, d2)` `YYYYMMDD` date-window parameters for Stooq's daily
+/// download, spanning the last [`RECENT_WINDOW_DAYS`] up to `today`. A live probe
+/// (2026-06-09) established that a *bounded* query returns only settled daily bars
+/// — Stooq excludes the in-progress current day regardless of the upper bound — so
+/// the latest row of a windowed response is the most recent settled close. Both
+/// the price fetcher and the key-probe build their request URLs from this.
+pub fn recent_daily_window(today: NaiveDate) -> (String, String) {
+    let from = today - chrono::Duration::days(RECENT_WINDOW_DAYS);
+    (
+        from.format("%Y%m%d").to_string(),
+        today.format("%Y%m%d").to_string(),
+    )
+}
 
 /// Shared client that clears Stooq's proof-of-work gate and returns response
 /// bodies. Construct once and reuse: the cookie store carries the `auth` cookie so
@@ -100,7 +115,7 @@ impl StooqGate {
         if !response.status().is_success() {
             anyhow::bail!("Stooq returned {} ({label})", response.status());
         }
-        read_capped_text_with_limit(response, STOOQ_MAX_BODY_BYTES)
+        read_capped_text(response)
             .await
             .with_context(|| format!("Stooq response read failed ({label})"))
     }
@@ -129,7 +144,7 @@ impl StooqGate {
             );
         }
         // Drain the body so the connection returns to the pool.
-        read_capped_text_with_limit(response, STOOQ_MAX_BODY_BYTES)
+        read_capped_text(response)
             .await
             .context("Stooq challenge verification response read failed")?;
         Ok(())
@@ -247,5 +262,13 @@ mod tests {
         assert!(has_leading_hex_zeros(&[0x00, 0x00, 0x0a], 5));
         assert!(!has_leading_hex_zeros(&[0x00, 0x10, 0x00], 4));
         assert!(has_leading_hex_zeros(&[0xff], 0));
+    }
+
+    #[test]
+    fn recent_daily_window_spans_ten_days_up_to_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 9).expect("valid date");
+        let (d1, d2) = recent_daily_window(today);
+        assert_eq!(d1, "20260530");
+        assert_eq!(d2, "20260609");
     }
 }
