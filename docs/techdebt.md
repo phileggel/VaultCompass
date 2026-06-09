@@ -178,3 +178,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `feat/api-key-management` @ `3415f9d`
 - Severity: 🟡
 - Observation: `AssetPriceFetchUseCase` depends on the concrete four-method `ConnectionService` but consumes only `resolve_key(Provider::Stooq)`. The wide dependency forces the orchestrator's unit tests to construct a real `ConnectionService` with mocked ports rather than a single-method fake, and tightens coupling beyond the surface actually used. The narrower seam (a key-resolver port confined to the consumed method) is not yet carved; the coupling is correct today, the risk is friction as further providers are added.
+
+## 2026-06-09 — Price-refresh key gate duplicated across two features
+
+- Found by: reviewer-frontend
+- Where: `src/features/accounts/refresh_prices/useRefreshGlobalPrices.ts` + `src/features/account_details/refresh_prices/useRefreshAccountPrices.ts`
+- Context: branch `feat/api-key-management-fe` @ `affcc0f`
+- Severity: 🟡
+- Observation: Both refresh hooks import `connectionGateway` from the `connections` feature and carry verbatim-identical KEY-040 gate logic (read provider connections, find Stooq, open the dialog when no key). A gateway is behaviour, not a primitive — importing a sibling feature's gateway into `accounts` and `account_details` couples them, and the gate predicate now lives in two places that must stay in lockstep. A shared `useKeyGate()` hook (promoted to a neutral location) would centralise the single `getProviderConnections()` consult and remove the cross-feature gateway dependency. Natural to fold in with the next provider slice (when the `StooqKeyResolver` port lands).
