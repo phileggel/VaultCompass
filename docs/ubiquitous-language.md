@@ -155,6 +155,34 @@ Where a currency rate came from: `Manual` (entered by the user), or `Frankfurter
 
 ---
 
+## Connection Context (introduced by KEY spec)
+
+### Connection
+
+A configured link between VaultCompass and one external provider. Today a connection is just the provider's API key plus which storage tier holds it; it may later carry other per-provider settings. The provider it names is an External provider.
+
+> Status: confirmed
+
+### API key
+
+A free, user-supplied secret that authenticates VaultCompass to an external provider. Every price provider now requires one (ADR-015). The app never bundles a key, never sends it anywhere except the provider it belongs to, and never shows a stored key back on screen.
+
+> Status: confirmed
+
+### BYOK
+
+Bring-your-own-key: the model where the user obtains their own provider key and pastes it into VaultCompass, rather than the app shipping a shared key. Keys live only on the user's machine.
+
+> Status: confirmed
+
+### Storage tier
+
+Where a saved API key is kept, chosen by a security-preference ladder: the OS keychain (the default), session-only memory (the fallback when no keychain is available, cleared on exit), or an opt-in plaintext file. Defined by ADR-011.
+
+> Status: confirmed
+
+---
+
 ## Domain Events
 
 | Name                       | Raised by              | Intent                                                                                     | Status    |
@@ -229,7 +257,7 @@ A fetch task triggered manually by the user from an account detail page. Scope: 
 
 ### External provider
 
-A third-party HTTP service that returns current asset prices, configured per ADR-008. v1: Stooq.
+A third-party HTTP service that returns current asset prices, configured per ADR-015. v1: Stooq. The contract surfaces this as the `Provider` enum; "provider" in prose means an External provider.
 
 > Status: confirmed
 

@@ -9,10 +9,11 @@
 | [ADR-005](005-account-details-inject-transaction-service.md) | Inject TransactionService into account_details for Realized P&L   | Accepted — amends ADR-003     |
 | [ADR-006](006-unit-of-work.md)                               | Unit of Work Pattern for Cross-Aggregate Atomicity                | Accepted                      |
 | [ADR-007](007-e2e-combobox-boundary.md)                      | E2E Test Boundary at HeadlessUI ComboboxField                     | Accepted                      |
-| [ADR-008](008-asset-price-provider-chain.md)                 | Asset Price Provider Chain: Stooq + Finnhub-BYOK + Manual         | Accepted                      |
+| [ADR-008](008-asset-price-provider-chain.md)                 | Asset Price Provider Chain: Stooq + Finnhub-BYOK + Manual         | Superseded by ADR-015         |
 | [ADR-009](009-fx-rate-provider-chain.md)                     | FX Rate Provider Chain: Frankfurter + ECB XML + Manual            | Accepted                      |
 | [ADR-010](010-source-qualifier-precedence.md)                | Source-Qualifier Precedence: Manual Overrides External            | Superseded by ADR-012         |
 | [ADR-011](011-byok-api-keys-os-keychain.md)                  | User-Supplied API Keys via OS Keychain (3-Tier Linux Fallback)    | Accepted                      |
 | [ADR-012](012-latest-write-wins-source-as-metadata.md)       | Latest-Write-Wins; Source Field is Metadata (supersedes ADR-010)  | Accepted — supersedes ADR-010 |
 | [ADR-013](013-recompute-account-performance-on-read.md)      | Recompute Account Performance on Read                             | Accepted                      |
 | [ADR-014](014-price-refresh-lock-scope-exclusion.md)         | Per-Asset Price-Refresh Lock via Fetch-Scope Exclusion            | Accepted                      |
+| [ADR-015](015-byok-keyed-price-providers.md)                 | All Price Providers are BYOK-Keyed; No Key-less Default Source    | Accepted — supersedes ADR-008 |

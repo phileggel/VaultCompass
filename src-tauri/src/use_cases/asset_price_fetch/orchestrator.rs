@@ -2,6 +2,7 @@ use crate::context::account::{AccountApplicationError, AccountService};
 use crate::context::asset::{
     derive_stooq_symbol_with_exchange, Asset, AssetApplicationError, AssetError, AssetService,
 };
+use crate::context::connection::{ConnectionService, Provider};
 use crate::context::currency::CurrencyPair;
 use crate::core::cash::system_cash_asset_id;
 use crate::core::logger::BACKEND;
@@ -20,6 +21,7 @@ pub struct AssetPriceFetchUseCase {
     asset_service: Arc<AssetService>,
     fetch_guard: Arc<FetchGuard>,
     dispatcher: Arc<Dispatcher>,
+    connection_service: Arc<ConnectionService>,
 }
 
 impl AssetPriceFetchUseCase {
@@ -29,12 +31,32 @@ impl AssetPriceFetchUseCase {
         asset_service: Arc<AssetService>,
         fetch_guard: Arc<FetchGuard>,
         dispatcher: Arc<Dispatcher>,
+        connection_service: Arc<ConnectionService>,
     ) -> Self {
         Self {
             account_service,
             asset_service,
             fetch_guard,
             dispatcher,
+            connection_service,
+        }
+    }
+
+    /// Resolves the stored Stooq key for the fetch path (KEY-043/044). A read
+    /// fault is logged and treated as "no key" so the dispatcher short-circuits
+    /// rather than aborting the task; the Connections dialog (KEY-016) surfaces the
+    /// fault to the user separately.
+    async fn resolve_stooq_key(&self) -> Option<String> {
+        match self.connection_service.resolve_key(Provider::Stooq).await {
+            Ok(key) => key,
+            Err(error) => {
+                tracing::error!(
+                    target: BACKEND,
+                    ?error,
+                    "asset_price_fetch: Stooq key resolve failed; treating as absent"
+                );
+                None
+            }
         }
     }
 
@@ -76,7 +98,8 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
+        let stooq_key = self.resolve_stooq_key().await;
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, stooq_key);
         Ok(())
     }
 
@@ -125,7 +148,8 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
+        let stooq_key = self.resolve_stooq_key().await;
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, stooq_key);
         Ok(())
     }
 
@@ -230,6 +254,7 @@ mod tests {
         MockAssetRepository, MockPriceProvider, SqliteAssetCategoryRepository,
         SqliteAssetPriceRepository,
     };
+    use crate::context::connection::{ConnectionService, MockConnectionProbe, MockKeyStore};
     use crate::context::currency::{
         CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
     };
@@ -297,6 +322,11 @@ mod tests {
             asset_service,
             Arc::new(FetchGuard::new()),
             dispatcher,
+            // build_scope tests never reach resolve_key, so the ports are inert.
+            Arc::new(ConnectionService::new(
+                Box::new(MockKeyStore::new()),
+                Box::new(MockConnectionProbe::new()),
+            )),
         )
     }
 

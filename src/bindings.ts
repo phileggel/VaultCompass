@@ -330,6 +330,52 @@ async getCurrencyRates(fromCurrency: string, toCurrency: string) : Promise<Resul
 }
 },
 /**
+ * Lists every supported provider with its `has_key` / `active_tier` (KEY-016).
+ */
+async getProviderConnections() : Promise<Result<ProviderConnection[], ConnectionError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_provider_connections") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Persists a provider key via the tier ladder (KEY-010/011/012). Returns the
+ * resulting `ProviderConnection` so the FE learns the `active_tier`.
+ */
+async saveProviderKey(args: SaveProviderKeyArgs) : Promise<Result<ProviderConnection, ConnectionError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_provider_key", { args }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Probes a provider with the supplied candidate key (KEY-021/022). The three
+ * outcomes are successful returns, not errors (KEY-023).
+ */
+async testProviderKey(args: TestProviderKeyArgs) : Promise<Result<ProviderKeyTestOutcome, ConnectionError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("test_provider_key", { args }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Clears a provider's key from every tier (KEY-013). Idempotent.
+ */
+async removeProviderKey(args: RemoveProviderKeyArgs) : Promise<Result<null, ConnectionError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remove_provider_key", { args }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Archives an asset, guarded against active holdings (OQ-6).
  */
 async archiveAsset(id: string) : Promise<Result<null, ArchiveAssetError>> {
@@ -1406,6 +1452,26 @@ realized_pnl: number;
  */
 last_sold_date: string }
 /**
+ * Single flat error enum for the `connection` bounded context (gold error model).
+ * 
+ * `#[serde(tag = "code")]` makes each variant serialize as
+ * `{ "code": "VariantName", ...payload }` on the wire. `KeyStoreError` is the
+ * keychain-world analog of the SQLite contexts' `DatabaseError`: opaque on the
+ * wire, full diagnostic chain preserved server-side via `tracing::error!`
+ * (KEY-014 — the secret never appears in a variant or a log).
+ */
+export type ConnectionError = 
+/**
+ * The supplied key is blank or whitespace-only (KEY-010/021).
+ */
+{ code: "EmptyKey" } | 
+/**
+ * An infrastructure failure occurred against a storage tier (OS keychain /
+ * session memory / plaintext file). Opaque on the wire — carries no secret
+ * payload (KEY-014). The diagnostic chain is preserved via `tracing::error!`.
+ */
+{ code: "KeyStoreError" }
+/**
  * Parameters for correcting an existing transaction.
  * `account_id` and `asset_id` are immutable — taken from the existing transaction.
  */
@@ -2160,6 +2226,71 @@ year_to_date: PerformanceMetric | null;
  */
 since_inception: PerformanceMetric | null }
 /**
+ * Which external provider a connection authenticates (KEY-031). Extensible:
+ * Finnhub / OpenFIGI arrive as further variants in later slices.
+ */
+export type Provider = 
+/**
+ * Stooq daily-close price provider (ADR-015).
+ */
+"Stooq"
+/**
+ * Non-secret state of one provider's connection, surfaced to the UI (KEY-016).
+ */
+export type ProviderConnection = { 
+/**
+ * Which provider this connection authenticates.
+ */
+provider: Provider; 
+/**
+ * Whether a key is stored (KEY-016); the value is never exposed (KEY-018).
+ */
+has_key: boolean; 
+/**
+ * Where the key lives (KEY-015); `None` when `has_key` is false.
+ */
+active_tier: StorageTier | null }
+/**
+ * Result of probing a provider with a candidate key (KEY-023).
+ */
+export type ProviderKeyTestOutcome = 
+/**
+ * The provider accepted the key.
+ */
+"Accepted" | 
+/**
+ * The provider was reachable but rejected the key.
+ */
+"Rejected" | 
+/**
+ * The provider could not be contacted (network failure).
+ */
+"Unreachable"
+/**
+ * Arguments for `remove_provider_key` (KEY-013).
+ */
+export type RemoveProviderKeyArgs = { 
+/**
+ * Which provider's key to clear.
+ */
+provider: Provider }
+/**
+ * Arguments for `save_provider_key` (KEY-010/012).
+ */
+export type SaveProviderKeyArgs = { 
+/**
+ * Which provider the key authenticates.
+ */
+provider: Provider; 
+/**
+ * The pasted secret; write-only from the UI's perspective (KEY-018).
+ */
+key: string; 
+/**
+ * Tier-3 opt-in (KEY-012); `false` keeps the key off disk on a keyring-less host.
+ */
+allow_plaintext: boolean }
+/**
  * Parameters for recording a sale of an asset from an account.
  */
 export type SellHoldingDTO = { 
@@ -2195,6 +2326,34 @@ fees: number;
  * Optional user note.
  */
 note: string | null }
+/**
+ * Where a stored key currently lives, per the ADR-011 ladder (KEY-011, KEY-015).
+ */
+export type StorageTier = 
+/**
+ * Tier 1 — default, persists, OS-encrypted.
+ */
+"OsKeychain" | 
+/**
+ * Tier 2 — fallback, RAM-only, cleared on exit (KEY-017).
+ */
+"SessionMemory" | 
+/**
+ * Tier 3 — explicit opt-in only (KEY-012).
+ */
+"PlaintextFile"
+/**
+ * Arguments for `test_provider_key` (KEY-021).
+ */
+export type TestProviderKeyArgs = { 
+/**
+ * Which provider to probe.
+ */
+provider: Provider; 
+/**
+ * The candidate key to test (not necessarily the stored one).
+ */
+key: string }
 /**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
