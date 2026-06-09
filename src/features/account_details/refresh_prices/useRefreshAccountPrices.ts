@@ -1,6 +1,9 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchPriceErrorToI18n } from "@/features/accounts/shared/presenter";
+import { connectionGateway } from "@/features/connections/gateway";
+import { openModalSearch } from "@/lib/modalSearch";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
 
@@ -18,11 +21,22 @@ export function useRefreshAccountPrices(accountId: string): {
 } {
   const [isPending, setIsPending] = useState(false);
   const showSnackbar = useSnackbar();
+  const navigate = useNavigate();
   const { t } = useTranslation();
 
   const refresh = useCallback(async () => {
     setIsPending(true);
     try {
+      // KEY-040 — gate on a stored provider key (see useRefreshGlobalPrices).
+      const connections = await connectionGateway.getProviderConnections();
+      const stooq =
+        connections?.status === "ok"
+          ? connections.data.find((c) => c.provider === "Stooq")
+          : undefined;
+      if (stooq && !stooq.has_key) {
+        openModalSearch(navigate, { modal: "connections" });
+        return;
+      }
       const result = await accountDetailsGateway.fetchAccountAssetPrices(accountId);
       if (result.status === "ok") {
         showSnackbar(t("mkt.fetch_dispatched"), "info");
@@ -33,7 +47,7 @@ export function useRefreshAccountPrices(accountId: string): {
     } finally {
       setIsPending(false);
     }
-  }, [accountId, showSnackbar, t]);
+  }, [accountId, navigate, showSnackbar, t]);
 
   return { isPending, refresh };
 }

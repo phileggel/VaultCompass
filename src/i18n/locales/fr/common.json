@@ -184,7 +184,42 @@
     "about": "À propos",
     "settings": "Paramètres",
     "design_system": "Design System",
-    "currency_rates": "Taux de change"
+    "currency_rates": "Taux de change",
+    "connections": "Connexions"
+  },
+  "connection": {
+    "title": "Connexions",
+    "status": {
+      "no_key": "Aucune clé",
+      "key_set": "Clé enregistrée"
+    },
+    "tier": {
+      "os_keychain": "Trousseau du système",
+      "session_memory": "Session uniquement",
+      "plaintext_file": "Fichier en clair"
+    },
+    "test_outcome": {
+      "accepted": "La clé fonctionne",
+      "rejected": "Clé refusée",
+      "unreachable": "Fournisseur injoignable"
+    },
+    "error": {
+      "empty_key": "Saisissez d'abord une clé",
+      "key_store_error": "Accès au stockage des clés impossible"
+    },
+    "action": {
+      "test": "Tester la clé",
+      "save": "Enregistrer",
+      "remove": "Supprimer",
+      "save_to_disk": "Enregistrer sur le disque"
+    },
+    "plaintext_optin_prompt": "Aucun trousseau sécurisé n'a été trouvé : votre clé n'est conservée que pour cette session. Enregistrez-la dans un fichier en clair pour la garder après un redémarrage — elle sera alors lisible sur le disque.",
+    "save_success": "Clé enregistrée",
+    "remove_success": "Clé supprimée",
+    "remove_confirm": "Supprimer la clé {{provider}} ?",
+    "signup_link": "Obtenir une clé gratuite",
+    "key_placeholder": "Collez votre clé API",
+    "key_input_label": "Clé API"
   },
   "settings": {
     "title": "Paramètres",

@@ -184,7 +184,42 @@
     "about": "About",
     "settings": "Settings",
     "design_system": "Design System",
-    "currency_rates": "Currency Rates"
+    "currency_rates": "Currency Rates",
+    "connections": "Connections"
+  },
+  "connection": {
+    "title": "Connections",
+    "status": {
+      "no_key": "No key",
+      "key_set": "Key set"
+    },
+    "tier": {
+      "os_keychain": "OS keychain",
+      "session_memory": "Session only",
+      "plaintext_file": "Plaintext file"
+    },
+    "test_outcome": {
+      "accepted": "Key works",
+      "rejected": "Key rejected",
+      "unreachable": "Provider unreachable"
+    },
+    "error": {
+      "empty_key": "Enter a key first",
+      "key_store_error": "Couldn't access the key store"
+    },
+    "action": {
+      "test": "Test key",
+      "save": "Save",
+      "remove": "Remove",
+      "save_to_disk": "Save to disk"
+    },
+    "plaintext_optin_prompt": "No secure keychain was found, so your key is kept only for this session. Save it to a plain file to keep it across restarts — note it will be readable on disk.",
+    "save_success": "Key saved",
+    "remove_success": "Key removed",
+    "remove_confirm": "Remove the {{provider}} key?",
+    "signup_link": "Get a free key",
+    "key_placeholder": "Paste your API key",
+    "key_input_label": "API key"
   },
   "settings": {
     "title": "Settings",

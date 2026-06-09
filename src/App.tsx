@@ -2,12 +2,24 @@ import { RouterProvider } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { ProviderConnection } from "@/bindings";
 import { accountGateway } from "@/features/accounts/gateway";
+import { connectionGateway } from "@/features/connections/gateway";
 import { shellGateway } from "@/features/shell/gateway";
 import { getAutoFetch } from "@/lib/autoFetchStorage";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { router } from "./router";
+
+/**
+ * KEY-041 — pure predicate: should the launch auto-fetch run? True only when the
+ * price provider (Stooq) has a stored key. A key in any storage tier qualifies; an
+ * absent key (or empty list) skips the launch fetch silently — no dialog (that is
+ * reserved for explicit user-triggered refresh, KEY-040).
+ */
+export function shouldLaunchFetch(connections: ProviderConnection[]): boolean {
+  return connections.find((c) => c.provider === "Stooq")?.has_key === true;
+}
 
 function App() {
   const [dbError, setDbError] = useState<string | null>(null);
@@ -39,6 +51,12 @@ function App() {
     if (!getAutoFetch()) return;
     (async () => {
       try {
+        // KEY-041 — skip the launch fetch silently when no provider key is stored
+        // (no dialog on cold start; absence surfaces via the per-holding diagnostics).
+        const connections = await connectionGateway.getProviderConnections();
+        if (connections.status !== "ok" || !shouldLaunchFetch(connections.data)) {
+          return;
+        }
         const result = await accountGateway.fetchAllAssetPrices();
         if (result.status === "error") {
           logger.warn("[App] auto-fetch dispatch returned error", { code: result.error.code });
