@@ -170,3 +170,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `docs/techdebt-reqwest-expect` @ `51a27df`
 - Severity: 🔵
 - Observation: All three reqwest client constructors (`ReqwestStooqClient` / `ReqwestFrankfurterClient` / `ReqwestEcbClient`) call `.expect("reqwest client build")`, an `expect()` on a production path. The `lib.rs` lint set denies `clippy::unwrap_used` but not `clippy::expect_used`, so it passes CI. Practically unreachable — the builder fails only on invalid TLS config from a compile-time-constant setup, which surfaces in dev — but it is the lone `expect()`-family call in those constructors.
+
+## 2026-06-09 — Fetch use case couples to the whole ConnectionService
+
+- Found by: reviewer-arch
+- Where: `src-tauri/src/use_cases/asset_price_fetch/orchestrator.rs`
+- Context: branch `feat/api-key-management` @ `3415f9d`
+- Severity: 🟡
+- Observation: `AssetPriceFetchUseCase` depends on the concrete four-method `ConnectionService` but consumes only `resolve_key(Provider::Stooq)`. The wide dependency forces the orchestrator's unit tests to construct a real `ConnectionService` with mocked ports rather than a single-method fake, and tightens coupling beyond the surface actually used. The narrower seam (a key-resolver port confined to the consumed method) is not yet carved; the coupling is correct today, the risk is friction as further providers are added.

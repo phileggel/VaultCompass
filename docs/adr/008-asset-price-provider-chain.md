@@ -1,7 +1,7 @@
 # ADR 008 — Asset price provider chain: Stooq primary, Finnhub fallback (BYOK), Manual override
 
 **Date**: 2026-05-16
-**Status**: Accepted
+**Status**: Superseded by ADR-015
 
 ## Context
 

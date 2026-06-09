@@ -18,6 +18,7 @@ use crate::context::asset::{
     AssetPriceRepository, AssetService, PriceProvider, ReqwestStooqClient,
     SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
+use crate::context::connection::{ConnectionService, LayeredKeyStore, StooqProbe};
 use crate::context::currency::{
     ChainedRateProvider, CurrencyService, RateProvider, ReqwestEcbClient, ReqwestFrankfurterClient,
     SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
@@ -114,6 +115,10 @@ pub fn run() {
             app_handle.manage(Arc::new(UpdateState::new()) as ManagedUpdateState);
 
             tauri::async_runtime::block_on(async move {
+                // Captured before `local_data_dir` is moved into the DB: the
+                // connection BC's tier-3 plaintext key files live alongside the DB
+                // in the app's private data dir (ADR-011 / KEY-012).
+                let connection_keys_dir = dirs.local_data_dir.clone();
                 // R18 — emit migration error and keep app running so frontend can show error screen
                 let db = match Database::new(dirs.local_data_dir).await {
                     Ok(db) => Arc::new(db),
@@ -233,6 +238,16 @@ pub fn run() {
 
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 
+                // ----- connection BC (KEY) -----
+                // BYOK provider keys via the OS-keychain ladder (ADR-011). Injected
+                // into the price-fetch use case so the Stooq fetch path can resolve
+                // the key (KEY-043) and short-circuit when it is absent (KEY-044).
+                let connection_service = Arc::new(ConnectionService::new(
+                    Box::new(LayeredKeyStore::new(connection_keys_dir)),
+                    Box::new(StooqProbe::new()),
+                ));
+                app_handle.manage(Arc::clone(&connection_service));
+
                 let price_provider: Arc<dyn PriceProvider> = Arc::new(ReqwestStooqClient::new());
                 let fetch_guard = Arc::new(FetchGuard::new());
                 let dispatcher = Arc::new(PriceFetchDispatcher::new(
@@ -247,6 +262,7 @@ pub fn run() {
                     Arc::clone(&asset_service),
                     Arc::clone(&fetch_guard),
                     Arc::clone(&dispatcher),
+                    Arc::clone(&connection_service),
                 ));
                 app_handle.manage(asset_price_fetch_uc);
                 app_handle.manage(Arc::clone(&fetch_guard));
