@@ -135,3 +135,13 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Mitigation** — None without a key; the PoW solver cannot help (its endpoint is gone). The durable fix is the **KEY / BYOK** feature (ADR-011): the user obtains their own free Stooq key via the captcha page (`https://stooq.com/q/d/?s=spy.us&get_apikey`) and pastes it; the app then calls `q/d/l/?s=SYM&i=d&apikey=KEY` and takes the latest row's close. The key is free but **human-gated by a captcha**, so it cannot be automated — it is genuinely BYOK-shaped. Finnhub (ADR-008) is the documented fallback provider. Until BYOK ships there is no working price source; the immediate user-facing mitigation is to **surface the fetch failure on the frontend** instead of leaving prices silently stale.
 
 **Update (2026-06-10) — resolved**: the KEY / BYOK feature shipped (PRs #77–#78, [ADR-015](adr/015-byok-keyed-price-providers.md) supersedes ADR-008). Two corrections to the paragraph above, both verified live during implementation: (1) the apikey does **not** replace the L-005 proof-of-work — `q/d/l/` requires **both** the PoW cookie and the apikey, so the solver was retained behind the shared `StooqGate`; (2) the throttle is a **per-key daily quota** (IP-independent), so the fetch was made windowed (`d1`+`d2`, ~10-day range → latest settled close) to keep payloads tiny and request volume polite. Price fetching works again end-to-end once the user pastes a key in the Connections dialog.
+
+---
+
+## L-007 — Local E2E green is not CI green when the code branches on a host service
+
+**First observed**: 2026-06-11 (suite passed twice locally, failed on CI minutes after merge)
+
+**Symptom** — An E2E spec green in repeated local headless runs fails on CI, on an assertion right after an action whose behavior depends on an OS service — here the keychain: with no Secret Service on the runner, the save fell back to a lower storage tier whose UI flow is legitimately different, and the spec had asserted the dev-host variant only.
+
+**Mitigation** — (1) When a code path branches on host-service availability, assert only what is identical across all environment-legal variants (or accept any of them explicitly). (2) Before trusting local runs for such a path, reproduce the CI host: `DBUS_SESSION_BUS_ADDRESS=disabled: just test-e2e-headless` makes anything Secret-Service-dependent see "unavailable", exactly like CI. Generalizes to any host-coupled dependency — locale, display server, network: find the env knob that recreates the CI condition and run the suite under it. Fixed in `2091460`.
