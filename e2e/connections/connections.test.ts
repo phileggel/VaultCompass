@@ -154,9 +154,14 @@ describe("connections", () => {
   // Self-cleaning: saves a key then removes it, restoring the no-key baseline.
   //
   // Step 1: open dialog, enter a key, click Save.
-  //   Post-save assertion: Remove button appears (has_key = true, KEY-016).
+  //   Post-save wait is TIER-INDEPENDENT: with an OS keychain the row refreshes
+  //   and Remove appears; without one (CI) the save lands in session memory and
+  //   the row shows the KEY-012 plaintext opt-in instead — deliberately without
+  //   refreshing the list until the user answers the offer. Waiting for either
+  //   signal keeps the spec green on both hosts.
   // Step 2: close and reopen the dialog.
-  //   Post-reopen assertion: Remove button still present (KEY-016 persists).
+  //   Post-reopen assertion: Remove button present (KEY-016 persists) — the
+  //   reopen reloads the list fresh, so this holds on every storage tier.
   // Step 3: click Remove → confirm → Remove button disappears (KEY-013/034).
   //
   // -------------------------------------------------------------------------
@@ -176,12 +181,18 @@ describe("connections", () => {
     await saveBtn.waitForEnabled({ timeout: 5000 });
     await saveBtn.click();
 
-    // Post-save: Remove button appears — proxy for has_key = true (KEY-016/KEY-034).
-    const removeBtn = await $("#provider-Stooq-remove");
-    await removeBtn.waitForExist({ timeout: 8000 });
-    assert.ok(
-      await removeBtn.isExisting(),
-      "Remove button must appear after a successful save (KEY-010 stored → KEY-016 has_key=true)",
+    // Post-save: wait for whichever tier-dependent signal the save produced —
+    // Remove button (keychain tier) or plaintext opt-in offer (session tier).
+    await browser.waitUntil(
+      async () =>
+        (await $("#provider-Stooq-remove").isExisting()) ||
+        (await $("#provider-Stooq-plaintext").isExisting()),
+      {
+        timeout: 8000,
+        timeoutMsg:
+          "After a successful save, either the Remove button (keychain tier) or the " +
+          "plaintext opt-in offer (session tier, KEY-012) must appear",
+      },
     );
 
     // Step 2 — close and reopen to verify persistence (KEY-016 survives
