@@ -2,7 +2,7 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (spec) — Write KEY spec (User API Key Management) — 🔴 NOW BLOCKING price fetch
+## (spec) — Write KEY spec (User API Key Management) — ✅ Done
 
 **Escalated 2026-06-08 (v0.17.4)**: Stooq removed all free programmatic access — the `q/l/` quote endpoint 404s and the surviving `q/d/l/` endpoint requires a captcha-acquired API key (see L-006). **Price fetching is dead until a key-based provider ships.** This makes KEY the next feature, not a someday-enabler.
 
@@ -13,6 +13,8 @@ Cross-cutting enabler: every current and future external-provider feature depend
 Workflow-A: `/spec-writer api-key-management` → `/contract` → `feature-planner` → implementation. ~1-2 day feature. Consider scoping a Stooq-only first slice to restore prices fastest.
 
 Surfaced 2026-05-16 during the asset-valuation ADR thread; escalated to blocking 2026-06-08 (L-006).
+
+**Shipped** (PRs #77–#78, Stooq-only first slice): spec `docs/spec/api-key-management.md` (KEY-010..044), `connection` bounded context (3-tier `LayeredKeyStore` ladder, `StooqProbe`, 4 commands), keyed **windowed** `q/d/l/` fetch taking the latest settled close, Connections dialog + sidebar entry, price-refresh key gating (KEY-040) and launch skip (KEY-041). One live-probe correction vs the plan above: the apikey does **not** retire the L-005 PoW solver — Stooq requires PoW **and** apikey on `q/d/l/` (ADR-015). Subsequent consumers (Finnhub price fallback + ISIN enrichment, OpenFIGI uplift) remain open below.
 
 ## (spec) — Write FXR spec (Foreign Exchange Rate) — ✅ Done
 

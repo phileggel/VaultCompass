@@ -57,12 +57,14 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import {
+  removeProviderKey,
   seedAccount,
   seedAsset,
   seedAssetPrice,
   seedBuy,
   seedCategory,
   seedDeposit,
+  seedProviderKey,
 } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +81,13 @@ describe("MKT auto-fetch", () => {
   // AccountDetailsView "Refresh prices" on a cash-only account surfaces the
   // NoFetchableHoldings snackbar. Cash assets are excluded from fetch scope
   // (MKT-116), so with only a cash holding the use case rejects immediately.
+  //
+  // A Stooq key must be stored first: with no key the KEY-040 gate opens the
+  // Connections dialog instead of dispatching, so the no-holdings path is
+  // unreachable. A dummy key is seeded via IPC (save stores without probing)
+  // and removed in `finally` to restore the no-key baseline for other specs.
+  // The dispatch makes zero network calls — the use case rejects with
+  // NoFetchableHoldings before any symbol is fetched.
   // -------------------------------------------------------------------------
   it("MKT-131+MKT-111: AccountDetailsView Refresh prices on cash-only account shows no-holdings snackbar", async () => {
     const ACCOUNT_NAME = "E2E MKT-131 Cash Only";
@@ -89,27 +98,32 @@ describe("MKT auto-fetch", () => {
     // leaving zero fetchable holdings → NoFetchableHoldings.
     await seedDeposit(accountId, "2019-01-10", 500_000_000); // 500 EUR
 
-    await navigateToAccounts();
-    await navigateToAccountDetails(accountId);
+    await seedProviderKey("Stooq", "e2e-dummy-key-mkt-131");
+    try {
+      await navigateToAccounts();
+      await navigateToAccountDetails(accountId);
 
-    const refreshBtn = await $("#account-details-refresh-prices");
-    await refreshBtn.waitForExist({ timeout: 10000 });
-    await refreshBtn.click();
+      const refreshBtn = await $("#account-details-refresh-prices");
+      await refreshBtn.waitForExist({ timeout: 10000 });
+      await refreshBtn.click();
 
-    const snackbarRegion = await $('[role="status"]');
-    await snackbarRegion.waitForExist({ timeout: 10000 });
+      const snackbarRegion = await $('[role="status"]');
+      await snackbarRegion.waitForExist({ timeout: 10000 });
 
-    await browser.waitUntil(
-      async () => {
-        const text = await snackbarRegion.getText();
-        return text.includes("No holdings");
-      },
-      {
-        timeout: 8000,
-        timeoutMsg:
-          'Expected snackbar to contain "No holdings" (mkt.fetch_no_holdings) after clicking Refresh prices on a cash-only account',
-      },
-    );
+      await browser.waitUntil(
+        async () => {
+          const text = await snackbarRegion.getText();
+          return text.includes("No holdings");
+        },
+        {
+          timeout: 8000,
+          timeoutMsg:
+            'Expected snackbar to contain "No holdings" (mkt.fetch_no_holdings) after clicking Refresh prices on a cash-only account',
+        },
+      );
+    } finally {
+      await removeProviderKey("Stooq");
+    }
   });
 
   // -------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProviderConnection } from "@/bindings";
@@ -69,6 +70,7 @@ function ProviderRow({ connection, onMutated }: ProviderRowProps) {
     setApiKey,
     testing,
     saving,
+    removing,
     outcome,
     testError,
     saveError,
@@ -104,14 +106,20 @@ function ProviderRow({ connection, onMutated }: ProviderRowProps) {
         </span>
       )}
 
-      <a
-        href={SIGNUP_URL[provider]}
-        target="_blank"
-        rel="noreferrer"
+      {/* External URL must open in the system browser via plugin-opener, never
+          inside the WebView (in-WebView `target="_blank"` behavior is
+          platform-dependent and uncontrolled). */}
+      <button
+        type="button"
+        id={`provider-${provider}-signup`}
+        onClick={() => {
+          const url = SIGNUP_URL[provider];
+          if (url) void openUrl(url);
+        }}
         className="w-fit text-xs text-m3-primary underline"
       >
         {t("connection.signup_link")}
-      </a>
+      </button>
 
       <TextField
         id={`provider-key-input-${provider}`}
@@ -150,6 +158,7 @@ function ProviderRow({ connection, onMutated }: ProviderRowProps) {
             size="sm"
             id={`provider-${provider}-remove`}
             data-testid={`provider-remove-btn-${provider}`}
+            disabled={removing}
             onClick={() => setConfirmingRemove(true)}
           >
             {t("connection.action.remove")}
@@ -202,13 +211,20 @@ function ProviderRow({ connection, onMutated }: ProviderRowProps) {
             {t("connection.remove_confirm", { provider })}
           </span>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setConfirmingRemove(false)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={removing}
+              onClick={() => setConfirmingRemove(false)}
+            >
               {t("action.cancel")}
             </Button>
             <Button
               variant="danger"
               size="sm"
+              id="remove-confirm-ok"
               data-testid="remove-confirm-ok"
+              disabled={removing}
               onClick={handleRemove}
             >
               {t("connection.action.remove")}
