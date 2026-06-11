@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-06-11
+
+### Added
+
+- Connections dialog + price-refresh key gating
+  URL-driven Connections dialog (?modal=connections) for BYOK key entry,
+  test, and removal; the refresh buttons gate on a stored key (KEY-040) and
+  launch auto-fetch skips silently without one (KEY-041). The KEY-012
+  plaintext opt-in surfaces only when a save falls back to session memory.
+- provider API-key storage + Stooq keyed fetch
+  Stooq's key-less light-quote endpoint 404'd (L-006); a live probe showed
+  the apikey does not bypass the proof-of-work gate, so the fetch path
+  retains PoW and adds the key on q/d/l (ADR-015, supersedes ADR-008).
+  New connection BC stores BYOK keys via the OS-keychain ladder (ADR-011).
+
+### Fixed
+
+- surface price-fetch outcome with a failure snackbar
+  Price fetches failed silently — the user only learned from logs (worse
+  now that Stooq's free endpoint 404s, L-006). The fetch task now emits
+  AssetPriceFetchCompleted{ok,skipped} (MKT-119); the frontend shows a
+  snackbar when any asset was skipped, staying silent on full success so
+  launch auto-fetch stays quiet on the happy path (MKT-145).
+
 ## [0.17.4] - 2026-06-07
 
 ### Fixed
