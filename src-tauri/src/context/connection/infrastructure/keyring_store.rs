@@ -90,7 +90,18 @@ impl LayeredKeyStore {
     fn write_plaintext(&self, account: &str, key: &str) -> Result<()> {
         fs::create_dir_all(&self.plaintext_dir)
             .context("failed to create connection key directory")?;
-        fs::write(self.plaintext_path(account), key).context("failed to write plaintext key file")
+        let path = self.plaintext_path(account);
+        fs::write(&path, key).context("failed to write plaintext key file")?;
+        // A credential file must be owner-read-only; the default umask would
+        // leave it world-readable. No-op concern on Windows, where the file
+        // inherits the private data dir's ACLs.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+                .context("failed to restrict plaintext key file permissions")?;
+        }
+        Ok(())
     }
 
     fn read_plaintext(&self, account: &str) -> Result<Option<String>> {
@@ -296,6 +307,21 @@ mod tests {
         );
         store.remove_plaintext("stooq").unwrap();
         assert_eq!(store.read_plaintext("stooq").unwrap(), None);
+        cleanup(&store);
+    }
+
+    // KEY-012 — the plaintext key file is owner-read-only, never world-readable.
+    #[cfg(unix)]
+    #[test]
+    fn plaintext_file_is_owner_read_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let store = temp_store("plaintext-mode");
+        store.write_plaintext("stooq", "k3").unwrap();
+        let mode = std::fs::metadata(store.plaintext_path("stooq"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
         cleanup(&store);
     }
 

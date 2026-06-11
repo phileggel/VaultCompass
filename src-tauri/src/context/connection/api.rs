@@ -103,3 +103,34 @@ pub async fn remove_provider_key(
 ) -> StdResult<(), ConnectionError> {
     svc.remove_key(args.provider).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // KEY-014 — `{:?}` on the args carrying a secret renders `[REDACTED]`, never
+    // the key. Guards against a regression to `#[derive(Debug)]`.
+    #[test]
+    fn save_args_debug_redacts_the_key() {
+        let args = SaveProviderKeyArgs {
+            provider: Provider::Stooq,
+            key: "super-secret-key".to_string(),
+            allow_plaintext: false,
+        };
+        let rendered = format!("{args:?}");
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(!rendered.contains("super-secret-key"));
+    }
+
+    // KEY-014 — same redaction guarantee for the test-probe args.
+    #[test]
+    fn test_args_debug_redacts_the_key() {
+        let args = TestProviderKeyArgs {
+            provider: Provider::Stooq,
+            key: "super-secret-key".to_string(),
+        };
+        let rendered = format!("{args:?}");
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(!rendered.contains("super-secret-key"));
+    }
+}

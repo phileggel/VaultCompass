@@ -25,6 +25,7 @@ export function useProviderRow(provider: Provider, onMutated: () => Promise<void
   const [outcome, setOutcome] = useState<TestOutcomeUiState | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   // KEY-012 — set when a save fell back to session memory (keychain unavailable),
   // offering the user the persistent (opt-in) plaintext tier.
@@ -78,14 +79,20 @@ export function useProviderRow(provider: Provider, onMutated: () => Promise<void
   );
 
   const handleRemove = useCallback(async () => {
-    setConfirmingRemove(false);
-    const result = await connectionGateway.removeProviderKey({ provider });
-    if (result.status === "ok") {
-      showSnackbar(t("connection.remove_success"), "success");
-      await onMutated();
-    } else {
-      // F27 — surface the failure rather than silently dropping it.
-      showSnackbar(t(connectionErrorToI18n(result.error)), "error");
+    setRemoving(true);
+    try {
+      const result = await connectionGateway.removeProviderKey({ provider });
+      if (result.status === "ok") {
+        showSnackbar(t("connection.remove_success"), "success");
+        setConfirmingRemove(false);
+        await onMutated();
+      } else {
+        // F27 — surface the failure rather than silently dropping it.
+        showSnackbar(t(connectionErrorToI18n(result.error)), "error");
+        setConfirmingRemove(false);
+      }
+    } finally {
+      setRemoving(false);
     }
   }, [provider, showSnackbar, t, onMutated]);
 
@@ -94,6 +101,7 @@ export function useProviderRow(provider: Provider, onMutated: () => Promise<void
     setApiKey,
     testing,
     saving,
+    removing,
     outcome,
     testError,
     saveError,

@@ -356,6 +356,31 @@ describe("ConnectionsModal — in-flight state (KEY-035)", () => {
 
     resolveTest({ status: "ok", data: "Accepted" });
   });
+
+  // KEY-035 — remove buttons disabled while removeProviderKey is in flight
+  it("disables remove and confirm buttons while removeProviderKey is in progress", async () => {
+    vi.mocked(gateway.connectionGateway.getProviderConnections).mockResolvedValue({
+      status: "ok",
+      data: [{ provider: "Stooq", has_key: true, active_tier: "OsKeychain" }],
+    });
+
+    let resolveRemove!: (v: { status: "ok"; data: null }) => void;
+    vi.mocked(gateway.connectionGateway.removeProviderKey).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRemove = resolve;
+      }),
+    );
+
+    render(<ConnectionsModal open={true} onClose={vi.fn()} />);
+
+    await userEvent.click(await screen.findByTestId("provider-remove-btn-Stooq"));
+    await userEvent.click(screen.getByTestId("remove-confirm-ok"));
+
+    expect(screen.getByTestId("remove-confirm-ok")).toBeDisabled();
+    expect(screen.getByTestId("provider-remove-btn-Stooq")).toBeDisabled();
+
+    resolveRemove({ status: "ok", data: null });
+  });
 });
 
 describe("ConnectionsModal — KEY-012 plaintext opt-in", () => {
