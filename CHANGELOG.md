@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-06-12
+
+### Added
+
+- free-shares modal + transaction-list rendering
+  Record-menu entry + dedicated modal (no money inputs, asset locked on edit
+  via the URL-driven shell mount) so a zero-cost distribution is recorded as
+  quantity only. The TXL row dashes the money columns since no cash moved.
+- optional keyless Stooq fetch mode
+  Stooq's daily-download serves anonymously (PoW only) on some networks but
+  is key-gated or IP-blocked on others, so neither mode fits everyone. A
+  Settings toggle (default keyed) lets the user pick; the mode travels with
+  each fetch request. ADR-016 supersedes ADR-015's keyed-only decision.
+- record free-share distributions
+  Bonus shares added at zero cost: quantity rises, cost basis is unchanged
+  so the average price dilutes. No cash leg. Fully reversible via the
+  transaction-log replay (FSD-028) — delete restores the holding exactly.
+
 ## [0.18.0] - 2026-06-11
 
 ### Added
