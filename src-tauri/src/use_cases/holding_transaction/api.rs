@@ -275,3 +275,41 @@ pub async fn record_dividend(
     )
     .await
 }
+
+// =============================================================================
+// Free Shares — DTO + command (FSD-020/022)
+// =============================================================================
+
+/// Parameters for recording a zero-cost free-share distribution from a held
+/// distributing asset (FSD-020). No amount, no unit price, no exchange rate,
+/// no fees — no money changes hands.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct FreeSharesDTO {
+    /// Account whose holding receives the free shares.
+    pub account_id: String,
+    /// The distributing asset — must be actively held (quantity > 0) and not a Cash Asset (FSD-011).
+    pub asset_id: String,
+    /// Business date the shares were received (YYYY-MM-DD, FSD-021).
+    pub date: String,
+    /// Number of free shares received (micro-units, strictly positive, FSD-021).
+    pub quantity: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Records a zero-cost free-share distribution attributed to a held asset (FSD-022).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_free_shares(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: FreeSharesDTO,
+) -> Result<Transaction, super::error::FreeSharesError> {
+    uc.record_free_shares(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.quantity,
+        dto.note,
+    )
+    .await
+}

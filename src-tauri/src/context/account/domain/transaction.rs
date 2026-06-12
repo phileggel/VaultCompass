@@ -35,6 +35,8 @@ pub enum TransactionType {
     Withdrawal,
     /// A cash dividend paid by a held asset; credited to the Cash Holding (DIV-023).
     Dividend,
+    /// Shares of a held asset received at no cost; quantity rises, cost basis unchanged (FSD-022).
+    FreeShares,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -267,6 +269,64 @@ impl Transaction {
         )
     }
 
+    /// Factory: builds a FreeShares transaction (FSD-022/023).
+    ///
+    /// Zero-cost convention: `unit_price = 0`, `exchange_rate = 1.0` micros,
+    /// `fees = 0`, `total_amount = 0` (no money moves), `realized_pnl = None`.
+    /// `asset_id` is the distributing asset.
+    ///
+    /// FSD-021 — validates the date bounds and `quantity > 0` directly; the
+    /// generic validator does not apply because it rejects `total_amount = 0`,
+    /// which is exactly this type's convention.
+    pub fn free_shares(
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> StdResult<Self, TransactionDomainError> {
+        Self::validate_date(&date)?;
+        if quantity <= 0 {
+            return Err(TransactionDomainError::QuantityNotPositive);
+        }
+        Ok(Self {
+            id: Uuid::new_v4().to_string(),
+            account_id,
+            asset_id,
+            transaction_type: TransactionType::FreeShares,
+            date,
+            quantity,
+            unit_price: 0,
+            exchange_rate: 1_000_000,
+            fees: 0,
+            total_amount: 0,
+            note,
+            realized_pnl: None,
+            created_at: chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+                .to_string(),
+        })
+    }
+
+    /// Factory: rebuilds a FreeShares transaction with a caller-supplied ID and
+    /// `created_at` (FSD-040 correction). Same zero-cost packing and FSD-021
+    /// validation as `free_shares`, but preserves the transaction's identity —
+    /// the type-specific sibling of `with_id` (which rejects `total_amount = 0`).
+    pub fn free_shares_with_id(
+        id: String,
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+        created_at: String,
+    ) -> StdResult<Self, TransactionDomainError> {
+        let mut tx = Self::free_shares(account_id, asset_id, date, quantity, note)?;
+        tx.id = id;
+        tx.created_at = created_at;
+        Ok(tx)
+    }
+
     /// Reconstructs a Transaction from storage without validation.
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
@@ -312,17 +372,7 @@ impl Transaction {
         fees: i64,
         total_amount: i64,
     ) -> StdResult<(), TransactionDomainError> {
-        // TRX-020 — date must be parseable, not in the future, not before 1900-01-01
-        let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
-            .map_err(|_| TransactionDomainError::InvalidDate)?;
-        let today = chrono::Local::now().date_naive();
-        if parsed_date > today {
-            return Err(TransactionDomainError::DateInFuture);
-        }
-        let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).expect("hardcoded valid date");
-        if parsed_date < min_date {
-            return Err(TransactionDomainError::DateTooOld);
-        }
+        Self::validate_date(date)?;
 
         // TRX-020 — quantity must be strictly positive
         if quantity <= 0 {
@@ -349,6 +399,21 @@ impl Transaction {
             return Err(TransactionDomainError::TotalAmountNotPositive);
         }
 
+        Ok(())
+    }
+
+    /// TRX-020 — date must be parseable, not in the future, not before 1900-01-01.
+    fn validate_date(date: &str) -> StdResult<(), TransactionDomainError> {
+        let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            .map_err(|_| TransactionDomainError::InvalidDate)?;
+        let today = chrono::Local::now().date_naive();
+        if parsed_date > today {
+            return Err(TransactionDomainError::DateInFuture);
+        }
+        let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).expect("hardcoded valid date");
+        if parsed_date < min_date {
+            return Err(TransactionDomainError::DateTooOld);
+        }
         Ok(())
     }
 }
@@ -742,5 +807,156 @@ mod tests {
         .unwrap();
         assert!(tx.realized_pnl.is_none());
         assert_eq!(tx.note.as_deref(), Some("Q2 dividend"));
+    }
+
+    // -------------------------------------------------------------------------
+    // FSD-022/023 — Transaction::free_shares factory
+    // -------------------------------------------------------------------------
+
+    // FSD-022/023 — free_shares packs the contract convention exactly:
+    // transaction_type = FreeShares, unit_price = 0, exchange_rate = 1_000_000,
+    // fees = 0, total_amount = 0, realized_pnl = None; asset_id = distributing asset.
+    #[test]
+    fn free_shares_factory_packs_contract_convention() {
+        // FSD-022 — Transaction::free_shares must exist and set the zero-cost convention.
+        let tx = Transaction::free_shares(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            5_000_000, // 5 shares in micros
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            tx.transaction_type,
+            TransactionType::FreeShares,
+            "transaction_type must be FreeShares"
+        );
+        assert_eq!(tx.account_id, "acc-1");
+        assert_eq!(
+            tx.asset_id, "asset-xyz",
+            "asset_id must be the distributing asset"
+        );
+        assert_eq!(tx.quantity, 5_000_000);
+        // FSD-023 — zero-cost convention: no money moves
+        assert_eq!(
+            tx.unit_price, 0,
+            "unit_price must be 0 (no acquisition cost)"
+        );
+        assert_eq!(
+            tx.exchange_rate, 1_000_000,
+            "exchange_rate must be 1_000_000 (no FX leg)"
+        );
+        assert_eq!(tx.fees, 0, "fees must be 0");
+        assert_eq!(
+            tx.total_amount, 0,
+            "total_amount must be 0 (no money moved)"
+        );
+        assert!(
+            tx.realized_pnl.is_none(),
+            "realized_pnl must be None (not a capital gain)"
+        );
+    }
+
+    // FSD-022 — note is preserved on the returned transaction.
+    #[test]
+    fn free_shares_factory_preserves_note() {
+        let tx = Transaction::free_shares(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            1_000_000,
+            Some("Bonus issue 1:10".to_string()),
+        )
+        .unwrap();
+        assert_eq!(tx.note.as_deref(), Some("Bonus issue 1:10"));
+    }
+
+    // FSD-021 — quantity ≤ 0 must be rejected as QuantityNotPositive.
+    #[test]
+    fn free_shares_factory_rejects_zero_quantity() {
+        // FSD-021 — quantity must be strictly positive
+        let err = Transaction::free_shares(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            0,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::QuantityNotPositive),
+            "expected QuantityNotPositive, got: {err:?}"
+        );
+    }
+
+    // FSD-021 — future date is rejected as DateInFuture.
+    #[test]
+    fn free_shares_factory_rejects_future_date() {
+        // FSD-021 — date bounds: not in future
+        let err = Transaction::free_shares(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2099-01-01".to_string(),
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::DateInFuture),
+            "expected DateInFuture, got: {err:?}"
+        );
+    }
+
+    // FSD-021 — date before 1900-01-01 is rejected as DateTooOld.
+    #[test]
+    fn free_shares_factory_rejects_date_too_old() {
+        // FSD-021 — date bounds: not older than lower bound
+        let err = Transaction::free_shares(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "1899-12-31".to_string(),
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::DateTooOld),
+            "expected DateTooOld, got: {err:?}"
+        );
+    }
+
+    // FSD-021 — malformed date string is rejected as InvalidDate.
+    #[test]
+    fn free_shares_factory_rejects_invalid_date_string() {
+        // FSD-021 — date must be a well-formed ISO 8601 calendar date
+        let err = Transaction::free_shares(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "not-a-date".to_string(),
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, TransactionDomainError::InvalidDate),
+            "expected InvalidDate, got: {err:?}"
+        );
+    }
+
+    // FSD-022 — FreeShares round-trips through strum Display → from_str
+    // (the variant must be persisted as TEXT and deserialized back without error).
+    #[test]
+    fn free_shares_variant_round_trips_through_strum() {
+        // FSD-022 — strum serialization must handle FreeShares without error
+        use std::str::FromStr;
+        let original = TransactionType::FreeShares;
+        let as_str = original.to_string();
+        let parsed = TransactionType::from_str(&as_str).expect("strum parse must succeed");
+        assert_eq!(
+            parsed,
+            TransactionType::FreeShares,
+            "FreeShares must round-trip through strum"
+        );
     }
 }

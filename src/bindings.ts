@@ -486,6 +486,17 @@ async recordDividend(dto: DividendDTO) : Promise<Result<Transaction, DividendErr
 }
 },
 /**
+ * Records a zero-cost free-share distribution attributed to a held asset (FSD-022).
+ */
+async recordFreeShares(dto: FreeSharesDTO) : Promise<Result<Transaction, FreeSharesError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_free_shares", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
  */
 async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountApplicationError>> {
@@ -1937,6 +1948,78 @@ export type FetchPriceTask =
  */
 { code: "UnknownError" }
 /**
+ * Application-layer rejections specific to the `record_free_shares` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_free_shares`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type FreeSharesApplicationError = 
+/**
+ * No asset exists with the requested ID (FSD-011).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The asset is not currently held (quantity = 0 or no holding) (FSD-011).
+ */
+{ code: "AssetNotHeld" } | 
+/**
+ * Target asset is a system Cash Asset — free shares must be on non-cash
+ * holdings (FSD-011).
+ */
+{ code: "FreeSharesOnCashAsset" }
+/**
+ * Parameters for recording a zero-cost free-share distribution from a held
+ * distributing asset (FSD-020). No amount, no unit price, no exchange rate,
+ * no fees — no money changes hands.
+ */
+export type FreeSharesDTO = { 
+/**
+ * Account whose holding receives the free shares.
+ */
+account_id: string; 
+/**
+ * The distributing asset — must be actively held (quantity > 0) and not a Cash Asset (FSD-011).
+ */
+asset_id: string; 
+/**
+ * Business date the shares were received (YYYY-MM-DD, FSD-021).
+ */
+date: string; 
+/**
+ * Number of free shares received (micro-units, strictly positive, FSD-021).
+ */
+quantity: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
+ * Use-case composite for the **record free shares** failure surface.
+ * 
+ * Each leaf lives in its rightful layer:
+ * - `AccountApplicationError` — application layer, raises `AccountNotFound`
+ * and `DatabaseError`.
+ * - `FreeSharesApplicationError` — use-case-owned (this file), raises the
+ * cross-BC asset/holding checks.
+ * - `TransactionDomainError` — domain layer, raises date / quantity
+ * validation errors.
+ */
+export type FreeSharesError = 
+/**
+ * Account-side rejection (`AccountNotFound`, `DatabaseError`).
+ */
+AccountApplicationError | 
+/**
+ * Use-case-layer rejection (cross-BC asset checks).
+ */
+FreeSharesApplicationError | 
+/**
+ * Transaction-factory / domain validation rejection.
+ */
+TransactionDomainError
+/**
  * Current state of a financial position: an asset held within an account (ADR-002).
  * All financial fields are stored as i64 micro-units (ADR-001).
  */
@@ -2276,6 +2359,9 @@ export type RemoveProviderKeyArgs = {
 provider: Provider }
 /**
  * Arguments for `save_provider_key` (KEY-010/012).
+ * 
+ * `Debug` is implemented manually to redact the secret `key` (KEY-014): the
+ * derived form would render it verbatim in any `{:?}`.
  */
 export type SaveProviderKeyArgs = { 
 /**
@@ -2343,7 +2429,8 @@ export type StorageTier =
  */
 "PlaintextFile"
 /**
- * Arguments for `test_provider_key` (KEY-021).
+ * Arguments for `test_provider_key` (KEY-021). `Debug` redacts the secret `key`
+ * (KEY-014).
  */
 export type TestProviderKeyArgs = { 
 /**
@@ -2486,7 +2573,11 @@ export type TransactionType =
 /**
  * A cash dividend paid by a held asset; credited to the Cash Holding (DIV-023).
  */
-"Dividend"
+"Dividend" | 
+/**
+ * Shares of a held asset received at no cost; quantity rises, cost basis unchanged (FSD-022).
+ */
+"FreeShares"
 /**
  * Parameters for updating an existing account.
  */

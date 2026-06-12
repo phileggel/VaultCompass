@@ -40,7 +40,7 @@ The feature lives within the `transaction` bounded context (`features/transactio
 
 **TXL-021 — Transaction list loading — frontend (frontend)**: The transaction list is loaded on mount using the `accountId` and `assetId` from the route params, and reloaded whenever either filter changes to a complete selection.
 
-**TXL-022 — Displayed columns (frontend)**: The transaction table displays the following columns for each row: Type, Date, Quantity, Unit Price, Exchange Rate, Fees, Total Amount, Realized P&L. The Realized P&L column displays the `realized_pnl` value for sell rows (per SEL-041) and a neutral placeholder (`—`) for purchase, opening-balance, deposit, withdrawal, and dividend rows (dividend rows cross-amended by DIV-050).
+**TXL-022 — Displayed columns (frontend)**: The transaction table displays the following columns for each row: Type, Date, Quantity, Unit Price, Exchange Rate, Fees, Total Amount, Realized P&L. The Realized P&L column displays the `realized_pnl` value for sell rows (per SEL-041) and a neutral placeholder (`—`) for purchase, opening-balance, deposit, withdrawal, dividend, and free-shares rows (dividend rows cross-amended by DIV-050; free-shares rows by FSD-050, where the Unit Price and Total Amount columns also render `—`).
 
 **TXL-023 — Type column value (frontend)**: The Type column displays the actual transaction type for each row: "Purchase" for purchase transactions, "Sell" for sell transactions (per SEL-040), "Opening balance" for opening-balance entries, "Deposit" for deposit transactions (per CSH-101), and "Withdrawal" for withdrawal transactions (per CSH-101). Sell rows are visually distinguished from Purchase rows.
 

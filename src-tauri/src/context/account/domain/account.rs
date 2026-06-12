@@ -341,40 +341,57 @@ impl Account {
         let asset_id = existing.asset_id.clone();
         let created_at = existing.created_at.clone();
 
-        let total_amount = match tx_type {
-            TransactionType::Purchase => {
-                Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees)
-            }
-            TransactionType::Sell => {
-                Self::compute_sell_total(quantity, unit_price, exchange_rate, fees)
-            }
-            TransactionType::OpeningBalance => {
-                Self::compute_opening_balance_total(quantity, unit_price)
-            }
-            // CSH-022 / CSH-032: cash transactions carry total_amount == quantity (no fees, no FX).
-            TransactionType::Deposit | TransactionType::Withdrawal => quantity,
-            // DIV-040: dividend total_amount = floor(quantity × exchange_rate / MICRO).
-            // quantity holds amount_micros in asset currency on a Dividend correction.
-            TransactionType::Dividend => {
-                ((quantity as i128 * exchange_rate as i128) / 1_000_000) as i64
-            }
-        };
+        let updated_tx = if tx_type == TransactionType::FreeShares {
+            // FSD-040 — the zero-cost convention carries total_amount = 0, which the
+            // generic validator rejects; rebuild via the identity-preserving
+            // free-shares factory (validates date bounds + quantity > 0 per FSD-021).
+            Transaction::free_shares_with_id(
+                tx_id.to_string(),
+                self.id.clone(),
+                asset_id.clone(),
+                date,
+                quantity,
+                note,
+                created_at,
+            )?
+        } else {
+            let total_amount = match tx_type {
+                TransactionType::Purchase => {
+                    Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees)
+                }
+                TransactionType::Sell => {
+                    Self::compute_sell_total(quantity, unit_price, exchange_rate, fees)
+                }
+                TransactionType::OpeningBalance => {
+                    Self::compute_opening_balance_total(quantity, unit_price)
+                }
+                // CSH-022 / CSH-032: cash transactions carry total_amount == quantity (no fees, no FX).
+                TransactionType::Deposit | TransactionType::Withdrawal => quantity,
+                // DIV-040: dividend total_amount = floor(quantity × exchange_rate / MICRO).
+                // quantity holds amount_micros in asset currency on a Dividend correction.
+                TransactionType::Dividend => {
+                    ((quantity as i128 * exchange_rate as i128) / 1_000_000) as i64
+                }
+                // Never reached — FreeShares takes the dedicated branch above.
+                TransactionType::FreeShares => 0,
+            };
 
-        let updated_tx = Transaction::with_id(
-            tx_id.to_string(),
-            self.id.clone(),
-            asset_id.clone(),
-            tx_type,
-            date,
-            quantity,
-            unit_price,
-            exchange_rate,
-            fees,
-            total_amount,
-            note,
-            None, // realized_pnl recomputed below
-            created_at,
-        )?;
+            Transaction::with_id(
+                tx_id.to_string(),
+                self.id.clone(),
+                asset_id.clone(),
+                tx_type,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                total_amount,
+                note,
+                None, // realized_pnl recomputed below
+                created_at,
+            )?
+        };
 
         // Replace the transaction in-memory
         if let Some(slot) = self.transactions.iter_mut().find(|t| t.id == tx_id) {
@@ -649,6 +666,35 @@ impl Account {
         Ok(tx)
     }
 
+    /// Aggregate-root method: applies a pre-built FreeShares transaction to this
+    /// account (FSD-022). The transaction must have been built via
+    /// `Transaction::free_shares`. Pushes to history, recomputes the distributing
+    /// asset's holding (quantity rises at zero cost — the average price dilutes,
+    /// FSD-023), and queues the changes. The Cash Holding is never touched
+    /// (FSD-022d — a distribution has no cash leg).
+    pub fn apply_free_shares(&mut self, tx: Transaction) -> Result<Transaction> {
+        self.transactions.push(tx.clone());
+        let pair_txs: Vec<&Transaction> = self
+            .transactions
+            .iter()
+            .filter(|t| t.asset_id == tx.asset_id)
+            .collect();
+        let (holding, _) = match self.recalculate_holding(&tx.asset_id, &pair_txs) {
+            Ok(result) => result,
+            Err(e) => {
+                self.transactions.pop();
+                return Err(e);
+            }
+        };
+
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+        Ok(tx)
+    }
+
     // Cash deposit / withdrawal recording is composed at the application layer
     // (see `AccountService::record_deposit` / `record_withdrawal`) by chaining
     // `Transaction::new_deposit` / `new_withdrawal` (TRX-020) and `apply_deposit`
@@ -852,6 +898,12 @@ impl Account {
                     // reached on any correct/cancel replay of a dividend-bearing asset. It is a
                     // deliberate no-op: quantity, VWAP, and realized P&L are left untouched; the
                     // dividend's only effect (the cash credit) lives in `replay_cash_holding`.
+                }
+                // FSD-022/023 — free shares add quantity at zero cost: the VWAP numerator
+                // is unchanged, so the average price dilutes to cost_basis / new_quantity.
+                // No cash effect (FSD-022d — the type never enters `replay_cash_holding`).
+                TransactionType::FreeShares => {
+                    total_quantity += t.quantity as i128;
                 }
                 // CSH-032: a Withdrawal debits cash quantity by total_amount; never realises P&L
                 // and never tracks last_sold_date. CSH-080's eligibility guard runs in
@@ -2449,6 +2501,483 @@ mod tests {
             acc.cash_holding_quantity(),
             micro(600),
             "cash holding reflects the corrected dividend credit on replay"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // FSD-022/023/024/027/028/040/041 — apply_free_shares aggregate-root method
+    // -------------------------------------------------------------------------
+
+    // FSD-022a/023 — apply_free_shares increases holding quantity by distributed
+    // amount; cost basis is unchanged so the average price (VWAP) dilutes.
+    // Setup: buy 10 units at 100 each → cost_basis = 1000, VWAP = 100.
+    // Record 5 free shares → quantity = 15, cost_basis still = 1000, VWAP = 1000/15 ≈ 66.67.
+    #[test]
+    fn fsd_022_apply_free_shares_increases_quantity_and_dilutes_vwap() {
+        // FSD-022 — holding.quantity += distributed_quantity
+        // FSD-023 — cost basis unchanged; VWAP = cost_basis / new_quantity
+        let mut acc = cash_seeded_account();
+        // Buy 10 units @ 100 → total = 1_000, VWAP = 100
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+        let holding_before = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap()
+            .clone();
+        let cost_basis_before =
+            holding_before.quantity as i128 * holding_before.average_price as i128 / 1_000_000;
+
+        // Record 5 free shares at zero cost (FSD-022a, FSD-023)
+        let tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        acc.apply_free_shares(tx).unwrap();
+
+        let holding_after = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+
+        // FSD-022a — quantity must increase by the distributed amount
+        assert_eq!(
+            holding_after.quantity,
+            micro(15),
+            "quantity must increase from 10 to 15 after free-share distribution"
+        );
+
+        // FSD-023 — underlying cost unchanged → VWAP dilutes to the exact floored
+        // value (TRX-026 floor convention; the derived display cost may round down
+        // by < 1 micro-unit per share).
+        let expected_diluted_vwap =
+            (cost_basis_before * 1_000_000 / holding_after.quantity as i128) as i64;
+        assert_eq!(
+            holding_after.average_price, expected_diluted_vwap,
+            "average price must equal floor(cost_basis / new_quantity) after free-share distribution"
+        );
+        // VWAP = cost_basis_before / new_quantity; must be strictly less than before
+        assert!(
+            holding_after.average_price < holding_before.average_price,
+            "average price must dilute after free-share distribution"
+        );
+    }
+
+    // FSD-022d — apply_free_shares does NOT touch the Cash Holding.
+    #[test]
+    fn fsd_022d_apply_free_shares_leaves_cash_holding_unchanged() {
+        // FSD-022d — a free-share distribution has no cash leg
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+        let cash_before = acc.cash_holding_quantity();
+
+        let tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        acc.apply_free_shares(tx).unwrap();
+
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            cash_before,
+            "cash holding must be unchanged after free-share distribution (FSD-022d)"
+        );
+    }
+
+    // FSD-022 — apply_free_shares queues TransactionInserted and HoldingUpserted
+    // for the distributing asset; no HoldingUpserted for the cash asset.
+    #[test]
+    fn fsd_022_apply_free_shares_queues_correct_pending_changes() {
+        // FSD-022c — TransactionInserted must be queued for the distributing asset
+        // FSD-022d — no cash change emitted
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+        acc.pending_changes.clear(); // isolate from buy changes
+
+        let tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        let tx_id = tx.id.clone();
+        acc.apply_free_shares(tx).unwrap();
+
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::TransactionInserted(t) if t.id == tx_id
+            )),
+            "TransactionInserted must be queued for the free-shares transaction"
+        );
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::HoldingUpserted(h) if h.asset_id == "asset-xyz"
+            )),
+            "HoldingUpserted must be queued for the distributing asset"
+        );
+        // FSD-022d — no holding change for the Cash Asset
+        assert!(
+            !acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::HoldingUpserted(h) if h.asset_id == acc.cash_asset_id()
+            )),
+            "cash holding must NOT be updated by a free-share distribution (FSD-022d)"
+        );
+    }
+
+    // FSD-027 — chronological replay: a sell AFTER the distribution uses the
+    // diluted VWAP to compute realized P&L; a sell BEFORE the distribution is unaffected.
+    // Setup: buy 10 @ 100 (2024-01-01), record 5 free shares (2024-06-01),
+    //        sell 5 @ 80 (2024-09-01) → realized P&L against diluted VWAP.
+    #[test]
+    fn fsd_027_sell_after_distribution_uses_diluted_vwap() {
+        // FSD-027 — sells dated after distribution replay against diluted average price
+        let mut acc = cash_seeded_account();
+        // Step 1: buy 10 @ 100 → VWAP = 100, total cost = 1_000
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        // Step 2: record 5 free shares (date after the buy)
+        let fs_tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-01".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        acc.apply_free_shares(fs_tx).unwrap();
+        // Post-distribution: quantity=15, cost_basis=1_000, VWAP=1_000/15 (micro)
+
+        let diluted_vwap = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap()
+            .average_price;
+
+        // Step 3: correct_transaction is NOT used here; instead we record the
+        // sell AFTER the free shares in time. Use buy/sell directly.
+        // Sell 5 units after the distribution: sell proceeds = 5 × 80 = 400.
+        // realized_pnl = proceeds - diluted_vwap × qty = 400 - diluted_vwap × 5
+        let sell_tx = acc
+            .sell_holding(
+                "asset-xyz".to_string(),
+                "2024-09-01".to_string(),
+                micro(5),
+                micro(80),
+                micro(1),
+                0,
+                None,
+            )
+            .unwrap();
+
+        let expected_pnl =
+            micro(400) - (diluted_vwap as i128 * micro(5) as i128 / 1_000_000) as i64;
+        assert_eq!(
+            sell_tx.realized_pnl,
+            Some(expected_pnl),
+            "sell after distribution must compute P&L against diluted VWAP (FSD-027)"
+        );
+    }
+
+    // FSD-027 — a sell BEFORE the free-share distribution date is unaffected
+    // by the distribution when it is replayed chronologically.
+    // Setup: buy 10 @ 100 (2024-01-01), sell 2 @ 120 (2024-03-01),
+    //        then add 5 free shares (2024-06-01).
+    // The sell's realized P&L (computed at record time) should not change.
+    #[test]
+    fn fsd_027_sell_before_distribution_is_unaffected() {
+        // FSD-027 — sells dated before the distribution are unaffected
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+        // Sell 2 @ 120 before the distribution; P&L = 2 × (120 - 100) = 40
+        let sell_tx = acc
+            .sell_holding(
+                "asset-xyz".to_string(),
+                "2024-03-01".to_string(),
+                micro(2),
+                micro(120),
+                micro(1),
+                0,
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        let pnl_before_distribution = sell_tx.realized_pnl;
+
+        // Record 5 free shares after the sell
+        let fs_tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-01".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        acc.apply_free_shares(fs_tx).unwrap();
+
+        // The sell's P&L must not change (replay puts the free shares after the sell)
+        let sell_after_replay = acc
+            .transactions
+            .iter()
+            .find(|t| t.id == sell_tx.id)
+            .unwrap();
+        assert_eq!(
+            sell_after_replay.realized_pnl, pnl_before_distribution,
+            "sell before distribution must be unaffected by later free shares (FSD-027)"
+        );
+    }
+
+    // FSD-028 — reversibility: record → delete → compare.
+    // After cancel_transaction removes the free-shares row, the holding is
+    // restored EXACTLY to its pre-distribution state (quantity, average_price,
+    // cost_basis identical).
+    #[test]
+    fn fsd_028_cancel_free_shares_restores_holding_exactly() {
+        // FSD-028 — deleting a distribution restores holding to pre-distribution state exactly
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        let holding_before = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap()
+            .clone();
+
+        // Record free shares
+        let fs_tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        let fs_id = fs_tx.id.clone();
+        acc.apply_free_shares(fs_tx).unwrap();
+
+        // Verify distribution was applied
+        let holding_mid = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(
+            holding_mid.quantity,
+            micro(15),
+            "sanity: distribution applied"
+        );
+
+        // Cancel the distribution
+        acc.cancel_transaction(&fs_id).unwrap();
+
+        let holding_after = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+
+        // FSD-028 — exact restoration
+        assert_eq!(
+            holding_after.quantity, holding_before.quantity,
+            "quantity must be restored to pre-distribution value (FSD-028)"
+        );
+        assert_eq!(
+            holding_after.average_price, holding_before.average_price,
+            "average_price must be restored to pre-distribution value (FSD-028)"
+        );
+        // cost_basis = quantity × average_price / MICRO
+        let cost_after =
+            holding_after.quantity as i128 * holding_after.average_price as i128 / 1_000_000;
+        let cost_before =
+            holding_before.quantity as i128 * holding_before.average_price as i128 / 1_000_000;
+        assert_eq!(
+            cost_after, cost_before,
+            "cost basis must be restored exactly (FSD-028)"
+        );
+    }
+
+    // FSD-041 — cancel_transaction on a free-share distribution is rejected with
+    // CascadingOversell when a later sell would be left oversold without the free shares.
+    // Setup: buy 5 (2024-01-01), record 5 free shares (2024-06-01), sell 8 (2024-09-01).
+    // After the distribution there are 10 units; the sell of 8 is valid.
+    // Cancelling the distribution would replay with 5 units → sell of 8 oversells → rejected.
+    #[test]
+    fn fsd_041_cancel_free_shares_rejected_when_later_sell_would_oversell() {
+        // FSD-041 — removing free shares that a later sell depends on raises CascadingOversell
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(5),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        let fs_tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-01".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        let fs_id = fs_tx.id.clone();
+        acc.apply_free_shares(fs_tx).unwrap();
+
+        // Sell 8 (valid because 5 bought + 5 free = 10 available)
+        acc.sell_holding(
+            "asset-xyz".to_string(),
+            "2024-09-01".to_string(),
+            micro(8),
+            micro(80),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        // Cancelling the free shares would leave only 5 - 8 = -3 → oversell
+        let err = acc.cancel_transaction(&fs_id).unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref::<AccountOperationError>(),
+                Some(AccountOperationError::CascadingOversell)
+            ),
+            "expected CascadingOversell when cancelling free shares that a later sell requires, got: {err}"
+        );
+    }
+
+    // FSD-040 — correct_transaction handles FreeShares type:
+    // total_amount must remain 0 (no money moves) and the corrected quantity
+    // must update the holding accordingly on replay.
+    #[test]
+    fn fsd_040_correct_free_shares_transaction_updates_holding() {
+        // FSD-040 — editable fields: date, quantity, note; total_amount stays 0
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        let fs_tx = Transaction::free_shares(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-01".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        let fs_id = fs_tx.id.clone();
+        acc.apply_free_shares(fs_tx).unwrap();
+        // Post: quantity = 15
+
+        // Correct the distribution: change quantity from 5 to 3
+        let corrected = acc
+            .correct_transaction(
+                &fs_id,
+                "2024-06-01".to_string(),
+                micro(3),  // new quantity
+                0,         // unit_price = 0 (free shares, no acquisition cost)
+                1_000_000, // exchange_rate = 1.0 (no FX leg)
+                0,         // fees = 0
+                Some("Corrected note".to_string()),
+            )
+            .unwrap();
+
+        // FSD-040 — total_amount must stay 0 (no money moved)
+        assert_eq!(
+            corrected.total_amount, 0,
+            "corrected FreeShares total_amount must remain 0"
+        );
+        // Holding must now reflect 10 (buy) + 3 (corrected free) = 13
+        let holding = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(
+            holding.quantity,
+            micro(13),
+            "holding quantity must reflect corrected free-shares count (FSD-040)"
         );
     }
 
