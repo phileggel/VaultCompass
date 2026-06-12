@@ -565,10 +565,12 @@ async lookupAsset(query: string, mode: LookupMode) : Promise<Result<AssetLookupR
  * Dispatches an all-accounts auto-fetch task (MKT-122, MKT-130).
  * Returns `Ok(())` immediately after successful dispatch; per-asset results
  * arrive asynchronously via `AssetPriceUpdated` events (MKT-112).
+ * `use_api_key` carries the device-local Stooq fetch mode (KEY-050/053):
+ * `true` = keyed (resolve + send the key), `false` = keyless (anonymous).
  */
-async fetchAllAssetPrices() : Promise<Result<null, FetchAllAssetPricesError>> {
+async fetchAllAssetPrices(useApiKey: boolean) : Promise<Result<null, FetchAllAssetPricesError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_all_asset_prices") };
+    return { status: "ok", data: await TAURI_INVOKE("fetch_all_asset_prices", { useApiKey }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -577,10 +579,11 @@ async fetchAllAssetPrices() : Promise<Result<null, FetchAllAssetPricesError>> {
 /**
  * Dispatches a per-account price-fetch task (MKT-132, MKT-131).
  * Returns `Ok(())` immediately after successful dispatch.
+ * `use_api_key` carries the device-local Stooq fetch mode (KEY-050/053).
  */
-async fetchAccountAssetPrices(accountId: string) : Promise<Result<null, FetchAccountAssetPricesError>> {
+async fetchAccountAssetPrices(accountId: string, useApiKey: boolean) : Promise<Result<null, FetchAccountAssetPricesError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_account_asset_prices", { accountId }) };
+    return { status: "ok", data: await TAURI_INVOKE("fetch_account_asset_prices", { accountId, useApiKey }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

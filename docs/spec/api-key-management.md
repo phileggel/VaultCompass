@@ -2,11 +2,11 @@
 
 ## Context
 
-VaultCompass fetches asset prices from external providers (see [ADR-015](../adr/015-byok-keyed-price-providers.md), which supersedes ADR-008). Every such provider now requires a free, user-supplied API key. As of mid-2026 this includes Stooq itself: the formerly key-less quote path was withdrawn and the surviving download path requires a key the user obtains from the provider's signup page (see `docs/lessons.md` L-006). Without a stored key the app has **no working automated price source**.
+VaultCompass fetches asset prices from external providers (see [ADR-016](../adr/016-stooq-optional-keyless-fetch-mode.md), which supersedes ADR-015 → ADR-008). The **bring-your-own-key (BYOK)** path is the default and the robust option: the user supplies a free Stooq key obtained from the provider's signup page (see `docs/lessons.md` L-006). But Stooq's daily-download endpoint also serves **anonymously** — subject to a per-IP daily limit — and whether anonymous access works depends on the user's network (it works from some IPs, is blocked or rate-limited on others). The app therefore also offers an optional **keyless** fetch mode (KEY-050). With a key (the default) or in keyless mode, the app has a working automated price source; the two modes are the user's lever for whichever path their network allows.
 
 This feature gives the user a place to supply, test, store, and remove those keys, following the **bring-your-own-key (BYOK)** model: VaultCompass never bundles a key and never transmits a key anywhere except the provider it belongs to. Keys live only on the user's machine, stored as securely as the host allows via the storage-tier ladder defined in [ADR-011](../adr/011-byok-api-keys-os-keychain.md).
 
-The first slice covers **Stooq only**. The surface is built so additional providers (Finnhub per ADR-015, OpenFIGI per the WEB spec) slot in as further rows later without rework.
+The first slice covers **Stooq only**. The surface is built so additional providers (Finnhub per ADR-016, OpenFIGI per the WEB spec) slot in as further rows later without rework.
 
 This is a **feature spec**. Key storage is a cross-cutting infrastructure concern consumed by the asset price-fetch path (MKT). It is surfaced to the user through a **Connections** dialog reached from the side menu, and it gates the price-refresh actions defined in `docs/spec/market-price.md` (MKT-130/131).
 
@@ -82,9 +82,23 @@ Represents a single external provider's API key as the user manages it. The secr
 
 **KEY-042 — Manual price entry is never gated (frontend)**: Manual price actions — "Enter price" (MKT-010) and price-history add/edit/delete (MKT-070+) — remain fully available whether or not a key is stored. They write user-typed values and make no provider request, so a missing key never blocks them.
 
-**KEY-043 — Stooq fetch uses the stored key (backend)**: The Stooq price-fetch path authenticates with the stored Stooq key on the surviving daily-download endpoint and reads the latest available daily close for each symbol. The apikey does not by itself bypass Stooq's proof-of-work browser-verification gate, so the path solves that challenge (as it already did) **and** presents the key — both are required (see [ADR-015](../adr/015-byok-keyed-price-providers.md)). As the download returns the full daily history, the latest (last) row's close is taken. The observation-date handling defined in MKT-117/118 is unchanged — the provider's quote date dates the recorded price, falling back to today when absent or invalid.
+**KEY-043 — Stooq fetch uses the stored key (backend)**: The Stooq price-fetch path authenticates with the stored Stooq key on the surviving daily-download endpoint and reads the latest available daily close for each symbol. The apikey does not by itself bypass Stooq's proof-of-work browser-verification gate, so the path solves that challenge (as it already did) **and** presents the key — both are required in keyed mode (see [ADR-016](../adr/016-stooq-optional-keyless-fetch-mode.md)). As the download returns the full daily history, the latest (last) row's close is taken. The observation-date handling defined in MKT-117/118 is unchanged — the provider's quote date dates the recorded price, falling back to today when absent or invalid.
 
-**KEY-044 — No key means no fetched price (backend)**: When no Stooq key is stored and a fetch task is nonetheless dispatched, the backend detects the absent key **once** at task start and skips the entire scope without issuing any per-asset provider call — every asset is reported as skipped per MKT-119 (`ok = 0`). It does not make N doomed authenticated calls. This is a separate, earlier check than the empty-scope rejection (MKT-111, which fires only when no derivable holding exists at all — symbol derivation per MKT-110 does not depend on a key). Both frontend paths already avoid dispatching in this state (the refresh gate KEY-040 and the launch skip KEY-041); this rule guarantees backend correctness if a dispatch occurs regardless.
+**KEY-044 — No key means no fetched price in keyed mode (backend)**: **When the fetch mode is keyed (KEY-050)** and no Stooq key is stored, a dispatched fetch task detects the absent key **once** at task start and skips the entire scope without issuing any per-asset provider call — every asset is reported as skipped per MKT-119 (`ok = 0`). It does not make N doomed authenticated calls. This is a separate, earlier check than the empty-scope rejection (MKT-111, which fires only when no derivable holding exists at all — symbol derivation per MKT-110 does not depend on a key). In keyed mode both frontend paths already avoid dispatching in this state (the refresh gate KEY-040 and the launch skip KEY-041); this rule guarantees backend correctness if a dispatch occurs regardless. **This short-circuit does not apply in keyless mode (KEY-053)** — there the absent key is intentional, and the fetch proceeds anonymously.
+
+### Fetch Mode — Keyed vs Keyless (050–059)
+
+**KEY-050 — Stooq fetch-mode setting (frontend)**: The user can choose how Stooq price fetches authenticate, via a **"Use Stooq API key"** setting alongside the existing auto-fetch preference (MKT-120). It is a device-local preference that persists across sessions and defaults to **on (keyed)** — the BYOK behavior of KEY-040/043/044 is the default and is unchanged for existing users. When **off (keyless)**, fetches use Stooq's anonymous daily-download path: no key is required or sent. The setting exists because anonymous access works from some networks/IPs while others are blocked or rate-limited, and a stored key reverses that on yet others — the user keeps both paths and switches to whichever their network allows.
+
+**KEY-051 — Keyless mode bypasses the refresh gate (frontend)**: When the fetch mode is keyless (KEY-050 off), the price-refresh key gate (KEY-040) does **not** apply: triggering a global or account refresh dispatches the fetch directly, and a missing key never opens the Connections dialog. The Connections dialog remains reachable from the side menu (KEY-030) so the user can still save or test a key for later use in keyed mode.
+
+**KEY-052 — Keyless mode does not skip launch auto-fetch (frontend)**: When the fetch mode is keyless (KEY-050 off), the launch auto-fetch no-key skip (KEY-041) does **not** apply: if auto-fetch on launch is enabled (MKT-121), the task dispatches normally regardless of whether a key is stored. As a consequence, a keyless launch fetch that the network rate-limits surfaces the standard fetch-outcome snackbar (MKT-145) at cold start — unlike keyed mode, whose KEY-041 skip keeps a keyless-key cold start silent. This divergence is intended: in keyless mode the user has opted into anonymous fetching and a launch-time outcome (success or rate-limit) is the expected signal.
+
+**KEY-053 — Keyless Stooq fetch omits the key (backend)**: When the fetch mode is keyless, the Stooq price-fetch path solves the proof-of-work browser-verification gate (as in KEY-043) but presents **no apikey** — the anonymous daily-download request. The KEY-044 no-key short-circuit is suppressed in this mode: the fetch runs and reads the latest daily close per symbol exactly as the keyed path does (MKT-117/118 date handling unchanged). The chosen mode reaches the backend with the fetch request; the backend does not read the device-local setting itself. Anonymous access is subject to Stooq's per-IP daily limit, so a keyless fetch can fail or rate-limit where a keyed one would not — such failures surface through the existing fetch-outcome snackbar (MKT-145) and per-holding "no price" diagnostics (MKT-032), never silently.
+
+**KEY-054 — Keyed mode is the unchanged default (frontend + backend)**: When the fetch mode is keyed (KEY-050 on, the default), KEY-040 (refresh gate), KEY-041 (launch skip), KEY-043 (fetch with the stored key), and KEY-044 (no-key short-circuit) all apply exactly as specified. Switching the setting flips the whole feature between the two coherent modes; the modes never partially mix.
+
+**KEY-055 — Mode is fixed per fetch task (frontend + backend)**: The fetch mode is read at the moment a fetch task is dispatched and travels with that request (KEY-053). A task already in flight (MKT-113 permits one at a time) completes under the mode it was dispatched with, even if the user flips the setting before it finishes; the new mode takes effect on the next dispatched task. The backend never re-reads the device-local setting mid-task, and a mode change never aborts a running fetch.
 
 ---
 
@@ -106,12 +120,16 @@ Side menu
                                                    clear all tiers  (KEY-013)
 
 Refresh prices (global MKT-130 / account MKT-131)
-  └─ key stored?  (KEY-016)
-       ├─ yes ─▶ dispatch fetch (existing MKT flow); Stooq uses key (KEY-043)
-       └─ no  ─▶ open Connections dialog focused on Stooq (KEY-040)
+  └─ fetch mode? (KEY-050)
+       ├─ keyless ─▶ dispatch fetch; Stooq fetches anonymously, no key (KEY-051, KEY-053)
+       └─ keyed   ─▶ key stored?  (KEY-016)
+                       ├─ yes ─▶ dispatch fetch; Stooq uses key (KEY-043, KEY-054)
+                       └─ no  ─▶ open Connections dialog focused on Stooq (KEY-040)
 
 Launch auto-fetch (MKT-121, enabled)
-  └─ no key ─▶ no provider request; no dialog; miss shown via snackbar MKT-145 (KEY-041)
+  └─ fetch mode? (KEY-050)
+       ├─ keyless ─▶ dispatch fetch anonymously, key or no key (KEY-052)
+       └─ keyed, no key ─▶ no provider request; no dialog; miss shown via snackbar MKT-145 (KEY-041)
 
 Manual "Enter price" / price history (MKT-010 / MKT-070+)
   └─ always available, key or no key (KEY-042)
@@ -124,6 +142,18 @@ Manual "Enter price" / price history (MKT-010 / MKT-070+)
 ### Entry Point
 
 A "Connections" entry in the side menu (KEY-030). Opens the Connections dialog over the current view; no navigation away from the current page.
+
+The fetch-mode setting (KEY-050) lives separately, on the **Settings** page beside the existing auto-fetch preference (MKT-120) — not in the Connections dialog, since it governs how every Stooq fetch behaves rather than a per-provider key.
+
+### Fetch-mode setting (Settings page)
+
+| Element | Content                                                                                                  |
+| ------- | -------------------------------------------------------------------------------------------------------- |
+| Toggle  | "Use Stooq API key" — on (keyed, default) / off (keyless)                                                |
+| Help    | A short hint that keyless fetching is anonymous and may be rate-limited, and that a key is more reliable |
+
+- **Default (keyed)**: toggle on; price fetches use the stored key and the refresh gate (KEY-040) applies — first-run prompts the user to the Connections dialog when no key is stored.
+- **Keyless**: toggle off; price fetches go out anonymously, the refresh gate is bypassed (KEY-051), and launch auto-fetch runs without a key (KEY-052). The persisted choice survives a restart (KEY-050).
 
 ### Main Component
 
@@ -177,8 +207,10 @@ A dialog listing providers, one row per provider (KEY-031). In this slice: a sin
 
 ## Open Questions
 
-- [x] **ADR-008 premise change** — resolved: [ADR-015](../adr/015-byok-keyed-price-providers.md) supersedes ADR-008's _Stooq-primary_ decision point ("all price providers are BYOK-keyed; there is no key-less default source"). ADR-008's Finnhub-fallback, Manual-override, and `AssetPriceSource` decisions are carried forward into ADR-015 and remain valid.
+- [x] **ADR-008 premise change** — resolved: ADR-015 superseded ADR-008's _Stooq-primary_ decision point, and [ADR-016](../adr/016-stooq-optional-keyless-fetch-mode.md) in turn supersedes ADR-015 (Stooq is dual-mode: keyed by default, optional keyless). ADR-008's Finnhub-fallback, Manual-override, and `AssetPriceSource` decisions carry forward through both and remain valid.
 - [x] **Connections entry label** — resolved: "Connections" (matches ADR-011's "Connections panel"; provider-neutral). Reflected in KEY-030.
 - [x] **Test-probe symbol** — resolved: a fixed well-known symbol the provider is guaranteed to cover, not a holding-derived one. Reflected in KEY-021.
+- [x] **Keyless fetch mode** — resolved: [ADR-016](../adr/016-stooq-optional-keyless-fetch-mode.md) adds an optional, user-selected keyless (anonymous) Stooq fetch mode, default keyed. Reflected in KEY-050–055.
+- [x] **Keyless rate-limit → suggest keyed?** — resolved (deferred): when a keyless fetch is rate-limited (KEY-053), v1 surfaces the standard MKT-145 snackbar; an actionable "enable your API key" upsell is left to a later UX refinement, out of v1 scope.
 
 None — all questions have been resolved.

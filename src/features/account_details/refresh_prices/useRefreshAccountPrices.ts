@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { fetchPriceErrorToI18n } from "@/features/accounts/shared/presenter";
 import { connectionGateway } from "@/features/connections/gateway";
 import { openModalSearch } from "@/lib/modalSearch";
+import { getUseStooqApiKey } from "@/lib/stooqKeyModeStorage";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
 
@@ -27,17 +28,21 @@ export function useRefreshAccountPrices(accountId: string): {
   const refresh = useCallback(async () => {
     setIsPending(true);
     try {
-      // KEY-040 — gate on a stored provider key (see useRefreshGlobalPrices).
-      const connections = await connectionGateway.getProviderConnections();
-      const stooq =
-        connections?.status === "ok"
-          ? connections.data.find((c) => c.provider === "Stooq")
-          : undefined;
-      if (stooq && !stooq.has_key) {
-        openModalSearch(navigate, { modal: "connections" });
-        return;
+      // KEY-050/051 — keyless mode bypasses the KEY-040 key gate (see useRefreshGlobalPrices).
+      const useApiKey = getUseStooqApiKey();
+      if (useApiKey) {
+        // KEY-040 — gate on a stored provider key (see useRefreshGlobalPrices).
+        const connections = await connectionGateway.getProviderConnections();
+        const stooq =
+          connections?.status === "ok"
+            ? connections.data.find((c) => c.provider === "Stooq")
+            : undefined;
+        if (stooq && !stooq.has_key) {
+          openModalSearch(navigate, { modal: "connections" });
+          return;
+        }
       }
-      const result = await accountDetailsGateway.fetchAccountAssetPrices(accountId);
+      const result = await accountDetailsGateway.fetchAccountAssetPrices(accountId, useApiKey);
       if (result.status === "ok") {
         showSnackbar(t("mkt.fetch_dispatched"), "info");
         return;

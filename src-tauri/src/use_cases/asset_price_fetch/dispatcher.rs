@@ -58,6 +58,7 @@ impl Dispatcher {
         scope: Vec<(Asset, String)>,
         fx_pairs: Vec<CurrencyPair>,
         lease: FetchGuardLease,
+        use_api_key: bool,
         stooq_key: Option<String>,
     ) {
         tokio::spawn(async move {
@@ -66,11 +67,11 @@ impl Dispatcher {
             // MKT-119 — tally the task outcome so the frontend can summarize it.
             let mut ok: u32 = 0;
             let mut skipped: u32 = 0;
-            // KEY-044 — no stored Stooq key: skip the entire scope without any
-            // per-asset provider call; every asset is reported as skipped. The
-            // frontend gate (KEY-040) and launch skip (KEY-041) normally prevent a
-            // key-less dispatch; this keeps the backend correct if one occurs.
-            let Some(api_key) = stooq_key else {
+            // KEY-044 — in KEYED mode with no stored Stooq key: skip the entire scope
+            // without any per-asset provider call; every asset is reported as skipped.
+            // KEY-053 — in KEYLESS mode this short-circuit is suppressed; the fetch
+            // proceeds anonymously (`stooq_key` is None and stays None below).
+            if use_api_key && stooq_key.is_none() {
                 skipped = scope.len() as u32;
                 tracing::warn!(
                     target: BACKEND,
@@ -87,14 +88,15 @@ impl Dispatcher {
                     );
                 }
                 return;
-            };
+            }
+            // `Some(key)` in keyed mode; `None` in keyless mode (anonymous, KEY-053).
             for (index, (asset, symbol)) in scope.into_iter().enumerate() {
                 // Space out requests after the first to avoid a burst (see
                 // INTER_FETCH_DELAY); the provider is hit at most once per asset.
                 if index > 0 {
                     tokio::time::sleep(INTER_FETCH_DELAY).await;
                 }
-                match self.provider.fetch_price(&symbol, &api_key).await {
+                match self.provider.fetch_price(&symbol, stooq_key.clone()).await {
                     Ok(Some(quote)) => {
                         let record = AssetPrice::restore(
                             asset.id.clone(),

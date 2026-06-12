@@ -1,7 +1,7 @@
 # ADR 015 — All asset-price providers are BYOK-keyed; there is no key-less default source
 
 **Date**: 2026-06-08
-**Status**: Accepted — supersedes ADR-008
+**Status**: Superseded by ADR-016
 
 ## Context
 

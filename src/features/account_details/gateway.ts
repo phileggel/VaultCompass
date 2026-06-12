@@ -79,8 +79,9 @@ export const accountDetailsGateway = {
 
   async fetchAccountAssetPrices(
     accountId: string,
+    useApiKey: boolean,
   ): Promise<Result<null, FetchAccountAssetPricesError>> {
-    return commands.fetchAccountAssetPrices(accountId);
+    return commands.fetchAccountAssetPrices(accountId, useApiKey);
   },
 
   async blockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetCrudError>> {

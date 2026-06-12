@@ -230,7 +230,9 @@
     "auto_record_price_label": "Automatically record transaction price as market price",
     "auto_record_price_description": "When enabled, new transaction forms will have the auto-record checkbox pre-checked.",
     "auto_fetch_label": "Automatically fetch prices on launch",
-    "auto_fetch_description": "When enabled, the app fetches current prices from Stooq for all active holdings every time it starts."
+    "auto_fetch_description": "When enabled, the app fetches current prices from Stooq for all active holdings every time it starts.",
+    "use_api_key_label": "Use a Stooq API key",
+    "use_api_key_description": "When on, price fetches use your stored Stooq key. When off, they fetch anonymously — no key needed, but the daily limit is lower and some networks block it."
   },
   "shell": {
     "sidebar_collapse": "Collapse menu",

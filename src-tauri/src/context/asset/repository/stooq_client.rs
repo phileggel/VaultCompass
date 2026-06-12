@@ -47,13 +47,18 @@ impl ReqwestStooqClient {
 
 #[async_trait]
 impl PriceProvider for ReqwestStooqClient {
-    async fn fetch_price(&self, symbol: &str, api_key: &str) -> Result<Option<Quote>> {
+    async fn fetch_price(&self, symbol: &str, api_key: Option<String>) -> Result<Option<Quote>> {
         // Request only a recent date window (a handful of rows) rather than the
         // full multi-decade history; the latest row is the most recent settled
-        // close. The key is in the URL but never in the error label (KEY-014) —
-        // the label carries only the symbol.
+        // close. The key, when present, is in the URL but never in the error label
+        // (KEY-014) — the label carries only the symbol.
         let (from, to) = recent_daily_window(Local::now().date_naive());
-        let url = format!("{STOOQ_DOWNLOAD_URL}?s={symbol}&i=d&d1={from}&d2={to}&apikey={api_key}");
+        // KEY-053 — append `&apikey=` only in keyed mode; keyless mode (None) issues
+        // the anonymous request. The proof-of-work gate is solved in both.
+        let mut url = format!("{STOOQ_DOWNLOAD_URL}?s={symbol}&i=d&d1={from}&d2={to}");
+        if let Some(key) = api_key {
+            url.push_str(&format!("&apikey={key}"));
+        }
         let body = self.gate.get_text(&url, symbol).await?;
         parse_quote(&body)
             .with_context(|| format!("Stooq response parse failed for symbol: {symbol}"))

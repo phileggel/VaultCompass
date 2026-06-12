@@ -60,6 +60,7 @@ describe("useRefreshAccountPrices", () => {
 
     expect(gateway.accountDetailsGateway.fetchAccountAssetPrices).toHaveBeenCalledWith(
       "account-42",
+      true,
     );
   });
 
@@ -238,7 +239,10 @@ describe("useRefreshAccountPrices — KEY-040 key gate", () => {
       await result.current.refresh();
     });
 
-    expect(gateway.accountDetailsGateway.fetchAccountAssetPrices).toHaveBeenCalledWith("account-1");
+    expect(gateway.accountDetailsGateway.fetchAccountAssetPrices).toHaveBeenCalledWith(
+      "account-1",
+      true,
+    );
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 

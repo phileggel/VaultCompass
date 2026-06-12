@@ -8,6 +8,7 @@ import { connectionGateway } from "@/features/connections/gateway";
 import { shellGateway } from "@/features/shell/gateway";
 import { getAutoFetch } from "@/lib/autoFetchStorage";
 import { logger } from "@/lib/logger";
+import { getUseStooqApiKey } from "@/lib/stooqKeyModeStorage";
 import { useAppStore } from "@/lib/store";
 import { router } from "./router";
 
@@ -51,13 +52,18 @@ function App() {
     if (!getAutoFetch()) return;
     (async () => {
       try {
-        // KEY-041 — skip the launch fetch silently when no provider key is stored
-        // (no dialog on cold start; absence surfaces via the per-holding diagnostics).
-        const connections = await connectionGateway.getProviderConnections();
-        if (connections.status !== "ok" || !shouldLaunchFetch(connections.data)) {
-          return;
+        // KEY-050 — read the device-local fetch mode. KEY-052: in keyless mode the
+        // KEY-041 no-key launch skip does not apply — dispatch anonymously.
+        const useApiKey = getUseStooqApiKey();
+        if (useApiKey) {
+          // KEY-041 — skip the launch fetch silently when no provider key is stored
+          // (no dialog on cold start; absence surfaces via the per-holding diagnostics).
+          const connections = await connectionGateway.getProviderConnections();
+          if (connections.status !== "ok" || !shouldLaunchFetch(connections.data)) {
+            return;
+          }
         }
-        const result = await accountGateway.fetchAllAssetPrices();
+        const result = await accountGateway.fetchAllAssetPrices(useApiKey);
         if (result.status === "error") {
           logger.warn("[App] auto-fetch dispatch returned error", { code: result.error.code });
         }

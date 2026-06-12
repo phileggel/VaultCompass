@@ -58,11 +58,13 @@
 ### Asset Price Fetch Tasks
 
 > `fetch_all_asset_prices` is the single BE entry point shared by auto-fetch on launch (MKT-121, MKT-122) and global refresh on the dashboard (MKT-130). Both commands are acknowledged synchronously (return `()` once dispatched); per-asset results are signaled asynchronously via `AssetPriceUpdated` (MKT-112). Per-asset failures during the fetch degrade silently per MKT-114; the in-flight guard (MKT-113) rejects concurrent calls across both commands. System cash assets are excluded from scope per MKT-116.
+>
+> Both commands carry `use_api_key: bool` (KEY-053) — the device-local Stooq fetch-mode preference (KEY-050), passed by the frontend with each request (the backend does not read the setting itself). `true` = keyed: resolve the stored Stooq key and fetch with the apikey; absent key short-circuits the whole scope (KEY-044). `false` = keyless: solve the proof-of-work but send no apikey (anonymous download); the no-key short-circuit is suppressed (KEY-053). Proof-of-work is solved in both modes (KEY-043).
 
-| Command                      | Args                 | Return | Errors                                                                                                                                        |
-| ---------------------------- | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fetch_all_asset_prices`     | —                    | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
-| `fetch_account_asset_prices` | `account_id: String` | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
+| Command                      | Args                                    | Return | Errors                                                                                                                                        |
+| ---------------------------- | --------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch_all_asset_prices`     | `use_api_key: bool`                     | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
+| `fetch_account_asset_prices` | `account_id: String, use_api_key: bool` | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
 
 ### Web Lookup
 
@@ -174,3 +176,4 @@ enum AssetPriceSource { Manual, Stooq }
 ## Changelog
 
 - 2026-05-30 — Added by `market-price` spec (price-refresh-lock amendment, ADR-014): `block_asset_price_refresh`, `unblock_asset_price_refresh`; `Asset.price_refresh_blocked` field; `AssetUpdated` note extended.
+- 2026-06-12 — Amended by `api-key-management` spec (KEY-050–054, keyless fetch mode): `fetch_all_asset_prices` and `fetch_account_asset_prices` gain a `use_api_key: bool` arg carrying the device-local Stooq fetch-mode preference. No new types or errors.

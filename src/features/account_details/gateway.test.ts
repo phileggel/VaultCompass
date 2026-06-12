@@ -308,10 +308,11 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   // MKT-131 / MKT-132 — happy path: dispatch acknowledged, returns null
   it("fetchAccountAssetPrices returns null on successful dispatch", async () => {
     mockInvoke.mockResolvedValue(null);
-    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1");
+    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1", true);
     expect(result).toEqual({ status: "ok", data: null });
     expect(mockInvoke).toHaveBeenCalledWith("fetch_account_asset_prices", {
       accountId: "account-1",
+      useApiKey: true,
     });
   });
 
@@ -319,7 +320,7 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   it("fetchAccountAssetPrices surfaces AccountNotFound for unknown account_id", async () => {
     const error = { code: "AccountNotFound", account_id: "no-such" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPrices("no-such");
+    const result = await accountDetailsGateway.fetchAccountAssetPrices("no-such", true);
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -327,7 +328,7 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   it("fetchAccountAssetPrices surfaces FetchAlreadyRunning when another fetch is in progress", async () => {
     const error = { code: "FetchAlreadyRunning" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1");
+    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1", true);
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -335,7 +336,7 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   it("fetchAccountAssetPrices surfaces NoFetchableHoldings when account scope is empty", async () => {
     const error = { code: "NoFetchableHoldings" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1");
+    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1", true);
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -343,7 +344,7 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   it("fetchAccountAssetPrices surfaces DatabaseError on infrastructure failure", async () => {
     const error = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1");
+    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1", true);
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -351,7 +352,7 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   it("fetchAccountAssetPrices surfaces UnknownError on unexpected runtime failure", async () => {
     const error = { code: "UnknownError" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1");
+    const result = await accountDetailsGateway.fetchAccountAssetPrices("account-1", true);
     expect(result).toEqual({ status: "error", error });
   });
 });

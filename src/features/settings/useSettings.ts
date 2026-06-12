@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getLanguageOverride, resolveBrowserLang, setLanguageOverride } from "@/i18n/config";
 import { getAutoFetch, setAutoFetch } from "@/lib/autoFetchStorage";
 import { getAutoRecordPrice, setAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
+import { getUseStooqApiKey, setUseStooqApiKey } from "@/lib/stooqKeyModeStorage";
 
 export type LanguageChoice = "auto" | "en" | "fr";
 
@@ -15,6 +16,7 @@ export function useSettings() {
 
   const [autoRecordPrice, setAutoRecordPriceState] = useState<boolean>(() => getAutoRecordPrice());
   const [autoFetch, setAutoFetchState] = useState<boolean>(() => getAutoFetch());
+  const [useApiKey, setUseApiKeyState] = useState<boolean>(() => getUseStooqApiKey());
 
   const setLanguage = useCallback(
     (choice: LanguageChoice) => {
@@ -46,6 +48,14 @@ export function useSettings() {
     });
   }, []);
 
+  const toggleUseApiKey = useCallback(() => {
+    setUseApiKeyState((current) => {
+      const next = !current;
+      setUseStooqApiKey(next);
+      return next;
+    });
+  }, []);
+
   return {
     currentChoice,
     setLanguage,
@@ -53,5 +63,7 @@ export function useSettings() {
     toggleAutoRecordPrice,
     autoFetch,
     toggleAutoFetch,
+    useApiKey,
+    toggleUseApiKey,
   };
 }
