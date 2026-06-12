@@ -16,4 +16,5 @@
 | [ADR-012](012-latest-write-wins-source-as-metadata.md)       | Latest-Write-Wins; Source Field is Metadata (supersedes ADR-010)  | Accepted — supersedes ADR-010 |
 | [ADR-013](013-recompute-account-performance-on-read.md)      | Recompute Account Performance on Read                             | Accepted                      |
 | [ADR-014](014-price-refresh-lock-scope-exclusion.md)         | Per-Asset Price-Refresh Lock via Fetch-Scope Exclusion            | Accepted                      |
-| [ADR-015](015-byok-keyed-price-providers.md)                 | All Price Providers are BYOK-Keyed; No Key-less Default Source    | Accepted — supersedes ADR-008 |
+| [ADR-015](015-byok-keyed-price-providers.md)                 | All Price Providers are BYOK-Keyed; No Key-less Default Source    | Superseded by ADR-016         |
+| [ADR-016](016-stooq-optional-keyless-fetch-mode.md)          | Stooq Supports an Optional User-Selected Keyless Fetch Mode       | Accepted — supersedes ADR-015 |

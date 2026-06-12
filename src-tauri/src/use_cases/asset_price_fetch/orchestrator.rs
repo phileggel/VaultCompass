@@ -67,7 +67,7 @@ impl AssetPriceFetchUseCase {
     /// (d) derive Stooq symbols, discard non-derivable entries;
     /// (e) if empty scope → `NoFetchableHoldings` (MKT-111);
     /// (f) dispatch background task and return `Ok(())`.
-    pub async fn fetch_all(&self) -> Result<(), FetchAllAssetPricesError> {
+    pub async fn fetch_all(&self, use_api_key: bool) -> Result<(), FetchAllAssetPricesError> {
         let lease = self
             .fetch_guard
             .try_acquire()
@@ -98,8 +98,13 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        let stooq_key = self.resolve_stooq_key().await;
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, stooq_key);
+        // KEY-053/054 — resolve the key only in keyed mode; keyless skips the read.
+        let stooq_key = if use_api_key {
+            self.resolve_stooq_key().await
+        } else {
+            None
+        };
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, use_api_key, stooq_key);
         Ok(())
     }
 
@@ -114,6 +119,7 @@ impl AssetPriceFetchUseCase {
     pub async fn fetch_for_account(
         &self,
         account_id: &str,
+        use_api_key: bool,
     ) -> Result<(), FetchAccountAssetPricesError> {
         let account = self
             .account_service
@@ -148,8 +154,13 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        let stooq_key = self.resolve_stooq_key().await;
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, stooq_key);
+        // KEY-053/054 — resolve the key only in keyed mode; keyless skips the read.
+        let stooq_key = if use_api_key {
+            self.resolve_stooq_key().await
+        } else {
+            None
+        };
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, use_api_key, stooq_key);
         Ok(())
     }
 

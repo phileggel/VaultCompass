@@ -230,7 +230,9 @@
     "auto_record_price_label": "Enregistrer automatiquement le prix de transaction comme prix de marché",
     "auto_record_price_description": "Si activé, la case d'enregistrement automatique sera pré-cochée dans les nouveaux formulaires de transaction.",
     "auto_fetch_label": "Récupérer automatiquement les prix au démarrage",
-    "auto_fetch_description": "Si activé, l'application récupère les prix actuels depuis Stooq pour toutes les positions actives à chaque démarrage."
+    "auto_fetch_description": "Si activé, l'application récupère les prix actuels depuis Stooq pour toutes les positions actives à chaque démarrage.",
+    "use_api_key_label": "Utiliser une clé API Stooq",
+    "use_api_key_description": "Activé, la récupération des prix utilise votre clé Stooq enregistrée. Désactivé, elle se fait anonymement — sans clé, mais la limite quotidienne est plus basse et certains réseaux la bloquent."
   },
   "shell": {
     "sidebar_collapse": "Réduire le menu",

@@ -105,10 +105,16 @@ pub trait PriceProvider: Send + Sync {
     /// - `Err(_)` — transient HTTP / parse / IO failure. The dispatcher logs at
     ///   `tracing::warn!` and continues with the next asset (MKT-114).
     ///
-    /// `api_key` is the provider credential (KEY-043); Stooq's keyed download
-    /// endpoint requires it (ADR-015). The dispatcher only calls this with a
-    /// resolved key — the no-key case is short-circuited before the loop (KEY-044).
-    async fn fetch_price(&self, symbol: &str, api_key: &str) -> anyhow::Result<Option<Quote>>;
+    /// `api_key` is the provider credential (KEY-043): `Some(key)` in keyed mode —
+    /// Stooq's keyed download presents it (ADR-016); `None` in keyless mode — the
+    /// anonymous download omits it (KEY-053). The proof-of-work gate is solved in
+    /// both modes. In keyed mode the dispatcher only calls this with a resolved key
+    /// (the no-key case is short-circuited before the loop, KEY-044).
+    async fn fetch_price(
+        &self,
+        symbol: &str,
+        api_key: Option<String>,
+    ) -> anyhow::Result<Option<Quote>>;
 }
 
 /// Interface for AssetPrice persistence (upsert by (asset_id, date), MKT-025).

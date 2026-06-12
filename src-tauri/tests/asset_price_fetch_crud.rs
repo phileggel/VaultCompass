@@ -112,7 +112,7 @@ async fn build_ctx() -> Ctx {
             async fn fetch_price(
                 &self,
                 _symbol: &str,
-                _api_key: &str,
+                _api_key: Option<String>,
             ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
                 Ok(Some(vault_compass_lib::context::asset::Quote {
                     price: 100_000_000,
@@ -159,7 +159,7 @@ async fn fetch_all_returns_no_fetchable_holdings_on_empty_db() {
     };
 
     let ctx = build_ctx().await;
-    let result = ctx.use_case.fetch_all().await;
+    let result = ctx.use_case.fetch_all(true).await;
 
     assert!(
         matches!(
@@ -180,7 +180,7 @@ async fn fetch_for_account_returns_account_not_found_for_unknown_id() {
     use vault_compass_lib::use_cases::asset_price_fetch::FetchAccountAssetPricesError;
 
     let ctx = build_ctx().await;
-    let result = ctx.use_case.fetch_for_account("does-not-exist").await;
+    let result = ctx.use_case.fetch_for_account("does-not-exist", true).await;
 
     assert!(
         matches!(
@@ -207,7 +207,7 @@ async fn fetch_all_returns_fetch_already_running_while_guard_held() {
         .try_acquire()
         .expect("guard must be free at test start");
 
-    let result = ctx.use_case.fetch_all().await;
+    let result = ctx.use_case.fetch_all(true).await;
     assert!(
         matches!(
             result,
@@ -246,7 +246,7 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
         async fn fetch_price(
             &self,
             symbol: &str,
-            _api_key: &str,
+            _api_key: Option<String>,
         ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
             self.seen.lock().unwrap().push(symbol.to_string());
             Ok(Some(vault_compass_lib::context::asset::Quote {
@@ -330,7 +330,7 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
     );
 
     use_case
-        .fetch_for_account(&account.id)
+        .fetch_for_account(&account.id, true)
         .await
         .expect("fetch_for_account dispatch");
 
@@ -371,7 +371,7 @@ async fn fetch_for_account_skips_locked_asset() {
         async fn fetch_price(
             &self,
             _symbol: &str,
-            _api_key: &str,
+            _api_key: Option<String>,
         ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
             Ok(Some(vault_compass_lib::context::asset::Quote {
                 price: 100_000_000,
@@ -452,7 +452,7 @@ async fn fetch_for_account_skips_locked_asset() {
         stub_connection_service(),
     );
 
-    let result = use_case.fetch_for_account(&account.id).await;
+    let result = use_case.fetch_for_account(&account.id, true).await;
     assert!(
         matches!(
             result,
@@ -481,7 +481,7 @@ async fn fetch_for_account_includes_unblocked_asset() {
         async fn fetch_price(
             &self,
             _symbol: &str,
-            _api_key: &str,
+            _api_key: Option<String>,
         ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
             Ok(Some(vault_compass_lib::context::asset::Quote {
                 price: 100_000_000,
@@ -568,7 +568,7 @@ async fn fetch_for_account_includes_unblocked_asset() {
 
     // Scope is non-empty (asset unblocked) → dispatch succeeds, not NoFetchableHoldings.
     use_case
-        .fetch_for_account(&account.id)
+        .fetch_for_account(&account.id, true)
         .await
         .expect("MKT-156: an unblocked asset must re-enter fetch scope and dispatch");
 }
@@ -591,7 +591,7 @@ async fn fetch_publishes_completion_event_with_counts() {
         async fn fetch_price(
             &self,
             _symbol: &str,
-            _api_key: &str,
+            _api_key: Option<String>,
         ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
             Ok(Some(vault_compass_lib::context::asset::Quote {
                 price: 100_000_000,
@@ -665,7 +665,7 @@ async fn fetch_publishes_completion_event_with_counts() {
 
     let mut rx = bus.subscribe();
     use_case
-        .fetch_for_account(&account.id)
+        .fetch_for_account(&account.id, true)
         .await
         .expect("dispatch");
 
@@ -725,7 +725,7 @@ async fn dispatcher_with_no_key_skips_whole_scope_and_reports_all_skipped() {
         async fn fetch_price(
             &self,
             _symbol: &str,
-            _api_key: &str,
+            _api_key: Option<String>,
         ) -> anyhow::Result<Option<Quote>> {
             *self.calls.lock().unwrap() += 1;
             Ok(Some(Quote {
@@ -782,7 +782,7 @@ async fn dispatcher_with_no_key_skips_whole_scope_and_reports_all_skipped() {
 
     let mut rx = bus.subscribe();
     // KEY-044 — dispatch with `stooq_key = None`.
-    Arc::clone(&dispatcher).spawn(scope, fx_pairs, lease, None);
+    Arc::clone(&dispatcher).spawn(scope, fx_pairs, lease, true, None);
 
     let counts = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
@@ -822,17 +822,22 @@ async fn dispatcher_with_key_threads_api_key_into_fetch_price() {
     use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
     use vault_compass_lib::use_cases::asset_price_fetch::FetchGuard;
 
-    // A provider that records the api key it was handed.
+    // A provider that records the api key it was handed (the sentinel "<keyless>"
+    // when called in keyless mode, KEY-053).
     struct KeyCapturingProvider {
         seen_keys: Arc<Mutex<Vec<String>>>,
     }
     #[async_trait::async_trait]
     impl PriceProvider for KeyCapturingProvider {
-        async fn fetch_price(&self, _symbol: &str, api_key: &str) -> anyhow::Result<Option<Quote>> {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+            api_key: Option<String>,
+        ) -> anyhow::Result<Option<Quote>> {
             self.seen_keys
                 .lock()
                 .expect("KeyCapturingProvider seen_keys lock")
-                .push(api_key.to_string());
+                .push(api_key.unwrap_or_else(|| "<keyless>".to_string()));
             Ok(Some(Quote {
                 price: 100_000_000,
                 date: None,
@@ -887,7 +892,13 @@ async fn dispatcher_with_key_threads_api_key_into_fetch_price() {
 
     let mut rx = bus.subscribe();
     // KEY-043 — dispatch with a present key; it must reach `fetch_price`.
-    Arc::clone(&dispatcher).spawn(scope, fx_pairs, lease, Some("secret-stooq-key".to_string()));
+    Arc::clone(&dispatcher).spawn(
+        scope,
+        fx_pairs,
+        lease,
+        true,
+        Some("secret-stooq-key".to_string()),
+    );
 
     // Wait for the terminal completion event — it fires after the per-asset fetch
     // loop, so `fetch_price` has run by the time it arrives (event-driven, not a
@@ -910,5 +921,105 @@ async fn dispatcher_with_key_threads_api_key_into_fetch_price() {
         keys,
         vec!["secret-stooq-key".to_string()],
         "KEY-043: the stored Stooq key must be threaded into provider.fetch_price"
+    );
+}
+
+/// KEY-053 — in keyless mode (`use_api_key = false`, no stored key) the KEY-044
+/// short-circuit is suppressed: `provider.fetch_price` is still called, with `None`
+/// for the api key (the anonymous request).
+#[tokio::test]
+async fn dispatcher_keyless_mode_fetches_without_key() {
+    use std::sync::Mutex;
+    use vault_compass_lib::context::asset::{
+        Asset, AssetClass, AssetPriceRepository, PriceProvider, Quote, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::context::currency::CurrencyPair;
+    use vault_compass_lib::core::event_bus::Event;
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+    use vault_compass_lib::use_cases::asset_price_fetch::FetchGuard;
+
+    // Records whether `fetch_price` ran and whether it received a key.
+    struct KeylessRecordingProvider {
+        seen: Arc<Mutex<Vec<Option<String>>>>,
+    }
+    #[async_trait::async_trait]
+    impl PriceProvider for KeylessRecordingProvider {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+            api_key: Option<String>,
+        ) -> anyhow::Result<Option<Quote>> {
+            self.seen.lock().expect("seen lock").push(api_key);
+            Ok(Some(Quote {
+                price: 100_000_000,
+                date: None,
+            }))
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let asset_service = Arc::new(AssetService::new(
+        Box::new(SqliteAssetRepository::new(pool.clone())),
+        Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+        Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+    ));
+    let asset: Asset = asset_service
+        .create_asset(vault_compass_lib::context::asset::CreateAssetDTO {
+            name: "Apple".to_string(),
+            reference: "AAPL".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 4,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset");
+
+    let seen = Arc::new(Mutex::new(Vec::<Option<String>>::new()));
+    let provider = Arc::new(KeylessRecordingProvider {
+        seen: Arc::clone(&seen),
+    });
+    let price_repo: Arc<dyn AssetPriceRepository> =
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone()));
+    let dispatcher = Arc::new(Dispatcher::new(
+        provider,
+        price_repo,
+        Arc::clone(&bus),
+        Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        )),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+
+    let scope: Vec<(Asset, String)> = vec![(asset, "aapl.us".to_string())];
+    let fx_pairs: Vec<CurrencyPair> = Vec::new();
+    let lease = Arc::new(FetchGuard::new())
+        .try_acquire()
+        .expect("guard free at start");
+
+    let mut rx = bus.subscribe();
+    // KEY-053 — keyless mode (use_api_key = false) with no key: must NOT short-circuit.
+    Arc::clone(&dispatcher).spawn(scope, fx_pairs, lease, false, None);
+
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            rx.changed().await.expect("bus closed");
+            if matches!(*rx.borrow(), Event::AssetPriceFetchCompleted { .. }) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("AssetPriceFetchCompleted within timeout");
+
+    let seen = seen.lock().expect("seen lock").clone();
+    assert_eq!(
+        seen,
+        vec![None],
+        "KEY-053: keyless mode must call fetch_price once with no api key (not short-circuit)"
     );
 }
