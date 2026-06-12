@@ -493,6 +493,31 @@ impl AccountService {
         Ok(tx)
     }
 
+    /// Records a FreeShares distribution attributed to a held distributing asset
+    /// (FSD-022).
+    ///
+    /// Application-layer composition: loads the Account, builds the Transaction
+    /// via `Transaction::free_shares` (FSD-021 enforced by the factory), applies
+    /// it via `Account::apply_free_shares` (holding quantity rises at zero cost,
+    /// no cash leg), then saves atomically. Returns a typed
+    /// `HoldingTransactionError`.
+    pub async fn record_free_shares(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, HoldingTransactionError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, quantity = quantity, "record_free_shares");
+        let mut account = load_account(&*self.account_repo, account_id).await?;
+        let tx = Transaction::free_shares(account.id.clone(), asset_id, date, quantity, note)?;
+        let tx = account.apply_free_shares(tx).map_err(to_holding_tx_error)?;
+        save_account(&*self.account_repo, &mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -2030,6 +2055,222 @@ mod tests {
         assert!(
             matches!(err, AccountApplicationError::DatabaseError),
             "got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // FSD-022/026 — record_free_shares service method
+    // -------------------------------------------------------------------------
+
+    // FSD-022 — record_free_shares persists the transaction and updates the
+    // holding: quantity increases, cost basis unchanged (VWAP dilutes).
+    #[tokio::test]
+    async fn fsd_022_record_free_shares_persists_transaction_and_updates_holding() {
+        // FSD-022 — end-to-end through AccountService (real SQLite)
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FSD Account".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+        // Buy 10 units @ 100
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings_before = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let cost_basis_before = holdings_before
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .map(|h| h.quantity as i128 * h.average_price as i128 / 1_000_000)
+            .unwrap();
+
+        // Record 5 free shares
+        let tx = svc
+            .record_free_shares(
+                &account.id,
+                asset_id.clone(),
+                "2024-06-15".to_string(),
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // FSD-022 — returned Transaction must carry the FreeShares type and correct fields
+        assert_eq!(
+            tx.transaction_type,
+            crate::context::account::TransactionType::FreeShares
+        );
+        assert_eq!(tx.asset_id, asset_id);
+        assert_eq!(tx.quantity, micro(5));
+        assert_eq!(tx.unit_price, 0, "unit_price must be 0 (FSD-023)");
+        assert_eq!(
+            tx.exchange_rate, 1_000_000,
+            "exchange_rate must be 1_000_000"
+        );
+        assert_eq!(tx.fees, 0, "fees must be 0");
+        assert_eq!(tx.total_amount, 0, "total_amount must be 0 (FSD-023)");
+        assert!(tx.realized_pnl.is_none(), "realized_pnl must be None");
+
+        let holdings_after = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_after = holdings_after
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .unwrap();
+
+        // FSD-022a — quantity increased
+        assert_eq!(
+            holding_after.quantity,
+            micro(15),
+            "quantity must be 15 after 10 + 5 free"
+        );
+        // FSD-023 — underlying cost unchanged → VWAP dilutes to the exact floored
+        // value (TRX-026 floor convention).
+        let expected_diluted_vwap =
+            (cost_basis_before * 1_000_000 / holding_after.quantity as i128) as i64;
+        assert_eq!(
+            holding_after.average_price, expected_diluted_vwap,
+            "average price must equal floor(cost_basis / new_quantity) after free-share distribution"
+        );
+    }
+
+    // FSD-026 — record_free_shares publishes TransactionUpdated event on success.
+    #[tokio::test]
+    async fn fsd_026_record_free_shares_publishes_transaction_updated_event() {
+        // FSD-026 — TransactionUpdated must be emitted after a successful distribution
+        use std::time::Duration;
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let svc = AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        let (_, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FSD Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Subscribe AFTER setup so only the free-shares event is observed.
+        let mut rx = bus.subscribe();
+        svc.record_free_shares(
+            &account.id,
+            asset_id.clone(),
+            "2024-06-15".to_string(),
+            micro(5),
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("TransactionUpdated event not received within 200ms")
+            .expect("watch sender dropped");
+        use crate::core::event_bus::Event;
+        assert_eq!(
+            *rx.borrow(),
+            Event::TransactionUpdated,
+            "record_free_shares must publish TransactionUpdated (FSD-026)"
+        );
+    }
+
+    // FSD-022 — record_free_shares propagates save failure as Application(DatabaseError).
+    #[tokio::test]
+    async fn fsd_022_record_free_shares_returns_database_error_when_save_fails() {
+        // FSD-022 — Unit-of-Work failure surface
+        let mut mock_ar = MockAccountRepository::new();
+        mock_ar
+            .expect_get_with_holdings_and_transactions()
+            .once()
+            .returning(|_| {
+                // Seed a holding so the apply_free_shares call reaches save()
+                let mut acc = Account::new(
+                    "Test".to_string(),
+                    "EUR".to_string(),
+                    UpdateFrequency::ManualMonth,
+                )
+                .unwrap();
+                // Seed cash first (CSH-041 — a buy needs sufficient cash), then a buy
+                // so the holding exists.
+                acc.record_deposit("2024-01-01".to_string(), micro(1_000), None)
+                    .expect("seed deposit");
+                acc.buy_holding(
+                    "asset-1".to_string(),
+                    "2024-01-01".to_string(),
+                    micro(5),
+                    micro(100),
+                    micro(1),
+                    0,
+                    None,
+                )
+                .expect("seed buy");
+                acc.pending_changes.clear();
+                Ok(Some(acc))
+            });
+        mock_ar
+            .expect_save()
+            .once()
+            .returning(|_| Err(SimulatedSaveError.into()));
+
+        let svc = AccountService::new(
+            Box::new(mock_ar),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(MockTransactionRepository::new()),
+        );
+
+        let err = svc
+            .record_free_shares(
+                "any-id",
+                "asset-1".to_string(),
+                "2024-06-15".to_string(),
+                micro(3),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
+            ),
+            "record_free_shares must surface save failures as Application(DatabaseError), got: {err:?}"
         );
     }
 }

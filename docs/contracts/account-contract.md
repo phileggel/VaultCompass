@@ -1,7 +1,7 @@
 # Contract — Account
 
 > Domain: `account`
-> Last updated by: `account` spec, `financial-asset-transaction` spec, `sell-transaction` spec, `transaction-list` spec, `account-details` spec, `cash-tracking` spec, `cash-dividend` spec
+> Last updated by: `account` spec, `financial-asset-transaction` spec, `sell-transaction` spec, `transaction-list` spec, `account-details` spec, `cash-tracking` spec, `cash-dividend` spec, `free-share-distribution` spec
 
 > **Error model on the wire**: each command's error serializes as a flat `{ code: "VariantName", ...payload }` object. The FE matches on `code`. Per-command reachable codes are listed in the "Errors" column of each table below. Infrastructure failures surface as `{ code: "DatabaseError" }` (no payload; diagnostic chain preserved server-side via `tracing::error!`).
 >
@@ -57,15 +57,15 @@
 > single FE-visible surface. Mutation commands coordinate across the account and asset BCs
 > (cash-asset seeding, archived-asset guards, etc.).
 
-| Command                     | Args                                                    | Return             | Errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------- | ------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_asset_ids_for_account` | `account_id: String`                                    | `Vec<String>`      | `DatabaseError` (TXL-054) — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `get_transactions`          | `account_id: String, asset_id: String`                  | `Vec<Transaction>` | `DatabaseError` (TXL-020)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `buy_holding`               | `BuyHoldingDTO`                                         | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (TRX-020), `TotalAmountNotPositive` (TRX-020), `InsufficientCash { current_balance_micros, currency }` (CSH-041), `DatabaseError`                                                                                                                                          |
-| `sell_holding`              | `SellHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (SEL-020), `TotalAmountNotPositive` (TRX-020), `ClosedPosition` (SEL-012), `Oversell { available, requested }` (SEL-021), `DatabaseError`                                                                                                                                  |
-| `correct_transaction`       | `id: String, account_id: String, CorrectTransactionDTO` | `Transaction`      | `TransactionNotFound` (TRX-031), `AccountNotFound { account_id }` (TRX-031), `InvalidDate` (TRX-033), `DateInFuture` (TRX-033), `DateTooOld` (TRX-033), `QuantityNotPositive` (TRX-033), `UnitPriceNegative` (TRX-033), `ExchangeRateNotPositive` (TRX-033), `FeesNegative` (TRX-033), `TotalAmountNotPositive` (TRX-033), `CascadingOversell` (SEL-032), `InsufficientCash { current_balance_micros, currency }` (CSH-042 / CSH-051 / DIV-040 — dividend edit re-applies the cash credit on replay), `DatabaseError` |
-| `cancel_transaction`        | `id: String, account_id: String`                        | `()`               | `TransactionNotFound` (TRX-034), `AccountNotFound { account_id }` (TRX-034), `CascadingOversell` (SEL-033 — replay after cancel can leave a later sell oversold), `InsufficientCash { current_balance_micros, currency }` (CSH-024 / CSH-051 / DIV-041 — deleting a dividend removes a cash credit, which can underflow a later debit on replay), `DatabaseError`                                                                                                                                                     |
-| `open_holding`              | `OpenHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-056), `AssetNotFound` (TRX-056), `ArchivedAsset` (TRX-050), `OpeningBalanceOnCashAsset` (CSH-061), `QuantityNotPositive` (TRX-044), `InvalidTotalCost` (TRX-045), `InvalidDate` (TRX-046), `DateInFuture` (TRX-046), `DateTooOld` (TRX-046), `DatabaseError`                                                                                                                                                                                                                    |
+| Command                     | Args                                                    | Return             | Errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_asset_ids_for_account` | `account_id: String`                                    | `Vec<String>`      | `DatabaseError` (TXL-054) — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `get_transactions`          | `account_id: String, asset_id: String`                  | `Vec<Transaction>` | `DatabaseError` (TXL-020)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `buy_holding`               | `BuyHoldingDTO`                                         | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (TRX-020), `TotalAmountNotPositive` (TRX-020), `InsufficientCash { current_balance_micros, currency }` (CSH-041), `DatabaseError`                                                                                                                                                                                                                                    |
+| `sell_holding`              | `SellHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (SEL-020), `TotalAmountNotPositive` (TRX-020), `ClosedPosition` (SEL-012), `Oversell { available, requested }` (SEL-021), `DatabaseError`                                                                                                                                                                                                                            |
+| `correct_transaction`       | `id: String, account_id: String, CorrectTransactionDTO` | `Transaction`      | `TransactionNotFound` (TRX-031), `AccountNotFound { account_id }` (TRX-031), `InvalidDate` (TRX-033), `DateInFuture` (TRX-033), `DateTooOld` (TRX-033), `QuantityNotPositive` (TRX-033), `UnitPriceNegative` (TRX-033), `ExchangeRateNotPositive` (TRX-033), `FeesNegative` (TRX-033), `TotalAmountNotPositive` (TRX-033), `CascadingOversell` (SEL-032 / FSD-040 — shrinking a free-share distribution can leave a later sell oversold on replay), `InsufficientCash { current_balance_micros, currency }` (CSH-042 / CSH-051 / DIV-040 — dividend edit re-applies the cash credit on replay), `DatabaseError` |
+| `cancel_transaction`        | `id: String, account_id: String`                        | `()`               | `TransactionNotFound` (TRX-034), `AccountNotFound { account_id }` (TRX-034), `CascadingOversell` (SEL-033 / FSD-041 — replay after cancel can leave a later sell oversold, incl. removing a free-share distribution), `InsufficientCash { current_balance_micros, currency }` (CSH-024 / CSH-051 / DIV-041 — deleting a dividend removes a cash credit, which can underflow a later debit on replay), `DatabaseError`                                                                                                                                                                                           |
+| `open_holding`              | `OpenHoldingDTO`                                        | `Transaction`      | `AccountNotFound { account_id }` (TRX-056), `AssetNotFound` (TRX-056), `ArchivedAsset` (TRX-050), `OpeningBalanceOnCashAsset` (CSH-061), `QuantityNotPositive` (TRX-044), `InvalidTotalCost` (TRX-045), `InvalidDate` (TRX-046), `DateInFuture` (TRX-046), `DateTooOld` (TRX-046), `DatabaseError`                                                                                                                                                                                                                                                                                                              |
 
 ### Cash Transactions
 
@@ -94,6 +94,19 @@
 | Command           | Args          | Return        | Errors                                                                                                                                                                                                                                                                                                                                                                     |
 | ----------------- | ------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `record_dividend` | `DividendDTO` | `Transaction` | `AccountNotFound { account_id }` (DIV-011), `AssetNotFound` (DIV-011), `AssetNotHeld` (DIV-011 — no active holding, `quantity = 0` or never held), `DividendOnCashAsset` (DIV-011 — asset is a Cash Asset), `AmountNotPositive` (DIV-021), `InvalidDate` (DIV-021), `DateInFuture` (DIV-021), `DateTooOld` (DIV-021), `ExchangeRateNotPositive` (DIV-022), `DatabaseError` |
+
+### Free Share Distribution
+
+> `record_free_shares` records a zero-cost quantity-only corporate event attributed to the
+> **distributing asset**: the holding's `quantity` increases by the distributed amount, the cost
+> basis is unchanged (average cost dilutes — FSD-022/023), and **no cash moves** (no
+> `InsufficientCash` variant possible). Edit / delete reuse `correct_transaction` /
+> `cancel_transaction` (FSD-040/041) — both can surface `CascadingOversell` on replay, since
+> shrinking or removing the free shares can leave a later sell oversold.
+
+| Command              | Args            | Return        | Errors                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | --------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record_free_shares` | `FreeSharesDTO` | `Transaction` | `AccountNotFound { account_id }` (FSD-011), `AssetNotFound` (FSD-011), `AssetNotHeld` (FSD-011 — no active holding, `quantity = 0` or never held), `FreeSharesOnCashAsset` (FSD-011 — asset is a Cash Asset), `QuantityNotPositive` (FSD-021), `InvalidDate` (FSD-021), `DateInFuture` (FSD-021), `DateTooOld` (FSD-021), `DatabaseError` |
 
 ---
 
@@ -199,6 +212,17 @@ struct DividendDTO {
     exchange_rate: i64,     // micro-units, asset→account rate; strictly positive; 1_000_000 when currencies match (DIV-022)
     note: Option<String>,
 }
+
+// Free shares received at zero cost (FSD-020). `asset_id` is the DISTRIBUTING asset; the backend
+// adds `quantity` to that holding, leaves the cost basis unchanged (average cost dilutes —
+// FSD-022/023), and touches no cash. No amount, no unit price, no exchange rate, no fees.
+struct FreeSharesDTO {
+    account_id: String,
+    asset_id: String,       // the distributing asset (must be an active, non-cash holding — FSD-011)
+    date: String,           // ISO date YYYY-MM-DD; same TRX-020 / FSD-021 bounds as buy/sell
+    quantity: i64,          // micro-units; free shares received; strictly positive (FSD-021)
+    note: Option<String>,
+}
 ```
 
 ```rust
@@ -209,6 +233,7 @@ enum TransactionType {
     Deposit,         // CSH-022 — cash inflow
     Withdrawal,      // CSH-032 — cash outflow
     Dividend,        // DIV-023 — cash income; attributed to the paying asset, credits cash
+    FreeShares,      // FSD-022 — zero-cost quantity event; attributed to the distributing asset, no cash leg
 }
 
 // Returned by buy_holding, sell_holding, correct_transaction, open_holding, record_deposit,
@@ -221,6 +246,9 @@ enum TransactionType {
 // account-currency cash credited; exchange_rate is the asset→account rate (DIV-022); fees == 0;
 // realized_pnl is None (income, not a capital gain — DIV-024). quantity/unit_price carry no
 // business meaning (fixed convention).
+// For FreeShares (FSD-022): asset_id is the DISTRIBUTING asset; quantity is the distributed
+// shares; unit_price == 0, exchange_rate == 1_000_000, fees == 0, total_amount == 0 (no money
+// moved — FSD-023); realized_pnl is None.
 struct Transaction {
     id: String,
     account_id: String,
@@ -322,10 +350,10 @@ struct AccountPerformanceResponse {
 
 ### Published
 
-| Event                | Payload | Rule             |
-| -------------------- | ------- | ---------------- |
-| `AccountUpdated`     | —       | ACC-022          |
-| `TransactionUpdated` | —       | TRX-037, DIV-026 |
+| Event                | Payload | Rule                      |
+| -------------------- | ------- | ------------------------- |
+| `AccountUpdated`     | —       | ACC-022                   |
+| `TransactionUpdated` | —       | TRX-037, DIV-026, FSD-026 |
 
 ### Subscribed (frontend re-fetch triggers)
 
@@ -345,3 +373,4 @@ struct AccountPerformanceResponse {
 - 2026-05-31 — Added by `cash-dividend` spec: `record_dividend` (+ `DividendDTO`); `TransactionType::Dividend` variant; `HoldingDetail.dividends_received` + `.total_return_pct`; `AccountDetailsResponse.total_dividends_received`; edit/delete reuse `correct_transaction`/`cancel_transaction` (DIV-040/041)
 - 2026-05-31 — `cash-transaction-history` (CSH-110/111): no command change — cash Deposit/Withdrawal edit reuses `correct_transaction` and delete reuses `cancel_transaction` (both already accept the cash `TransactionType`s); the feature is a frontend entry point (cash-row inspect action + dedicated cash modals in edit mode). Contract surface unchanged.
 - 2026-06-02 — Added by `fx-rate` spec: `CurrencyRateUpdated` subscribed event (FXR-037) — the `account_details` and `account_performance` views re-fetch when an FX rate changes so foreign-currency holdings revalue. No command change.
+- 2026-06-11 — Added by `free-share-distribution` spec: `record_free_shares` (+ `FreeSharesDTO`); `TransactionType::FreeShares` variant + its `Transaction` packing convention; FSD-040/041 cross-refs on `correct_transaction`/`cancel_transaction`'s `CascadingOversell`; edit/delete reuse those commands.

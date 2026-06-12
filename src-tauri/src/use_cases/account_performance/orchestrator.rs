@@ -550,10 +550,15 @@ fn end_value_as_of(
             TransactionType::Withdrawal | TransactionType::Purchase => {
                 cash_balance -= transaction.total_amount as i128;
             }
-            TransactionType::OpeningBalance => {}
+            // FSD-022d — a free-share distribution has no cash leg.
+            TransactionType::OpeningBalance | TransactionType::FreeShares => {}
         }
         match transaction.transaction_type {
-            TransactionType::Purchase | TransactionType::OpeningBalance => {
+            // FSD-070 — free shares enter the as-of-date unit reconstruction like a
+            // purchase (quantity rises); they carry no cash or flow effect.
+            TransactionType::Purchase
+            | TransactionType::OpeningBalance
+            | TransactionType::FreeShares => {
                 *quantity_by_asset
                     .entry(transaction.asset_id.as_str())
                     .or_insert(0) += transaction.quantity as i128;
@@ -628,7 +633,11 @@ fn net_external_flow_in_range(
             }
             // DIV-023: Dividend credits cash (internal income), not an external flow — excluded
             // from Simple Dietz net external flow (PRF-031) like Purchase/Sell.
-            TransactionType::Purchase | TransactionType::Sell | TransactionType::Dividend => {}
+            // FSD-070: FreeShares is not an external flow either — no flow adjustment.
+            TransactionType::Purchase
+            | TransactionType::Sell
+            | TransactionType::Dividend
+            | TransactionType::FreeShares => {}
         }
     }
     debug_assert!(
@@ -667,9 +676,11 @@ fn metric_for_span(
                 TransactionType::Withdrawal => -(transaction.total_amount as i128),
                 // DIV-023: Dividend is internal income (credit-only), not an external flow —
                 // excluded from Simple Dietz weighted flow (PRF-031) like Purchase/Sell.
-                TransactionType::Purchase | TransactionType::Sell | TransactionType::Dividend => {
-                    continue
-                }
+                // FSD-070: FreeShares is excluded the same way — no flow adjustment.
+                TransactionType::Purchase
+                | TransactionType::Sell
+                | TransactionType::Dividend
+                | TransactionType::FreeShares => continue,
             };
             let days_remaining = (period_end - date).num_days() as i128;
             weighted_flow += signed_flow * days_remaining / days_in_period as i128;

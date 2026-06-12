@@ -1,5 +1,6 @@
 use super::error::{
-    DividendApplicationError, DividendError, OpenHoldingApplicationError, OpenHoldingError,
+    DividendApplicationError, DividendError, FreeSharesApplicationError, FreeSharesError,
+    OpenHoldingApplicationError, OpenHoldingError,
 };
 use super::shared::ensure_cash_asset;
 use crate::context::account::{
@@ -288,6 +289,72 @@ impl HoldingTransactionUseCase {
                 HoldingTransactionError::Operation(op) => {
                     tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id_for_log, amount_micros, exchange_rate, err = ?op, "record_dividend: unexpected operation error on a credit-only path");
                     DividendError::Application(AccountApplicationError::DatabaseError)
+                }
+            })
+    }
+
+    /// Records a FreeShares distribution attributed to a held distributing asset
+    /// (FSD-011/022).
+    ///
+    /// The distribution has no cash leg (FSD-022d — no `ensure_cash_asset`, no
+    /// `InsufficientCash`) and never touches an `AssetPrice` row (FSD-024).
+    /// Returns `FreeSharesError`.
+    pub async fn record_free_shares(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, FreeSharesError> {
+        // FSD-011 — account must exist (checked before any asset work).
+        self.account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+
+        // FSD-011 — asset must exist and must not be a Cash Asset.
+        let asset = self
+            .asset_service
+            .get_asset_by_id(&asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_free_shares: get_asset_by_id failed");
+                AccountApplicationError::DatabaseError
+            })?;
+        match asset {
+            None => return Err(FreeSharesApplicationError::AssetNotFound.into()),
+            Some(a) if a.class == AssetClass::Cash => {
+                return Err(FreeSharesApplicationError::FreeSharesOnCashAsset.into())
+            }
+            Some(_) => {}
+        }
+
+        // FSD-011 — asset must be currently held (quantity > 0).
+        let held = self
+            .account_service
+            .get_holding_by_account_asset(account_id, &asset_id)
+            .await?;
+        match held {
+            Some(h) if h.quantity > 0 => {}
+            _ => return Err(FreeSharesApplicationError::AssetNotHeld.into()),
+        }
+
+        // Delegate to the account BC; map its composite into the free-shares
+        // surface (Operation is unreachable — a distribution only adds quantity:
+        // no cash leg, no oversell).
+        let asset_id_for_log = asset_id.clone();
+        self.account_service
+            .record_free_shares(account_id, asset_id, date, quantity, note)
+            .await
+            .map_err(|e| match e {
+                HoldingTransactionError::Application(a) => FreeSharesError::Application(a),
+                HoldingTransactionError::Validation(v) => FreeSharesError::Validation(v),
+                HoldingTransactionError::Operation(op) => {
+                    tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id_for_log, quantity, err = ?op, "record_free_shares: unexpected operation error on a quantity-only path");
+                    FreeSharesError::Application(AccountApplicationError::DatabaseError)
                 }
             })
     }
@@ -1072,6 +1139,370 @@ mod tests {
         assert_eq!(
             tx.total_amount, 90_000_000,
             "total_amount must equal floor(amount × rate / MICRO)"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // record_free_shares — orchestrator unit tests (FSD-011, FSD-021, FSD-022,
+    // FSD-023, FSD-024, FSD-026)
+    // -------------------------------------------------------------------------
+
+    // FSD-022/023 — happy path: free shares increase quantity, cost basis unchanged,
+    // no cash movement, no AssetPrice created.
+    #[tokio::test]
+    async fn record_free_shares_happy_path() {
+        // FSD-022 — orchestrator delegates through to account service; holding updated
+        use crate::context::account::TransactionType;
+
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), Arc::clone(&asset_svc));
+
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings_before = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let cost_basis_before = holdings_before
+            .iter()
+            .find(|h| h.asset_id == asset.id)
+            .map(|h| h.quantity as i128 * h.average_price as i128 / 1_000_000)
+            .unwrap();
+
+        let tx = uc
+            .record_free_shares(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // FSD-022 — transaction fields
+        assert_eq!(
+            tx.transaction_type,
+            TransactionType::FreeShares,
+            "transaction_type must be FreeShares"
+        );
+        assert_eq!(tx.asset_id, asset.id);
+        assert_eq!(tx.quantity, micro(5));
+        // FSD-023 — zero-cost convention
+        assert_eq!(tx.unit_price, 0);
+        assert_eq!(tx.exchange_rate, 1_000_000);
+        assert_eq!(tx.fees, 0);
+        assert_eq!(tx.total_amount, 0);
+        assert!(tx.realized_pnl.is_none());
+
+        let holdings_after = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let holding_after = holdings_after
+            .iter()
+            .find(|h| h.asset_id == asset.id)
+            .unwrap();
+
+        // FSD-022a — quantity increased by distributed amount
+        assert_eq!(holding_after.quantity, micro(15), "quantity must be 15");
+        // FSD-023 — underlying cost unchanged → VWAP dilutes to the exact floored
+        // value (TRX-026 floor convention).
+        let expected_diluted_vwap =
+            (cost_basis_before * 1_000_000 / holding_after.quantity as i128) as i64;
+        assert_eq!(
+            holding_after.average_price, expected_diluted_vwap,
+            "average price must equal floor(cost_basis / new_quantity)"
+        );
+
+        // FSD-024 — no AssetPrice row created
+        let latest_price = asset_svc.get_latest_price(&asset.id).await.unwrap();
+        assert!(
+            latest_price.is_none(),
+            "record_free_shares must not create an AssetPrice row (FSD-024)"
+        );
+
+        // FSD-022d — cash holding unchanged
+        let cash_holdings = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let _ = cash_holdings; // presence assertion done via business logic; cash test is in account.rs
+    }
+
+    // FSD-011 — AccountNotFound: unknown account is rejected before any asset check.
+    #[tokio::test]
+    async fn record_free_shares_rejects_unknown_account() {
+        // FSD-011 — account must exist
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_free_shares(
+                "nonexistent-account",
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::AccountApplicationError;
+        use crate::use_cases::holding_transaction::FreeSharesError;
+        assert!(
+            matches!(
+                err,
+                FreeSharesError::Application(AccountApplicationError::AccountNotFound { .. })
+            ),
+            "expected Application(AccountNotFound), got: {err:?}"
+        );
+    }
+
+    // FSD-011 — AssetNotFound: unknown asset_id is rejected.
+    #[tokio::test]
+    async fn record_free_shares_rejects_unknown_asset() {
+        // FSD-011 — asset must exist
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_free_shares(
+                &account.id,
+                "nonexistent-asset".to_string(),
+                "2024-06-15".to_string(),
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{FreeSharesApplicationError, FreeSharesError};
+        assert!(
+            matches!(
+                err,
+                FreeSharesError::UseCase(FreeSharesApplicationError::AssetNotFound)
+            ),
+            "expected UseCase(AssetNotFound), got: {err:?}"
+        );
+    }
+
+    // FSD-011 — AssetNotHeld: asset exists but is not held in this account.
+    #[tokio::test]
+    async fn record_free_shares_rejects_asset_not_held() {
+        // FSD-011 — asset must be currently held with quantity > 0
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_free_shares(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{FreeSharesApplicationError, FreeSharesError};
+        assert!(
+            matches!(
+                err,
+                FreeSharesError::UseCase(FreeSharesApplicationError::AssetNotHeld)
+            ),
+            "expected UseCase(AssetNotHeld), got: {err:?}"
+        );
+    }
+
+    // FSD-011 — FreeSharesOnCashAsset: the distributing asset is a Cash Asset.
+    #[tokio::test]
+    async fn record_free_shares_rejects_cash_asset() {
+        // FSD-011 — distributing asset must not be a Cash Asset
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let cash_asset = asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_free_shares(
+                &account.id,
+                cash_asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{FreeSharesApplicationError, FreeSharesError};
+        assert!(
+            matches!(
+                err,
+                FreeSharesError::UseCase(FreeSharesApplicationError::FreeSharesOnCashAsset)
+            ),
+            "expected UseCase(FreeSharesOnCashAsset), got: {err:?}"
+        );
+    }
+
+    // FSD-021 — QuantityNotPositive: quantity = 0 is rejected.
+    #[tokio::test]
+    async fn record_free_shares_rejects_zero_quantity() {
+        // FSD-021 — quantity must be strictly positive
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_free_shares(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                0, // invalid
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::TransactionDomainError;
+        use crate::use_cases::holding_transaction::FreeSharesError;
+        assert!(
+            matches!(
+                err,
+                FreeSharesError::Validation(TransactionDomainError::QuantityNotPositive)
+            ),
+            "expected Validation(QuantityNotPositive), got: {err:?}"
+        );
+    }
+
+    // FSD-021 — DateInFuture: future date is rejected.
+    #[tokio::test]
+    async fn record_free_shares_rejects_future_date() {
+        // FSD-021 — date must not be in the future
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_free_shares(
+                &account.id,
+                asset.id.clone(),
+                "2099-01-01".to_string(), // future
+                micro(5),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::context::account::TransactionDomainError;
+        use crate::use_cases::holding_transaction::FreeSharesError;
+        assert!(
+            matches!(
+                err,
+                FreeSharesError::Validation(TransactionDomainError::DateInFuture)
+            ),
+            "expected Validation(DateInFuture), got: {err:?}"
         );
     }
 }

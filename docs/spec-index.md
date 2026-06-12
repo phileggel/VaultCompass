@@ -18,6 +18,7 @@
 | DIV     | Cash Dividend               | Cash dividend transaction: income credited to cash, attributed to the paying asset         | active   |
 | FXR     | Foreign Exchange Rate       | Currency-pair rates (fetch + manual) for live multi-currency holding valuation             | planning |
 | KEY     | API Key Management          | BYOK provider API keys via OS-keychain ladder; Connections dialog; gates Stooq price fetch | active   |
+| FSD     | Free Share Distribution     | Bonus shares received at zero cost: quantity event, no cash, cost basis unchanged          | active   |
 
 ---
 

@@ -129,6 +129,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             holding_transaction::record_deposit,
             holding_transaction::record_withdrawal,
             holding_transaction::record_dividend,
+            holding_transaction::record_free_shares,
             account_details::get_account_details,
             account_summary::get_account_summaries,
             account_performance::get_account_performance,
