@@ -1,9 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderConnection } from "@/bindings";
 
-// Import the testable helper extracted from App.tsx per KEY-041.
-// This import fails until App.tsx exports the helper — that is the expected red state.
-import { shouldLaunchFetch } from "./App";
+// Mock the gateways the launch helper reaches so no command.* call is made.
+vi.mock("@/features/accounts/gateway", () => ({
+  accountGateway: { fetchAllAssetPrices: vi.fn() },
+}));
+vi.mock("@/features/connections/gateway", () => ({
+  connectionGateway: { getProviderConnections: vi.fn() },
+}));
+vi.mock("@/features/shell/gateway", () => ({
+  shellGateway: { onMigrationError: vi.fn(() => Promise.resolve(() => {})) },
+}));
+
+import { accountGateway } from "@/features/accounts/gateway";
+import { connectionGateway } from "@/features/connections/gateway";
+import { setAutoFetch } from "@/lib/autoFetchStorage";
+import { setUseStooqApiKey } from "@/lib/stooqKeyModeStorage";
+// Import the testable helpers extracted from App.tsx per KEY-041 / KEY-052.
+import { maybeLaunchAutoFetch, shouldLaunchFetch } from "./App";
 
 describe("shouldLaunchFetch — KEY-041 launch auto-fetch gate", () => {
   // KEY-041 — returns false (skip) when no connections data is available
@@ -55,5 +69,61 @@ describe("shouldLaunchFetch — KEY-041 launch auto-fetch gate", () => {
     const result = shouldLaunchFetch(connections);
     expect(result).toBe(false);
     expect(typeof result).toBe("boolean");
+  });
+});
+
+describe("maybeLaunchAutoFetch — MKT-121 / KEY-052 launch dispatch", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear(); // keyed default; auto-fetch off
+  });
+
+  // MKT-120 — auto-fetch disabled: no dispatch at all.
+  it("does not dispatch when auto-fetch is disabled", async () => {
+    setAutoFetch(false);
+    await maybeLaunchAutoFetch();
+    expect(connectionGateway.getProviderConnections).not.toHaveBeenCalled();
+    expect(accountGateway.fetchAllAssetPrices).not.toHaveBeenCalled();
+  });
+
+  // KEY-052 — keyless mode: dispatch anonymously WITHOUT the KEY-041 no-key skip,
+  // never consulting the stored key.
+  it("keyless mode dispatches anonymously without the key gate (KEY-052)", async () => {
+    setAutoFetch(true);
+    setUseStooqApiKey(false);
+    vi.mocked(accountGateway.fetchAllAssetPrices).mockResolvedValue({ status: "ok", data: null });
+
+    await maybeLaunchAutoFetch();
+
+    expect(connectionGateway.getProviderConnections).not.toHaveBeenCalled();
+    expect(accountGateway.fetchAllAssetPrices).toHaveBeenCalledWith(false);
+  });
+
+  // KEY-041 — keyed mode, no stored key: the launch skip applies, no dispatch.
+  it("keyed mode with no key skips the launch fetch silently (KEY-041)", async () => {
+    setAutoFetch(true); // keyed is the default (localStorage cleared)
+    vi.mocked(connectionGateway.getProviderConnections).mockResolvedValue({
+      status: "ok",
+      data: [{ provider: "Stooq", has_key: false, active_tier: null }],
+    });
+
+    await maybeLaunchAutoFetch();
+
+    expect(connectionGateway.getProviderConnections).toHaveBeenCalledTimes(1);
+    expect(accountGateway.fetchAllAssetPrices).not.toHaveBeenCalled();
+  });
+
+  // KEY-041 / KEY-054 — keyed mode with a stored key: dispatch with use_api_key=true.
+  it("keyed mode with a stored key dispatches with the key (KEY-054)", async () => {
+    setAutoFetch(true);
+    vi.mocked(connectionGateway.getProviderConnections).mockResolvedValue({
+      status: "ok",
+      data: [{ provider: "Stooq", has_key: true, active_tier: "OsKeychain" }],
+    });
+    vi.mocked(accountGateway.fetchAllAssetPrices).mockResolvedValue({ status: "ok", data: null });
+
+    await maybeLaunchAutoFetch();
+
+    expect(accountGateway.fetchAllAssetPrices).toHaveBeenCalledWith(true);
   });
 });

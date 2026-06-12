@@ -22,6 +22,36 @@ export function shouldLaunchFetch(connections: ProviderConnection[]): boolean {
   return connections.find((c) => c.provider === "Stooq")?.has_key === true;
 }
 
+/**
+ * MKT-121 launch auto-fetch decision, extracted from the mount effect so it is
+ * unit-testable (the effect just awaits it once after init). Fire-and-forget:
+ * dispatch-level failures are logged, never surfaced as a cold-start snackbar.
+ *
+ * - Auto-fetch disabled (MKT-120) → no dispatch.
+ * - Keyed mode (KEY-050 on): apply the KEY-041 no-key launch skip — only dispatch
+ *   when a Stooq key is stored; otherwise return silently (no dialog).
+ * - Keyless mode (KEY-050 off): KEY-052 — the no-key skip does NOT apply; dispatch
+ *   anonymously regardless of stored key.
+ */
+export async function maybeLaunchAutoFetch(): Promise<void> {
+  if (!getAutoFetch()) return;
+  try {
+    const useApiKey = getUseStooqApiKey();
+    if (useApiKey) {
+      const connections = await connectionGateway.getProviderConnections();
+      if (connections.status !== "ok" || !shouldLaunchFetch(connections.data)) {
+        return;
+      }
+    }
+    const result = await accountGateway.fetchAllAssetPrices(useApiKey);
+    if (result.status === "error") {
+      logger.warn("[App] auto-fetch dispatch returned error", { code: result.error.code });
+    }
+  } catch (error) {
+    logger.error("[App] auto-fetch dispatch threw", { error });
+  }
+}
+
 function App() {
   const [dbError, setDbError] = useState<string | null>(null);
   const init = useAppStore((state) => state.init);
@@ -49,28 +79,8 @@ function App() {
   // logged server-side via the FE logger — no startup snackbar to avoid noise on launch.
   useEffect(() => {
     if (!isInitialized) return;
-    if (!getAutoFetch()) return;
-    (async () => {
-      try {
-        // KEY-050 — read the device-local fetch mode. KEY-052: in keyless mode the
-        // KEY-041 no-key launch skip does not apply — dispatch anonymously.
-        const useApiKey = getUseStooqApiKey();
-        if (useApiKey) {
-          // KEY-041 — skip the launch fetch silently when no provider key is stored
-          // (no dialog on cold start; absence surfaces via the per-holding diagnostics).
-          const connections = await connectionGateway.getProviderConnections();
-          if (connections.status !== "ok" || !shouldLaunchFetch(connections.data)) {
-            return;
-          }
-        }
-        const result = await accountGateway.fetchAllAssetPrices(useApiKey);
-        if (result.status === "error") {
-          logger.warn("[App] auto-fetch dispatch returned error", { code: result.error.code });
-        }
-      } catch (error) {
-        logger.error("[App] auto-fetch dispatch threw", { error });
-      }
-    })();
+    // MKT-121 / KEY-052 — decision lives in maybeLaunchAutoFetch (unit-tested).
+    void maybeLaunchAutoFetch();
   }, [isInitialized]);
 
   // R18 — critical migration error: app blocked with error message
