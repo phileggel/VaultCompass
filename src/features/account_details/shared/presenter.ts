@@ -5,7 +5,9 @@ import type {
   AssetPriceSource,
   ClosedHoldingDetail,
   DividendError,
+  FreeSharesError,
   HoldingDetail,
+  HoldingTransactionError,
 } from "@/bindings";
 import {
   microToFormatted,
@@ -84,6 +86,16 @@ export function dividendErrorToI18n(err: DividendError): I18nMessage {
     default:
       return { key: "error.Unknown" };
   }
+}
+
+/**
+ * F27 — Maps the free-shares error surfaces to an i18n key (FSD-021/011/040).
+ * Covers both the create path (`FreeSharesError`) and the edit path
+ * (`HoldingTransactionError`, via `correct_transaction`); every flat `{ code }`
+ * variant resolves to `error.{code}`.
+ */
+export function freeSharesErrorToI18n(err: FreeSharesError | HoldingTransactionError): I18nMessage {
+  return { key: `error.${err.code}` };
 }
 
 const DASH = "—";

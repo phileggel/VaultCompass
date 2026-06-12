@@ -4,6 +4,7 @@ import { AssetEditModalMount } from "@/features/shell/AssetEditModalMount";
 import { CashTransactionEditMount } from "@/features/shell/CashTransactionEditMount";
 import { ConnectionsModalMount } from "@/features/shell/ConnectionsModalMount";
 import { CurrencyRateEditMount } from "@/features/shell/CurrencyRateEditMount";
+import { FreeSharesEditModalMount } from "@/features/shell/FreeSharesEditModalMount";
 import { MainLayout } from "@/features/shell/MainLayout";
 import { saveLastPath } from "@/lib/lastPath";
 
@@ -21,6 +22,7 @@ export function AppShell() {
       <CashTransactionEditMount />
       <CurrencyRateEditMount />
       <ConnectionsModalMount />
+      <FreeSharesEditModalMount />
     </MainLayout>
   );
 }

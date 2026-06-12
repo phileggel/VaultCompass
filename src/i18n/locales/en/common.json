@@ -293,6 +293,7 @@
     "type_deposit": "Deposit",
     "type_withdrawal": "Withdrawal",
     "type_dividend": "Dividend",
+    "type_freeshares": "Free shares",
     "action_sell": "Sell",
     "buy_modal_title": "Buy position",
     "sell_modal_title": "Sell position",
@@ -342,7 +343,8 @@
     "column_dividends_received": "Dividends",
     "column_total_return_pct": "Total Return",
     "action_add_menu": "Record",
-    "action_record_dividend": "Dividend"
+    "action_record_dividend": "Dividend",
+    "action_record_free_shares": "Free shares"
   },
   "account_performance": {
     "title": "Performance",
@@ -426,6 +428,15 @@
     "form_amount_placeholder": "0.00",
     "action_record": "Record dividend",
     "recorded": "Dividend recorded."
+  },
+  "free_shares": {
+    "modal_title": "Record free shares",
+    "form_asset_label": "Distributing asset",
+    "form_select_asset": "Select an asset…",
+    "form_quantity_label": "Quantity of free shares",
+    "form_quantity_placeholder": "0",
+    "action_record": "Record free shares",
+    "recorded": "Free shares recorded."
   },
   "validation": {
     "amount_not_positive": "Amount must be greater than 0.",
@@ -549,6 +560,7 @@
     "AssetNotFound": "Asset not found.",
     "AssetNotHeld": "This asset is not currently held in this account.",
     "DividendOnCashAsset": "Dividends cannot be recorded on a cash holding.",
+    "FreeSharesOnCashAsset": "Free shares cannot be recorded on a cash holding.",
     "InvalidType": "Unknown transaction type.",
     "TypeImmutable": "Cannot change the type of an existing transaction.",
     "ArchivedAssetSell": "Cannot sell an archived asset.",

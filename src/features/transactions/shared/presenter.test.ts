@@ -77,6 +77,52 @@ describe("toTransactionRow — cash transactions (CSH-101)", () => {
   });
 });
 
+// FSD-022 / FSD-050 — FreeShares transaction type round-trips through toTransactionRow
+describe("toTransactionRow — FreeShares (FSD-022/050)", () => {
+  const MICRO = 1_000_000;
+  const freeSharesTx = {
+    id: "tx-fsd-1",
+    account_id: "account-1",
+    asset_id: "asset-equity-1",
+    transaction_type: "FreeShares" as const,
+    date: "2026-06-12",
+    quantity: 5 * MICRO,
+    unit_price: 0,
+    exchange_rate: 1 * MICRO,
+    fees: 0,
+    total_amount: 0,
+    note: null,
+    realized_pnl: null,
+    created_at: "2026-06-12T10:00:00Z",
+  };
+
+  // FSD-050 — type field carries "FreeShares" so the component can build the i18n key
+  // (the key "transaction.type.FreeShares" maps to "Free shares" — FSD-050)
+  it("FSD-050: type is 'FreeShares' for i18n key construction", () => {
+    const row = toTransactionRow(freeSharesTx, "Apple Inc", "My Account");
+    expect(row.type).toBe("FreeShares");
+  });
+
+  // FSD-022 — quantity shows the distributed share count (microToFormatted default 3 decimals)
+  it("FSD-022: quantity reflects the distributed shares formatted to 3 decimals", () => {
+    const row = toTransactionRow(freeSharesTx, "Apple Inc", "My Account");
+    expect(row.quantity).toBe("5,000");
+  });
+
+  // FSD-023 — total_amount is 0 (no money moved); formatted to 3 decimals
+  it("FSD-023: totalAmount is '0,000' (no money moved)", () => {
+    const row = toTransactionRow(freeSharesTx, "Apple Inc", "My Account");
+    expect(row.totalAmount).toBe("0,000");
+  });
+
+  // FSD-023 — realized P&L is null (no capital event)
+  it("FSD-023: realizedPnl and realizedPnlRaw are null", () => {
+    const row = toTransactionRow(freeSharesTx, "Apple Inc", "My Account");
+    expect(row.realizedPnl).toBeNull();
+    expect(row.realizedPnlRaw).toBeNull();
+  });
+});
+
 // F27 layer-3 presenter — exhaustive variant coverage across HoldingTransactionError
 // and OpenHoldingError. Payload-bearing variants get pre-formatted micros (presenter
 // owns the data formatting; component owns t()).

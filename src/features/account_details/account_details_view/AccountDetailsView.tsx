@@ -7,6 +7,7 @@ import { Button } from "@/ui/components/button/Button";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
+import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
@@ -201,6 +202,16 @@ export function AccountDetailsView() {
                           onClick={() => runFromAddMenu(view.handleDividendOpen)}
                         >
                           {t("account_details.action_record_dividend")}
+                        </button>
+                        {/* FSD-010 — Record free shares */}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          id="add-menu-free-shares"
+                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                          onClick={() => runFromAddMenu(view.handleFreeSharesOpen)}
+                        >
+                          {t("account_details.action_record_free_shares")}
                         </button>
                       </div>
                     </>
@@ -450,6 +461,17 @@ export function AccountDetailsView() {
           accountCurrency={view.accountCurrency}
           heldAssets={view.dividendPayingAssets}
           onSubmitSuccess={view.handleDividendSuccess}
+        />
+      )}
+
+      {/* FSD-010/020 — Free-shares modal (distributing asset chosen inside) */}
+      {view.freeSharesOpen && (
+        <FreeSharesModal
+          isOpen
+          onClose={view.handleFreeSharesClose}
+          accountId={accountId}
+          heldAssets={view.dividendPayingAssets}
+          onSubmitSuccess={view.handleFreeSharesSuccess}
         />
       )}
     </div>

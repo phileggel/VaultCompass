@@ -208,73 +208,98 @@ export function TransactionListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedTransactions.map((row) => (
-                    <tr key={row.id} className="m3-tr">
-                      <td className="m3-td">{t(`transaction.type_${row.type.toLowerCase()}`)}</td>
-                      <td className="m3-td tabular-nums">{row.date}</td>
-                      <td className="m3-td text-right tabular-nums">{row.quantity}</td>
-                      <td className="m3-td text-right tabular-nums">{row.unitPrice}</td>
-                      <td className="m3-td text-right tabular-nums">{row.exchangeRate}</td>
-                      <td className="m3-td text-right tabular-nums">{row.fees}</td>
-                      <td className="m3-td text-right tabular-nums font-medium">
-                        {row.totalAmount}
-                      </td>
-                      {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}
-                      <td className="m3-td text-right tabular-nums">
-                        {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (
-                          <span
-                            className={row.realizedPnlRaw > 0 ? "text-m3-success" : "text-m3-error"}
-                          >
-                            {row.realizedPnl}
-                          </span>
-                        ) : (
-                          <span className="text-m3-on-surface-variant">
-                            {t("account_details.pnl_placeholder")}
-                          </span>
-                        )}
-                      </td>
-                      <td className="m3-td">
-                        <div className="flex items-center gap-1">
-                          <IconButton
-                            icon={<Pencil size={16} />}
-                            size="sm"
-                            aria-label={t("action.edit")}
-                            onClick={() => {
-                              const raw = transactionById.get(row.id);
-                              if (!raw) return;
-                              // CSH-111 — cash Deposit/Withdrawal edits use the dedicated
-                              // cash modals (the generic modal is cash-excluded, CSH-018),
-                              // opened via the URL-driven modal mount (no cross-feature import).
-                              if (raw.transaction_type === "Deposit") {
-                                patchModalSearch(navigate, {
-                                  modal: "edit-cash-deposit",
-                                  editTxId: raw.id,
-                                  editTxAccountId: raw.account_id,
-                                  editTxAssetId: raw.asset_id,
-                                });
-                              } else if (raw.transaction_type === "Withdrawal") {
-                                patchModalSearch(navigate, {
-                                  modal: "edit-cash-withdrawal",
-                                  editTxId: raw.id,
-                                  editTxAccountId: raw.account_id,
-                                  editTxAssetId: raw.asset_id,
-                                });
-                              } else {
-                                setEditingTransaction(raw);
+                  {sortedTransactions.map((row) => {
+                    // FSD-050 — a free-share distribution moves no money: the
+                    // unit-price and total-amount columns render the neutral
+                    // placeholder (the quantity column still shows the shares).
+                    const isFreeShares = row.type === "FreeShares";
+                    const moneyDash = (
+                      <span className="text-m3-on-surface-variant">
+                        {t("account_details.pnl_placeholder")}
+                      </span>
+                    );
+                    return (
+                      <tr key={row.id} className="m3-tr">
+                        <td className="m3-td">{t(`transaction.type_${row.type.toLowerCase()}`)}</td>
+                        <td className="m3-td tabular-nums">{row.date}</td>
+                        <td className="m3-td text-right tabular-nums">{row.quantity}</td>
+                        <td className="m3-td text-right tabular-nums">
+                          {isFreeShares ? moneyDash : row.unitPrice}
+                        </td>
+                        <td className="m3-td text-right tabular-nums">{row.exchangeRate}</td>
+                        <td className="m3-td text-right tabular-nums">{row.fees}</td>
+                        <td className="m3-td text-right tabular-nums font-medium">
+                          {isFreeShares ? moneyDash : row.totalAmount}
+                        </td>
+                        {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}
+                        <td className="m3-td text-right tabular-nums">
+                          {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (
+                            <span
+                              className={
+                                row.realizedPnlRaw > 0 ? "text-m3-success" : "text-m3-error"
                               }
-                            }}
-                          />
-                          <IconButton
-                            icon={<Trash2 size={16} />}
-                            size="sm"
-                            variant="danger"
-                            aria-label={t("action.delete")}
-                            onClick={() => setDeletingTransactionId(row.id)}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            >
+                              {row.realizedPnl}
+                            </span>
+                          ) : (
+                            <span className="text-m3-on-surface-variant">
+                              {t("account_details.pnl_placeholder")}
+                            </span>
+                          )}
+                        </td>
+                        <td className="m3-td">
+                          <div className="flex items-center gap-1">
+                            <IconButton
+                              icon={<Pencil size={16} />}
+                              size="sm"
+                              aria-label={t("action.edit")}
+                              onClick={() => {
+                                const raw = transactionById.get(row.id);
+                                if (!raw) return;
+                                // CSH-111 — cash Deposit/Withdrawal edits use the dedicated
+                                // cash modals (the generic modal is cash-excluded, CSH-018),
+                                // opened via the URL-driven modal mount (no cross-feature import).
+                                if (raw.transaction_type === "Deposit") {
+                                  patchModalSearch(navigate, {
+                                    modal: "edit-cash-deposit",
+                                    editTxId: raw.id,
+                                    editTxAccountId: raw.account_id,
+                                    editTxAssetId: raw.asset_id,
+                                  });
+                                } else if (raw.transaction_type === "Withdrawal") {
+                                  patchModalSearch(navigate, {
+                                    modal: "edit-cash-withdrawal",
+                                    editTxId: raw.id,
+                                    editTxAccountId: raw.account_id,
+                                    editTxAssetId: raw.asset_id,
+                                  });
+                                } else if (raw.transaction_type === "FreeShares") {
+                                  // FSD-040 — free-shares edits use the dedicated modal in
+                                  // edit mode (only date/quantity/note editable, asset
+                                  // locked), opened via the URL-driven modal mount.
+                                  patchModalSearch(navigate, {
+                                    modal: "edit-free-shares",
+                                    editTxId: raw.id,
+                                    editTxAccountId: raw.account_id,
+                                    editTxAssetId: raw.asset_id,
+                                  });
+                                } else {
+                                  setEditingTransaction(raw);
+                                }
+                              }}
+                            />
+                            <IconButton
+                              icon={<Trash2 size={16} />}
+                              size="sm"
+                              variant="danger"
+                              aria-label={t("action.delete")}
+                              onClick={() => setDeletingTransactionId(row.id)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -39,6 +39,7 @@ export function useAccountDetailsView(accountId: string) {
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [dividendOpen, setDividendOpen] = useState(false);
+  const [freeSharesOpen, setFreeSharesOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -100,6 +101,14 @@ export function useAccountDetailsView(accountId: string) {
   const handleDividendClose = useCallback(() => setDividendOpen(false), []);
   const handleDividendSuccess = useCallback(() => {
     setDividendOpen(false);
+    data.retry();
+  }, [data]);
+
+  // FSD-010/012 — free-shares modal state (entered from the header "Record" menu).
+  const handleFreeSharesOpen = useCallback(() => setFreeSharesOpen(true), []);
+  const handleFreeSharesClose = useCallback(() => setFreeSharesOpen(false), []);
+  const handleFreeSharesSuccess = useCallback(() => {
+    setFreeSharesOpen(false);
     data.retry();
   }, [data]);
 
@@ -178,6 +187,7 @@ export function useAccountDetailsView(accountId: string) {
     depositOpen,
     withdrawalOpen,
     dividendOpen,
+    freeSharesOpen,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -200,6 +210,9 @@ export function useAccountDetailsView(accountId: string) {
     handleDividendOpen,
     handleDividendClose,
     handleDividendSuccess,
+    handleFreeSharesOpen,
+    handleFreeSharesClose,
+    handleFreeSharesSuccess,
     handleTogglePriceRefreshLock,
   };
 }
