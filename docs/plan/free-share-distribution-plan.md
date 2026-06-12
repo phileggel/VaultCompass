@@ -10,43 +10,43 @@
 
 **Setup**
 
-- [ ] 📖 Read spec: `docs/spec/free-share-distribution.md`
-- [ ] 📖 Read contract: `docs/contracts/account-contract.md` (§ Free Share Distribution + `Transaction` packing convention)
-- [ ] 📖 Read constraining ADRs: `docs/adr/001-use-i64-for-monetary-amounts.md` (micro-units), `docs/adr/002-replace-asset-account-with-holding.md` (Holding model), `docs/adr/006-unit-of-work.md` (atomic record), `docs/adr/013-recompute-account-performance-on-read.md` (PRF replay)
-- [ ] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/backend-patterns.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`
+- [x] 📖 Read spec: `docs/spec/free-share-distribution.md`
+- [x] 📖 Read contract: `docs/contracts/account-contract.md` (§ Free Share Distribution + `Transaction` packing convention)
+- [x] 📖 Read constraining ADRs: `docs/adr/001-use-i64-for-monetary-amounts.md` (micro-units), `docs/adr/002-replace-asset-account-with-holding.md` (Holding model), `docs/adr/006-unit-of-work.md` (atomic record), `docs/adr/013-recompute-account-performance-on-read.md` (PRF replay)
+- [x] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/backend-patterns.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`
 
 **Backend phase** _(PR 1)_
 
-- [ ] 🗄️ No migration — `transaction_type` persists as TEXT (strum); a new enum variant needs no schema change (DIV precedent). No `just migrate` / `just prepare-sqlx` needed.
-- [ ] ✍️ Backend test stubs (`test-writer-backend` from the contract's `record_free_shares` row + FSD-022/023/027/028/070 replay rules — red confirmed)
-- [ ] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of future rules; green confirmed)
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + **`reviewer-security`** [new `#[tauri::command]`] in parallel → `/review-triage` → apply Follow-ups) — _no `reviewer-sql` (no migration)_
-- [ ] 🔗 Type Synchronization (`just generate-types` → `src/bindings.ts`)
-- [ ] 🔧 Run `npx tsc --noEmit` → fix TS errors from new bindings only (no UI work)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(account): record free-share distributions` via `/smart-commit` [HARD GATE]
-- [ ] 🔀 `/create-pr` (PR 1 — backend). After merge, branch the FE phase off updated `main`.
+- [x] 🗄️ No migration — `transaction_type` persists as TEXT (strum); a new enum variant needs no schema change (DIV precedent). No `just migrate` / `just prepare-sqlx` needed.
+- [x] ✍️ Backend test stubs (`test-writer-backend` from the contract's `record_free_shares` row + FSD-022/023/027/028/070 replay rules — red confirmed)
+- [x] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of future rules; green confirmed)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + **`reviewer-security`** [new `#[tauri::command]`] in parallel → `/review-triage` → apply Follow-ups) — _no `reviewer-sql` (no migration)_
+- [x] 🔗 Type Synchronization (`just generate-types` → `src/bindings.ts`)
+- [x] 🔧 Run `npx tsc --noEmit` → fix TS errors from new bindings only (no UI work)
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(account): record free-share distributions` via `/smart-commit` [HARD GATE]
+- [x] 🔀 `/create-pr` (PR 1 — backend). After merge, branch the FE phase off updated `main`.
 
 **Frontend phase** _(PR 2, part 1)_
 
-- [ ] ✍️ Frontend test stubs (`test-writer-frontend` from contract; pass the `modified_functions` list from § Rules Coverage; red confirmed)
-- [ ] 💻 Frontend Implementation (minimal — implement only what makes the failing tests pass; green confirmed)
-- [ ] 📸 Visual proof (`/visual-proof` — FreeSharesModal: idle / filled / error / edit-mode; AccountDetailsView Record menu open; TransactionListPage with a free-shares row; light + dark)
-- [ ] 🔍 Frontend Review (`reviewer-frontend` → `/review-triage` → apply Follow-ups)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(account): free-shares modal + transaction-list rendering` via `/smart-commit` [HARD GATE]
-- [ ] _(no `/create-pr` here — PR 2 continues with closure)_
+- [x] ✍️ Frontend test stubs (`test-writer-frontend` from contract; pass the `modified_functions` list from § Rules Coverage; red confirmed)
+- [x] 💻 Frontend Implementation (minimal — implement only what makes the failing tests pass; green confirmed)
+- [x] 📸 Visual proof (`/visual-proof` — FreeSharesModal: idle / filled / error / edit-mode; AccountDetailsView Record menu open; TransactionListPage with a free-shares row; light + dark)
+- [x] 🔍 Frontend Review (`reviewer-frontend` → `/review-triage` → apply Follow-ups)
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(account): free-shares modal + transaction-list rendering` via `/smart-commit` [HARD GATE]
+- [x] _(no `/create-pr` here — PR 2 continues with closure)_
 
 **Closure** _(PR 2, part 2)_
 
-- [ ] ✍️ E2E scenarios (`test-writer-e2e` — record → holding reflects → delete restores; see § E2E)
-- [ ] ▶️ Run E2E suite (`just test-e2e-headless` → green; main agent triages failures)
-- [ ] 🔍 Cross-cutting Review (`reviewer-e2e` [E2E files] → `/review-triage`) — _`reviewer-security` already ran in the BE phase; `reviewer-infra` only if config/scripts change_
-- [ ] 📚 Documentation Update — **housekeeping bundle**: `docs/roadmap.md` (Phase 4 table: add "Free distribution ✅ Done" row), tick this plan's checkboxes, tick/close the stale shipped plans (`docs/plan/api-key-management-plan.md`, `docs/plan/fx-rate-plan.md` — flagged by `/whats-next` 2026-06-11), `docs/spec-index.md` FSD status stays `active`
-- [ ] ✅ Spec check (`spec-checker`) [HARD GATE — all 16 FSD rules + `record_free_shares` covered; halt on any gap]
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `test(account): FSD E2E + closure` via `/smart-commit` [HARD GATE]
-- [ ] 🔀 `/create-pr` (PR 2 — frontend + E2E + closure)
+- [x] ✍️ E2E scenarios (`test-writer-e2e` — record → holding reflects → delete restores; see § E2E)
+- [x] ▶️ Run E2E suite (`just test-e2e-headless` → green; main agent triages failures)
+- [x] 🔍 Cross-cutting Review (`reviewer-e2e` [E2E files] → `/review-triage`) — _`reviewer-security` already ran in the BE phase; `reviewer-infra` only if config/scripts change_
+- [x] 📚 Documentation Update — **housekeeping bundle**: `docs/roadmap.md` (Phase 4 table: add "Free distribution ✅ Done" row), tick this plan's checkboxes, tick/close the stale shipped plans (`docs/plan/api-key-management-plan.md`, `docs/plan/fx-rate-plan.md` — flagged by `/whats-next` 2026-06-11), `docs/spec-index.md` FSD status stays `active`
+- [x] ✅ Spec check (`spec-checker`) [HARD GATE — all 16 FSD rules + `record_free_shares` covered; halt on any gap]
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `test(account): FSD E2E + closure` via `/smart-commit` [HARD GATE]
+- [x] 🔀 `/create-pr` (PR 2 — frontend + E2E + closure)
 
 ---
 

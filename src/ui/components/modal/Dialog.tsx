@@ -100,6 +100,7 @@ interface ConfirmationDialogProps {
   confirmLabel: string;
   cancelLabel: string;
   variant?: "default" | "danger";
+  confirmId?: string;
 }
 
 export function ConfirmationDialog({
@@ -111,13 +112,18 @@ export function ConfirmationDialog({
   confirmLabel,
   cancelLabel,
   variant = "default",
+  confirmId,
 }: ConfirmationDialogProps) {
   const actions = (
     <div className="flex items-center justify-end gap-3">
       <Button variant="ghost" onClick={onCancel}>
         {cancelLabel}
       </Button>
-      <Button variant={variant === "danger" ? "danger" : "primary"} onClick={onConfirm}>
+      <Button
+        variant={variant === "danger" ? "danger" : "primary"}
+        id={confirmId}
+        onClick={onConfirm}
+      >
         {confirmLabel}
       </Button>
     </div>

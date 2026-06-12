@@ -186,3 +186,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `feat/api-key-management-fe` @ `affcc0f`
 - Severity: 🟡
 - Observation: Both refresh hooks import `connectionGateway` from the `connections` feature and carry verbatim-identical KEY-040 gate logic (read provider connections, find Stooq, open the dialog when no key). A gateway is behaviour, not a primitive — importing a sibling feature's gateway into `accounts` and `account_details` couples them, and the gate predicate now lives in two places that must stay in lockstep. A shared `useKeyGate()` hook (promoted to a neutral location) would centralise the single `getProviderConnections()` consult and remove the cross-feature gateway dependency. Natural to fold in with the next provider slice (when the `StooqKeyResolver` port lands).
+
+## 2026-06-12 — TXL row cells addressable only by column position
+
+- Found by: reviewer-e2e
+- Where: `src/features/transactions/transaction_list/TransactionListPage.tsx`
+- Context: branch `feat/free-share-distribution-fe` @ `ef3caf3`
+- Severity: 🔵
+- Observation: The transaction-list `<td>` cells carry no stable per-cell identifier; E2E assertions reach the quantity / unit-price / total columns through positional `td:nth-child(N)` selectors. The column position is an implicit contract — reordering or inserting a column silently shifts every cell selector, and the breakage surfaces only on a full E2E run. The FSD-050 assertions already depend on columns 3/4/7 holding their place. Per-cell ids (`#txl-qty-<txId>` / `#txl-unit-price-<txId>` / `#txl-total-<txId>`) would decouple the selectors from layout.

@@ -1770,6 +1770,97 @@ mod tests {
         );
     }
 
+    // FSD-070 / PRF-031 — a free-share distribution moves no cash, so it is
+    // excluded from net external flow; yet the units it adds enter the as-of-date
+    // holding reconstruction and raise end value once the asset is priced.
+    #[tokio::test]
+    async fn free_shares_excluded_from_net_flow_but_units_enter_valuation() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Free Shares Flow".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "FSD Stock".to_string(),
+                reference: "FSD".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-03-01".to_string(), 2_000_000_000, None)
+            .await
+            .unwrap();
+        // Buy 1 unit at 1000 EUR → cash 2000 − 1000 = 1000 EUR; holding = 1 unit.
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-10".to_string(),
+                1_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Distribute 2 free units → no cash leg; holding = 3 units.
+        account_svc
+            .record_free_shares(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-15".to_string(),
+                2_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-31", 1000.0)
+            .await
+            .unwrap();
+        // end_value = cash(1000 EUR) + 3 units × 1000 EUR = 4000 EUR. The 3000 EUR
+        // stock leg (not 1000) proves the 2 distributed units entered reconstruction.
+        // net_flow  = deposit 2000 only (Purchase + FreeShares excluded).
+        // gain      = 4000 − 0 − 2000 = 2000 EUR.
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let mar_2024 = resp
+            .monthly
+            .iter()
+            .find(|p| p.year == 2024 && p.month == Some(3))
+            .expect("Mar 2024 row");
+        assert_eq!(
+            mar_2024.end_value, 4_000_000_000,
+            "end_value must value all 3 units (1 bought + 2 distributed) at 1000 EUR"
+        );
+        let since_inception = mar_2024
+            .since_inception
+            .as_ref()
+            .expect("since_inception present for first period");
+        assert_eq!(
+            since_inception.gain, 2_000_000_000,
+            "free-share units raise end value but must stay out of net_flow (gain = 2000 EUR)"
+        );
+    }
+
     // PRF-030 — OpeningBalance cost is counted as an inflow in net_external_flow
     #[tokio::test]
     async fn opening_balance_included_in_net_external_flow() {

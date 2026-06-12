@@ -10,44 +10,44 @@
 
 ### Setup
 
-- [ ] 📖 Read spec: `docs/spec/api-key-management.md`
-- [ ] 📖 Read contract: `docs/contracts/connection-contract.md`
-- [ ] 📖 Read constraining ADRs: `docs/adr/011-byok-api-keys-os-keychain.md`, `docs/adr/015-byok-keyed-price-providers.md`, `docs/adr/004-use-cases-inject-services-not-repositories.md`
-- [ ] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md` (esp. B0/B37–B43 gold layout), `docs/ddd-reference.md`, `docs/error-model.md`, `docs/frontend-rules.md` (F0/F26–F28), `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`
+- [x] 📖 Read spec: `docs/spec/api-key-management.md`
+- [x] 📖 Read contract: `docs/contracts/connection-contract.md`
+- [x] 📖 Read constraining ADRs: `docs/adr/011-byok-api-keys-os-keychain.md`, `docs/adr/015-byok-keyed-price-providers.md`, `docs/adr/004-use-cases-inject-services-not-repositories.md`
+- [x] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md` (esp. B0/B37–B43 gold layout), `docs/ddd-reference.md`, `docs/error-model.md`, `docs/frontend-rules.md` (F0/F26–F28), `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`
 
 ### Backend phase — **PR #1**
 
-- [ ] 🗄️ No migration (keys are not persisted to SQLite)
-- [ ] 📦 Add `keyring` crate to `src-tauri/Cargo.toml` (OS keychain backend; default features cover macOS/Windows/Linux Secret Service + portal per ADR-011)
-- [ ] ✍️ Backend test stubs (`test-writer-backend` from `connection-contract.md`; + KEY-043/044 integration stubs in `asset_price_fetch` tests — confirm red)
-- [ ] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of future rules; green confirmed)
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + **`reviewer-security`** [key storage / new commands / secret handling] + **`reviewer-infra`** [`keyring` dependency add in `Cargo.toml`] in parallel → `/review-triage` → apply Follow-ups; halt on (b)/(c)) — _no `reviewer-sql` (no migration)_
-- [ ] 🔗 Type Synchronization (`just generate-types` → `src/bindings.ts`)
-- [ ] 🔧 `npx tsc --noEmit` → fix TS errors from new bindings only (no UI work)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(connection): provider API-key storage + Stooq keyed fetch` via `/smart-commit` [HARD GATE]
-- [ ] 🔀 `/create-pr` (PR #1 — BE). After merge, branch FE off updated `main`.
+- [x] 🗄️ No migration (keys are not persisted to SQLite)
+- [x] 📦 Add `keyring` crate to `src-tauri/Cargo.toml` (OS keychain backend; default features cover macOS/Windows/Linux Secret Service + portal per ADR-011)
+- [x] ✍️ Backend test stubs (`test-writer-backend` from `connection-contract.md`; + KEY-043/044 integration stubs in `asset_price_fetch` tests — confirm red)
+- [x] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of future rules; green confirmed)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + **`reviewer-security`** [key storage / new commands / secret handling] + **`reviewer-infra`** [`keyring` dependency add in `Cargo.toml`] in parallel → `/review-triage` → apply Follow-ups; halt on (b)/(c)) — _no `reviewer-sql` (no migration)_
+- [x] 🔗 Type Synchronization (`just generate-types` → `src/bindings.ts`)
+- [x] 🔧 `npx tsc --noEmit` → fix TS errors from new bindings only (no UI work)
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(connection): provider API-key storage + Stooq keyed fetch` via `/smart-commit` [HARD GATE]
+- [x] 🔀 `/create-pr` (PR #1 — BE). After merge, branch FE off updated `main`.
 
 ### Frontend phase — **PR #2**
 
-- [ ] ✍️ Frontend test stubs (`test-writer-frontend` from contract; pass `modified_functions` list — see §Rules Coverage; confirm red)
-- [ ] 💻 Frontend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of future rules; green confirmed)
-- [ ] 📸 Visual proof (`/visual-proof` — Connections dialog: no-key / key-entered / testing / test-success / test-invalid / test-unreachable / key-set+tier / remove-confirm; light + dark)
-- [ ] 🔍 Frontend Review (`reviewer-frontend` → `/review-triage` → apply Follow-ups; halt on (b)/(c))
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(connection): Connections dialog + price-refresh key gating` via `/smart-commit` [HARD GATE]
-- [ ] 🔀 `/create-pr` (PR #2 — FE). After merge, branch E2E off updated `main`.
+- [x] ✍️ Frontend test stubs (`test-writer-frontend` from contract; pass `modified_functions` list — see §Rules Coverage; confirm red)
+- [x] 💻 Frontend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of future rules; green confirmed)
+- [x] 📸 Visual proof (`/visual-proof` — Connections dialog: no-key / key-entered / testing / test-success / test-invalid / test-unreachable / key-set+tier / remove-confirm; light + dark)
+- [x] 🔍 Frontend Review (`reviewer-frontend` → `/review-triage` → apply Follow-ups; halt on (b)/(c))
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(connection): Connections dialog + price-refresh key gating` via `/smart-commit` [HARD GATE]
+- [x] 🔀 `/create-pr` (PR #2 — FE). After merge, branch E2E off updated `main`.
 
 ### Closure — **PR #3**
 
-- [ ] ✍️ E2E scenarios (`test-writer-e2e`; `/setup-e2e` first if needed) — Connections save/remove + refresh-gate-opens-dialog. **Exclusions:** the live Stooq probe (KEY-021) stays in BE tests (no external network in E2E); keychain is unavailable headless → flows land in tier-2 session memory.
-- [ ] ▶️ Run E2E suite (`just test-e2e-headless` → green; main agent triages failures)
-- [ ] 🔍 Cross-cutting Review (`reviewer-e2e` [E2E files] + **`reviewer-security`** [final pass on the key surface + provider rewire] in parallel → `/review-triage`) — _`reviewer-infra` only if `Cargo.toml`/CI/capabilities changed_
-- [ ] 📚 Documentation Update — `docs/todo.md` (close the 🔴 KEY entry), `docs/lessons.md` (L-006 resolution pointer to ADR-015/KEY), `ARCHITECTURE.md` (register the new `connection` BC + the `connection` event-less command surface; note first non-SQLite context), update memory `project_price_fetch_blocked_on_key`
-- [ ] ✅ Spec check (`spec-checker`) [HARD GATE — every KEY-NNN + the 4 contract commands covered]
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `test(connection): E2E + closure for API key management` via `/smart-commit` [HARD GATE]
-- [ ] 🔀 `/create-pr` (PR #3 — E2E + closure)
+- [x] ✍️ E2E scenarios (`test-writer-e2e`; `/setup-e2e` first if needed) — Connections save/remove + refresh-gate-opens-dialog. **Exclusions:** the live Stooq probe (KEY-021) stays in BE tests (no external network in E2E); keychain is unavailable headless → flows land in tier-2 session memory.
+- [x] ▶️ Run E2E suite (`just test-e2e-headless` → green; main agent triages failures)
+- [x] 🔍 Cross-cutting Review (`reviewer-e2e` [E2E files] + **`reviewer-security`** [final pass on the key surface + provider rewire] in parallel → `/review-triage`) — _`reviewer-infra` only if `Cargo.toml`/CI/capabilities changed_
+- [x] 📚 Documentation Update — `docs/todo.md` (close the 🔴 KEY entry), `docs/lessons.md` (L-006 resolution pointer to ADR-015/KEY), `ARCHITECTURE.md` (register the new `connection` BC + the `connection` event-less command surface; note first non-SQLite context), update memory `project_price_fetch_blocked_on_key`
+- [x] ✅ Spec check (`spec-checker`) [HARD GATE — every KEY-NNN + the 4 contract commands covered]
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `test(connection): E2E + closure for API key management` via `/smart-commit` [HARD GATE]
+- [x] 🔀 `/create-pr` (PR #3 — E2E + closure)
 
 ---
 

@@ -219,7 +219,7 @@ export function TransactionListPage() {
                       </span>
                     );
                     return (
-                      <tr key={row.id} className="m3-tr">
+                      <tr key={row.id} id={`txl-row-${row.id}`} className="m3-tr">
                         <td className="m3-td">{t(`transaction.type_${row.type.toLowerCase()}`)}</td>
                         <td className="m3-td tabular-nums">{row.date}</td>
                         <td className="m3-td text-right tabular-nums">{row.quantity}</td>
@@ -292,6 +292,7 @@ export function TransactionListPage() {
                               icon={<Trash2 size={16} />}
                               size="sm"
                               variant="danger"
+                              id={`txl-delete-${row.id}`}
                               aria-label={t("action.delete")}
                               onClick={() => setDeletingTransactionId(row.id)}
                             />
@@ -331,6 +332,7 @@ export function TransactionListPage() {
         confirmLabel={t("action.confirm")}
         cancelLabel={t("action.cancel")}
         variant="danger"
+        confirmId="txl-delete-confirm"
       />
 
       {/* Add transaction modal — empty state CTA */}
