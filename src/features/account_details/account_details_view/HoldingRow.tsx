@@ -175,7 +175,9 @@ export function HoldingRow({
           <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
         </div>
       </td>
-      <td className="m3-td text-right tabular-nums">{row.quantity}</td>
+      <td id={`holding-quantity-${row.assetId}`} className="m3-td text-right tabular-nums">
+        {row.quantity}
+      </td>
       <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
       <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
       {/* SEL-042 — Realized P&L */}
@@ -320,6 +322,7 @@ export function HoldingRow({
           <IconButton
             icon={<Search size={16} />}
             size="sm"
+            id={`action-view-transactions-${row.assetId}`}
             aria-label={t("transaction.list_title")}
             onClick={handleViewTransactions}
           />

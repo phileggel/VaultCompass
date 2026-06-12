@@ -44,7 +44,7 @@
 - [x] 🔗 `just generate-types` (valuation lift reuses existing `HoldingDetail`/`AccountDetailsResponse` shapes → doc-comment-only diff in `bindings.ts`, no wire change)
 - [x] 🧹 `just format`
 - [x] 💾 Commit: `feat(currency): multi-currency valuation lift` via `/smart-commit` (`255c8f1`)
-- [ ] 🔀 `/create-pr` (PR 2a — valuation lift). After merge, branch PR 2b off updated `main`.
+- [x] 🔀 `/create-pr` (PR 2a — valuation lift). After merge, branch PR 2b off updated `main`.
 
 ### Backend phase B2 — FX provider fetch (PR 2b)
 
@@ -53,28 +53,28 @@
 - [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` + `reviewer-infra` _(new dep)_ → `/dep-audit` → `/review-triage`) — 5 (a) hardening fixes (finite/positive guards, cross-rate `i64::try_from`, version pin, test assert); 2 (b) → `docs/techdebt.md`; quick-xml CVE-clean
 - [x] 🧹 `just format`
 - [x] 💾 Commit: `feat(currency): FX provider fetch (Frankfurter + ECB)` via `/smart-commit` (`433a6ea`)
-- [ ] 🔀 `/create-pr` (PR 2b — provider fetch). After merge, branch PR 3 off updated `main`.
+- [x] 🔀 `/create-pr` (PR 2b — provider fetch). After merge, branch PR 3 off updated `main`.
 
 ### Frontend phase — currency feature (PR 3)
 
-- [ ] ✍️ Frontend test stubs (`test-writer-frontend` — gateway unit, presenter unit, RTL for the Currency Rates view + forms + mount; pass `modified_functions` list below; red confirmed)
-- [ ] 💻 Frontend implementation (implement only what makes failing tests pass — no defensive code, no anticipation of future rules)
-- [ ] 📸 `/visual-proof` — capture Currency Rates view (list/empty/loading/error), Add-pair form, record/edit/delete rate modals, the holding-row staleness label + converted values, light + dark
-- [ ] 🔍 Frontend Review (`reviewer-frontend` + `reviewer-arch` _(`.ts`/`.tsx` touched)_ → `/review-triage`)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `feat(currency): Currency Rates view + holding-row FX shortcut` via `/smart-commit`
-- [ ] 🔀 `/create-pr` (PR 3 — frontend). After merge, branch PR 4 off updated `main`.
+- [x] ✍️ Frontend test stubs (`test-writer-frontend` — gateway unit, presenter unit, RTL for the Currency Rates view + forms + mount; pass `modified_functions` list below; red confirmed)
+- [x] 💻 Frontend implementation (implement only what makes failing tests pass — no defensive code, no anticipation of future rules)
+- [x] 📸 `/visual-proof` — capture Currency Rates view (list/empty/loading/error), Add-pair form, record/edit/delete rate modals, the holding-row staleness label + converted values, light + dark
+- [x] 🔍 Frontend Review (`reviewer-frontend` + `reviewer-arch` _(`.ts`/`.tsx` touched)_ → `/review-triage`)
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `feat(currency): Currency Rates view + holding-row FX shortcut` via `/smart-commit`
+- [x] 🔀 `/create-pr` (PR 3 — frontend). After merge, branch PR 4 off updated `main`.
 
 ### Closure phase — E2E + docs (PR 4)
 
-- [ ] ✍️ E2E scenarios (`test-writer-e2e` — declare pair → record rate → foreign holding values live; run `/setup-e2e` first if needed)
-- [ ] ▶️ `npm run test:e2e` → green (main agent triages failures)
-- [ ] 🔍 Cross-cutting Review (`reviewer-e2e` _(E2E files)_ + `reviewer-security` _(if fetch/capability touched and not already reviewed in PR 2)_ in parallel → `/review-triage`)
-- [ ] 📚 Docs: `ARCHITECTURE.md` (new `currency` BC + `CurrencyRateUpdated` event-bus row + FXR-037 subscription note), `docs/contracts/account-contract.md` (add `CurrencyRateUpdated` to Subscribed events), `docs/ubiquitous-language.md` (add `CurrencyPair` / `CurrencyRate` / `CurrencyRateSource`; distinguish valuation rate from frozen per-transaction `exchange_rate`), `docs/todo.md` (close the FXR entry), `docs/roadmap.md` (Phase 3 multi-currency)
-- [ ] ✅ `spec-checker` [HARD GATE — every FXR rule + every `currency-contract.md` command covered; halt on any gap]
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `test(currency): FX E2E + spec closure` via `/smart-commit`
-- [ ] 🔀 `/create-pr` (PR 4 — E2E + closure)
+- [x] ✍️ E2E scenarios (`test-writer-e2e` — declare pair → record rate → foreign holding values live; run `/setup-e2e` first if needed)
+- [x] ▶️ `npm run test:e2e` → green (main agent triages failures)
+- [x] 🔍 Cross-cutting Review (`reviewer-e2e` _(E2E files)_ + `reviewer-security` _(if fetch/capability touched and not already reviewed in PR 2)_ in parallel → `/review-triage`)
+- [x] 📚 Docs: `ARCHITECTURE.md` (new `currency` BC + `CurrencyRateUpdated` event-bus row + FXR-037 subscription note), `docs/contracts/account-contract.md` (add `CurrencyRateUpdated` to Subscribed events), `docs/ubiquitous-language.md` (add `CurrencyPair` / `CurrencyRate` / `CurrencyRateSource`; distinguish valuation rate from frozen per-transaction `exchange_rate`), `docs/todo.md` (close the FXR entry), `docs/roadmap.md` (Phase 3 multi-currency)
+- [x] ✅ `spec-checker` [HARD GATE — every FXR rule + every `currency-contract.md` command covered; halt on any gap]
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `test(currency): FX E2E + spec closure` via `/smart-commit`
+- [x] 🔀 `/create-pr` (PR 4 — E2E + closure)
 
 ---
 
