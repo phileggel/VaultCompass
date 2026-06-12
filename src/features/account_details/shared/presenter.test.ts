@@ -11,6 +11,7 @@ import {
   formatFxStaleness,
   formatSource,
   formatStaleness,
+  freeSharesErrorToI18n,
   priceRefreshLockErrorToI18n,
   toAccountSummary,
   toClosedHoldingRow,
@@ -626,6 +627,38 @@ describe("dividendErrorToI18n", () => {
     expect(dividendErrorToI18n({ code: "SomeUnknownCode" } as never)).toEqual({
       key: "error.Unknown",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// freeSharesErrorToI18n — F27 presenter for the free-shares error surfaces (FSD).
+// Create path (FreeSharesError): AccountNotFound, AssetNotFound, AssetNotHeld,
+// FreeSharesOnCashAsset, QuantityNotPositive, InvalidDate, DateInFuture,
+// DateTooOld, DatabaseError. Edit path (HoldingTransactionError via
+// correct_transaction): e.g. CascadingOversell, TransactionNotFound. Every flat
+// { code } maps to error.{code}.
+// ---------------------------------------------------------------------------
+
+describe("freeSharesErrorToI18n", () => {
+  it.each([
+    "AccountNotFound",
+    "AssetNotFound",
+    "AssetNotHeld",
+    "FreeSharesOnCashAsset",
+    "QuantityNotPositive",
+    "InvalidDate",
+    "DateInFuture",
+    "DateTooOld",
+    "DatabaseError",
+  ] as const)("create-path %s maps to its flat error key", (code) => {
+    expect(freeSharesErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
+  });
+
+  it.each([
+    "CascadingOversell",
+    "TransactionNotFound",
+  ] as const)("edit-path %s maps to its flat error key", (code) => {
+    expect(freeSharesErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
   });
 });
 

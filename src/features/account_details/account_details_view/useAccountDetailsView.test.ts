@@ -155,6 +155,54 @@ describe("useAccountDetailsView — dividend modal state (DIV-012)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// FSD-012 — Header "Record" menu: free-shares modal state in useAccountDetailsView.
+// Mirrors the DIV-012 dividend pattern: freeSharesOpen starts false, flips
+// true on handleFreeSharesOpen, resets to false on close/success.
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetailsView — free-shares modal state (FSD-012)", () => {
+  beforeEach(() => {
+    mockBlock.mockReset();
+    mockUnblock.mockReset();
+    mockShowSnackbar.mockReset();
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  // FSD-012 — freeSharesOpen starts as false
+  it("freeSharesOpen starts as false (FSD-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.freeSharesOpen).toBe(false);
+  });
+
+  // FSD-012 — handleFreeSharesOpen sets freeSharesOpen to true
+  it("handleFreeSharesOpen sets freeSharesOpen to true (FSD-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleFreeSharesOpen());
+    expect(result.current.freeSharesOpen).toBe(true);
+  });
+
+  // FSD-012 — handleFreeSharesClose resets freeSharesOpen to false
+  it("handleFreeSharesClose resets freeSharesOpen to false (FSD-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleFreeSharesOpen());
+    act(() => result.current.handleFreeSharesClose());
+    expect(result.current.freeSharesOpen).toBe(false);
+  });
+
+  // FSD-012 — handleFreeSharesSuccess closes the modal
+  it("handleFreeSharesSuccess closes the modal (FSD-012)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleFreeSharesOpen());
+    act(() => result.current.handleFreeSharesSuccess());
+    expect(result.current.freeSharesOpen).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DIV-011/020 — dividendPayingAssets exposes only active, non-cash holdings
 // (quantity > 0) as candidates for the dividend modal's asset selector.
 // ---------------------------------------------------------------------------

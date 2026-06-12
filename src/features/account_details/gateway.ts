@@ -9,6 +9,8 @@ import type {
   DividendDTO,
   DividendError,
   FetchAccountAssetPricesError,
+  FreeSharesDTO,
+  FreeSharesError,
   HoldingTransactionError,
   OpenHoldingDTO,
   OpenHoldingError,
@@ -66,6 +68,11 @@ export const accountDetailsGateway = {
 
   async recordDividend(dto: DividendDTO): Promise<Result<Transaction, DividendError>> {
     return commands.recordDividend(dto);
+  },
+
+  // FSD-022 — record a zero-cost free-share distribution attributed to a held asset.
+  async recordFreeShares(dto: FreeSharesDTO): Promise<Result<Transaction, FreeSharesError>> {
+    return commands.recordFreeShares(dto);
   },
 
   // CSH-111 — editing a cash Deposit/Withdrawal persists via correct_transaction.

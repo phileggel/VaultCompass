@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   DepositDTO,
   DividendDTO,
+  FreeSharesDTO,
   HoldingTransactionError,
   OpenHoldingDTO,
   OpenHoldingError,
@@ -431,6 +432,198 @@ describe("accountDetailsGateway — recordWithdrawal (CSH-032)", () => {
     mockInvoke.mockRejectedValue({ code: "CashAssetNotEditable" });
     const result = await accountDetailsGateway.blockAssetPriceRefresh("cash-id");
     expect(result).toEqual({ status: "error", error: { code: "CashAssetNotEditable" } });
+  });
+});
+
+describe("accountDetailsGateway — recordFreeShares (FSD-022)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // FSD-022 — happy path: recordFreeShares passes DTO through and returns Transaction
+  it("recordFreeShares returns Transaction on success", async () => {
+    const dto: FreeSharesDTO = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const mockTransaction: Transaction = {
+      id: "tx-fsd-1",
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      transaction_type: "FreeShares",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      unit_price: 0,
+      exchange_rate: 1_000_000,
+      fees: 0,
+      total_amount: 0,
+      note: null,
+      realized_pnl: null,
+      created_at: "2026-06-12T10:00:00Z",
+    };
+    mockInvoke.mockResolvedValue(mockTransaction);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "ok", data: mockTransaction });
+    expect(mockInvoke).toHaveBeenCalledWith("record_free_shares", { dto });
+  });
+
+  // FSD-011 — AccountNotFound
+  it("recordFreeShares surfaces AccountNotFound", async () => {
+    const dto = {
+      account_id: "no-such",
+      asset_id: "asset-equity-1",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "AccountNotFound", account_id: "no-such" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+    expect(mockInvoke).toHaveBeenCalledWith("record_free_shares", { dto });
+  });
+
+  // FSD-011 — AssetNotFound
+  it("recordFreeShares surfaces AssetNotFound", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "no-such-asset",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "AssetNotFound" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // FSD-011 — AssetNotHeld: asset exists but no active holding
+  it("recordFreeShares surfaces AssetNotHeld", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-not-held",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "AssetNotHeld" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // FSD-011 — FreeSharesOnCashAsset: distributing asset is a Cash Asset
+  it("recordFreeShares surfaces FreeSharesOnCashAsset", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "system-cash-eur",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "FreeSharesOnCashAsset" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // FSD-021 — QuantityNotPositive
+  it("recordFreeShares surfaces QuantityNotPositive", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-06-12",
+      quantity: 0,
+      note: null,
+    };
+    const err = { code: "QuantityNotPositive" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // FSD-021 — InvalidDate
+  it("recordFreeShares surfaces InvalidDate", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "not-a-date",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "InvalidDate" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // FSD-021 — DateInFuture
+  it("recordFreeShares surfaces DateInFuture", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2099-12-31",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "DateInFuture" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // FSD-021 — DateTooOld
+  it("recordFreeShares surfaces DateTooOld", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "1899-12-31",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "DateTooOld" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  // DatabaseError — infrastructure failure
+  it("recordFreeShares surfaces DatabaseError on infrastructure failure", async () => {
+    const dto = {
+      account_id: "account-1",
+      asset_id: "asset-equity-1",
+      date: "2026-06-12",
+      quantity: 5_000_000,
+      note: null,
+    };
+    const err = { code: "DatabaseError" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.recordFreeShares(dto);
+
+    expect(result).toEqual({ status: "error", error: err });
   });
 });
 
