@@ -1,5 +1,7 @@
 # Contract — Connection
 
+> **⛔ RETIRED — superseded by [ADR-017](../adr/017-yahoo-finance-keyless-price-source.md).** The price provider moved to keyless Yahoo Finance; no provider needs a credential, so the `connection` bounded context and every command/type/error below is being removed. All inactive — retained only until the migration PR deletes this file alongside the implementation.
+
 > Domain: `connection` (bounded context — provider credential management)
 > Last updated by: `api-key-management` spec
 

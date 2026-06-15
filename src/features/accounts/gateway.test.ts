@@ -199,16 +199,16 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
   // MKT-130 — happy path: dispatch acknowledged, returns null
   it("fetchAllAssetPrices returns null on successful dispatch", async () => {
     mockInvoke.mockResolvedValue(null);
-    const result = await accountGateway.fetchAllAssetPrices(true);
+    const result = await accountGateway.fetchAllAssetPrices();
     expect(result).toEqual({ status: "ok", data: null });
-    expect(mockInvoke).toHaveBeenCalledWith("fetch_all_asset_prices", { useApiKey: true });
+    expect(mockInvoke).toHaveBeenCalledWith("fetch_all_asset_prices");
   });
 
   // MKT-113 — in-flight guard
   it("fetchAllAssetPrices surfaces FetchAlreadyRunning when another fetch is in progress", async () => {
     const error = { code: "FetchAlreadyRunning" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountGateway.fetchAllAssetPrices(true);
+    const result = await accountGateway.fetchAllAssetPrices();
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -216,7 +216,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
   it("fetchAllAssetPrices surfaces NoFetchableHoldings when no active holdings are derivable", async () => {
     const error = { code: "NoFetchableHoldings" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountGateway.fetchAllAssetPrices(true);
+    const result = await accountGateway.fetchAllAssetPrices();
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -224,7 +224,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
   it("fetchAllAssetPrices surfaces DatabaseError on infrastructure failure", async () => {
     const error = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountGateway.fetchAllAssetPrices(true);
+    const result = await accountGateway.fetchAllAssetPrices();
     expect(result).toEqual({ status: "error", error });
   });
 
@@ -232,7 +232,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
   it("fetchAllAssetPrices surfaces UnknownError on unexpected runtime failure", async () => {
     const error = { code: "UnknownError" };
     mockInvoke.mockRejectedValue(error);
-    const result = await accountGateway.fetchAllAssetPrices(true);
+    const result = await accountGateway.fetchAllAssetPrices();
     expect(result).toEqual({ status: "error", error });
   });
 

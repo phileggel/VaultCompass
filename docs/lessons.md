@@ -147,3 +147,11 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Symptom** — An E2E spec green in repeated local headless runs fails on CI, on an assertion right after an action whose behavior depends on an OS service — here the keychain: with no Secret Service on the runner, the save fell back to a lower storage tier whose UI flow is legitimately different, and the spec had asserted the dev-host variant only.
 
 **Mitigation** — (1) When a code path branches on host-service availability, assert only what is identical across all environment-legal variants (or accept any of them explicitly). (2) Before trusting local runs for such a path, reproduce the CI host: `DBUS_SESSION_BUS_ADDRESS=disabled: just test-e2e-headless` makes anything Secret-Service-dependent see "unavailable", exactly like CI. Generalizes to any host-coupled dependency — locale, display server, network: find the env knob that recreates the CI condition and run the suite under it. Fixed in `2091460`.
+
+## L-008 — An external API's "access denied" can be origin-gated, not credential-gated
+
+**First observed**: 2026-06-12 (a price provider that "needed a key" was actually blocking by IP)
+
+**Symptom** — A read-only HTTP API returned access-denied for every request; the natural reading was "authentication required, get a key." Acquiring/sending a key changed nothing, because the gate keyed on the _request origin_ (IP/ASN allow-list), not on any credential. The same endpoint served data fine from a different network and rejected a valid key from a datacenter IP.
+
+**Mitigation** — Before concluding an API needs auth, probe it from the _actual deployment network_ (a tool call's egress IP may differ from the user's — `[[feedback-bash-egress-uses-user-network]]`-style), and test the keyed and keyless requests from the _same_ origin to isolate the variable. When the gate turns out to be origin-based and no key fixes it, the credential machinery is wasted complexity: prefer a provider whose documented JSON endpoint is permissive over scraping/auth gymnastics. Drove the Stooq→Yahoo migration (ADR-017): a stable keyless JSON endpoint replaced a whole BYOK feature.

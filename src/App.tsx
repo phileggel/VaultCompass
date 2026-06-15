@@ -2,48 +2,25 @@ import { RouterProvider } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ProviderConnection } from "@/bindings";
 import { accountGateway } from "@/features/accounts/gateway";
-import { connectionGateway } from "@/features/connections/gateway";
 import { shellGateway } from "@/features/shell/gateway";
 import { getAutoFetch } from "@/lib/autoFetchStorage";
 import { logger } from "@/lib/logger";
-import { getUseStooqApiKey } from "@/lib/stooqKeyModeStorage";
 import { useAppStore } from "@/lib/store";
 import { router } from "./router";
-
-/**
- * KEY-041 — pure predicate: should the launch auto-fetch run? True only when the
- * price provider (Stooq) has a stored key. A key in any storage tier qualifies; an
- * absent key (or empty list) skips the launch fetch silently — no dialog (that is
- * reserved for explicit user-triggered refresh, KEY-040).
- */
-export function shouldLaunchFetch(connections: ProviderConnection[]): boolean {
-  return connections.find((c) => c.provider === "Stooq")?.has_key === true;
-}
 
 /**
  * MKT-121 launch auto-fetch decision, extracted from the mount effect so it is
  * unit-testable (the effect just awaits it once after init). Fire-and-forget:
  * dispatch-level failures are logged, never surfaced as a cold-start snackbar.
  *
- * - Auto-fetch disabled (MKT-120) → no dispatch.
- * - Keyed mode (KEY-050 on): apply the KEY-041 no-key launch skip — only dispatch
- *   when a Stooq key is stored; otherwise return silently (no dialog).
- * - Keyless mode (KEY-050 off): KEY-052 — the no-key skip does NOT apply; dispatch
- *   anonymously regardless of stored key.
+ * Gated solely on the auto-fetch setting (MKT-120). The provider is keyless Yahoo
+ * Finance (ADR-017), so there is no key check before dispatch.
  */
 export async function maybeLaunchAutoFetch(): Promise<void> {
   if (!getAutoFetch()) return;
   try {
-    const useApiKey = getUseStooqApiKey();
-    if (useApiKey) {
-      const connections = await connectionGateway.getProviderConnections();
-      if (connections.status !== "ok" || !shouldLaunchFetch(connections.data)) {
-        return;
-      }
-    }
-    const result = await accountGateway.fetchAllAssetPrices(useApiKey);
+    const result = await accountGateway.fetchAllAssetPrices();
     if (result.status === "error") {
       logger.warn("[App] auto-fetch dispatch returned error", { code: result.error.code });
     }
@@ -79,7 +56,7 @@ function App() {
   // logged server-side via the FE logger — no startup snackbar to avoid noise on launch.
   useEffect(() => {
     if (!isInitialized) return;
-    // MKT-121 / KEY-052 — decision lives in maybeLaunchAutoFetch (unit-tested).
+    // MKT-121 — decision lives in maybeLaunchAutoFetch (unit-tested).
     void maybeLaunchAutoFetch();
   }, [isInitialized]);
 

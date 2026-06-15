@@ -4,10 +4,10 @@ mod asset;
 mod asset_price;
 /// Asset category persistence logic.
 mod category;
-/// Stooq HTTP price provider (ADR-008).
-mod stooq_client;
+/// Yahoo Finance HTTP price provider (ADR-017).
+mod yahoo_client;
 
 pub use asset::SqliteAssetRepository;
 pub use asset_price::SqliteAssetPriceRepository;
 pub use category::SqliteAssetCategoryRepository;
-pub use stooq_client::ReqwestStooqClient;
+pub use yahoo_client::ReqwestYahooClient;

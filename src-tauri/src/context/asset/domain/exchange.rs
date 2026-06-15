@@ -1,7 +1,7 @@
 /// Canonical trading venue value object for the asset bounded context.
 ///
 /// `Exchange` is the single source of truth for all venue-related logic: the
-/// `Asset` aggregate carries an optional reference to one, the Stooq outbound
+/// `Asset` aggregate carries an optional reference to one, the Yahoo outbound
 /// mapper resolves it to a provider suffix, and the OpenFIGI inbound mapper
 /// resolves provider codes to it. Only venues in the hardcoded curated set are
 /// considered canonical (AST-001).
@@ -48,7 +48,7 @@ pub fn all() -> Vec<Exchange> {
 
 /// The hardcoded curated set of supported trading venues (locked decision 1).
 ///
-/// Intersection of OpenFIGI `micCode` coverage and Stooq venue suffixes.
+/// Intersection of OpenFIGI `micCode` coverage and Yahoo venue suffixes.
 const CANONICAL_EXCHANGES: &[(&str, &str)] = &[
     ("XPAR", "Euronext Paris"),
     ("XNAS", "NASDAQ"),

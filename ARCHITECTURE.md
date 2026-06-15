@@ -69,7 +69,6 @@ core/                 shared infra (legacy bucket — new shared code goes in sh
 shared/               gold-layout shared infra (docs/backend-rules.md B0/B37)
   infrastructure/
     http.rs           shared reqwest client construction + capped body reads
-    stooq.rs          StooqGate — proof-of-work solver + cookie reuse + recent daily window
 
 lib.rs                composition root — wires services, use cases, dispatchers; calls app_handle.manage()
 ```
@@ -81,7 +80,7 @@ lib.rs                composition root — wires services, use cases, dispatcher
 - Repositories return `Result<T, anyhow::Error>`. Services translate to typed `{BC}Error`. Use cases compose via `#[from]`. See `docs/error-model.md`.
 - See [`docs/backend-patterns.md`](docs/backend-patterns.md) for the row-mapping recipe and orchestrator shape.
 
-> Contexts: `account/`, `asset/`, `currency/`, `connection/`. The newer `currency/` and `connection/` BCs follow the gold `application/domain/infrastructure` trio with `api.rs` + `error.rs`, rather than the `repository/` + `service.rs` shape shown in the template above. `connection/` (BYOK provider API keys, ADR-015) stores keys via a 3-tier `LayeredKeyStore` ladder (OS keychain → session memory → opt-in plaintext) and probes provider reachability; it owns no SQLite tables.
+> Contexts: `account/`, `asset/`, `currency/`. The newer `currency/` BC follows the gold `application/domain/infrastructure` trio with `api.rs` + `error.rs`, rather than the `repository/` + `service.rs` shape shown in the template above. Asset prices are auto-fetched from the keyless Yahoo Finance `/v8/chart/` endpoint (`asset/repository/yahoo_client.rs`, ADR-017) — no API key, so no credential bounded context.
 
 ---
 
@@ -161,7 +160,7 @@ Hard rules:
 
 ### Cross-feature modal opens — URL-driven shell mounts
 
-A feature must not import a sibling feature's modal. Instead the opener sets a `?modal=…` URL param (`openModalSearch` / `patchModalSearch` in `src/lib/modalSearch.ts`) and a mount component in `features/shell/` (e.g. `ConnectionsModalMount`, `AssetEditModalMount`) renders the dialog while the param is present. The shell is the only layer that imports across features.
+A feature must not import a sibling feature's modal. Instead the opener sets a `?modal=…` URL param (`openModalSearch` / `patchModalSearch` in `src/lib/modalSearch.ts`) and a mount component in `features/shell/` (e.g. `CashTransactionEditMount`, `AssetEditModalMount`) renders the dialog while the param is present. The shell is the only layer that imports across features.
 
 ---
 

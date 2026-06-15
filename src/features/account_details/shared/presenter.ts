@@ -254,8 +254,8 @@ export function formatSource(source: AssetPriceSource | null): string | null {
   switch (source) {
     case "Manual":
       return "mkt.source_manual";
-    case "Stooq":
-      return "mkt.source_stooq";
+    case "YahooFinance":
+      return "mkt.source_yahoo";
   }
 }
 

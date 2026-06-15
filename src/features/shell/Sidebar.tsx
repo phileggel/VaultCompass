@@ -1,10 +1,9 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Info, KeyRound, Menu, Settings, TrendingUp, X } from "lucide-react";
+import { Info, Menu, Settings, TrendingUp, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AboutModal } from "@/features/about";
 import { logger } from "@/lib/logger";
-import { openModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components";
 import { NAV_ITEMS } from "./navItems";
@@ -78,17 +77,6 @@ export function Sidebar({ isOpen, toggleDrawer }: SidebarProps) {
             </button>
           );
         })}
-
-        <button
-          type="button"
-          id="nav-connections"
-          onClick={() => openModalSearch(navigate, { modal: "connections" })}
-          aria-label={t("nav.connections")}
-          className={`w-full m3-navigation-item ${!isOpen && "justify-center px-0"}`}
-        >
-          <KeyRound size={24} />
-          {isOpen && <span>{t("nav.connections")}</span>}
-        </button>
 
         <button
           type="button"

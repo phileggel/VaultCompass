@@ -54,9 +54,6 @@ quick-xml = "0.37.5"
 strum = "0.27.2"
 strum_macros = "0.27.2"
 unicode-normalization = "0.1.25"
-# sync-secret-service: Linux Secret Service over D-Bus (via spawn_blocking); needs libdbus-1-dev at build time (CI installs it).
-# crypto-rust: pure-Rust crypto for the D-Bus session, consistent with the rustls stance on reqwest.
-keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
 [dev-dependencies]
 mockall = "0.13"

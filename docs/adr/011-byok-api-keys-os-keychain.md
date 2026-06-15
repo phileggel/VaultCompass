@@ -1,7 +1,7 @@
 # ADR 011 — User-supplied API keys via OS keychain with layered Linux fallback
 
 **Date**: 2026-05-16
-**Status**: Accepted
+**Status**: Superseded by ADR-017
 
 ## Context
 
