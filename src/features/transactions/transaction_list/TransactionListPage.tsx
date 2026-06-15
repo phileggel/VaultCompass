@@ -222,13 +222,21 @@ export function TransactionListPage() {
                       <tr key={row.id} id={`txl-row-${row.id}`} className="m3-tr">
                         <td className="m3-td">{t(`transaction.type_${row.type.toLowerCase()}`)}</td>
                         <td className="m3-td tabular-nums">{row.date}</td>
-                        <td className="m3-td text-right tabular-nums">{row.quantity}</td>
-                        <td className="m3-td text-right tabular-nums">
+                        <td id={`txl-qty-${row.id}`} className="m3-td text-right tabular-nums">
+                          {row.quantity}
+                        </td>
+                        <td
+                          id={`txl-unit-price-${row.id}`}
+                          className="m3-td text-right tabular-nums"
+                        >
                           {isFreeShares ? moneyDash : row.unitPrice}
                         </td>
                         <td className="m3-td text-right tabular-nums">{row.exchangeRate}</td>
                         <td className="m3-td text-right tabular-nums">{row.fees}</td>
-                        <td className="m3-td text-right tabular-nums font-medium">
+                        <td
+                          id={`txl-total-${row.id}`}
+                          className="m3-td text-right tabular-nums font-medium"
+                        >
                           {isFreeShares ? moneyDash : row.totalAmount}
                         </td>
                         {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}

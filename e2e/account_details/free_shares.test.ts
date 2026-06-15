@@ -156,16 +156,17 @@ describe("free_shares", () => {
     await viewTxBtn.waitForExist({ timeout: 8000 });
     await viewTxBtn.click();
 
-    // The free-shares row is the only one whose total-amount column (7th)
-    // renders the "—" placeholder (FSD-050) — buys always carry a real total.
-    // Locate it by that locale-invariant signal, then derive its row id so the
-    // delete button (#txl-delete-<txId>) can be targeted by stable id (E4).
+    // The free-shares row is the only one whose total-amount cell renders the
+    // "—" placeholder (FSD-050) — buys always carry a real total. Locate it by
+    // that locale-invariant signal, then derive its row id so the per-cell
+    // (#txl-{qty,unit-price,total}-<txId>) and delete (#txl-delete-<txId>)
+    // selectors can be targeted by stable id (E4).
     let freeSharesRowId: string | null = null;
     await browser.waitUntil(
       async () => {
         const rows = await $$('[id^="txl-row-"]');
         for (const row of rows) {
-          const totalCell = await row.$("td:nth-child(7)");
+          const totalCell = await row.$('[id^="txl-total-"]');
           if ((await totalCell.getText()) === "—") {
             freeSharesRowId = await row.getAttribute("id");
             return true;
@@ -177,29 +178,29 @@ describe("free_shares", () => {
     );
     assert.ok(freeSharesRowId, "Free-shares row must exist in the TXL (FSD-050)");
 
-    // FSD-050 — quantity column shows the 5 distributed shares; the unit-price
-    // (4th) and total-amount (7th) money columns both show the "—" placeholder.
-    const freeSharesRow = await $(`#${freeSharesRowId}`);
+    // FSD-050 — quantity cell shows the 5 distributed shares; the unit-price and
+    // total-amount money cells both show the "—" placeholder.
+    const txId = (freeSharesRowId as string).replace("txl-row-", "");
     assert.strictEqual(
-      await (await freeSharesRow.$("td:nth-child(3)")).getText(),
+      await (await $(`#txl-qty-${txId}`)).getText(),
       "5.000",
-      "FSD-050 — quantity column shows the distributed shares",
+      "FSD-050 — quantity cell shows the distributed shares",
     );
     assert.strictEqual(
-      await (await freeSharesRow.$("td:nth-child(4)")).getText(),
+      await (await $(`#txl-unit-price-${txId}`)).getText(),
       "—",
-      "FSD-050 — unit-price column is the neutral placeholder",
+      "FSD-050 — unit-price cell is the neutral placeholder",
     );
     assert.strictEqual(
-      await (await freeSharesRow.$("td:nth-child(7)")).getText(),
+      await (await $(`#txl-total-${txId}`)).getText(),
       "—",
-      "FSD-050 — total-amount column is the neutral placeholder",
+      "FSD-050 — total-amount cell is the neutral placeholder",
     );
 
     // -------------------------------------------------------------------
     // Step 7 — Delete the distribution via the TXL (FSD-028).
     // -------------------------------------------------------------------
-    const txId = (freeSharesRowId as string).replace("txl-row-", "");
+    const freeSharesRow = await $(`#${freeSharesRowId}`);
     const deleteBtn = await $(`#txl-delete-${txId}`);
     await deleteBtn.waitForExist({ timeout: 5000 });
     await deleteBtn.click();
