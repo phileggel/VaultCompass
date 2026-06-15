@@ -28,20 +28,6 @@ Surfaced 2026-05-16 by `adr-reviewer` after ADR-009 was written.
 
 **Shipped** (PRs #63–#66): `currency` bounded context (manual rate CRUD + Frankfurter/ECB provider fetch), multi-currency valuation lift (foreign holdings now value into the account currency), and the Currency Rates view. Only the FX-staleness wiring (FXR-090) remains, tracked in `docs/techdebt.md`.
 
-## (asset) — Auto-fill ISIN ↔ ticker via Finnhub (BYOK)
-
-PR #41 shipped `Asset.isin` as an optional field separate from `reference` (the ticker). On the web-lookup ISIN path both fields populate from the user's query and the OpenFIGI ticker; on the keyword path only `reference` gets filled because OpenFIGI's free `/v3` endpoints do not expose ISIN in any response shape (verified live 2026-05-24). Manual creation similarly leaves the other field empty.
-
-Once the KEY spec ships (BYOK + OS keychain per ADR-011), Finnhub's `/api/v1/stock/profile2?symbol={SYMBOL}&token={KEY}` becomes the reference enrichment path: the documented response includes both `ticker` and `isin`, so one call can fill the missing side. UX entry point: an "Auto-fill" affordance on the Add/Edit Asset form next to whichever identifier field is blank, triggered on demand by the user (not automatic) to keep call volume aligned with the ~3-5 adds/session pattern.
-
-**Coverage caveat — must validate before committing:** Finnhub's free-tier coverage for European ETFs (especially Amundi's `FR0014…` range, the original motivating case) is documented in the field schema but not verified end-to-end. Cheapest validation is a one-shot curl against `/stock/profile2?symbol=PE500.PA&token=…` with a free Finnhub key (~30s signup). If coverage gaps surface, EODHD `/api/fundamentals` is the secondary candidate (similar key model, stronger European coverage, $20/mo for all-markets).
-
-**Dependencies:** KEY spec (above) must ship first — Finnhub gates every endpoint behind a token, so the BYOK key-storage layer is a hard prerequisite (verified 2026-05-24: keyless calls return `401 — Please use an API key.`).
-
-**Subsumes:** the legacy "(mkt) Stooq fetch by ISIN returns N/D" issue — once the enrichment path fills `reference` (ticker) when the user only supplied ISIN, Stooq fetches the resolved ticker and the original symptom disappears. The ISIN-based dedup question (deferred during PR #41 — see asset spec § Future features) is independent of this entry.
-
-Surfaced 2026-05-24 (post-PR #41 follow-up).
-
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.

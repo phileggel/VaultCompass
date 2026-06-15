@@ -20,23 +20,23 @@
 
 **Phase 2 — Backend** _(sonnet)_
 
-- [ ] `test-writer-backend` → Yahoo client + exchange-suffix mapper + GBp normalization tests (red).
-- [ ] Implement Yahoo + delete Stooq + delete connection BC (see Detailed Plan).
-- [ ] `reviewer-backend` + `reviewer-arch` + `reviewer-security` (commands removed) → `/review-triage`.
-- [ ] `just generate-types` → `bindings.ts`; `npx tsc --noEmit`; `just format`.
+- [x] `test-writer-backend` → Yahoo client + exchange-suffix mapper + GBp normalization tests (red).
+- [x] Implement Yahoo + delete Stooq + delete connection BC (see Detailed Plan).
+- [x] `reviewer-backend` + `reviewer-arch` + `reviewer-security` (commands removed) → `/review-triage`.
+- [x] `just generate-types` → `bindings.ts`; `npx tsc --noEmit`; `just format`.
 
 **Phase 3 — Frontend** _(sonnet)_
 
-- [ ] `test-writer-frontend` for changed surfaces (red). `modified_functions`: `[presenter.ts:formatSource, App.tsx:(launch gate), useRefreshGlobalPrices.ts, useRefreshAccountPrices.ts]`.
-- [ ] Delete connections feature + key gates; update MKT source badge/i18n.
-- [ ] `/visual-proof` (Settings page, holding source badge); `reviewer-frontend` → `/review-triage`; `just format`.
+- [x] `test-writer-frontend` for changed surfaces (red). `modified_functions`: `[presenter.ts:formatSource, App.tsx:(launch gate), useRefreshGlobalPrices.ts, useRefreshAccountPrices.ts]`.
+- [x] Delete connections feature + key gates; update MKT source badge/i18n.
+- [x] `/visual-proof` (Settings page, holding source badge); `reviewer-frontend` → `/review-triage`; `just format`.
 
 **Phase 4 — Closure** _(sonnet)_
 
-- [ ] `test-writer-e2e` Yahoo-fetch scenario; delete `connections.test.ts` + `keyless_fetch_mode.test.ts`; de-KEY `auto_fetch.test.ts`.
-- [ ] `just test-e2e-headless` green; `reviewer-e2e` + `reviewer-security` → `/review-triage`.
-- [ ] Docs closure: delete `api-key-management.md` + `connection-contract.md`; delete/supersede note for retired ADRs already done; roadmap, UL, lessons, ARCHITECTURE.
-- [ ] `spec-checker` [HARD GATE]; `just format`; `/smart-commit` (per layer); `/create-pr`.
+- [x] `test-writer-e2e` Yahoo-fetch scenario; delete `connections.test.ts` + `keyless_fetch_mode.test.ts`; de-KEY `auto_fetch.test.ts`.
+- [x] `just test-e2e-headless` green; `reviewer-e2e` + `reviewer-security` → `/review-triage`.
+- [x] Docs closure: delete `api-key-management.md` + `connection-contract.md`; delete/supersede note for retired ADRs already done; roadmap, UL, lessons, ARCHITECTURE.
+- [x] `spec-checker` [HARD GATE]; `just format`; `/smart-commit` (per layer); `/create-pr`.
 
 ## Detailed Implementation Plan
 
