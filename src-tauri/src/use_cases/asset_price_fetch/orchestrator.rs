@@ -1,8 +1,7 @@
 use crate::context::account::{AccountApplicationError, AccountService};
 use crate::context::asset::{
-    derive_stooq_symbol_with_exchange, Asset, AssetApplicationError, AssetError, AssetService,
+    derive_yahoo_symbol_with_exchange, Asset, AssetApplicationError, AssetError, AssetService,
 };
-use crate::context::connection::{ConnectionService, Provider};
 use crate::context::currency::CurrencyPair;
 use crate::core::cash::system_cash_asset_id;
 use crate::core::logger::BACKEND;
@@ -21,7 +20,6 @@ pub struct AssetPriceFetchUseCase {
     asset_service: Arc<AssetService>,
     fetch_guard: Arc<FetchGuard>,
     dispatcher: Arc<Dispatcher>,
-    connection_service: Arc<ConnectionService>,
 }
 
 impl AssetPriceFetchUseCase {
@@ -31,32 +29,12 @@ impl AssetPriceFetchUseCase {
         asset_service: Arc<AssetService>,
         fetch_guard: Arc<FetchGuard>,
         dispatcher: Arc<Dispatcher>,
-        connection_service: Arc<ConnectionService>,
     ) -> Self {
         Self {
             account_service,
             asset_service,
             fetch_guard,
             dispatcher,
-            connection_service,
-        }
-    }
-
-    /// Resolves the stored Stooq key for the fetch path (KEY-043/044). A read
-    /// fault is logged and treated as "no key" so the dispatcher short-circuits
-    /// rather than aborting the task; the Connections dialog (KEY-016) surfaces the
-    /// fault to the user separately.
-    async fn resolve_stooq_key(&self) -> Option<String> {
-        match self.connection_service.resolve_key(Provider::Stooq).await {
-            Ok(key) => key,
-            Err(error) => {
-                tracing::error!(
-                    target: BACKEND,
-                    ?error,
-                    "asset_price_fetch: Stooq key resolve failed; treating as absent"
-                );
-                None
-            }
         }
     }
 
@@ -64,10 +42,10 @@ impl AssetPriceFetchUseCase {
     /// (a) acquire guard or return `FetchAlreadyRunning`;
     /// (b) load all active holdings across all accounts;
     /// (c) filter system cash assets (MKT-116);
-    /// (d) derive Stooq symbols, discard non-derivable entries;
+    /// (d) derive Yahoo symbols, discard non-derivable entries;
     /// (e) if empty scope → `NoFetchableHoldings` (MKT-111);
     /// (f) dispatch background task and return `Ok(())`.
-    pub async fn fetch_all(&self, use_api_key: bool) -> Result<(), FetchAllAssetPricesError> {
+    pub async fn fetch_all(&self) -> Result<(), FetchAllAssetPricesError> {
         let lease = self
             .fetch_guard
             .try_acquire()
@@ -98,13 +76,7 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        // KEY-053/054 — resolve the key only in keyed mode; keyless skips the read.
-        let stooq_key = if use_api_key {
-            self.resolve_stooq_key().await
-        } else {
-            None
-        };
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, use_api_key, stooq_key);
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
         Ok(())
     }
 
@@ -113,13 +85,12 @@ impl AssetPriceFetchUseCase {
     /// (b) acquire guard or return `FetchAlreadyRunning` (MKT-113);
     /// (c) load holdings for the account;
     /// (d) filter system cash assets (MKT-116);
-    /// (e) derive Stooq symbols, discard non-derivable entries;
+    /// (e) derive Yahoo symbols, discard non-derivable entries;
     /// (f) if empty scope → `NoFetchableHoldings` (MKT-111);
     /// (g) dispatch background task and return `Ok(())`.
     pub async fn fetch_for_account(
         &self,
         account_id: &str,
-        use_api_key: bool,
     ) -> Result<(), FetchAccountAssetPricesError> {
         let account = self
             .account_service
@@ -154,18 +125,12 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        // KEY-053/054 — resolve the key only in keyed mode; keyless skips the read.
-        let stooq_key = if use_api_key {
-            self.resolve_stooq_key().await
-        } else {
-            None
-        };
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, use_api_key, stooq_key);
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
         Ok(())
     }
 
     /// Loads every non-cash asset once and returns the auto-fetch `scope` (assets
-    /// with a derivable Stooq symbol and an unlocked price refresh) alongside an
+    /// with a derivable Yahoo symbol and an unlocked price refresh) alongside an
     /// `asset_id → currency` map covering all loaded assets — including locked and
     /// non-derivable ones, which are excluded from scope but still need their FX
     /// pair followed by `build_fx_pairs`.
@@ -201,7 +166,7 @@ impl AssetPriceFetchUseCase {
                 continue;
             }
             let Some(symbol) =
-                derive_stooq_symbol_with_exchange(&asset.reference, asset.exchange.as_ref())
+                derive_yahoo_symbol_with_exchange(&asset.reference, asset.exchange.as_ref())
             else {
                 continue;
             };
@@ -265,7 +230,6 @@ mod tests {
         MockAssetRepository, MockPriceProvider, SqliteAssetCategoryRepository,
         SqliteAssetPriceRepository,
     };
-    use crate::context::connection::{ConnectionService, MockConnectionProbe, MockKeyStore};
     use crate::context::currency::{
         CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
     };
@@ -333,11 +297,6 @@ mod tests {
             asset_service,
             Arc::new(FetchGuard::new()),
             dispatcher,
-            // build_scope tests never reach resolve_key, so the ports are inert.
-            Arc::new(ConnectionService::new(
-                Box::new(MockKeyStore::new()),
-                Box::new(MockConnectionProbe::new()),
-            )),
         )
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    context::{account, asset, connection, currency},
+    context::{account, asset, currency},
     core::{logger, Event},
     use_cases::{
         account_deletion, account_details, account_performance, account_summary, archive_asset,
@@ -41,15 +41,6 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<currency::CurrencyRateSource>()
         .typ::<currency::CurrencyPairSummary>()
         .typ::<currency::CurrencyError>()
-        // ----- connection BC (KEY) -----
-        .typ::<connection::Provider>()
-        .typ::<connection::StorageTier>()
-        .typ::<connection::ProviderKeyTestOutcome>()
-        .typ::<connection::ProviderConnection>()
-        .typ::<connection::ConnectionError>()
-        .typ::<connection::SaveProviderKeyArgs>()
-        .typ::<connection::TestProviderKeyArgs>()
-        .typ::<connection::RemoveProviderKeyArgs>()
         // ----- use cases -----
         .typ::<archive_asset::ArchiveAssetApplicationError>()
         .typ::<archive_asset::ArchiveAssetError>()
@@ -113,11 +104,6 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             currency::delete_currency_rate,
             currency::get_currency_pairs,
             currency::get_currency_rates,
-            // ----- connection BC (KEY) -----
-            connection::get_provider_connections,
-            connection::save_provider_key,
-            connection::test_provider_key,
-            connection::remove_provider_key,
             // ----- use cases -----
             archive_asset::archive_asset,
             delete_asset::delete_asset,

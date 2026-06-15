@@ -59,12 +59,12 @@
 
 > `fetch_all_asset_prices` is the single BE entry point shared by auto-fetch on launch (MKT-121, MKT-122) and global refresh on the dashboard (MKT-130). Both commands are acknowledged synchronously (return `()` once dispatched); per-asset results are signaled asynchronously via `AssetPriceUpdated` (MKT-112). Per-asset failures during the fetch degrade silently per MKT-114; the in-flight guard (MKT-113) rejects concurrent calls across both commands. System cash assets are excluded from scope per MKT-116.
 >
-> Both commands carry `use_api_key: bool` (KEY-053) — the device-local Stooq fetch-mode preference (KEY-050), passed by the frontend with each request (the backend does not read the setting itself). `true` = keyed: resolve the stored Stooq key and fetch with the apikey; absent key short-circuits the whole scope (KEY-044). `false` = keyless: solve the proof-of-work but send no apikey (anonymous download); the no-key short-circuit is suppressed (KEY-053). Proof-of-work is solved in both modes (KEY-043).
+> Both commands are keyless (ADR-017): they fetch from Yahoo Finance with no API key and no fetch-mode argument. The former `use_api_key: bool` parameter was removed when the BYOK/Stooq path was retired.
 
-| Command                      | Args                                    | Return | Errors                                                                                                                                        |
-| ---------------------------- | --------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fetch_all_asset_prices`     | `use_api_key: bool`                     | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
-| `fetch_account_asset_prices` | `account_id: String, use_api_key: bool` | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
+| Command                      | Args                 | Return | Errors                                                                                                                                        |
+| ---------------------------- | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch_all_asset_prices`     | _(none)_             | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
+| `fetch_account_asset_prices` | `account_id: String` | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
 
 ### Web Lookup
 
@@ -102,7 +102,7 @@ struct AssetCategory {
 }
 
 // Canonical reference to a trading venue, independent of any market-data provider.
-// AST Entity Definition. Provider keys (Stooq venue suffixes, OpenFIGI exchange
+// AST Entity Definition. Provider symbols (Yahoo venue suffixes, OpenFIGI exchange
 // codes) are resolved by per-provider mappers at the boundary, NOT stored here.
 struct Exchange {
     code: String,                // ISO 10383 Market Identifier Code (MIC), e.g. "XPAR", "XNAS"
@@ -153,13 +153,13 @@ struct AssetPrice {
 ```
 
 ```rust
-// AssetPriceSource variants (MKT-100) — Finnhub reserved for the KEY spec
-enum AssetPriceSource { Manual, Stooq }
-// Manual: every user-driven write — manual entry (MKT-020+), transaction
-//         auto-record follow-up (MKT-050+), price-history edit (MKT-083+);
-//         set by record_asset_price / update_asset_price per MKT-101.
-// Stooq:  fetch-task write (fetch_all_asset_prices, fetch_account_asset_prices)
-//         per MKT-102.
+// AssetPriceSource variants (MKT-100) — keyless Yahoo Finance is the sole provider (ADR-017)
+enum AssetPriceSource { Manual, YahooFinance }
+// Manual:       every user-driven write — manual entry (MKT-020+), transaction
+//               auto-record follow-up (MKT-050+), price-history edit (MKT-083+);
+//               set by record_asset_price / update_asset_price per MKT-101.
+// YahooFinance: fetch-task write (fetch_all_asset_prices, fetch_account_asset_prices)
+//               per MKT-102.
 ```
 
 ---
@@ -177,3 +177,4 @@ enum AssetPriceSource { Manual, Stooq }
 
 - 2026-05-30 — Added by `market-price` spec (price-refresh-lock amendment, ADR-014): `block_asset_price_refresh`, `unblock_asset_price_refresh`; `Asset.price_refresh_blocked` field; `AssetUpdated` note extended.
 - 2026-06-12 — Amended by `api-key-management` spec (KEY-050–054, keyless fetch mode): `fetch_all_asset_prices` and `fetch_account_asset_prices` gain a `use_api_key: bool` arg carrying the device-local Stooq fetch-mode preference. No new types or errors.
+- 2026-06-12 — Amended by `market-price` spec under ADR-017 (Yahoo Finance keyless price source): `fetch_all_asset_prices` and `fetch_account_asset_prices` drop the `use_api_key: bool` arg (BYOK retired); `AssetPriceSource` variant `Stooq` renamed to `YahooFinance`.

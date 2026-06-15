@@ -194,9 +194,9 @@ mod tests {
     // the repository methods read/write it.
     // -------------------------------------------------------------------------
 
-    // MKT-100 / MKT-102 — upsert with source=Stooq and read back via get_latest
+    // MKT-100 / MKT-102 — upsert with source=YahooFinance and read back via get_latest
     #[tokio::test]
-    async fn upsert_and_get_latest_roundtrip_source_stooq() {
+    async fn upsert_and_get_latest_roundtrip_source_yahoo() {
         use crate::context::asset::AssetPriceSource;
         let pool = setup_pool().await;
         seed_asset(&pool, "asset-1").await;
@@ -206,13 +206,13 @@ mod tests {
             "asset-1".into(),
             "2026-01-01".into(),
             100_000_000,
-            AssetPriceSource::Stooq,
+            AssetPriceSource::YahooFinance,
         ))
         .await
         .unwrap();
 
         let price = repo.get_latest("asset-1").await.unwrap().unwrap();
-        assert_eq!(price.source, AssetPriceSource::Stooq);
+        assert_eq!(price.source, AssetPriceSource::YahooFinance);
     }
 
     // MKT-100 / MKT-101 — upsert with source=Manual and read back via get_by_asset_and_date
@@ -260,7 +260,7 @@ mod tests {
             "asset-1".into(),
             "2026-01-02".into(),
             110_000_000,
-            AssetPriceSource::Stooq,
+            AssetPriceSource::YahooFinance,
         ))
         .await
         .unwrap();
@@ -268,7 +268,7 @@ mod tests {
         let prices = repo.get_all_for_asset("asset-1").await.unwrap();
         assert_eq!(prices.len(), 2);
         // Sorted date desc: 2026-01-02 first
-        assert_eq!(prices[0].source, AssetPriceSource::Stooq);
+        assert_eq!(prices[0].source, AssetPriceSource::YahooFinance);
         assert_eq!(prices[1].source, AssetPriceSource::Manual);
     }
 
@@ -284,7 +284,7 @@ mod tests {
             "asset-1".into(),
             "2026-01-01".into(),
             100_000_000,
-            AssetPriceSource::Stooq,
+            AssetPriceSource::YahooFinance,
         ))
         .await
         .unwrap();

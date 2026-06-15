@@ -13,7 +13,7 @@
  *
  *   MKT-130 (AccountManager global refresh — NoFetchableHoldings path) —
  *     `fetch_all_asset_prices` scans ALL accounts in the shared DB for non-cash
- *     active holdings. `derive_stooq_symbol` returns Some() for any non-empty ASCII
+ *     active holdings. `derive_yahoo_symbol` returns Some() for any non-empty ASCII
  *     reference, so any buy seeded by other test files (buy_sell.test.ts etc.) makes
  *     the global use case dispatch rather than reject. This scenario therefore cannot
  *     be written in order-independent fashion without controlling the entire DB.
@@ -26,17 +26,17 @@
  *     in WebKitGTK; covered by FE hook unit tests (useRefreshGlobalPrices.test.ts,
  *     useRefreshAccountPrices.test.ts).
  *
- *   MKT-122 / fetch dispatch on a populated account — Would hit real Stooq HTTP
- *     and write a Stooq price as a side effect, polluting the DB across tests.
+ *   MKT-122 / fetch dispatch on a populated account — Would hit real Yahoo HTTP
+ *     and write a Yahoo price as a side effect, polluting the DB across tests.
  *     The "dispatched" snackbar path (mkt.fetch_dispatched) is covered by FE unit
- *     tests. The Stooq HTTP client itself is covered by BE integration tests in
+ *     tests. The Yahoo HTTP client itself is covered by BE integration tests in
  *     src-tauri/tests/.
  *
  *   MKT-132 (AccountNotFound) — The UI button always passes a valid accountId from
  *     the router URL param; the error is not reachable via normal UI interaction.
  *     Covered by BE Tier 2/3 tests.
  *
- *   MKT-121 (auto-fetch on launch) — Requires controlling whether Stooq responds,
+ *   MKT-121 (auto-fetch on launch) — Requires controlling whether Yahoo responds,
  *     which is a network dependency. The mount-once effect is covered by FE unit tests.
  *
  *   MKT-116 (cash asset exclusion) — The cash row is excluded inside the BE use case
@@ -57,14 +57,12 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import {
-  removeProviderKey,
   seedAccount,
   seedAsset,
   seedAssetPrice,
   seedBuy,
   seedCategory,
   seedDeposit,
-  seedProviderKey,
 } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -82,12 +80,11 @@ describe("MKT auto-fetch", () => {
   // NoFetchableHoldings snackbar. Cash assets are excluded from fetch scope
   // (MKT-116), so with only a cash holding the use case rejects immediately.
   //
-  // A Stooq key must be stored first: with no key the KEY-040 gate opens the
-  // Connections dialog instead of dispatching, so the no-holdings path is
-  // unreachable. A dummy key is seeded via IPC (save stores without probing)
-  // and removed in `finally` to restore the no-key baseline for other specs.
+  // Keyless (ADR-017): the fetch is dispatched directly with no API key and no
+  // Connections gate, so the no-holdings path is reached without any key setup.
   // The dispatch makes zero network calls — the use case rejects with
-  // NoFetchableHoldings before any symbol is fetched.
+  // NoFetchableHoldings before any symbol is fetched. This is the keyless-dispatch
+  // E2E proof: the refresh button → backend → snackbar path runs key-free.
   // -------------------------------------------------------------------------
   it("MKT-131+MKT-111: AccountDetailsView Refresh prices on cash-only account shows no-holdings snackbar", async () => {
     const ACCOUNT_NAME = "E2E MKT-131 Cash Only";
@@ -98,32 +95,27 @@ describe("MKT auto-fetch", () => {
     // leaving zero fetchable holdings → NoFetchableHoldings.
     await seedDeposit(accountId, "2019-01-10", 500_000_000); // 500 EUR
 
-    await seedProviderKey("Stooq", "e2e-dummy-key-mkt-131");
-    try {
-      await navigateToAccounts();
-      await navigateToAccountDetails(accountId);
+    await navigateToAccounts();
+    await navigateToAccountDetails(accountId);
 
-      const refreshBtn = await $("#account-details-refresh-prices");
-      await refreshBtn.waitForExist({ timeout: 10000 });
-      await refreshBtn.click();
+    const refreshBtn = await $("#account-details-refresh-prices");
+    await refreshBtn.waitForExist({ timeout: 10000 });
+    await refreshBtn.click();
 
-      const snackbarRegion = await $('[role="status"]');
-      await snackbarRegion.waitForExist({ timeout: 10000 });
+    const snackbarRegion = await $('[role="status"]');
+    await snackbarRegion.waitForExist({ timeout: 10000 });
 
-      await browser.waitUntil(
-        async () => {
-          const text = await snackbarRegion.getText();
-          return text.includes("No holdings");
-        },
-        {
-          timeout: 8000,
-          timeoutMsg:
-            'Expected snackbar to contain "No holdings" (mkt.fetch_no_holdings) after clicking Refresh prices on a cash-only account',
-        },
-      );
-    } finally {
-      await removeProviderKey("Stooq");
-    }
+    await browser.waitUntil(
+      async () => {
+        const text = await snackbarRegion.getText();
+        return text.includes("No holdings");
+      },
+      {
+        timeout: 8000,
+        timeoutMsg:
+          'Expected snackbar to contain "No holdings" (mkt.fetch_no_holdings) after clicking Refresh prices on a cash-only account',
+      },
+    );
   });
 
   // -------------------------------------------------------------------------

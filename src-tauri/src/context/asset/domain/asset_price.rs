@@ -75,8 +75,8 @@ impl AssetPrice {
 pub enum AssetPriceSource {
     /// User-driven write: manual entry or price-history edit (MKT-101).
     Manual,
-    /// Auto-fetched from Stooq (MKT-102).
-    Stooq,
+    /// Auto-fetched from Yahoo Finance (MKT-102).
+    YahooFinance,
 }
 
 /// A quote returned by a [`PriceProvider`]: the price plus the provider's
@@ -90,31 +90,22 @@ pub struct Quote {
     pub date: Option<String>,
 }
 
-/// External price-data provider trait (MKT-110, ADR-008).
+/// External price-data provider trait (MKT-110, ADR-017).
 /// Returns the latest price as i64 micros (ADR-001) with its observation date (MKT-117).
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait PriceProvider: Send + Sync {
-    /// Fetches the latest quote for the given provider symbol.
+    /// Fetches the latest quote for the given provider symbol. Keyless (ADR-017):
+    /// the provider (Yahoo Finance) requires no credential.
     ///
     /// - `Ok(Some(quote))` — the provider returned a usable price and (optionally) its
     ///   observation date.
-    /// - `Ok(None)` — the provider explicitly reports "no data" for this symbol
-    ///   (e.g. Stooq's `N/D` sentinel). Treated as a quiet per-asset skip with a
-    ///   `tracing::debug!` line; not a fetch failure.
+    /// - `Ok(None)` — the provider reports "no data" for this symbol (an unknown /
+    ///   delisted symbol). Treated as a quiet per-asset skip with a `tracing::debug!`
+    ///   line; not a fetch failure.
     /// - `Err(_)` — transient HTTP / parse / IO failure. The dispatcher logs at
     ///   `tracing::warn!` and continues with the next asset (MKT-114).
-    ///
-    /// `api_key` is the provider credential (KEY-043): `Some(key)` in keyed mode —
-    /// Stooq's keyed download presents it (ADR-016); `None` in keyless mode — the
-    /// anonymous download omits it (KEY-053). The proof-of-work gate is solved in
-    /// both modes. In keyed mode the dispatcher only calls this with a resolved key
-    /// (the no-key case is short-circuited before the loop, KEY-044).
-    async fn fetch_price(
-        &self,
-        symbol: &str,
-        api_key: Option<String>,
-    ) -> anyhow::Result<Option<Quote>>;
+    async fn fetch_price(&self, symbol: &str) -> anyhow::Result<Option<Quote>>;
 }
 
 /// Interface for AssetPrice persistence (upsert by (asset_id, date), MKT-025).
@@ -165,17 +156,17 @@ mod tests {
         assert_eq!(ap.source, AssetPriceSource::Manual);
     }
 
-    // MKT-100 — AssetPriceSource::Stooq variant exists and round-trips through new().
+    // MKT-100 — AssetPriceSource::YahooFinance variant exists and round-trips through new().
     #[test]
-    fn new_accepts_source_stooq() {
+    fn new_accepts_source_yahoo_finance() {
         let ap = AssetPrice::new(
             "asset-1".to_string(),
             "2026-01-01".to_string(),
             100_000_000,
-            AssetPriceSource::Stooq,
+            AssetPriceSource::YahooFinance,
         )
         .unwrap();
-        assert_eq!(ap.source, AssetPriceSource::Stooq);
+        assert_eq!(ap.source, AssetPriceSource::YahooFinance);
     }
 
     // MKT-100 — restore() round-trips the source field (B7 restore factory).
@@ -185,9 +176,9 @@ mod tests {
             "x".to_string(),
             "2026-01-01".to_string(),
             1_000_000,
-            AssetPriceSource::Stooq,
+            AssetPriceSource::YahooFinance,
         );
-        assert_eq!(ap.source, AssetPriceSource::Stooq);
+        assert_eq!(ap.source, AssetPriceSource::YahooFinance);
     }
 
     // MKT-021 — new() rejects price <= 0

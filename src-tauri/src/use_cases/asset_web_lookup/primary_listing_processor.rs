@@ -95,7 +95,7 @@ pub struct AssetLookupResult {
     pub name: String,
     /// Ticker symbol returned by OpenFIGI; `None` when no ticker is available
     /// (WEB-046). Consistent across both lookup paths so the FE always pre-fills
-    /// `Asset.reference` with a value market-data providers (Stooq, etc.) can
+    /// `Asset.reference` with a value market-data providers (Yahoo, etc.) can
     /// resolve.
     pub reference: Option<String>,
     /// ISIN (ISO 6166, 12 chars normalized). Populated only on the ISIN path

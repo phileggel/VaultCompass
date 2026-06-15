@@ -15,10 +15,8 @@ use super::guard::FetchGuardLease;
 pub type Clock = Arc<dyn Fn() -> NaiveDate + Send + Sync>;
 
 /// Politeness delay inserted between successive provider requests in a fetch task.
-/// Stooq's proof-of-work gate fingerprints non-browser bursts (L-005/L-006), so
-/// spacing requests out keeps a launch fetch of a large portfolio from looking
-/// like an abusive burst. It shapes request *cadence* only — it does not raise the
-/// provider's per-key daily quota.
+/// Spacing requests out keeps a launch fetch of a large portfolio from looking like
+/// an abusive burst to the provider. It shapes request *cadence* only.
 const INTER_FETCH_DELAY: Duration = Duration::from_millis(250);
 
 /// Dispatches the background per-asset price-fetch task (MKT-114, MKT-102, MKT-112).
@@ -58,8 +56,6 @@ impl Dispatcher {
         scope: Vec<(Asset, String)>,
         fx_pairs: Vec<CurrencyPair>,
         lease: FetchGuardLease,
-        use_api_key: bool,
-        stooq_key: Option<String>,
     ) {
         tokio::spawn(async move {
             let _lease = lease;
@@ -67,42 +63,19 @@ impl Dispatcher {
             // MKT-119 — tally the task outcome so the frontend can summarize it.
             let mut ok: u32 = 0;
             let mut skipped: u32 = 0;
-            // KEY-044 — in KEYED mode with no stored Stooq key: skip the entire scope
-            // without any per-asset provider call; every asset is reported as skipped.
-            // KEY-053 — in KEYLESS mode this short-circuit is suppressed; the fetch
-            // proceeds anonymously (`stooq_key` is None and stays None below).
-            if use_api_key && stooq_key.is_none() {
-                skipped = scope.len() as u32;
-                tracing::warn!(
-                    target: BACKEND,
-                    skipped,
-                    "asset_price_fetch: no Stooq key configured; skipping all assets (KEY-044)"
-                );
-                self.event_bus
-                    .publish(Event::AssetPriceFetchCompleted { ok, skipped });
-                if let Err(e) = self.currency_service.refresh_all_rates(fx_pairs).await {
-                    tracing::warn!(
-                        target: BACKEND,
-                        err = ?e,
-                        "asset_price_fetch: FX rate refresh failed (no Stooq key path)"
-                    );
-                }
-                return;
-            }
-            // `Some(key)` in keyed mode; `None` in keyless mode (anonymous, KEY-053).
             for (index, (asset, symbol)) in scope.into_iter().enumerate() {
                 // Space out requests after the first to avoid a burst (see
                 // INTER_FETCH_DELAY); the provider is hit at most once per asset.
                 if index > 0 {
                     tokio::time::sleep(INTER_FETCH_DELAY).await;
                 }
-                match self.provider.fetch_price(&symbol, stooq_key.clone()).await {
+                match self.provider.fetch_price(&symbol).await {
                     Ok(Some(quote)) => {
                         let record = AssetPrice::restore(
                             asset.id.clone(),
                             resolve_observation_date(quote.date.as_deref(), today),
                             quote.price,
-                            AssetPriceSource::Stooq,
+                            AssetPriceSource::YahooFinance,
                         );
                         if let Err(e) = self.price_repo.upsert(record).await {
                             skipped += 1;

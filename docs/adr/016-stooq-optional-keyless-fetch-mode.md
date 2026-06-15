@@ -1,7 +1,7 @@
 # ADR 016 — Stooq supports an optional user-selected keyless fetch mode
 
 **Date**: 2026-06-12
-**Status**: Accepted — supersedes ADR-015
+**Status**: Superseded by ADR-017
 
 ## Context
 

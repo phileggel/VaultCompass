@@ -1,4 +1,4 @@
-//! Auto-fetch use case: retrieves prices from Stooq for all active, derivable
+//! Auto-fetch use case: retrieves prices from Yahoo for all active, derivable
 //! holdings on launch (MKT-122), on global refresh (MKT-130), and on
 //! per-account refresh (MKT-132).
 

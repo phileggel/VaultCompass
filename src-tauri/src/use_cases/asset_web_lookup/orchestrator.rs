@@ -673,7 +673,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     // WEB-046 — on the ISIN path, `reference` holds the ticker from the hit
-    // (so the FE always pre-fills `Asset.reference` with a value Stooq can
+    // (so the FE always pre-fills `Asset.reference` with a value Yahoo can
     // resolve) and `isin` holds the normalized ISIN query.
     #[tokio::test]
     async fn isin_path_fills_ticker_in_reference_and_isin_in_isin() {

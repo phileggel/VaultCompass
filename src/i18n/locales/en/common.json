@@ -184,42 +184,7 @@
     "about": "About",
     "settings": "Settings",
     "design_system": "Design System",
-    "currency_rates": "Currency Rates",
-    "connections": "Connections"
-  },
-  "connection": {
-    "title": "Connections",
-    "status": {
-      "no_key": "No key",
-      "key_set": "Key set"
-    },
-    "tier": {
-      "os_keychain": "OS keychain",
-      "session_memory": "Session only",
-      "plaintext_file": "Plaintext file"
-    },
-    "test_outcome": {
-      "accepted": "Key works",
-      "rejected": "Key rejected",
-      "unreachable": "Provider unreachable"
-    },
-    "error": {
-      "empty_key": "Enter a key first",
-      "key_store_error": "Couldn't access the key store"
-    },
-    "action": {
-      "test": "Test key",
-      "save": "Save",
-      "remove": "Remove",
-      "save_to_disk": "Save to disk"
-    },
-    "plaintext_optin_prompt": "No secure keychain was found, so your key is kept only for this session. Save it to a plain file to keep it across restarts — note it will be readable on disk.",
-    "save_success": "Key saved",
-    "remove_success": "Key removed",
-    "remove_confirm": "Remove the {{provider}} key?",
-    "signup_link": "Get a free key",
-    "key_placeholder": "Paste your API key",
-    "key_input_label": "API key"
+    "currency_rates": "Currency Rates"
   },
   "settings": {
     "title": "Settings",
@@ -230,9 +195,7 @@
     "auto_record_price_label": "Automatically record transaction price as market price",
     "auto_record_price_description": "When enabled, new transaction forms will have the auto-record checkbox pre-checked.",
     "auto_fetch_label": "Automatically fetch prices on launch",
-    "auto_fetch_description": "When enabled, the app fetches current prices from Stooq for all active holdings every time it starts.",
-    "use_api_key_label": "Use a Stooq API key",
-    "use_api_key_description": "When on, price fetches use your stored Stooq key. When off, they fetch anonymously — no key needed, but the daily limit is lower and some networks block it."
+    "auto_fetch_description": "When enabled, the app fetches current prices from Yahoo Finance for all active holdings every time it starts."
   },
   "shell": {
     "sidebar_collapse": "Collapse menu",
@@ -387,7 +350,7 @@
     "fetch_completed_partial": "Updated {{ok}} · {{skipped}} couldn't be updated",
     "fetch_completed_failed": "Couldn't update prices ({{skipped}})",
     "source_manual": "Manual",
-    "source_stooq": "Stooq",
+    "source_yahoo": "Yahoo Finance",
     "staleness_today": "Updated today",
     "staleness_days_ago": "Updated {{days}}d ago",
     "price_state": {

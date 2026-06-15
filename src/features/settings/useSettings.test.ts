@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useSettings } from "./useSettings";
 
 const AUTO_FETCH_KEY = "auto_fetch_prices";
-const STOOQ_USE_API_KEY = "stooq_use_api_key";
 
 const AUTO_RECORD_PRICE_KEY = "auto_record_price";
 
@@ -90,32 +89,5 @@ describe("useSettings", () => {
 
     expect(result.current.autoFetch).toBe(false);
     expect(localStorage.getItem(AUTO_FETCH_KEY)).toBe("false");
-  });
-
-  // KEY-050/054 — useApiKey defaults to true (keyed) when the key is absent
-  it("useApiKey defaults to true (keyed) when localStorage key is absent", () => {
-    const { result } = renderHook(() => useSettings());
-    expect(result.current.useApiKey).toBe(true);
-  });
-
-  // KEY-050 — useApiKey is false (keyless) when localStorage key is "false"
-  it("useApiKey is false when localStorage key is set to false", () => {
-    localStorage.setItem(STOOQ_USE_API_KEY, "false");
-    const { result } = renderHook(() => useSettings());
-    expect(result.current.useApiKey).toBe(false);
-  });
-
-  // KEY-050 — toggleUseApiKey flips keyed → keyless and persists to localStorage
-  it("toggleUseApiKey flips from keyed to keyless and persists to localStorage", () => {
-    const { result } = renderHook(() => useSettings());
-
-    expect(result.current.useApiKey).toBe(true);
-
-    act(() => {
-      result.current.toggleUseApiKey();
-    });
-
-    expect(result.current.useApiKey).toBe(false);
-    expect(localStorage.getItem(STOOQ_USE_API_KEY)).toBe("false");
   });
 });

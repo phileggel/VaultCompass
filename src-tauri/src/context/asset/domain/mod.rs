@@ -12,17 +12,17 @@ pub mod exchange;
 pub mod isin;
 /// OpenFIGI inbound exchange mapper — `micCode` / `exchCode` → `Exchange` (WEB-049).
 pub mod openfigi_exchange_mapper;
-/// Stooq outbound exchange mapper — `Exchange` → Stooq suffix (MKT-110).
-pub mod stooq_exchange_mapper;
-/// Stooq provider symbol derivation from asset reference (MKT-110, ADR-008).
-pub mod stooq_symbol;
+/// Yahoo outbound exchange mapper — `Exchange` → Yahoo suffix (MKT-110).
+pub mod yahoo_exchange_mapper;
+/// Yahoo provider symbol derivation from asset reference (MKT-110, ADR-017).
+pub mod yahoo_symbol;
 
 pub use asset::*;
 pub use asset_price::{AssetPrice, AssetPriceRepository, AssetPriceSource, PriceProvider, Quote};
 pub use category::*;
 pub use error::{AssetDomainError, AssetPriceDomainError, CategoryDomainError};
 pub use exchange::Exchange;
-pub use stooq_symbol::{derive_stooq_symbol, derive_stooq_symbol_with_exchange};
+pub use yahoo_symbol::{derive_yahoo_symbol, derive_yahoo_symbol_with_exchange};
 
 #[cfg(test)]
 pub use asset::MockAssetRepository;

@@ -39,7 +39,7 @@ const baseRow: HoldingRowViewModel = {
   totalReturnPctRaw: 50_000_000,
   isCash: false,
   staleness: { key: "mkt.staleness_today" },
-  sourceLabel: "mkt.source_stooq",
+  sourceLabel: "mkt.source_yahoo",
 };
 
 const renderInTable = (row: HoldingRowViewModel) =>
@@ -66,7 +66,7 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
   it("renders the current price and the source + staleness sub-line", () => {
     renderInTable(baseRow);
     expect(screen.getByText("150.00")).toBeInTheDocument();
-    expect(screen.getByText("mkt.source_stooq")).toBeInTheDocument();
+    expect(screen.getByText("mkt.source_yahoo")).toBeInTheDocument();
     expect(screen.getByText("mkt.staleness_today")).toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     });
     expect(screen.getByText("mkt.price_state.missing_ticker")).toBeInTheDocument();
     // No source or staleness when there's no price
-    expect(screen.queryByText("mkt.source_stooq")).not.toBeInTheDocument();
+    expect(screen.queryByText("mkt.source_yahoo")).not.toBeInTheDocument();
     expect(screen.queryByText("mkt.staleness_today")).not.toBeInTheDocument();
   });
 
@@ -99,7 +99,7 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
       sourceLabel: null,
     });
     expect(screen.getByText("mkt.price_state.no_price_available")).toBeInTheDocument();
-    expect(screen.queryByText("mkt.source_stooq")).not.toBeInTheDocument();
+    expect(screen.queryByText("mkt.source_yahoo")).not.toBeInTheDocument();
     expect(screen.queryByText("mkt.staleness_today")).not.toBeInTheDocument();
   });
 

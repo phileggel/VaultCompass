@@ -496,10 +496,10 @@ describe("formatSource", () => {
     expect(formatSource(source)).toBe("mkt.source_manual");
   });
 
-  // MKT-102 — Stooq source → i18n key
-  it("returns mkt.source_stooq for Stooq source", () => {
-    const source: AssetPriceSource = "Stooq";
-    expect(formatSource(source)).toBe("mkt.source_stooq");
+  // MKT-102 — YahooFinance source → i18n key
+  it("returns mkt.source_yahoo for YahooFinance source", () => {
+    const source: AssetPriceSource = "YahooFinance";
+    expect(formatSource(source)).toBe("mkt.source_yahoo");
   });
 });
 
@@ -528,12 +528,12 @@ describe("toHoldingRow — staleness and sourceLabel fields (MKT-140, MKT-142)",
     expect(row.sourceLabel).toBe("mkt.source_manual");
   });
 
-  // MKT-142 — sourceLabel: Stooq source → i18n key
-  it("sourceLabel is mkt.source_stooq when current_price_source is Stooq", () => {
+  // MKT-142 — sourceLabel: YahooFinance source → i18n key
+  it("sourceLabel is mkt.source_yahoo when current_price_source is YahooFinance", () => {
     const row = toHoldingRow(
-      makeHolding({ current_price_source: "Stooq", current_price: 100_000_000 }),
+      makeHolding({ current_price_source: "YahooFinance", current_price: 100_000_000 }),
     );
-    expect(row.sourceLabel).toBe("mkt.source_stooq");
+    expect(row.sourceLabel).toBe("mkt.source_yahoo");
   });
 });
 

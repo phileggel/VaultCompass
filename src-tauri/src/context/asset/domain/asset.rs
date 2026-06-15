@@ -84,7 +84,7 @@ pub struct Asset {
     pub risk_level: u8,
     /// Ticker / free-form reference (mandatory — R1). For quoted assets that
     /// also carry an ISIN, the canonical ISO 6166 identity lives in `isin`
-    /// (AST-023); `reference` holds the provider-lookup symbol (Stooq, etc.).
+    /// (AST-023); `reference` holds the provider-lookup symbol (Yahoo, etc.).
     pub reference: String,
     /// Optional ISIN (ISO 6166, 12 chars, Luhn-validated — AST-023). Stored
     /// in the normalized uppercase form returned by `validate_isin`.

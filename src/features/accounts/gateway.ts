@@ -43,8 +43,8 @@ export const accountGateway = {
     return await commands.getAccountDeletionSummary(accountId);
   },
 
-  async fetchAllAssetPrices(useApiKey: boolean): Promise<Result<null, FetchAllAssetPricesError>> {
-    return commands.fetchAllAssetPrices(useApiKey);
+  async fetchAllAssetPrices(): Promise<Result<null, FetchAllAssetPricesError>> {
+    return commands.fetchAllAssetPrices();
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

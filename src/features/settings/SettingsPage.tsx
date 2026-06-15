@@ -18,8 +18,6 @@ export function SettingsPage() {
     toggleAutoRecordPrice,
     autoFetch,
     toggleAutoFetch,
-    useApiKey,
-    toggleUseApiKey,
   } = useSettings();
 
   useEffect(() => {
@@ -68,26 +66,6 @@ export function SettingsPage() {
             </span>
             <span className="text-xs text-m3-on-surface-variant">
               {t("settings.auto_fetch_description")}
-            </span>
-          </span>
-        </label>
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <label className="flex items-start gap-3 cursor-pointer group">
-          <input
-            id="settings-use-api-key"
-            type="checkbox"
-            checked={useApiKey}
-            onChange={toggleUseApiKey}
-            className="accent-m3-primary w-4 h-4 mt-1"
-          />
-          <span className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-m3-on-surface group-hover:text-m3-primary transition-colors">
-              {t("settings.use_api_key_label")}
-            </span>
-            <span className="text-xs text-m3-on-surface-variant">
-              {t("settings.use_api_key_description")}
             </span>
           </span>
         </label>

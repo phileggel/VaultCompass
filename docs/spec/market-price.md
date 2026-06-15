@@ -20,12 +20,12 @@ All financial values are stored as `i64` micro-units per [ADR-001](../adr/001-us
 
 Represents a manually recorded market price for a financial asset on a specific date. Owned by the `asset` bounded context.
 
-| Field      | Business meaning                                                                                                                                                                                                                                                                                                       |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `asset_id` | The asset whose market price this record describes.                                                                                                                                                                                                                                                                    |
-| `date`     | The calendar date this price observation applies to (ISO 8601, e.g. `2026-04-26`). Date is the user's local calendar date at write time, not the asset market's timezone.                                                                                                                                              |
-| `price`    | Market price per unit in the asset's native currency (i64 micros, ADR-001).                                                                                                                                                                                                                                            |
-| `source`   | Provenance of this price record (see MKT-100 for variants). `Manual` for user-entered values (including those auto-recorded from a transaction's `record_price=true` flag); a provider name (e.g. `Stooq`) for auto-fetched values. Metadata for traceability; does not influence read/write precedence (per ADR-012). |
+| Field      | Business meaning                                                                                                                                                                                                                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `asset_id` | The asset whose market price this record describes.                                                                                                                                                                                                                                                                           |
+| `date`     | The calendar date this price observation applies to (ISO 8601, e.g. `2026-04-26`). Date is the user's local calendar date at write time, not the asset market's timezone.                                                                                                                                                     |
+| `price`    | Market price per unit in the asset's native currency (i64 micros, ADR-001).                                                                                                                                                                                                                                                   |
+| `source`   | Provenance of this price record (see MKT-100 for variants). `Manual` for user-entered values (including those auto-recorded from a transaction's `record_price=true` flag); a provider name (e.g. `YahooFinance`) for auto-fetched values. Metadata for traceability; does not influence read/write precedence (per ADR-012). |
 
 > The combination `(asset_id, date)` is unique: only one price per asset per day. Recording a second price for the same `(asset_id, date)` pair overwrites the first (MKT-025), regardless of source (per ADR-012). Correction by re-recording remains valid. Standalone edit and delete of individual entries are also supported via the price history view (MKT-070+).
 
@@ -33,14 +33,14 @@ Represents a manually recorded market price for a financial asset on a specific 
 
 The `HoldingDetail` DTO defined in the ACD spec gains five new fields populated by this feature.
 
-| Field                  | Business meaning                                                                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `asset_currency`       | ISO 4217 currency code of the asset (e.g. `"USD"`). Required for the price label in the modal (MKT-023) and for the currency-mismatch check (MKT-034). Always present.                                                               |
-| `current_price`        | Most recently dated `AssetPrice.price` for this asset, in asset currency (i64 micros). `None` if no price has ever been recorded.                                                                                                    |
-| `current_price_date`   | ISO date string of the price observation used as `current_price`. `None` when `current_price` is `None`.                                                                                                                             |
-| `current_price_source` | Provenance of the price observation used as `current_price` (see `AssetPriceSource` — `Manual` or `Stooq`). `None` when `current_price` is `None`. Surfaced so the FE can render the source badge per MKT-142 without a per-row IPC. |
-| `unrealized_pnl`       | Unrealized gain or loss in account currency (i64 micros). `None` when no price exists or when asset and account currencies differ (MKT-034). `0` when current price equals average price (not `None`).                               |
-| `performance_pct`      | `unrealized_pnl / cost_basis × 100`, expressed as i64 micros (e.g. 5.25 % = 5 250 000). `None` when `unrealized_pnl` is `None` or `cost_basis` is zero. `0` when `unrealized_pnl` is zero.                                           |
+| Field                  | Business meaning                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `asset_currency`       | ISO 4217 currency code of the asset (e.g. `"USD"`). Required for the price label in the modal (MKT-023) and for the currency-mismatch check (MKT-034). Always present.                                                                      |
+| `current_price`        | Most recently dated `AssetPrice.price` for this asset, in asset currency (i64 micros). `None` if no price has ever been recorded.                                                                                                           |
+| `current_price_date`   | ISO date string of the price observation used as `current_price`. `None` when `current_price` is `None`.                                                                                                                                    |
+| `current_price_source` | Provenance of the price observation used as `current_price` (see `AssetPriceSource` — `Manual` or `YahooFinance`). `None` when `current_price` is `None`. Surfaced so the FE can render the source badge per MKT-142 without a per-row IPC. |
+| `unrealized_pnl`       | Unrealized gain or loss in account currency (i64 micros). `None` when no price exists or when asset and account currencies differ (MKT-034). `0` when current price equals average price (not `None`).                                      |
+| `performance_pct`      | `unrealized_pnl / cost_basis × 100`, expressed as i64 micros (e.g. 5.25 % = 5 250 000). `None` when `unrealized_pnl` is `None` or `cost_basis` is zero. `0` when `unrealized_pnl` is zero.                                                  |
 
 ### AccountDetailsResponse (extended)
 
@@ -215,15 +215,15 @@ This section extends the buy/sell transaction flow defined in `docs/spec/financi
 
 These rules apply to all paths that write `AssetPrice` (manual entry MKT-020+, transaction auto-record MKT-050+, and auto-fetch — see "Auto-Fetch from External Provider").
 
-**MKT-100 — `AssetPriceSource` enum (backend)**: `AssetPrice.source` is of type `AssetPriceSource`, with variants `Manual | Stooq` in v1 (`Finnhub` added when the KEY spec ships). Exposed on the frontend wire surface.
+**MKT-100 — `AssetPriceSource` enum (backend)**: `AssetPrice.source` is of type `AssetPriceSource`, with variants `Manual | YahooFinance`. Exposed on the frontend wire surface. (Per ADR-017 the provider is keyless Yahoo Finance; the former `Stooq` / `Finnhub` variants are removed.)
 
 **MKT-101 — `source: Manual` on user-driven paths (backend)**: Every user-driven write sets `source = Manual` — both `record_asset_price` (manual entry MKT-020+, transaction auto-record MKT-050+) and `update_asset_price` (price-history edit MKT-083, MKT-084). An auto-fetched row edited via the price-history flow therefore becomes `Manual`. The frontend never passes a source value.
 
-**MKT-102 — `source: Stooq` on fetched paths (backend)**: Every write produced by a fetch path (launch MKT-122, global refresh MKT-130, account refresh MKT-132) sets `source = Stooq` (and the corresponding provider variant when more are added per MKT-100).
+**MKT-102 — `source: YahooFinance` on fetched paths (backend)**: Every write produced by a fetch path (launch MKT-122, global refresh MKT-130, account refresh MKT-132) sets `source = YahooFinance`.
 
 ### Auto-Fetch from External Provider (110–149)
 
-This section adds an automated price-update mechanism that complements the existing manual entry paths (MKT-020+, MKT-050+). Auto-fetch retrieves current prices from an external provider on app launch and on user demand. The choice of external provider is captured in ADR-008 (Stooq primary; future Finnhub fallback per the KEY spec, deferred to a follow-up phase).
+This section adds an automated price-update mechanism that complements the existing manual entry paths (MKT-020+, MKT-050+). Auto-fetch retrieves current prices from an external provider on app launch and on user demand. The choice of external provider is captured in [ADR-017](../adr/017-yahoo-finance-keyless-price-source.md): the keyless Yahoo Finance `/v8/finance/chart/` JSON endpoint, the sole automated source (no API key, no proof-of-work).
 
 #### Fetch task definitions
 
@@ -233,13 +233,13 @@ This section adds an automated price-update mechanism that complements the exist
 
 #### Shared behaviors (110–119)
 
-**MKT-110 — Symbol derivation (backend)**: The Stooq provider symbol is resolved per ADR-008 with the following precedence:
+**MKT-110 — Symbol derivation (backend)**: The Yahoo Finance provider symbol is resolved per ADR-017 with the following precedence:
 
-1. If `Asset.exchange` is set, the symbol is the lowercased `Asset.reference` joined by `.` to the Stooq venue suffix of the exchange (the suffix is produced by a per-provider mapper from the canonical `Exchange`).
-2. If `Asset.exchange` is unset, the symbol is the lowercased `Asset.reference`. This branch preserves the US-ticker happy path and covers legacy assets created before the exchange field existed.
-3. If the mapper returns no suffix for the chosen exchange, or the resolved string is empty, the asset is skipped per MKT-114.
+1. If `Asset.exchange` is set, the symbol is `Asset.reference` joined by `.` to the Yahoo venue suffix of the exchange (e.g. `VOD` + LSE → `VOD.L`, `BMW` + XETRA → `BMW.DE`, `MC` + Euronext Paris → `MC.PA`); the suffix is produced by a per-provider mapper from the canonical `Exchange`. US venues (NYSE/Nasdaq) map to an **empty** suffix, so the symbol is the bare reference (`AAPL`) — Yahoo addresses US listings without a suffix.
+2. If `Asset.exchange` is unset, the symbol is the bare `Asset.reference`. This branch preserves the US-ticker happy path and covers legacy assets created before the exchange field existed.
+3. If the mapper returns no suffix for a non-US exchange it does not recognise, or the resolved string is empty, the asset is skipped per MKT-114.
 
-In all branches a class-share `/` separator in the reference is translated to Stooq's `-` convention before lowercasing: OpenFIGI spells Berkshire Hathaway B as `BRK/B`, but Stooq resolves only `BRK-B.US` (the slash form returns the `N/D` no-data sentinel). The reference itself is left unchanged — the translation is local to the Stooq symbol so other providers keep the canonical ticker.
+In all branches a class-share `/` separator in the reference is translated to Yahoo's `-` convention: OpenFIGI spells Berkshire Hathaway B as `BRK/B`, but Yahoo resolves `BRK-B`. The reference itself is left unchanged — the translation is local to the provider symbol.
 
 **MKT-111 — Empty-holdings rejection (backend)**: When the task's scope contains no holding asset that is both active (quantity > 0) and has a derivable provider symbol (MKT-110), the fetch task is rejected with a specific error so the frontend can give feedback. No external calls are made. Applies to every fetch task path (launch MKT-122, global refresh MKT-130, account refresh MKT-132).
 
@@ -259,7 +259,7 @@ The launch auto-fetch (MKT-121) shows no dispatch snackbar; its outcome is silen
 
 **MKT-116 — System cash assets excluded (backend)**: System cash assets (per CSH spec, identified by their `system-cash-*` reference) are excluded from every fetch task scope (launch MKT-122, global refresh MKT-130, account refresh MKT-132). They have no external market price.
 
-**MKT-117 — Provider returns the observation date (backend)**: `PriceProvider::fetch_price` returns the provider's observation date alongside the price (the date the quote is _for_, not the time of the fetch). The Stooq adapter reads this from the CSV `Date` column (already requested via the `d2` field in `f=sd2t2ohlcv`). A provider that does not supply a date returns it as absent.
+**MKT-117 — Provider returns the observation date (backend)**: `PriceProvider::fetch_price` returns the provider's observation date alongside the price (the date the quote is _for_, not the time of the fetch). The Yahoo adapter derives this from the chart response's regular-market timestamp (epoch seconds, converted to the exchange-local ISO date). A provider that does not supply a date returns it as absent.
 
 **MKT-118 — Fetched price is dated by the observation date, with a today fallback (backend)**: When a fetch writes an `AssetPrice`, it uses the provider's observation date (MKT-117) as `AssetPrice.date` — keyed and upserted by `(asset_id, observation_date)` per MKT-025 — provided that date is a well-formed ISO `yyyy-mm-dd` not in the future. When the observation date is absent, malformed, or in the future, it falls back to the current local date. The price is always recorded; an unusable observation date never causes a skip (contrast MKT-114, which skips only on price/network/parse failure). Effect: a fetch on a non-trading day dates the row at the last trading day, so the staleness label (MKT-140) reads honestly (e.g. "Updated 2d ago" on a Sunday), and repeated non-trading-day fetches are idempotent on that row rather than minting a new current-dated row.
 
@@ -272,6 +272,8 @@ The launch auto-fetch (MKT-121) shows no dispatch snackbar; its outcome is silen
 **MKT-121 — Auto-fetch call (frontend)**: If the setting (MKT-120) is `ON`, the frontend calls the auto-fetch task once per session, after initial app mount. The call is fire-and-forget (the frontend does not await the backend response).
 
 **MKT-122 — Auto-fetch start (backend)**: The auto-fetch task scope is all active holdings across all accounts (subject to MKT-111, MKT-116). Auto-fetch is acknowledged synchronously; per-asset results are signaled via `AssetPriceUpdated` (MKT-112).
+
+**MKT-125 — Sub-unit (pence) quotes normalized to the major ISO unit (backend)**: Applies to every fetch-write path (launch MKT-122, global refresh MKT-130, account refresh MKT-132). Some venues quote in a currency's minor unit — Yahoo reports London (LSE) prices in `GBp` (pence), Johannesburg in `ZAc` (cents), Tel Aviv in `ILA` (agorot). When the provider's quoted currency is one of the recognised minor-unit codes (`GBp`, `ZAc`, `ILA`), the adapter divides the price by 100 and persists it under the corresponding major ISO currency (`GBp → GBP`, `ZAc → ZAR`, `ILA → ILS`). Any currency code **not** in that recognised minor-unit set — including every major ISO code — is treated as already major and stored unchanged (no division). A minor-unit code is never persisted as a currency. (Known limitation: a minor-unit code outside the recognised set would be stored unscaled; the recognised set is widened if such a venue surfaces.)
 
 #### Manual refresh (130–134)
 
@@ -403,9 +405,9 @@ App launch
         └─ dispatch background job, return                                 (MKT-122)
     → background job:
         for each active holding asset:
-            ├─ derive provider symbol from Asset.reference                (MKT-110, ADR-008)
+            ├─ derive provider symbol from Asset.reference                (MKT-110, ADR-017)
             ├─ if symbol unmappable OR provider fetch fails: skip silently (MKT-114, logged warning)
-            └─ on success: upsert (asset_id, today, price, source=Stooq)  (MKT-025, MKT-102)
+            └─ on success: upsert (asset_id, date, price, source=YahooFinance) (MKT-025, MKT-102, MKT-125)
                           publish AssetPriceUpdated                       (MKT-112)
     → subscribers re-fetch on AssetPriceUpdated                            (MKT-036)
 
@@ -611,7 +613,7 @@ The "Current Price" column displays the price as before (MKT-030), with a second
 
 #### Price-history modal — Source badge
 
-Each row in the price-history list (MKT-071) gains a small badge to the right of the date showing the row's `source` value: "Manual", "Stooq", etc. (MKT-141). The badge uses neutral styling — it's informational, not a status pill.
+Each row in the price-history list (MKT-071) gains a small badge to the right of the date showing the row's `source` value: "Manual", "Yahoo Finance", etc. (MKT-141). The badge uses neutral styling — it's informational, not a status pill.
 
 #### States
 
@@ -643,12 +645,12 @@ Each row in the price-history list (MKT-071) gains a small badge to the right of
 
 #### User flow — manual override of a fetched value
 
-1. Auto-fetch writes `AssetPrice(AAPL, 2026-05-17) = $192, source: Stooq`.
-2. User notices the "Stooq" badge and disagrees with the value (e.g. corporate-action edge case).
+1. Auto-fetch writes `AssetPrice(AAPL, 2026-05-17) = $192, source: YahooFinance`.
+2. User notices the "Yahoo Finance" badge and disagrees with the value (e.g. corporate-action edge case).
 3. User opens "Enter price" or "Price history", enters $189.
-4. Backend writes `AssetPrice(AAPL, 2026-05-17) = $189, source: Manual` — overwrites the Stooq row (per ADR-012; MKT-025, MKT-101).
+4. Backend writes `AssetPrice(AAPL, 2026-05-17) = $189, source: Manual` — overwrites the fetched row (per ADR-012; MKT-025, MKT-101).
 5. Account Details shows $189; the badge becomes "Manual".
-6. On the next launch, auto-fetch will overwrite $189 with the new day's Stooq value (per ADR-012). The user's correction is for today; tomorrow brings tomorrow's price.
+6. On the next launch, auto-fetch will overwrite $189 with the new day's Yahoo Finance value (per ADR-012). The user's correction is for today; tomorrow brings tomorrow's price.
 
 ### UX Draft — Price refresh lock (MKT-150+)
 
@@ -665,7 +667,7 @@ A lock / unlock icon button on each active, non-cash holding row in Account Deta
 
 #### User flow — pin a manual correction
 
-1. A fetch wrote `AssetPrice(DCAM, today) = 6.000, source: Stooq`, but the official close was `5.993`.
+1. A fetch wrote `AssetPrice(DCAM, today) = 6.000, source: YahooFinance`, but the official close was `5.993`.
 2. The user records `5.993` manually via "Enter price" (MKT-010) → the row now shows the manual value with a "Manual" badge.
 3. The user clicks the lock icon on the holding row (MKT-153). The asset is now locked (MKT-156); a snackbar confirms (MKT-157).
 4. On every subsequent refresh, the asset is skipped (MKT-151); the `5.993` value persists.

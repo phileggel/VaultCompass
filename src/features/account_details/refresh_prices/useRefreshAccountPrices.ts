@@ -1,10 +1,6 @@
-import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchPriceErrorToI18n } from "@/features/accounts/shared/presenter";
-import { connectionGateway } from "@/features/connections/gateway";
-import { openModalSearch } from "@/lib/modalSearch";
-import { getUseStooqApiKey } from "@/lib/stooqKeyModeStorage";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
 
@@ -15,6 +11,7 @@ import { accountDetailsGateway } from "../gateway";
  * Calls `accountDetailsGateway.fetchAccountAssetPrices(accountId)` and surfaces the
  * result via the global snackbar. Success dispatches `mkt.fetch_dispatched`; errors
  * route through `fetchPriceErrorToI18n` (F27 layer 3) for typed key + severity.
+ * Keyless (ADR-017): no API key, so no key gate — the fetch dispatches directly.
  */
 export function useRefreshAccountPrices(accountId: string): {
   isPending: boolean;
@@ -22,27 +19,12 @@ export function useRefreshAccountPrices(accountId: string): {
 } {
   const [isPending, setIsPending] = useState(false);
   const showSnackbar = useSnackbar();
-  const navigate = useNavigate();
   const { t } = useTranslation();
 
   const refresh = useCallback(async () => {
     setIsPending(true);
     try {
-      // KEY-050/051 — keyless mode bypasses the KEY-040 key gate (see useRefreshGlobalPrices).
-      const useApiKey = getUseStooqApiKey();
-      if (useApiKey) {
-        // KEY-040 — gate on a stored provider key (see useRefreshGlobalPrices).
-        const connections = await connectionGateway.getProviderConnections();
-        const stooq =
-          connections?.status === "ok"
-            ? connections.data.find((c) => c.provider === "Stooq")
-            : undefined;
-        if (stooq && !stooq.has_key) {
-          openModalSearch(navigate, { modal: "connections" });
-          return;
-        }
-      }
-      const result = await accountDetailsGateway.fetchAccountAssetPrices(accountId, useApiKey);
+      const result = await accountDetailsGateway.fetchAccountAssetPrices(accountId);
       if (result.status === "ok") {
         showSnackbar(t("mkt.fetch_dispatched"), "info");
         return;
@@ -52,7 +34,7 @@ export function useRefreshAccountPrices(accountId: string): {
     } finally {
       setIsPending(false);
     }
-  }, [accountId, navigate, showSnackbar, t]);
+  }, [accountId, showSnackbar, t]);
 
   return { isPending, refresh };
 }

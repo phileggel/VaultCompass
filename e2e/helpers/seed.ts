@@ -174,53 +174,6 @@ export async function seedAssetPrice(assetId: string, date: string, price: numbe
 }
 
 /**
- * Stores a provider API key via IPC (`save_provider_key`, KEY-010). Lets a
- * test pass the KEY-040 refresh gate without driving the Connections dialog.
- * Pair with `removeProviderKey` in a `finally` block — on a host with an OS
- * keychain the key would otherwise persist across spec files and runs.
- *
- * @param provider - provider identifier (e.g. "Stooq")
- * @param key      - key value to store (a dummy value; no live probe happens)
- */
-export async function seedProviderKey(provider: string, key: string): Promise<void> {
-  const result = (await browser.executeAsync(
-    (prov: string, k: string, done: (r: unknown) => void) => {
-      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
-      window.__TAURI_INTERNALS__
-        .invoke("save_provider_key", { args: { provider: prov, key: k, allow_plaintext: false } })
-        .then(done)
-        .catch((err: unknown) => done({ __error: String(err) }));
-    },
-    provider,
-    key,
-  )) as { __error?: string } | null;
-  assert.ok(
-    !(result !== null && typeof result === "object" && "__error" in result),
-    `seedProviderKey failed: ${JSON.stringify(result)}`,
-  );
-}
-
-/**
- * Removes a stored provider API key via IPC (`remove_provider_key`, KEY-013).
- * Clears every storage tier; idempotent when no key is stored.
- *
- * @param provider - provider identifier (e.g. "Stooq")
- */
-export async function removeProviderKey(provider: string): Promise<void> {
-  const result = (await browser.executeAsync((prov: string, done: (r: unknown) => void) => {
-    // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
-    window.__TAURI_INTERNALS__
-      .invoke("remove_provider_key", { args: { provider: prov } })
-      .then(done)
-      .catch((err: unknown) => done({ __error: String(err) }));
-  }, provider)) as { __error?: string } | null;
-  assert.ok(
-    !(result !== null && typeof result === "object" && "__error" in result),
-    `removeProviderKey failed: ${JSON.stringify(result)}`,
-  );
-}
-
-/**
  * Records a manual currency rate via IPC (`record_currency_rate`). The written
  * record carries source=Manual (FXR-025).
  *

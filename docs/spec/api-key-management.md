@@ -1,5 +1,7 @@
 # Business Rules — API Key Management (KEY)
 
+> **⛔ RETIRED — superseded by [ADR-017](../adr/017-yahoo-finance-keyless-price-source.md).** The price provider moved to keyless Yahoo Finance; no provider requires an API key, so the entire BYOK/KEY feature (connection bounded context, Connections dialog, key storage, fetch-mode toggle, refresh key-gate) is being removed. **Every KEY-NNN rule below is inactive** — do not treat them as constraints. This file is retained only until the migration PR deletes it alongside the implementation.
+
 ## Context
 
 VaultCompass fetches asset prices from external providers (see [ADR-016](../adr/016-stooq-optional-keyless-fetch-mode.md), which supersedes ADR-015 → ADR-008). The **bring-your-own-key (BYOK)** path is the default and the robust option: the user supplies a free Stooq key obtained from the provider's signup page (see `docs/lessons.md` L-006). But Stooq's daily-download endpoint also serves **anonymously** — subject to a per-IP daily limit — and whether anonymous access works depends on the user's network (it works from some IPs, is blocked or rate-limited on others). The app therefore also offers an optional **keyless** fetch mode (KEY-050). With a key (the default) or in keyless mode, the app has a working automated price source; the two modes are the user's lever for whichever path their network allows.

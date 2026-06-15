@@ -1,24 +1,24 @@
 # Trigram Registry
 
-| Trigram | Spec Name                   | Description                                                                                                | Status   |
-| ------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | -------- |
-| TRX     | Financial Asset Transaction | recording purchases and managing holdings                                                                  | active   |
-| ACD     | Account Details             | Account holdings, performance and asset list                                                               | active   |
-| ACC     | Account Management          | CRUD operations for financial accounts                                                                     | active   |
-| TXL     | Transaction List            | Browse, edit and delete transactions per (account, asset) pair                                             | active   |
-| SEL     | Sell Transaction            | Recording asset sales, holding reduction, and realized P&L                                                 | active   |
-| MKT     | Market Price                | Per-asset price: manual entry, auto-fetch (Stooq), per-asset refresh lock; unrealized P&L                  | active   |
-| AST     | Asset                       | Asset CRUD, archival, and listing                                                                          | active   |
-| CAT     | Category                    | User-defined asset category management                                                                     | active   |
-| UPD     | Application Update          | Auto-update detection, download, and install                                                               | active   |
-| WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                                                             | active   |
-| PFD     | Portfolio Dashboard         | Cross-account aggregate view: KPIs + per-account list                                                      | planning |
-| CSH     | Cash Tracking               | Cash-as-Holding (one per currency); Deposit/Withdrawal; Buy/Sell re-linked to cash                         | active   |
-| PRF     | Account Performance         | Per-account value-over-time table: month/year rows, net-of-flows perf (MoM/YTD/all-time)                   | planning |
-| DIV     | Cash Dividend               | Cash dividend transaction: income credited to cash, attributed to the paying asset                         | active   |
-| FXR     | Foreign Exchange Rate       | Currency-pair rates (fetch + manual) for live multi-currency holding valuation                             | planning |
-| KEY     | API Key Management          | BYOK provider API keys (OS-keychain ladder) + Connections dialog; gates Stooq fetch; optional keyless mode | active   |
-| FSD     | Free Share Distribution     | Bonus shares received at zero cost: quantity event, no cash, cost basis unchanged                          | active   |
+| Trigram | Spec Name                   | Description                                                                                                        | Status   |
+| ------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------- |
+| TRX     | Financial Asset Transaction | recording purchases and managing holdings                                                                          | active   |
+| ACD     | Account Details             | Account holdings, performance and asset list                                                                       | active   |
+| ACC     | Account Management          | CRUD operations for financial accounts                                                                             | active   |
+| TXL     | Transaction List            | Browse, edit and delete transactions per (account, asset) pair                                                     | active   |
+| SEL     | Sell Transaction            | Recording asset sales, holding reduction, and realized P&L                                                         | active   |
+| MKT     | Market Price                | Per-asset price: manual entry, keyless auto-fetch (Yahoo Finance, ADR-017), per-asset refresh lock; unrealized P&L | active   |
+| AST     | Asset                       | Asset CRUD, archival, and listing                                                                                  | active   |
+| CAT     | Category                    | User-defined asset category management                                                                             | active   |
+| UPD     | Application Update          | Auto-update detection, download, and install                                                                       | active   |
+| WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                                                                     | active   |
+| PFD     | Portfolio Dashboard         | Cross-account aggregate view: KPIs + per-account list                                                              | planning |
+| CSH     | Cash Tracking               | Cash-as-Holding (one per currency); Deposit/Withdrawal; Buy/Sell re-linked to cash                                 | active   |
+| PRF     | Account Performance         | Per-account value-over-time table: month/year rows, net-of-flows perf (MoM/YTD/all-time)                           | planning |
+| DIV     | Cash Dividend               | Cash dividend transaction: income credited to cash, attributed to the paying asset                                 | active   |
+| FXR     | Foreign Exchange Rate       | Currency-pair rates (fetch + manual) for live multi-currency holding valuation                                     | planning |
+| KEY     | API Key Management          | BYOK provider API keys + Connections dialog — RETIRED by ADR-017 (price fetch moved to keyless Yahoo Finance)      | retired  |
+| FSD     | Free Share Distribution     | Bonus shares received at zero cost: quantity event, no cash, cost basis unchanged                                  | active   |
 
 ---
 

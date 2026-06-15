@@ -64,13 +64,13 @@ The date a price is _for_ — the trading day its value reflects — as distinct
 
 ### AssetPriceSource
 
-A value-object enum qualifying the provenance of an `AssetPrice` record. Variants in v1: `Manual` (user-entered via manual entry or transaction auto-record), `Stooq` (auto-fetched from the Stooq provider). `Finnhub` reserved for the KEY spec. Metadata for traceability per ADR-012 — does not influence read/write precedence (latest-write-wins).
+A value-object enum qualifying the provenance of an `AssetPrice` record. Variants: `Manual` (user-entered via manual entry or transaction auto-record) and `YahooFinance` (keyless auto-fetch, ADR-017). Metadata for traceability per ADR-012 — does not influence read/write precedence (latest-write-wins).
 
 > Status: confirmed
 
 ### Exchange
 
-A canonical reference to a trading venue, independent of any market-data provider. Carries an ISO 10383 Market Identifier Code (MIC) as `code` (e.g. `XPAR`, `XNAS`) and a human-readable `label`. Optional field on `Asset`. Auto-filled by the OpenFIGI lookup path (WEB-049) or selected by the user via a curated picker on the Add/Edit Asset form (AST-021). Used by the auto-fetch task to resolve the Stooq provider symbol (MKT-110). Provider keys (Stooq venue suffixes, OpenFIGI exchange codes) are NOT stored on `Exchange` — they are resolved by per-provider mappers at the boundary.
+A canonical reference to a trading venue, independent of any market-data provider. Carries an ISO 10383 Market Identifier Code (MIC) as `code` (e.g. `XPAR`, `XNAS`) and a human-readable `label`. Optional field on `Asset`. Auto-filled by the OpenFIGI lookup path (WEB-049) or selected by the user via a curated picker on the Add/Edit Asset form (AST-021). Used by the auto-fetch task to resolve the Yahoo Finance provider symbol (MKT-110). Provider symbols (Yahoo venue suffixes, OpenFIGI exchange codes) are NOT stored on `Exchange` — they are resolved by per-provider mappers at the boundary.
 
 > Status: confirmed
 
@@ -158,30 +158,6 @@ Where a currency rate came from: `Manual` (entered by the user), or `Frankfurter
 
 ## Connection Context (introduced by KEY spec)
 
-### Connection
-
-A configured link between VaultCompass and one external provider. Today a connection is just the provider's API key plus which storage tier holds it; it may later carry other per-provider settings. The provider it names is an External provider.
-
-> Status: confirmed
-
-### API key
-
-A free, user-supplied secret that authenticates VaultCompass to an external provider. Every price provider now requires one (ADR-015). The app never bundles a key, never sends it anywhere except the provider it belongs to, and never shows a stored key back on screen.
-
-> Status: confirmed
-
-### BYOK
-
-Bring-your-own-key: the model where the user obtains their own provider key and pastes it into VaultCompass, rather than the app shipping a shared key. Keys live only on the user's machine.
-
-> Status: confirmed
-
-### Storage tier
-
-Where a saved API key is kept, chosen by a security-preference ladder: the OS keychain (the default), session-only memory (the fallback when no keychain is available, cleared on exit), or an opt-in plaintext file. Defined by ADR-011.
-
-> Status: confirmed
-
 ---
 
 ## Domain Events
@@ -258,7 +234,7 @@ A fetch task triggered manually by the user from an account detail page. Scope: 
 
 ### External provider
 
-A third-party HTTP service that returns current asset prices, configured per ADR-015. v1: Stooq. The contract surfaces this as the `Provider` enum; "provider" in prose means an External provider.
+A third-party HTTP service that returns current asset prices. Currently Yahoo Finance — keyless, no credential required (ADR-017). "provider" in prose means an External provider.
 
 > Status: confirmed
 

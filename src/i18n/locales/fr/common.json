@@ -184,42 +184,7 @@
     "about": "À propos",
     "settings": "Paramètres",
     "design_system": "Design System",
-    "currency_rates": "Taux de change",
-    "connections": "Connexions"
-  },
-  "connection": {
-    "title": "Connexions",
-    "status": {
-      "no_key": "Aucune clé",
-      "key_set": "Clé enregistrée"
-    },
-    "tier": {
-      "os_keychain": "Trousseau du système",
-      "session_memory": "Session uniquement",
-      "plaintext_file": "Fichier en clair"
-    },
-    "test_outcome": {
-      "accepted": "La clé fonctionne",
-      "rejected": "Clé refusée",
-      "unreachable": "Fournisseur injoignable"
-    },
-    "error": {
-      "empty_key": "Saisissez d'abord une clé",
-      "key_store_error": "Accès au stockage des clés impossible"
-    },
-    "action": {
-      "test": "Tester la clé",
-      "save": "Enregistrer",
-      "remove": "Supprimer",
-      "save_to_disk": "Enregistrer sur le disque"
-    },
-    "plaintext_optin_prompt": "Aucun trousseau sécurisé n'a été trouvé : votre clé n'est conservée que pour cette session. Enregistrez-la dans un fichier en clair pour la garder après un redémarrage — elle sera alors lisible sur le disque.",
-    "save_success": "Clé enregistrée",
-    "remove_success": "Clé supprimée",
-    "remove_confirm": "Supprimer la clé {{provider}} ?",
-    "signup_link": "Obtenir une clé gratuite",
-    "key_placeholder": "Collez votre clé API",
-    "key_input_label": "Clé API"
+    "currency_rates": "Taux de change"
   },
   "settings": {
     "title": "Paramètres",
@@ -230,9 +195,7 @@
     "auto_record_price_label": "Enregistrer automatiquement le prix de transaction comme prix de marché",
     "auto_record_price_description": "Si activé, la case d'enregistrement automatique sera pré-cochée dans les nouveaux formulaires de transaction.",
     "auto_fetch_label": "Récupérer automatiquement les prix au démarrage",
-    "auto_fetch_description": "Si activé, l'application récupère les prix actuels depuis Stooq pour toutes les positions actives à chaque démarrage.",
-    "use_api_key_label": "Utiliser une clé API Stooq",
-    "use_api_key_description": "Activé, la récupération des prix utilise votre clé Stooq enregistrée. Désactivé, elle se fait anonymement — sans clé, mais la limite quotidienne est plus basse et certains réseaux la bloquent."
+    "auto_fetch_description": "Si activé, l'application récupère les prix actuels depuis Yahoo Finance pour toutes les positions actives à chaque démarrage."
   },
   "shell": {
     "sidebar_collapse": "Réduire le menu",
@@ -387,7 +350,7 @@
     "fetch_completed_partial": "{{ok}} mis à jour · {{skipped}} en échec",
     "fetch_completed_failed": "Échec de la mise à jour des prix ({{skipped}})",
     "source_manual": "Manuel",
-    "source_stooq": "Stooq",
+    "source_yahoo": "Yahoo Finance",
     "staleness_today": "Mis à jour aujourd'hui",
     "staleness_days_ago": "Mis à jour il y a {{days}} j",
     "price_state": {
