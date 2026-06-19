@@ -618,7 +618,7 @@ async fn fetch_publishes_completion_event_with_counts() {
             rx.changed()
                 .await
                 .expect("bus closed before AssetPriceFetchCompleted arrived");
-            if let Event::AssetPriceFetchCompleted { ok, skipped } = *rx.borrow() {
+            if let Event::AssetPriceFetchCompleted { ok, skipped, .. } = *rx.borrow() {
                 return (ok, skipped);
             }
         }
@@ -638,5 +638,743 @@ async fn fetch_publishes_completion_event_with_counts() {
         latest.source,
         vault_compass_lib::context::asset::AssetPriceSource::YahooFinance,
         "fetch-path write must stamp source = YahooFinance (MKT-102)"
+    );
+}
+
+// ── MKT-170 / MKT-171 — unpriced list on AssetPriceFetchCompleted ───────────
+
+/// MKT-170/171 — when a provider returns no data for an asset (Ok(None)), the
+/// completion event's `unpriced` list contains exactly that asset with its
+/// identifying fields (name, reference, isin, currency) populated and
+/// `last_price` / `last_price_date` set from its most recently recorded price.
+///
+/// Also verifies MKT-171: `unpriced.len() == skipped`.
+#[tokio::test]
+async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_price() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, PriceProvider, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::core::event_bus::{Event, UnpricedAsset};
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+
+    // Provider that returns no data — the canonical MKT-114 "no data" skip arm.
+    struct NoDataProvider;
+    #[async_trait::async_trait]
+    impl PriceProvider for NoDataProvider {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(None)
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(vault_compass_lib::context::account::AccountService::new(
+        Box::new(vault_compass_lib::context::account::SqliteAccountRepository::new(pool.clone())),
+        Box::new(vault_compass_lib::context::account::SqliteHoldingRepository::new(pool.clone())),
+        Box::new(
+            vault_compass_lib::context::account::SqliteTransactionRepository::new(pool.clone()),
+        ),
+    ));
+    let asset_service = Arc::new(
+        AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus)),
+    );
+
+    // Seed an asset with an ISIN so we can assert it is forwarded.
+    let asset = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Unpriced Corp".to_string(),
+            reference: "UNPX".to_string(),
+            isin: Some("US0231351067".to_string()),
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 3,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset");
+
+    // Seed a known prior price (50.0 USD = 50_000_000 micros) so last_price /
+    // last_price_date are populated. `record_asset_price` stamps source = Manual
+    // automatically (MKT-101).
+    asset_service
+        .record_asset_price(&asset.id, "2026-06-01", 50.0)
+        .await
+        .expect("seed prior price");
+
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "USD".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    account_service
+        .open_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-01".to_string(),
+            1_000_000,
+            100_000_000,
+        )
+        .await
+        .expect("seed holding");
+
+    let dispatcher = Arc::new(Dispatcher::new(
+        Arc::new(NoDataProvider),
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+        Arc::clone(&bus),
+        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
+                    pool.clone(),
+                ),
+            ),
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
+                    pool.clone(),
+                ),
+            ),
+        )),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+    let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
+        dispatcher,
+    );
+
+    let mut rx = bus.subscribe();
+    use_case
+        .fetch_for_account(&account.id)
+        .await
+        .expect("dispatch");
+
+    // Wait for the terminal completion event.
+    let event = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            rx.changed()
+                .await
+                .expect("bus closed before AssetPriceFetchCompleted arrived");
+            if let Event::AssetPriceFetchCompleted {
+                ok,
+                skipped,
+                ref unpriced,
+            } = *rx.borrow()
+            {
+                return (ok, skipped, unpriced.clone());
+            }
+        }
+    })
+    .await
+    .expect("AssetPriceFetchCompleted within timeout");
+
+    let (ok, skipped, unpriced) = event;
+
+    // MKT-171: counts must agree.
+    assert_eq!(ok, 0, "provider returned no data → ok must be 0");
+    assert_eq!(skipped, 1, "one asset skipped");
+    assert_eq!(
+        unpriced.len(),
+        skipped as usize,
+        "MKT-171: unpriced.len() must equal skipped count"
+    );
+
+    // MKT-170: identifying fields and last-known price must be populated.
+    let entry: &UnpricedAsset = &unpriced[0];
+    assert_eq!(
+        entry.asset_id, asset.id,
+        "asset_id must match the skipped asset"
+    );
+    assert_eq!(entry.name, "Unpriced Corp", "name must match");
+    assert_eq!(entry.reference, "UNPX", "reference (ticker) must match");
+    assert_eq!(
+        entry.isin,
+        Some("US0231351067".to_string()),
+        "isin must be forwarded when the asset has one"
+    );
+    assert_eq!(
+        entry.currency, "USD",
+        "currency must match asset native currency"
+    );
+    assert_eq!(
+        entry.last_price,
+        Some(50_000_000_i64),
+        "MKT-170: last_price must be the most recently recorded price in i64 micros (ADR-001)"
+    );
+    assert_eq!(
+        entry.last_price_date,
+        Some("2026-06-01".to_string()),
+        "MKT-170: last_price_date must be the ISO date of the most recently recorded price"
+    );
+}
+
+/// MKT-170 — when an asset has never had a price recorded, `last_price` and
+/// `last_price_date` in the `UnpricedAsset` entry are `None`.
+#[tokio::test]
+async fn fetch_completion_unpriced_entry_has_none_last_price_when_never_priced() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, PriceProvider, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::core::event_bus::{Event, UnpricedAsset};
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+
+    struct NoDataProvider;
+    #[async_trait::async_trait]
+    impl PriceProvider for NoDataProvider {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(None)
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(vault_compass_lib::context::account::AccountService::new(
+        Box::new(vault_compass_lib::context::account::SqliteAccountRepository::new(pool.clone())),
+        Box::new(vault_compass_lib::context::account::SqliteHoldingRepository::new(pool.clone())),
+        Box::new(
+            vault_compass_lib::context::account::SqliteTransactionRepository::new(pool.clone()),
+        ),
+    ));
+    let asset_service = Arc::new(
+        AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus)),
+    );
+
+    // Seed an asset with NO prior price recorded.
+    let asset = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Never Priced".to_string(),
+            reference: "NVPR".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "EUR".to_string(),
+            risk_level: 2,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset");
+
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    account_service
+        .open_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-01".to_string(),
+            1_000_000,
+            100_000_000,
+        )
+        .await
+        .expect("seed holding");
+
+    let dispatcher = Arc::new(Dispatcher::new(
+        Arc::new(NoDataProvider),
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+        Arc::clone(&bus),
+        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
+                    pool.clone(),
+                ),
+            ),
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
+                    pool.clone(),
+                ),
+            ),
+        )),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+    let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
+        dispatcher,
+    );
+
+    let mut rx = bus.subscribe();
+    use_case
+        .fetch_for_account(&account.id)
+        .await
+        .expect("dispatch");
+
+    let unpriced: Vec<UnpricedAsset> =
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                rx.changed()
+                    .await
+                    .expect("bus closed before AssetPriceFetchCompleted arrived");
+                if let Event::AssetPriceFetchCompleted { ref unpriced, .. } = *rx.borrow() {
+                    return unpriced.clone();
+                }
+            }
+        })
+        .await
+        .expect("AssetPriceFetchCompleted within timeout");
+
+    assert_eq!(unpriced.len(), 1, "one asset skipped, one entry expected");
+    let entry = &unpriced[0];
+    assert_eq!(
+        entry.last_price, None,
+        "MKT-170: last_price must be None when the asset has never been priced"
+    );
+    assert_eq!(
+        entry.last_price_date, None,
+        "MKT-170: last_price_date must be None when the asset has never been priced"
+    );
+}
+
+/// MKT-171 — a successfully fetched asset must NOT appear in the `unpriced` list.
+/// With one asset fetched ok (provider returns a quote), `unpriced` is empty.
+#[tokio::test]
+async fn fetch_completion_unpriced_list_excludes_successfully_fetched_asset() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, PriceProvider, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::core::event_bus::{Event, UnpricedAsset};
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+
+    struct OkProvider;
+    #[async_trait::async_trait]
+    impl PriceProvider for OkProvider {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(Some(vault_compass_lib::context::asset::Quote {
+                price: 150_000_000,
+                date: Some("2026-06-01".to_string()),
+            }))
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(vault_compass_lib::context::account::AccountService::new(
+        Box::new(vault_compass_lib::context::account::SqliteAccountRepository::new(pool.clone())),
+        Box::new(vault_compass_lib::context::account::SqliteHoldingRepository::new(pool.clone())),
+        Box::new(
+            vault_compass_lib::context::account::SqliteTransactionRepository::new(pool.clone()),
+        ),
+    ));
+    let asset_service = Arc::new(
+        AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus)),
+    );
+
+    let asset = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Fetched Ok".to_string(),
+            reference: "FOKO".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 3,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset");
+
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "USD".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    account_service
+        .open_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-01".to_string(),
+            1_000_000,
+            100_000_000,
+        )
+        .await
+        .expect("seed holding");
+
+    let dispatcher = Arc::new(Dispatcher::new(
+        Arc::new(OkProvider),
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+        Arc::clone(&bus),
+        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
+                    pool.clone(),
+                ),
+            ),
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
+                    pool.clone(),
+                ),
+            ),
+        )),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+    let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
+        dispatcher,
+    );
+
+    let mut rx = bus.subscribe();
+    use_case
+        .fetch_for_account(&account.id)
+        .await
+        .expect("dispatch");
+
+    let unpriced: Vec<UnpricedAsset> =
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                rx.changed()
+                    .await
+                    .expect("bus closed before AssetPriceFetchCompleted arrived");
+                if let Event::AssetPriceFetchCompleted { ref unpriced, .. } = *rx.borrow() {
+                    return unpriced.clone();
+                }
+            }
+        })
+        .await
+        .expect("AssetPriceFetchCompleted within timeout");
+
+    assert!(
+        unpriced.is_empty(),
+        "MKT-171: a successfully fetched asset must not appear in unpriced; got: {unpriced:?}"
+    );
+}
+
+/// MKT-171 — `unpriced.len() == skipped` is an invariant that holds when multiple
+/// assets are in scope and some succeed while others fail. Two assets: one fetched
+/// ok (provider returns a quote), one skipped (provider returns an error). Only
+/// the skipped one appears in `unpriced`, and `skipped == 1 == unpriced.len()`.
+#[tokio::test]
+async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, PriceProvider, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::core::event_bus::{Event, UnpricedAsset};
+    use vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher;
+
+    // Provider: succeeds for the first symbol queried, fails for the second.
+    // Errors deterministically for one symbol so the ok/err split is independent of
+    // fetch-scope iteration order; every other symbol fetches OK.
+    struct ErrForSymbolProvider {
+        err_symbol: &'static str,
+    }
+    #[async_trait::async_trait]
+    impl PriceProvider for ErrForSymbolProvider {
+        async fn fetch_price(
+            &self,
+            symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            if symbol == self.err_symbol {
+                Err(anyhow::anyhow!("simulated network error"))
+            } else {
+                Ok(Some(vault_compass_lib::context::asset::Quote {
+                    price: 100_000_000,
+                    date: None,
+                }))
+            }
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(vault_compass_lib::context::account::AccountService::new(
+        Box::new(vault_compass_lib::context::account::SqliteAccountRepository::new(pool.clone())),
+        Box::new(vault_compass_lib::context::account::SqliteHoldingRepository::new(pool.clone())),
+        Box::new(
+            vault_compass_lib::context::account::SqliteTransactionRepository::new(pool.clone()),
+        ),
+    ));
+    let asset_service = Arc::new(
+        AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus)),
+    );
+
+    let asset_ok = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Asset Ok".to_string(),
+            reference: "AOK".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 3,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset ok");
+    let asset_err = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Asset Err".to_string(),
+            reference: "AERR".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 3,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed asset err");
+
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "USD".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    // Open holdings for both assets so both enter fetch scope.
+    for asset in [&asset_ok, &asset_err] {
+        account_service
+            .open_holding(
+                &account.id,
+                asset.id.clone(),
+                "2024-01-01".to_string(),
+                1_000_000,
+                100_000_000,
+            )
+            .await
+            .expect("seed holding");
+    }
+
+    let dispatcher = Arc::new(Dispatcher::new(
+        Arc::new(ErrForSymbolProvider { err_symbol: "AERR" }),
+        Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+        Arc::clone(&bus),
+        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
+                    pool.clone(),
+                ),
+            ),
+            Box::new(
+                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
+                    pool.clone(),
+                ),
+            ),
+        )),
+        Arc::new(|| chrono::Local::now().date_naive()),
+    ));
+    let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
+        dispatcher,
+    );
+
+    let mut rx = bus.subscribe();
+    use_case
+        .fetch_for_account(&account.id)
+        .await
+        .expect("dispatch");
+
+    let event = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            rx.changed()
+                .await
+                .expect("bus closed before AssetPriceFetchCompleted arrived");
+            if let Event::AssetPriceFetchCompleted {
+                ok,
+                skipped,
+                ref unpriced,
+            } = *rx.borrow()
+            {
+                return (ok, skipped, unpriced.clone());
+            }
+        }
+    })
+    .await
+    .expect("AssetPriceFetchCompleted within timeout");
+
+    let (ok, skipped, unpriced) = event;
+    assert_eq!(ok, 1, "one asset fetched ok");
+    assert_eq!(skipped, 1, "one asset errored → skipped");
+    assert_eq!(
+        unpriced.len(),
+        skipped as usize,
+        "MKT-171: unpriced.len() must equal skipped count; got ok={ok} skipped={skipped} unpriced={unpriced:?}"
+    );
+    // The entry must be for the errored asset, not the successful one.
+    let entry: &UnpricedAsset = &unpriced[0];
+    assert_eq!(
+        entry.asset_id, asset_err.id,
+        "the unpriced entry must identify the errored asset, not the successful one"
+    );
+}
+
+/// MKT-171 — a cash asset (system cash, MKT-116) and a refresh-locked asset
+/// (MKT-151) are excluded from fetch scope upstream, so they never enter the
+/// `unpriced` list. The fetch scope built by the orchestrator already filters
+/// them out; the dispatcher never sees them. With only a cash/locked asset in the
+/// account, `fetch_for_account` returns `NoFetchableHoldings` — no completion
+/// event is published and `unpriced` is therefore absent entirely. This test
+/// confirms the path that would incorrectly include those assets in `unpriced`
+/// is never reached.
+#[tokio::test]
+async fn fetch_completion_locked_asset_absent_from_unpriced_list() {
+    use vault_compass_lib::context::account::UpdateFrequency;
+    use vault_compass_lib::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, PriceProvider, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use vault_compass_lib::use_cases::asset_price_fetch::{
+        FetchAccountAssetPricesError, FetchPriceTask,
+    };
+
+    // This provider would add to unpriced if the locked asset reached the dispatcher.
+    struct NoDataProvider;
+    #[async_trait::async_trait]
+    impl PriceProvider for NoDataProvider {
+        async fn fetch_price(
+            &self,
+            _symbol: &str,
+        ) -> anyhow::Result<Option<vault_compass_lib::context::asset::Quote>> {
+            Ok(None)
+        }
+    }
+
+    let pool = make_pool().await;
+    let bus = Arc::new(SideEffectEventBus::new());
+    let account_service = Arc::new(vault_compass_lib::context::account::AccountService::new(
+        Box::new(vault_compass_lib::context::account::SqliteAccountRepository::new(pool.clone())),
+        Box::new(vault_compass_lib::context::account::SqliteHoldingRepository::new(pool.clone())),
+        Box::new(
+            vault_compass_lib::context::account::SqliteTransactionRepository::new(pool.clone()),
+        ),
+    ));
+    let asset_service = Arc::new(
+        AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus)),
+    );
+
+    let asset = asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Locked Asset".to_string(),
+            reference: "LKDA".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 3,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+        })
+        .await
+        .expect("seed locked asset");
+
+    // Lock the asset (MKT-151) before the fetch.
+    asset_service
+        .block_price_refresh(&asset.id)
+        .await
+        .expect("lock asset");
+
+    let account = account_service
+        .create(
+            "Test".to_string(),
+            "USD".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .expect("seed account");
+    account_service
+        .open_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-01".to_string(),
+            1_000_000,
+            100_000_000,
+        )
+        .await
+        .expect("seed holding");
+
+    let dispatcher = Arc::new(
+        vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher::new(
+            Arc::new(NoDataProvider),
+            Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+            Arc::clone(&bus),
+            Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+                Box::new(
+                    vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
+                        pool.clone(),
+                    ),
+                ),
+                Box::new(
+                    vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
+                        pool.clone(),
+                    ),
+                ),
+            )),
+            Arc::new(|| chrono::Local::now().date_naive()),
+        ),
+    );
+    let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
+        Arc::clone(&account_service),
+        Arc::clone(&asset_service),
+        Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
+        dispatcher,
+    );
+
+    // The locked asset is excluded from scope upstream: the task is rejected with
+    // NoFetchableHoldings, and no AssetPriceFetchCompleted is published.
+    let result = use_case.fetch_for_account(&account.id).await;
+    assert!(
+        matches!(
+            result,
+            Err(FetchAccountAssetPricesError::Failure(
+                FetchPriceTask::NoFetchableHoldings
+            ))
+        ),
+        "MKT-151/171: locked asset excluded from scope → NoFetchableHoldings (no completion event, no unpriced entry); got: {result:?}"
     );
 }

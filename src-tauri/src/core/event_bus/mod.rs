@@ -4,4 +4,4 @@ mod bus;
 mod event;
 
 pub use bus::SideEffectEventBus;
-pub use event::Event;
+pub use event::{Event, UnpricedAsset};

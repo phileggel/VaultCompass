@@ -33,7 +33,23 @@ vi.mock("./logger", () => ({
 }));
 
 // Capture the events.event.listen callback so tests can fire synthetic events
-type CapturedEvent = { payload: { type: string; ok?: number; skipped?: number } };
+type UnpricedAssetFixture = {
+  asset_id: string;
+  name: string;
+  reference: string;
+  isin: string | null;
+  currency: string;
+  last_price: number | null;
+  last_price_date: string | null;
+};
+type CapturedEvent = {
+  payload: {
+    type: string;
+    ok?: number;
+    skipped?: number;
+    unpriced?: UnpricedAssetFixture[];
+  };
+};
 let capturedEventListener: ((event: CapturedEvent) => void) | null = null;
 
 vi.mock("../bindings", () => ({
@@ -133,7 +149,9 @@ describe("store — AssetPriceFetchCompleted snackbar (MKT-145)", () => {
     const cleanup = useAppStore.getState().init();
     await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
 
-    capturedEventListener?.({ payload: { type: "AssetPriceFetchCompleted", ok: 5, skipped: 0 } });
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 5, skipped: 0, unpriced: [] },
+    });
 
     expect(mockShow).not.toHaveBeenCalled();
     cleanup();
@@ -143,7 +161,9 @@ describe("store — AssetPriceFetchCompleted snackbar (MKT-145)", () => {
     const cleanup = useAppStore.getState().init();
     await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
 
-    capturedEventListener?.({ payload: { type: "AssetPriceFetchCompleted", ok: 0, skipped: 3 } });
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 0, skipped: 3, unpriced: [] },
+    });
 
     expect(mockShow).toHaveBeenCalledTimes(1);
     expect(mockShow).toHaveBeenCalledWith(
@@ -157,13 +177,160 @@ describe("store — AssetPriceFetchCompleted snackbar (MKT-145)", () => {
     const cleanup = useAppStore.getState().init();
     await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
 
-    capturedEventListener?.({ payload: { type: "AssetPriceFetchCompleted", ok: 2, skipped: 1 } });
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 2, skipped: 1, unpriced: [] },
+    });
 
     expect(mockShow).toHaveBeenCalledTimes(1);
     expect(mockShow).toHaveBeenCalledWith(
       expect.stringMatching(/mkt\.fetch_completed_partial.*"ok":2.*"skipped":1/),
       "info",
     );
+    cleanup();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MKT-172 / MKT-173 — unpricedAssets store slice and snackbar suppression
+// ---------------------------------------------------------------------------
+
+const makeUnpricedAsset = (id: string): UnpricedAssetFixture => ({
+  asset_id: id,
+  name: `Asset ${id}`,
+  reference: `REF-${id}`,
+  isin: null,
+  currency: "EUR",
+  last_price: null,
+  last_price_date: null,
+});
+
+describe("store — unpricedAssets slice (MKT-172)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEventListener = null;
+    useAppStore.setState({ isInitialized: false });
+  });
+
+  // MKT-172 — when payload.unpriced is non-empty, the store stashes it in the
+  // unpricedAssets slice so UnpricedPricesModalMount can open the modal.
+  it("stashes the unpriced list into the unpricedAssets store slice when non-empty (MKT-172)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    const unpriced = [makeUnpricedAsset("asset-1"), makeUnpricedAsset("asset-2")];
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 0, skipped: 2, unpriced },
+    });
+
+    const state = useAppStore.getState();
+    // The implementation must expose unpricedAssets on the store state.
+    expect(state.unpricedAssets).toEqual(unpriced);
+
+    cleanup();
+  });
+
+  // MKT-172 — when unpriced is empty, the slice remains empty (or is cleared).
+  it("does not stash anything when unpriced list is empty (no modal needed)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 5, skipped: 0, unpriced: [] },
+    });
+
+    const unpricedAssets = useAppStore.getState().unpricedAssets;
+    // Slice must be empty.
+    expect(unpricedAssets).toHaveLength(0);
+
+    cleanup();
+  });
+});
+
+describe("store — MKT-145 snackbar suppression when unpriced non-empty (MKT-173)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEventListener = null;
+    useAppStore.setState({ isInitialized: false });
+  });
+
+  // MKT-173 — when unpriced is non-empty, the modal supersedes the snackbar:
+  // the MKT-145 snackbar must NOT be shown even though skipped > 0.
+  it("suppresses the MKT-145 snackbar when unpriced list is non-empty (MKT-173)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    const unpriced = [makeUnpricedAsset("asset-1")];
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 0, skipped: 1, unpriced },
+    });
+
+    // The modal supersedes the snackbar — no snackbar call allowed.
+    expect(mockShow).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it("suppresses the snackbar on partial success when unpriced is non-empty (MKT-173)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    const unpriced = [makeUnpricedAsset("asset-1")];
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 3, skipped: 1, unpriced },
+    });
+
+    expect(mockShow).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  // When unpriced is empty, the snackbar still fires as before (regression guard).
+  it("still shows the snackbar when unpriced is empty and skipped > 0 (MKT-145 regression guard)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 0, skipped: 2, unpriced: [] },
+    });
+
+    expect(mockShow).toHaveBeenCalledTimes(1);
+
+    cleanup();
+  });
+});
+
+describe("store — unpricedAssets dismiss / clear action (MKT-177)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEventListener = null;
+    useAppStore.setState({ isInitialized: false });
+  });
+
+  // MKT-177 — after the modal is dismissed (all rows resolved or skipped),
+  // a dismiss action empties the unpricedAssets slice.
+  it("clearUnpricedAssets action empties the slice (MKT-177)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    // First stash some assets.
+    capturedEventListener?.({
+      payload: {
+        type: "AssetPriceFetchCompleted",
+        ok: 0,
+        skipped: 1,
+        unpriced: [makeUnpricedAsset("asset-1")],
+      },
+    });
+
+    // Verify they are stashed.
+    expect(useAppStore.getState().unpricedAssets).toHaveLength(1);
+
+    // Call the dismiss/clear action.
+    useAppStore.getState().clearUnpricedAssets();
+
+    // Slice must now be empty.
+    expect(useAppStore.getState().unpricedAssets).toHaveLength(0);
+
     cleanup();
   });
 });

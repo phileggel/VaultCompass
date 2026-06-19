@@ -1,7 +1,13 @@
 import { getName, getVersion } from "@tauri-apps/api/app";
 import i18next from "i18next";
 import { create } from "zustand";
-import { type Account, type Asset, type AssetCategory, events } from "../bindings";
+import {
+  type Account,
+  type Asset,
+  type AssetCategory,
+  events,
+  type UnpricedAsset,
+} from "../bindings";
 import { accountGateway } from "../features/accounts/gateway";
 import { assetGateway } from "../features/assets/gateway";
 import { categoryGateway } from "../features/categories/gateway";
@@ -32,6 +38,9 @@ interface AppState {
   categories: AssetCategory[];
   accounts: Account[];
 
+  // Assets a fetch task could not price (MKT-170); drives the manual-fill modal.
+  unpricedAssets: UnpricedAsset[];
+
   // Loading states
   isLoadingAssets: boolean;
   isLoadingCategories: boolean;
@@ -48,6 +57,9 @@ interface AppState {
   fetchCategories: () => Promise<void>;
   fetchAccounts: () => Promise<void>;
 
+  // MKT-177 — dismiss the manual-fill modal, clearing the unpriced list.
+  clearUnpricedAssets: () => void;
+
   // Initialization
   isAnyLoading: () => boolean;
   init: () => () => void;
@@ -60,6 +72,7 @@ export const useAppStore = create<AppState>((set, get) => {
     assets: [],
     categories: [],
     accounts: [],
+    unpricedAssets: [],
     isLoadingAssets: false,
     isLoadingCategories: false,
     isLoadingAccounts: false,
@@ -107,6 +120,8 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
+    clearUnpricedAssets: () => set({ unpricedAssets: [] }),
+
     isAnyLoading: () => {
       const state = get();
       return state.isLoadingAssets || state.isLoadingCategories || state.isLoadingAccounts;
@@ -149,9 +164,16 @@ export const useAppStore = create<AppState>((set, get) => {
         // The global store is the app's single always-on event sink, so a
         // launch-time fetch-failure snackbar surfaces regardless of the open view.
         if (payload.type === "AssetPriceFetchCompleted") {
-          const feedback = buildPriceFetchFeedback(payload.ok, payload.skipped);
-          if (feedback) {
-            useSnackbarStore.getState().show(feedback.message, feedback.variant);
+          // MKT-172/173 — each completed fetch refreshes the unpriced list. A
+          // non-empty list opens the manual-fill modal and supersedes the MKT-145
+          // snackbar; an empty list clears any stale modal and lets the snackbar
+          // surface the outcome as before.
+          set({ unpricedAssets: payload.unpriced });
+          if (payload.unpriced.length === 0) {
+            const feedback = buildPriceFetchFeedback(payload.ok, payload.skipped);
+            if (feedback) {
+              useSnackbarStore.getState().show(feedback.message, feedback.variant);
+            }
           }
           return;
         }

@@ -5,6 +5,7 @@ import { CashTransactionEditMount } from "@/features/shell/CashTransactionEditMo
 import { CurrencyRateEditMount } from "@/features/shell/CurrencyRateEditMount";
 import { FreeSharesEditModalMount } from "@/features/shell/FreeSharesEditModalMount";
 import { MainLayout } from "@/features/shell/MainLayout";
+import { UnpricedPricesModalMount } from "@/features/shell/UnpricedPricesModalMount";
 import { saveLastPath } from "@/lib/lastPath";
 
 export function AppShell() {
@@ -21,6 +22,7 @@ export function AppShell() {
       <CashTransactionEditMount />
       <CurrencyRateEditMount />
       <FreeSharesEditModalMount />
+      <UnpricedPricesModalMount />
     </MainLayout>
   );
 }

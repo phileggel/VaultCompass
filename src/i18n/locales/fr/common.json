@@ -364,6 +364,12 @@
       "success_unblocked": "Mises à jour automatiques réactivées pour cet actif."
     }
   },
+  "unpriced_prices": {
+    "title": "Prix non mis à jour",
+    "description": "Le cours de ces actifs n'a pas pu être récupéré automatiquement. Saisissez un prix pour ceux que vous connaissez, ou ignorez-les.",
+    "no_previous_price": "Aucun prix précédent",
+    "skip": "Ignorer"
+  },
   "cash": {
     "deposit_modal_title": "Enregistrer un dépôt",
     "withdrawal_modal_title": "Enregistrer un retrait",

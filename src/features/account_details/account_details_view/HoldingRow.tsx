@@ -185,7 +185,7 @@ export function HoldingRow({
         <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
       </td>
       {/* MKT-030 — Current price; MKT-032 diagnostic states; MKT-140 staleness; MKT-142 source badge */}
-      <td className="m3-td text-right tabular-nums">
+      <td id={`holding-current-price-${row.assetId}`} className="m3-td text-right tabular-nums">
         {row.currentPrice.kind === "present" ? (
           <div className="flex flex-col items-end gap-0.5">
             <span>{row.currentPrice.formatted}</span>

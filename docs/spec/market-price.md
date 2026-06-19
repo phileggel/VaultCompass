@@ -293,7 +293,7 @@ The launch auto-fetch (MKT-121) shows no dispatch snackbar; its outcome is silen
 
 **MKT-142 — Source badge in Current Price column (frontend)**: The Account Details "Current Price" column displays a badge alongside the price (or near the staleness label MKT-140) showing the source of the most recent `AssetPrice` record. Same styling as MKT-141.
 
-**MKT-145 — Fetch-outcome snackbar (frontend)**: On `AssetPriceFetchCompleted` (MKT-119), the frontend shows a snackbar only when `skipped > 0`: an error snackbar ("Couldn't update prices (N)") when `ok == 0`, otherwise an info snackbar summarizing the partial result ("Updated N · M couldn't be updated"). A fully successful fetch (`skipped == 0`) shows nothing, so the launch auto-fetch (MKT-121) stays silent on the happy path while failures surface from any entry point. Handled globally (the event is not correlated to a specific trigger).
+**MKT-145 — Fetch-outcome snackbar (frontend)**: On `AssetPriceFetchCompleted` (MKT-119), the frontend shows a snackbar only when `skipped > 0`: an error snackbar ("Couldn't update prices (N)") when `ok == 0`, otherwise an info snackbar summarizing the partial result ("Updated N · M couldn't be updated"). A fully successful fetch (`skipped == 0`) shows nothing, so the launch auto-fetch (MKT-121) stays silent on the happy path while failures surface from any entry point. Handled globally (the event is not correlated to a specific trigger). This snackbar is superseded by the unupdated-prices modal whenever that modal auto-opens for the same signal (MKT-173) — the two never appear together for one completion event.
 
 ### Price Refresh Lock (150–169)
 
@@ -316,6 +316,30 @@ This section lets the user pin an asset's recorded price against automated overw
 **MKT-157 — Toggle reactivity and feedback (frontend)**: After a successful toggle, the frontend re-reads the asset list once the command returns (mirroring the archive / unarchive flow; the `AssetUpdated` event published per MKT-156 keeps other views in sync). The holding row sources `price_refresh_blocked` from that asset slice — the same store it already uses for archive state — so its lock icon reflects the new state, and `HoldingDetail` is not extended with the flag. A snackbar confirms the change, and a subsequent refresh (MKT-130 / MKT-131) then skips or includes the asset per MKT-151.
 
 **MKT-158 — Locked state preserves the displayed price (frontend + backend)**: While an asset is locked, its Current Price column continues to display the most recently recorded `AssetPrice` (MKT-030); because fetches skip the asset (MKT-151), the staleness label (MKT-140) may age ("Updated Nd ago") without being refreshed. The source badge (MKT-142) keeps reflecting the recorded row's source (typically `Manual`).
+
+### Unupdated-Price Manual Fill (170–189)
+
+This section lets the user hand-enter prices for the assets a fetch task could not update. A fetch silently skips an asset whose price the provider cannot supply (MKT-114); those assets keep a stale price or none at all. Rather than leave the gap invisible, the fetch's completion signal now also names the unpriced assets, and the frontend presents them in a single modal where the user can enter a value per asset or skip it. Manual entries reuse the existing recording path (MKT-020+), so no new write behavior is introduced — only a richer completion signal and a new presentation surface.
+
+**MKT-170 — Unpriced-asset list on the completion signal (backend)**: The fetch task-completion signal (MKT-119) carries, in addition to the `ok` / `skipped` counts, the list of assets that were counted in `skipped` — i.e. every in-scope asset not in the `ok` set, defined by the outcome counter rather than by data availability (the rare "provider returned data but the upsert failed" case is therefore included, while a today-fallback write per MKT-118 is an `ok` and is excluded). Each entry identifies the asset by name, ticker (`reference`), and ISIN (when the asset has one), and carries the asset's native currency together with its most recently recorded price and that price's observation date (both absent when the asset has never had a price recorded). The carried price and date are a point-in-time snapshot for modal display only — not an authoritative source; the modal's accuracy after a manual fill comes from the MKT-179 re-fetch, not from this snapshot. The list is published once per task, after the per-asset loop, for every fetch path (launch MKT-122, global refresh MKT-130, account refresh MKT-132), consistent with MKT-119.
+
+**MKT-171 — Scope of the unpriced list (backend)**: The unpriced list (MKT-170) contains exactly the in-scope assets the fetch could not price — provider returned no data, the provider fetch failed, the symbol could not be derived, or the upsert failed (the full MKT-114 skip set). Assets excluded from the fetch scope entirely — system cash (MKT-116) and refresh-locked (MKT-151) — never enter the list, since they are never counted as skipped. The list length equals the `skipped` count (MKT-119).
+
+**MKT-172 — Modal auto-opens on a fetch with unpriced assets (frontend)**: When a completion signal (MKT-170) reports a non-empty unpriced list, the frontend automatically opens the unupdated-prices modal listing those assets. When the list is empty (a fully successful fetch), no modal opens. This applies to every fetch path (launch MKT-122, global refresh MKT-130, account refresh MKT-132), handled globally like the completion-snackbar (MKT-145) — the modal is not correlated to a specific trigger.
+
+**MKT-173 — Modal supersedes the fetch-outcome snackbar (frontend)**: When the unupdated-prices modal auto-opens (MKT-172), the partial-result / failure snackbar of MKT-145 is not also shown for that same completion signal — the modal is the richer surface and the snackbar would duplicate it. A fully successful fetch remains silent on both surfaces.
+
+**MKT-174 — Modal list contents (frontend)**: The modal shows one row per unpriced asset. Each row displays the asset name, its most recently recorded price formatted in the asset's native currency (or a "no previous price" indicator when the asset has never had a price), the ticker (`reference`), the ISIN (when present), and an empty price input for the new value. The asset's currency code is shown next to the input, consistent with MKT-023.
+
+**MKT-175 — Manual entry per row (frontend + backend)**: Entering a value in a row and confirming it records a market price for that asset through the existing manual-recording path (MKT-020+, MKT-025): the price is written in the asset's native currency, dated to the fetch day (the user's current local date), with `source = Manual` (MKT-101). Each row is recorded independently as it is confirmed; there is no batch write. The same price and date validation applies (MKT-021, MKT-022): the date is valid by construction (today is never in the future), while a price that fails MKT-021 (≤ 0 or non-finite) is rejected and surfaced inline on that row per MKT-178.
+
+**MKT-176 — Skip a row (frontend)**: A row can be skipped without entering a value. Skipping records nothing; the asset's price is left unchanged (stale, or absent if it never had one). Skipping is always available and never produces an error.
+
+**MKT-177 — Row resolution and modal dismissal (frontend)**: A row that has been recorded (MKT-175) or skipped (MKT-176) leaves the list. When every row has been resolved, the modal closes automatically. The user may also dismiss the whole modal at any time; any rows still unresolved are treated as skipped (MKT-176).
+
+**MKT-178 — Per-row in-flight, success, and error feedback (frontend)**: While a row's record request is in flight, that row's confirm action is disabled to prevent double-submission (consistent with MKT-027). On success, a per-row confirmation is shown and the row leaves the list. On a validation failure or backend rejection, the row remains in the list with an inline error adjacent to its input so the user can correct and retry, consistent with MKT-029; other rows are unaffected.
+
+**MKT-179 — Reactivity after a manual fill (frontend + backend)**: Each successful per-row record (MKT-175) publishes `AssetPriceUpdated` (MKT-026), so the Account Details and dashboard views re-fetch and reflect the newly entered price and its derived values, consistent with MKT-036. No additional coordination is required from the modal.
 
 ---
 
@@ -461,6 +485,33 @@ Next refresh (global MKT-130 / account MKT-131)
 User unlocks (same toggle)
     → backend: set price_refresh_blocked = false                         (MKT-156)
     → asset re-enters fetch scope on the next refresh                    (MKT-151)
+```
+
+### Workflow — Manual fill of unupdated prices (MKT-170+)
+
+```
+Any fetch task finishes (launch MKT-122 / global MKT-130 / account MKT-132)
+    → backend publishes completion signal with counts + unpriced list    (MKT-119, MKT-170)
+        list = in-scope assets the fetch could not price                 (MKT-171, MKT-114)
+    → frontend receives the signal (handled globally)
+        if unpriced list is empty: nothing (silent success)              (MKT-172)
+        if unpriced list is non-empty:
+            → unupdated-prices modal auto-opens                          (MKT-172)
+            → MKT-145 partial/failure snackbar suppressed for this signal (MKT-173)
+
+Unupdated-prices modal (one row per unpriced asset)
+    each row: asset name | last-known value (or "no previous price") |
+              ticker | ISIN | empty price input + currency label         (MKT-174)
+    → user enters a value and confirms a row
+        frontend: record_asset_price(asset_id, today, price)             (MKT-175, MKT-020+)
+            source = Manual; upsert by (asset_id, today)                 (MKT-101, MKT-025)
+        on success: row leaves the list; AssetPriceUpdated published     (MKT-178, MKT-179)
+        on failure: row stays with an inline error for retry             (MKT-178)
+    → user skips a row
+        nothing recorded; row leaves the list                           (MKT-176)
+    → all rows resolved → modal closes                                  (MKT-177)
+    → user dismisses modal → remaining rows treated as skipped          (MKT-177)
+    → Account Details / dashboard re-fetch on AssetPriceUpdated          (MKT-179, MKT-036)
 ```
 
 ---
@@ -673,6 +724,43 @@ A lock / unlock icon button on each active, non-cash holding row in Account Deta
 4. On every subsequent refresh, the asset is skipped (MKT-151); the `5.993` value persists.
 5. When the user no longer needs the pin, they click the icon again to unlock; the asset re-enters fetch scope (MKT-151).
 
+### UX Draft — Manual fill of unupdated prices (MKT-170+)
+
+#### Entry Point
+
+No explicit entry point: the modal auto-opens (MKT-172) after any fetch task that left one or more assets unpriced. It is not reachable from a button — it is a reaction to the fetch outcome.
+
+#### Main Component
+
+A modal dialog listing the unpriced assets, one per row. Each row is a self-contained mini-form (value input + confirm + skip) so the user can fill the assets they know and skip the rest.
+
+| Column / control | Content                                                                 | Editable |
+| ---------------- | ----------------------------------------------------------------------- | -------- |
+| Asset name       | Asset display name                                                      | No       |
+| Last-known value | Most recent recorded price in asset currency, or "no previous price"    | No       |
+| Ticker           | `reference`                                                             | No       |
+| ISIN             | ISIN when present, otherwise blank                                      | No       |
+| Price input      | Empty; user types the new value (currency label alongside, per MKT-023) | Yes      |
+| Confirm / Skip   | Per-row confirm (records) and skip (dismisses) actions                  | —        |
+
+#### States
+
+- **Auto-open with unpriced assets** (MKT-172): modal appears listing every unpriced asset; the MKT-145 snackbar is suppressed (MKT-173).
+- **Row in-flight** (MKT-178): the row's confirm action is disabled while its record request is in progress.
+- **Row recorded** (MKT-175, MKT-178): the row shows brief confirmation and leaves the list.
+- **Row error** (MKT-178): inline error adjacent to the row's input; the row stays for retry; other rows unaffected.
+- **Row skipped** (MKT-176): the row leaves the list with nothing recorded.
+- **All rows resolved** (MKT-177): the modal closes automatically.
+- **Modal dismissed** (MKT-177): remaining rows are treated as skipped.
+
+#### User Flow — fill some, skip the rest
+
+1. A launch auto-fetch finishes; the provider could not price 3 of the user's holdings.
+2. The unupdated-prices modal auto-opens listing those 3 assets, each with its last-known value, ticker, and ISIN.
+3. The user knows today's price for two of them; they type each value and confirm the row. Each confirm records a `Manual` price dated today and the row disappears.
+4. The third is an illiquid asset with no figure to hand; the user skips it. The row disappears.
+5. With all rows resolved, the modal closes. Account Details and the dashboard already reflect the two new prices (reactive via `AssetPriceUpdated`).
+
 ---
 
 ## Open Questions / Deferred
@@ -682,5 +770,8 @@ A lock / unlock icon button on each active, non-cash holding row in Account Deta
 **MKT-153 — toggling the lock from the Asset management table.** This phase exposes the lock only from the Account Details holding row, where the price discrepancy is observed. Surfacing the same toggle in the Asset management table (assets view) — so an asset can be locked without holding it in an open account — is deferred until a need surfaces; the flag and commands (MKT-150, MKT-156) already support it.
 
 - [x] **Companion ADR for the price-refresh lock** — resolved: [ADR-014](../adr/014-price-refresh-lock-scope-exclusion.md) records the decision, fulfilling [ADR-012](../adr/012-latest-write-wins-source-as-metadata.md)'s decision-point-4 deferral. The pin is implemented as fetch-scope exclusion, leaving ADR-012's latest-write-wins write path intact.
+
+- [x] **MKT-171 — scope of the unpriced list.** Resolved: the list includes the full MKT-114 skip set (no-data, fetch error, and symbol-underivable). List length equals the `skipped` count.
+- [x] **MKT-175 — save model.** Resolved: per-row immediate record on confirm, reusing `record_asset_price`; no batch command.
 
 None — all questions have been resolved.

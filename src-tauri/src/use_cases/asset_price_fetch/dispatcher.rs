@@ -2,7 +2,7 @@ use crate::context::asset::{
     Asset, AssetPrice, AssetPriceRepository, AssetPriceSource, PriceProvider,
 };
 use crate::context::currency::{CurrencyPair, CurrencyService};
-use crate::core::event_bus::Event;
+use crate::core::event_bus::{Event, UnpricedAsset};
 use crate::core::logger::BACKEND;
 use crate::core::SideEffectEventBus;
 use chrono::NaiveDate;
@@ -63,6 +63,8 @@ impl Dispatcher {
             // MKT-119 — tally the task outcome so the frontend can summarize it.
             let mut ok: u32 = 0;
             let mut skipped: u32 = 0;
+            // MKT-170/171 — one entry per skipped asset, for the manual-fill modal.
+            let mut unpriced: Vec<UnpricedAsset> = Vec::with_capacity(scope.len());
             for (index, (asset, symbol)) in scope.into_iter().enumerate() {
                 // Space out requests after the first to avoid a burst (see
                 // INTER_FETCH_DELAY); the provider is hit at most once per asset.
@@ -79,6 +81,7 @@ impl Dispatcher {
                         );
                         if let Err(e) = self.price_repo.upsert(record).await {
                             skipped += 1;
+                            unpriced.push(self.unpriced_entry(&asset).await);
                             tracing::warn!(
                                 target: BACKEND,
                                 asset_id = %asset.id,
@@ -93,6 +96,7 @@ impl Dispatcher {
                     }
                     Ok(None) => {
                         skipped += 1;
+                        unpriced.push(self.unpriced_entry(&asset).await);
                         tracing::debug!(
                             target: BACKEND,
                             asset_id = %asset.id,
@@ -102,6 +106,7 @@ impl Dispatcher {
                     }
                     Err(e) => {
                         skipped += 1;
+                        unpriced.push(self.unpriced_entry(&asset).await);
                         tracing::warn!(
                             target: BACKEND,
                             asset_id = %asset.id,
@@ -113,10 +118,14 @@ impl Dispatcher {
                 }
             }
 
-            // MKT-119 — task-completion signal carrying the outcome counts. The
-            // frontend surfaces a snackbar when `skipped > 0` (MKT-145).
-            self.event_bus
-                .publish(Event::AssetPriceFetchCompleted { ok, skipped });
+            // MKT-119/170 — task-completion signal carrying the outcome counts and
+            // the per-asset unpriced list. The frontend surfaces a snackbar when
+            // `skipped > 0` (MKT-145) or auto-opens the manual-fill modal (MKT-172).
+            self.event_bus.publish(Event::AssetPriceFetchCompleted {
+                ok,
+                skipped,
+                unpriced,
+            });
 
             // FXR-075/076 — piggyback FX rate refresh on the same task and lease.
             // refresh_all_rates degrades internally (per-pair skips, provider
@@ -129,6 +138,22 @@ impl Dispatcher {
                 );
             }
         });
+    }
+
+    /// Builds the [`UnpricedAsset`] entry for a skipped asset (MKT-170), reading its
+    /// most recently recorded price via the repository. A lookup error degrades to no
+    /// prior price — the entry is for display only and is never authoritative.
+    async fn unpriced_entry(&self, asset: &Asset) -> UnpricedAsset {
+        let latest = self.price_repo.get_latest(&asset.id).await.ok().flatten();
+        UnpricedAsset {
+            asset_id: asset.id.clone(),
+            name: asset.name.clone(),
+            reference: asset.reference.clone(),
+            isin: asset.isin.clone(),
+            currency: asset.currency.clone(),
+            last_price: latest.as_ref().map(|price| price.price),
+            last_price_date: latest.map(|price| price.date),
+        }
     }
 }
 

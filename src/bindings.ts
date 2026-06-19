@@ -1802,9 +1802,10 @@ export type Event =
 /**
  * A price-fetch task finished: `ok` assets were updated, `skipped` were not
  * (no data or fetch failure). Carries counts so the frontend can summarize
- * the outcome (MKT-119). Distinct from the per-asset `AssetPriceUpdated`.
+ * the outcome (MKT-119), plus the per-asset unpriced list so it can offer
+ * manual entry (MKT-170). Distinct from the per-asset `AssetPriceUpdated`.
  */
-{ type: "AssetPriceFetchCompleted"; ok: number; skipped: number } | 
+{ type: "AssetPriceFetchCompleted"; ok: number; skipped: number; unpriced: UnpricedAsset[] } | 
 /**
  * A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
  */
@@ -2415,6 +2416,42 @@ export type TransactionType =
  * Shares of a held asset received at no cost; quantity rises, cost basis unchanged (FSD-022).
  */
 "FreeShares"
+/**
+ * One asset a price-fetch task could not price (MKT-170/171), carried in the
+ * `AssetPriceFetchCompleted` payload so the frontend can list it for manual entry.
+ * `last_price` / `last_price_date` describe the asset's most recently recorded
+ * price and are absent when the asset has never had a price recorded.
+ */
+export type UnpricedAsset = { 
+/**
+ * The asset whose price could not be updated.
+ */
+asset_id: string; 
+/**
+ * The asset's display name.
+ */
+name: string; 
+/**
+ * The asset's ticker / free-form reference.
+ */
+reference: string; 
+/**
+ * The asset's ISIN, when it has one.
+ */
+isin: string | null; 
+/**
+ * ISO 4217 currency code the asset's prices are denominated in.
+ */
+currency: string; 
+/**
+ * Most recently recorded price in the asset's native currency, i64 micros
+ * (ADR-001); absent when the asset has never had a price recorded.
+ */
+last_price: number | null; 
+/**
+ * ISO 8601 date of `last_price`; absent when there is no recorded price.
+ */
+last_price_date: string | null }
 /**
  * Parameters for updating an existing account.
  */

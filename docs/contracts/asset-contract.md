@@ -162,14 +162,31 @@ enum AssetPriceSource { Manual, YahooFinance }
 //               per MKT-102.
 ```
 
+```rust
+// MKT-170 — one entry per asset a fetch task could not price (the full MKT-114 skip
+// set: no-data, fetch error, symbol-underivable, upsert failure). Carried in the
+// AssetPriceFetchCompleted payload so the FE can present the manual-fill modal (MKT-172+).
+// last_price / last_price_date are absent when the asset has never had a price recorded.
+struct UnpricedAsset {
+    asset_id: String,                 // target of the per-row record_asset_price call (MKT-175)
+    name: String,                     // display name (MKT-174)
+    reference: String,                // ticker (MKT-174)
+    isin: Option<String>,             // ISIN when the asset has one (MKT-174)
+    currency: String,                 // asset native currency — formatting + the manual write (MKT-023)
+    last_price: Option<i64>,          // most recent recorded price, i64 micros (ADR-001); absent if never priced
+    last_price_date: Option<String>,  // ISO date of last_price; absent if never priced
+}
+```
+
 ---
 
 ## Events
 
-| Event               | Payload | Direction                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AssetUpdated`      | none    | published — fired after any successful asset CRUD write or archive/unarchive/delete (R18, R23), including the price-refresh lock toggle `block_asset_price_refresh` / `unblock_asset_price_refresh` (MKT-156)                                                                                                                                                                                                          |
-| `AssetPriceUpdated` | none    | published — fired after successful `record_asset_price` (MKT-026), `update_asset_price` (MKT-085), `delete_asset_price` (MKT-091), or per-asset write success during a fetch task — `fetch_all_asset_prices` / `fetch_account_asset_prices` (MKT-112). The transaction auto-record path (MKT-055/057) emits via the same `record_asset_price` call the FE issues after the transaction commits — no separate producer. |
+| Event                      | Payload                                                   | Direction                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetUpdated`             | none                                                      | published — fired after any successful asset CRUD write or archive/unarchive/delete (R18, R23), including the price-refresh lock toggle `block_asset_price_refresh` / `unblock_asset_price_refresh` (MKT-156)                                                                                                                                                                                                          |
+| `AssetPriceUpdated`        | none                                                      | published — fired after successful `record_asset_price` (MKT-026), `update_asset_price` (MKT-085), `delete_asset_price` (MKT-091), or per-asset write success during a fetch task — `fetch_all_asset_prices` / `fetch_account_asset_prices` (MKT-112). The transaction auto-record path (MKT-055/057) emits via the same `record_asset_price` call the FE issues after the transaction commits — no separate producer. |
+| `AssetPriceFetchCompleted` | `{ ok: u32, skipped: u32, unpriced: Vec<UnpricedAsset> }` | published — once per fetch task after the per-asset loop (MKT-119), for every fetch path (`fetch_all_asset_prices` / `fetch_account_asset_prices`). `ok` = assets repriced, `skipped` = assets the fetch could not price; `unpriced` carries one `UnpricedAsset` per skipped asset (MKT-170/171) so the FE can open the manual-fill modal (MKT-172). `unpriced.len() == skipped`.                                      |
 
 ---
 
@@ -178,3 +195,4 @@ enum AssetPriceSource { Manual, YahooFinance }
 - 2026-05-30 — Added by `market-price` spec (price-refresh-lock amendment, ADR-014): `block_asset_price_refresh`, `unblock_asset_price_refresh`; `Asset.price_refresh_blocked` field; `AssetUpdated` note extended.
 - 2026-06-12 — Amended by `api-key-management` spec (KEY-050–054, keyless fetch mode): `fetch_all_asset_prices` and `fetch_account_asset_prices` gain a `use_api_key: bool` arg carrying the device-local Stooq fetch-mode preference. No new types or errors.
 - 2026-06-12 — Amended by `market-price` spec under ADR-017 (Yahoo Finance keyless price source): `fetch_all_asset_prices` and `fetch_account_asset_prices` drop the `use_api_key: bool` arg (BYOK retired); `AssetPriceSource` variant `Stooq` renamed to `YahooFinance`.
+- 2026-06-16 — Amended by `market-price` spec (MKT-170+, unupdated-price manual fill): new `UnpricedAsset` shared type; `AssetPriceFetchCompleted` event registered with its `{ ok, skipped, unpriced }` payload (the `unpriced` list is the new part). No new command — per-row manual fill reuses `record_asset_price`.

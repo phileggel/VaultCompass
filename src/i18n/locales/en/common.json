@@ -364,6 +364,12 @@
       "success_unblocked": "Automatic price updates re-enabled for this asset."
     }
   },
+  "unpriced_prices": {
+    "title": "Prices that couldn't be updated",
+    "description": "These assets couldn't be priced automatically. Enter a price for the ones you know, or skip them.",
+    "no_previous_price": "No previous price",
+    "skip": "Skip"
+  },
   "cash": {
     "deposit_modal_title": "Record a deposit",
     "withdrawal_modal_title": "Record a withdrawal",
