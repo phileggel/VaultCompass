@@ -26,6 +26,8 @@ const makeSummary = (overrides: Partial<AccountSummary> = {}): AccountSummary =>
   currency: "EUR",
   update_frequency: "ManualMonth",
   total_global_value: 100_000_000,
+  total_unrealized_pnl: null,
+  ytd_performance_pct: null,
   ...overrides,
 });
 

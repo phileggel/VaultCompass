@@ -1,7 +1,11 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { configure, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountSummary } from "@/bindings";
 import { AccountTable } from "./AccountTable";
+
+// New metric cells use stable `id` attributes (F25, consistent with the existing
+// account-row ids); resolve getByTestId against `id`.
+configure({ testIdAttribute: "id" });
 
 // Strip i18n — keys come through unchanged for stable assertions.
 vi.mock("react-i18next", () => ({
@@ -57,6 +61,8 @@ const makeSummary = (overrides: Partial<AccountSummary> = {}): AccountSummary =>
   currency: "EUR",
   update_frequency: "ManualMonth",
   total_global_value: 100_000_000,
+  total_unrealized_pnl: null,
+  ytd_performance_pct: null,
   ...overrides,
 });
 
@@ -131,5 +137,98 @@ describe("AccountTable — Global Value column (ACC-021)", () => {
     const row = screen.getAllByRole("row")[1] as HTMLElement;
     expect(within(row).getByText("0.00")).toBeInTheDocument();
     expect(within(row).getByText("JPY")).toBeInTheDocument();
+  });
+});
+
+// ACC-023 — Unrealized P&L column (after Global Value)
+describe("AccountTable — Unrealized P&L column (ACC-023)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsLoading.mockReturnValue(false);
+    mockError.mockReturnValue(null);
+  });
+
+  it("renders the Unrealized P&L column header in the table", () => {
+    mockSummaries.mockReturnValue([makeSummary()]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.getByText("account.column_unrealized_pnl")).toBeInTheDocument();
+  });
+
+  it("renders formatted P&L value for an account with total_unrealized_pnl set", () => {
+    // 1_250_000 micros = 1.25 in account currency (via mocked microToFormatted → en-US)
+    mockSummaries.mockReturnValue([makeSummary({ id: "a", total_unrealized_pnl: 1_250_000 })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    // The presenter formats 1_250_000 micros to "1.25"; the mocked microToFormatted
+    // (en-US, 2 decimals) produces "1.25".
+    expect(screen.getByTestId("account-unrealized-pnl-a")).toHaveTextContent("1.25");
+  });
+
+  it("renders '—' (dash) when total_unrealized_pnl is null", () => {
+    mockSummaries.mockReturnValue([makeSummary({ id: "b", total_unrealized_pnl: null })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.getByTestId("account-unrealized-pnl-b")).toHaveTextContent("—");
+  });
+
+  it("P&L column header is sortable (aria-sort changes on click)", () => {
+    mockSummaries.mockReturnValue([makeSummary()]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    const header = screen.getByText("account.column_unrealized_pnl").closest("th") as HTMLElement;
+    expect(header.getAttribute("aria-sort")).toBe("none");
+
+    fireEvent.click(screen.getByText("account.column_unrealized_pnl"));
+    expect(header.getAttribute("aria-sort")).toBe("ascending");
+
+    fireEvent.click(screen.getByText("account.column_unrealized_pnl"));
+    expect(header.getAttribute("aria-sort")).toBe("descending");
+  });
+});
+
+// ACC-024 — YTD Performance column (after Unrealized P&L)
+describe("AccountTable — YTD Performance column (ACC-024)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsLoading.mockReturnValue(false);
+    mockError.mockReturnValue(null);
+  });
+
+  it("renders the YTD Performance column header in the table", () => {
+    mockSummaries.mockReturnValue([makeSummary()]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.getByText("account.column_ytd_performance")).toBeInTheDocument();
+  });
+
+  it("renders a positive YTD percent with leading '+' sign", () => {
+    // 8_000_000 micro-percent = +8.00%
+    mockSummaries.mockReturnValue([makeSummary({ id: "a", ytd_performance_pct: 8_000_000 })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.getByTestId("account-ytd-pct-a")).toHaveTextContent("+8.00%");
+  });
+
+  it("renders a negative YTD percent with '-' sign", () => {
+    // -3_700_000 micro-percent = -3.70%
+    mockSummaries.mockReturnValue([makeSummary({ id: "b", ytd_performance_pct: -3_700_000 })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.getByTestId("account-ytd-pct-b")).toHaveTextContent("-3.70%");
+  });
+
+  it("renders '—' (dash) when ytd_performance_pct is null", () => {
+    mockSummaries.mockReturnValue([makeSummary({ id: "c", ytd_performance_pct: null })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.getByTestId("account-ytd-pct-c")).toHaveTextContent("—");
+  });
+
+  it("YTD column header is sortable (aria-sort changes on click)", () => {
+    mockSummaries.mockReturnValue([makeSummary()]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    const header = screen.getByText("account.column_ytd_performance").closest("th") as HTMLElement;
+    expect(header.getAttribute("aria-sort")).toBe("none");
+
+    fireEvent.click(screen.getByText("account.column_ytd_performance"));
+    expect(header.getAttribute("aria-sort")).toBe("ascending");
+
+    fireEvent.click(screen.getByText("account.column_ytd_performance"));
+    expect(header.getAttribute("aria-sort")).toBe("descending");
   });
 });

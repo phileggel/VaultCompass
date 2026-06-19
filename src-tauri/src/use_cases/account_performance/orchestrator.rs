@@ -19,14 +19,14 @@ const MICRO: i128 = 1_000_000;
 /// on or before the date appear; a missing entry means "no usable rate" → the
 /// holding contributes 0 (FXR-034). Pre-resolved up front because the per-period
 /// valuation runs in a synchronous loop.
-type RateMap = HashMap<(String, NaiveDate), i64>;
+pub(crate) type RateMap = HashMap<(String, NaiveDate), i64>;
 /// Percentage scale applied to the Simple Dietz numerator (PRF-032): `× 100`
 /// turns a ratio into percent, `× 1_000_000` into micro-percent.
 const PERCENT_SCALE: i128 = 100_000_000;
 
 /// Non-cash asset metadata plus its full recorded price history, preloaded once
 /// per asset so the per-period valuation loop never re-queries the asset context.
-struct PricedAsset {
+pub(crate) struct PricedAsset {
     currency: String,
     class: AssetClass,
     /// Recorded prices sorted ascending by date (PRF-022 carry-forward lookup).
@@ -142,20 +142,20 @@ impl AccountPerformanceUseCase {
             }
         };
 
-        let priced_assets = self.load_priced_assets(&transactions).await?;
+        let priced_assets = load_priced_assets(&self.asset_service, &transactions).await?;
 
         let today = Local::now().date_naive();
         // FXR-042/035 — pre-resolve FX rates for every foreign holding currency at
         // each period-end the synchronous valuation loop will visit.
-        let rate_map = self
-            .load_rate_map(
-                &priced_assets,
-                &account.currency,
-                month_view_available,
-                earliest_date,
-                today,
-            )
-            .await?;
+        let rate_map = load_rate_map(
+            &self.currency_service,
+            &priced_assets,
+            &account.currency,
+            month_view_available,
+            earliest_date,
+            today,
+        )
+        .await?;
         let yearly = self.build_yearly(
             &transactions,
             &priced_assets,
@@ -184,107 +184,6 @@ impl AccountPerformanceUseCase {
             yearly,
             monthly,
         })
-    }
-
-    /// Preloads metadata + price history for every distinct non-cash asset in the
-    /// transaction set, so the per-period valuation never re-queries the asset BC.
-    async fn load_priced_assets(
-        &self,
-        transactions: &[Transaction],
-    ) -> StdResult<HashMap<String, PricedAsset>, AccountApplicationError> {
-        let mut priced_assets: HashMap<String, PricedAsset> = HashMap::new();
-        for transaction in transactions {
-            if priced_assets.contains_key(&transaction.asset_id) {
-                continue;
-            }
-            let asset = self
-                .asset_service
-                .get_asset_by_id(&transaction.asset_id)
-                .await
-                .map_err(|e| {
-                    tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, err = ?e, "get_account_performance: get_asset_by_id failed");
-                    AccountApplicationError::DatabaseError
-                })?
-                .ok_or_else(|| {
-                    tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, "get_account_performance: transaction references missing asset");
-                    AccountApplicationError::DatabaseError
-                })?;
-
-            if asset.class == AssetClass::Cash {
-                priced_assets.insert(
-                    transaction.asset_id.clone(),
-                    PricedAsset {
-                        currency: asset.currency,
-                        class: asset.class,
-                        prices: Vec::new(),
-                    },
-                );
-                continue;
-            }
-
-            // get_asset_by_id above already confirmed the asset exists, so AssetPriceError's NotFound arm is unreachable here.
-            let mut prices = self
-                .asset_service
-                .get_asset_prices(&transaction.asset_id)
-                .await
-                .map_err(|e| {
-                    tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, err = ?e, "get_account_performance: get_asset_prices failed");
-                    AccountApplicationError::DatabaseError
-                })?;
-            prices.sort_by(|a, b| a.date.cmp(&b.date));
-            priced_assets.insert(
-                transaction.asset_id.clone(),
-                PricedAsset {
-                    currency: asset.currency,
-                    class: asset.class,
-                    prices,
-                },
-            );
-        }
-        Ok(priced_assets)
-    }
-
-    /// Pre-resolves FX rates for each foreign holding currency at every period-end
-    /// the synchronous valuation loop will visit (FXR-035/042). Identity pairs are
-    /// excluded — same-currency holdings need no conversion.
-    async fn load_rate_map(
-        &self,
-        priced_assets: &HashMap<String, PricedAsset>,
-        account_currency: &str,
-        month_view_available: bool,
-        earliest_date: NaiveDate,
-        today: NaiveDate,
-    ) -> StdResult<RateMap, AccountApplicationError> {
-        let mut foreign_currencies: Vec<String> = priced_assets
-            .values()
-            .filter(|p| p.class != AssetClass::Cash && p.currency != account_currency)
-            .map(|p| p.currency.clone())
-            .collect();
-        foreign_currencies.sort();
-        foreign_currencies.dedup();
-
-        let mut rate_map: RateMap = HashMap::new();
-        if foreign_currencies.is_empty() {
-            return Ok(rate_map);
-        }
-
-        for period_end in period_end_dates(month_view_available, earliest_date, today) {
-            let as_of = period_end.format("%Y-%m-%d").to_string();
-            for currency in &foreign_currencies {
-                if let Some(rate) = self
-                    .currency_service
-                    .resolve_rate_micros(currency, account_currency, &as_of)
-                    .await
-                    .map_err(|e| {
-                        tracing::error!(target: BACKEND, currency = %currency, err = ?e, "get_account_performance: resolve_rate_micros failed");
-                        AccountApplicationError::DatabaseError
-                    })?
-                {
-                    rate_map.insert((currency.clone(), period_end), rate);
-                }
-            }
-        }
-        Ok(rate_map)
     }
 
     /// Builds the yearly series, most-recent first (PRF-012, PRF-040, PRF-041).
@@ -444,6 +343,171 @@ impl AccountPerformanceUseCase {
         rows.reverse();
         rows
     }
+}
+
+/// Preloads metadata + price history for every distinct non-cash asset in the
+/// transaction set, so the per-period valuation never re-queries the asset BC.
+/// Shared with `account_summary` so the YTD computation reuses one loading pass
+/// (ADR-004 service-level reuse).
+pub(crate) async fn load_priced_assets(
+    asset_service: &AssetService,
+    transactions: &[Transaction],
+) -> StdResult<HashMap<String, PricedAsset>, AccountApplicationError> {
+    let mut priced_assets: HashMap<String, PricedAsset> = HashMap::new();
+    for transaction in transactions {
+        if priced_assets.contains_key(&transaction.asset_id) {
+            continue;
+        }
+        let asset = asset_service
+            .get_asset_by_id(&transaction.asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, err = ?e, "load_priced_assets: get_asset_by_id failed");
+                AccountApplicationError::DatabaseError
+            })?
+            .ok_or_else(|| {
+                tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, "load_priced_assets: transaction references missing asset");
+                AccountApplicationError::DatabaseError
+            })?;
+
+        if asset.class == AssetClass::Cash {
+            priced_assets.insert(
+                transaction.asset_id.clone(),
+                PricedAsset {
+                    currency: asset.currency,
+                    class: asset.class,
+                    prices: Vec::new(),
+                },
+            );
+            continue;
+        }
+
+        // get_asset_by_id above already confirmed the asset exists, so AssetPriceError's NotFound arm is unreachable here.
+        let mut prices = asset_service
+            .get_asset_prices(&transaction.asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, err = ?e, "load_priced_assets: get_asset_prices failed");
+                AccountApplicationError::DatabaseError
+            })?;
+        prices.sort_by(|a, b| a.date.cmp(&b.date));
+        priced_assets.insert(
+            transaction.asset_id.clone(),
+            PricedAsset {
+                currency: asset.currency,
+                class: asset.class,
+                prices,
+            },
+        );
+    }
+    Ok(priced_assets)
+}
+
+/// Pre-resolves FX rates for each foreign holding currency at every period-end
+/// the synchronous valuation loop will visit (FXR-035/042). Identity pairs are
+/// excluded — same-currency holdings need no conversion. Shared with
+/// `account_summary` (ADR-004 service-level reuse).
+pub(crate) async fn load_rate_map(
+    currency_service: &CurrencyService,
+    priced_assets: &HashMap<String, PricedAsset>,
+    account_currency: &str,
+    month_view_available: bool,
+    earliest_date: NaiveDate,
+    today: NaiveDate,
+) -> StdResult<RateMap, AccountApplicationError> {
+    let mut foreign_currencies: Vec<String> = priced_assets
+        .values()
+        .filter(|p| p.class != AssetClass::Cash && p.currency != account_currency)
+        .map(|p| p.currency.clone())
+        .collect();
+    foreign_currencies.sort();
+    foreign_currencies.dedup();
+
+    let mut rate_map: RateMap = HashMap::new();
+    if foreign_currencies.is_empty() {
+        return Ok(rate_map);
+    }
+
+    for period_end in period_end_dates(month_view_available, earliest_date, today) {
+        let as_of = period_end.format("%Y-%m-%d").to_string();
+        for currency in &foreign_currencies {
+            if let Some(rate) = currency_service
+                .resolve_rate_micros(currency, account_currency, &as_of)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, currency = %currency, err = ?e, "load_rate_map: resolve_rate_micros failed");
+                    AccountApplicationError::DatabaseError
+                })?
+            {
+                rate_map.insert((currency.clone(), period_end), rate);
+            }
+        }
+    }
+    Ok(rate_map)
+}
+
+/// ACC-024 — current calendar-year YTD performance percentage (PRF-034) for the
+/// span `[Jan 1 of the current year, today]`, in micro-percent. Composes the same
+/// Simple-Dietz machinery that `build_monthly` uses for the current-month row, so
+/// `AccountSummary.ytd_performance_pct` agrees with the `AccountPerformance`
+/// latest-month `year_to_date.pct`.
+///
+/// Returns `None` when there is no data span (no transactions) or when the Dietz
+/// denominator is 0 (PRF-032). A first-calendar-year account uses a year-start
+/// baseline of 0 and is present (denominator is the weighted current-year flow).
+pub(crate) async fn compute_current_ytd_pct(
+    account_currency: &str,
+    asset_service: &AssetService,
+    currency_service: &CurrencyService,
+    transactions: &[Transaction],
+    today: NaiveDate,
+) -> StdResult<Option<i64>, AccountApplicationError> {
+    // PRF-043 — no transactions means no data span and no YTD period.
+    let Some(earliest_date) = transactions
+        .iter()
+        .filter_map(|t| parse_date(&t.date))
+        .min()
+    else {
+        return Ok(None);
+    };
+
+    let priced_assets = load_priced_assets(asset_service, transactions).await?;
+    // The current-year YTD valuation visits today (period end) and the prior
+    // 31 December (year-start baseline); both fall in the monthly period set.
+    let rate_map = load_rate_map(
+        currency_service,
+        &priced_assets,
+        account_currency,
+        true,
+        earliest_date,
+        today,
+    )
+    .await?;
+
+    let end_value = end_value_as_of(
+        transactions,
+        &priced_assets,
+        &rate_map,
+        account_currency,
+        today,
+    );
+    // PRF-034 — year-start baseline is the prior 31 December end value (0 for a
+    // first-calendar-year account, whose data starts in the current year).
+    let year_start_baseline = end_value_as_of(
+        transactions,
+        &priced_assets,
+        &rate_map,
+        account_currency,
+        last_day_of_year(today.year() - 1),
+    );
+    let metric = metric_for_span(
+        transactions,
+        year_start_baseline,
+        end_value,
+        first_day_of_year(today.year()),
+        today,
+    );
+    Ok(metric.pct)
 }
 
 /// Parses an ISO `YYYY-MM-DD` date, returning None on malformed input.

@@ -5,7 +5,27 @@ import type {
   FetchAllAssetPricesError,
   UpdateFrequency,
 } from "@/bindings";
+import { microToFormatted } from "@/lib/microUnits";
 import type { I18nMessage, SnackbarMessage } from "@/ui/format/i18n";
+
+/**
+ * ACC-023 — formats an account's account-wide unrealized P&L (account-currency
+ * micros) to 2 decimals; "—" when the account has no computable holding (`null`).
+ */
+export function formatAccountRowTotalUnrealizedPnl(pnl: number | null): string {
+  return pnl === null ? "—" : microToFormatted(pnl, 2);
+}
+
+/**
+ * ACC-024 — formats an account's year-to-date performance (micro-percent) to a
+ * signed percentage (e.g. "+8,00%" / "-3,70%"); "—" when `null` (no baseline /
+ * zero Dietz denominator).
+ */
+export function formatAccountRowYtdPerformancePct(pct: number | null): string {
+  if (pct === null) return "—";
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${microToFormatted(pct, 2)}%`;
+}
 
 /**
  * F27 — Maps any asset-price fetch error (per-account or all-accounts) to a
