@@ -62,7 +62,10 @@ export function useAssetTable(assets: Asset[], searchTerm: string, showArchived:
 
       if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
       if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
+      // AST-017 — every primary sort breaks ties by name ascending (the default
+      // order), independent of the primary direction, so equal-key rows stay
+      // alphabetical. A no-op when the primary key is already name.
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
   }, [assets, searchTerm, showArchived, sortConfig]);
 

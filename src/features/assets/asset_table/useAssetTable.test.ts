@@ -119,4 +119,33 @@ describe("useAssetTable", () => {
     expect(result.current.sortConfig.direction).toBe("desc");
     expect(result.current.sortedAndFilteredAssets[0]?.name).toBe("Zoom");
   });
+
+  // AST-017 — every primary sort breaks ties by name ascending, independent of
+  // the primary direction.
+  it("breaks ties by name ascending on a primary sort, independent of direction", () => {
+    const assets = [
+      makeAsset({ id: "z", name: "Zoom", reference: "ZM", currency: "USD" }),
+      makeAsset({ id: "a", name: "Apple", reference: "AAPL", currency: "USD" }),
+      makeAsset({ id: "m", name: "Mango", reference: "MNG", currency: "EUR" }),
+    ];
+    const { result } = renderHook(() => useAssetTable(assets, "", false));
+
+    // Primary sort by currency ascending → EUR group, then USD group with names A→Z.
+    act(() => result.current.handleSort("currency"));
+    expect(result.current.sortConfig).toMatchObject({ key: "currency", direction: "asc" });
+    expect(result.current.sortedAndFilteredAssets.map((a) => a.name)).toEqual([
+      "Mango",
+      "Apple",
+      "Zoom",
+    ]);
+
+    // Toggle to descending → USD group first, but names still A→Z within the tie.
+    act(() => result.current.handleSort("currency"));
+    expect(result.current.sortConfig).toMatchObject({ key: "currency", direction: "desc" });
+    expect(result.current.sortedAndFilteredAssets.map((a) => a.name)).toEqual([
+      "Apple",
+      "Zoom",
+      "Mango",
+    ]);
+  });
 });
