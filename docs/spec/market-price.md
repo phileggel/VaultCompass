@@ -293,6 +293,8 @@ The launch auto-fetch (MKT-121) shows no dispatch snackbar; its outcome is silen
 
 **MKT-142 — Source badge in Current Price column (frontend)**: The Account Details "Current Price" column displays a badge alongside the price (or near the staleness label MKT-140) showing the source of the most recent `AssetPrice` record. Same styling as MKT-141.
 
+**MKT-143 — Current Value column (frontend)**: The Account Details active-holdings table includes a "Current Value" column, placed immediately after "Current Price", showing the holding's market value as `current_price × quantity` in the asset's native currency. When `current_price` is `None`, the column shows the same neutral placeholder as the other market columns ("—"). The system cash row leaves the cell blank, consistent with its other market columns. This is a presentation-only derivation — no new `HoldingDetail` field is introduced.
+
 **MKT-145 — Fetch-outcome snackbar (frontend)**: On `AssetPriceFetchCompleted` (MKT-119), the frontend shows a snackbar only when `skipped > 0`: an error snackbar ("Couldn't update prices (N)") when `ok == 0`, otherwise an info snackbar summarizing the partial result ("Updated N · M couldn't be updated"). A fully successful fetch (`skipped == 0`) shows nothing, so the launch auto-fetch (MKT-121) stays silent on the happy path while failures surface from any entry point. Handled globally (the event is not correlated to a specific trigger). This snackbar is superseded by the unupdated-prices modal whenever that modal auto-opens for the same signal (MKT-173) — the two never appear together for one completion event.
 
 ### Price Refresh Lock (150–169)
