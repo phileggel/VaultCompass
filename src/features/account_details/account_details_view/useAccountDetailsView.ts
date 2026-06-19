@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { patchModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
@@ -44,11 +45,11 @@ export function useAccountDetailsView(accountId: string) {
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
+  // ACD-035/036 — open the Add Transaction modal in place via the shell-mounted
+  // AddTransactionModalMount (URL-driven), rather than navigating to a page. No
+  // cross-feature import: the FAB only mutates URL params.
   const handleAddTransaction = useCallback(() => {
-    navigate({
-      to: "/transactions/new",
-      search: { prefillAccountId: accountId, prefillAssetId: undefined },
-    });
+    patchModalSearch(navigate, { modal: "add-transaction", prefillAccountId: accountId });
   }, [navigate, accountId]);
 
   const handleBuyOpen = useCallback((target: ModalTarget) => setBuyTarget(target), []);

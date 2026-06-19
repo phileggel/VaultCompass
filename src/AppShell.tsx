@@ -1,5 +1,6 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { AddTransactionModalMount } from "@/features/shell/AddTransactionModalMount";
 import { AssetEditModalMount } from "@/features/shell/AssetEditModalMount";
 import { CashTransactionEditMount } from "@/features/shell/CashTransactionEditMount";
 import { CurrencyRateEditMount } from "@/features/shell/CurrencyRateEditMount";
@@ -23,6 +24,7 @@ export function AppShell() {
       <CurrencyRateEditMount />
       <FreeSharesEditModalMount />
       <UnpricedPricesModalMount />
+      <AddTransactionModalMount />
     </MainLayout>
   );
 }
