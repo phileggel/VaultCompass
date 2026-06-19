@@ -115,7 +115,7 @@ The table displays only active assets (`is_archived = false`) by default. A page
 
 **AST-016 (was R16) — Fuzzy search (frontend)**: A search field in the header filters the list in real time on name, reference, class, and category. The search applies only to assets currently displayed: active assets only if the AST-019 toggle is off, both active and archived if the toggle is on. If no result matches, the table displays "No results for this search."
 
-**AST-017 (was R17) — Column sorting (frontend)**: Clicking a sortable column header sorts the list by that column ascending. A second click toggles to descending.
+**AST-017 (was R17) — Column sorting (frontend)**: Clicking a sortable column header sorts the list by that column ascending. A second click toggles to descending. Every primary sort breaks ties by name ascending as the secondary key — independent of the primary direction — so rows sharing a primary value stay in alphabetical (default) order.
 
 **AST-008 (was R8) — Creation via FAB (frontend)**: A floating FAB at the bottom right opens a creation modal. The form contains: Name (required), Reference (required — ticker / free-form identifier), ISIN (optional, see AST-023), ISO Currency (required), Category (select, pre-selected to `default-uncategorized`, see AST-002), Class (select, pre-selected to `Cash`), Risk level (1–5 selector, pre-filled per class, see AST-010). Submission is blocked if name, reference, or currency is missing, or if the ISIN field is filled with a value that fails the format validation (AST-023 / WEB-016). The `Exchange` picker is optional and defaults to (none) — see AST-021.
 
