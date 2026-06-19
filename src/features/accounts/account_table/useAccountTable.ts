@@ -7,7 +7,12 @@ import { FREQUENCY_ORDER } from "../shared/presenter";
 const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 export type SortConfig = {
-  key: "name" | "update_frequency" | "total_global_value";
+  key:
+    | "name"
+    | "update_frequency"
+    | "total_global_value"
+    | "total_unrealized_pnl"
+    | "ytd_performance_pct";
   direction: "asc" | "desc";
 };
 
@@ -65,6 +70,26 @@ export function useAccountTable(
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         handleSort("total_global_value");
+      }
+    },
+    [handleSort],
+  );
+
+  const handleUnrealizedPnlKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSort("total_unrealized_pnl");
+      }
+    },
+    [handleSort],
+  );
+
+  const handleYtdPctKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSort("ytd_performance_pct");
       }
     },
     [handleSort],
@@ -133,7 +158,23 @@ export function useAccountTable(
       a.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
 
+    const byName = (a: AccountSummary, b: AccountSummary) =>
+      a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+
     return [...filtered].sort((a, b) => {
+      // ACC-008 — nullable metric columns: null values always sort last,
+      // independent of direction (so they stay at the bottom in both asc & desc).
+      if (sortConfig.key === "total_unrealized_pnl" || sortConfig.key === "ytd_performance_pct") {
+        const av = a[sortConfig.key];
+        const bv = b[sortConfig.key];
+        if (av === null && bv === null) return byName(a, b);
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        const cmp = av - bv;
+        if (cmp === 0) return byName(a, b);
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      }
+
       let cmp: number;
       if (sortConfig.key === "update_frequency") {
         // R9 — sort by logical enum order, not alphabetical label
@@ -141,9 +182,9 @@ export function useAccountTable(
       } else if (sortConfig.key === "total_global_value") {
         // ACC-008 — numeric compare on micros; ties broken by name asc for stability
         cmp = a.total_global_value - b.total_global_value;
-        if (cmp === 0) cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        if (cmp === 0) cmp = byName(a, b);
       } else {
-        cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        cmp = byName(a, b);
       }
       return sortConfig.direction === "asc" ? cmp : -cmp;
     });
@@ -162,6 +203,8 @@ export function useAccountTable(
     handleNameKeyDown,
     handleFrequencyKeyDown,
     handleGlobalValueKeyDown,
+    handleUnrealizedPnlKeyDown,
+    handleYtdPctKeyDown,
     handleRowKeyDown,
     handleEditClick,
     handleEditClose,

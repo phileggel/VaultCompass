@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { accountMutationErrorToI18n, fetchPriceErrorToI18n } from "./presenter";
+import {
+  accountMutationErrorToI18n,
+  fetchPriceErrorToI18n,
+  formatAccountRowTotalUnrealizedPnl,
+  formatAccountRowYtdPerformancePct,
+} from "./presenter";
 
 // F27 layer-3 presenter — exhaustive variant coverage across AccountCrudError
 // and AccountApplicationError (the two account-BC error surfaces consumed by
@@ -61,5 +66,50 @@ describe("fetchPriceErrorToI18n", () => {
       key: "error.DatabaseError",
       severity: "error",
     });
+  });
+});
+
+// ACC-023 — formatAccountRowTotalUnrealizedPnl: account-currency micros → formatted string
+// or "—" when null. Mirrors the HoldingRowViewModel.unrealizedPnl pattern from
+// account_details/shared/presenter.ts (microToFormatted with 2 decimals).
+describe("formatAccountRowTotalUnrealizedPnl", () => {
+  it("returns '—' when total_unrealized_pnl is null", () => {
+    expect(formatAccountRowTotalUnrealizedPnl(null)).toBe("—");
+  });
+
+  it("formats a positive value (micros) to 2 decimal places", () => {
+    // 1_250_000 micros = 1.25 in account currency
+    expect(formatAccountRowTotalUnrealizedPnl(1_250_000)).toBe("1,25");
+  });
+
+  it("formats a negative value (micros) to 2 decimal places with leading minus", () => {
+    // -3_700_000 micros = -3.70 in account currency
+    expect(formatAccountRowTotalUnrealizedPnl(-3_700_000)).toBe("-3,70");
+  });
+
+  it("formats zero as '0.00'", () => {
+    expect(formatAccountRowTotalUnrealizedPnl(0)).toBe("0,00");
+  });
+});
+
+// ACC-024 — formatAccountRowYtdPerformancePct: micro-percent → signed formatted string
+// or "—" when null. 8_000_000 micro-percent = 8.00%, with explicit '+' for positives.
+describe("formatAccountRowYtdPerformancePct", () => {
+  it("returns '—' when ytd_performance_pct is null", () => {
+    expect(formatAccountRowYtdPerformancePct(null)).toBe("—");
+  });
+
+  it("formats a positive micro-percent with a leading '+' sign", () => {
+    // 8_000_000 micro-percent = 8.00%
+    expect(formatAccountRowYtdPerformancePct(8_000_000)).toBe("+8,00%");
+  });
+
+  it("formats a negative micro-percent with a leading '-' sign (no explicit '+')", () => {
+    // -3_700_000 micro-percent = -3.70%
+    expect(formatAccountRowYtdPerformancePct(-3_700_000)).toBe("-3,70%");
+  });
+
+  it("formats zero as '+0.00%' (non-negative, treated as positive sign)", () => {
+    expect(formatAccountRowYtdPerformancePct(0)).toBe("+0,00%");
   });
 });

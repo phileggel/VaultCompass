@@ -246,6 +246,8 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
         currency: "EUR",
         update_frequency: "ManualMonth",
         total_global_value: 470_000_000,
+        total_unrealized_pnl: null,
+        ytd_performance_pct: null,
       },
     ];
     mockInvoke.mockResolvedValue(summaries);

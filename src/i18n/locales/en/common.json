@@ -107,6 +107,8 @@
     "column_name": "Name",
     "column_frequency": "Frequency",
     "column_global_value": "Global Value",
+    "column_unrealized_pnl": "Unrealized P&L",
+    "column_ytd_performance": "YTD Performance",
     "column_actions": "Actions",
     "loading": "Loading accounts...",
     "empty": "No accounts. Create your first account with the + button.",

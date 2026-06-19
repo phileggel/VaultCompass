@@ -314,6 +314,8 @@ struct AccountSummary {
     currency: String,                          // ISO 4217 currency code; same as Account.currency
     update_frequency: UpdateFrequency,
     total_global_value: i64,                   // micros, account currency: same algorithm as AccountDetailsResponse.total_global_value (CSH-094)
+    total_unrealized_pnl: Option<i64>,         // micros, account currency: account-wide unrealized P&L, same algorithm as AccountDetailsResponse.total_unrealized_pnl (MKT-040 / ACC-023); None when no holding qualifies
+    ytd_performance_pct: Option<i64>,          // micro-percent: year-to-date net-of-flows performance since Jan 1, reusing PRF-034 (ACC-024); first-year accounts use an inception baseline (present, not None); None only when the Simple-Dietz denominator is 0 (PRF-032)
 }
 ```
 
@@ -373,4 +375,5 @@ struct AccountPerformanceResponse {
 - 2026-05-31 — Added by `cash-dividend` spec: `record_dividend` (+ `DividendDTO`); `TransactionType::Dividend` variant; `HoldingDetail.dividends_received` + `.total_return_pct`; `AccountDetailsResponse.total_dividends_received`; edit/delete reuse `correct_transaction`/`cancel_transaction` (DIV-040/041)
 - 2026-05-31 — `cash-transaction-history` (CSH-110/111): no command change — cash Deposit/Withdrawal edit reuses `correct_transaction` and delete reuses `cancel_transaction` (both already accept the cash `TransactionType`s); the feature is a frontend entry point (cash-row inspect action + dedicated cash modals in edit mode). Contract surface unchanged.
 - 2026-06-02 — Added by `fx-rate` spec: `CurrencyRateUpdated` subscribed event (FXR-037) — the `account_details` and `account_performance` views re-fetch when an FX rate changes so foreign-currency holdings revalue. No command change.
+- 2026-06-16 — Amended by `account` spec (ACC-023/024, accounts-overview metrics): `AccountSummary` gains `total_unrealized_pnl: Option<i64>` (account-wide unrealized P&L, MKT-040 algorithm) and `ytd_performance_pct: Option<i64>` (year-to-date performance reusing PRF-034). No new command — `get_account_summaries` returns the enriched rows.
 - 2026-06-11 — Added by `free-share-distribution` spec: `record_free_shares` (+ `FreeSharesDTO`); `TransactionType::FreeShares` variant + its `Transaction` packing convention; FSD-040/041 cross-refs on `correct_transaction`/`cancel_transaction`'s `CascadingOversell`; edit/delete reuse those commands.

@@ -170,3 +170,19 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `docs/techdebt-reqwest-expect` @ `51a27df`
 - Severity: 🔵
 - Observation: All three reqwest client constructors (`ReqwestYahooClient` / `ReqwestFrankfurterClient` / `ReqwestEcbClient`) call `.expect("reqwest client build")`, an `expect()` on a production path. The `lib.rs` lint set denies `clippy::unwrap_used` but not `clippy::expect_used`, so it passes CI. Practically unreachable — the builder fails only on invalid TLS config from a compile-time-constant setup, which surfaces in dev — but it is the lone `expect()`-family call in those constructors.
+
+## 2026-06-16 — YTD summary helper over-fetches the FX rate map
+
+- Found by: reviewer-backend (accounts-overview-metrics review)
+- Where: `src-tauri/src/use_cases/account_performance/orchestrator.rs` (`compute_current_ytd_pct` → `load_rate_map(month_view_available=true)`)
+- Context: branch `refactor/ux-improvements` @ HEAD
+- Severity: 🟡
+- Observation: `compute_current_ytd_pct` (called once per account by `get_account_summaries`) pre-resolves FX rates for every monthly/yearly period-end from the account's earliest date to today, but the YTD computation only consumes two dates (today + prior 31 Dec). For a long-lived account with foreign holdings this is O(months × foreign currencies) unnecessary rate lookups per summary row, multiplied across all accounts on the list. Correctness is unaffected (the two needed dates are always in the set). A targeted `load_rate_map_for_dates(&[today, prior_dec_31])` would bound it. Accepted at current scale per the ACC-024 dependency note; revisit if account/transaction volume grows.
+
+## 2026-06-16 — Shared performance/valuation helpers live inside account_performance, imported by account_summary
+
+- Found by: reviewer-arch (accounts-overview-metrics review)
+- Where: `src-tauri/src/use_cases/account_performance/orchestrator.rs` (`pub(crate)` `load_priced_assets` / `load_rate_map` / `compute_current_ytd_pct` / `PricedAsset` / `RateMap`) imported by `src-tauri/src/use_cases/account_summary/orchestrator.rs`
+- Context: branch `refactor/ux-improvements` @ HEAD
+- Severity: 🔵
+- Observation: ACC-024's YTD reuse is implemented by promoting performance-engine helpers to `pub(crate)` and importing them into the sibling `account_summary` use case — an asymmetric inter-module dependency within `use_cases/` (not a hard layering violation: no use-case struct injection, no service duplication, all within the layer). Before a third use case needs these, extract the stateless valuation/Dietz helpers (`load_priced_assets`, `load_rate_map`, `compute_current_ytd_pct`, `PricedAsset`, `RateMap`) into a neutral `use_cases/shared/` module owned by neither use case, and replace `account_performance/mod.rs`'s wildcard `pub use orchestrator::*` with an explicit re-export so internal helpers don't leak.

@@ -835,7 +835,23 @@ update_frequency: UpdateFrequency;
  * holdings, with foreign holdings converted to account currency. Unpriced holdings,
  * or foreign holdings with no usable rate (FXR-034), contribute 0.
  */
-total_global_value: number }
+total_global_value: number; 
+/**
+ * Account-wide unrealized P&L in account-currency micros (ACC-023, ADR-001):
+ * the sum of per-holding unrealized P&L (current value − cost basis) over
+ * priced, computable, active non-cash holdings, with foreign holdings
+ * converted to account currency (MKT-040, FXR-040). `None` when no holding
+ * qualifies (no price, or a foreign holding with no usable rate).
+ */
+total_unrealized_pnl: number | null; 
+/**
+ * Year-to-date performance for the current calendar year as micro-percent
+ * (ACC-024, ADR-001): the Simple-Dietz return over `[Jan 1, today]` (PRF-034).
+ * `None` when the account has no transactions or the Dietz denominator is 0
+ * (PRF-032). A first-calendar-year account uses a year-start baseline of 0
+ * and is present.
+ */
+ytd_performance_pct: number | null }
 /**
  * Application-layer rejection specific to the `archive_asset` use case —
  * the cross-BC active-holdings check performed by the orchestrator before

@@ -8,7 +8,11 @@ import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { SortIcon } from "@/ui/components/SortIcon";
 import { EditAccountModal } from "../edit_account_modal/EditAccountModal";
-import { FREQUENCY_I18N_KEYS } from "../shared/presenter";
+import {
+  FREQUENCY_I18N_KEYS,
+  formatAccountRowTotalUnrealizedPnl,
+  formatAccountRowYtdPerformancePct,
+} from "../shared/presenter";
 import { useAccountSummaries } from "../useAccountSummaries";
 import { useAccounts } from "../useAccounts";
 import { useAccountTable } from "./useAccountTable";
@@ -38,6 +42,8 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     handleNameKeyDown,
     handleFrequencyKeyDown,
     handleGlobalValueKeyDown,
+    handleUnrealizedPnlKeyDown,
+    handleYtdPctKeyDown,
     handleRowKeyDown,
     handleEditClick,
     handleEditClose,
@@ -147,13 +153,61 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                 />
               </div>
             </th>
+            <th
+              id="account-column-unrealized-pnl"
+              className="m3-th cursor-pointer text-right"
+              tabIndex={0}
+              scope="col"
+              aria-sort={
+                sortConfig.key === "total_unrealized_pnl"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              onClick={() => handleSort("total_unrealized_pnl")}
+              onKeyDown={handleUnrealizedPnlKeyDown}
+            >
+              <div className="flex items-center justify-end">
+                {t("account.column_unrealized_pnl")}
+                <SortIcon
+                  active={sortConfig.key === "total_unrealized_pnl"}
+                  direction={
+                    sortConfig.key === "total_unrealized_pnl" ? sortConfig.direction : null
+                  }
+                />
+              </div>
+            </th>
+            <th
+              id="account-column-ytd-pct"
+              className="m3-th cursor-pointer text-right"
+              tabIndex={0}
+              scope="col"
+              aria-sort={
+                sortConfig.key === "ytd_performance_pct"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              onClick={() => handleSort("ytd_performance_pct")}
+              onKeyDown={handleYtdPctKeyDown}
+            >
+              <div className="flex items-center justify-end">
+                {t("account.column_ytd_performance")}
+                <SortIcon
+                  active={sortConfig.key === "ytd_performance_pct"}
+                  direction={sortConfig.key === "ytd_performance_pct" ? sortConfig.direction : null}
+                />
+              </div>
+            </th>
             <th className="m3-th text-right">{t("account.column_actions")}</th>
           </tr>
         </thead>
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={4} className="m3-td text-center py-12">
+              <td colSpan={6} className="m3-td text-center py-12">
                 <span className="text-m3-on-surface-variant animate-pulse">
                   {t("account.loading")}
                 </span>
@@ -162,14 +216,14 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           ) : isEmpty ? (
             // R11 — empty state distinct from no-search-results
             <tr>
-              <td colSpan={4} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+              <td colSpan={6} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
                 {t("account.empty")}
               </td>
             </tr>
           ) : fetchError ? (
             // R12 — error state with retry (only shown when accounts exist but failed to reload)
             <tr>
-              <td colSpan={4} className="m3-td text-center py-12">
+              <td colSpan={6} className="m3-td text-center py-12">
                 <div className="flex flex-col items-center gap-3">
                   <span className="text-m3-error text-sm">{t("account.error_load")}</span>
                   <Button variant="outline" size="sm" onClick={refetch}>
@@ -181,7 +235,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           ) : hasNoSearchResults ? (
             // R10 — no search results (filter active, no match)
             <tr>
-              <td colSpan={4} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+              <td colSpan={6} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
                 {t("account.no_search_results")}
               </td>
             </tr>
@@ -219,6 +273,37 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                   </span>
                   <span className="ml-1 text-xs text-m3-on-surface-variant">
                     {account.currency}
+                  </span>
+                </td>
+                {/* ACC-023 — account-wide unrealized P&L */}
+                <td
+                  id={`account-unrealized-pnl-${account.id}`}
+                  className="m3-td text-right tabular-nums"
+                >
+                  <span
+                    className={
+                      account.total_unrealized_pnl == null || account.total_unrealized_pnl === 0
+                        ? "text-m3-on-surface-variant"
+                        : account.total_unrealized_pnl < 0
+                          ? "text-m3-error"
+                          : "text-m3-success"
+                    }
+                  >
+                    {formatAccountRowTotalUnrealizedPnl(account.total_unrealized_pnl)}
+                  </span>
+                </td>
+                {/* ACC-024 — year-to-date performance */}
+                <td id={`account-ytd-pct-${account.id}`} className="m3-td text-right tabular-nums">
+                  <span
+                    className={
+                      account.ytd_performance_pct == null || account.ytd_performance_pct === 0
+                        ? "text-m3-on-surface-variant"
+                        : account.ytd_performance_pct < 0
+                          ? "text-m3-error"
+                          : "text-m3-success"
+                    }
+                  >
+                    {formatAccountRowYtdPerformancePct(account.ytd_performance_pct)}
                   </span>
                 </td>
                 <td className="m3-td text-right">

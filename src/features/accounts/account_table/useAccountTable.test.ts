@@ -8,8 +8,18 @@ function makeAccount(
   name: string,
   freq: AccountSummary["update_frequency"],
   total_global_value = 0,
+  total_unrealized_pnl: number | null = null,
+  ytd_performance_pct: number | null = null,
 ): AccountSummary {
-  return { id, name, currency: "EUR", update_frequency: freq, total_global_value };
+  return {
+    id,
+    name,
+    currency: "EUR",
+    update_frequency: freq,
+    total_global_value,
+    total_unrealized_pnl,
+    ytd_performance_pct,
+  };
 }
 
 const accounts: [AccountSummary, AccountSummary, AccountSummary, AccountSummary] = [
@@ -280,5 +290,91 @@ describe("useAccountTable", () => {
 
     expect(result.current.deleteData).toBeNull();
     expect(result.current.deleteSummary).toBeNull();
+  });
+});
+
+// ACC-023 / ACC-024 / ACC-008 — new sort keys: total_unrealized_pnl and ytd_performance_pct
+// Both must sort numerically and place nulls LAST in both directions.
+describe("useAccountTable — sort by total_unrealized_pnl (ACC-023, ACC-008)", () => {
+  // Accounts: one with a positive P&L, one negative, one null
+  const pnlAccounts: AccountSummary[] = [
+    makeAccount("a", "Alpha", "ManualMonth", 0, 5_000_000, null), // pnl=5, ytd=null
+    makeAccount("b", "Beta", "ManualMonth", 0, -2_000_000, null), // pnl=-2, ytd=null
+    makeAccount("c", "Gamma", "ManualMonth", 0, null, null), // pnl=null → sorts last
+  ];
+
+  it("sorts total_unrealized_pnl ascending, nulls last", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(pnlAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("total_unrealized_pnl"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("sorts total_unrealized_pnl descending, nulls last", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(pnlAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("total_unrealized_pnl"));
+    act(() => result.current.handleSort("total_unrealized_pnl"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("exposes handleUnrealizedPnlKeyDown that triggers sort on Enter", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(pnlAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    expect(result.current.sortConfig.key).toBe("name");
+
+    act(() => result.current.handleUnrealizedPnlKeyDown(makeKeyEvent("Enter")));
+
+    expect(result.current.sortConfig.key).toBe("total_unrealized_pnl");
+    expect(result.current.sortConfig.direction).toBe("asc");
+  });
+});
+
+describe("useAccountTable — sort by ytd_performance_pct (ACC-024, ACC-008)", () => {
+  // Accounts: one positive YTD, one negative YTD, one null
+  const ytdAccounts: AccountSummary[] = [
+    makeAccount("a", "Alpha", "ManualMonth", 0, null, 8_000_000), // ytd=+8%, pnl=null
+    makeAccount("b", "Beta", "ManualMonth", 0, null, -3_700_000), // ytd=-3.7%, pnl=null
+    makeAccount("c", "Gamma", "ManualMonth", 0, null, null), // ytd=null → sorts last
+  ];
+
+  it("sorts ytd_performance_pct ascending, nulls last", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(ytdAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("ytd_performance_pct"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("sorts ytd_performance_pct descending, nulls last", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(ytdAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("ytd_performance_pct"));
+    act(() => result.current.handleSort("ytd_performance_pct"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("exposes handleYtdPctKeyDown that triggers sort on Enter", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(ytdAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    expect(result.current.sortConfig.key).toBe("name");
+
+    act(() => result.current.handleYtdPctKeyDown(makeKeyEvent("Enter")));
+
+    expect(result.current.sortConfig.key).toBe("ytd_performance_pct");
+    expect(result.current.sortConfig.direction).toBe("asc");
   });
 });
