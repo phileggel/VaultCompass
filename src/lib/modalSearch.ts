@@ -18,6 +18,8 @@ export type ModalSearchParams = {
   /** Record-FX-rate shortcut (FXR-012): the directed pair to pre-fill (`modal=record-fx-rate`). */
   fxFrom?: string;
   fxTo?: string;
+  /** Add-transaction modal (ACD-035/036): account to pre-fill (`modal=add-transaction`). */
+  prefillAccountId?: string;
 };
 
 /**
