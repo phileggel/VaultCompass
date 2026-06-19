@@ -1,9 +1,10 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDown, Plus, RefreshCw, TrendingUp } from "lucide-react";
+import { ChevronDown, RefreshCw, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { FAB } from "@/ui/components/fab/FAB";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
@@ -217,16 +218,6 @@ export function AccountDetailsView() {
                     </>
                   )}
                 </div>
-                {!view.summary.isEmpty && !view.summary.isAllClosed && (
-                  <Button
-                    variant="tonal"
-                    size="sm"
-                    icon={<Plus size={14} />}
-                    onClick={view.handleAddTransaction}
-                  >
-                    {t("account_details.add_transaction")}
-                  </Button>
-                )}
               </div>
             </div>
           ) : null}
@@ -258,15 +249,7 @@ export function AccountDetailsView() {
               <p className="text-m3-on-surface-variant italic">
                 {t("account_details.empty_no_positions")}
               </p>
-              {/* ACD-035 — empty state CTA */}
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Plus size={14} />}
-                onClick={view.handleAddTransaction}
-              >
-                {t("account_details.add_transaction")}
-              </Button>
+              {/* ACD-035 — add affordance is the global FAB (bottom-right) */}
             </div>
           ) : (
             <div className="flex flex-col">
@@ -371,14 +354,6 @@ export function AccountDetailsView() {
                   <p className="text-m3-on-surface-variant italic">
                     {t("account_details.empty_all_closed")}
                   </p>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<Plus size={14} />}
-                    onClick={view.handleAddTransaction}
-                  >
-                    {t("account_details.add_transaction")}
-                  </Button>
                 </div>
               )}
             </div>
@@ -475,6 +450,14 @@ export function AccountDetailsView() {
           onSubmitSuccess={view.handleFreeSharesSuccess}
         />
       )}
+
+      {/* ACD-035/036 — add-transaction entry point is a global FAB (replaces the
+          former contextual "Add Transaction" buttons in the header / empty states) */}
+      <FAB
+        id="account-details-add-transaction-fab"
+        onClick={view.handleAddTransaction}
+        label={t("account_details.add_transaction")}
+      />
     </div>
   );
 }

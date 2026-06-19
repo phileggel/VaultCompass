@@ -197,3 +197,35 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     expect(screen.getByTestId("holding-row")).toBeInTheDocument();
   });
 });
+
+describe("AccountDetailsView — add-transaction FAB (ACD-035/036)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
+  });
+
+  it("renders a single add-transaction FAB and triggers handleAddTransaction on click", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+    render(<AccountDetailsView />);
+
+    const fab = screen.getByRole("button", { name: "account_details.add_transaction" });
+    fireEvent.click(fab);
+    expect(handlers.handleAddTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the FAB in the empty state with no inline CTA button", () => {
+    mockUseAccountDetailsView.mockReturnValue(
+      makeView({
+        summary: { ...makeView().summary, isEmpty: true },
+        hasVisibleCashRow: false,
+      }),
+    );
+    render(<AccountDetailsView />);
+
+    expect(screen.getByText("account_details.empty_no_positions")).toBeInTheDocument();
+    // The only add-transaction affordance is the FAB (exactly one).
+    expect(screen.getAllByRole("button", { name: "account_details.add_transaction" })).toHaveLength(
+      1,
+    );
+  });
+});
