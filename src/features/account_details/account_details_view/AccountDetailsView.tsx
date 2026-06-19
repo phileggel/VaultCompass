@@ -284,9 +284,6 @@ export function AccountDetailsView() {
                         <th className="m3-th text-right">
                           {t("account_details.column_avg_price")}
                         </th>
-                        <th className="m3-th text-right">
-                          {t("account_details.column_cost_basis")}
-                        </th>
                         {/* SEL-042 — Realized P&L column */}
                         <th className="m3-th text-right">
                           {t("account_details.column_realized_pnl")}
@@ -294,6 +291,10 @@ export function AccountDetailsView() {
                         {/* MKT-030 — Current price column */}
                         <th className="m3-th text-right">
                           {t("account_details.column_current_price")}
+                        </th>
+                        {/* MKT-143 — Current value column */}
+                        <th className="m3-th text-right">
+                          {t("account_details.column_current_value")}
                         </th>
                         {/* MKT-032/034 — Unrealized P&L column */}
                         <th className="m3-th text-right">

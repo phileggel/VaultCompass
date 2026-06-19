@@ -116,7 +116,8 @@ export interface HoldingRowViewModel {
   /** Holding quantity in raw micro-units — used to pass to SellTransactionModal (SEL-010). */
   quantityMicro: number;
   averagePrice: string;
-  costBasis: string;
+  /** Market value = current_price × quantity, asset currency; "—" when no price (MKT-143). */
+  currentValue: string;
   /** Formatted realized P&L string (2 decimal places, SEL-042). */
   realizedPnl: string;
   /** Raw realized P&L in micro-units — used for sign-based color styling (SEL-043). */
@@ -273,7 +274,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       quantity: microToFormatted(detail.quantity, 2),
       quantityMicro: detail.quantity,
       averagePrice: "",
-      costBasis: "",
+      currentValue: "",
       realizedPnl: "",
       realizedPnlRaw: 0,
       canEnterPrice: false,
@@ -299,7 +300,15 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     quantity: microToFormattedQuantity(detail.quantity),
     quantityMicro: detail.quantity,
     averagePrice: microToFormattedPrice(detail.average_price),
-    costBasis: microToFormatted(detail.cost_basis, 2),
+    // MKT-143 — market value = current_price × quantity in the asset's native
+    // currency; "—" when no price has been recorded. Dividing the price out of
+    // micros before multiplying keeps the intermediate below MAX_SAFE_INTEGER
+    // (vs price_micros × qty_micros); the sub-micro float drift is absorbed by
+    // microToFormatted's 2-decimal rounding.
+    currentValue:
+      detail.current_price !== null
+        ? microToFormatted((detail.current_price / 1_000_000) * detail.quantity, 2)
+        : DASH,
     realizedPnl: microToFormatted(detail.realized_pnl, 2),
     realizedPnlRaw: detail.realized_pnl,
     canEnterPrice: true,

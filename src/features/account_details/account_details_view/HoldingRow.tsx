@@ -179,7 +179,6 @@ export function HoldingRow({
         {row.quantity}
       </td>
       <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
-      <td className="m3-td text-right tabular-nums font-medium">{row.costBasis}</td>
       {/* SEL-042 — Realized P&L */}
       <td className="m3-td text-right">
         <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
@@ -216,6 +215,10 @@ export function HoldingRow({
             {t("mkt.price_state.no_price_available")}
           </span>
         )}
+      </td>
+      {/* MKT-143 — Current value = current price × quantity (asset currency) */}
+      <td id={`holding-current-value-${row.assetId}`} className="m3-td text-right tabular-nums">
+        {row.currentValue}
       </td>
       {/* MKT-032/034 — Unrealized P&L; FXR-012 — foreign-currency holdings with a
           price but no usable rate show a Record-FX-rate shortcut instead of "—" */}

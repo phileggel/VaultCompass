@@ -25,7 +25,7 @@ const baseRow: HoldingRowViewModel = {
   quantity: "2.000000",
   quantityMicro: 2_000_000,
   averagePrice: "100.00",
-  costBasis: "200.00",
+  currentValue: "300.00",
   realizedPnl: "0.00",
   realizedPnlRaw: 0,
   canEnterPrice: true,

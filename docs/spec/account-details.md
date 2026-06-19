@@ -200,8 +200,8 @@ UPDATE holdings SET
   - Asset (Name + Ticker)
   - Quantity
   - Avg. Price
-  - Cost Basis
   - Realized P&L (`—` when zero or no sells)
+  - Current Value (current price × quantity, asset currency; `—` when no price — MKT-143)
   - Actions: Buy, Sell, Inspect
 - **Closed Positions Section** (rendered only when `closed_holdings` non-empty, per ACD-047):
   - Section heading "Closed positions"

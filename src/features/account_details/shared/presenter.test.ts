@@ -86,9 +86,14 @@ describe("toHoldingRow", () => {
     expect(row.averagePrice).toBe("10,00");
   });
 
-  it("formats costBasis with 2 decimals", () => {
-    const row = toHoldingRow(makeHolding({ cost_basis: 300_000_000 }));
-    expect(row.costBasis).toBe("300,00");
+  it("formats currentValue as current_price × quantity with 2 decimals (MKT-143)", () => {
+    const row = toHoldingRow(makeHolding({ current_price: 150_000_000, quantity: 2_000_000 }));
+    expect(row.currentValue).toBe("300,00");
+  });
+
+  it("shows currentValue as a dash when no price is recorded (MKT-143)", () => {
+    const row = toHoldingRow(makeHolding({ current_price: null }));
+    expect(row.currentValue).toBe("—");
   });
 
   it("maps asset metadata fields correctly", () => {
@@ -333,10 +338,10 @@ describe("toHoldingRow — cash variant (CSH-090/091)", () => {
   });
 
   // CSH-091 — cash row has no cost basis / average price / realized P&L cells
-  it("cash row leaves averagePrice / costBasis / realizedPnl blank", () => {
+  it("cash row leaves averagePrice / currentValue / realizedPnl blank", () => {
     const row = toHoldingRow(makeCashHolding());
     expect(row.averagePrice).toBe("");
-    expect(row.costBasis).toBe("");
+    expect(row.currentValue).toBe("");
     expect(row.realizedPnl).toBe("");
   });
 

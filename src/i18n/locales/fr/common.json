@@ -279,7 +279,7 @@
     "column_asset": "Actif",
     "column_quantity": "Quantité",
     "column_avg_price": "Prix moyen",
-    "column_cost_basis": "Coût de revient",
+    "column_current_value": "Valeur actuelle",
     "column_realized_pnl": "P&L réalisé",
     "total_cost_basis": "Coût de revient total",
     "total_realized_pnl": "P&L réalisé total",
