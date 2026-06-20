@@ -43,12 +43,13 @@ pub enum HoldingDomainError {
 }
 
 /// Aggregate-level domain rejection raised by `Account::open_holding` on its
-/// own input — currently only the `total_cost > 0` invariant (TRX-045).
+/// own input — currently only the `total_cost >= 0` invariant (TRX-045). A zero
+/// total cost is valid (e.g. a mined / gifted / airdropped position).
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
 pub enum OpeningBalanceDomainError {
-    /// total_cost was zero or negative (TRX-045).
-    #[error("Total cost must be strictly positive")]
+    /// total_cost was negative (TRX-045).
+    #[error("Total cost must not be negative")]
     InvalidTotalCost,
 }
 

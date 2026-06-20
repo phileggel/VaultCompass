@@ -163,14 +163,14 @@ describe("accountDetailsGateway — openHolding", () => {
     expect(result).toEqual({ status: "error", error: err });
   });
 
-  // TRX-045 — InvalidTotalCost error is surfaced correctly
-  it("openHolding returns InvalidTotalCost when total_cost is zero or negative", async () => {
+  // TRX-045 — InvalidTotalCost error (negative total cost) is surfaced correctly
+  it("openHolding returns InvalidTotalCost when total_cost is negative", async () => {
     const dto: OpenHoldingDTO = {
       account_id: "account-1",
       asset_id: "asset-1",
       date: "2024-01-15",
       quantity: 1_000_000,
-      total_cost: 0,
+      total_cost: -1,
     };
     const err: OpenHoldingError = { code: "InvalidTotalCost" };
     mockInvoke.mockRejectedValue(err);

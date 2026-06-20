@@ -147,14 +147,27 @@ describe("useOpenBalance", () => {
     expect(result.current.isFormValid).toBe(false);
   });
 
-  // TRX-045 — totalCost = 0 is invalid
-  it("isFormValid is false when totalCost is zero (TRX-045)", async () => {
+  // TRX-045 — totalCost = 0 is valid (zero-cost position: mined / gifted / airdropped)
+  it("isFormValid is true when totalCost is zero (TRX-045)", async () => {
     const { result } = renderHook(() => useOpenBalance(BASE_PROPS));
 
     await act(async () => {
       result.current.handleChange("date", "2024-01-15");
       result.current.handleChange("quantity", "5");
       result.current.handleChange("totalCost", "0");
+    });
+
+    expect(result.current.isFormValid).toBe(true);
+  });
+
+  // TRX-045 — a negative totalCost is still invalid
+  it("isFormValid is false when totalCost is negative (TRX-045)", async () => {
+    const { result } = renderHook(() => useOpenBalance(BASE_PROPS));
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-01-15");
+      result.current.handleChange("quantity", "5");
+      result.current.handleChange("totalCost", "-10");
     });
 
     expect(result.current.isFormValid).toBe(false);
