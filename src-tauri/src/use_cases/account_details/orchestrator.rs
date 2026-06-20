@@ -142,9 +142,13 @@ impl AccountDetailsUseCase {
         // ACD-047 — total realized pnl from ALL holdings (active + closed)
         let total_realized_pnl: i64 = all_holdings.iter().map(|h| h.total_realized_pnl).sum();
 
-        // ACD-020 — active holdings (quantity > 0); ACD-044 — closed (quantity == 0, last_sold_date set)
-        let (active_holdings, closed_holdings_raw): (Vec<_>, Vec<_>) =
-            all_holdings.into_iter().partition(|h| h.quantity > 0);
+        // ACD-020 — active holdings (quantity > 0); ACD-044 — closed (quantity == 0, last_sold_date set).
+        // CSH-090 — the Cash Holding is always active, even at quantity 0 (never closed), so the
+        // cash row is always shown. The predicate runs on raw holdings before asset-class
+        // enrichment, so it tests the deterministic cash-asset id prefix, not the class.
+        let (active_holdings, closed_holdings_raw): (Vec<_>, Vec<_>) = all_holdings
+            .into_iter()
+            .partition(|h| h.quantity > 0 || crate::core::cash::is_cash_asset(&h.asset_id));
 
         // ACD-022 — enrich each active holding with asset metadata; ACD-021 — archived assets included
         // CSH-094 — accumulate the Global Value as we go: cash quantity + Σ priced non-cash holdings.
@@ -1772,12 +1776,11 @@ mod tests {
         );
     }
 
-    // CSH-097 — Cash row hidden at quantity = 0 (the cash holding follows
-    // ACD-020's quantity > 0 filter without override). Setup: deposit then
-    // withdraw the full balance so the cash holding exists at quantity 0
-    // (Deposit + Withdrawal pair remains, so CSH-013 cleanup does not fire).
+    // CSH-090 / CSH-097 — Cash row always in the active holdings even at quantity 0
+    // (exempt from ACD-020's quantity > 0 filter; never placed in closed_holdings).
+    // Setup: deposit then withdraw the full balance so the cash holding sits at 0.
     #[tokio::test]
-    async fn cash_holding_hidden_when_quantity_is_zero() {
+    async fn cash_holding_shown_in_active_when_quantity_is_zero() {
         let pool = make_pool().await;
         let (account_svc, asset_svc) = setup(&pool).await;
 
@@ -1806,12 +1809,18 @@ mod tests {
         );
         let resp = uc.get_account_details(&account.id).await.unwrap();
 
+        let cash = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id.starts_with("system-cash-"))
+            .expect("cash row must be present in active holdings even at quantity 0 (CSH-090)");
+        assert_eq!(cash.quantity, 0);
         assert!(
             !resp
-                .holdings
+                .closed_holdings
                 .iter()
                 .any(|h| h.asset_id.starts_with("system-cash-")),
-            "cash row must be hidden when its quantity is 0 (CSH-097)"
+            "cash row must never be placed in closed_holdings (ACD-044)"
         );
     }
 

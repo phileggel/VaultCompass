@@ -10,17 +10,6 @@ use tauri::State;
 
 // --- DTOs ---
 
-/// Parameters for creating a new account.
-#[derive(Debug, Serialize, Deserialize, Type)]
-pub struct CreateAccountDTO {
-    /// Display name.
-    pub name: String,
-    /// ISO 4217 currency code.
-    pub currency: String,
-    /// Update frequency.
-    pub update_frequency: UpdateFrequency,
-}
-
 /// Parameters for updating an existing account.
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct UpdateAccountDTO {
@@ -43,19 +32,6 @@ pub async fn get_accounts(
     state: State<'_, AppState>,
 ) -> Result<Vec<Account>, AccountApplicationError> {
     state.account_service.get_all().await
-}
-
-/// Adds a new account.
-#[tauri::command]
-#[specta::specta]
-pub async fn add_account(
-    state: State<'_, AppState>,
-    dto: CreateAccountDTO,
-) -> Result<Account, AccountCrudError> {
-    state
-        .account_service
-        .create(dto.name, dto.currency, dto.update_frequency)
-        .await
 }
 
 /// Updates an existing account.

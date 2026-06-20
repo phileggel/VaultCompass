@@ -3,6 +3,8 @@
 //! Cross-cutting application use cases that orchestrate multiple bounded
 //! contexts or platform capabilities.
 
+/// Account Creation: seeds the per-currency Cash Asset + the account's 0-balance Cash Holding at creation (ACC-025, CSH-010/012).
+pub mod account_creation;
 /// Account Deletion: pre-deletion summary of holdings and transactions (ACC-020).
 pub mod account_deletion;
 /// Account Details: cross-context read of holdings + asset metadata (ACD feature).

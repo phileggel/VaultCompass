@@ -81,6 +81,39 @@ impl AccountService {
         Ok(created)
     }
 
+    /// Seeds the account's 0-balance Cash Holding (CSH-012). Called by the
+    /// account-creation use case after the Cash Asset has been ensured (FK).
+    /// Idempotent — `Account::seed_cash_holding` is a no-op if one already exists.
+    ///
+    /// Uses its own CRUD-typed load/save (returning `AccountCrudError`) rather than
+    /// the `HoldingTransactionError`-typed `load_account`/`save_account` helpers.
+    pub async fn seed_cash_holding(&self, account_id: &str) -> Result<(), AccountCrudError> {
+        let mut account = match self
+            .account_repo
+            .get_with_holdings_and_transactions(account_id)
+            .await
+        {
+            Ok(Some(acc)) => acc,
+            Ok(None) => {
+                return Err(AccountApplicationError::AccountNotFound {
+                    account_id: account_id.to_string(),
+                }
+                .into());
+            }
+            Err(e) => {
+                tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "seed_cash_holding: load failure");
+                return Err(AccountApplicationError::DatabaseError.into());
+            }
+        };
+        account.seed_cash_holding();
+        self.account_repo.save(&mut account).await.map_err(|e| {
+            tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "seed_cash_holding: save failure");
+            AccountApplicationError::DatabaseError
+        })?;
+        self.emit_account_updated();
+        Ok(())
+    }
+
     /// Updates an existing account.
     pub async fn update(
         &self,

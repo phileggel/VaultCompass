@@ -2,8 +2,9 @@ use crate::{
     context::{account, asset, currency},
     core::{logger, Event},
     use_cases::{
-        account_deletion, account_details, account_performance, account_summary, archive_asset,
-        asset_price_fetch, asset_web_lookup, delete_asset, holding_transaction, update_checker,
+        account_creation, account_deletion, account_details, account_performance, account_summary,
+        archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, holding_transaction,
+        update_checker,
     },
 };
 
@@ -92,7 +93,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset::delete_asset_price,
             // ----- account BC -----
             account::get_accounts,
-            account::add_account,
+            account_creation::add_account,
             account::update_account,
             account::delete_account,
             account::get_asset_ids_for_account,

@@ -202,7 +202,8 @@ async getAccounts() : Promise<Result<Account[], AccountApplicationError>> {
 }
 },
 /**
- * Adds a new account.
+ * Adds a new account, eagerly seeding its Cash Asset + 0-balance Cash Holding
+ * (ACC-025, CSH-010 / CSH-012).
  */
 async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, AccountCrudError>> {
     try {

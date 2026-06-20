@@ -70,7 +70,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 > **MKT extension**: `docs/spec/market-price.md` adds `total_unrealized_pnl: Option<i64>` to this response and five new fields to `HoldingDetail` (`asset_currency`, `current_price`, `current_price_date`, `unrealized_pnl`, `performance_pct`). See the MKT spec for definitions.
 
-> **CSH extension**: `docs/spec/cash-tracking.md` adds `total_global_value: i64` to this response (CSH-094) and amends ACD-034 with a cash-specific exception (CSH-098). The Cash Holding (when present and `quantity > 0`) is included in `holdings` like any other holding (CSH-090); ACD-020's `quantity > 0` filter applies to it without override (CSH-097). Asset metadata is enriched via `AssetService` like any other asset (ACD-022).
+> **CSH extension**: `docs/spec/cash-tracking.md` adds `total_global_value: i64` to this response (CSH-094) and amends ACD-034 with a cash-specific exception (CSH-098). The Cash Holding is **always** included in `holdings` (CSH-090), exempt from ACD-020's `quantity > 0` filter — it appears even at `quantity = 0` (CSH-097) and is never placed in `closed_holdings`. Asset metadata is enriched via `AssetService` like any other asset (ACD-022).
 
 ---
 
@@ -86,7 +86,7 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 ### Holding List and Cost Basis
 
-**ACD-020 — Active holding filter (backend)**: Only holdings with `quantity > 0` are included in the **active holdings section** of the Account Details view. Holdings with `quantity = 0` are excluded from the active section but may appear in the closed positions section (ACD-044, ACD-047). The Cash Holding follows this rule without exception (CSH-097): when `quantity = 0`, it is hidden from the active section and the frontend shows the "No cash recorded yet" banner (CSH-095) in its place.
+**ACD-020 — Active holding filter (backend)**: Only holdings with `quantity > 0` are included in the **active holdings section** of the Account Details view. Holdings with `quantity = 0` are excluded from the active section but may appear in the closed positions section (ACD-044, ACD-047). The Cash Holding is **exempt** from this filter (CSH-090 / CSH-097): it is always included in the active section and rendered even at `quantity = 0` (a freshly created or fully-withdrawn account still shows its cash row). There is no "no cash recorded" banner.
 
 **ACD-021 — Archived asset inclusion (backend)**: Holdings for archived assets are included in the display as long as their `quantity > 0`. Archiving an asset does not close its position.
 
@@ -148,7 +148,7 @@ UPDATE holdings SET
     AND transaction_type = 'Sell');
 ```
 
-**ACD-044 — Closed holdings query (backend)**: `AccountDetailsUseCase` splits the full holdings list for the account into active (`quantity > 0`) and closed (`quantity = 0`). No new DB query is needed — the existing holdings fetch returns all rows regardless of quantity; the split happens in application code. Closed holdings are enriched with asset name and reference via `AssetService`, identical to the active holdings enrichment path (ACD-022).
+**ACD-044 — Closed holdings query (backend)**: `AccountDetailsUseCase` splits the full holdings list for the account into active (`quantity > 0`) and closed (`quantity = 0`). The Cash Holding is always classified active regardless of quantity (CSH-090) — never closed. No new DB query is needed — the existing holdings fetch returns all rows regardless of quantity; the split happens in application code. Closed holdings are enriched with asset name and reference via `AssetService`, identical to the active holdings enrichment path (ACD-022).
 
 **ACD-045 — AccountDetailsResponse total_realized_pnl source (backend)**: `AccountDetailsResponse.total_realized_pnl` is computed as the sum of `Holding.total_realized_pnl` across **all** holdings for the account (both active and closed). This supersedes SEL-038's `get_realized_pnl_by_account` aggregation query for this use case — the value is semantically identical as long as ACD-043's backfill migration has run. `TransactionService` is no longer injected into `AccountDetailsUseCase`; the P&L data is available directly from the holdings fetch (ACD-044). No new error variant is introduced: the only failure path remains the holdings fetch itself, already covered by ACD-038. `TransactionService.get_realized_pnl_by_account` is retained in the service and repository layers as it may serve future use cases, but is no longer called from `AccountDetailsUseCase`.
 

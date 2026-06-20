@@ -26,6 +26,7 @@ use crate::core::event_bus::Event;
 use crate::core::{
     create_specta_builder, Database, SideEffectEventBus, SqlxTransactionManager, BACKEND,
 };
+use crate::use_cases::account_creation::AccountCreationUseCase;
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
 use crate::use_cases::account_performance::AccountPerformanceUseCase;
@@ -218,6 +219,11 @@ pub fn run() {
                 let account_deletion_uc =
                     AccountDeletionUseCase::new(Arc::clone(&account_service));
 
+                let account_creation_uc = AccountCreationUseCase::new(
+                    Arc::clone(&account_service),
+                    Arc::clone(&asset_service),
+                );
+
                 let holding_transaction_uc = HoldingTransactionUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
@@ -229,6 +235,7 @@ pub fn run() {
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
                 app_handle.manage(account_deletion_uc);
+                app_handle.manage(account_creation_uc);
                 app_handle.manage(holding_transaction_uc);
 
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
