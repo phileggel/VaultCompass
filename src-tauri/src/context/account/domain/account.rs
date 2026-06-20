@@ -732,9 +732,9 @@ impl Account {
     /// in `(date ASC, created_at ASC)` order. Validates running balance is never strictly
     /// negative; raises `InsufficientCash` otherwise (CSH-080).
     ///
-    /// On success, queues the appropriate `AccountChange` (Upserted or Deleted) and updates
-    /// `self.holdings` in memory. CSH-013: the Cash Holding is deleted when no
-    /// Deposit / Withdrawal transactions remain for this account.
+    /// On success, queues a `HoldingUpserted` change and updates `self.holdings` in
+    /// memory. CSH-013: the Cash Holding is never deleted here — it persists at
+    /// quantity 0 when no cash remains (removed only when the account is deleted).
     ///
     /// Returns a typed `AccountOperationError` rather than `anyhow::Result` because
     /// `InsufficientCash` is the only failure mode and callers benefit from knowing it

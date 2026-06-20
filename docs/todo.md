@@ -2,19 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (feature) — Eager cash line at account creation (no more lazy creation)
-
-Today the Cash Holding is lazily created on the first cash-credit transaction (CSH-012) and auto-deleted when its balance returns to zero (CSH-013); a freshly created account has no cash row and shows the "No cash recorded yet" banner (CSH-095). The desired behaviour: every account gets its Cash Holding **at creation time, seeded at quantity 0**, and the cash row is **always visible** with its own Deposit/Withdraw/History actions. Consequently the header "Record" dropdown's **Deposit / Withdraw** entries are removed (the cash row owns those actions); the no-cash banner and the hide-at-zero rule go away.
-
-Decided approach (confirmed 2026-06-20):
-
-- **Real domain eager-create** (not a frontend display-only row): persist a 0-balance Cash Holding at account creation, and the cash line is **never auto-deleted**.
-- **Backfill via migration**: every existing account gets a 0-balance Cash Holding (and the per-currency Cash Asset / `system-cash-category` rows) if absent.
-
-Spec amendments required (cash-tracking CSH): CSH-010 (seed Cash Asset at account creation, not lazily), CSH-012 (eager create at qty 0), CSH-013 (never auto-delete — drop the TRX-034 cash cleanup), CSH-019 / DIV-012 (remove header-menu Deposit/Withdraw), CSH-022(b)/CSH-024/CSH-034/CSH-090 (reword — holding always present), CSH-095 (remove no-cash banner), CSH-097 (always show cash row). Also account.md (ACC: creation seeds cash) and account-details.md (ACD: cash row always rendered).
-
-Backend approach: new `use_cases/account_creation/{api,orchestrator,mod}.rs` (cross-context, mirrors `account_deletion`/`holding_transaction`), injecting `AccountService` + `AssetService`; the `add_account` command moves there keeping its exact signature (so `bindings.ts` and the FE gateway are unchanged). `Account::new` seeds the 0-qty cash holding; `replay_cash_holding` drops its CSH-013 delete branch. Frontend: remove the two add-menu cash buttons + delete `NoCashBanner.tsx`; cash row always rendered. Open question to settle when picked up: SQL backfill migration vs idempotent Rust startup backfill. Full plan was drafted in conversation on 2026-06-20.
-
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.
