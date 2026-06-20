@@ -335,6 +335,47 @@ describe("useAccountTable — sort by total_unrealized_pnl (ACC-023, ACC-008)", 
     expect(result.current.sortConfig.key).toBe("total_unrealized_pnl");
     expect(result.current.sortConfig.direction).toBe("asc");
   });
+
+  // ACC-008 — when both compared values are null, they order among themselves by name.
+  it("orders null total_unrealized_pnl rows among themselves by name", () => {
+    const bothNull: AccountSummary[] = [
+      makeAccount("z", "Zeta", "ManualMonth", 0, null, null),
+      makeAccount("a", "Alpha", "ManualMonth", 0, null, null),
+      makeAccount("b", "Beta", "ManualMonth", 0, 5_000_000, null),
+    ];
+    const { result } = renderHook(() =>
+      useAccountTable(bothNull, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    act(() => result.current.handleSort("total_unrealized_pnl"));
+    // Beta (non-null) first; the two nulls sort last, ordered by name (Alpha < Zeta).
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["b", "a", "z"]);
+  });
+
+  // ACC-008 — equal non-null metrics break ties by name ascending.
+  it("breaks equal total_unrealized_pnl ties by name ascending", () => {
+    const tied: AccountSummary[] = [
+      makeAccount("z", "Zeta", "ManualMonth", 0, 5_000_000, null),
+      makeAccount("a", "Alpha", "ManualMonth", 0, 5_000_000, null),
+    ];
+    const { result } = renderHook(() =>
+      useAccountTable(tied, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    act(() => result.current.handleSort("total_unrealized_pnl"));
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["a", "z"]);
+  });
+
+  it("handleUnrealizedPnlKeyDown triggers sort on Space and ignores other keys", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(pnlAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    act(() => result.current.handleUnrealizedPnlKeyDown(makeKeyEvent(" ")));
+    expect(result.current.sortConfig.key).toBe("total_unrealized_pnl");
+    expect(result.current.sortConfig.direction).toBe("asc");
+
+    // Tab is ignored — direction stays asc (a second sort on the same key would flip it).
+    act(() => result.current.handleUnrealizedPnlKeyDown(makeKeyEvent("Tab")));
+    expect(result.current.sortConfig.direction).toBe("asc");
+  });
 });
 
 describe("useAccountTable — sort by ytd_performance_pct (ACC-024, ACC-008)", () => {
@@ -375,6 +416,19 @@ describe("useAccountTable — sort by ytd_performance_pct (ACC-024, ACC-008)", (
     act(() => result.current.handleYtdPctKeyDown(makeKeyEvent("Enter")));
 
     expect(result.current.sortConfig.key).toBe("ytd_performance_pct");
+    expect(result.current.sortConfig.direction).toBe("asc");
+  });
+
+  it("handleYtdPctKeyDown triggers sort on Space and ignores other keys", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(ytdAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    act(() => result.current.handleYtdPctKeyDown(makeKeyEvent(" ")));
+    expect(result.current.sortConfig.key).toBe("ytd_performance_pct");
+    expect(result.current.sortConfig.direction).toBe("asc");
+
+    // Tab is ignored — direction stays asc (a second sort on the same key would flip it).
+    act(() => result.current.handleYtdPctKeyDown(makeKeyEvent("Tab")));
     expect(result.current.sortConfig.direction).toBe("asc");
   });
 });
