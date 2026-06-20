@@ -10,7 +10,7 @@ The feature touches the `account` bounded context (Holding, Transaction, the Acc
 
 > **Prerequisite (not part of this spec)**: this spec assumes a prior refactor has consolidated the existing transaction-recording use cases (`record_buy`, `record_sell`, `record_opening_balance`, `correct_transaction`, `cancel_transaction`) into a single cross-context module `use_cases/holding_transaction/`, and that the module exposes a shared `ensure_cash_asset(currency)` helper. That refactor is its own feature, scoped and shipped before this spec. The cash spec only declares **observable behaviours**; the orchestration mechanics live in the feature plan of the prerequisite refactor.
 
-> **No-migration scope**: The application is not yet shipped. Schema and behavioural changes ship without a backfill. Local development databases are reset via `just clean-db` after the migration adds the new transaction-type variants.
+> **Migration note**: The original cash-tracking rollout shipped without a backfill (the app had no data yet). The eager-cash-line revision (CSH-010 / CSH-012 / CSH-013) ships a one-off data migration that seeds the Cash category + per-currency Cash Assets and inserts a 0-balance Cash Holding for every existing account.
 
 ---
 
@@ -95,7 +95,7 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 ### Cash Asset and Cash Holding Lifecycle (010–019)
 
-**CSH-010 — Cash Asset lazy seeding (backend)**: The Cash Asset for a given currency is created the first time any cash-affecting transaction needs it for an account in that currency. The seeding step runs inside `use_cases/holding_transaction/` (assumed to exist per the prerequisite refactor) via the shared `ensure_cash_asset(currency)` helper, which injects `AssetService` and idempotently upserts the Cash Asset. No cross-context import from `context/account/` to `context/asset/` is introduced (B13 / ADR-003 / ADR-004 preserved). Account creation itself does **not** seed a Cash Asset — accounts that never see a cash-affecting transaction never trigger seeding.
+**CSH-010 — Cash Asset seeded at account creation (backend)**: The Cash Asset for an account's currency is seeded when the account is created, by the `use_cases/account_creation/` orchestrator via the shared `ensure_cash_asset(currency)` helper, which injects `AssetService` and idempotently upserts the Cash Asset (and the Cash category per CSH-017). `use_cases/holding_transaction/` still calls `ensure_cash_asset` before each cash-affecting transaction as an idempotent safety net, so a pre-existing Cash Asset is a no-op. No cross-context import from `context/account/` to `context/asset/` is introduced (B13 / ADR-003 / ADR-004 preserved).
 
 **CSH-011 — One Cash Asset per currency (backend)**: Cash Asset IDs are deterministic from the currency code (`system-cash-{ccy_lower}`). The seeding helper (`ensure_cash_asset`) treats a primary-key collision as "already exists" and reuses the existing record — making the helper safe to call from every cash-affecting use case without prior existence checks.
 
@@ -103,13 +103,13 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 **CSH-018 — Cash Asset suppression in user-facing asset selectors (frontend)**: Cash Assets do not appear in any user-facing asset selector. The Asset Manager table, the Add Transaction asset combobox (used by Buy/Sell/OpeningBalance flows), and the OpenBalance asset combobox all filter out assets where `class === "Cash"` at the component level. The transaction-list asset filter (TXL) is the only place Cash Assets surface — and only in already-existing-transactions context (CSH-101).
 
-**CSH-019 — Account Details header cash actions (frontend)**: The Account Details header renders a "Deposit" button at all times next to the existing "Add Transaction" button. The "Withdraw" button is rendered only when the account has a Cash Holding with `quantity > 0` (i.e. the cash row is visible per CSH-097). The buttons open `DepositTransactionModal` and `WithdrawalTransactionModal` respectively (per CSH-020 / CSH-030).
+**CSH-019 — Cash actions live on the cash row, not the header (frontend)**: The Account Details header carries **no** Deposit/Withdraw actions. Because every account has a persistent, always-visible Cash row (CSH-012 / CSH-097) whose inline actions are Deposit / Withdraw / View transactions (CSH-091), a header affordance would only duplicate them. Deposit and Withdrawal are reached exclusively from the Cash row's inline actions.
 
-> **Superseded by DIV-012**: the standalone Deposit/Withdraw header buttons are consolidated into the header "Record" dropdown menu, relabeled "Cash deposit" / "Cash withdrawal" (the Withdraw visibility condition above is preserved inside the menu). The Cash-row inline Deposit/Withdraw actions (CSH-091) are unaffected.
+> **Revised for eager cash (this spec revision)**: the DIV-012 header "Record" dropdown no longer lists "Cash deposit" / "Cash withdrawal" — those two entries are removed. The dropdown keeps its non-cash entries (Open balance, Record dividend, Record free shares). The Cash-row inline Deposit/Withdraw actions (CSH-091) are the sole entry points; DIV-012 is cross-amended accordingly.
 
-**CSH-012 — Cash Holding lazy creation (backend)**: An account does not have a Cash Holding until a cash-credit transaction is recorded for it. Two transaction types create the Cash Holding lazily: Deposit (CSH-022) and Sell (CSH-050). Cash-debit transactions (Buy, Withdrawal) cannot create a Cash Holding — they instead fail the insufficient-cash guard (CSH-080) when no Cash Holding exists. After creation, the Cash Holding's `quantity` reflects the full credit from the triggering transaction (i.e. the deposited amount or the sell proceeds in account currency).
+**CSH-012 — Cash Holding created eagerly at account creation (backend)**: Every account has a Cash Holding for its currency from the moment it is created — seeded at `quantity = 0` by the `use_cases/account_creation/` orchestrator (CSH-010) and persisted alongside the account. There is **no lazy creation**: Deposit (CSH-022), Sell (CSH-050), Purchase and Withdrawal all operate on the already-present Cash Holding. Accounts created before this spec revision are backfilled by a one-off data migration that is **insert-if-absent**: it seeds the Cash category and the per-currency Cash Asset (`system-cash-{ccy_lower}`, CSH-011) for every distinct existing-account currency, and inserts a 0-balance Cash Holding **only** for accounts that do not already have one — any Cash Holding created under the old lazy path (with its balance) is preserved untouched. After any cash-affecting transaction, the Cash Holding's `quantity` reflects the running cash balance (always ≥ 0 per CSH-080). The eager Cash Holding requires no new event: it surfaces through the normal `get_account_details` load (CSH-090), and ACC-022's `AccountUpdated` already fires on account creation.
 
-**CSH-013 — Cash Holding lifecycle follows TRX-034 (backend)**: A Cash Holding has the same lifecycle as any other Holding: deleted by the existing TRX-034 cleanup when no transactions remain for the `(account_id, asset_id)` pair. After deletion, a subsequent Deposit or Sell lazy-recreates it (CSH-012). Cash Holdings carry no special never-delete invariant.
+**CSH-013 — Cash Holding persists for the account's lifetime (backend)**: Unlike other holdings (TRX-034), the Cash Holding is **never** removed by transaction cleanup — it persists at `quantity = 0` when fully withdrawn or spent. It is deleted only when its account is deleted (ACC cascade). The chronological replay (CSH-024 / CSH-034 / CSH-042 / CSH-051) always upserts the Cash Holding with the recomputed balance; it never deletes it.
 
 **CSH-014 — Cash Holding currency invariant (backend)**: The `asset_id` of every Cash Holding for an account always matches `system-cash-{account.currency}`. Account currency is set at account creation (ACC) and is not editable; this invariant therefore holds for the life of the account.
 
@@ -123,11 +123,11 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 **CSH-021 — Deposit input validation (frontend + backend)**: `amount` must parse as a positive decimal (`> 0`); `date` must not be in the future and must not be older than the TRX-020 lower bound. Backend re-validates and rejects with explicit error variants (`AmountNotPositive`, `DateInFuture`, `DateTooOld`).
 
-**CSH-022 — Deposit creation effect (backend)**: Recording a Deposit, within a single Unit of Work (ADR-006), (a) seeds the Cash Asset for `account.currency` if absent (CSH-010), (b) lazy-creates the Cash Holding at `quantity = 0` if absent (CSH-012), (c) increases the Cash Holding's `quantity` by `total_amount` (which equals the deposited amount in account currency), and (d) persists the Transaction with `transaction_type = Deposit`. All four steps commit together or all roll back.
+**CSH-022 — Deposit creation effect (backend)**: Recording a Deposit, within a single Unit of Work (ADR-006), (a) idempotently ensures the Cash Asset for `account.currency` (a no-op when already seeded at account creation per CSH-010), (b) increases the account's always-present Cash Holding's `quantity` by `total_amount` (which equals the deposited amount in account currency), and (c) persists the Transaction with `transaction_type = Deposit`. All steps commit together or all roll back.
 
 **CSH-023 — Deposit edit (backend + frontend)**: Editing a Deposit re-applies the chronological replay used by `Account` aggregate root (TRX-031). The cash holding is recomputed from scratch over all cash-affecting transactions for the account. Edits may change `date`, `amount`, or `note`.
 
-**CSH-024 — Deposit delete (backend + frontend)**: Deleting a Deposit triggers a full chronological replay of every cash-affecting transaction for the account in `(date ASC, created_at ASC)` order with the deleted Deposit excluded. If, at any point during the replay, a remaining Withdrawal or Purchase would drive the running cash balance strictly negative, the deletion is rejected with the existing `cancel_transaction` `InsufficientCash { current_balance_micros, currency }` error (CSH-080). When the replay succeeds and no cash-affecting transactions remain afterwards, TRX-034 cleanup removes the Cash Holding row. The Cash Asset itself is never deleted.
+**CSH-024 — Deposit delete (backend + frontend)**: Deleting a Deposit triggers a full chronological replay of every cash-affecting transaction for the account in `(date ASC, created_at ASC)` order with the deleted Deposit excluded. If, at any point during the replay, a remaining Withdrawal or Purchase would drive the running cash balance strictly negative, the deletion is rejected with the existing `cancel_transaction` `InsufficientCash { current_balance_micros, currency }` error (CSH-080). When the replay succeeds, the Cash Holding is upserted with the recomputed balance — it is never deleted, even when that balance is zero (CSH-013). The Cash Asset is likewise never deleted.
 
 **CSH-025 — Deposit confirmation feedback (frontend)**: On successful Deposit recording or edit, a snackbar displays "Deposit recorded" / "Deposit updated"; on delete, "Deposit deleted". Failures display the validation or backend error inline in the form.
 
@@ -137,7 +137,7 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 **CSH-031 — Withdrawal input validation (frontend + backend)**: Same as Deposit (CSH-021) plus an additional eligibility check: `amount` may not exceed the cash holding's current `quantity` (CSH-080). Backend rejects with `InsufficientCash` when violated.
 
-**CSH-032 — Withdrawal creation effect (backend)**: Recording a Withdrawal, within a single Unit of Work (ADR-006), (a) requires the Cash Holding for `account.currency` to already exist with `quantity ≥ amount`; absent Cash Holding or insufficient quantity triggers `InsufficientCash { current_balance_micros, currency }` per CSH-080 (Withdrawals do not lazy-create the Cash Holding — only Deposit and Sell do, per CSH-012); (b) decreases the Cash Holding's `quantity` by `total_amount`; (c) persists the Transaction with `transaction_type = Withdrawal`. All steps commit together or all roll back.
+**CSH-032 — Withdrawal creation effect (backend)**: Recording a Withdrawal, within a single Unit of Work (ADR-006), (a) requires the account's always-present Cash Holding to have `quantity ≥ amount`; insufficient quantity triggers `InsufficientCash { current_balance_micros, currency }` per CSH-080 (Withdrawals only debit the existing Cash Holding); (b) decreases the Cash Holding's `quantity` by `total_amount`; (c) persists the Transaction with `transaction_type = Withdrawal`. All steps commit together or all roll back.
 
 **CSH-033 — Withdrawal edit (backend + frontend)**: Same replay semantics as CSH-023. The eligibility check is re-evaluated chronologically over the new transaction set; an edit that would leave any subsequent transaction in violation of CSH-080 is rejected with `InsufficientCash`.
 
@@ -147,15 +147,15 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 ### Purchase and Sell Re-linked to Cash (040–059)
 
-**CSH-040 — Purchase debits cash (backend)**: Recording a Purchase via `buy_holding` (TRX-026) — in addition to its existing effect on the bought asset's holding — debits the account's Cash Holding by `total_amount` (already in account currency per TRX-021/TRX-026). The cash debit, the asset-holding mutation, and the Transaction persistence commit together within a single Unit of Work (ADR-006). Purchases do not lazy-create the Cash Holding (only Deposit and Sell do, per CSH-012); the eligibility for the cash debit is governed by CSH-041.
+**CSH-040 — Purchase debits cash (backend)**: Recording a Purchase via `buy_holding` (TRX-026) — in addition to its existing effect on the bought asset's holding — debits the account's Cash Holding by `total_amount` (already in account currency per TRX-021/TRX-026). The cash debit, the asset-holding mutation, and the Transaction persistence commit together within a single Unit of Work (ADR-006). The Cash Holding is always present (CSH-012); eligibility for the cash debit is governed by CSH-041.
 
-**CSH-041 — Purchase eligibility on cash (backend)**: A Purchase is rejected when no Cash Holding exists for `account.currency`, or when the existing Cash Holding's `quantity` is strictly less than the Purchase's `total_amount`. The error variant is `InsufficientCash { current_balance_micros, currency }` (added to `BuyHoldingCommandError`). The guard is evaluated **after** the existing TRX-020/TRX-026 validations and **before** any mutation is persisted (CSH-080); on rejection, neither the asset holding nor the cash holding nor the Transaction is written.
+**CSH-041 — Purchase eligibility on cash (backend)**: A Purchase is rejected when the account's Cash Holding `quantity` is strictly less than the Purchase's `total_amount` (a freshly created account with a 0-balance Cash Holding therefore rejects any Purchase until funded). The error variant is `InsufficientCash { current_balance_micros, currency }` (added to `BuyHoldingCommandError`). The guard is evaluated **after** the existing TRX-020/TRX-026 validations and **before** any mutation is persisted (CSH-080); on rejection, neither the asset holding nor the cash holding nor the Transaction is written.
 
 **CSH-042 — Purchase edit re-applies cash effect (backend)**: Editing a Purchase (TRX-031) triggers the existing chronological replay for the asset holding **and** the Cash Holding. Both are recomputed end-to-end. The eligibility check (CSH-080) is re-evaluated chronologically; an edit that would leave any later Purchase in violation is rejected with `InsufficientCash`.
 
 **CSH-043 — Purchase delete returns cash (backend)**: Deleting a Purchase (TRX-034) triggers replay; cash holding rises by the deleted total. Always safe — never violates CSH-080.
 
-**CSH-050 — Sell credits cash (backend)**: Recording a Sell via `sell_holding` (SEL-024) — in addition to its existing effect on the sold asset's holding — credits the account's Cash Holding by `total_amount`. The Cash Holding is created lazily (CSH-012) when this is the first cash-affecting transaction.
+**CSH-050 — Sell credits cash (backend)**: Recording a Sell via `sell_holding` (SEL-024) — in addition to its existing effect on the sold asset's holding — credits the account's always-present Cash Holding by `total_amount` (CSH-012).
 
 **CSH-051 — Sell delete and edit replay (backend)**: Edits and deletes of Sell transactions (SEL-031, SEL-033) trigger the same chronological replay across both the sold-asset holding and the Cash Holding. A delete that would leave any later Purchase in violation of CSH-080 is rejected with `InsufficientCash`, mirroring CSH-024.
 
@@ -173,7 +173,7 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 ### Cash Holding Display (090–099)
 
-**CSH-090 — Cash Holding included in AccountDetailsResponse (backend)**: When an account has a Cash Holding (lazy-created per CSH-012), `AccountDetailsUseCase` includes it in `AccountDetailsResponse.holdings`. Asset-metadata enrichment (ACD-022) treats the Cash Asset like any other asset — `asset_name` becomes "Cash EUR" / "Cash USD" / etc.
+**CSH-090 — Cash Holding included in AccountDetailsResponse (backend)**: Every account has a Cash Holding (CSH-012), and `AccountDetailsUseCase` always includes it in `AccountDetailsResponse.holdings` (the active list) — **exempt from the ACD-020 `quantity > 0` filter** and never placed in `closed_holdings`, even at `quantity = 0`. Asset-metadata enrichment (ACD-022) treats the Cash Asset like any other asset — `asset_name` becomes "Cash EUR" / "Cash USD" / etc.
 
 **CSH-091 — Cash row layout (frontend)**: The Cash row displays its quantity as a currency amount (e.g. `€1,250.00`), no average price column, no cost basis column, no realized P&L column, no Buy/Sell row actions. Its inline actions are a "Deposit" / "Withdraw" pair plus a "View transactions" (inspect) action (CSH-110) — replacing the standard holding-row actions.
 
@@ -183,9 +183,9 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 **CSH-094 — total_global_value field (backend)**: `AccountDetailsResponse` is extended with a new field `total_global_value: i64` (account-currency micros, ADR-001), computed by `AccountDetailsUseCase` as `cash_holding.quantity + Σ_h (h.quantity × latest_price(h))` over **non-cash active holdings only** (`quantity > 0`). When no Cash Holding exists, the cash term is `0`. When a non-cash holding has no recorded `AssetPrice`, that holding contributes `0` (no fallback to `average_price`). When all non-cash holdings are unpriced and the account has no cash, `total_global_value = 0`. The amendment to `AccountDetailsResponse` is registered in `docs/spec/account-details.md`.
 
-**CSH-095 — No-cash empty state (frontend)**: When the cash row is not visible (per CSH-097: either no Cash Holding exists, or the Cash Holding has `quantity = 0`), the Account Details holdings table displays a banner row "No cash recorded yet" at the top in place of the cash row, with a primary "Record a deposit" button. Clicking the button opens `DepositTransactionModal`.
+**CSH-095 — Cash row always visible (frontend)**: The Cash row is always rendered at the top of the active holdings table (CSH-092), including when its `quantity = 0` (e.g. a freshly created account, or one fully withdrawn/spent). There is **no** "No cash recorded yet" banner and no empty cash state — the persistent cash row, with its inline Deposit action, is the entry point for funding the account.
 
-**CSH-097 — Cash row hidden at zero quantity (frontend)**: The cash row follows ACD-020's `quantity > 0` filter without override — when the Cash Holding's `quantity = 0` (e.g. fully withdrawn or fully spent), the row is hidden, and the "No cash recorded yet" banner (CSH-095) renders in its place. The user retains entry to Deposit via the Account Details header button (CSH-019) and the banner's primary action.
+**CSH-097 — Cash row shown regardless of quantity (frontend)**: The Cash row overrides ACD-020's `quantity > 0` filter — it renders even at `quantity = 0` (the backend always supplies it per CSH-090). The Withdraw inline action is disabled when `quantity == 0` (cash is never negative — CSH-080); the Deposit inline action is always enabled.
 
 **CSH-098 — ACD-034 empty-state count excludes cash (frontend)**: When determining whether to show the "No positions yet" or "All positions are closed" empty-state messages (ACD-034), the frontend excludes the Cash Holding from the active-holdings count. An account whose only non-zero holding is the Cash Holding still shows ACD-034's "No positions yet" message in the asset positions area (with the cash row visible above per CSH-091/092). The corresponding cross-reference is registered in `docs/spec/account-details.md` (ACD-034 amendment).
 
@@ -207,13 +207,14 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 ```
 [User creates account in EUR]
-  → ACC creates the account
-  → CSH-010: Cash Asset "system-cash-eur" seeded if not present
-  → No Cash Holding created yet (lazy, CSH-012)
+  → ACC + use_cases/account_creation create the account
+  → CSH-010: Cash Asset "system-cash-eur" seeded (idempotent)
+  → CSH-012: Cash Holding created eagerly at quantity 0, persisted
+  → Account Details shows the cash row at €0.00 (CSH-095)
 
-[User opens "Deposit" form from Account Details header]
+[User opens "Deposit" from the cash row's inline action]
   → CSH-020 form: amount, date, optional note
-  → Submit → CSH-022: Cash Holding created at qty 0, then incremented by amount
+  → Submit → CSH-022: cash holding quantity incremented by amount
   → TransactionUpdated event → ACD-039 re-fetch
   → Account Details header shows total_global_value
 
@@ -239,8 +240,8 @@ The asset-mutation commands (`update_asset`, `archive_asset`, `unarchive_asset`,
 
 ### Entry Point
 
-- A "Deposit" and a "Withdraw" button in the Account Details header, next to the existing "Add Transaction" button. Both open dedicated modals.
-- The Cash Holding row in the active holdings table also exposes its own "Deposit" and "Withdraw" inline actions (CSH-091).
+- The Cash Holding row in the active holdings table exposes "Deposit" and "Withdraw" inline actions (CSH-091), which open dedicated modals. This is the sole entry point — the Account Details header carries no cash actions (CSH-019).
+- The cash row is always present (CSH-095), so the Deposit action is reachable even on a brand-new, unfunded account.
 
 ### Main Component
 
@@ -256,7 +257,7 @@ The Account Details header gains a new total: **Global Value** (cash + market va
 
 ### States
 
-- **Empty**: when an account has just been created and has no Cash Holding yet, the Account Details header reads "No cash recorded — record a deposit to get started." A primary "Deposit" button opens the modal.
+- **Fresh account**: a just-created account shows the cash row at €0.00 (CSH-095) with its inline Deposit action enabled and Withdraw disabled (CSH-097). No banner, no empty cash state.
 - **Loading**: skeleton row at the top of the active holdings table while the Cash Holding is fetched (handled by ACD-037).
 - **Error (insufficient cash)**: per CSH-081 — inline error in form.
 - **Error (validation)**: inline form errors per CSH-021 / CSH-031.
@@ -264,8 +265,8 @@ The Account Details header gains a new total: **Global Value** (cash + market va
 
 ### User Flow
 
-1. User creates a new account in EUR → no cash holding yet, header shows "No cash recorded".
-2. User clicks "Deposit", enters €5 000, today's date → cash holding created at €5 000, header updates.
+1. User creates a new account in EUR → cash row shows €0.00 immediately (CSH-012/095).
+2. User clicks the cash row's "Deposit", enters €5 000, today's date → cash holding rises to €5 000, header updates.
 3. User buys an asset for €1 600 → cash debited to €3 400, AAPL holding created. Both visible in the holdings table.
 4. User sells half of the asset for €900 → cash credited to €4 300, AAPL holding quantity halved.
 5. User clicks "Withdraw", enters €1 000 → cash drops to €3 300.

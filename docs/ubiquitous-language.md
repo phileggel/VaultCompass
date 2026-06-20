@@ -110,7 +110,7 @@ A system-seeded `Asset` of `class = AssetClass::Cash`, one per ISO currency, wit
 
 > Status: confirmed
 
-A `Holding` whose asset is a Cash Asset. Represents the cash balance held in the account in the account's reference currency. At most one Cash Holding per `(account_id, account.currency)`. Lazy-created on first Deposit or Sell; cleaned up by TRX-034 when no cash-affecting transactions remain.
+A `Holding` whose asset is a Cash Asset. Represents the cash balance held in the account in the account's reference currency. Exactly one Cash Holding per account, created together with the account at a zero balance and kept for the account's lifetime — when the account holds no cash it stays at zero rather than disappearing.
 
 ### Global Value
 

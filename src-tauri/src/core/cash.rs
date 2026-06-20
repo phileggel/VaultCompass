@@ -18,6 +18,13 @@ pub fn system_cash_asset_id(currency: &str) -> String {
     format!("system-cash-{}", currency.to_lowercase())
 }
 
+/// Returns true when `asset_id` is a system Cash Asset id (`system-cash-{ccy}`).
+/// Mirrors the frontend `isCashAsset` prefix check. Only ever called with asset
+/// ids (never the `system-cash-category` id), so the prefix is unambiguous.
+pub fn is_cash_asset(asset_id: &str) -> bool {
+    asset_id.starts_with("system-cash-")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -27,5 +34,16 @@ mod tests {
         assert_eq!(system_cash_asset_id("EUR"), "system-cash-eur");
         assert_eq!(system_cash_asset_id("usd"), "system-cash-usd");
         assert_eq!(system_cash_asset_id("UsD"), "system-cash-usd");
+    }
+
+    #[test]
+    fn is_cash_asset_matches_cash_ids_only() {
+        assert!(is_cash_asset("system-cash-eur"));
+        assert!(is_cash_asset("system-cash-usd"));
+        assert!(!is_cash_asset("aapl-uuid"));
+        assert!(!is_cash_asset(""));
+        // The category id also carries the prefix; callers only ever pass asset ids,
+        // so this match is harmless but documented here.
+        assert!(is_cash_asset(SYSTEM_CASH_CATEGORY_ID));
     }
 }

@@ -306,8 +306,8 @@ impl Account {
             .push(AccountChange::HoldingUpserted(holding.clone()));
         self.upsert_holding_in_memory(holding);
 
-        // CSH-050 — Sell credits cash; lazy-creates the Cash Holding when this is the first
-        // cash-affecting transaction (CSH-012). Sell never raises InsufficientCash.
+        // CSH-050 — Sell credits the account's always-present Cash Holding (CSH-012).
+        // Sell never raises InsufficientCash.
         self.replay_cash_holding()?;
 
         self.transactions
@@ -483,7 +483,11 @@ impl Account {
             .filter(|t| t.asset_id == asset_id)
             .collect();
 
-        if remaining.is_empty() {
+        if crate::core::cash::is_cash_asset(&asset_id) {
+            // CSH-013 — the Cash Holding is never deleted and is not recalculated via the
+            // asset-holding path; `replay_cash_holding` (below) is its sole manager and
+            // upserts it with the recomputed balance (staying at 0 when no cash remains).
+        } else if remaining.is_empty() {
             // Remove the holding — no transactions left for this pair
             self.holdings
                 .retain(|h| !(h.account_id == self.id && h.asset_id == asset_id));
@@ -592,11 +596,27 @@ impl Account {
         self.holding_quantity(&self.cash_asset_id())
     }
 
+    /// Seeds the account's Cash Holding at a zero balance (CSH-012). Idempotent —
+    /// a no-op when a Cash Holding already exists. Enqueues a `HoldingUpserted`
+    /// change so the eager 0-balance holding is persisted alongside the account.
+    /// `average_price` is `1_000_000` (1.0 micros — cash is its own unit, ADR-001).
+    pub fn seed_cash_holding(&mut self) {
+        let cash_asset_id = self.cash_asset_id();
+        if self.holdings.iter().any(|h| h.asset_id == cash_asset_id) {
+            return;
+        }
+        let holding = Holding::new(self.id.clone(), cash_asset_id, 0, 1_000_000, 0, None)
+            .expect("0-balance cash holding has invariant-safe values (qty 0, price 1.0)");
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+    }
+
     /// Aggregate-root method: applies a pre-built Deposit transaction to this
     /// account (CSH-022). The transaction must have been built via
     /// `Transaction::new_deposit` so TRX-020 is already validated. Pushes to
     /// history, queues the `TransactionInserted` change, and replays the cash
-    /// holding (CSH-012 lazy-creates the Cash Holding on first deposit).
+    /// holding (CSH-012 — credits the account's always-present Cash Holding).
     ///
     /// Returns a `Result` for signature symmetry with `apply_withdrawal`, but
     /// the only failure path (`replay_cash_holding` raising `InsufficientCash`)
@@ -617,8 +637,8 @@ impl Account {
     /// this account (CSH-032). The transaction must have been built via
     /// `Transaction::new_withdrawal`. Enforces CSH-080 (insufficient cash)
     /// before any mutation so a rejected transaction is never left in
-    /// `self.transactions`. Withdrawals do not lazy-create the Cash Holding —
-    /// only Deposit and Sell do (CSH-012).
+    /// `self.transactions`. Withdrawals debit the account's always-present Cash
+    /// Holding (CSH-012).
     pub fn apply_withdrawal(
         &mut self,
         tx: Transaction,
@@ -649,7 +669,7 @@ impl Account {
     /// account (DIV-023). The transaction must have been built via
     /// `Transaction::new_dividend`. Pushes to history, queues the
     /// `TransactionInserted` change for the dividend, and replays the cash
-    /// holding (CSH-012 lazy-creates the Cash Holding on the first credit).
+    /// holding (CSH-012 — credits the account's always-present Cash Holding).
     ///
     /// The paying asset's holding (`asset_id`) is left untouched (DIV-024):
     /// only the Cash Holding is updated. Never raises `InsufficientCash` —
@@ -659,7 +679,7 @@ impl Account {
         tx: Transaction,
     ) -> StdResult<Transaction, AccountOperationError> {
         // DIV-023/024 — credit-only, identical to a Deposit: push to history,
-        // queue the insert, replay the cash holding (lazy-creates per CSH-012).
+        // queue the insert, replay the cash holding (credits it per CSH-012).
         // The paying asset's holding is intentionally not recomputed — a dividend
         // never affects its quantity or cost basis.
         self.transactions.push(tx.clone());
@@ -762,27 +782,11 @@ impl Account {
             }
         }
 
-        // CSH-013 / TRX-034 cleanup: when no Deposit / Withdrawal remain *and* the running
-        // balance is zero, drop the Cash Holding. (The "pair" for cash, by analogy with
-        // TRX-034, is Deposit + Withdrawal; Purchase / Sell touch cash via side-effect but
-        // are owned by their non-cash asset's pair.)
-        let cash_pair_remains = self.transactions.iter().any(|t| {
-            matches!(
-                t.transaction_type,
-                TransactionType::Deposit | TransactionType::Withdrawal | TransactionType::Dividend
-            )
-        });
+        // CSH-013 — the Cash Holding persists for the account's lifetime. Unlike other
+        // holdings (TRX-034), it is never deleted by transaction cleanup; it is upserted
+        // with the recomputed balance and stays at quantity 0 when the account holds no
+        // cash. (It is removed only when the account is deleted, via the ACC cascade.)
         let existing_cash_holding = self.holdings.iter().find(|h| h.asset_id == cash_asset_id);
-        if running == 0 && !cash_pair_remains {
-            if existing_cash_holding.is_some() {
-                self.holdings.retain(|h| h.asset_id != cash_asset_id);
-                self.pending_changes.push(AccountChange::HoldingDeleted {
-                    account_id: self.id.clone(),
-                    asset_id: cash_asset_id,
-                });
-            }
-            return Ok(());
-        }
 
         // Upsert the Cash Holding with average_price = 1.0, total_realized_pnl = 0,
         // last_sold_date = None — invariants from the spec entity definition.
@@ -1765,10 +1769,10 @@ mod tests {
         assert_eq!(cash.average_price, 1_000_000, "cash VWAP is constant 1.0");
     }
 
-    // CSH-013 — Cash Holding lifecycle follows TRX-034: when no Deposit/Withdrawal
-    // remain after a delete and the running balance is zero, the holding is removed.
+    // CSH-013 — the Cash Holding persists for the account's lifetime: cancelling the
+    // last deposit leaves it at quantity 0, never deleted.
     #[test]
-    fn csh_013_cash_holding_removed_when_last_deposit_cancelled() {
+    fn csh_013_cash_holding_persists_at_zero_when_last_deposit_cancelled() {
         let mut acc = base_account();
         let dep = acc
             .record_deposit("2020-01-01".to_string(), 500_000_000, None)
@@ -1778,19 +1782,68 @@ mod tests {
 
         acc.cancel_transaction(&dep.id).unwrap();
 
+        let cash = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == acc.cash_asset_id())
+            .expect("cash holding must persist after the last deposit is cancelled");
+        assert_eq!(cash.quantity, 0, "cash holding stays at zero, not deleted");
         assert!(
-            !acc.holdings
-                .iter()
-                .any(|h| h.asset_id == acc.cash_asset_id()),
-            "cash holding must be removed when no cash-pair tx remains"
-        );
-        assert!(
-            acc.pending_changes.iter().any(|c| matches!(
+            !acc.pending_changes.iter().any(|c| matches!(
                 c,
                 AccountChange::HoldingDeleted { asset_id, .. }
                     if asset_id == &acc.cash_asset_id()
             )),
-            "HoldingDeleted change must be queued for the cash asset"
+            "no HoldingDeleted change may be queued for the cash asset (CSH-013)"
+        );
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::HoldingUpserted(h)
+                    if h.asset_id == acc.cash_asset_id() && h.quantity == 0
+            )),
+            "cash holding must be upserted at zero"
+        );
+    }
+
+    // CSH-012 — eager seed: a fresh account gains a 0-balance cash holding and an
+    // upsert change; calling twice is idempotent.
+    #[test]
+    fn csh_012_seed_cash_holding_creates_zero_balance_holding() {
+        let mut acc = base_account();
+        assert!(
+            !acc.holdings
+                .iter()
+                .any(|h| h.asset_id == acc.cash_asset_id()),
+            "fresh account has no cash holding before seeding"
+        );
+
+        acc.seed_cash_holding();
+
+        let cash = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == acc.cash_asset_id())
+            .expect("seed_cash_holding must create the cash holding");
+        assert_eq!(cash.quantity, 0);
+        assert_eq!(cash.average_price, 1_000_000, "cash VWAP is constant 1.0");
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::HoldingUpserted(h)
+                    if h.asset_id == acc.cash_asset_id() && h.quantity == 0
+            )),
+            "HoldingUpserted must be queued for the seeded cash holding"
+        );
+
+        // Idempotent — a second call does not add a duplicate.
+        acc.seed_cash_holding();
+        assert_eq!(
+            acc.holdings
+                .iter()
+                .filter(|h| h.asset_id == acc.cash_asset_id())
+                .count(),
+            1
         );
     }
 

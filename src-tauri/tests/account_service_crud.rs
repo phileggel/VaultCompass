@@ -432,3 +432,17 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
     // 3 transactions: 2 purchases + the seeded Deposit.
     assert_eq!(tx_count, 3, "two purchases plus the seeded deposit");
 }
+
+// CSH-012 — seed_cash_holding rejects an unknown account (AccountNotFound branch).
+#[tokio::test]
+async fn seed_cash_holding_errors_when_account_missing() {
+    let pool = make_pool().await;
+    let service = make_service(&pool).await;
+
+    let result = service.seed_cash_holding("does-not-exist").await;
+
+    assert!(
+        result.is_err(),
+        "seed_cash_holding must reject an unknown account id"
+    );
+}

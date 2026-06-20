@@ -106,7 +106,7 @@ Transaction list (filtered by the distributing asset)
 
 ### Entry Point
 
-A "Free shares" item in the Account Details header's consolidated "Record" dropdown menu (DIV-012), alongside Cash deposit, Cash withdrawal, New position, and Dividend. Selecting it opens the free-shares modal. (A per-holding-row action is deferred — FSD-010.)
+A "Free shares" item in the Account Details header's consolidated "Record" dropdown menu (DIV-012), alongside New position and Dividend (cash Deposit/Withdraw live on the cash row, not this menu — DIV-012). Selecting it opens the free-shares modal. (A per-holding-row action is deferred — FSD-010.)
 
 ### Main Component
 

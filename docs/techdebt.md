@@ -113,6 +113,14 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
   Migration is mechanical for #1 (folder move + ~5 import sites) and conventional for #2/#3 (depends on the consolidation decision). Cleanest as one or two dedicated PRs after the kit proposals land (so the project mirrors the kit-ratified spec).
 
+## 2026-06-20 — `replay_cash_holding` uses `Holding::restore` for fresh/upserted holdings
+
+- Found by: reviewer-arch (eager-cash-line review)
+- Where: `src-tauri/src/context/account/domain/account.rs` (`replay_cash_holding`, the cash-holding upsert)
+- Context: branch `feat/eager-cash-line` @ HEAD
+- Severity: 🟡
+- Observation: The cash-holding upsert in `replay_cash_holding` builds the holding via `Holding::restore` (the "reconstruct from DB, no validation" factory) for both the preserve-existing-id case and the freshly-generated-id case. Per the three-factory convention it should use `Holding::with_id(existing_id, …)` when preserving an id and `Holding::new(…)` when generating one (both validate). Pre-dates this branch; deferred because the fix needs a new/with_id branch split (design, not a mechanical swap). `seed_cash_holding` (added this branch) already uses `Holding::new` correctly — align `replay_cash_holding` when next touched.
+
 ## 2026-06-20 — `account_details` hooks read the shared asset store directly (F28)
 
 - Found by: reviewer-arch + reviewer-frontend (holdings-grouping review)

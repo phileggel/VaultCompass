@@ -57,7 +57,7 @@ The `AccountDetailsResponse` DTO (owned by ACD) gains one field.
 
 **DIV-011 — Eligibility (backend)**: A dividend may be recorded only for an `(account, asset)` pair where the account currently holds the asset with `quantity > 0` and the asset is not a Cash Asset. The action is rejected with a specific error when the account is unknown, the asset is unknown, the asset is not currently held in that account (no active holding), or the asset is a Cash Asset.
 
-**DIV-012 — Header "Record" menu consolidation (frontend)**: The Account Details header groups its "record an entry" actions under a single "Record" dropdown menu rather than separate buttons. The menu's items are: Cash deposit, Cash withdrawal (shown only when withdrawing is possible, preserving CSH-019's existing visibility condition), New position (the Opening-balance action, TRX-055), and Dividend (DIV-010). The item labels are reworded for consistency under the "Record" header — the underlying actions and modals are unchanged. Each item opens its existing dedicated modal. This **supersedes the standalone-button header placement** of CSH-019 (Deposit/Withdraw) and TRX-055 (Add a position) — see the reciprocal back-references in those rules. It does **not** touch the Cash _row's_ inline Deposit/Withdraw actions (CSH-091), which remain. The Performance and Refresh-prices header actions, and the primary "Add transaction" (buy/sell) action, are unchanged and remain outside this menu.
+**DIV-012 — Header "Record" menu consolidation (frontend)**: The Account Details header groups its "record an entry" actions under a single "Record" dropdown menu rather than separate buttons. The menu's items are: New position (the Opening-balance action, TRX-055), Dividend (DIV-010), and Record free shares (FSD-010). Each item opens its existing dedicated modal. This **supersedes the standalone-button header placement** of TRX-055 (Add a position) — see the reciprocal back-reference in that rule. The menu carries **no** cash actions: Deposit and Withdrawal are reached exclusively from the Cash _row's_ inline actions (CSH-091 / CSH-019), since the cash row is always present (CSH-095). The Performance and Refresh-prices header actions, and the primary "Add transaction" (buy/sell) action, are unchanged and remain outside this menu.
 
 ### Recording a Dividend (020–029)
 
@@ -67,7 +67,7 @@ The `AccountDetailsResponse` DTO (owned by ACD) gains one field.
 
 **DIV-022 — Currency conversion (frontend + backend)**: The dividend is entered in the asset's native currency and credited to the account in account currency, converted via `exchange_rate`, reusing the same mechanism as Buy/Sell (TRX-021). When the asset currency equals the account currency, `exchange_rate` is `1` and no rate input is shown; otherwise the user supplies the rate and `total_amount = net_amount × exchange_rate`.
 
-**DIV-023 — Recording effect (backend)**: Recording a Dividend, within a single Unit of Work ([ADR-006](../adr/006-unit-of-work.md)): (a) credits the account's Cash Holding by `total_amount` (account currency), lazy-creating the Cash Holding if absent — identical to how Sell credits cash (CSH-050, CSH-012); (b) leaves the paying asset's holding `quantity`, average cost, and cost basis **unchanged**; (c) persists the Transaction with `transaction_type = Dividend` attributed to the paying asset. All steps commit together or all roll back.
+**DIV-023 — Recording effect (backend)**: Recording a Dividend, within a single Unit of Work ([ADR-006](../adr/006-unit-of-work.md)): (a) credits the account's always-present Cash Holding by `total_amount` (account currency) — identical to how Sell credits cash (CSH-050, CSH-012); (b) leaves the paying asset's holding `quantity`, average cost, and cost basis **unchanged**; (c) persists the Transaction with `transaction_type = Dividend` attributed to the paying asset. All steps commit together or all roll back.
 
 **DIV-024 — No effect on cost basis or realized P&L (backend)**: A Dividend never alters the paying asset's `quantity`, average cost, or cost basis (the holding is left untouched per DIV-023b), and never contributes to realized P&L. Dividend income is kept distinct from capital gains so the two can be reported separately.
 
@@ -110,7 +110,7 @@ Account Details header → "Record" menu → "Dividend" (DIV-010/012)
   → submit
       backend validate: amount > 0, date ≤ today, asset held (qty > 0), not cash (DIV-011/021)
       backend (single Unit of Work, ADR-006):
-        ├─ credit Cash Holding by total_amount (lazy-create if absent)   (DIV-023, CSH-050/012)
+        ├─ credit the always-present Cash Holding by total_amount        (DIV-023, CSH-050/012)
         ├─ leave paying asset's holding qty / cost basis unchanged        (DIV-024)
         └─ persist Transaction(type=Dividend, asset_id=paying asset)      (DIV-023)
       publish TransactionUpdated                                          (DIV-026)
@@ -129,7 +129,7 @@ Transaction list (filtered by the paying asset)
 
 ### Entry Point
 
-A "Dividend" item in the Account Details header's consolidated "Record" dropdown menu (DIV-012), which also hosts Cash deposit, Cash withdrawal, and New position. Selecting it opens the dividend modal. (A per-holding-row dividend action is deferred — DIV-010.)
+A "Dividend" item in the Account Details header's consolidated "Record" dropdown menu (DIV-012), which also hosts New position and Record free shares (cash Deposit/Withdraw live on the cash row, not this menu — DIV-012). Selecting it opens the dividend modal. (A per-holding-row dividend action is deferred — DIV-010.)
 
 ### Main Component
 
