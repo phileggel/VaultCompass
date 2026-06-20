@@ -16,7 +16,6 @@ import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
 import { WithdrawalTransactionModal } from "../withdrawal_transaction/WithdrawalTransactionModal";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
-import { NoCashBanner } from "./NoCashBanner";
 import { useAccountDetailsView } from "./useAccountDetailsView";
 
 export function AccountDetailsView() {
@@ -162,28 +161,7 @@ export function AccountDetailsView() {
                           if (e.key === "Escape") setAddMenuOpen(false);
                         }}
                       >
-                        {/* CSH-019 — Deposit always available */}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          id="add-menu-deposit"
-                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                          onClick={() => runFromAddMenu(view.handleDepositOpen)}
-                        >
-                          {t("account_details.action_deposit")}
-                        </button>
-                        {/* CSH-019 — Withdraw only when there is cash to withdraw */}
-                        {view.hasVisibleCashRow && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            id="add-menu-withdraw"
-                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                            onClick={() => runFromAddMenu(view.handleWithdrawalOpen)}
-                          >
-                            {t("account_details.action_withdraw")}
-                          </button>
-                        )}
+                        {/* CSH-019 — cash Deposit/Withdraw live on the cash row, not this menu */}
                         {/* TRX-055 — Open balance (keeps its shipped "Add a position" label) */}
                         <button
                           type="button"
@@ -240,80 +218,77 @@ export function AccountDetailsView() {
                 {t("action.retry")}
               </Button>
             </div>
-          ) : view.summary?.isEmpty && !view.hasVisibleCashRow ? (
-            /* ACD-034 / CSH-098 — empty state only when there are no positions
-               AND no cash row to display. With a cash holding present, the
-               cash row renders even though `isEmpty` excludes cash from its
-               own count (CSH-098 gating intent). */
-            <div className="flex flex-col items-center justify-center h-full gap-4 py-12">
-              <p className="text-m3-on-surface-variant italic">
-                {t("account_details.empty_no_positions")}
-              </p>
-              {/* ACD-035 — add affordance is the global FAB (bottom-right) */}
-            </div>
           ) : (
             <div className="flex flex-col">
-              {/* CSH-095 — no-cash banner above the active holdings table */}
-              {view.showNoCashBanner && <NoCashBanner onRecordDeposit={view.handleDepositOpen} />}
+              {/* CSH-095 — active holdings table; the Cash row is always present
+                  (even at €0), so this table always renders. */}
+              <div className="m3-table-container">
+                <table className="w-full border-collapse">
+                  <thead className="sticky top-0 bg-m3-surface-container z-10">
+                    <tr>
+                      <th className="m3-th">{t("account_details.column_asset")}</th>
+                      <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
+                      <th className="m3-th text-right">{t("account_details.column_avg_price")}</th>
+                      {/* SEL-042 — Realized P&L column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_realized_pnl")}
+                      </th>
+                      {/* MKT-030 — Current price column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_current_price")}
+                      </th>
+                      {/* MKT-143 — Current value column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_current_value")}
+                      </th>
+                      {/* MKT-032/034 — Unrealized P&L column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_unrealized_pnl")}
+                      </th>
+                      {/* MKT-035 — Performance % column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_performance_pct")}
+                      </th>
+                      {/* DIV-072 — Dividends received column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_dividends_received")}
+                      </th>
+                      {/* DIV-072 — Total return % column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_total_return_pct")}
+                      </th>
+                      <th className="m3-th">{t("transaction.column_actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {view.holdings.map((row) => (
+                      <HoldingRow
+                        key={row.assetId}
+                        row={row}
+                        accountId={accountId}
+                        onBuy={view.handleBuyOpen}
+                        onSell={view.handleSellOpen}
+                        onPriceHistory={view.handlePriceHistory}
+                        onDeposit={view.handleDepositOpen}
+                        onWithdraw={view.handleWithdrawalOpen}
+                        onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-              {/* Active holdings table */}
-              {view.hasActiveHoldings && (
-                <div className="m3-table-container">
-                  <table className="w-full border-collapse">
-                    <thead className="sticky top-0 bg-m3-surface-container z-10">
-                      <tr>
-                        <th className="m3-th">{t("account_details.column_asset")}</th>
-                        <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
-                        <th className="m3-th text-right">
-                          {t("account_details.column_avg_price")}
-                        </th>
-                        {/* SEL-042 — Realized P&L column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_realized_pnl")}
-                        </th>
-                        {/* MKT-030 — Current price column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_current_price")}
-                        </th>
-                        {/* MKT-143 — Current value column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_current_value")}
-                        </th>
-                        {/* MKT-032/034 — Unrealized P&L column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_unrealized_pnl")}
-                        </th>
-                        {/* MKT-035 — Performance % column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_performance_pct")}
-                        </th>
-                        {/* DIV-072 — Dividends received column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_dividends_received")}
-                        </th>
-                        {/* DIV-072 — Total return % column */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_total_return_pct")}
-                        </th>
-                        <th className="m3-th">{t("transaction.column_actions")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {view.holdings.map((row) => (
-                        <HoldingRow
-                          key={row.assetId}
-                          row={row}
-                          accountId={accountId}
-                          onBuy={view.handleBuyOpen}
-                          onSell={view.handleSellOpen}
-                          onPriceHistory={view.handlePriceHistory}
-                          onDeposit={view.handleDepositOpen}
-                          onWithdraw={view.handleWithdrawalOpen}
-                          onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
+              {/* ACD-034 / CSH-098 — asset-positions empty message; the Cash row is
+                  excluded from the count, so a cash-only account still reads "No positions yet" */}
+              {!view.hasNonCashActiveHoldings && (
+                <div className="flex flex-col items-center justify-center gap-4 py-8">
+                  <p className="text-m3-on-surface-variant italic">
+                    {t(
+                      view.summary?.isAllClosed
+                        ? "account_details.empty_all_closed"
+                        : "account_details.empty_no_positions",
+                    )}
+                  </p>
                 </div>
               )}
 
@@ -345,15 +320,6 @@ export function AccountDetailsView() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-
-              {/* No active holdings but has closed — show CTA */}
-              {!view.hasActiveHoldings && (
-                <div className="flex flex-col items-center justify-center gap-4 py-8">
-                  <p className="text-m3-on-surface-variant italic">
-                    {t("account_details.empty_all_closed")}
-                  </p>
                 </div>
               )}
             </div>

@@ -355,10 +355,11 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
     totalRealizedPnl: microToFormatted(response.total_realized_pnl, 2),
     totalRealizedPnlRaw: response.total_realized_pnl,
     holdingCount: response.total_holding_count,
-    isEmpty:
-      response.total_holding_count === 0 ||
-      (nonCashActive.length === 0 && response.closed_holdings.length === 0),
-    isAllClosed: response.total_holding_count > 0 && nonCashActive.length === 0,
+    // CSH-098 — cash is excluded from both counts. With eager cash, every account
+    // has a Cash Holding (total_holding_count >= 1), so these key off non-cash active
+    // holdings + closed holdings only, never the raw count.
+    isEmpty: nonCashActive.length === 0 && response.closed_holdings.length === 0,
+    isAllClosed: nonCashActive.length === 0 && response.closed_holdings.length > 0,
     hasClosedHoldings: response.closed_holdings.length > 0,
     totalUnrealizedPnl:
       response.total_unrealized_pnl !== null

@@ -385,16 +385,19 @@ describe("toAccountSummary — cash totals (CSH-094/098)", () => {
     expect(summary.hasCashHolding).toBe(false);
   });
 
-  // CSH-098 — cash row excluded from isEmpty / isAllClosed gating
-  it("isEmpty true when only the cash holding is active and no closed holdings", () => {
+  // CSH-098 — cash row excluded from isEmpty / isAllClosed gating. Under eager cash a
+  // fresh account always has the Cash Holding (total_holding_count >= 1), so it must
+  // read "No positions yet" (isEmpty) — NOT "All positions closed" (isAllClosed).
+  it("fresh cash-only account is isEmpty, not isAllClosed (CSH-098)", () => {
     const summary = toAccountSummary(
       makeResponse({
         holdings: [makeCashHolding()],
-        total_holding_count: 0,
+        total_holding_count: 1,
         closed_holdings: [],
       }),
     );
     expect(summary.isEmpty).toBe(true);
+    expect(summary.isAllClosed).toBe(false);
   });
 
   it("isAllClosed true when only cash is active but closed holdings exist", () => {
