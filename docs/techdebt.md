@@ -113,6 +113,14 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
   Migration is mechanical for #1 (folder move + ~5 import sites) and conventional for #2/#3 (depends on the consolidation decision). Cleanest as one or two dedicated PRs after the kit proposals land (so the project mirrors the kit-ratified spec).
 
+## 2026-06-20 — `account_details` hooks read the shared asset store directly (F28)
+
+- Found by: reviewer-arch + reviewer-frontend (holdings-grouping review)
+- Where: `src/features/account_details/account_details_view/useAccountDetails.ts` (`useAppStore((s) => s.assets)`) and `src/features/account_details/account_details_view/HoldingRow.tsx` (`useAppStore` for `assets` / `accounts`)
+- Context: branch `refactor/ux-improvements` @ HEAD
+- Severity: 🟡
+- Observation: F28 (Store kinds) wants cross-feature reads of the shared BE/FE cache to go through the feature's own gateway selector rather than importing `@/lib/store` directly. `useAccountDetails.ts` now joins the asset catalog (for ACD-051 class grouping) by reading `useAppStore` directly, matching the pre-existing `HoldingRow.tsx` pattern in the same sub-feature. Fixing one hook alone would leave the sibling inconsistent (a partial mid-flight refactor CLAUDE.md forbids), so deferred. When picked up: expose an `assets` selector on `accountDetailsGateway` and route both callsites through it. Folds naturally into the FE gold layout migration (2026-05-10 entry) and the eventual `lib/ → infra/cache/` rename.
+
 ## 2026-05-09 — Migrate to gold DDD layout (per kit proposals #17–#19)
 
 - Found by: manual (post-PR-#12 design discussion)
