@@ -37,7 +37,8 @@ export function DateField({
   ...props
 }: DateFieldProps) {
   const { t, i18n } = useTranslation("common");
-  const effectiveLocale = locale ?? I18N_TO_BCP47[i18n.language] ?? i18n.language;
+  const baseLang = i18n.language.split("-")[0] ?? i18n.language;
+  const effectiveLocale = locale ?? I18N_TO_BCP47[baseLang] ?? baseLang;
   const {
     displayValue,
     showCalendar,
@@ -51,6 +52,7 @@ export function DateField({
     closeCalendar,
     clearDate,
     handleInputChange,
+    handleKeyDown,
     handleDateSelect,
     getDaysInMonth,
     getFirstDayOfMonth,
@@ -103,10 +105,12 @@ export function DateField({
           className={`m3-input w-full pr-8 ${error ? "border-m3-error" : ""} ${className}`}
           value={displayValue}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           onFocus={openCalendar}
           onBlur={closeCalendar}
           disabled={disabled}
           placeholder={t("field.datePlaceholder")}
+          autoComplete="off"
           {...props}
         />
         {displayValue && !disabled && (

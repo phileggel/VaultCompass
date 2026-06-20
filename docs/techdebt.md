@@ -202,3 +202,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `refactor/ux-improvements` @ HEAD
 - Severity: 🔵
 - Observation: ACC-024's YTD reuse is implemented by promoting performance-engine helpers to `pub(crate)` and importing them into the sibling `account_summary` use case — an asymmetric inter-module dependency within `use_cases/` (not a hard layering violation: no use-case struct injection, no service duplication, all within the layer). Before a third use case needs these, extract the stateless valuation/Dietz helpers (`load_priced_assets`, `load_rate_map`, `compute_current_ytd_pct`, `PricedAsset`, `RateMap`) into a neutral `use_cases/shared/` module owned by neither use case, and replace `account_performance/mod.rs`'s wildcard `pub use orchestrator::*` with an explicit re-export so internal helpers don't leak.
+
+## 2026-06-21 — DateField stale display on external reset during partial entry
+
+- Found by: reviewer-frontend (datefield-input-typing review)
+- Where: `src/ui/components/field/useDateField.ts` (sync `useEffect` + `lastEmittedIso` ref)
+- Context: branch `fix/datefield-input-typing` @ `c297767`
+- Severity: 🟡
+- Observation: When a parent resets `value` to `""` while the user has an in-progress partial entry (e.g. `05/06`), the field keeps showing the stale partial text. A partial entry parses to `""`, which is indistinguishable from an externally-imposed `""`, so the echo-skip guard cannot tell the two apart; React also skips the effect entirely when `value` is already `""`. The reachable variants (a committed date reset to empty) sync correctly, and the marginal path is masked today by modals unmounting the field on close. No covering test exists for this path.

@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const CALENDAR_WIDTH = 256;
 const CALENDAR_HEIGHT = 290;
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const toIsoLocal = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const todayIsoLocal = () => toIsoLocal(new Date());
+
 /**
  * useDateField - Logic for the DateField component.
  *
@@ -21,6 +26,11 @@ export function useDateField(
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const inputRef = useRef<HTMLInputElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
+  // The ISO value this field last emitted via onChange. When the incoming `value`
+  // prop equals it, the prop is just echoing our own edit — re-deriving displayValue
+  // from it would clobber in-progress typing (a partial date emits "" and would wipe
+  // the field). We only re-sync the display on a genuinely external change.
+  const lastEmittedIso = useRef<string | undefined>(undefined);
 
   // Format ISO date (YYYY-MM-DD) to locale string (e.g., DD/MM/YYYY for fr-FR)
   const formatDateForDisplay = useCallback(
@@ -56,14 +66,19 @@ export function useDateField(
     [locale],
   );
 
-  // Sync display value when ISO value changes from outside (controlled component)
+  // Sync display value only when the ISO value changes from outside the field
+  // (calendar pick routed through the parent, prefill, or a programmatic reset).
+  // Skip echoes of our own onChange so partial typing is never wiped.
   useEffect(() => {
-    if (value !== undefined) {
-      setDisplayValue(formatDateForDisplay(value));
-      if (value && String(value).match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const [year, month] = String(value).split("-") as [string, string];
-        setCurrentMonth(new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1));
-      }
+    if (value === undefined) return;
+    const incoming = String(value);
+    if (incoming === (lastEmittedIso.current ?? "")) return;
+
+    lastEmittedIso.current = incoming;
+    setDisplayValue(formatDateForDisplay(value));
+    if (incoming.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month] = incoming.split("-") as [string, string];
+      setCurrentMonth(new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1));
     }
   }, [value, formatDateForDisplay]);
 
@@ -93,6 +108,7 @@ export function useDateField(
   const clearDate = () => {
     setDisplayValue("");
     setShowCalendar(false);
+    lastEmittedIso.current = "";
     onChange?.({
       target: { value: "" },
     } as React.ChangeEvent<HTMLInputElement>);
@@ -104,10 +120,42 @@ export function useDateField(
 
     const isoDate = formatDateForStorage(newDisplayValue);
     const validIso = isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? isoDate : "";
+    lastEmittedIso.current = validIso;
     onChange?.({
       ...e,
       target: { ...e.target, value: validIso },
     } as React.ChangeEvent<HTMLInputElement>);
+  };
+
+  // Step the committed date by `deltaDays`; an empty field jumps straight to today.
+  const stepDate = (deltaDays: number) => {
+    const current = lastEmittedIso.current;
+    let isoDate: string;
+    if (current && ISO_DATE.test(current)) {
+      const [year, month, day] = current.split("-").map(Number) as [number, number, number];
+      const next = new Date(year, month - 1, day);
+      next.setDate(next.getDate() + deltaDays);
+      isoDate = toIsoLocal(next);
+    } else {
+      isoDate = todayIsoLocal();
+    }
+    setDisplayValue(formatDateForDisplay(isoDate));
+    lastEmittedIso.current = isoDate;
+    const [year, month] = isoDate.split("-").map(Number) as [number, number, number];
+    setCurrentMonth(new Date(year, month - 1, 1));
+    onChange?.({
+      target: { value: isoDate },
+    } as React.ChangeEvent<HTMLInputElement>);
+  };
+
+  // +/= increments and - decrements the date by one day. Only fires on a settled
+  // value (empty or a complete date) so a "-" separator typed mid-entry isn't hijacked.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "+" && e.key !== "=" && e.key !== "-") return;
+    const settled = displayValue === "" || ISO_DATE.test(formatDateForStorage(displayValue));
+    if (!settled) return;
+    e.preventDefault();
+    stepDate(e.key === "-" ? -1 : 1);
   };
 
   const handleDateSelect = (date: Date) => {
@@ -117,6 +165,7 @@ export function useDateField(
     const isoDate = `${year}-${month}-${day}`;
     setDisplayValue(formatDateForDisplay(isoDate));
     setShowCalendar(false);
+    lastEmittedIso.current = isoDate;
     onChange?.({
       target: { value: isoDate },
     } as React.ChangeEvent<HTMLInputElement>);
@@ -147,6 +196,7 @@ export function useDateField(
     closeCalendar,
     clearDate,
     handleInputChange,
+    handleKeyDown,
     handleDateSelect,
     getDaysInMonth,
     getFirstDayOfMonth,
