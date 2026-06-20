@@ -38,16 +38,3 @@ export function patchModalSearch(
     replace: options?.replace,
   });
 }
-
-/**
- * Open a shell modal by setting the URL search params to `params` (object form,
- * replacing any prior modal params). Used to route into a modal from a context
- * that should not preserve unrelated search state — e.g. the price-refresh key
- * gate opening the Connections dialog (KEY-040).
- */
-export function openModalSearch(navigate: NavigateFn, params: ModalSearchParams): void {
-  navigate({
-    // biome-ignore lint/suspicious/noExplicitAny: shell-level modal params bypass per-route validateSearch typing
-    search: params as any,
-  });
-}

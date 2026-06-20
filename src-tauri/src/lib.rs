@@ -23,9 +23,7 @@ use crate::context::currency::{
     SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
 };
 use crate::core::event_bus::Event;
-use crate::core::{
-    create_specta_builder, Database, SideEffectEventBus, SqlxTransactionManager, BACKEND,
-};
+use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
 use crate::use_cases::account_creation::AccountCreationUseCase;
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
@@ -63,8 +61,6 @@ pub struct AppState {
     pub asset_service: Arc<AssetService>,
     /// Account management service (owns account, holding, and transaction operations).
     pub account_service: Arc<AccountService>,
-    /// Transaction manager for future cross-aggregate atomic writes (UoW pattern).
-    pub transaction_manager: Arc<SqlxTransactionManager>,
 }
 
 /// Update lifecycle state — managed separately so it is accessible without a DB.
@@ -261,15 +257,11 @@ pub fn run() {
 
                 app_handle.manage(Arc::clone(&currency_service));
 
-                let transaction_manager =
-                    Arc::new(SqlxTransactionManager::new(db.pool.clone()));
-
                 app_handle.manage(AppState {
                     db,
                     event_bus,
                     asset_service,
                     account_service,
-                    transaction_manager,
                 });
 
                 tracing::info!(target: BACKEND, "Application backend initialized successfully");
