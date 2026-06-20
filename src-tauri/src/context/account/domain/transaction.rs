@@ -61,7 +61,8 @@ pub struct Transaction {
     pub exchange_rate: i64,
     /// Transaction fees in account currency (micro-units).
     pub fees: i64,
-    /// Total cost (Purchase) or proceeds (Sell) in account currency (micro-units). Must be > 0.
+    /// Total cost (Purchase) or proceeds (Sell) in account currency (micro-units).
+    /// Must be > 0, except an OpeningBalance position may be 0 (zero-cost, TRX-045).
     pub total_amount: i64,
     /// Optional user comment.
     pub note: Option<String>,
@@ -91,6 +92,7 @@ impl Transaction {
         realized_pnl: Option<i64>,
     ) -> StdResult<Self, TransactionDomainError> {
         Self::validate(
+            &transaction_type,
             &date,
             quantity,
             unit_price,
@@ -139,6 +141,7 @@ impl Transaction {
         created_at: String,
     ) -> StdResult<Self, TransactionDomainError> {
         Self::validate(
+            &transaction_type,
             &date,
             quantity,
             unit_price,
@@ -276,7 +279,8 @@ impl Transaction {
     /// `asset_id` is the distributing asset.
     ///
     /// FSD-021 — validates the date bounds and `quantity > 0` directly; the
-    /// generic validator does not apply because it rejects `total_amount = 0`,
+    /// generic validator does not apply because it rejects `total_amount = 0`
+    /// for free-shares' `FreeShares` type (only `OpeningBalance` allows 0, TRX-045),
     /// which is exactly this type's convention.
     pub fn free_shares(
         account_id: String,
@@ -311,7 +315,8 @@ impl Transaction {
     /// Factory: rebuilds a FreeShares transaction with a caller-supplied ID and
     /// `created_at` (FSD-040 correction). Same zero-cost packing and FSD-021
     /// validation as `free_shares`, but preserves the transaction's identity —
-    /// the type-specific sibling of `with_id` (which rejects `total_amount = 0`).
+    /// the type-specific sibling of `with_id` (which rejects `total_amount = 0`
+    /// for the `FreeShares` type — `with_id` allows 0 only for `OpeningBalance`, TRX-045).
     pub fn free_shares_with_id(
         id: String,
         account_id: String,
@@ -365,6 +370,7 @@ impl Transaction {
     /// total_amount is computed by the orchestrator (TRX-026) before this is called —
     /// no formula check here.
     fn validate(
+        transaction_type: &TransactionType,
         date: &str,
         quantity: i64,
         unit_price: i64,
@@ -394,8 +400,14 @@ impl Transaction {
             return Err(TransactionDomainError::ExchangeRateNotPositive);
         }
 
-        // TRX-020 — total_amount must be > 0
-        if total_amount <= 0 {
+        // TRX-020 — total_amount must be > 0, EXCEPT an OpeningBalance position
+        // may have a zero total cost (TRX-045 — a mined / gifted / airdropped
+        // position seeded at zero cost). Negative is always rejected.
+        let total_amount_ok = match transaction_type {
+            TransactionType::OpeningBalance => total_amount >= 0,
+            _ => total_amount > 0,
+        };
+        if !total_amount_ok {
             return Err(TransactionDomainError::TotalAmountNotPositive);
         }
 
@@ -491,6 +503,60 @@ mod tests {
         let micro = 1_000_000i64;
         let result = make_transaction(micro, 0, micro, micro, micro);
         assert!(result.is_ok(), "got: {:?}", result.err());
+    }
+
+    // TRX-045 — an OpeningBalance may have total_amount = 0 (zero-cost position),
+    // on both the create (`new`) and edit (`with_id`) paths.
+    #[test]
+    fn new_allows_zero_total_amount_for_opening_balance() {
+        let micro = 1_000_000i64;
+        let result = Transaction::new(
+            "account-1".to_string(),
+            "asset-1".to_string(),
+            TransactionType::OpeningBalance,
+            "2020-01-01".to_string(),
+            micro, // quantity
+            0,     // unit_price
+            micro, // exchange_rate
+            0,     // fees
+            0,     // total_amount = 0 (zero-cost)
+            None,
+            None,
+        );
+        assert!(result.is_ok(), "got: {:?}", result.err());
+    }
+
+    #[test]
+    fn with_id_allows_zero_total_amount_for_opening_balance() {
+        let micro = 1_000_000i64;
+        let result = Transaction::with_id(
+            "tx-1".to_string(),
+            "account-1".to_string(),
+            "asset-1".to_string(),
+            TransactionType::OpeningBalance,
+            "2020-01-01".to_string(),
+            micro,
+            0,
+            micro,
+            0,
+            0, // total_amount = 0 (zero-cost, edit path)
+            None,
+            None,
+            "2020-01-01T00:00:00.000000Z".to_string(),
+        );
+        assert!(result.is_ok(), "got: {:?}", result.err());
+    }
+
+    // TRX-045 — the carve-out is OpeningBalance-only: a Purchase with total_amount 0
+    // is still rejected (buy/sell invariant untouched).
+    #[test]
+    fn new_still_rejects_zero_total_amount_for_purchase() {
+        let micro = 1_000_000i64;
+        let result = make_transaction(micro, 0, micro, 0, 0); // Purchase, total_amount = 0
+        assert!(matches!(
+            result,
+            Err(TransactionDomainError::TotalAmountNotPositive)
+        ));
     }
 
     // TRX-020 — date before 1900-01-01 is rejected

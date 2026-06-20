@@ -40,8 +40,9 @@ export function useOpenBalance({ accountId, assetId, onSubmitSuccess }: UseOpenB
     const qty = parseFloat(formData.quantity);
     const cost = parseFloat(formData.totalCost);
     const today = new Date().toISOString().slice(0, 10);
-    // TRX-046: date must not be in the future
-    return !!formData.assetId && !!formData.date && formData.date <= today && qty > 0 && cost > 0;
+    // TRX-046: date must not be in the future. TRX-045: total cost may be 0 (a
+    // zero-cost position — mined / gifted / airdropped); empty (NaN) stays invalid.
+    return !!formData.assetId && !!formData.date && formData.date <= today && qty > 0 && cost >= 0;
   }, [formData.assetId, formData.date, formData.quantity, formData.totalCost]);
 
   const handleChange = useCallback((field: keyof OpenBalanceFormData, value: string) => {

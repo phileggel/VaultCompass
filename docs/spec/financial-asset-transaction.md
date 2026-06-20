@@ -110,7 +110,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-044 — Opening balance quantity validation (frontend + backend)**: Quantity must be greater than zero. The submit action is disabled while quantity is zero or empty.
 
-**TRX-045 — Opening balance total cost validation (frontend + backend)**: Total cost must be greater than zero. The submit action is disabled while total cost is zero or empty.
+**TRX-045 — Opening balance total cost validation (frontend + backend)**: Total cost must not be negative; a total cost of **zero is valid** — a zero-cost position (e.g. a mined, gifted, or airdropped asset seeded as a starting position) is the distinguishing case for the open-balance / "New position" flow versus a buy/sell transaction. Quantity must still be strictly positive (TRX-044). The submit action is disabled while total cost is empty or negative, and enabled at zero. A zero-cost position has `unit_price` and cost basis `0`.
 
 **TRX-046 — Opening balance date validation (frontend + backend)**: Date is required and must not be in the future, consistent with TRX-020. The submit action is disabled while the date is empty, invalid, or in the future.
 

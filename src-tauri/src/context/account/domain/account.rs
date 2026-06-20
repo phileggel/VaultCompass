@@ -532,7 +532,10 @@ impl Account {
         if quantity <= 0 {
             return Err(TransactionDomainError::QuantityNotPositive.into());
         }
-        if total_cost <= 0 {
+        // TRX-045 — a zero-cost position is valid (e.g. a mined / gifted /
+        // airdropped asset seeded as a starting position); only a negative
+        // total cost is rejected.
+        if total_cost < 0 {
             return Err(OpeningBalanceDomainError::InvalidTotalCost.into());
         }
         const MICRO: i128 = 1_000_000;
@@ -1398,20 +1401,16 @@ mod tests {
         );
     }
 
-    // TRX-045 — open_holding rejects total_cost ≤ 0
+    // TRX-045 — open_holding accepts a zero total_cost (mined / gifted / airdropped
+    // position); unit_price and cost basis are 0.
     #[test]
-    fn open_holding_rejects_zero_total_cost() {
+    fn open_holding_allows_zero_total_cost() {
         let mut acc = cash_seeded_account();
-        let err = acc
+        let tx = acc
             .open_holding("asset-1".to_string(), "2024-01-01".to_string(), micro(1), 0)
-            .unwrap_err();
-        // OpeningBalanceDomainError is in scope via `use super::*` once implemented
-        assert!(
-            err.downcast_ref::<OpeningBalanceDomainError>()
-                .map(|e| matches!(e, OpeningBalanceDomainError::InvalidTotalCost))
-                .unwrap_or(false),
-            "expected InvalidTotalCost, got: {err}"
-        );
+            .expect("zero-cost opening balance is valid");
+        assert_eq!(tx.total_amount, 0, "zero-cost position has total_amount 0");
+        assert_eq!(tx.unit_price, 0, "zero-cost position has unit_price 0");
     }
 
     // TRX-045 — open_holding rejects negative total_cost

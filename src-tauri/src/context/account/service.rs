@@ -1380,7 +1380,7 @@ mod tests {
                 asset_id,
                 "2024-01-01".to_string(),
                 micro(1),
-                0, // total_cost ≤ 0
+                -1, // negative total_cost (zero is now valid, TRX-045)
             )
             .await
             .unwrap_err();
