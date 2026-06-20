@@ -153,7 +153,7 @@ const makeCashHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail 
     ...overrides,
   });
 
-describe("useAccountDetails — cash row (CSH-092 / CSH-019 / CSH-095)", () => {
+describe("useAccountDetails — cash row (CSH-092 / CSH-095)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -177,29 +177,20 @@ describe("useAccountDetails — cash row (CSH-092 / CSH-019 / CSH-095)", () => {
     expect(result.current.holdings.at(0)?.assetId).toBe("system-cash-eur");
   });
 
-  // CSH-019/095 — hasVisibleCashRow is true when the response contains a cash holding
-  it("hasVisibleCashRow true when response contains a cash holding", async () => {
+  // CSH-090/095 — a 0-balance cash holding is surfaced in `holdings` (always-present cash row)
+  it("surfaces a 0-balance cash holding in holdings (CSH-095)", async () => {
     mockGetAccountDetails.mockResolvedValue({
       status: "ok",
       data: makeResponse({
-        holdings: [makeCashHolding()],
+        holdings: [makeCashHolding({ quantity: 0 })],
         total_holding_count: 1,
       }),
     });
     const { result } = renderHook(() => useAccountDetails("account-1"));
     await act(async () => {});
-    expect(result.current.hasVisibleCashRow).toBe(true);
-  });
-
-  // CSH-095 — hasVisibleCashRow is false when no cash holding present
-  it("hasVisibleCashRow false when response has no cash holding", async () => {
-    mockGetAccountDetails.mockResolvedValue({
-      status: "ok",
-      data: makeResponse({ holdings: [makeHolding()], total_holding_count: 1 }),
-    });
-    const { result } = renderHook(() => useAccountDetails("account-1"));
-    await act(async () => {});
-    expect(result.current.hasVisibleCashRow).toBe(false);
+    const cash = result.current.holdings.find((h) => h.isCash);
+    expect(cash).toBeDefined();
+    expect(cash?.assetId).toBe("system-cash-eur");
   });
 });
 

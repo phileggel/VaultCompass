@@ -144,7 +144,8 @@ export function useAccountDetailsView(accountId: string) {
   // ---------------------------------------------------------------------------
   // Derived flags
   // ---------------------------------------------------------------------------
-  const hasActiveHoldings = data.holdings.length > 0;
+  // CSH-098 — the asset-positions empty state excludes the always-present Cash row.
+  const hasNonCashActiveHoldings = data.holdings.some((row) => !row.isCash);
   const hasClosedHoldings = data.summary?.hasClosedHoldings ?? false;
   // DIV-011/020 — paying-asset candidates for the dividend modal: active,
   // non-cash holdings (quantity > 0). Memoized so the stable reference does not
@@ -160,10 +161,6 @@ export function useAccountDetailsView(accountId: string) {
         })),
     [data.holdingDetails],
   );
-  // CSH-095 — banner only fires when other holdings exist (or all-closed) and no cash row.
-  const showNoCashBanner =
-    data.summary !== null && !data.hasVisibleCashRow && !data.summary.isEmpty;
-
   return {
     // Data layer (re-exposed)
     isLoading: data.isLoading,
@@ -173,12 +170,10 @@ export function useAccountDetailsView(accountId: string) {
     holdings: data.holdings,
     holdingDetails: data.holdingDetails,
     closedHoldings: data.closedHoldings,
-    hasVisibleCashRow: data.hasVisibleCashRow,
     // Derived
     accountCurrency,
-    hasActiveHoldings,
+    hasNonCashActiveHoldings,
     hasClosedHoldings,
-    showNoCashBanner,
     dividendPayingAssets,
     // Modal targets / flags
     buyTarget,

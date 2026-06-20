@@ -44,7 +44,6 @@ vi.mock("../dividend_transaction/DividendTransactionModal", () => ({
 }));
 vi.mock("./HoldingRow", () => ({ HoldingRow: () => <tr data-testid="holding-row" /> }));
 vi.mock("./ClosedHoldingRow", () => ({ ClosedHoldingRow: () => <tr /> }));
-vi.mock("./NoCashBanner", () => ({ NoCashBanner: () => null }));
 
 const handlers = {
   handleDepositOpen: vi.fn(),
@@ -73,11 +72,9 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   },
   holdings: [],
   closedHoldings: [],
-  hasVisibleCashRow: true,
   accountCurrency: "EUR",
-  hasActiveHoldings: false,
+  hasNonCashActiveHoldings: false,
   hasClosedHoldings: false,
-  showNoCashBanner: false,
   dividendPayingAssets: [],
   buyTarget: null,
   sellTarget: null,
@@ -121,22 +118,16 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     expect(document.querySelector("#add-menu-dividend")).toBeNull();
   });
 
-  it("opens the menu showing Deposit / Withdraw / Open balance / Dividend (DIV-012)", () => {
+  it("opens the menu showing Open balance / Dividend / Free shares, with NO cash actions (DIV-012/CSH-019)", () => {
     render(<AccountDetailsView />);
     fireEvent.click(document.querySelector("#account-details-add-menu")!);
-    expect(document.querySelector("#add-menu-deposit")).toBeInTheDocument();
-    expect(document.querySelector("#add-menu-withdraw")).toBeInTheDocument();
+    // CSH-019 — cash Deposit/Withdraw live on the cash row, not this menu.
+    expect(document.querySelector("#add-menu-deposit")).toBeNull();
+    expect(document.querySelector("#add-menu-withdraw")).toBeNull();
+    // Non-cash entries remain.
     expect(document.querySelector("#add-menu-open-balance")).toBeInTheDocument();
     expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
-  });
-
-  it("hides the Withdraw item when there is no cash row (CSH-019 visibility)", () => {
-    mockUseAccountDetailsView.mockReturnValue(makeView({ hasVisibleCashRow: false }));
-    render(<AccountDetailsView />);
-    fireEvent.click(document.querySelector("#account-details-add-menu")!);
-    expect(document.querySelector("#add-menu-withdraw")).toBeNull();
-    // The other three remain.
-    expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-free-shares")).toBeInTheDocument();
   });
 
   it("invokes the dividend handler and closes the menu when Dividend is chosen (DIV-010)", () => {
@@ -148,19 +139,11 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     expect(document.querySelector("#add-menu-dividend")).toBeNull();
   });
 
-  it("routes the other menu items to their handlers", () => {
+  it("routes the Open balance menu item to its handler", () => {
     render(<AccountDetailsView />);
-    fireEvent.click(document.querySelector("#account-details-add-menu")!);
-    fireEvent.click(document.querySelector("#add-menu-deposit")!);
-    expect(handlers.handleDepositOpen).toHaveBeenCalledTimes(1);
-
     fireEvent.click(document.querySelector("#account-details-add-menu")!);
     fireEvent.click(document.querySelector("#add-menu-open-balance")!);
     expect(handlers.handleOpenBalanceOpen).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(document.querySelector("#account-details-add-menu")!);
-    fireEvent.click(document.querySelector("#add-menu-withdraw")!);
-    expect(handlers.handleWithdrawalOpen).toHaveBeenCalledTimes(1);
   });
 
   it("mounts the dividend modal only when dividendOpen is true (DIV-010/020)", () => {
@@ -189,7 +172,7 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
 
   it("renders the Dividends and Total Return column headers when holdings exist (DIV-072)", () => {
     mockUseAccountDetailsView.mockReturnValue(
-      makeView({ hasActiveHoldings: true, holdings: [{ assetId: "a1" }] }),
+      makeView({ hasNonCashActiveHoldings: true, holdings: [{ assetId: "a1" }] }),
     );
     render(<AccountDetailsView />);
     expect(screen.getByText("account_details.column_dividends_received")).toBeInTheDocument();
@@ -214,10 +197,12 @@ describe("AccountDetailsView — add-transaction FAB (ACD-035/036)", () => {
   });
 
   it("shows the FAB in the empty state with no inline CTA button", () => {
+    // No non-cash active holdings → the asset-positions empty message renders
+    // (the always-present cash row is excluded from the count, CSH-098).
     mockUseAccountDetailsView.mockReturnValue(
       makeView({
         summary: { ...makeView().summary, isEmpty: true },
-        hasVisibleCashRow: false,
+        hasNonCashActiveHoldings: false,
       }),
     );
     render(<AccountDetailsView />);
@@ -227,5 +212,18 @@ describe("AccountDetailsView — add-transaction FAB (ACD-035/036)", () => {
     expect(screen.getAllByRole("button", { name: "account_details.add_transaction" })).toHaveLength(
       1,
     );
+  });
+
+  it("shows 'All positions closed' when closed holdings exist but no active non-cash (ACD-034)", () => {
+    mockUseAccountDetailsView.mockReturnValue(
+      makeView({
+        summary: { ...makeView().summary, isAllClosed: true },
+        hasNonCashActiveHoldings: false,
+        hasClosedHoldings: true,
+      }),
+    );
+    render(<AccountDetailsView />);
+    expect(screen.getByText("account_details.empty_all_closed")).toBeInTheDocument();
+    expect(screen.queryByText("account_details.empty_no_positions")).toBeNull();
   });
 });

@@ -9,7 +9,6 @@ import {
   type AccountSummaryViewModel,
   type ClosedHoldingRowViewModel,
   type HoldingRowViewModel,
-  isCashAsset,
   toAccountSummary,
   toClosedHoldingRow,
   toHoldingRow,
@@ -26,8 +25,6 @@ interface UseAccountDetailsResult {
   holdingDetails: HoldingDetail[];
   closedHoldings: ClosedHoldingRowViewModel[];
   summary: AccountSummaryViewModel | null;
-  /** True when the account currently shows a cash row in the active table (CSH-019/092/095). */
-  hasVisibleCashRow: boolean;
 }
 
 export function useAccountDetails(accountId: string): UseAccountDetailsResult {
@@ -109,13 +106,6 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     [data],
   );
 
-  // CSH-097 — backend filters cash holding when its quantity is 0 (ACD-020), so
-  // any cash holding present in `holdings` is by definition visible.
-  const hasVisibleCashRow = useMemo<boolean>(
-    () => (data ? data.holdings.some((h) => isCashAsset(h.asset_id)) : false),
-    [data],
-  );
-
   return {
     isLoading,
     error,
@@ -124,6 +114,5 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     holdingDetails,
     closedHoldings,
     summary,
-    hasVisibleCashRow,
   };
 }

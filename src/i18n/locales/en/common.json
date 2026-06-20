@@ -299,8 +299,6 @@
     "total_unrealized_pnl": "Total Unrealized P&L",
     "action_price_history": "Price history",
     "action_open_balance": "New position",
-    "action_deposit": "Cash deposit",
-    "action_withdraw": "Cash withdrawal",
     "action_refresh_prices": "Refresh prices",
     "action_performance": "Performance",
     "total_global_value": "Global Value",
