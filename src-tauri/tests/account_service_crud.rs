@@ -11,7 +11,8 @@ use common::micro;
 use sqlx::sqlite::SqlitePoolOptions;
 use vault_compass_lib::context::account::AccountService;
 use vault_compass_lib::context::account::{
-    SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository, UpdateFrequency,
+    AccountOperationError, HoldingTransactionError, SqliteAccountRepository,
+    SqliteHoldingRepository, SqliteTransactionRepository, UpdateFrequency,
 };
 
 async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
@@ -444,5 +445,84 @@ async fn seed_cash_holding_errors_when_account_missing() {
     assert!(
         result.is_err(),
         "seed_cash_holding must reject an unknown account id"
+    );
+}
+
+// SEL-024 / SEL-030 — full-stack guard: correcting a sell to a date before its buy is
+// rejected with CascadingOversell. Transactions hydrate from SQLite ordered by date
+// (ORDER BY date ASC, created_at ASC), the exact reload condition under which the
+// chronological replay must run — independent of the in-session append order.
+#[tokio::test]
+async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
+    let pool = make_pool().await;
+    let svc = make_service(&pool).await;
+    let asset_id = seed_asset(&pool).await;
+
+    let account = svc
+        .create(
+            "ReorderGuard".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+    svc.buy_holding(
+        &account.id,
+        asset_id.clone(),
+        "2024-06-01".to_string(),
+        micro(2),
+        micro(100),
+        micro(1),
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+    let sell = svc
+        .sell_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-07-01".to_string(),
+            micro(1),
+            micro(150),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let err = svc
+        .correct_transaction(
+            &account.id,
+            &sell.id,
+            "2024-05-01".to_string(),
+            micro(1),
+            micro(150),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .expect_err("moving a sell before its buy must be rejected");
+    assert!(
+        matches!(
+            err,
+            HoldingTransactionError::Operation(AccountOperationError::CascadingOversell)
+        ),
+        "expected CascadingOversell, got: {err:?}"
+    );
+
+    // The rejected correction must not have mutated the persisted sell.
+    let persisted = svc
+        .get_transaction_by_id(&sell.id)
+        .await
+        .unwrap()
+        .expect("sell transaction must still exist after a rejected correction");
+    assert_eq!(
+        persisted.date, "2024-07-01",
+        "rejected correction must leave the sell's date unchanged"
     );
 }

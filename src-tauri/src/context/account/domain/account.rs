@@ -850,6 +850,17 @@ impl Account {
         use std::collections::HashMap;
         const MICRO: i128 = 1_000_000;
 
+        // SEL-024 — replay strictly in chronological order (date ASC, created_at ASC),
+        // independent of the physical storage order of the input slice. The running
+        // oversell guard is order-sensitive, so a sell must be evaluated against the
+        // holding as it stands immediately before it in date order (SEL-030/031).
+        let mut txs_by_date: Vec<&Transaction> = transactions.to_vec();
+        txs_by_date.sort_by(|a, b| {
+            a.date
+                .cmp(&b.date)
+                .then_with(|| a.created_at.cmp(&b.created_at))
+        });
+
         let mut total_quantity: i128 = 0;
         let mut vwap_numerator: i128 = 0;
         let mut last_vwap: i64 = 0;
@@ -857,7 +868,7 @@ impl Account {
         let mut total_realized_pnl: i64 = 0;
         let mut last_sold_date: Option<String> = None;
 
-        for t in transactions {
+        for t in &txs_by_date {
             match t.transaction_type {
                 TransactionType::Purchase | TransactionType::OpeningBalance => {
                     let qty = t.quantity as i128;
@@ -1330,6 +1341,101 @@ mod tests {
             .find(|h| h.asset_id == "asset-1")
             .unwrap();
         assert_eq!(h.average_price, micro(200));
+    }
+
+    // SEL-024 / SEL-030 — recalculation replays in chronological order regardless of the
+    // physical order of the input slice. A sell stored physically before its buy (as happens
+    // after a DB reload, which orders by date) must still validate against the holding as it
+    // stands at the sell's date, not its storage position.
+    #[test]
+    fn recalculate_holding_is_order_independent() {
+        let acc = base_account();
+        let buy = Transaction::restore(
+            "buy-1".to_string(),
+            acc.id.clone(),
+            "asset-1".to_string(),
+            TransactionType::Purchase,
+            "2024-06-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            micro(200),
+            None,
+            None,
+            "2024-06-01T00:00:00.000001Z".to_string(),
+        );
+        let sell = Transaction::restore(
+            "sell-1".to_string(),
+            acc.id.clone(),
+            "asset-1".to_string(),
+            TransactionType::Sell,
+            "2024-07-01".to_string(),
+            micro(1),
+            micro(150),
+            micro(1),
+            0,
+            micro(150),
+            None,
+            None,
+            "2024-07-01T00:00:00.000002Z".to_string(),
+        );
+
+        // Physical order [sell, buy] — chronologically valid (buy precedes sell by date).
+        let (holding, _pnl) = acc
+            .recalculate_holding("asset-1", &[&sell, &buy])
+            .expect("chronologically valid history must not oversell regardless of storage order");
+        assert_eq!(holding.quantity, micro(1));
+    }
+
+    // SEL-024 / SEL-030 — correcting a sell to a date that precedes its buy is rejected:
+    // the holding is empty at the sell's new chronological position, so it oversells.
+    // Guards the trap where moving a sell before its buy was silently accepted (the in-memory
+    // slice happened to list the buy first) and only blocked after a reload flipped the order.
+    #[test]
+    fn correct_transaction_rejects_moving_sell_before_its_buy() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-06-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+        let sell = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-07-01".to_string(),
+                micro(1),
+                micro(150),
+                micro(1),
+                0,
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        let err = acc
+            .correct_transaction(
+                &sell.id,
+                "2024-05-01".to_string(),
+                micro(1),
+                micro(150),
+                micro(1),
+                0,
+                None,
+            )
+            .unwrap_err();
+        let op_err = err
+            .downcast_ref::<AccountOperationError>()
+            .unwrap_or_else(|| panic!("expected AccountOperationError, got: {err}"));
+        assert!(
+            matches!(op_err, AccountOperationError::CascadingOversell),
+            "expected CascadingOversell when moving a sell before its buy, got: {op_err}"
+        );
     }
 
     // TRX-034 — cancel_transaction removes holding when it was the last transaction

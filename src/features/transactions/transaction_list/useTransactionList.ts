@@ -117,6 +117,18 @@ export function useTransactionList() {
     [selectedAccountId, selectedAssetId, fetchTransactions],
   );
 
+  // Re-fetch on TransactionUpdated so a correction/move reflects without a navigate-away.
+  useEffect(() => {
+    const unlistenPromise = transactionGateway.subscribeToEvents((type) => {
+      if (type === "TransactionUpdated") {
+        refreshTransactions();
+      }
+    });
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [refreshTransactions]);
+
   const handleDeleteSuccess = useCallback(async () => {
     const remaining = await refreshTransactions();
     if (remaining.length === 0) {

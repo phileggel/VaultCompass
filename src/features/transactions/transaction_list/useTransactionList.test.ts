@@ -13,11 +13,13 @@ vi.mock("@tanstack/react-router", () => ({
 
 const mockGetAssetIdsForAccount = vi.fn();
 const mockGetTransactions = vi.fn();
+const mockSubscribeToEvents = vi.fn();
 
 vi.mock("../gateway", () => ({
   transactionGateway: {
     getAssetIdsForAccount: (...args: unknown[]) => mockGetAssetIdsForAccount(...args),
     getTransactions: (...args: unknown[]) => mockGetTransactions(...args),
+    subscribeToEvents: (...args: unknown[]) => mockSubscribeToEvents(...args),
   },
 }));
 
@@ -42,6 +44,8 @@ const makeTx = (id: string, date: string) => ({
 });
 
 describe("useTransactionList", () => {
+  let eventCallback: ((type: string) => void) | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
     useAppStore.setState({
@@ -61,6 +65,11 @@ describe("useTransactionList", () => {
     mockGetTransactions.mockResolvedValue({
       status: "ok",
       data: [makeTx("tx-1", "2024-01-01"), makeTx("tx-2", "2024-03-01")],
+    });
+    eventCallback = undefined;
+    mockSubscribeToEvents.mockImplementation(async (cb: (type: string) => void) => {
+      eventCallback = cb;
+      return () => {};
     });
   });
 
@@ -162,5 +171,37 @@ describe("useTransactionList", () => {
     await act(async () => {});
     expect(result.current.transactionById.get("tx-1")?.id).toBe("tx-1");
     expect(result.current.transactionById.get("tx-2")?.id).toBe("tx-2");
+  });
+
+  // A TransactionUpdated event re-fetches the list so a correction/move reflects
+  // without navigating away and back.
+  it("re-fetches transactions on a TransactionUpdated event", async () => {
+    const { result } = renderHook(() => useTransactionList());
+    await act(async () => {});
+    expect(mockGetTransactions).toHaveBeenCalledTimes(1);
+
+    mockGetTransactions.mockResolvedValue({
+      status: "ok",
+      data: [makeTx("tx-1", "2024-01-01")],
+    });
+    await act(async () => {
+      eventCallback?.("TransactionUpdated");
+    });
+
+    expect(mockGetTransactions).toHaveBeenCalledTimes(2);
+    expect(result.current.transactions).toHaveLength(1);
+  });
+
+  // Unrelated events do not trigger a re-fetch.
+  it("ignores events other than TransactionUpdated", async () => {
+    renderHook(() => useTransactionList());
+    await act(async () => {});
+    expect(mockGetTransactions).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      eventCallback?.("AssetUpdated");
+    });
+
+    expect(mockGetTransactions).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,11 +3,12 @@ import type {
   AssetPriceError,
   BuyHoldingDTO,
   CorrectTransactionDTO,
+  Event,
   HoldingTransactionError,
   SellHoldingDTO,
   Transaction,
 } from "../../bindings";
-import { commands, type Result } from "../../bindings";
+import { commands, events, type Result } from "../../bindings";
 
 /**
  * Gateway for Transaction-related backend communication.
@@ -56,5 +57,12 @@ export const transactionGateway = {
     price: number,
   ): Promise<Result<null, AssetPriceError>> {
     return await commands.recordAssetPrice(assetId, date, price);
+  },
+
+  /** Subscribe to the backend event bus; invokes `callback` with each event's discriminant. */
+  async subscribeToEvents(callback: (type: Event["type"]) => void): Promise<() => void> {
+    return events.event.listen((event) => {
+      callback(event.payload.type);
+    });
   },
 };
