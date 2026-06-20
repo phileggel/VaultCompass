@@ -385,8 +385,6 @@
     "withdrawal_recorded": "Withdrawal recorded.",
     "withdrawal_updated": "Withdrawal updated.",
     "withdrawal_deleted": "Withdrawal deleted.",
-    "no_cash_banner_message": "No cash recorded for this account yet.",
-    "no_cash_banner_cta": "Record a deposit",
     "insufficient_cash_inline": "Not enough cash. Available balance: {{balance}} {{currency}}."
   },
   "dividend": {

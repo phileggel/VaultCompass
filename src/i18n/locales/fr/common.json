@@ -385,8 +385,6 @@
     "withdrawal_recorded": "Retrait enregistré.",
     "withdrawal_updated": "Retrait mis à jour.",
     "withdrawal_deleted": "Retrait supprimé.",
-    "no_cash_banner_message": "Aucune trésorerie enregistrée pour ce compte.",
-    "no_cash_banner_cta": "Enregistrer un dépôt",
     "insufficient_cash_inline": "Trésorerie insuffisante. Solde disponible : {{balance}} {{currency}}."
   },
   "dividend": {

@@ -41,11 +41,10 @@ export async function navigateToAccountDetails(accountId: string): Promise<void>
 }
 
 /**
- * Opens the Account Details header "Add" dropdown (DIV-012) and clicks one of
- * its menu items by stable id (e.g. `add-menu-deposit`, `add-menu-withdraw`,
- * `add-menu-open-balance`, `add-menu-dividend`). Replaces the pre-DIV-012
- * standalone header buttons (`#action-deposit` / `#action-withdraw` /
- * `#action-open-balance`), which the consolidated menu superseded.
+ * Opens the Account Details header "Record" dropdown (DIV-012) and clicks one of
+ * its menu items by stable id (`add-menu-open-balance`, `add-menu-dividend`,
+ * `add-menu-free-shares`). Cash Deposit/Withdraw are NOT in this menu — they live
+ * on the always-present cash row's inline actions (CSH-019).
  */
 export async function openAddMenuItem(menuItemId: string): Promise<void> {
   const addMenuBtn = await $("#account-details-add-menu");

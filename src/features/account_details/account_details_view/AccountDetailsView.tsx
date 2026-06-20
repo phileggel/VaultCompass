@@ -125,9 +125,9 @@ export function AccountDetailsView() {
                 >
                   {t("account_details.action_refresh_prices")}
                 </Button>
-                {/* DIV-012 — consolidated "Add" dropdown (Deposit / Withdraw /
-                    Open balance / Record dividend); supersedes the standalone
-                    CSH-019 and TRX-055 header buttons. */}
+                {/* DIV-012 — consolidated "Record" dropdown (Open balance /
+                    Dividend / Free shares). Cash Deposit/Withdraw are NOT here —
+                    they live on the always-present cash row (CSH-019). */}
                 <div className="relative">
                   <Button
                     id="account-details-add-menu"
