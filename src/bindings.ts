@@ -2209,11 +2209,12 @@ OpeningBalanceDomainError |
 TransactionDomainError
 /**
  * Aggregate-level domain rejection raised by `Account::open_holding` on its
- * own input — currently only the `total_cost > 0` invariant (TRX-045).
+ * own input — currently only the `total_cost >= 0` invariant (TRX-045). A zero
+ * total cost is valid (e.g. a mined / gifted / airdropped position).
  */
 export type OpeningBalanceDomainError = 
 /**
- * total_cost was zero or negative (TRX-045).
+ * total_cost was negative (TRX-045).
  */
 { code: "InvalidTotalCost" }
 /**
@@ -2337,7 +2338,8 @@ exchange_rate: number;
  */
 fees: number; 
 /**
- * Total cost (Purchase) or proceeds (Sell) in account currency (micro-units). Must be > 0.
+ * Total cost (Purchase) or proceeds (Sell) in account currency (micro-units).
+ * Must be > 0, except an OpeningBalance position may be 0 (zero-cost, TRX-045).
  */
 total_amount: number; 
 /**
