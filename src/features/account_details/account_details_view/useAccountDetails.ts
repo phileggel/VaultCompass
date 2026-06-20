@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
 import { accountMutationErrorToI18n } from "@/features/accounts/shared/presenter";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
 import {
@@ -33,6 +34,8 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
   const [data, setData] = useState<AccountDetailsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<I18nMessage | null>(null);
+  // ACD-051 — asset class is read from the loaded asset catalog to group holdings.
+  const assets = useAppStore((state) => state.assets);
 
   const fetchDetails = useCallback(async () => {
     setIsLoading(true);
@@ -78,14 +81,23 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
 
   const holdingDetails = useMemo<HoldingDetail[]>(() => data?.holdings ?? [], [data]);
 
-  // CSH-092 — Cash row rendered first, ahead of the existing alphabetical sort.
+  // ACD-051 / CSH-092 — group active holdings by asset class: cash first, then
+  // Stocks, then every other class; alphabetical by asset_name within each group.
   const holdings = useMemo<HoldingRowViewModel[]>(() => {
     if (!data) return [];
-    const rows = data.holdings.map(toHoldingRow);
-    const cashRows = rows.filter((r) => r.isCash);
-    const otherRows = rows.filter((r) => !r.isCash);
-    return [...cashRows, ...otherRows];
-  }, [data]);
+    const classById = new Map(assets.map((a) => [a.id, a.class]));
+    const groupRank = (row: HoldingRowViewModel): number => {
+      if (row.isCash) return 0;
+      return classById.get(row.assetId) === "Stocks" ? 1 : 2;
+    };
+    return data.holdings
+      .map(toHoldingRow)
+      .sort(
+        (a, b) =>
+          groupRank(a) - groupRank(b) ||
+          a.assetName.toLowerCase().localeCompare(b.assetName.toLowerCase()),
+      );
+  }, [data, assets]);
 
   const closedHoldings = useMemo<ClosedHoldingRowViewModel[]>(
     () => (data ? data.closed_holdings.map(toClosedHoldingRow) : []),

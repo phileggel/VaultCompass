@@ -1,7 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountDetailsResponse, ClosedHoldingDetail, HoldingDetail } from "@/bindings";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AccountDetailsResponse, Asset, ClosedHoldingDetail, HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import { useAccountDetails } from "./useAccountDetails";
 
 const mockGetAccountDetails = vi.fn();
@@ -315,5 +316,68 @@ describe("useAccountDetails — gateway throw fallback", () => {
       code: "AccountNotFound",
       account_id: "account-1",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ACD-051 — holdings grouped by class: cash → Stocks → other, alpha within group
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetails — holdings display grouping (ACD-051)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAppStore.setState({
+      assets: [
+        { id: "stock-z", class: "Stocks" },
+        { id: "stock-a", class: "Stocks" },
+        { id: "crypto-1", class: "DigitalAsset" },
+        { id: "bond-1", class: "Bonds" },
+      ] as unknown as Asset[],
+    });
+  });
+
+  afterEach(() => {
+    useAppStore.setState({ assets: [] });
+  });
+
+  it("orders cash first, then Stocks, then other classes (ACD-051)", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        holdings: [
+          makeHolding({ asset_id: "crypto-1", asset_name: "Bitcoin" }),
+          makeHolding({ asset_id: "stock-z", asset_name: "Zeta Corp" }),
+          makeCashHolding(),
+          makeHolding({ asset_id: "stock-a", asset_name: "Alpha Corp" }),
+          makeHolding({ asset_id: "bond-1", asset_name: "Acme Bond" }),
+        ],
+        total_holding_count: 5,
+      }),
+    });
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    expect(result.current.holdings.map((r) => r.assetId)).toEqual([
+      "system-cash-eur", // cash group
+      "stock-a", // Stocks group, alpha within group
+      "stock-z",
+      "bond-1", // other group, alpha within group
+      "crypto-1",
+    ]);
+  });
+
+  it("treats a holding whose asset is not in the catalog as 'other' (ACD-051)", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        holdings: [
+          makeHolding({ asset_id: "unknown-1", asset_name: "Mystery" }),
+          makeHolding({ asset_id: "stock-a", asset_name: "Alpha Corp" }),
+        ],
+        total_holding_count: 2,
+      }),
+    });
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    expect(result.current.holdings.map((r) => r.assetId)).toEqual(["stock-a", "unknown-1"]);
   });
 });

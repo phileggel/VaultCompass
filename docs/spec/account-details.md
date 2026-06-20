@@ -104,6 +104,8 @@ The top-level response returned by the `get_account_details(account_id)` Tauri c
 
 **ACD-033 — Holdings sort order (backend)**: Holdings in the response are sorted alphabetically by `asset_name` ascending. This is the default display order; no user-controlled sort is required for the initial implementation.
 
+**ACD-051 — Holdings display grouping (frontend)**: The active holdings table groups rows by asset class ahead of the backend `asset_name` sort (ACD-033): the Cash Holding first (per CSH-092), then `Stocks`, then all other asset classes. Within each group, rows keep ascending `asset_name` order. Asset class is read from the loaded asset catalog (the global asset store); a holding whose asset is not yet loaded is treated as "other" until the catalog resolves.
+
 ### States
 
 **ACD-034 — Empty account state (frontend)**: If no holdings remain after applying the `quantity > 0` filter (ACD-020), the view displays one of two messages depending on the backend response: "No positions yet" when the account has no holdings at all, or "All positions are closed" when holdings exist but all have `quantity = 0`. The Tauri command response includes `total_holding_count` so the frontend can distinguish these two cases without a second request. **Cash exception (per CSH-098)**: the Cash Holding is excluded from this asset-positions count — an account whose only non-zero holding is cash still renders the asset-positions area as empty (with the cash row visible above per CSH-091/092).
