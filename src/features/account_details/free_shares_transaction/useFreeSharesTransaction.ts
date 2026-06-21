@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import { decimalToMicro } from "@/lib/microUnits";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
@@ -39,8 +40,6 @@ interface FreeSharesFormData {
   note: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export function useFreeSharesTransaction({
   accountId,
   onSubmitSuccess,
@@ -54,7 +53,7 @@ export function useFreeSharesTransaction({
 
   const [formData, setFormData] = useState<FreeSharesFormData>(() => ({
     assetId: editMode?.lockedAssetId ?? "",
-    date: editMode?.initialDate ?? today(),
+    date: editMode?.initialDate ?? getLastOperationDate(accountId),
     quantity: editMode?.initialQuantity ?? "",
     note: editMode?.initialNote ?? "",
   }));
@@ -124,6 +123,7 @@ export function useFreeSharesTransaction({
           setError(freeSharesErrorToI18n(result.error));
           return;
         }
+        if (!editMode) setLastOperationDate(accountId, formData.date);
         showSnackbar(t("free_shares.recorded"), "success");
         onSubmitSuccess?.();
       } finally {

@@ -194,6 +194,32 @@ describe("useAddTransaction", () => {
     expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
   });
 
+  // After a successful submit the form resets but carries the just-entered date forward
+  // (last-operation prefill), keyed by the manually-selected account — not today.
+  it("resets with the submitted date after success and persists it per account", async () => {
+    mockBuyHolding.mockResolvedValue({ data: { id: "tx-reset" }, error: null });
+    const { result } = renderHook(() => useAddTransaction());
+
+    await act(async () => {
+      result.current.handleChange("accountId", "account-1");
+      result.current.handleChange("assetId", "asset-1");
+      result.current.handleChange("date", "2018-03-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "10");
+      result.current.handleChange("exchangeRate", "1");
+      result.current.handleChange("fees", "0");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.formData.date).toBe("2018-03-01");
+    expect(result.current.formData.accountId).toBe("account-1");
+    expect(result.current.formData.quantity).toBe("");
+    expect(localStorage.getItem("last_operation_date_account-1")).toBe("2018-03-01");
+  });
+
   // handleSubmit with archived asset → does not call buyHolding (waits for confirmation)
   it("handleSubmit with archived asset does not submit immediately", async () => {
     const onSubmitSuccess = vi.fn();

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import { decimalToMicro } from "@/lib/microUnits";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
@@ -30,8 +31,6 @@ interface DividendFormData {
   note: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export function useDividendTransaction({
   accountId,
   accountCurrency,
@@ -43,7 +42,7 @@ export function useDividendTransaction({
 
   const [formData, setFormData] = useState<DividendFormData>(() => ({
     assetId: "",
-    date: today(),
+    date: getLastOperationDate(accountId),
     amount: "",
     exchangeRate: "1.000000",
     note: "",
@@ -104,6 +103,7 @@ export function useDividendTransaction({
           setError(dividendErrorToI18n(result.error));
           return;
         }
+        setLastOperationDate(accountId, formData.date);
         showSnackbar(t("dividend.recorded"), "success");
         onSubmitSuccess?.();
       } finally {

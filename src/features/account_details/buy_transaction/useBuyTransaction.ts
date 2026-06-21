@@ -4,6 +4,7 @@ import type { TransactionFormData } from "@/features/transactions/shared/types";
 import { validateTransactionForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
 import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
+import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import {
   computeTotalMicro,
@@ -22,8 +23,6 @@ interface UseBuyTransactionProps {
   onSubmitSuccess?: () => void;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBuyTransactionProps) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
@@ -33,7 +32,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
   const [formData, setFormData] = useState<TransactionFormData>(() => ({
     accountId,
     assetId,
-    date: today(),
+    date: getLastOperationDate(accountId),
     quantity: "",
     unitPrice: "",
     exchangeRate: "1.000000",
@@ -112,6 +111,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
           .catch((e) => logger.warn("Failed to record asset price after buy", { error: e }));
       }
 
+      setLastOperationDate(formData.accountId, formData.date);
       showSnackbar(t("transaction.success_created"), "success");
       onSubmitSuccess?.();
     } finally {

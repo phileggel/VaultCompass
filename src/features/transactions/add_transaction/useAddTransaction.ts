@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
+import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import {
   computeTotalMicro,
@@ -24,12 +25,10 @@ interface UseAddTransactionProps {
   onSubmitSuccess?: () => void;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
-const defaultForm = (): TransactionFormData => ({
-  accountId: "",
+const defaultForm = (accountId: string): TransactionFormData => ({
+  accountId,
   assetId: "",
-  date: today(),
+  date: getLastOperationDate(accountId),
   quantity: "",
   unitPrice: "",
   exchangeRate: "1.000000",
@@ -48,9 +47,8 @@ export function useAddTransaction({
   const assets = useAppStore((state) => state.assets);
 
   const [formData, setFormData] = useState<TransactionFormData>(() => ({
-    ...defaultForm(),
+    ...defaultForm(prefillAccountId ?? ""),
     assetId: prefillAssetId ?? "",
-    accountId: prefillAccountId ?? "",
   }));
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -125,11 +123,11 @@ export function useAddTransaction({
           .catch((e) => logger.warn("Failed to record asset price after buy", { error: e }));
       }
 
+      setLastOperationDate(formData.accountId, formData.date);
       showSnackbar(t("transaction.success_created"), "success");
       setFormData({
-        ...defaultForm(),
+        ...defaultForm(formData.accountId),
         assetId: prefillAssetId ?? "",
-        accountId: prefillAccountId ?? "",
       });
       onSubmitSuccess?.();
     } finally {
@@ -142,7 +140,6 @@ export function useAddTransaction({
     buyHolding,
     t,
     prefillAssetId,
-    prefillAccountId,
     onSubmitSuccess,
     showSnackbar,
   ]);

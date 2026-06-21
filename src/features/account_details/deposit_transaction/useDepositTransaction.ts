@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
 import { transactionMutationErrorToI18n } from "@/features/transactions/shared/presenter";
+import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import { decimalToMicro, microToDecimal } from "@/lib/microUnits";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
@@ -24,8 +25,6 @@ interface DepositFormData {
   note: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export function useDepositTransaction({
   accountId,
   editTransaction,
@@ -42,7 +41,7 @@ export function useDepositTransaction({
           amount: microToDecimal(editTransaction.total_amount),
           note: editTransaction.note ?? "",
         }
-      : { date: today(), amount: "", note: "" },
+      : { date: getLastOperationDate(accountId), amount: "", note: "" },
   );
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,6 +91,7 @@ export function useDepositTransaction({
           setError(transactionMutationErrorToI18n(result.error));
           return;
         }
+        if (!isEdit) setLastOperationDate(accountId, formData.date);
         showSnackbar(t(isEdit ? "cash.deposit_updated" : "cash.deposit_recorded"), "success");
         onSubmitSuccess?.();
       } catch (e) {
