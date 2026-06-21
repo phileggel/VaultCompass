@@ -258,6 +258,18 @@ async getTransactions(accountId: string, assetId: string) : Promise<Result<Trans
 }
 },
 /**
+ * Retrieves every transaction for an account across all assets, ordered
+ * chronologically by `(date, created_at)` (TRX-036).
+ */
+async getAllTransactionsForAccount(accountId: string) : Promise<Result<Transaction[], AccountApplicationError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_all_transactions_for_account", { accountId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Declares a currency pair (FXR-054). Idempotent: returns the existing pair
  * rather than duplicating it.
  */
