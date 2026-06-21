@@ -1,24 +1,22 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
-import { patchModalSearch } from "@/lib/modalSearch";
 import { Button } from "@/ui/components/button/Button";
-import { IconButton } from "@/ui/components/button/IconButton";
 import { SelectField } from "@/ui/components/field/SelectField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
-import { SortIcon } from "@/ui/components/SortIcon";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
-import { formatIsoDateNumeric } from "@/ui/format/date";
 import { AddTransactionModal } from "../add_transaction/AddTransactionModal";
 import { EditTransactionModal } from "../edit_transaction_modal/EditTransactionModal";
+import { routeEditTransaction } from "../shared/routeEditTransaction";
 import { useTransactions } from "../useTransactions";
+import { TransactionTable } from "./TransactionTable";
 import { useTransactionList } from "./useTransactionList";
 
 export function TransactionListPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { accountId: routeAccountId, assetId: routeAssetId } = useParams({
     from: "/accounts/$accountId/transactions/$assetId",
@@ -184,137 +182,16 @@ export function TransactionListPage() {
             </div>
           ) : (
             /* TXL-022 — transaction table */
-            <div className="m3-table-container flex-1">
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 bg-m3-surface-container z-10">
-                  <tr>
-                    <th className="m3-th">{t("transaction.column_type")}</th>
-                    <th className="m3-th">
-                      <button
-                        type="button"
-                        onClick={toggleSortDirection}
-                        className="flex items-center cursor-pointer hover:text-m3-primary transition-colors"
-                      >
-                        {t("transaction.column_date")}
-                        <SortIcon active direction={sortDirection} />
-                      </button>
-                    </th>
-                    <th className="m3-th text-right">{t("transaction.column_quantity")}</th>
-                    <th className="m3-th text-right">{t("transaction.column_unit_price")}</th>
-                    <th className="m3-th text-right">{t("transaction.column_exchange_rate")}</th>
-                    <th className="m3-th text-right">{t("transaction.column_fees")}</th>
-                    <th className="m3-th text-right">{t("transaction.column_total_amount")}</th>
-                    <th className="m3-th text-right">{t("transaction.column_realized_pnl")}</th>
-                    <th className="m3-th">{t("transaction.column_actions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTransactions.map((row) => {
-                    // FSD-050 — a free-share distribution moves no money: the
-                    // unit-price and total-amount columns render the neutral
-                    // placeholder (the quantity column still shows the shares).
-                    const isFreeShares = row.type === "FreeShares";
-                    const moneyDash = (
-                      <span className="text-m3-on-surface-variant">
-                        {t("account_details.pnl_placeholder")}
-                      </span>
-                    );
-                    return (
-                      <tr key={row.id} id={`txl-row-${row.id}`} className="m3-tr">
-                        <td className="m3-td">{t(`transaction.type_${row.type.toLowerCase()}`)}</td>
-                        <td className="m3-td tabular-nums">
-                          {formatIsoDateNumeric(row.date, i18n.language)}
-                        </td>
-                        <td id={`txl-qty-${row.id}`} className="m3-td text-right tabular-nums">
-                          {row.quantity}
-                        </td>
-                        <td
-                          id={`txl-unit-price-${row.id}`}
-                          className="m3-td text-right tabular-nums"
-                        >
-                          {isFreeShares ? moneyDash : row.unitPrice}
-                        </td>
-                        <td className="m3-td text-right tabular-nums">{row.exchangeRate}</td>
-                        <td className="m3-td text-right tabular-nums">{row.fees}</td>
-                        <td
-                          id={`txl-total-${row.id}`}
-                          className="m3-td text-right tabular-nums font-medium"
-                        >
-                          {isFreeShares ? moneyDash : row.totalAmount}
-                        </td>
-                        {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}
-                        <td className="m3-td text-right tabular-nums">
-                          {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (
-                            <span
-                              className={
-                                row.realizedPnlRaw > 0 ? "text-m3-success" : "text-m3-error"
-                              }
-                            >
-                              {row.realizedPnl}
-                            </span>
-                          ) : (
-                            <span className="text-m3-on-surface-variant">
-                              {t("account_details.pnl_placeholder")}
-                            </span>
-                          )}
-                        </td>
-                        <td className="m3-td">
-                          <div className="flex items-center gap-1">
-                            <IconButton
-                              icon={<Pencil size={16} />}
-                              size="sm"
-                              aria-label={t("action.edit")}
-                              onClick={() => {
-                                const raw = transactionById.get(row.id);
-                                if (!raw) return;
-                                // CSH-111 — cash Deposit/Withdrawal edits use the dedicated
-                                // cash modals (the generic modal is cash-excluded, CSH-018),
-                                // opened via the URL-driven modal mount (no cross-feature import).
-                                if (raw.transaction_type === "Deposit") {
-                                  patchModalSearch(navigate, {
-                                    modal: "edit-cash-deposit",
-                                    editTxId: raw.id,
-                                    editTxAccountId: raw.account_id,
-                                    editTxAssetId: raw.asset_id,
-                                  });
-                                } else if (raw.transaction_type === "Withdrawal") {
-                                  patchModalSearch(navigate, {
-                                    modal: "edit-cash-withdrawal",
-                                    editTxId: raw.id,
-                                    editTxAccountId: raw.account_id,
-                                    editTxAssetId: raw.asset_id,
-                                  });
-                                } else if (raw.transaction_type === "FreeShares") {
-                                  // FSD-040 — free-shares edits use the dedicated modal in
-                                  // edit mode (only date/quantity/note editable, asset
-                                  // locked), opened via the URL-driven modal mount.
-                                  patchModalSearch(navigate, {
-                                    modal: "edit-free-shares",
-                                    editTxId: raw.id,
-                                    editTxAccountId: raw.account_id,
-                                    editTxAssetId: raw.asset_id,
-                                  });
-                                } else {
-                                  setEditingTransaction(raw);
-                                }
-                              }}
-                            />
-                            <IconButton
-                              icon={<Trash2 size={16} />}
-                              size="sm"
-                              variant="danger"
-                              id={`txl-delete-${row.id}`}
-                              aria-label={t("action.delete")}
-                              onClick={() => setDeletingTransactionId(row.id)}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <TransactionTable
+              rows={sortedTransactions}
+              sortDirection={sortDirection}
+              onToggleSort={toggleSortDirection}
+              onEditTransaction={(txId) => {
+                const raw = transactionById.get(txId);
+                if (raw) routeEditTransaction(navigate, raw, setEditingTransaction);
+              }}
+              onDeleteTransaction={setDeletingTransactionId}
+            />
           )}
         </div>
       </div>

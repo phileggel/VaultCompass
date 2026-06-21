@@ -45,6 +45,12 @@ export const transactionGateway = {
     return await commands.getTransactions(accountId, assetId);
   },
 
+  async getAllTransactionsForAccount(
+    accountId: string,
+  ): Promise<Result<Transaction[], AccountApplicationError>> {
+    return await commands.getAllTransactionsForAccount(accountId);
+  },
+
   async getAssetIdsForAccount(
     accountId: string,
   ): Promise<Result<string[], AccountApplicationError>> {

@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDown, RefreshCw, TrendingUp } from "lucide-react";
+import { ChevronDown, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -112,6 +112,23 @@ export function AccountDetailsView() {
                   aria-label={t("account_details.action_performance")}
                 >
                   {t("account_details.action_performance")}
+                </Button>
+
+                {/* TRX-036 — per-account overall transaction journal */}
+                <Button
+                  id="account-details-journal"
+                  variant="secondary"
+                  size="sm"
+                  icon={<ScrollText size={14} />}
+                  onClick={() =>
+                    void navigate({
+                      to: "/accounts/$accountId/journal",
+                      params: { accountId },
+                    })
+                  }
+                  aria-label={t("account_details.action_journal")}
+                >
+                  {t("account_details.action_journal")}
                 </Button>
                 {/* MKT-131 — per-account "Refresh prices" entry point */}
                 <Button

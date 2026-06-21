@@ -13,7 +13,11 @@ import { CategoryManager } from "@/features/categories";
 import { CurrencyRatesView } from "@/features/currency";
 import { DesignSystemPage } from "@/features/design-system";
 import { SettingsPage } from "@/features/settings";
-import { AddTransactionPage, TransactionListPage } from "@/features/transactions";
+import {
+  AccountJournalPage,
+  AddTransactionPage,
+  TransactionListPage,
+} from "@/features/transactions";
 import { getLastPath } from "@/lib/lastPath";
 import { AppShell } from "./AppShell";
 
@@ -60,6 +64,12 @@ const accountPerformanceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts/$accountId/performance",
   component: AccountPerformancePage,
+});
+
+const accountJournalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/accounts/$accountId/journal",
+  component: AccountJournalPage,
 });
 
 const transactionListRoute = createRoute({
@@ -115,6 +125,7 @@ const routeTree = rootRoute.addChildren([
   accountsRoute,
   accountDetailsRoute,
   accountPerformanceRoute,
+  accountJournalRoute,
   transactionListRoute,
   addTransactionRoute,
   categoriesRoute,
