@@ -12,6 +12,11 @@ interface TransactionTableProps {
   onToggleSort: () => void;
   /** Show an Asset column — used by the account-wide journal where rows span assets. */
   showAssetColumn?: boolean;
+  /**
+   * Bank-statement mode: replace the single Total Amount column with Cash out /
+   * Cash in / Balance (driven by each row's `cashOut`/`cashIn`/`balance`).
+   */
+  cashStatement?: boolean;
   onEditTransaction: (transactionId: string) => void;
   onDeleteTransaction: (transactionId: string) => void;
 }
@@ -26,6 +31,7 @@ export function TransactionTable({
   sortDirection,
   onToggleSort,
   showAssetColumn = false,
+  cashStatement = false,
   onEditTransaction,
   onDeleteTransaction,
 }: TransactionTableProps) {
@@ -53,7 +59,15 @@ export function TransactionTable({
             <th className="m3-th text-right">{t("transaction.column_unit_price")}</th>
             <th className="m3-th text-right">{t("transaction.column_exchange_rate")}</th>
             <th className="m3-th text-right">{t("transaction.column_fees")}</th>
-            <th className="m3-th text-right">{t("transaction.column_total_amount")}</th>
+            {cashStatement ? (
+              <>
+                <th className="m3-th text-right">{t("transaction.column_cash_out")}</th>
+                <th className="m3-th text-right">{t("transaction.column_cash_in")}</th>
+                <th className="m3-th text-right">{t("transaction.column_balance")}</th>
+              </>
+            ) : (
+              <th className="m3-th text-right">{t("transaction.column_total_amount")}</th>
+            )}
             <th className="m3-th text-right">{t("transaction.column_realized_pnl")}</th>
             <th className="m3-th">{t("transaction.column_actions")}</th>
           </tr>
@@ -88,12 +102,38 @@ export function TransactionTable({
                 </td>
                 <td className="m3-td text-right tabular-nums">{row.exchangeRate}</td>
                 <td className="m3-td text-right tabular-nums">{row.fees}</td>
-                <td
-                  id={`txl-total-${row.id}`}
-                  className="m3-td text-right tabular-nums font-medium"
-                >
-                  {isFreeShares ? moneyDash : row.totalAmount}
-                </td>
+                {cashStatement ? (
+                  <>
+                    {/* cashOut/cashIn use `||` — an empty string means "no cash this
+                        side", so it falls back to the placeholder; `balance` uses `??`
+                        because "0" is a meaningful value that must still render. */}
+                    <td
+                      id={`txl-cash-out-${row.id}`}
+                      className="m3-td text-right tabular-nums text-m3-error"
+                    >
+                      {row.cashOut || moneyDash}
+                    </td>
+                    <td
+                      id={`txl-cash-in-${row.id}`}
+                      className="m3-td text-right tabular-nums text-m3-success"
+                    >
+                      {row.cashIn || moneyDash}
+                    </td>
+                    <td
+                      id={`txl-balance-${row.id}`}
+                      className="m3-td text-right tabular-nums font-medium"
+                    >
+                      {row.balance ?? moneyDash}
+                    </td>
+                  </>
+                ) : (
+                  <td
+                    id={`txl-total-${row.id}`}
+                    className="m3-td text-right tabular-nums font-medium"
+                  >
+                    {isFreeShares ? moneyDash : row.totalAmount}
+                  </td>
+                )}
                 {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}
                 <td className="m3-td text-right tabular-nums">
                   {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (

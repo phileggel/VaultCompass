@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Account, Asset, Transaction } from "@/bindings";
+import { microToFormatted } from "@/lib/microUnits";
 import { useAppStore } from "@/lib/store";
 import { useAccountJournal } from "./useAccountJournal";
 
@@ -127,6 +128,95 @@ describe("useAccountJournal", () => {
     });
     expect(mockGetAll).toHaveBeenCalledTimes(2);
     expect(result.current.hasTransactions).toBe(true);
+  });
+
+  it("computes bank-statement cash columns + running balance over the full set", async () => {
+    mockGetAll.mockResolvedValue({
+      status: "ok",
+      data: [
+        tx({
+          id: "dep",
+          date: "2024-01-01",
+          transaction_type: "Deposit",
+          total_amount: 1000 * MICRO,
+        }),
+        tx({
+          id: "buy",
+          date: "2024-02-01",
+          transaction_type: "Purchase",
+          total_amount: 300 * MICRO,
+        }),
+        tx({
+          id: "div",
+          date: "2024-03-01",
+          transaction_type: "Dividend",
+          total_amount: 50 * MICRO,
+        }),
+        tx({ id: "sell", date: "2024-04-01", transaction_type: "Sell", total_amount: 200 * MICRO }),
+      ],
+    });
+    const { result } = renderHook(() => useAccountJournal());
+    await act(async () => {});
+    const byId = Object.fromEntries(result.current.filteredSortedRows.map((r) => [r.id, r]));
+
+    // Deposit/Dividend/Sell are credits (cash in); Purchase is a debit (cash out).
+    expect(byId.dep?.cashIn).toBe(microToFormatted(1000 * MICRO));
+    expect(byId.dep?.cashOut).toBe("");
+    expect(byId.buy?.cashOut).toBe(microToFormatted(300 * MICRO));
+    expect(byId.buy?.cashIn).toBe("");
+
+    // Running balance: 1000 → 700 → 750 → 950.
+    expect(byId.dep?.balance).toBe(microToFormatted(1000 * MICRO));
+    expect(byId.buy?.balance).toBe(microToFormatted(700 * MICRO));
+    expect(byId.div?.balance).toBe(microToFormatted(750 * MICRO));
+    expect(byId.sell?.balance).toBe(microToFormatted(950 * MICRO));
+  });
+
+  it("leaves cash columns blank for a non-cash type and keeps the balance flat", async () => {
+    mockGetAll.mockResolvedValue({
+      status: "ok",
+      data: [
+        tx({
+          id: "ob",
+          date: "2024-01-01",
+          transaction_type: "OpeningBalance",
+          total_amount: 500 * MICRO,
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useAccountJournal());
+    await act(async () => {});
+    const row = result.current.filteredSortedRows[0];
+    expect(row?.cashOut).toBe("");
+    expect(row?.cashIn).toBe("");
+    expect(row?.balance).toBe(microToFormatted(0));
+  });
+
+  it("keeps the true full-history balance on a filtered row", async () => {
+    mockGetAll.mockResolvedValue({
+      status: "ok",
+      data: [
+        tx({
+          id: "dep",
+          date: "2024-01-01",
+          transaction_type: "Deposit",
+          total_amount: 1000 * MICRO,
+        }),
+        tx({
+          id: "buy",
+          asset_id: "asset-1",
+          date: "2024-02-01",
+          transaction_type: "Purchase",
+          total_amount: 300 * MICRO,
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useAccountJournal());
+    await act(async () => {});
+    act(() => result.current.setFilter("type", "Purchase"));
+    // Only the Purchase row is visible, but its balance still reflects the prior Deposit.
+    expect(result.current.filteredSortedRows.map((r) => r.id)).toEqual(["buy"]);
+    expect(result.current.filteredSortedRows[0]?.balance).toBe(microToFormatted(700 * MICRO));
   });
 
   it("surfaces an i18n error when the load fails", async () => {

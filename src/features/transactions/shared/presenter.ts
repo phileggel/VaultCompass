@@ -83,6 +83,14 @@ export interface TransactionRowViewModel {
   realizedPnl: string | null;
   /** Raw realized P&L in micro-units — used for sign-based color styling (SEL-043). */
   realizedPnlRaw: number | null;
+  /**
+   * Bank-statement cash columns (account-wide journal only; undefined elsewhere).
+   * `cashOut`/`cashIn` are the formatted debit/credit for this row (empty string when
+   * the type moves no cash); `balance` is the running cash balance after this row.
+   */
+  cashOut?: string;
+  cashIn?: string;
+  balance?: string;
 }
 
 /**
@@ -109,5 +117,23 @@ export function toTransactionRow(
     note: tx.note ?? null,
     realizedPnl: tx.realized_pnl != null ? microToFormatted(tx.realized_pnl) : null,
     realizedPnlRaw: tx.realized_pnl ?? null,
+  };
+}
+
+/**
+ * Formats the bank-statement cash cells for a journal row (account-wide journal).
+ * Takes raw micro-unit values — `null` debit/credit means the type moves no cash and
+ * renders an empty cell. Keeps all micro→display formatting in the presenter (F5); the
+ * running-balance arithmetic itself stays in the hook.
+ */
+export function toCashStatementCells(input: {
+  debitMicros: number | null;
+  creditMicros: number | null;
+  balanceMicros: number;
+}): { cashOut: string; cashIn: string; balance: string } {
+  return {
+    cashOut: input.debitMicros != null ? microToFormatted(input.debitMicros) : "",
+    cashIn: input.creditMicros != null ? microToFormatted(input.creditMicros) : "",
+    balance: microToFormatted(input.balanceMicros),
   };
 }

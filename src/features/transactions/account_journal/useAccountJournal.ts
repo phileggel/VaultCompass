@@ -7,7 +7,11 @@ import { decimalToMicro } from "@/lib/microUnits";
 import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { transactionGateway } from "../gateway";
-import { type TransactionRowViewModel, toTransactionRow } from "../shared/presenter";
+import {
+  type TransactionRowViewModel,
+  toCashStatementCells,
+  toTransactionRow,
+} from "../shared/presenter";
 
 const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
@@ -98,6 +102,37 @@ export function useAccountJournal() {
     }));
   }, [transactions]);
 
+  // Bank-statement cash columns. Computed over the FULL chronological set (date ASC,
+  // created_at ASC) so each row's balance is the true cash balance at that point —
+  // independent of the display filters/sort. Signs mirror the backend cash replay:
+  // credit = Deposit/Sell/Dividend, debit = Withdrawal/Purchase, none = OpeningBalance/FreeShares.
+  const cashByTxId = useMemo(() => {
+    const ordered = [...transactions].sort((a, b) =>
+      a.date !== b.date ? a.date.localeCompare(b.date) : a.created_at.localeCompare(b.created_at),
+    );
+    const map = new Map<string, { cashOut: string; cashIn: string; balance: string }>();
+    let running = 0;
+    for (const tx of ordered) {
+      const isCredit =
+        tx.transaction_type === "Deposit" ||
+        tx.transaction_type === "Sell" ||
+        tx.transaction_type === "Dividend";
+      const isDebit = tx.transaction_type === "Withdrawal" || tx.transaction_type === "Purchase";
+      if (isCredit) running += tx.total_amount;
+      else if (isDebit) running -= tx.total_amount;
+      // Raw micro values → presenter formats them (F5); the arithmetic stays here.
+      map.set(
+        tx.id,
+        toCashStatementCells({
+          debitMicros: isDebit ? tx.total_amount : null,
+          creditMicros: isCredit ? tx.total_amount : null,
+          balanceMicros: running,
+        }),
+      );
+    }
+    return map;
+  }, [transactions]);
+
   const filteredSortedRows = useMemo<TransactionRowViewModel[]>(() => {
     const hasMin = filters.amountMin.trim() !== "";
     const hasMax = filters.amountMax.trim() !== "";
@@ -115,14 +150,16 @@ export function useAccountJournal() {
     const rows = filtered.map((tx) => {
       const asset = assets.find((a) => a.id === tx.asset_id);
       const account = accounts.find((a) => a.id === tx.account_id);
-      return toTransactionRow(tx, asset?.name ?? tx.asset_id, account?.name ?? tx.account_id);
+      const row = toTransactionRow(tx, asset?.name ?? tx.asset_id, account?.name ?? tx.account_id);
+      const cash = cashByTxId.get(tx.id);
+      return cash ? { ...row, ...cash } : row;
     });
 
     return rows.sort((a, b) => {
       const cmp = a.date.localeCompare(b.date);
       return sortDirection === "asc" ? cmp : -cmp;
     });
-  }, [transactions, filters, assets, accounts, sortDirection]);
+  }, [transactions, filters, assets, accounts, sortDirection, cashByTxId]);
 
   return {
     accountId,

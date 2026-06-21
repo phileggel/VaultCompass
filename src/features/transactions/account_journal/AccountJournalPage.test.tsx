@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transaction } from "@/bindings";
 import type { TransactionRowViewModel } from "../shared/presenter";
@@ -16,7 +17,12 @@ vi.mock("../useTransactions", () => ({
   useTransactions: () => ({ cancelTransaction: mockCancelTransaction }),
 }));
 
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+  Link: ({ children, to: _to, params: _params, ...rest }: Record<string, unknown>) => (
+    <a {...rest}>{children as ReactNode}</a>
+  ),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "fr" } }),

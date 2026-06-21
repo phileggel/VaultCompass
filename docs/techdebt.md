@@ -218,3 +218,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `fix/datefield-input-typing` @ `6d1682b`
 - Severity: 🟡
 - Observation: Three different date-display styles coexist with no single audited convention — locale-numeric (14/06/2026) in the transaction journal, short-month (14 juin 2026) in price-history/closed-holdings, and raw ISO (2026-06-14, US-looking on a fr machine) in the currency rates table. The two helpers (`ui/format/date.ts` numeric vs `account_details/shared/formatDate.ts` short-month) also live in different buckets, and some surfaces bypass both.
+
+## 2026-06-21 — Semantic M3 color tokens repurposed for financial polarity
+
+- Found by: reviewer-frontend (journal-bank-statement review)
+- Where: `src/features/transactions/transaction_list/TransactionTable.tsx` (cash-out/cash-in cells use `text-m3-error`/`text-m3-success`; realized-P&L cell uses the same tokens)
+- Context: branch `feat/journal-bank-statement` @ HEAD
+- Severity: 🔵
+- Observation: The M3 `error`/`success` semantic color tokens are reused to express financial debit/credit (and gain/loss) polarity — cash out = `text-m3-error` (red), cash in = `text-m3-success` (green). Visually conventional and consistent with the pre-existing P&L sign-coloring, but it overloads tokens whose semantics are failure/confirmation, which a high-contrast or screen-reader-driven theme may interpret differently from "money out / money in". A dedicated `text-m3-debit`/`text-m3-credit` (and `-gain`/`-loss`) alias mapping to the same palette entries — or an ADR ratifying the reuse — would carry the correct intent. Cross-cutting (affects the P&L column too), so larger than one PR.

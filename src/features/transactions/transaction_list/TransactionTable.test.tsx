@@ -102,4 +102,24 @@ describe("TransactionTable", () => {
     );
     expect(screen.getByText("-50.000")).toHaveClass("text-m3-error");
   });
+
+  it("replaces Total Amount with Cash out/in/Balance in cashStatement mode", () => {
+    render(
+      <TransactionTable
+        rows={[row({ cashOut: "300,000", cashIn: "", balance: "700,000" })]}
+        {...baseProps}
+        cashStatement
+      />,
+    );
+    expect(screen.getByText("transaction.column_cash_out")).toBeInTheDocument();
+    expect(screen.getByText("transaction.column_cash_in")).toBeInTheDocument();
+    expect(screen.getByText("transaction.column_balance")).toBeInTheDocument();
+    expect(screen.queryByText("transaction.column_total_amount")).not.toBeInTheDocument();
+    expect(document.getElementById("txl-cash-out-tx-1")).toHaveTextContent("300,000");
+    expect(document.getElementById("txl-balance-tx-1")).toHaveTextContent("700,000");
+    // Empty cash-in cell falls back to the neutral placeholder.
+    expect(document.getElementById("txl-cash-in-tx-1")).toHaveTextContent(
+      "account_details.pnl_placeholder",
+    );
+  });
 });

@@ -1,4 +1,5 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
@@ -72,9 +73,20 @@ export function AccountJournalPage() {
       <div className="flex-1 flex flex-col min-w-0 bg-m3-surface-container rounded-[28px] shadow-elevation-1 overflow-hidden">
         {/* Filter bar */}
         <div className="px-6 py-4 bg-m3-surface-container-high flex flex-wrap gap-4 items-end">
-          <h1 className="text-lg font-medium text-m3-on-surface mr-auto self-center">
-            {t("transaction.journal_title")}
-          </h1>
+          <div className="mr-auto flex items-center gap-3 self-center">
+            <Link
+              to="/accounts/$accountId"
+              params={{ accountId }}
+              id="journal-back"
+              aria-label={t("action.back")}
+              className="inline-flex items-center text-m3-on-surface-variant hover:text-m3-on-surface transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </Link>
+            <h1 className="text-lg font-medium text-m3-on-surface">
+              {t("transaction.journal_title")}
+            </h1>
+          </div>
           <div className="w-44">
             <SelectField
               id="journal-filter-asset"
@@ -155,6 +167,7 @@ export function AccountJournalPage() {
               sortDirection={sortDirection}
               onToggleSort={toggleSortDirection}
               showAssetColumn
+              cashStatement
               onEditTransaction={(txId) => {
                 const raw = transactionById.get(txId);
                 if (raw) routeEditTransaction(navigate, raw, setEditingTransaction);
