@@ -11,13 +11,14 @@ import { SelectField } from "@/ui/components/field/SelectField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { SortIcon } from "@/ui/components/SortIcon";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
+import { formatIsoDateNumeric } from "@/ui/format/date";
 import { AddTransactionModal } from "../add_transaction/AddTransactionModal";
 import { EditTransactionModal } from "../edit_transaction_modal/EditTransactionModal";
 import { useTransactions } from "../useTransactions";
 import { useTransactionList } from "./useTransactionList";
 
 export function TransactionListPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { accountId: routeAccountId, assetId: routeAssetId } = useParams({
     from: "/accounts/$accountId/transactions/$assetId",
@@ -221,7 +222,9 @@ export function TransactionListPage() {
                     return (
                       <tr key={row.id} id={`txl-row-${row.id}`} className="m3-tr">
                         <td className="m3-td">{t(`transaction.type_${row.type.toLowerCase()}`)}</td>
-                        <td className="m3-td tabular-nums">{row.date}</td>
+                        <td className="m3-td tabular-nums">
+                          {formatIsoDateNumeric(row.date, i18n.language)}
+                        </td>
                         <td id={`txl-qty-${row.id}`} className="m3-td text-right tabular-nums">
                           {row.quantity}
                         </td>

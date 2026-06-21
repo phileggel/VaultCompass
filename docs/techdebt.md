@@ -210,3 +210,11 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `fix/datefield-input-typing` @ `c297767`
 - Severity: 🟡
 - Observation: When a parent resets `value` to `""` while the user has an in-progress partial entry (e.g. `05/06`), the field keeps showing the stale partial text. A partial entry parses to `""`, which is indistinguishable from an externally-imposed `""`, so the echo-skip guard cannot tell the two apart; React also skips the effect entirely when `value` is already `""`. The reachable variants (a committed date reset to empty) sync correctly, and the marginal path is masked today by modals unmounting the field on close. No covering test exists for this path.
+
+## 2026-06-21 — Inconsistent date display style across the app (fr/us)
+
+- Found by: manual
+- Where: `src` — date-rendering surfaces; confirmed sites: `features/transactions/transaction_list/TransactionListPage.tsx:226` (locale-numeric), `features/account_details/price_history/PriceHistoryModal.tsx:144` + `features/account_details/account_details_view/ClosedHoldingRow.tsx:39` (short-month via `account_details/shared/formatDate.ts`), `features/currency/currency_rates_view/CurrencyRatesView.tsx:159` (raw ISO `{rate.date}`)
+- Context: branch `fix/datefield-input-typing` @ `6d1682b`
+- Severity: 🟡
+- Observation: Three different date-display styles coexist with no single audited convention — locale-numeric (14/06/2026) in the transaction journal, short-month (14 juin 2026) in price-history/closed-holdings, and raw ISO (2026-06-14, US-looking on a fr machine) in the currency rates table. The two helpers (`ui/format/date.ts` numeric vs `account_details/shared/formatDate.ts` short-month) also live in different buckets, and some surfaces bypass both.
