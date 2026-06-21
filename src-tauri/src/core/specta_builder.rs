@@ -98,6 +98,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::delete_account,
             account::get_asset_ids_for_account,
             account::get_transactions,
+            account::get_all_transactions_for_account,
             // ----- currency BC (FXR) -----
             currency::declare_currency_pair,
             currency::record_currency_rate,

@@ -286,6 +286,98 @@ async fn test_get_transactions_returns_chronological_order() {
     assert!(txs[1].date <= txs[2].date);
 }
 
+/// get_all_transactions_for_account() returns every asset's transactions for the
+/// account, ordered chronologically by (date, created_at) — the account-wide journal.
+#[tokio::test]
+async fn test_get_all_transactions_for_account_spans_assets_chronologically() {
+    let pool = make_pool().await;
+    let svc = make_service(&pool).await;
+    let asset_a = seed_asset(&pool).await;
+    let asset_b = "integ-asset-b".to_string();
+    sqlx::query(
+        "INSERT INTO assets (id, name, reference, asset_class, category_id, currency, risk_level)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&asset_b)
+    .bind("IntegAssetB")
+    .bind("INTB")
+    .bind("Stocks")
+    .bind("default-uncategorized")
+    .bind("EUR")
+    .bind(2_i64)
+    .execute(&pool)
+    .await
+    .expect("seed second asset");
+
+    let account = svc
+        .create(
+            "AllTx".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .await
+        .unwrap();
+    seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+    // Interleave two assets across non-monotonic dates to prove ordering + cross-asset span.
+    svc.buy_holding(
+        &account.id,
+        asset_a.clone(),
+        "2020-03-01".to_string(),
+        micro(1),
+        micro(100),
+        micro(1),
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+    svc.buy_holding(
+        &account.id,
+        asset_b.clone(),
+        "2020-01-01".to_string(),
+        micro(1),
+        micro(50),
+        micro(1),
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+    svc.buy_holding(
+        &account.id,
+        asset_a.clone(),
+        "2020-02-01".to_string(),
+        micro(1),
+        micro(90),
+        micro(1),
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let txs = svc
+        .get_all_transactions_for_account(&account.id)
+        .await
+        .expect("get_all_transactions_for_account must succeed for a valid account");
+
+    // The seeded cash Deposit (2020-01-01) plus the 3 buys = 4 transactions.
+    assert_eq!(
+        txs.len(),
+        4,
+        "all assets' transactions plus the cash deposit"
+    );
+    assert!(
+        txs.windows(2).all(|w| w[0].date <= w[1].date),
+        "transactions must be chronologically ordered across all assets"
+    );
+    assert!(
+        txs.iter().any(|t| t.asset_id == asset_a) && txs.iter().any(|t| t.asset_id == asset_b),
+        "result must span both assets"
+    );
+}
+
 /// get_transaction_by_id() returns Some for an existing transaction and None for an unknown id.
 #[tokio::test]
 async fn test_get_transaction_by_id_returns_some_or_none() {
