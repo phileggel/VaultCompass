@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-06-21
+
+### Added
+
+- bank-statement cash columns + back nav in journal
+  The Balance column is the true full-history cash balance at each row,
+  shown even when filters hide cash-moving transactions — so it can jump.
+
 ## [0.22.0] - 2026-06-21
 
 ### Added
