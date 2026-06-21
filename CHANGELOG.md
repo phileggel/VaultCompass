@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-06-21
+
+### Added
+
+- account-wide transaction journal with filters
+- expose get_all_transactions_for_account command
+- prefill operation date from last entry per account
+
+### Fixed
+
+- render transaction journal dates in locale-numeric format
+- stop DateField wiping input; add +/- day stepping
+- replay holdings chronologically and refresh journal on edit
+  recalculate_holding trusted callers to pass transactions in date
+  order, so the oversell guard was order-dependent: a sell could be
+  moved before its buy, then a reload flipped physical order and
+  permanently blocked further edits. Sort the replay internally; the
+  journal now refreshes on TransactionUpdated instead of on reload.
+
 ## [0.21.0] - 2026-06-20
 
 ### Added
