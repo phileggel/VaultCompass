@@ -338,6 +338,8 @@
     "column_period_over_period": "Period Change",
     "column_year_to_date": "Year to Date",
     "column_since_inception": "Since Inception",
+    "subcol_value": "Value",
+    "subcol_pct": "%",
     "error": {
       "account_not_found": "Account not found.",
       "database_error": "An unexpected error occurred while computing performance. Please try again."

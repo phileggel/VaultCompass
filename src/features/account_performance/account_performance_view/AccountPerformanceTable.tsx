@@ -17,10 +17,15 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
         className="w-full border-collapse"
       >
         <thead className="sticky top-0 bg-m3-surface-container z-10">
+          {/* Each performance metric spans a Value + % pair (grouped header). */}
           <tr>
-            <th className="m3-th">{t("account_performance.column_period")}</th>
-            <th className="m3-th text-right">{t("account_performance.column_end_value")}</th>
-            <th className="m3-th text-right">
+            <th scope="col" rowSpan={2} className="m3-th align-bottom">
+              {t("account_performance.column_period")}
+            </th>
+            <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
+              {t("account_performance.column_end_value")}
+            </th>
+            <th scope="colgroup" colSpan={2} className="m3-th text-center">
               {t("account_performance.column_period_over_period")}
             </th>
             {/* PRF-037 — YTD column present only in month view */}
@@ -28,12 +33,52 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
               <th
                 id="account-performance-col-ytd"
                 data-testid="account-performance-col-ytd"
-                className="m3-th text-right"
+                scope="colgroup"
+                colSpan={2}
+                className="m3-th text-center"
               >
                 {t("account_performance.column_year_to_date")}
               </th>
             )}
-            <th className="m3-th text-right">{t("account_performance.column_since_inception")}</th>
+            <th scope="colgroup" colSpan={2} className="m3-th text-center">
+              {t("account_performance.column_since_inception")}
+            </th>
+          </tr>
+          <tr>
+            <th scope="col" id="account-performance-subcol-pop-value" className="m3-th text-right">
+              {t("account_performance.subcol_value")}
+            </th>
+            <th scope="col" id="account-performance-subcol-pop-pct" className="m3-th text-right">
+              {t("account_performance.subcol_pct")}
+            </th>
+            {showYtd && (
+              <>
+                <th
+                  scope="col"
+                  id="account-performance-subcol-ytd-value"
+                  className="m3-th text-right"
+                >
+                  {t("account_performance.subcol_value")}
+                </th>
+                <th
+                  scope="col"
+                  id="account-performance-subcol-ytd-pct"
+                  className="m3-th text-right"
+                >
+                  {t("account_performance.subcol_pct")}
+                </th>
+              </>
+            )}
+            <th
+              scope="col"
+              id="account-performance-subcol-since-value"
+              className="m3-th text-right"
+            >
+              {t("account_performance.subcol_value")}
+            </th>
+            <th scope="col" id="account-performance-subcol-since-pct" className="m3-th text-right">
+              {t("account_performance.subcol_pct")}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -46,19 +91,45 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
             >
               <td className="m3-td">{row.month !== null ? t(row.periodLabel) : row.periodLabel}</td>
               <td className="m3-td text-right">{row.endValueFormatted}</td>
-              <td className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}>
-                {row.periodOverPeriod.gainFormatted}{" "}
-                <span className="text-xs">({row.periodOverPeriod.pctFormatted})</span>
+              <td
+                data-testid={`account-performance-pop-value-${row.rowKey}`}
+                className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}
+              >
+                {row.periodOverPeriod.gainFormatted}
+              </td>
+              <td
+                data-testid={`account-performance-pop-pct-${row.rowKey}`}
+                className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}
+              >
+                {row.periodOverPeriod.pctFormatted}
               </td>
               {showYtd && (
-                <td className={`m3-td text-right ${row.yearToDate?.colorClass ?? ""}`}>
-                  {row.yearToDate?.gainFormatted ?? "—"}{" "}
-                  <span className="text-xs">({row.yearToDate?.pctFormatted ?? "—"})</span>
-                </td>
+                <>
+                  <td
+                    data-testid={`account-performance-ytd-value-${row.rowKey}`}
+                    className={`m3-td text-right ${row.yearToDate?.colorClass ?? ""}`}
+                  >
+                    {row.yearToDate?.gainFormatted ?? "—"}
+                  </td>
+                  <td
+                    data-testid={`account-performance-ytd-pct-${row.rowKey}`}
+                    className={`m3-td text-right ${row.yearToDate?.colorClass ?? ""}`}
+                  >
+                    {row.yearToDate?.pctFormatted ?? "—"}
+                  </td>
+                </>
               )}
-              <td className={`m3-td text-right ${row.sinceInception.colorClass}`}>
-                {row.sinceInception.gainFormatted}{" "}
-                <span className="text-xs">({row.sinceInception.pctFormatted})</span>
+              <td
+                data-testid={`account-performance-since-value-${row.rowKey}`}
+                className={`m3-td text-right ${row.sinceInception.colorClass}`}
+              >
+                {row.sinceInception.gainFormatted}
+              </td>
+              <td
+                data-testid={`account-performance-since-pct-${row.rowKey}`}
+                className={`m3-td text-right ${row.sinceInception.colorClass}`}
+              >
+                {row.sinceInception.pctFormatted}
               </td>
             </tr>
           ))}

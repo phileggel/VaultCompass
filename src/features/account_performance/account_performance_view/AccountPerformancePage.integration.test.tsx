@@ -278,6 +278,30 @@ describe("AccountPerformancePage", () => {
     expect(rows[1]).toHaveAttribute("data-testid", "account-performance-row-2024");
   });
 
+  // Value and percentage render in dedicated columns (not combined in one cell).
+  it("renders performance value and percentage in separate columns", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        month_view_available: false,
+        monthly: [],
+        yearly: [makeYearRow({ year: 2025 })],
+      }),
+    });
+
+    render(<AccountPerformancePage />);
+    await screen.findByTestId("account-performance-table");
+
+    const value = screen.getByTestId("account-performance-pop-value-2025");
+    const pct = screen.getByTestId("account-performance-pop-pct-2025");
+    // The value cell carries the money amount with no percent sign; the pct cell carries the %.
+    expect(value).not.toHaveTextContent("%");
+    expect(pct).toHaveTextContent("%");
+    // Since-Inception splits the same way.
+    expect(screen.getByTestId("account-performance-since-value-2025")).not.toHaveTextContent("%");
+    expect(screen.getByTestId("account-performance-since-pct-2025")).toHaveTextContent("%");
+  });
+
   // PRF-060 — re-fetch subscribes to TransactionUpdated, AssetPriceUpdated, AccountUpdated
   it("calls getAccountPerformance on mount (PRF-060 setup)", async () => {
     vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({

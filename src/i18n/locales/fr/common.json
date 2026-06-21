@@ -338,6 +338,8 @@
     "column_period_over_period": "Variation période",
     "column_year_to_date": "Depuis le début de l'année",
     "column_since_inception": "Depuis l'origine",
+    "subcol_value": "Valeur",
+    "subcol_pct": "%",
     "error": {
       "account_not_found": "Compte introuvable.",
       "database_error": "Une erreur inattendue s'est produite lors du calcul de la performance. Veuillez réessayer."
