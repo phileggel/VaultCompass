@@ -108,6 +108,37 @@ pub trait PriceProvider: Send + Sync {
     async fn fetch_price(&self, symbol: &str) -> anyhow::Result<Option<Quote>>;
 }
 
+/// A request for a historical quote on a specific calendar date.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoricalPriceRequest {
+    /// Provider symbol to query (e.g. a derived Yahoo ticker).
+    pub symbol: String,
+    /// Target observation date, ISO `yyyy-mm-dd`. The provider returns the most
+    /// recent close at or before this date (carry-back over closed market days).
+    pub date: String,
+}
+
+/// External provider for a price on a specific past date — the date-scoped
+/// counterpart to [`PriceProvider`], kept as a separate interface so the latest
+/// fetch path is untouched (ADR-017).
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait HistoricalPriceProvider: Send + Sync {
+    /// Fetches the most recent quote at or before `request.date` for the symbol.
+    /// Keyless (ADR-017).
+    ///
+    /// - `Ok(Some(quote))` — a usable close was found at or before the target date;
+    ///   `quote.date` is the actual candle's date (may predate the request when the
+    ///   target fell on a closed market day).
+    /// - `Ok(None)` — the provider has no data at or before the date (unknown symbol,
+    ///   or the date predates the symbol's history). A quiet per-asset skip.
+    /// - `Err(_)` — transient HTTP / parse / IO failure.
+    async fn fetch_price_on_date(
+        &self,
+        request: HistoricalPriceRequest,
+    ) -> anyhow::Result<Option<Quote>>;
+}
+
 /// Interface for AssetPrice persistence (upsert by (asset_id, date), MKT-025).
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]

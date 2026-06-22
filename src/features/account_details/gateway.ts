@@ -9,6 +9,8 @@ import type {
   DividendDTO,
   DividendError,
   FetchAccountAssetPricesError,
+  FetchAccountAssetPricesForDateError,
+  FetchForDateOutcome,
   FreeSharesDTO,
   FreeSharesError,
   HoldingTransactionError,
@@ -88,6 +90,13 @@ export const accountDetailsGateway = {
     accountId: string,
   ): Promise<Result<null, FetchAccountAssetPricesError>> {
     return commands.fetchAccountAssetPrices(accountId);
+  },
+
+  async fetchAccountAssetPricesForDate(
+    accountId: string,
+    date: string,
+  ): Promise<Result<FetchForDateOutcome, FetchAccountAssetPricesForDateError>> {
+    return commands.fetchAccountAssetPricesForDate(accountId, date);
   },
 
   async blockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetCrudError>> {

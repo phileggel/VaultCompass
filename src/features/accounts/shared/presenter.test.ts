@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountMutationErrorToI18n,
   fetchPriceErrorToI18n,
+  fetchPriceForDateErrorToI18n,
   formatAccountRowTotalUnrealizedPnl,
   formatAccountRowYtdPerformancePct,
 } from "./presenter";
@@ -63,6 +64,39 @@ describe("fetchPriceErrorToI18n", () => {
     "NameAlreadyExists",
   ] as const)("%s falls through to the generic DatabaseError snackbar", (code) => {
     expect(fetchPriceErrorToI18n({ code })).toEqual({
+      key: "error.DatabaseError",
+      severity: "error",
+    });
+  });
+});
+
+describe("fetchPriceForDateErrorToI18n", () => {
+  it("InvalidDate dispatches a dedicated error snackbar", () => {
+    expect(fetchPriceForDateErrorToI18n({ code: "InvalidDate" })).toEqual({
+      key: "mkt.fetch_date_invalid",
+      severity: "error",
+    });
+  });
+
+  it("DateInFuture dispatches a dedicated error snackbar", () => {
+    expect(fetchPriceForDateErrorToI18n({ code: "DateInFuture" })).toEqual({
+      key: "mkt.fetch_date_future",
+      severity: "error",
+    });
+  });
+
+  it("AccountNotFound dispatches the dedicated error snackbar", () => {
+    expect(fetchPriceForDateErrorToI18n({ code: "AccountNotFound", account_id: "acc-1" })).toEqual({
+      key: "error.AccountNotFound",
+      severity: "error",
+    });
+  });
+
+  it.each([
+    "DatabaseError",
+    "UnknownError",
+  ] as const)("%s falls through to the generic DatabaseError snackbar", (code) => {
+    expect(fetchPriceForDateErrorToI18n({ code })).toEqual({
       key: "error.DatabaseError",
       severity: "error",
     });

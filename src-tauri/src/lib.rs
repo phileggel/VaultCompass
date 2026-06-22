@@ -15,7 +15,7 @@ use crate::context::account::{
     AccountService, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
 };
 use crate::context::asset::{
-    AssetPriceRepository, AssetService, PriceProvider, ReqwestYahooClient,
+    AssetPriceRepository, AssetService, HistoricalPriceProvider, PriceProvider, ReqwestYahooClient,
     SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
 };
 use crate::context::currency::{
@@ -32,6 +32,7 @@ use crate::use_cases::account_summary::AccountSummaryUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
 use crate::use_cases::asset_price_fetch::dispatcher::Dispatcher as PriceFetchDispatcher;
 use crate::use_cases::asset_price_fetch::{AssetPriceFetchUseCase, FetchGuard};
+use crate::use_cases::asset_price_fetch_for_date::AssetPriceFetchForDateUseCase;
 use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
@@ -254,6 +255,18 @@ pub fn run() {
                 ));
                 app_handle.manage(asset_price_fetch_uc);
                 app_handle.manage(Arc::clone(&fetch_guard));
+
+                // ----- date-scoped price fetch (isolated from the latest auto-fetch) -----
+                let historical_provider: Arc<dyn HistoricalPriceProvider> =
+                    Arc::new(ReqwestYahooClient::new());
+                let asset_price_fetch_for_date_uc = Arc::new(AssetPriceFetchForDateUseCase::new(
+                    Arc::clone(&account_service),
+                    Arc::clone(&asset_service),
+                    historical_provider,
+                    Arc::new(SqliteAssetPriceRepository::new(db.pool.clone())),
+                    Arc::clone(&event_bus),
+                ));
+                app_handle.manage(asset_price_fetch_for_date_uc);
 
                 app_handle.manage(Arc::clone(&currency_service));
 

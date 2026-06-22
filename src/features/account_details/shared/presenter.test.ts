@@ -43,6 +43,7 @@ const makeClosedHolding = (overrides: Partial<ClosedHoldingDetail> = {}): Closed
   asset_name: "Closed Corp",
   asset_reference: "CLSD",
   realized_pnl: 0,
+  dividends_received: 0,
   last_sold_date: "2024-12-31",
   ...overrides,
 });
@@ -188,6 +189,22 @@ describe("toClosedHoldingRow", () => {
   it("passes lastSoldDate through verbatim (ACD-049)", () => {
     const row = toClosedHoldingRow(makeClosedHolding({ last_sold_date: "2025-06-15" }));
     expect(row.lastSoldDate).toBe("2025-06-15");
+  });
+
+  // DIV-073 — dividends received formatted + raw exposed
+  it("formats dividendsReceived with 2 decimals and exposes raw (DIV-073)", () => {
+    const row = toClosedHoldingRow(makeClosedHolding({ dividends_received: 5_000_000 }));
+    expect(row.dividendsReceived).toBe("5,00");
+    expect(row.dividendsReceivedRaw).toBe(5_000_000);
+  });
+
+  // Total revenues = realized P&L + dividends
+  it("computes totalRevenues as realized P&L + dividends", () => {
+    const row = toClosedHoldingRow(
+      makeClosedHolding({ realized_pnl: 15_000_000, dividends_received: 5_000_000 }),
+    );
+    expect(row.totalRevenues).toBe("20,00");
+    expect(row.totalRevenuesRaw).toBe(20_000_000);
   });
 
   // ACD-047 — toAccountSummary totalRealizedPnl covers active + closed (backend sums, presenter passes through)

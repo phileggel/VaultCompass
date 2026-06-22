@@ -23,6 +23,7 @@ const makeClosedHolding = (overrides: Partial<ClosedHoldingDetail> = {}): Closed
   asset_name: "Closed Corp",
   asset_reference: "CLSD",
   realized_pnl: 5_000_000,
+  dividends_received: 0,
   last_sold_date: "2025-12-01",
   ...overrides,
 });

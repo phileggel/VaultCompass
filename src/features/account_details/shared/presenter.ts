@@ -176,6 +176,14 @@ export interface ClosedHoldingRowViewModel {
   realizedPnl: string;
   /** Raw realized P&L in micro-units — used for sign-based color styling (ACD-049). */
   realizedPnlRaw: number;
+  /** Formatted dividends received over the life of the position (2 decimals, DIV-073). */
+  dividendsReceived: string;
+  /** Raw dividends received in micro-units (DIV-073). */
+  dividendsReceivedRaw: number;
+  /** Formatted total revenues = realized P&L + dividends (2 decimals). */
+  totalRevenues: string;
+  /** Raw total revenues in micro-units — used for sign-based color styling. */
+  totalRevenuesRaw: number;
   /** ISO date of last sell "YYYY-MM-DD" (ACD-049). */
   lastSoldDate: string;
 }
@@ -339,6 +347,10 @@ export function toClosedHoldingRow(detail: ClosedHoldingDetail): ClosedHoldingRo
     assetReference: detail.asset_reference,
     realizedPnl: microToFormatted(detail.realized_pnl, 2),
     realizedPnlRaw: detail.realized_pnl,
+    dividendsReceived: microToFormatted(detail.dividends_received, 2),
+    dividendsReceivedRaw: detail.dividends_received,
+    totalRevenues: microToFormatted(detail.realized_pnl + detail.dividends_received, 2),
+    totalRevenuesRaw: detail.realized_pnl + detail.dividends_received,
     lastSoldDate: detail.last_sold_date,
   };
 }

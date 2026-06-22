@@ -35,6 +35,12 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
       <td className="m3-td text-right">
         <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
       </td>
+      {/* DIV-073 — dividends received over the position's life */}
+      <td className="m3-td text-right text-m3-on-surface">{row.dividendsReceived}</td>
+      {/* Total revenues = realized P&L + dividends */}
+      <td className="m3-td text-right">
+        <PnlCell value={row.totalRevenues} raw={row.totalRevenuesRaw} />
+      </td>
       <td className="m3-td text-right text-m3-on-surface-variant">
         {formatIsoDate(row.lastSoldDate, i18n.language)}
       </td>

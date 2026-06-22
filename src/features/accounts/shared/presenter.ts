@@ -2,6 +2,7 @@ import type {
   AccountApplicationError,
   AccountCrudError,
   FetchAccountAssetPricesError,
+  FetchAccountAssetPricesForDateError,
   FetchAllAssetPricesError,
   UpdateFrequency,
 } from "@/bindings";
@@ -46,6 +47,34 @@ export function fetchPriceErrorToI18n(
       return { key: "mkt.fetch_already_running", severity: "info" };
     case "NoFetchableHoldings":
       return { key: "mkt.fetch_no_holdings", severity: "info" };
+    case "AccountNotFound":
+      return { key: "error.AccountNotFound", severity: "error" };
+    case "NameAlreadyExists":
+    case "DatabaseError":
+    case "UnknownError":
+      return { key: "error.DatabaseError", severity: "error" };
+    default: {
+      const _exhaustive: never = err;
+      return _exhaustive;
+    }
+  }
+}
+
+/**
+ * F27 — Maps a date-scoped price-fetch error to a snackbar message + severity.
+ * Pure function, no React, no useTranslation.
+ *
+ * Covers `FetchAccountAssetPricesForDateError` — composes AssetError +
+ * AccountApplicationError + FetchPriceForDateTask on the wire.
+ */
+export function fetchPriceForDateErrorToI18n(
+  err: FetchAccountAssetPricesForDateError,
+): SnackbarMessage {
+  switch (err.code) {
+    case "InvalidDate":
+      return { key: "mkt.fetch_date_invalid", severity: "error" };
+    case "DateInFuture":
+      return { key: "mkt.fetch_date_future", severity: "error" };
     case "AccountNotFound":
       return { key: "error.AccountNotFound", severity: "error" };
     case "NameAlreadyExists":
