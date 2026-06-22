@@ -25,5 +25,6 @@ pub use service::*;
 
 #[cfg(test)]
 pub use domain::{
-    MockAssetCategoryRepository, MockAssetPriceRepository, MockAssetRepository, MockPriceProvider,
+    MockAssetCategoryRepository, MockAssetPriceRepository, MockAssetRepository,
+    MockHistoricalPriceProvider, MockPriceProvider,
 };

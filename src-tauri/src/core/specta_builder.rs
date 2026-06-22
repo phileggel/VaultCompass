@@ -3,8 +3,8 @@ use crate::{
     core::{logger, Event},
     use_cases::{
         account_creation, account_deletion, account_details, account_performance, account_summary,
-        archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, holding_transaction,
-        update_checker,
+        archive_asset, asset_price_fetch, asset_price_fetch_for_date, asset_web_lookup,
+        delete_asset, holding_transaction, update_checker,
     },
 };
 
@@ -72,6 +72,9 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<asset_price_fetch::FetchAllAssetPricesError>()
         .typ::<asset_price_fetch::FetchAccountAssetPricesError>()
         .typ::<asset_price_fetch::FetchPriceTask>()
+        .typ::<asset_price_fetch_for_date::FetchForDateOutcome>()
+        .typ::<asset_price_fetch_for_date::FetchAccountAssetPricesForDateError>()
+        .typ::<asset_price_fetch_for_date::FetchPriceForDateTask>()
         .typ::<update_checker::UpdateInfo>()
         .commands(tauri_specta::collect_commands![
             // ----- asset BC -----
@@ -125,6 +128,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             asset_web_lookup::lookup_asset,
             asset_price_fetch::fetch_all_asset_prices,
             asset_price_fetch::fetch_account_asset_prices,
+            asset_price_fetch_for_date::fetch_account_asset_prices_for_date,
             update_checker::check_for_update,
             update_checker::download_update,
             update_checker::install_update,

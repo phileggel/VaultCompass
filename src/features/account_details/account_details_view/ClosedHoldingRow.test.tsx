@@ -20,6 +20,10 @@ const baseRow: ClosedHoldingRowViewModel = {
   assetReference: "AAPL",
   realizedPnl: "150.00",
   realizedPnlRaw: 150_000_000,
+  dividendsReceived: "20.00",
+  dividendsReceivedRaw: 20_000_000,
+  totalRevenues: "170.00",
+  totalRevenuesRaw: 170_000_000,
   lastSoldDate: "2024-01-15",
 };
 
@@ -37,6 +41,12 @@ describe("ClosedHoldingRow", () => {
     renderInTable(baseRow);
     expect(screen.getByText("Apple Inc")).toBeInTheDocument();
     expect(screen.getByText("AAPL")).toBeInTheDocument();
+  });
+
+  it("renders dividends received and total revenues", () => {
+    renderInTable(baseRow);
+    expect(screen.getByText("20.00")).toBeInTheDocument();
+    expect(screen.getByText("170.00")).toBeInTheDocument();
   });
 
   it("renders the lastSoldDate via formatIsoDate threaded with i18n.language", () => {

@@ -17,6 +17,8 @@ pub mod account_summary;
 pub mod archive_asset;
 /// Asset price auto-fetch: retrieves prices from Yahoo on launch and user demand (MKT-100+).
 pub mod asset_price_fetch;
+/// Date-scoped price fetch: retrieves and stores each holding's close at a user-picked date.
+pub mod asset_price_fetch_for_date;
 /// Asset Web Lookup: OpenFIGI search to pre-fill the Add Asset form (WEB).
 pub mod asset_web_lookup;
 /// Delete asset: guards hard-deletion against existing transactions.

@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDown, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
+import { CalendarClock, ChevronDown, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -8,6 +8,7 @@ import { FAB } from "@/ui/components/fab/FAB";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
+import { FetchPricesForDateModal } from "../fetch_prices_for_date/FetchPricesForDateModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
@@ -27,6 +28,10 @@ export function AccountDetailsView() {
     useRefreshAccountPrices(accountId);
   // DIV-012 — consolidated header "Add" dropdown open/close state.
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  // ACD-048 — closed positions section is collapsible (open by default).
+  const [closedSectionOpen, setClosedSectionOpen] = useState(true);
+  // Date-scoped price fetch modal open/close state.
+  const [fetchDateOpen, setFetchDateOpen] = useState(false);
 
   const runFromAddMenu = useCallback((action: () => void) => {
     setAddMenuOpen(false);
@@ -141,6 +146,17 @@ export function AccountDetailsView() {
                   aria-label={t("account_details.action_refresh_prices")}
                 >
                   {t("account_details.action_refresh_prices")}
+                </Button>
+                {/* Date-scoped price fetch (historical close at a picked date) */}
+                <Button
+                  id="account-details-fetch-prices-for-date"
+                  variant="secondary"
+                  size="sm"
+                  icon={<CalendarClock size={14} />}
+                  onClick={() => setFetchDateOpen(true)}
+                  aria-label={t("account_details.action_fetch_prices_for_date")}
+                >
+                  {t("account_details.action_fetch_prices_for_date")}
                 </Button>
                 {/* DIV-012 — consolidated "Record" dropdown (Open balance /
                     Dividend / Free shares). Cash Deposit/Withdraw are NOT here —
@@ -309,34 +325,55 @@ export function AccountDetailsView() {
                 </div>
               )}
 
-              {/* ACD-048 — Closed positions section */}
+              {/* ACD-048 — Closed positions section (collapsible) */}
               {view.hasClosedHoldings && (
                 <div className="mt-2">
-                  <div className="px-6 py-3 bg-m3-surface-container-high">
+                  <button
+                    type="button"
+                    id="account-closed-positions-toggle"
+                    aria-expanded={closedSectionOpen}
+                    onClick={() => setClosedSectionOpen((open) => !open)}
+                    className="w-full flex items-center gap-2 px-6 py-3 bg-m3-surface-container-high text-left hover:bg-m3-surface-container-highest"
+                  >
+                    <ChevronDown
+                      size={16}
+                      className={`text-m3-on-surface-variant transition-transform ${
+                        closedSectionOpen ? "" : "-rotate-90"
+                      }`}
+                    />
                     <h3 className="text-sm font-semibold text-m3-on-surface-variant uppercase tracking-wide">
                       {t("account_details.closed_positions_header")}
                     </h3>
-                  </div>
-                  <table className="w-full border-collapse">
-                    <thead className="sticky top-0 bg-m3-surface-container z-10">
-                      <tr>
-                        <th className="m3-th">{t("account_details.column_asset")}</th>
-                        {/* ACD-049 — P&L and last sold date */}
-                        <th className="m3-th text-right">
-                          {t("account_details.column_realized_pnl")}
-                        </th>
-                        <th className="m3-th text-right">
-                          {t("account_details.column_last_sold_date")}
-                        </th>
-                        <th className="m3-th">{t("transaction.column_actions")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {view.closedHoldings.map((row) => (
-                        <ClosedHoldingRow key={row.assetId} row={row} accountId={accountId} />
-                      ))}
-                    </tbody>
-                  </table>
+                  </button>
+                  {closedSectionOpen && (
+                    <table className="w-full border-collapse">
+                      <thead className="sticky top-0 bg-m3-surface-container z-10">
+                        <tr>
+                          <th className="m3-th">{t("account_details.column_asset")}</th>
+                          {/* ACD-049 — P&L and last sold date */}
+                          <th className="m3-th text-right">
+                            {t("account_details.column_realized_pnl")}
+                          </th>
+                          {/* DIV-073 — dividends received + total revenues */}
+                          <th className="m3-th text-right">
+                            {t("account_details.column_dividends_received")}
+                          </th>
+                          <th className="m3-th text-right">
+                            {t("account_details.column_total_revenues")}
+                          </th>
+                          <th className="m3-th text-right">
+                            {t("account_details.column_last_sold_date")}
+                          </th>
+                          <th className="m3-th">{t("transaction.column_actions")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {view.closedHoldings.map((row) => (
+                          <ClosedHoldingRow key={row.assetId} row={row} accountId={accountId} />
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
             </div>
@@ -433,6 +470,13 @@ export function AccountDetailsView() {
           onSubmitSuccess={view.handleFreeSharesSuccess}
         />
       )}
+
+      {/* Date-scoped price fetch modal (historical close at a user-picked date) */}
+      <FetchPricesForDateModal
+        isOpen={fetchDateOpen}
+        onClose={() => setFetchDateOpen(false)}
+        accountId={accountId}
+      />
 
       {/* ACD-035/036 — add-transaction entry point is a global FAB (replaces the
           former contextual "Add Transaction" buttons in the header / empty states) */}

@@ -64,6 +64,8 @@ pub struct ClosedHoldingDetail {
     pub asset_reference: String,
     /// Total realized P&L for this position (micro-units, ACD-045).
     pub realized_pnl: i64,
+    /// Total dividends received over the life of this position (micro-units, DIV-073).
+    pub dividends_received: i64,
     /// ISO date of the most recent sell for this position ("YYYY-MM-DD", ACD-043).
     pub last_sold_date: String,
 }
@@ -367,11 +369,14 @@ impl AccountDetailsUseCase {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, "get_account_details: closed holding references missing asset");
                     AccountApplicationError::DatabaseError
                 })?;
+            // DIV-073 — carry forward dividends received while the position was open.
+            let dividends_received = *dividends_by_asset.get(&holding.asset_id).unwrap_or(&0);
             closed_details.push(ClosedHoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
                 asset_reference: asset.reference,
                 realized_pnl: holding.total_realized_pnl,
+                dividends_received,
                 last_sold_date,
             });
         }
@@ -853,6 +858,86 @@ mod tests {
         );
         let resp = uc.get_account_details(&account.id).await.unwrap();
         assert_eq!(resp.closed_holdings[0].realized_pnl, 42_000_000);
+    }
+
+    // DIV-073 — ClosedHoldingDetail.dividends_received sums Dividend cash for the position
+    #[tokio::test]
+    async fn closed_holding_detail_carries_dividends_received() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "P".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Q".to_string(),
+                reference: "Q".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        // Cash deposit establishes the cash holding the dividends credit into.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2025-01-05".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+        // Two dividends recorded over the life of the (now closed) position.
+        account_svc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2025-06-01".to_string(),
+                3_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_dividend(
+                &account.id,
+                asset.id.clone(),
+                "2025-09-01".to_string(),
+                2_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        let holding_repo = SqliteHoldingRepository::new(pool.clone());
+        holding_repo
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id,
+                    0,
+                    0,
+                    42_000_000,
+                    Some("2026-02-01".to_string()),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id).await.unwrap();
+        assert_eq!(resp.closed_holdings[0].dividends_received, 5_000_000);
     }
 
     // ACD-045 — last_sold_date on ClosedHoldingDetail is non-optional String from Holding

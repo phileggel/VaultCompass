@@ -18,7 +18,10 @@ pub mod yahoo_exchange_mapper;
 pub mod yahoo_symbol;
 
 pub use asset::*;
-pub use asset_price::{AssetPrice, AssetPriceRepository, AssetPriceSource, PriceProvider, Quote};
+pub use asset_price::{
+    AssetPrice, AssetPriceRepository, AssetPriceSource, HistoricalPriceProvider,
+    HistoricalPriceRequest, PriceProvider, Quote,
+};
 pub use category::*;
 pub use error::{AssetDomainError, AssetPriceDomainError, CategoryDomainError};
 pub use exchange::Exchange;
@@ -27,6 +30,6 @@ pub use yahoo_symbol::{derive_yahoo_symbol, derive_yahoo_symbol_with_exchange};
 #[cfg(test)]
 pub use asset::MockAssetRepository;
 #[cfg(test)]
-pub use asset_price::{MockAssetPriceRepository, MockPriceProvider};
+pub use asset_price::{MockAssetPriceRepository, MockHistoricalPriceProvider, MockPriceProvider};
 #[cfg(test)]
 pub use category::MockAssetCategoryRepository;
