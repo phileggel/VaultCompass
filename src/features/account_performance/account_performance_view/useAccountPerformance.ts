@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccountPerformanceResponse } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { getPerfViewMode, setPerfViewMode } from "@/lib/perfViewModeStorage";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountPerformanceGateway } from "../gateway";
 import {
@@ -10,6 +11,20 @@ import {
 } from "../shared/presenter";
 
 export type PerformanceViewMode = "month" | "year";
+
+/**
+ * PRF-014 — resolves the view mode to open with: the account's remembered choice when
+ * still valid, clamped to year view when a remembered month view is no longer available,
+ * else the default (month when available, otherwise year).
+ */
+function resolveViewMode(
+  remembered: PerformanceViewMode | null,
+  monthAvailable: boolean,
+): PerformanceViewMode {
+  if (remembered === "month" && !monthAvailable) return "year";
+  if (remembered !== null) return remembered;
+  return monthAvailable ? "month" : "year";
+}
 
 interface UseAccountPerformanceResult {
   isLoading: boolean;
@@ -42,8 +57,9 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
       const result = await accountPerformanceGateway.getAccountPerformance(accountId);
       if (result.status === "ok") {
         setData(result.data);
-        // PRF-014 — open in month view by default when month view is available.
-        setViewMode(result.data.month_view_available ? "month" : "year");
+        // PRF-014 — restore the account's remembered view mode (clamped to availability),
+        // falling back to the default when there is no stored preference.
+        setViewMode(resolveViewMode(getPerfViewMode(accountId), result.data.month_view_available));
         // PRF-015 — default the year selector to the most-recent year in the monthly data.
         const firstMonthlyYear = result.data.monthly[0]?.year ?? null;
         setSelectedYear(firstMonthlyYear);
@@ -80,6 +96,15 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     };
   }, [fetchPerformance]);
 
+  // PRF-014 — remember the user's choice per account on every toggle.
+  const selectViewMode = useCallback(
+    (mode: PerformanceViewMode) => {
+      setViewMode(mode);
+      setPerfViewMode(accountId, mode);
+    },
+    [accountId],
+  );
+
   const monthViewAvailable = data?.month_view_available ?? false;
 
   const isEmpty = useMemo(
@@ -114,7 +139,7 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     monthViewAvailable,
     isEmpty,
     viewMode,
-    setViewMode,
+    setViewMode: selectViewMode,
     availableYears,
     selectedYear,
     setSelectedYear,

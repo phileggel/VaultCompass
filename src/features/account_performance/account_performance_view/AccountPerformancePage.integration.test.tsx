@@ -80,6 +80,7 @@ const makeResponse = (
 describe("AccountPerformancePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   // PRF-050 — loading skeleton displayed while fetch is in-flight
@@ -207,6 +208,50 @@ describe("AccountPerformancePage", () => {
     await screen.findByTestId("account-performance-table");
 
     // Year selector must not be present in year view
+    expect(screen.queryByTestId("account-performance-year-selector")).not.toBeInTheDocument();
+  });
+
+  // PRF-014 — a remembered "year" preference overrides the month-view default
+  it("restores the remembered view mode over the default (PRF-014)", async () => {
+    localStorage.setItem("perf_view_mode_account-1", "year");
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({ month_view_available: true }),
+    });
+
+    render(<AccountPerformancePage />);
+    await screen.findByTestId("account-performance-table");
+
+    // Year view restored despite month view being available → no year selector.
+    expect(screen.queryByTestId("account-performance-year-selector")).not.toBeInTheDocument();
+  });
+
+  // PRF-014 — toggling the view mode persists the choice per account
+  it("persists the view mode when the user toggles it (PRF-014)", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({ month_view_available: true }),
+    });
+
+    render(<AccountPerformancePage />);
+    await screen.findByTestId("account-performance-year-selector"); // month view active
+
+    await userEvent.click(screen.getByTestId("account-performance-view-toggle-year"));
+
+    expect(localStorage.getItem("perf_view_mode_account-1")).toBe("year");
+  });
+
+  // PRF-014 — a remembered "month" is clamped to year view when month view is gone
+  it("falls back to year view when the remembered month view is unavailable (PRF-014)", async () => {
+    localStorage.setItem("perf_view_mode_account-1", "month");
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({ month_view_available: false, monthly: [] }),
+    });
+
+    render(<AccountPerformancePage />);
+    await screen.findByTestId("account-performance-table");
+
     expect(screen.queryByTestId("account-performance-year-selector")).not.toBeInTheDocument();
   });
 

@@ -46,7 +46,7 @@ Money entering or leaving the account from outside the tracked world: a `Deposit
 
 **PRF-013 — Month view eligibility by frequency (frontend + backend)**: The month view is available only when the account's `update_frequency` (ACC-004) is `Automatic`, `ManualDay`, or `ManualWeek` (cadences of at most one week, which produce enough observations for monthly rows). For `ManualMonth` and `ManualYear`, the month view is not offered and the page presents only the year view; the view-mode control is hidden or disabled.
 
-**PRF-014 — Default view mode (frontend)**: When the month view is available (PRF-013), the page opens in month view showing the current calendar year. Otherwise it opens in year view.
+**PRF-014 — Default view mode (frontend)**: The page restores the account's last-used view mode (remembered per account in local storage), clamped to availability — a remembered month view falls back to year view when the month view is no longer available (PRF-013). When the account has no remembered preference, the page opens in month view showing the current calendar year if the month view is available, otherwise in year view.
 
 **PRF-015 — Year selector in month view (frontend)**: The month view displays the twelve months of a single calendar year and exposes a year selector to change which year is shown. The selector defaults to the current calendar year and offers every year from the account's first data year (PRF-040) through the current calendar year inclusive — the current year is always selectable even when the latest transaction falls in an earlier year.
 
