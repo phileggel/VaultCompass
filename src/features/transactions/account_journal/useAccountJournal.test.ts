@@ -81,6 +81,55 @@ describe("useAccountJournal", () => {
     expect(result.current.filteredSortedRows.map((r) => r.id)).toEqual(["b", "c", "a"]);
   });
 
+  it("orders same-date events by created_at, applying the sort direction (regression)", async () => {
+    // All on the same day, fed in created_at order (as the backend returns them).
+    mockGetAll.mockResolvedValue({
+      status: "ok",
+      data: [
+        tx({
+          id: "A",
+          date: "2024-05-01",
+          transaction_type: "Deposit",
+          total_amount: 1000 * MICRO,
+          created_at: "2024-05-01T09:00:00.000Z",
+        }),
+        tx({
+          id: "B",
+          date: "2024-05-01",
+          transaction_type: "Purchase",
+          total_amount: 300 * MICRO,
+          created_at: "2024-05-01T10:00:00.000Z",
+        }),
+        tx({
+          id: "C",
+          date: "2024-05-01",
+          transaction_type: "Sell",
+          total_amount: 200 * MICRO,
+          created_at: "2024-05-01T11:00:00.000Z",
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useAccountJournal());
+    await act(async () => {});
+
+    // desc (default): newest-created first — NOT the input order (the bug showed
+    // input order here, flipping the balance column at the day boundary).
+    expect(result.current.filteredSortedRows.map((r) => r.id)).toEqual(["C", "B", "A"]);
+
+    // Each row still carries its true post-event balance from the chronological
+    // replay (A 1000 → B 700 → C 900), independent of display order.
+    const byId = Object.fromEntries(
+      result.current.filteredSortedRows.map((r) => [r.id, r.balance]),
+    );
+    expect(byId.A).toBe(microToFormatted(1000 * MICRO));
+    expect(byId.B).toBe(microToFormatted(700 * MICRO));
+    expect(byId.C).toBe(microToFormatted(900 * MICRO));
+
+    // asc: oldest-created first.
+    act(() => result.current.toggleSortDirection());
+    expect(result.current.filteredSortedRows.map((r) => r.id)).toEqual(["A", "B", "C"]);
+  });
+
   it("filters by asset", async () => {
     const { result } = renderHook(() => useAccountJournal());
     await act(async () => {});

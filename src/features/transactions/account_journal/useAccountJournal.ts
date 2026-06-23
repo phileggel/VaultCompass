@@ -147,17 +147,21 @@ export function useAccountJournal() {
       return true;
     });
 
-    const rows = filtered.map((tx) => {
+    // Order on the raw transactions (which carry created_at) so same-date events
+    // tie-break by input order — matching the running-balance replay. Sorting rows
+    // by date alone would leave same-date rows in their stable input order even in
+    // desc view, flipping the balance column at each day boundary.
+    const ordered = [...filtered].sort((a, b) => {
+      const cmp = a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at);
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+
+    return ordered.map((tx) => {
       const asset = assets.find((a) => a.id === tx.asset_id);
       const account = accounts.find((a) => a.id === tx.account_id);
       const row = toTransactionRow(tx, asset?.name ?? tx.asset_id, account?.name ?? tx.account_id);
       const cash = cashByTxId.get(tx.id);
       return cash ? { ...row, ...cash } : row;
-    });
-
-    return rows.sort((a, b) => {
-      const cmp = a.date.localeCompare(b.date);
-      return sortDirection === "asc" ? cmp : -cmp;
     });
   }, [transactions, filters, assets, accounts, sortDirection, cashByTxId]);
 
