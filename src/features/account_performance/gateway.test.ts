@@ -13,19 +13,20 @@ const mockInvoke = vi.mocked(invoke);
 // Import after mock is registered so bindings.ts picks up the mock
 const { accountPerformanceGateway } = await import("./gateway");
 
-// PRF-070–073 — snapshot column defaults (the gateway passes these through untouched).
-const SNAPSHOT_DEFAULTS = {
-  dividends_received: 120_000_000,
-  realized_pnl: 450_000_000,
-  unrealized_pnl: -200_000_000,
-  cash_balance: 3_000_000_000,
+// PRF-070–074 — bridge term defaults (the gateway passes these through untouched).
+const BRIDGE_DEFAULTS = {
+  previous_value: 9_000_000_000,
+  cash_flow: 500_000_000,
+  asset_flow: 0,
+  dividends: 120_000_000,
+  pnl: 380_000_000,
 } satisfies Partial<PerformancePeriod>;
 
 const makeYearRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePeriod => ({
   year: 2025,
   month: null,
   end_value: 10_000_000_000,
-  ...SNAPSHOT_DEFAULTS,
+  ...BRIDGE_DEFAULTS,
   period_over_period: { gain: 500_000_000, pct: 5_000_000 },
   year_to_date: null,
   since_inception: { gain: 500_000_000, pct: 5_000_000 },
@@ -36,7 +37,7 @@ const makeMonthRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePe
   year: 2025,
   month: 5,
   end_value: 10_000_000_000,
-  ...SNAPSHOT_DEFAULTS,
+  ...BRIDGE_DEFAULTS,
   period_over_period: { gain: 200_000_000, pct: 2_000_000 },
   year_to_date: { gain: 350_000_000, pct: 3_500_000 },
   since_inception: { gain: 500_000_000, pct: 5_000_000 },

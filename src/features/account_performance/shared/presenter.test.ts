@@ -19,19 +19,20 @@ const makeMetric = (overrides: Partial<PerformanceMetric> = {}): PerformanceMetr
   ...overrides,
 });
 
-// PRF-070–073 — snapshot column defaults shared by both row factories.
-const SNAPSHOT_DEFAULTS = {
-  dividends_received: 120_000_000, // €120.00
-  realized_pnl: 450_000_000, // €450.00
-  unrealized_pnl: -200_000_000, // −€200.00
-  cash_balance: 3_000_000_000, // €3 000.00
+// PRF-070–074 — bridge term defaults shared by both row factories (they sum to end_value).
+const BRIDGE_DEFAULTS = {
+  previous_value: 9_000_000_000, // €9 000.00
+  cash_flow: 500_000_000, // +€500.00
+  asset_flow: 0,
+  dividends: 120_000_000, // €120.00
+  pnl: 380_000_000, // +€380.00 → 9 000 + 500 + 0 + 120 + 380 = 10 000
 } satisfies Partial<PerformancePeriod>;
 
 const makeYearRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePeriod => ({
   year: 2025,
   month: null,
   end_value: 10_000_000_000, // €10 000.00
-  ...SNAPSHOT_DEFAULTS,
+  ...BRIDGE_DEFAULTS,
   period_over_period: makeMetric(),
   year_to_date: null, // always null for year rows (PRF-037)
   since_inception: makeMetric({ gain: 2_000_000_000, pct: 20_000_000 }),
@@ -42,7 +43,7 @@ const makeMonthRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePe
   year: 2025,
   month: 5,
   end_value: 10_000_000_000,
-  ...SNAPSHOT_DEFAULTS,
+  ...BRIDGE_DEFAULTS,
   period_over_period: makeMetric(),
   year_to_date: makeMetric({ gain: 350_000_000, pct: 3_500_000 }),
   since_inception: makeMetric({ gain: 2_000_000_000, pct: 20_000_000 }),
@@ -140,7 +141,7 @@ describe("gainColorClass", () => {
   });
 });
 
-// ---- pnlColorClass (PRF-071/072) ----------------------------------------------
+// ---- pnlColorClass (PRF-070/071/073) ------------------------------------------
 
 describe("pnlColorClass", () => {
   it("returns distinct positive and negative classes", () => {
@@ -188,20 +189,22 @@ describe("presentPeriodRow — year row", () => {
     expect(row.sinceInception).toBeDefined();
   });
 
-  it("maps the four snapshot columns (PRF-070–073)", () => {
+  it("maps the bridge columns and the terms sum to end value (PRF-070–074)", () => {
     const row = presentPeriodRow(
       makeYearRow({
-        dividends_received: 120_000_000,
-        realized_pnl: 450_000_000,
-        unrealized_pnl: -200_000_000,
-        cash_balance: 3_000_000_000,
+        previous_value: 9_000_000_000,
+        cash_flow: 500_000_000, // positive (cash in)
+        asset_flow: -200_000_000, // negative (asset out)
+        dividends: 120_000_000,
+        pnl: 580_000_000,
+        end_value: 10_000_000_000,
       }),
     );
-    expect(row.dividendsReceivedFormatted).toBeTruthy();
-    expect(row.cashBalanceFormatted).toBeTruthy();
-    // realized gain is positive, latent P&L negative → distinct sign colours
-    expect(row.realizedPnl.formatted).toBeTruthy();
-    expect(row.realizedPnl.colorClass).not.toBe(row.latentPnl.colorClass);
+    expect(row.previousValueFormatted).toBeTruthy();
+    expect(row.dividendsFormatted).toBeTruthy();
+    // cash in (+) and asset out (−) get distinct sign colours.
+    expect(row.cashFlow.colorClass).not.toBe(row.assetFlow.colorClass);
+    expect(row.pnl.formatted).toBeTruthy();
   });
 
   it("renders '—' for an absent period_over_period (first row, PRF-042)", () => {

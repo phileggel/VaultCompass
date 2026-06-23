@@ -2329,24 +2329,29 @@ year: number;
 month: number | null; 
 /**
  * Global Value at period end in account-currency micros (PRF-020).
+ * Bridge identity: `end_value = previous_value + cash_flow + asset_flow + dividends + pnl` (PRF-074).
  */
 end_value: number; 
 /**
- * Cumulative dividends received through period end, account-currency micros (PRF-070).
+ * Global Value at the previous period end — the bridge baseline (PRF-074). 0 for the first period.
  */
-dividends_received: number; 
+previous_value: number; 
 /**
- * Cumulative realized P&L through period end, account-currency micros (PRF-071).
+ * Net external cash flow within the period: deposits − withdrawals, account-currency micros (PRF-070).
  */
-realized_pnl: number; 
+cash_flow: number; 
 /**
- * Unrealized P&L of holdings still open at period end, account-currency micros (PRF-072).
+ * In-kind asset contributions within the period: opening-balance cost + free shares at market value (PRF-071).
  */
-unrealized_pnl: number; 
+asset_flow: number; 
 /**
- * Cash net balance at period end, account-currency micros (PRF-073).
+ * Dividend income received within the period, account-currency micros (PRF-072).
  */
-cash_balance: number; 
+dividends: number; 
+/**
+ * Investment P&L vs the previous period (realized gains + price movement); the bridge residual (PRF-073).
+ */
+pnl: number; 
 /**
  * Performance vs the preceding period of the same granularity (PRF-033).
  * None when no preceding period exists (PRF-042).

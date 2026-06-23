@@ -116,17 +116,19 @@ Money entering or leaving the account from outside the tracked world: a `Deposit
 
 **PRF-060 — Reactivity to data changes (frontend)**: The page re-fetches its data when it receives a `TransactionUpdated`, `AssetPriceUpdated`, or `AccountUpdated` event, since all three can change reconstructed period values (transactions change holdings and flows, prices change valuations, account changes affect currency/frequency). This mirrors the Account Details subscription set (ACD-039, ACD-040, MKT-036).
 
-### Snapshot Columns (070–079)
+### Global Value Bridge (070–079)
 
-Each period row carries four point-in-time snapshot columns alongside its end value (PRF-020), reported in the account currency. Unlike the performance metrics (PRF-030–039), which measure change across a span, each snapshot is the cumulative state **as of the row's period end** — the same reference date as the end value. They apply to both the yearly and the monthly tables.
+Each period row decomposes how its end value (PRF-020) was built from the previous period's, reported in the account currency. Unlike the performance metrics (PRF-030–039), which express change as a percentage across a span, the bridge expresses it as **values that occurred within the period**. It applies to both the yearly and the monthly tables.
 
-**PRF-070 — Dividends received (backend + frontend)**: The cumulative sum of all dividend cash credited on or before the row's period end. Rendered as a plain account-currency amount.
+**PRF-070 — Cash in/out (backend + frontend)**: The net external cash flow within the period — deposits minus withdrawals, dated within `[period start, period end]`. Purchases and sales are excluded: they move value between cash and holdings without crossing the account boundary. Sign-coloured (positive in / negative out).
 
-**PRF-071 — Realized P&L (backend + frontend)**: The cumulative realized profit and loss from every sale dated on or before the row's period end, using the same per-sale figure the account records when the sale is entered (volume-weighted average cost basis). Rendered with a sign-based colour (gain / loss / neutral), consistent with the metric cells (PRF-036).
+**PRF-071 — Asset in/out (backend + frontend)**: The value of securities that enter or leave the portfolio in kind within the period, without a cash trade — opening-balance positions (valued at their book cost) plus free shares (FSD-070, valued at their period-end carry-forward market price, PRF-022/FXR-042; 0 when unpriced). Sign-coloured.
 
-**PRF-072 — Latent P&L (backend + frontend)**: The unrealized profit and loss of the holdings still open at the row's period end — their carry-forward market value (PRF-022, foreign holdings converted per FXR-042) minus their average-cost basis. A holding with no usable price or FX rate as of the period end is excluded (it contributes 0, mirroring PRF-022/FXR-034). Rendered with a sign-based colour (PRF-036).
+**PRF-072 — Dividends (backend + frontend)**: Dividend income received within the period (DIV-023). Rendered as a plain account-currency amount.
 
-**PRF-073 — Cash net balance (backend + frontend)**: The account's cash balance at the row's period end — deposits, sale proceeds and dividends received, less withdrawals and purchase costs, on or before that date. This is the cash component of the end value (PRF-020). Rendered as a plain account-currency amount.
+**PRF-073 — P&L vs n-1 (backend + frontend)**: The investment profit and loss versus the previous period — realized gains on sales plus the market revaluation of held positions. Computed as the bridge residual `end value − previous value − cash in/out − asset in/out − dividends`, which by the value decomposition equals exactly that. Sign-coloured (PRF-036).
+
+**PRF-074 — Bridge identity (backend + frontend)**: Every row satisfies, to the cent, `End Value(n) = Previous Value(n-1) + Cash in/out + Asset in/out + Dividends + P&L`. The previous value is the prior period's end value (0 for the first period in the span, PRF-040). The row displays the previous value, the four bridge terms, and the end value as a left-to-right sum.
 
 ---
 
