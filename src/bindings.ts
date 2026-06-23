@@ -2332,6 +2332,22 @@ month: number | null;
  */
 end_value: number; 
 /**
+ * Cumulative dividends received through period end, account-currency micros (PRF-070).
+ */
+dividends_received: number; 
+/**
+ * Cumulative realized P&L through period end, account-currency micros (PRF-071).
+ */
+realized_pnl: number; 
+/**
+ * Unrealized P&L of holdings still open at period end, account-currency micros (PRF-072).
+ */
+unrealized_pnl: number; 
+/**
+ * Cash net balance at period end, account-currency micros (PRF-073).
+ */
+cash_balance: number; 
+/**
  * Performance vs the preceding period of the same granularity (PRF-033).
  * None when no preceding period exists (PRF-042).
  */

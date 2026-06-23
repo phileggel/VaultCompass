@@ -25,6 +25,18 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
             <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
               {t("account_performance.column_end_value")}
             </th>
+            <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
+              {t("account_performance.column_dividends")}
+            </th>
+            <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
+              {t("account_performance.column_realized_pnl")}
+            </th>
+            <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
+              {t("account_performance.column_latent_pnl")}
+            </th>
+            <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
+              {t("account_performance.column_cash_balance")}
+            </th>
             <th scope="colgroup" colSpan={2} className="m3-th text-center">
               {t("account_performance.column_period_over_period")}
             </th>
@@ -91,6 +103,30 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
             >
               <td className="m3-td">{row.month !== null ? t(row.periodLabel) : row.periodLabel}</td>
               <td className="m3-td text-right">{row.endValueFormatted}</td>
+              <td
+                data-testid={`account-performance-dividends-${row.rowKey}`}
+                className="m3-td text-right"
+              >
+                {row.dividendsReceivedFormatted}
+              </td>
+              <td
+                data-testid={`account-performance-realized-${row.rowKey}`}
+                className={`m3-td text-right ${row.realizedPnl.colorClass}`}
+              >
+                {row.realizedPnl.formatted}
+              </td>
+              <td
+                data-testid={`account-performance-latent-${row.rowKey}`}
+                className={`m3-td text-right ${row.latentPnl.colorClass}`}
+              >
+                {row.latentPnl.formatted}
+              </td>
+              <td
+                data-testid={`account-performance-cash-${row.rowKey}`}
+                className="m3-td text-right"
+              >
+                {row.cashBalanceFormatted}
+              </td>
               <td
                 data-testid={`account-performance-pop-value-${row.rowKey}`}
                 className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}

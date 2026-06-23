@@ -52,6 +52,14 @@ pub struct PerformancePeriod {
     pub month: Option<u8>,
     /// Global Value at period end in account-currency micros (PRF-020).
     pub end_value: i64,
+    /// Cumulative dividends received through period end, account-currency micros (PRF-070).
+    pub dividends_received: i64,
+    /// Cumulative realized P&L through period end, account-currency micros (PRF-071).
+    pub realized_pnl: i64,
+    /// Unrealized P&L of holdings still open at period end, account-currency micros (PRF-072).
+    pub unrealized_pnl: i64,
+    /// Cash net balance at period end, account-currency micros (PRF-073).
+    pub cash_balance: i64,
     /// Performance vs the preceding period of the same granularity (PRF-033).
     /// None when no preceding period exists (PRF-042).
     pub period_over_period: Option<PerformanceMetric>,
@@ -234,11 +242,22 @@ impl AccountPerformanceUseCase {
                 earliest_date,
                 period_end,
             ));
+            let snapshot = period_snapshot_as_of(
+                transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
+                period_end,
+            );
 
             rows.push(PerformancePeriod {
                 year,
                 month: None,
                 end_value,
+                dividends_received: snapshot.dividends_received,
+                realized_pnl: snapshot.realized_pnl,
+                unrealized_pnl: snapshot.unrealized_pnl,
+                cash_balance: snapshot.cash_balance,
                 period_over_period,
                 // PRF-037 — year_to_date is omitted on year rows.
                 year_to_date: None,
@@ -319,11 +338,22 @@ impl AccountPerformanceUseCase {
                 earliest_date,
                 period_end,
             ));
+            let snapshot = period_snapshot_as_of(
+                transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
+                period_end,
+            );
 
             rows.push(PerformancePeriod {
                 year,
                 month: Some(month as u8),
                 end_value,
+                dividends_received: snapshot.dividends_received,
+                realized_pnl: snapshot.realized_pnl,
+                unrealized_pnl: snapshot.unrealized_pnl,
+                cash_balance: snapshot.cash_balance,
                 period_over_period,
                 year_to_date,
                 since_inception,
@@ -672,6 +702,160 @@ fn end_value_as_of(
         "end_value_as_of i64 overflow: {total}"
     );
     total as i64
+}
+
+/// Point-in-time snapshot of cumulative income/P&L and cash as of a period end,
+/// all in account-currency micros (PRF-070–073). Computed in a single chronological
+/// replay so the VWAP/realized math mirrors `recalculate_holding` in the account BC.
+struct PeriodSnapshot {
+    /// Σ Dividend cash credited through period end (PRF-070).
+    dividends_received: i64,
+    /// Σ realized P&L on sells dated through period end (PRF-071).
+    realized_pnl: i64,
+    /// Market value − cost basis of holdings still open at period end (PRF-072).
+    unrealized_pnl: i64,
+    /// Cash net balance at period end (PRF-073).
+    cash_balance: i64,
+}
+
+/// PRF-070–073 — snapshot of dividends, realized P&L, unrealized P&L and cash as of
+/// `period_end`. The cash leg and the held-quantity reconstruction mirror
+/// `end_value_as_of`; realized P&L reuses each sell's stored value (the same figure
+/// the account BC persists); unrealized P&L values still-open holdings with the same
+/// carry-forward price + FX rules as `end_value_as_of`, minus their VWAP cost basis.
+fn period_snapshot_as_of(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    period_end: NaiveDate,
+) -> PeriodSnapshot {
+    let mut cash_balance: i128 = 0;
+    let mut dividends_received: i128 = 0;
+    let mut realized_pnl: i128 = 0;
+    // Per-asset VWAP state for the cost basis of holdings still open at period end.
+    let mut quantity_by_asset: HashMap<&str, i128> = HashMap::new();
+    let mut vwap_numerator_by_asset: HashMap<&str, i128> = HashMap::new();
+
+    // SEL-024 — replay strictly in (date ASC, created_at ASC) order so the running
+    // VWAP each sell sees matches the account BC's recalculation.
+    let mut ordered: Vec<&Transaction> = transactions
+        .iter()
+        .filter(|t| matches!(parse_date(&t.date), Some(date) if date <= period_end))
+        .collect();
+    ordered.sort_by(|a, b| {
+        a.date
+            .cmp(&b.date)
+            .then_with(|| a.created_at.cmp(&b.created_at))
+    });
+
+    for transaction in ordered {
+        match transaction.transaction_type {
+            TransactionType::Deposit | TransactionType::Sell | TransactionType::Dividend => {
+                cash_balance += transaction.total_amount as i128;
+            }
+            TransactionType::Withdrawal | TransactionType::Purchase => {
+                cash_balance -= transaction.total_amount as i128;
+            }
+            TransactionType::OpeningBalance | TransactionType::FreeShares => {}
+        }
+        match transaction.transaction_type {
+            // DIV-023 — a Dividend credits cash income; it never touches the paying asset's units.
+            TransactionType::Dividend => {
+                dividends_received += transaction.total_amount as i128;
+            }
+            // FSD-070 — free shares add units at zero cost (VWAP numerator unchanged).
+            TransactionType::Purchase | TransactionType::OpeningBalance => {
+                *quantity_by_asset
+                    .entry(transaction.asset_id.as_str())
+                    .or_insert(0) += transaction.quantity as i128;
+                *vwap_numerator_by_asset
+                    .entry(transaction.asset_id.as_str())
+                    .or_insert(0) += transaction.total_amount as i128 * MICRO;
+            }
+            TransactionType::FreeShares => {
+                *quantity_by_asset
+                    .entry(transaction.asset_id.as_str())
+                    .or_insert(0) += transaction.quantity as i128;
+            }
+            TransactionType::Sell => {
+                realized_pnl += transaction.realized_pnl.unwrap_or(0) as i128;
+                let quantity_held = quantity_by_asset
+                    .entry(transaction.asset_id.as_str())
+                    .or_insert(0);
+                let numerator = vwap_numerator_by_asset
+                    .entry(transaction.asset_id.as_str())
+                    .or_insert(0);
+                // Truncate to i64 before subtracting, exactly as recalculate_holding does,
+                // so the cost basis matches the average_price the account BC persists.
+                let vwap_before: i128 = if *quantity_held > 0 {
+                    (*numerator / *quantity_held) as i64 as i128
+                } else {
+                    0
+                };
+                let sell_quantity = transaction.quantity as i128;
+                *numerator -= vwap_before * sell_quantity;
+                *quantity_held -= sell_quantity;
+            }
+            // Deposit/Withdrawal move cash only; they never enter the non-cash unit reconstruction.
+            TransactionType::Deposit | TransactionType::Withdrawal => {}
+        }
+    }
+
+    let mut unrealized_pnl: i128 = 0;
+    for (asset_id, quantity) in &quantity_by_asset {
+        if *quantity <= 0 {
+            continue;
+        }
+        let Some(priced) = priced_assets.get(*asset_id) else {
+            continue;
+        };
+        if priced.class == AssetClass::Cash {
+            continue;
+        }
+        // PRF-022 — carry-forward: most recent recorded price with date ≤ period_end.
+        let Some(price) = priced
+            .prices
+            .iter()
+            .rev()
+            .find(|p| parse_date(&p.date).is_some_and(|d| d <= period_end))
+            .map(|p| p.price as i128)
+        else {
+            continue;
+        };
+        let market_value = if priced.currency == account_currency {
+            *quantity * price / MICRO
+        } else if let Some(rate) = rate_map.get(&(priced.currency.clone(), period_end)) {
+            let converted_price = price * (*rate as i128) / MICRO;
+            *quantity * converted_price / MICRO
+        } else {
+            // FXR-034 — a foreign holding with no usable rate is excluded from the snapshot.
+            continue;
+        };
+        // cost_basis = quantity × average_price / MICRO = vwap_numerator / MICRO.
+        // unwrap_or(0): a holding built solely from free shares (FSD-070) has units but
+        // no VWAP numerator, so its cost basis is 0 and unrealized P&L is pure market value.
+        let cost_basis = vwap_numerator_by_asset.get(*asset_id).copied().unwrap_or(0) / MICRO;
+        unrealized_pnl += market_value - cost_basis;
+    }
+
+    debug_assert!(
+        [
+            cash_balance,
+            dividends_received,
+            realized_pnl,
+            unrealized_pnl
+        ]
+        .iter()
+        .all(|v| *v <= i64::MAX as i128 && *v >= i64::MIN as i128),
+        "period_snapshot_as_of i64 overflow"
+    );
+    PeriodSnapshot {
+        dividends_received: dividends_received as i64,
+        realized_pnl: realized_pnl as i64,
+        unrealized_pnl: unrealized_pnl as i64,
+        cash_balance: cash_balance as i64,
+    }
 }
 
 /// PRF-030 — net external cash flow for transactions dated within `[start, end]`:
@@ -1533,6 +1717,143 @@ mod tests {
                 row.year
             );
         }
+    }
+
+    // PRF-070/071/072/073 — the four snapshot columns on the current-year row.
+    // Scenario (EUR): deposit 12_500, buy 10 @ 1000 (cost 10_000), price 1350,
+    // dividend 200, sell 4 @ 1400 (realized 1600). As of today:
+    //   cash = 12_500 − 10_000 + 200 + 5_600 = 8_300
+    //   dividends = 200, realized = 1_600
+    //   unrealized = 6 held × (1350 − 1000) = 2_100
+    #[tokio::test]
+    async fn snapshot_columns_on_current_year_row() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Snapshot".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-03-01".to_string(), 12_500_000_000, None)
+            .await
+            .unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Snap Stock".to_string(),
+                reference: "SNP".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                10_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-31", 1350.0)
+            .await
+            .unwrap();
+        account_svc
+            .record_dividend(
+                &account.id,
+                stock.id.clone(),
+                "2024-06-01".to_string(),
+                200_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-09-01".to_string(),
+                4_000_000,
+                1_400_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let current_year = chrono::Local::now().date_naive().year();
+        let row = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == current_year)
+            .expect("current-year row");
+        assert_eq!(row.dividends_received, 200_000_000, "cumulative dividends");
+        assert_eq!(row.realized_pnl, 1_600_000_000, "cumulative realized P&L");
+        assert_eq!(row.unrealized_pnl, 2_100_000_000, "unrealized = mv − cost");
+        assert_eq!(row.cash_balance, 8_300_000_000, "cash net balance");
+    }
+
+    // PRF-073 — cash_balance is the as-of-period-end cumulative total: the 2023 row
+    // sees only the 2023 deposit; the 2024 row sees both deposits.
+    #[tokio::test]
+    async fn cash_balance_is_period_end_cumulative() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Cumulative Cash".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2023-06-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-06-01".to_string(), 500_000_000, None)
+            .await
+            .unwrap();
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let year_2023 = resp.yearly.iter().find(|p| p.year == 2023).expect("2023");
+        let year_2024 = resp.yearly.iter().find(|p| p.year == 2024).expect("2024");
+        assert_eq!(
+            year_2023.cash_balance, 1_000_000_000,
+            "2023 row sees only the 2023 deposit"
+        );
+        assert_eq!(
+            year_2024.cash_balance, 1_500_000_000,
+            "2024 row sees both deposits cumulatively"
+        );
     }
 
     // PRF-022 — an asset with no recorded price on or before the period end contributes 0

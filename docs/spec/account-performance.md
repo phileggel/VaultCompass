@@ -116,6 +116,18 @@ Money entering or leaving the account from outside the tracked world: a `Deposit
 
 **PRF-060 — Reactivity to data changes (frontend)**: The page re-fetches its data when it receives a `TransactionUpdated`, `AssetPriceUpdated`, or `AccountUpdated` event, since all three can change reconstructed period values (transactions change holdings and flows, prices change valuations, account changes affect currency/frequency). This mirrors the Account Details subscription set (ACD-039, ACD-040, MKT-036).
 
+### Snapshot Columns (070–079)
+
+Each period row carries four point-in-time snapshot columns alongside its end value (PRF-020), reported in the account currency. Unlike the performance metrics (PRF-030–039), which measure change across a span, each snapshot is the cumulative state **as of the row's period end** — the same reference date as the end value. They apply to both the yearly and the monthly tables.
+
+**PRF-070 — Dividends received (backend + frontend)**: The cumulative sum of all dividend cash credited on or before the row's period end. Rendered as a plain account-currency amount.
+
+**PRF-071 — Realized P&L (backend + frontend)**: The cumulative realized profit and loss from every sale dated on or before the row's period end, using the same per-sale figure the account records when the sale is entered (volume-weighted average cost basis). Rendered with a sign-based colour (gain / loss / neutral), consistent with the metric cells (PRF-036).
+
+**PRF-072 — Latent P&L (backend + frontend)**: The unrealized profit and loss of the holdings still open at the row's period end — their carry-forward market value (PRF-022, foreign holdings converted per FXR-042) minus their average-cost basis. A holding with no usable price or FX rate as of the period end is excluded (it contributes 0, mirroring PRF-022/FXR-034). Rendered with a sign-based colour (PRF-036).
+
+**PRF-073 — Cash net balance (backend + frontend)**: The account's cash balance at the row's period end — deposits, sale proceeds and dividends received, less withdrawals and purchase costs, on or before that date. This is the cash component of the end value (PRF-020). Rendered as a plain account-currency amount.
+
 ---
 
 ## Workflow

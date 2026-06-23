@@ -65,6 +65,25 @@ export function monthLabel(month: number): string {
   return MONTH_LABEL_KEYS[month - 1] ?? MONTH_LABEL_KEYS[0];
 }
 
+/**
+ * PRF-071 / PRF-072 — Sign-based colour class for a snapshot P&L amount (micros).
+ * Neutral when zero; distinct positive and negative classes (mirrors gainColorClass).
+ */
+export function pnlColorClass(amount: number): string {
+  if (amount === 0) return "text-m3-on-surface";
+  return amount > 0 ? "text-m3-success" : "text-m3-error";
+}
+
+/** Formatted + colourised view of a snapshot P&L cell (PRF-071/072). */
+export interface PnlCellViewModel {
+  formatted: string;
+  colorClass: string;
+}
+
+function toPnlCell(amount: number): PnlCellViewModel {
+  return { formatted: microToFormatted(amount, 2), colorClass: pnlColorClass(amount) };
+}
+
 /** Formatted + colourised view of a single performance metric cell. */
 export interface MetricCellViewModel {
   gainFormatted: string;
@@ -91,6 +110,14 @@ export interface PeriodRowViewModel {
   periodLabel: string;
   /** Formatted period-end Global Value (PRF-020). */
   endValueFormatted: string;
+  /** Cumulative dividends received through period end (PRF-070). */
+  dividendsReceivedFormatted: string;
+  /** Cumulative realized P&L through period end (PRF-071) — sign-coloured. */
+  realizedPnl: PnlCellViewModel;
+  /** Latent (unrealized) P&L of holdings open at period end (PRF-072) — sign-coloured. */
+  latentPnl: PnlCellViewModel;
+  /** Cash net balance at period end (PRF-073). */
+  cashBalanceFormatted: string;
   /** Period-over-period metric cell (PRF-033) — always present, "—" when absent (PRF-042). */
   periodOverPeriod: MetricCellViewModel;
   /** Year-to-date metric cell (PRF-034) — present only for month rows; omitted for year rows (PRF-037). */
@@ -111,6 +138,10 @@ export function presentPeriodRow(period: PerformancePeriod): PeriodRowViewModel 
     month: period.month,
     periodLabel: period.month !== null ? monthLabel(period.month) : String(period.year),
     endValueFormatted: formatEndValue(period.end_value),
+    dividendsReceivedFormatted: microToFormatted(period.dividends_received, 2),
+    realizedPnl: toPnlCell(period.realized_pnl),
+    latentPnl: toPnlCell(period.unrealized_pnl),
+    cashBalanceFormatted: microToFormatted(period.cash_balance, 2),
     periodOverPeriod: toMetricCell(period.period_over_period),
     yearToDate: isYearRow ? undefined : toMetricCell(period.year_to_date),
     sinceInception: toMetricCell(period.since_inception),

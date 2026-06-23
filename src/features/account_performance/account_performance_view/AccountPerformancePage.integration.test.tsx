@@ -30,10 +30,19 @@ const makeMetric = (gain = 1_000_000_000, pct: number | null = 8_000_000) => ({
   pct,
 });
 
+// PRF-070–073 — snapshot column defaults shared by both row factories.
+const SNAPSHOT_DEFAULTS = {
+  dividends_received: 120_000_000,
+  realized_pnl: 450_000_000,
+  unrealized_pnl: -200_000_000,
+  cash_balance: 3_000_000_000,
+} satisfies Partial<PerformancePeriod>;
+
 const makeYearRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePeriod => ({
   year: 2025,
   month: null,
   end_value: 10_000_000_000,
+  ...SNAPSHOT_DEFAULTS,
   period_over_period: makeMetric(),
   year_to_date: null,
   since_inception: makeMetric(2_000_000_000, 20_000_000),
@@ -47,6 +56,7 @@ const makeMonthRow = (
   year: 2025,
   month,
   end_value: 10_000_000_000,
+  ...SNAPSHOT_DEFAULTS,
   period_over_period: makeMetric(),
   year_to_date: makeMetric(350_000_000, 3_500_000),
   since_inception: makeMetric(2_000_000_000, 20_000_000),
