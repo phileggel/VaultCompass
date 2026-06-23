@@ -12,6 +12,29 @@ vi.mock("./useDividendTransaction", () => ({
   useDividendTransaction: (...args: unknown[]) => mockUseDividendTransaction(...args),
 }));
 
+// ComboboxField cannot be driven via jsdom events (HeadlessUI), so stub it: expose
+// the item ids it received and let a click select the first item (ADR-007 boundary).
+vi.mock("@/ui/components/field/ComboboxField", () => ({
+  ComboboxField: ({
+    id,
+    items,
+    idKey,
+    onChange,
+  }: {
+    id: string;
+    items: Record<string, unknown>[];
+    idKey: string;
+    onChange: (value: string) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid={`combobox-${id}`}
+      data-item-ids={items.map((item) => String(item[idKey])).join(",")}
+      onClick={() => onChange(String(items[0]?.[idKey]))}
+    />
+  ),
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -65,13 +88,12 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     mockUseDividendTransaction.mockReturnValue(makeHookReturn());
   });
 
-  // DIV-020 — asset selector renders all held assets as options (F25 stable id)
+  // DIV-020 — asset selector receives all held assets (F25 stable id)
   it("renders the asset selector with all held assets (DIV-020)", () => {
     render(<DividendTransactionModal {...BASE_PROPS} />);
-    const select = screen.getByTestId("dividend-trx-asset");
-    expect(select).toBeInTheDocument();
-    expect(screen.getByText("Apple Inc")).toBeInTheDocument();
-    expect(screen.getByText("Tesla Inc")).toBeInTheDocument();
+    const combobox = screen.getByTestId("combobox-dividend-trx-asset");
+    expect(combobox).toBeInTheDocument();
+    expect(combobox.getAttribute("data-item-ids")).toBe("asset-eur-1,asset-usd-1");
   });
 
   // DIV-020 — date field present (F25 stable id)
@@ -167,14 +189,13 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     expect(submitButton).toBeDisabled();
   });
 
-  // UI → gateway: selecting an asset calls handleChange (F25 stable id)
+  // UI → gateway: selecting an asset in the combobox calls handleChange (F25 stable id)
   it("calls handleChange with assetId when user selects an asset", async () => {
     const handleChange = vi.fn();
     mockUseDividendTransaction.mockReturnValue(makeHookReturn({ handleChange }));
     render(<DividendTransactionModal {...BASE_PROPS} />);
 
-    const select = screen.getByTestId("dividend-trx-asset");
-    await userEvent.selectOptions(select, "asset-eur-1");
+    await userEvent.click(screen.getByTestId("combobox-dividend-trx-asset"));
 
     expect(handleChange).toHaveBeenCalledWith("assetId", "asset-eur-1");
   });

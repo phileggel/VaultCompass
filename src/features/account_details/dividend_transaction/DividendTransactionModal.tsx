@@ -2,8 +2,8 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
-import { SelectField } from "@/ui/components/field/SelectField";
 import { TextareaField } from "@/ui/components/field/TextareaField";
 import { TextField } from "@/ui/components/field/TextField";
 import { FormModal } from "@/ui/components/modal/FormModal";
@@ -47,14 +47,6 @@ export function DividendTransactionModal({
   const selectedCurrency =
     heldAssets.find((a) => a.assetId === formData.assetId)?.assetCurrency ?? accountCurrency;
 
-  const assetOptions = useMemo(
-    () => [
-      { label: t("dividend.form_select_asset"), value: "" },
-      ...heldAssets.map((a) => ({ label: a.assetName, value: a.assetId })),
-    ],
-    [heldAssets, t],
-  );
-
   const footer = useMemo(
     () => (
       <div className="flex items-center justify-end gap-2">
@@ -84,15 +76,17 @@ export function DividendTransactionModal({
       maxWidth="max-w-2xl"
     >
       <form id="dividend-transaction-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* DIV-020 — paying asset chosen inside the modal */}
-        <SelectField
+        {/* DIV-020 — paying asset chosen inside the modal via fuzzy-search combobox */}
+        <ComboboxField
           id="dividend-trx-asset"
-          data-testid="dividend-trx-asset"
           label={t("dividend.form_asset_label")}
+          items={heldAssets}
+          displayKey="assetName"
+          idKey="assetId"
           value={formData.assetId}
-          onChange={(e) => handleChange("assetId", e.target.value)}
-          options={assetOptions}
-          required
+          onChange={(id) => handleChange("assetId", id)}
+          searchKeys={["assetName"]}
+          placeholder={t("dividend.form_select_asset")}
         />
 
         <DateField

@@ -143,6 +143,51 @@ export async function seedBuy(
 }
 
 /**
+ * Records a cash dividend via IPC (`record_dividend`). Used so dividend E2E can
+ * exercise the happy path without driving the asset ComboboxField, which cannot
+ * be automated in WebKitGTK (ADR 007 — docs/adr/007-e2e-combobox-boundary.md).
+ *
+ * The exchange rate is fixed at 1:1, so this helper only covers dividends whose
+ * paying-asset currency equals the account currency. A foreign-currency dividend
+ * test would extend it with a rate parameter when that case is actually needed.
+ *
+ * @param accountId    - account receiving the dividend
+ * @param assetId      - the held paying asset (must have quantity > 0, DIV-011)
+ * @param date         - ISO 8601 date string (e.g. "2020-06-15")
+ * @param amountMicros - net dividend amount in the (same) account currency, i64 micros
+ */
+export async function seedDividend(
+  accountId: string,
+  assetId: string,
+  date: string,
+  amountMicros: number,
+): Promise<void> {
+  const result = (await browser.executeAsync(
+    (accId: string, astId: string, d: string, amount: number, done: (r: unknown) => void) => {
+      // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
+      window.__TAURI_INTERNALS__
+        .invoke("record_dividend", {
+          dto: {
+            account_id: accId,
+            asset_id: astId,
+            date: d,
+            amount_micros: amount,
+            exchange_rate: 1_000_000,
+            note: "",
+          },
+        })
+        .then(done)
+        .catch((err: unknown) => done({ __error: String(err) }));
+    },
+    accountId,
+    assetId,
+    date,
+    amountMicros,
+  )) as { id?: string; __error?: string };
+  assert.ok(!("__error" in result), `seedDividend failed: ${JSON.stringify(result)}`);
+}
+
+/**
  * Records a manual asset price via IPC (`record_asset_price`). The written
  * record carries source=Manual (MKT-101).
  *

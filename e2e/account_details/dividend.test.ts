@@ -4,22 +4,22 @@
  * Spec: docs/spec/cash-dividend.md
  * Contract: docs/contracts/account-contract.md § Dividend
  * Spec rules covered:
- *   DIV-010/012 — "Record dividend" item in the header "Add" menu opens the modal
- *   DIV-023    — recording credits the account's Cash Holding (cash row present after submit)
- *   DIV-072    — paying asset's holding row shows a non-zero dividends-received amount
- *   DIV-073    — account header surfaces total_dividends_received once a dividend is recorded
+ *   DIV-023    — recording credits the account's Cash Holding (cash row present after)
+ *   DIV-072    — paying asset's holding row remains intact (quantity unchanged)
+ *   DIV-073    — account header surfaces total_dividends_received once recorded
+ *   DIV-021    — submit stays disabled until the form is valid
  *
  * Seed strategy:
  *   - Account + category + asset seeded via IPC (mirrors buy_sell.test.ts).
- *   - seedBuy opens a position so the asset appears in the dividend modal's
- *     asset selector (DIV-011 requires quantity > 0).
- *   - The dividend modal's asset selector is a native <select> (SelectField),
- *     driven with selectByAttribute — no combobox automation needed.
+ *   - seedBuy opens a position so the asset qualifies for dividend recording
+ *     (DIV-011 requires quantity > 0).
  *
- * Why one scenario:
- *   Error variants (AssetNotHeld, DividendOnCashAsset, AmountNotPositive, …) are
- *   adequately covered by backend integration tests and the Vitest frontend suite.
- *   E2E sits at the apex: one critical-path happy-path scenario is the right scope.
+ * ADR 007 (docs/adr/007-e2e-combobox-boundary.md): the dividend modal's asset
+ * selector is now a ComboboxField, which cannot be automated in WebKitGTK
+ * (HeadlessUI isTrusted + floating-ui portal). The happy path is therefore
+ * driven via the record_dividend IPC (seedDividend) and the resulting UI state
+ * asserted; a separate UI test verifies the submit-disabled guard. Full form
+ * fill/submit wiring is covered by the Vitest component suite.
  */
 
 import assert from "node:assert";
@@ -28,13 +28,13 @@ import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
-import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
+import { seedAccount, seedAsset, seedBuy, seedCategory, seedDividend } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
 // Fixed past dates — one per write operation (E2E rule E9)
 // ---------------------------------------------------------------------------
 const DATES = {
-  dividend: isoToDisplayDate("2020-06-15"),
+  dividend: "2020-06-15",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -63,65 +63,19 @@ describe("dividend", () => {
   });
 
   // -------------------------------------------------------------------------
-  // DIV-010/012/023/072/073 — record dividend via the header "Add" menu:
-  //   cash holding is credited; paying asset holding is untouched; header
-  //   surfaces the total dividends received.
+  // DIV-023/072/073 — record a dividend via IPC (ADR 007: combobox cannot be
+  //   UI-automated), then assert the resulting account-details UI state: cash
+  //   holding credited, paying asset holding intact, header total surfaced.
   // -------------------------------------------------------------------------
-  it("DIV-023/072/073: recording a dividend credits cash and surfaces the dividend totals", async () => {
+  it("DIV-023/072/073: a recorded dividend credits cash and surfaces the dividend totals", async () => {
+    // 75 EUR dividend on the held asset (EUR == account currency, rate 1:1).
+    await seedDividend(accId, astId, DATES.dividend, 75_000_000);
+
     await navigateToAccounts();
     await navigateToAccountDetails(accId);
 
-    // -----------------------------------------------------------------------
-    // Step 1 — Open the consolidated "Add" menu (DIV-012), then "Record
-    //           dividend" (DIV-010).
-    // -----------------------------------------------------------------------
-    const addMenuBtn = await $("#account-details-add-menu");
-    await addMenuBtn.waitForExist({ timeout: 10000 });
-    await addMenuBtn.click();
-
-    const dividendItem = await $("#add-menu-dividend");
-    await dividendItem.waitForExist({ timeout: 5000 });
-    await dividendItem.click();
-
-    // -----------------------------------------------------------------------
-    // Step 2 — Fill the dividend form (DIV-020).
-    //   asset selector: native <select> → selectByAttribute (no combobox).
-    //   date: DateField (text input) → setReactInputValue + isoToDisplayDate.
-    //   amount: <input type="number"> → setReactInputValue.
-    //   exchange rate: not shown (asset currency EUR == account currency EUR).
-    // -----------------------------------------------------------------------
-    const form = await $("form#dividend-transaction-form");
-    await form.waitForExist({ timeout: 8000 });
-
-    // Select the paying asset by its seeded id (locale-invariant).
-    const assetSelect = await $("#dividend-trx-asset");
-    await assetSelect.waitForExist({ timeout: 5000 });
-    await assetSelect.selectByAttribute("value", astId);
-
-    await setReactInputValue("dividend-trx-date", DATES.dividend);
-    await setReactInputValue("dividend-trx-amount", "75");
-
-    // -----------------------------------------------------------------------
-    // Step 3 — Submit.
-    // -----------------------------------------------------------------------
-    const submitBtn = await $('button[type="submit"][form="dividend-transaction-form"]');
-    await submitBtn.waitForEnabled({ timeout: 5000 });
-    await submitBtn.click();
-
-    // -----------------------------------------------------------------------
-    // Step 4 — Assert post-conditions (DIV-023/072/073).
-    // -----------------------------------------------------------------------
-
-    // Form must close on success (DIV-025).
-    await form.waitForExist({ timeout: 8000, reverse: true });
-    assert.strictEqual(
-      await form.isExisting(),
-      false,
-      "Dividend form must close after successful submission (DIV-025)",
-    );
-
     // DIV-023 — Cash Holding credited: the cash row's inline Deposit button
-    // must now be present (same assertion anchor used by cash.test.ts CSH-022).
+    // must be present (same assertion anchor used by cash.test.ts CSH-022).
     const cashDepositBtn = await $("#action-record-deposit-system-cash-eur");
     await cashDepositBtn.waitForExist({ timeout: 8000 });
     assert.ok(
@@ -129,12 +83,12 @@ describe("dividend", () => {
       "Cash holding row must be present after dividend (DIV-023 cash credit)",
     );
 
-    // DIV-023b — Paying asset holding must be intact (Buy button still present).
+    // DIV-072 — Paying asset holding must be intact (Buy button still present).
     const buyBtn = await $(`#action-buy-${astId}`);
     await buyBtn.waitForExist({ timeout: 8000 });
     assert.ok(
       await buyBtn.isExisting(),
-      "Paying asset holding row must remain after recording dividend (DIV-023 quantity unchanged)",
+      "Paying asset holding row must remain after recording dividend (DIV-072 quantity unchanged)",
     );
 
     // DIV-073 — the dedicated header total-dividends tile must surface the
@@ -147,6 +101,39 @@ describe("dividend", () => {
     assert.ok(
       totalDividendsText.includes("75,00") || totalDividendsText.includes("75.00"),
       `Header total-dividends tile should surface the 75 EUR dividend (DIV-073) — got: ${totalDividendsText}`,
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // DIV-021 — submit-disabled guard via the UI. ADR 007: the asset combobox
+  //   cannot be driven in WebDriver, so the asset stays empty; with date and
+  //   amount filled, the composite isFormValid guard must keep submit disabled.
+  // -------------------------------------------------------------------------
+  it("DIV-021: submit stays disabled while no paying asset is selected", async () => {
+    await navigateToAccounts();
+    await navigateToAccountDetails(accId);
+
+    const addMenuBtn = await $("#account-details-add-menu");
+    await addMenuBtn.waitForExist({ timeout: 10000 });
+    await addMenuBtn.click();
+
+    const dividendItem = await $("#add-menu-dividend");
+    await dividendItem.waitForExist({ timeout: 5000 });
+    await dividendItem.click();
+
+    const form = await $("form#dividend-transaction-form");
+    await form.waitForExist({ timeout: 8000 });
+
+    // Fill date + amount; asset selection skipped per ADR 007.
+    await setReactInputValue("dividend-trx-date", isoToDisplayDate(DATES.dividend));
+    await setReactInputValue("dividend-trx-amount", "75");
+
+    const submitBtn = await $('button[type="submit"][form="dividend-transaction-form"]');
+    await submitBtn.waitForExist({ timeout: 5000 });
+    assert.strictEqual(
+      await submitBtn.isEnabled(),
+      false,
+      "Submit must stay disabled until a paying asset is selected (DIV-021)",
     );
   });
 });
