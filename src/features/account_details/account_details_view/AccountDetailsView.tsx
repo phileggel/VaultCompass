@@ -2,6 +2,10 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { CalendarClock, ChevronDown, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  getClosedSectionOpen,
+  setClosedSectionOpen as persistClosedSectionOpen,
+} from "@/lib/closedSectionStorage";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { FAB } from "@/ui/components/fab/FAB";
@@ -28,10 +32,21 @@ export function AccountDetailsView() {
     useRefreshAccountPrices(accountId);
   // DIV-012 — consolidated header "Add" dropdown open/close state.
   const [addMenuOpen, setAddMenuOpen] = useState(false);
-  // ACD-048 — closed positions section is collapsible (open by default).
-  const [closedSectionOpen, setClosedSectionOpen] = useState(true);
+  // ACD-048 — closed positions section is collapsible; fold state is remembered per account.
+  const [closedSectionOpen, setClosedSectionOpen] = useState(() => getClosedSectionOpen(accountId));
   // Date-scoped price fetch modal open/close state.
   const [fetchDateOpen, setFetchDateOpen] = useState(false);
+
+  // Restore the remembered fold state when switching to another account without a remount.
+  useEffect(() => {
+    setClosedSectionOpen(getClosedSectionOpen(accountId));
+  }, [accountId]);
+
+  const toggleClosedSection = useCallback(() => {
+    const next = !closedSectionOpen;
+    setClosedSectionOpen(next);
+    persistClosedSectionOpen(accountId, next);
+  }, [accountId, closedSectionOpen]);
 
   const runFromAddMenu = useCallback((action: () => void) => {
     setAddMenuOpen(false);
@@ -332,7 +347,7 @@ export function AccountDetailsView() {
                     type="button"
                     id="account-closed-positions-toggle"
                     aria-expanded={closedSectionOpen}
-                    onClick={() => setClosedSectionOpen((open) => !open)}
+                    onClick={toggleClosedSection}
                     className="w-full flex items-center gap-2 px-6 py-3 bg-m3-surface-container-high text-left hover:bg-m3-surface-container-highest"
                   >
                     <ChevronDown
