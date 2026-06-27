@@ -1,4 +1,4 @@
-use crate::context::account::{AccountApplicationError, AccountService};
+use crate::context::account::{AccountError, AccountService};
 use serde::Serialize;
 use specta::Type;
 use std::result::Result as StdResult;
@@ -31,7 +31,7 @@ impl AccountDeletionUseCase {
     pub async fn get_summary(
         &self,
         account_id: &str,
-    ) -> StdResult<AccountDeletionSummary, AccountApplicationError> {
+    ) -> StdResult<AccountDeletionSummary, AccountError> {
         let (holding_count, transaction_count) = self
             .account_service
             .get_deletion_summary(account_id)
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(summary.transaction_count, 3);
     }
 
-    // get_summary translates raw repo failure to AccountApplicationError::DatabaseError.
+    // get_summary translates raw repo failure to AccountError::DatabaseError.
     #[tokio::test]
     async fn get_summary_translates_repo_failure_to_database_error() {
         use crate::context::account::{
@@ -253,9 +253,6 @@ mod tests {
         ));
         let uc = AccountDeletionUseCase::new(svc);
         let err = uc.get_summary("any-id").await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 }

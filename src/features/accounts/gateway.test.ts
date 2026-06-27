@@ -2,10 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Account,
-  AccountApplicationError,
-  AccountCrudError,
   AccountDeletionSummary,
-  AccountDomainError,
+  AccountError,
   AccountSummary,
   CreateAccountDTO,
   UpdateAccountDTO,
@@ -51,7 +49,7 @@ describe("accountGateway", () => {
   });
 
   it("getAccounts surfaces DatabaseError on repo failure", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.getAccounts();
     expect(result).toEqual({ status: "error", error: err });
@@ -78,7 +76,7 @@ describe("accountGateway", () => {
       currency: "EUR",
       update_frequency: "ManualMonth",
     };
-    const err: AccountCrudError = { code: "NameAlreadyExists" };
+    const err: AccountError = { code: "NameAlreadyExists" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.addAccount(dto);
     expect(result).toEqual({ status: "error", error: err });
@@ -90,7 +88,7 @@ describe("accountGateway", () => {
       currency: "XYZ",
       update_frequency: "ManualMonth",
     };
-    const err: AccountDomainError = { code: "InvalidCurrency", currency: "XYZ" };
+    const err: AccountError = { code: "InvalidCurrency", currency: "XYZ" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.addAccount(dto);
     expect(result).toEqual({ status: "error", error: err });
@@ -102,7 +100,7 @@ describe("accountGateway", () => {
       currency: "EUR",
       update_frequency: "ManualMonth",
     };
-    const err: AccountDomainError = { code: "NameEmpty" };
+    const err: AccountError = { code: "NameEmpty" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.addAccount(dto);
     expect(result).toEqual({ status: "error", error: err });
@@ -114,7 +112,7 @@ describe("accountGateway", () => {
       currency: "EUR",
       update_frequency: "ManualMonth",
     };
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.addAccount(dto);
     expect(result).toEqual({ status: "error", error: err });
@@ -143,7 +141,7 @@ describe("accountGateway", () => {
       currency: "EUR",
       update_frequency: "ManualMonth",
     };
-    const err: AccountCrudError = { code: "NameAlreadyExists" };
+    const err: AccountError = { code: "NameAlreadyExists" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.updateAccount(dto);
     expect(result).toEqual({ status: "error", error: err });
@@ -159,7 +157,7 @@ describe("accountGateway", () => {
   });
 
   it("deleteAccount surfaces DatabaseError on repo failure", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.deleteAccount("acc-1");
     expect(result).toEqual({ status: "error", error: err });
@@ -181,7 +179,7 @@ describe("accountGateway", () => {
   });
 
   it("getAccountDeletionSummary surfaces DatabaseError on repo failure", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.getAccountDeletionSummary("missing");
     expect(result).toEqual({ status: "error", error: err });
@@ -257,7 +255,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
   });
 
   it("getAccountSummaries surfaces DatabaseError when the use case fails", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await accountGateway.getAccountSummaries();
     expect(result).toEqual({ status: "error", error: err });

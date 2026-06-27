@@ -5,7 +5,8 @@ import type { I18nMessage } from "@/ui/format/i18n";
  * F27 — Maps any asset-BC mutation error (add / update / archive / unarchive / delete)
  * to an i18n key + interpolation vars. Pure function, no React, no useTranslation.
  *
- * Exhaustive switch on `code`: TypeScript catches new variants at compile time.
+ * Handles the codes reachable for these commands; the wrapped `AccountError` is a
+ * BC-wide union, so any unreachable variant falls through to `error.Unknown`.
  */
 export function assetMutationErrorToI18n(
   err: AssetCrudError | ArchiveAssetError | DeleteAssetError,
@@ -29,10 +30,8 @@ export function assetMutationErrorToI18n(
     case "ExistingTransactions":
     case "DuplicateName":
       return { key: `error.${err.code}` };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
+    default:
+      return { key: "error.Unknown" };
   }
 }
 

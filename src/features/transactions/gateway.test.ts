@@ -1,11 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  AccountApplicationError,
+  AccountError,
   AssetPriceApplicationError,
   BuyHoldingDTO,
   CorrectTransactionDTO,
-  HoldingTransactionError,
   SellHoldingDTO,
   Transaction,
 } from "@/bindings";
@@ -55,7 +54,7 @@ describe("transactionGateway", () => {
   });
 
   it("buyHolding returns error on failure", async () => {
-    const err: HoldingTransactionError = {
+    const err: AccountError = {
       code: "AccountNotFound",
       account_id: "acc-1",
     };
@@ -95,7 +94,7 @@ describe("transactionGateway", () => {
       fees: 0,
       note: null,
     };
-    const err: HoldingTransactionError = {
+    const err: AccountError = {
       code: "Oversell",
       available: 500_000,
       requested: 999_000_000,
@@ -128,7 +127,7 @@ describe("transactionGateway", () => {
   });
 
   it("correctTransaction returns error on failure", async () => {
-    const err: HoldingTransactionError = { code: "TransactionNotFound" };
+    const err: AccountError = { code: "TransactionNotFound" };
     mockInvoke.mockRejectedValue(err);
     const dto: CorrectTransactionDTO = {
       date: "2024-01-20",
@@ -155,7 +154,7 @@ describe("transactionGateway", () => {
   });
 
   it("cancelTransaction returns error on failure", async () => {
-    const err: HoldingTransactionError = { code: "TransactionNotFound" };
+    const err: AccountError = { code: "TransactionNotFound" };
     mockInvoke.mockRejectedValue(err);
     const result = await transactionGateway.cancelTransaction("tx-1", "acc-1");
     expect(result).toEqual({ status: "error", error: err });
@@ -186,7 +185,7 @@ describe("transactionGateway", () => {
   });
 
   it("getAssetIdsForAccount surfaces DatabaseError on repo failure", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await transactionGateway.getAssetIdsForAccount("acc-1");
     expect(result).toEqual({ status: "error", error: err });

@@ -619,10 +619,10 @@ describe("priceRefreshLockErrorToI18n", () => {
 
 // ---------------------------------------------------------------------------
 // dividendErrorToI18n — F27 presenter for record_dividend error surface (DIV)
-// Reachable codes per contract: AccountNotFound, DatabaseError (AccountApplicationError);
+// Reachable codes per contract: AccountNotFound, DatabaseError (AccountError);
 // AssetNotFound, AssetNotHeld, DividendOnCashAsset (DividendApplicationError);
 // AmountNotPositive, ExchangeRateNotPositive, DateInFuture, DateTooOld, InvalidDate
-// (TransactionDomainError). Unknown codes fall to error.Unknown.
+// (AccountError). Unknown codes fall to error.Unknown.
 // ---------------------------------------------------------------------------
 
 describe("dividendErrorToI18n", () => {
@@ -659,7 +659,7 @@ describe("dividendErrorToI18n", () => {
 // freeSharesErrorToI18n — F27 presenter for the free-shares error surfaces (FSD).
 // Create path (FreeSharesError): AccountNotFound, AssetNotFound, AssetNotHeld,
 // FreeSharesOnCashAsset, QuantityNotPositive, InvalidDate, DateInFuture,
-// DateTooOld, DatabaseError. Edit path (HoldingTransactionError via
+// DateTooOld, DatabaseError. Edit path (AccountError via
 // correct_transaction): e.g. CascadingOversell, TransactionNotFound. Every flat
 // { code } maps to error.{code}.
 // ---------------------------------------------------------------------------

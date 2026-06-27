@@ -1,4 +1,4 @@
-import type { AccountApplicationError, PerformanceMetric, PerformancePeriod } from "@/bindings";
+import type { AccountError, PerformanceMetric, PerformancePeriod } from "@/bindings";
 import { microToFormatted } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 
@@ -21,9 +21,11 @@ const MONTH_LABEL_KEYS = [
 
 /**
  * F27 — Maps an account-performance read error to its i18n key. Pure function:
- * no React, no useTranslation. Exhaustive switch on `code`.
+ * no React, no useTranslation. Handles the two reachable codes
+ * (`AccountNotFound`, `DatabaseError`); any other code in the BC-wide
+ * `AccountError` union falls back to the generic database-error key.
  */
-export function presentAccountPerformanceError(error: AccountApplicationError): I18nMessage {
+export function presentAccountPerformanceError(error: AccountError): I18nMessage {
   switch (error.code) {
     case "AccountNotFound":
       return { key: "account_performance.error.account_not_found" };

@@ -1,4 +1,4 @@
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use crate::context::asset::AssetCrudError;
 
 /// Application-layer rejection specific to the `delete_asset` use case —
@@ -34,7 +34,7 @@ pub enum DeleteAssetApplicationError {
 ///   `AssetApplicationError::NotFound` and
 ///   `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
 ///   composition-over-redefinition rule.
-/// - `AccountApplicationError` — account BC (`account/application/`), surfaces
+/// - `AccountError` — account BC (`account/application/`), surfaces
 ///   `DatabaseError` from the cross-BC transaction-history check.
 /// - `DeleteAssetApplicationError` — use-case-owned (this file), raises
 ///   `ExistingTransactions` from the orchestrator.
@@ -48,7 +48,7 @@ pub enum DeleteAssetError {
     /// Account BC rejection (`DatabaseError` from the cross-BC
     /// transaction-history check).
     #[error(transparent)]
-    Account(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case orchestration rejection (`ExistingTransactions`).
     #[error(transparent)]
     Application(#[from] DeleteAssetApplicationError),
@@ -98,11 +98,11 @@ mod tests {
     // (cross-BC transaction-history check repo failure)
     #[test]
     fn account_database_error_surfaces_through_account_leaf() {
-        let composite: DeleteAssetError = AccountApplicationError::DatabaseError.into();
+        let composite: DeleteAssetError = AccountError::DatabaseError.into();
         assert!(
             matches!(
                 composite,
-                DeleteAssetError::Account(AccountApplicationError::DatabaseError)
+                DeleteAssetError::Account(AccountError::DatabaseError)
             ),
             "got: {composite:?}"
         );

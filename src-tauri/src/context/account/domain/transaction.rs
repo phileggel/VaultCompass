@@ -1,4 +1,4 @@
-use super::transaction_error::TransactionDomainError;
+use crate::context::account::error::AccountError;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -74,9 +74,9 @@ pub struct Transaction {
 
 impl Transaction {
     /// Creates a new Transaction with a generated ID.
-    /// Validates TRX-020 and TRX-026. Returns a typed `TransactionDomainError`
+    /// Validates TRX-020 and TRX-026. Returns a typed `AccountError`
     /// so callers can propagate it through typed unions (e.g. the application-
-    /// layer `HoldingTransactionError` composed by `AccountService::record_deposit`).
+    /// layer `AccountError` composed by `AccountService::record_deposit`).
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         account_id: String,
@@ -90,7 +90,7 @@ impl Transaction {
         total_amount: i64,
         note: Option<String>,
         realized_pnl: Option<i64>,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         Self::validate(
             &transaction_type,
             &date,
@@ -139,7 +139,7 @@ impl Transaction {
         note: Option<String>,
         realized_pnl: Option<i64>,
         created_at: String,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         Self::validate(
             &transaction_type,
             &date,
@@ -180,9 +180,9 @@ impl Transaction {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         if amount <= 0 {
-            return Err(TransactionDomainError::AmountNotPositive);
+            return Err(AccountError::AmountNotPositive);
         }
         Self::new(
             account_id,
@@ -212,9 +212,9 @@ impl Transaction {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         if amount <= 0 {
-            return Err(TransactionDomainError::AmountNotPositive);
+            return Err(AccountError::AmountNotPositive);
         }
         Self::new(
             account_id,
@@ -247,13 +247,13 @@ impl Transaction {
         amount_micros: i64,
         exchange_rate: i64,
         note: Option<String>,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         // DIV-021/022 — cash-specific codes fire before the generic validator.
         if amount_micros <= 0 {
-            return Err(TransactionDomainError::AmountNotPositive);
+            return Err(AccountError::AmountNotPositive);
         }
         if exchange_rate <= 0 {
-            return Err(TransactionDomainError::ExchangeRateNotPositive);
+            return Err(AccountError::ExchangeRateNotPositive);
         }
         // total_amount in account currency = amount × rate (i128 intermediate, ADR-001).
         let total_amount = ((amount_micros as i128 * exchange_rate as i128) / 1_000_000) as i64;
@@ -288,10 +288,10 @@ impl Transaction {
         date: String,
         quantity: i64,
         note: Option<String>,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         Self::validate_date(&date)?;
         if quantity <= 0 {
-            return Err(TransactionDomainError::QuantityNotPositive);
+            return Err(AccountError::QuantityNotPositive);
         }
         Ok(Self {
             id: Uuid::new_v4().to_string(),
@@ -325,7 +325,7 @@ impl Transaction {
         quantity: i64,
         note: Option<String>,
         created_at: String,
-    ) -> StdResult<Self, TransactionDomainError> {
+    ) -> StdResult<Self, AccountError> {
         let mut tx = Self::free_shares(account_id, asset_id, date, quantity, note)?;
         tx.id = id;
         tx.created_at = created_at;
@@ -377,27 +377,27 @@ impl Transaction {
         exchange_rate: i64,
         fees: i64,
         total_amount: i64,
-    ) -> StdResult<(), TransactionDomainError> {
+    ) -> StdResult<(), AccountError> {
         Self::validate_date(date)?;
 
         // TRX-020 — quantity must be strictly positive
         if quantity <= 0 {
-            return Err(TransactionDomainError::QuantityNotPositive);
+            return Err(AccountError::QuantityNotPositive);
         }
 
         // TRX-020 — unit_price must be >= 0
         if unit_price < 0 {
-            return Err(TransactionDomainError::UnitPriceNegative);
+            return Err(AccountError::UnitPriceNegative);
         }
 
         // SEL-020 — fees must be zero or positive
         if fees < 0 {
-            return Err(TransactionDomainError::FeesNegative);
+            return Err(AccountError::FeesNegative);
         }
 
         // TRX-020 — exchange_rate must be strictly positive
         if exchange_rate <= 0 {
-            return Err(TransactionDomainError::ExchangeRateNotPositive);
+            return Err(AccountError::ExchangeRateNotPositive);
         }
 
         // TRX-020 — total_amount must be > 0, EXCEPT an OpeningBalance position
@@ -408,23 +408,23 @@ impl Transaction {
             _ => total_amount > 0,
         };
         if !total_amount_ok {
-            return Err(TransactionDomainError::TotalAmountNotPositive);
+            return Err(AccountError::TotalAmountNotPositive);
         }
 
         Ok(())
     }
 
     /// TRX-020 — date must be parseable, not in the future, not before 1900-01-01.
-    fn validate_date(date: &str) -> StdResult<(), TransactionDomainError> {
-        let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
-            .map_err(|_| TransactionDomainError::InvalidDate)?;
+    fn validate_date(date: &str) -> StdResult<(), AccountError> {
+        let parsed_date =
+            NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| AccountError::InvalidDate)?;
         let today = chrono::Local::now().date_naive();
         if parsed_date > today {
-            return Err(TransactionDomainError::DateInFuture);
+            return Err(AccountError::DateInFuture);
         }
         let min_date = NaiveDate::from_ymd_opt(1900, 1, 1).expect("hardcoded valid date");
         if parsed_date < min_date {
-            return Err(TransactionDomainError::DateTooOld);
+            return Err(AccountError::DateTooOld);
         }
         Ok(())
     }
@@ -471,7 +471,7 @@ mod tests {
         exchange_rate: i64,
         fees: i64,
         total_amount: i64,
-    ) -> StdResult<Transaction, TransactionDomainError> {
+    ) -> StdResult<Transaction, AccountError> {
         Transaction::new(
             "account-1".to_string(),
             "asset-1".to_string(),
@@ -553,10 +553,7 @@ mod tests {
     fn new_still_rejects_zero_total_amount_for_purchase() {
         let micro = 1_000_000i64;
         let result = make_transaction(micro, 0, micro, 0, 0); // Purchase, total_amount = 0
-        assert!(matches!(
-            result,
-            Err(TransactionDomainError::TotalAmountNotPositive)
-        ));
+        assert!(matches!(result, Err(AccountError::TotalAmountNotPositive)));
     }
 
     // TRX-020 — date before 1900-01-01 is rejected
@@ -662,7 +659,7 @@ mod tests {
             None,
         )
         .unwrap_err();
-        assert!(matches!(err, TransactionDomainError::AmountNotPositive));
+        assert!(matches!(err, AccountError::AmountNotPositive));
     }
 
     // CSH-032 — Transaction::new_withdrawal sets the cash-specific defaults
@@ -698,7 +695,7 @@ mod tests {
             None,
         )
         .unwrap_err();
-        assert!(matches!(err, TransactionDomainError::DateTooOld));
+        assert!(matches!(err, AccountError::DateTooOld));
     }
 
     // -------------------------------------------------------------------------
@@ -764,7 +761,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::AmountNotPositive),
+            matches!(err, AccountError::AmountNotPositive),
             "expected AmountNotPositive, got: {err:?}"
         );
     }
@@ -782,7 +779,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::AmountNotPositive),
+            matches!(err, AccountError::AmountNotPositive),
             "expected AmountNotPositive, got: {err:?}"
         );
     }
@@ -800,7 +797,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::ExchangeRateNotPositive),
+            matches!(err, AccountError::ExchangeRateNotPositive),
             "expected ExchangeRateNotPositive, got: {err:?}"
         );
     }
@@ -818,7 +815,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::DateInFuture),
+            matches!(err, AccountError::DateInFuture),
             "expected DateInFuture, got: {err:?}"
         );
     }
@@ -836,7 +833,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::DateTooOld),
+            matches!(err, AccountError::DateTooOld),
             "expected DateTooOld, got: {err:?}"
         );
     }
@@ -854,7 +851,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::InvalidDate),
+            matches!(err, AccountError::InvalidDate),
             "expected InvalidDate, got: {err:?}"
         );
     }
@@ -951,7 +948,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::QuantityNotPositive),
+            matches!(err, AccountError::QuantityNotPositive),
             "expected QuantityNotPositive, got: {err:?}"
         );
     }
@@ -969,7 +966,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::DateInFuture),
+            matches!(err, AccountError::DateInFuture),
             "expected DateInFuture, got: {err:?}"
         );
     }
@@ -987,7 +984,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::DateTooOld),
+            matches!(err, AccountError::DateTooOld),
             "expected DateTooOld, got: {err:?}"
         );
     }
@@ -1005,7 +1002,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(err, TransactionDomainError::InvalidDate),
+            matches!(err, AccountError::InvalidDate),
             "expected InvalidDate, got: {err:?}"
         );
     }

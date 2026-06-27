@@ -1,5 +1,6 @@
 import type {
   AccountDetailsResponse,
+  AccountError,
   AssetCrudError,
   AssetPriceError,
   AssetPriceSource,
@@ -7,7 +8,6 @@ import type {
   DividendError,
   FreeSharesError,
   HoldingDetail,
-  HoldingTransactionError,
 } from "@/bindings";
 import {
   microToFormatted,
@@ -63,12 +63,12 @@ export function priceRefreshLockErrorToI18n(err: AssetCrudError): I18nMessage {
 
 /**
  * F27 — Maps the `record_dividend` error surface to an i18n key. `DividendError`
- * is an untagged union of three tagged leaves (`AccountApplicationError` |
- * `DividendApplicationError` | `TransactionDomainError`) whose combined `code`
- * set is wider than what the command can actually raise, so this switch lists
- * the reachable codes (per the account contract) and falls back to a generic
- * key for any other — mirroring `priceRefreshLockErrorToI18n` rather than the
- * `never`-exhaustive style used for narrow single-type errors.
+ * is an untagged union of two tagged leaves (`AccountError` |
+ * `DividendApplicationError`) whose combined `code` set is wider than what the
+ * command can actually raise, so this switch lists the reachable codes (per the
+ * account contract) and falls back to a generic key for any other — mirroring
+ * `priceRefreshLockErrorToI18n` rather than the `never`-exhaustive style used
+ * for narrow single-type errors.
  */
 export function dividendErrorToI18n(err: DividendError): I18nMessage {
   switch (err.code) {
@@ -91,10 +91,15 @@ export function dividendErrorToI18n(err: DividendError): I18nMessage {
 /**
  * F27 — Maps the free-shares error surfaces to an i18n key (FSD-021/011/040).
  * Covers both the create path (`FreeSharesError`) and the edit path
- * (`HoldingTransactionError`, via `correct_transaction`); every flat `{ code }`
- * variant resolves to `error.{code}`.
+ * (`AccountError`, via `correct_transaction`). Every reachable code resolves to
+ * `error.{code}`; the two holding-internal codes that never reach the wire
+ * (`NegativeQuantity`, `NegativeAveragePrice`) have no i18n key, so they fall
+ * back to `error.Unknown`.
  */
-export function freeSharesErrorToI18n(err: FreeSharesError | HoldingTransactionError): I18nMessage {
+export function freeSharesErrorToI18n(err: FreeSharesError | AccountError): I18nMessage {
+  if (err.code === "NegativeQuantity" || err.code === "NegativeAveragePrice") {
+    return { key: "error.Unknown" };
+  }
   return { key: `error.${err.code}` };
 }
 

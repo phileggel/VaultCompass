@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::AccountCreationUseCase;
-use crate::context::account::{Account, AccountCrudError, UpdateFrequency};
+use crate::context::account::{Account, AccountError, UpdateFrequency};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -25,7 +25,7 @@ pub struct CreateAccountDTO {
 pub async fn add_account(
     uc: State<'_, AccountCreationUseCase>,
     dto: CreateAccountDTO,
-) -> Result<Account, AccountCrudError> {
+) -> Result<Account, AccountError> {
     uc.create(dto.name, dto.currency, dto.update_frequency)
         .await
 }

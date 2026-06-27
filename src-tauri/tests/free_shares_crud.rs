@@ -289,11 +289,11 @@ async fn record_free_shares_account_not_found_propagates() {
         .await
         .unwrap_err();
 
-    use vault_compass_lib::context::account::AccountApplicationError;
+    use vault_compass_lib::context::account::AccountError;
     assert!(
         matches!(
             err,
-            FreeSharesError::Application(AccountApplicationError::AccountNotFound { .. })
+            FreeSharesError::Account(AccountError::AccountNotFound { .. })
         ),
         "expected Application(AccountNotFound), got: {err:?}"
     );

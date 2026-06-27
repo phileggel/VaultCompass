@@ -1,4 +1,4 @@
-use super::error::HoldingDomainError;
+use crate::context::account::error::AccountError;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -92,10 +92,10 @@ impl Holding {
 
     fn validate(quantity: i64, average_price: i64) -> Result<()> {
         if quantity < 0 {
-            return Err(HoldingDomainError::NegativeQuantity.into());
+            return Err(AccountError::NegativeQuantity.into());
         }
         if average_price < 0 {
-            return Err(HoldingDomainError::NegativeAveragePrice.into());
+            return Err(AccountError::NegativeAveragePrice.into());
         }
         Ok(())
     }

@@ -31,11 +31,9 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::Account>()
         .typ::<account::UpdateFrequency>()
         .typ::<account::Holding>()
-        .typ::<account::AccountApplicationError>()
-        .typ::<account::AccountCrudError>()
+        .typ::<account::AccountError>()
         .typ::<account::Transaction>()
         .typ::<account::TransactionType>()
-        .typ::<account::HoldingTransactionError>()
         // ----- currency BC (FXR) -----
         .typ::<currency::CurrencyPair>()
         .typ::<currency::CurrencyRate>()

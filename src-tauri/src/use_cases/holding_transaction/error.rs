@@ -1,6 +1,4 @@
-use crate::context::account::{
-    AccountApplicationError, OpeningBalanceDomainError, TransactionDomainError,
-};
+use crate::context::account::AccountError;
 
 /// Application-layer rejections specific to the `record_dividend` use case —
 /// cross-BC asset and holding checks performed by the orchestrator before
@@ -25,25 +23,19 @@ pub enum DividendApplicationError {
 
 /// Use-case composite for the **record dividend** failure surface.
 ///
-/// Each leaf lives in its rightful layer:
-/// - `AccountApplicationError` — application layer, raises `AccountNotFound`
-///   and `DatabaseError`.
-/// - `DividendApplicationError` — use-case-owned (this file), raises the
-///   cross-BC asset/holding checks.
-/// - `TransactionDomainError` — domain layer, raises date / amount / rate
-///   validation errors.
+/// - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+///   the transaction-factory date / amount / rate validation).
+/// - `DividendApplicationError` — use-case-owned (this file), the cross-BC
+///   asset/holding checks.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
 pub enum DividendError {
-    /// Account-side rejection (`AccountNotFound`, `DatabaseError`).
+    /// Account-BC rejection (lookup, infra, transaction validation).
     #[error(transparent)]
-    Application(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case-layer rejection (cross-BC asset checks).
     #[error(transparent)]
     UseCase(#[from] DividendApplicationError),
-    /// Transaction-factory / domain validation rejection.
-    #[error(transparent)]
-    Validation(#[from] TransactionDomainError),
 }
 
 #[cfg(test)]
@@ -56,15 +48,15 @@ mod dividend_error_wire_tests {
     #[test]
     fn each_variant_emits_a_code() {
         let cases: Vec<DividendError> = vec![
-            AccountApplicationError::AccountNotFound {
+            AccountError::AccountNotFound {
                 account_id: "acc-1".to_string(),
             }
             .into(),
             DividendApplicationError::AssetNotFound.into(),
             DividendApplicationError::AssetNotHeld.into(),
             DividendApplicationError::DividendOnCashAsset.into(),
-            TransactionDomainError::AmountNotPositive.into(),
-            TransactionDomainError::ExchangeRateNotPositive.into(),
+            AccountError::AmountNotPositive.into(),
+            AccountError::ExchangeRateNotPositive.into(),
         ];
         for err in cases {
             let value = serde_json::to_value(&err).expect("serialize DividendError");
@@ -99,25 +91,19 @@ pub enum FreeSharesApplicationError {
 
 /// Use-case composite for the **record free shares** failure surface.
 ///
-/// Each leaf lives in its rightful layer:
-/// - `AccountApplicationError` — application layer, raises `AccountNotFound`
-///   and `DatabaseError`.
-/// - `FreeSharesApplicationError` — use-case-owned (this file), raises the
-///   cross-BC asset/holding checks.
-/// - `TransactionDomainError` — domain layer, raises date / quantity
-///   validation errors.
+/// - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+///   the transaction-factory date / quantity validation).
+/// - `FreeSharesApplicationError` — use-case-owned (this file), the cross-BC
+///   asset/holding checks.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
 pub enum FreeSharesError {
-    /// Account-side rejection (`AccountNotFound`, `DatabaseError`).
+    /// Account-BC rejection (lookup, infra, transaction validation).
     #[error(transparent)]
-    Application(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case-layer rejection (cross-BC asset checks).
     #[error(transparent)]
     UseCase(#[from] FreeSharesApplicationError),
-    /// Transaction-factory / domain validation rejection.
-    #[error(transparent)]
-    Validation(#[from] TransactionDomainError),
 }
 
 #[cfg(test)]
@@ -131,15 +117,15 @@ mod free_shares_error_wire_tests {
     fn each_variant_emits_a_code() {
         // FSD-011 — all eligibility error variants must serialize correctly
         let cases: Vec<FreeSharesError> = vec![
-            AccountApplicationError::AccountNotFound {
+            AccountError::AccountNotFound {
                 account_id: "acc-1".to_string(),
             }
             .into(),
             FreeSharesApplicationError::AssetNotFound.into(),
             FreeSharesApplicationError::AssetNotHeld.into(),
             FreeSharesApplicationError::FreeSharesOnCashAsset.into(),
-            TransactionDomainError::QuantityNotPositive.into(),
-            TransactionDomainError::DateInFuture.into(),
+            AccountError::QuantityNotPositive.into(),
+            AccountError::DateInFuture.into(),
         ];
         for err in cases {
             let value = serde_json::to_value(&err).expect("serialize FreeSharesError");
@@ -178,34 +164,19 @@ pub enum OpenHoldingApplicationError {
 /// Use-case composite for the **open holding** failure surface — the single
 /// command `open_holding` (TRX-042) and its full chain of rejections.
 ///
-/// Each leaf lives in its rightful layer:
-/// - `AccountApplicationError` — application layer (`account/application/`),
-///   raises `AccountNotFound { account_id }` and `DatabaseError` from
-///   account-side service operations. Asset-side `DatabaseError` from the
-///   cross-BC `get_asset_by_id` lookup is also tunnelled through this leaf
-///   (the orchestrator translates at the call site) so the FE wire surface
-///   carries a single `{ code: "DatabaseError" }` shape.
-/// - `OpenHoldingApplicationError` — use-case-owned (this file), raises the
-///   3 cross-BC rejections (`AssetNotFound`, `ArchivedAsset`,
-///   `OpeningBalanceOnCashAsset`).
-/// - `OpeningBalanceDomainError` — domain layer (`account/domain/`), raises
-///   `InvalidTotalCost` from `Account::open_holding` on its own input.
-/// - `TransactionDomainError` — domain layer (`account/domain/`), raises
-///   the date / quantity invariants enforced by `Transaction::new`.
+/// - `AccountError` — every account-BC rejection: `AccountNotFound`,
+///   `DatabaseError` (incl. asset-side `get_asset_by_id` infra failures
+///   tunnelled here so the wire carries a single `{ code: "DatabaseError" }`),
+///   `InvalidTotalCost`, and the transaction-factory date / quantity invariants.
+/// - `OpenHoldingApplicationError` — use-case-owned (this file), the 3 cross-BC
+///   rejections (`AssetNotFound`, `ArchivedAsset`, `OpeningBalanceOnCashAsset`).
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
 pub enum OpenHoldingError {
-    /// Account-side rejection (`AccountNotFound`, `DatabaseError`).
+    /// Account-BC rejection (lookup, infra, opening-balance + transaction validation).
     #[error(transparent)]
-    Application(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case-layer rejection (cross-BC asset checks).
     #[error(transparent)]
     UseCase(#[from] OpenHoldingApplicationError),
-    /// Aggregate-level domain rejection (`InvalidTotalCost`).
-    #[error(transparent)]
-    Validation(#[from] OpeningBalanceDomainError),
-    /// Transaction-factory validation rejection (invalid date, negative
-    /// quantity, etc. — subset of variants reachable from `open_holding`).
-    #[error(transparent)]
-    TxValidation(#[from] TransactionDomainError),
 }

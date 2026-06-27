@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::orchestrator::{AccountDetailsResponse, AccountDetailsUseCase};
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use tauri::State;
 
 /// Returns the full account details view for the given account (ACD-012 to ACD-041).
@@ -11,6 +11,6 @@ use tauri::State;
 pub async fn get_account_details(
     state: State<'_, AccountDetailsUseCase>,
     account_id: String,
-) -> Result<AccountDetailsResponse, AccountApplicationError> {
+) -> Result<AccountDetailsResponse, AccountError> {
     state.get_account_details(&account_id).await
 }

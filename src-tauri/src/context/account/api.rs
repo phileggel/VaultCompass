@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::domain::{Account, UpdateFrequency};
-use crate::context::account::{AccountApplicationError, AccountCrudError, Transaction};
+use crate::context::account::{AccountError, Transaction};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -28,9 +28,7 @@ pub struct UpdateAccountDTO {
 /// Retrieves all accounts.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_accounts(
-    state: State<'_, AppState>,
-) -> Result<Vec<Account>, AccountApplicationError> {
+pub async fn get_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, AccountError> {
     state.account_service.get_all().await
 }
 
@@ -40,7 +38,7 @@ pub async fn get_accounts(
 pub async fn update_account(
     state: State<'_, AppState>,
     dto: UpdateAccountDTO,
-) -> Result<Account, AccountCrudError> {
+) -> Result<Account, AccountError> {
     state
         .account_service
         .update(dto.id, dto.name, dto.currency, dto.update_frequency)
@@ -50,10 +48,7 @@ pub async fn update_account(
 /// Deletes an account (R5 — cascades to its holdings at the repo level).
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_account(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), AccountApplicationError> {
+pub async fn delete_account(state: State<'_, AppState>, id: String) -> Result<(), AccountError> {
     state.account_service.delete(&id).await
 }
 
@@ -63,7 +58,7 @@ pub async fn delete_account(
 pub async fn get_asset_ids_for_account(
     state: State<'_, AppState>,
     account_id: String,
-) -> Result<Vec<String>, AccountApplicationError> {
+) -> Result<Vec<String>, AccountError> {
     state
         .account_service
         .get_asset_ids_for_account(&account_id)
@@ -77,7 +72,7 @@ pub async fn get_transactions(
     state: State<'_, AppState>,
     account_id: String,
     asset_id: String,
-) -> Result<Vec<Transaction>, AccountApplicationError> {
+) -> Result<Vec<Transaction>, AccountError> {
     state
         .account_service
         .get_transactions(&account_id, &asset_id)
@@ -91,7 +86,7 @@ pub async fn get_transactions(
 pub async fn get_all_transactions_for_account(
     state: State<'_, AppState>,
     account_id: String,
-) -> Result<Vec<Transaction>, AccountApplicationError> {
+) -> Result<Vec<Transaction>, AccountError> {
     state
         .account_service
         .get_all_transactions_for_account(&account_id)

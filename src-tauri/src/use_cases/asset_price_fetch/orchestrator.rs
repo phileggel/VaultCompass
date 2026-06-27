@@ -1,4 +1,4 @@
-use crate::context::account::{AccountApplicationError, AccountService};
+use crate::context::account::{AccountError, AccountService};
 use crate::context::asset::{
     derive_yahoo_symbol_with_exchange, Asset, AssetApplicationError, AssetError, AssetService,
 };
@@ -97,7 +97,7 @@ impl AssetPriceFetchUseCase {
             .get_by_id(account_id)
             .await?
             .ok_or_else(|| {
-                FetchAccountAssetPricesError::Account(AccountApplicationError::AccountNotFound {
+                FetchAccountAssetPricesError::Account(AccountError::AccountNotFound {
                     account_id: account_id.to_string(),
                 })
             })?;

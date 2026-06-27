@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::{FetchAllAssetPricesError, FetchPriceTask};
-    use crate::context::account::AccountApplicationError;
+    use crate::context::account::AccountError;
     use crate::context::asset::AssetError;
 
     fn json(error: &FetchAllAssetPricesError) -> serde_json::Value {
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn account_wrapper_flattens_bc_code_with_payload() {
-        let wrapped = FetchAllAssetPricesError::Account(AccountApplicationError::AccountNotFound {
+        let wrapped = FetchAllAssetPricesError::Account(AccountError::AccountNotFound {
             account_id: "abc".into(),
         });
         assert_eq!(

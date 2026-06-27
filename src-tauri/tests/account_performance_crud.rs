@@ -6,7 +6,7 @@
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
 use vault_compass_lib::context::account::{
-    AccountApplicationError, AccountService, SqliteAccountRepository, SqliteHoldingRepository,
+    AccountError, AccountService, SqliteAccountRepository, SqliteHoldingRepository,
     SqliteTransactionRepository, UpdateFrequency,
 };
 use vault_compass_lib::context::asset::{
@@ -130,7 +130,7 @@ async fn get_account_performance_not_found_propagates() {
     assert!(
         matches!(
             &err,
-            AccountApplicationError::AccountNotFound { account_id }
+            AccountError::AccountNotFound { account_id }
                 if account_id == "does-not-exist"
         ),
         "AccountNotFound must propagate with the supplied account_id; got: {err:?}"

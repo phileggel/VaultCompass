@@ -1,7 +1,6 @@
-use super::error::{AccountDomainError, AccountOperationError, OpeningBalanceDomainError};
 use super::holding::Holding;
 use super::transaction::{Transaction, TransactionType};
-use super::transaction_error::TransactionDomainError;
+use crate::context::account::error::AccountError;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -95,10 +94,10 @@ impl Account {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
-    ) -> StdResult<Self, AccountDomainError> {
+    ) -> StdResult<Self, AccountError> {
         let name = name.trim().to_string();
         if name.is_empty() {
-            return Err(AccountDomainError::NameEmpty);
+            return Err(AccountError::NameEmpty);
         }
         Self::validate_currency(&currency)?;
         Ok(Self {
@@ -118,10 +117,10 @@ impl Account {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
-    ) -> StdResult<Self, AccountDomainError> {
+    ) -> StdResult<Self, AccountError> {
         let name = name.trim().to_string();
         if name.is_empty() {
-            return Err(AccountDomainError::NameEmpty);
+            return Err(AccountError::NameEmpty);
         }
         Self::validate_currency(&currency)?;
         Ok(Self {
@@ -257,11 +256,11 @@ impl Account {
         // SEL-012 — closed position guard
         let current_qty = self.holding_quantity(&asset_id);
         if current_qty == 0 {
-            return Err(AccountOperationError::ClosedPosition.into());
+            return Err(AccountError::ClosedPosition.into());
         }
         // SEL-021 — oversell guard
         if quantity > current_qty {
-            return Err(AccountOperationError::Oversell {
+            return Err(AccountError::Oversell {
                 available: current_qty,
                 requested: quantity,
             }
@@ -335,7 +334,7 @@ impl Account {
             .transactions
             .iter()
             .find(|t| t.id == tx_id)
-            .ok_or(AccountOperationError::TransactionNotFound)?;
+            .ok_or(AccountError::TransactionNotFound)?;
 
         let tx_type = existing.transaction_type;
         let asset_id = existing.asset_id.clone();
@@ -397,7 +396,7 @@ impl Account {
         if let Some(slot) = self.transactions.iter_mut().find(|t| t.id == tx_id) {
             *slot = updated_tx;
         } else {
-            return Err(AccountOperationError::TransactionNotFound.into());
+            return Err(AccountError::TransactionNotFound.into());
         }
 
         // Full recalculation for the (account, asset) pair — SEL-032 cascading check inside
@@ -465,14 +464,14 @@ impl Account {
             .transactions
             .iter()
             .find(|t| t.id == tx_id)
-            .ok_or(AccountOperationError::TransactionNotFound)?
+            .ok_or(AccountError::TransactionNotFound)?
             .asset_id
             .clone();
         let pos = self
             .transactions
             .iter()
             .position(|t| t.id == tx_id)
-            .ok_or(AccountOperationError::TransactionNotFound)?;
+            .ok_or(AccountError::TransactionNotFound)?;
         self.transactions.remove(pos);
         self.pending_changes
             .push(AccountChange::TransactionDeleted(tx_id.to_string()));
@@ -534,13 +533,13 @@ impl Account {
         total_cost: i64,
     ) -> Result<&Transaction> {
         if quantity <= 0 {
-            return Err(TransactionDomainError::QuantityNotPositive.into());
+            return Err(AccountError::QuantityNotPositive.into());
         }
         // TRX-045 — a zero-cost position is valid (e.g. a mined / gifted /
         // airdropped asset seeded as a starting position); only a negative
         // total cost is rejected.
         if total_cost < 0 {
-            return Err(OpeningBalanceDomainError::InvalidTotalCost.into());
+            return Err(AccountError::InvalidTotalCost.into());
         }
         const MICRO: i128 = 1_000_000;
         let unit_price = (total_cost as i128 * MICRO / quantity as i128) as i64;
@@ -622,10 +621,7 @@ impl Account {
     /// the only failure path (`replay_cash_holding` raising `InsufficientCash`)
     /// is unreachable for a Deposit: deposits only add to the running balance,
     /// so back-dating one cannot create an interim shortfall.
-    pub fn apply_deposit(
-        &mut self,
-        tx: Transaction,
-    ) -> StdResult<Transaction, AccountOperationError> {
+    pub fn apply_deposit(&mut self, tx: Transaction) -> StdResult<Transaction, AccountError> {
         self.transactions.push(tx.clone());
         self.pending_changes
             .push(AccountChange::TransactionInserted(tx.clone()));
@@ -639,17 +635,14 @@ impl Account {
     /// before any mutation so a rejected transaction is never left in
     /// `self.transactions`. Withdrawals debit the account's always-present Cash
     /// Holding (CSH-012).
-    pub fn apply_withdrawal(
-        &mut self,
-        tx: Transaction,
-    ) -> StdResult<Transaction, AccountOperationError> {
+    pub fn apply_withdrawal(&mut self, tx: Transaction) -> StdResult<Transaction, AccountError> {
         let current = self.cash_holding_quantity();
         // Compare against `total_amount` to match `replay_cash_holding`'s deduction
         // field. For cash withdrawals built via `Transaction::new_withdrawal` the
         // two are equal, but a future caller wiring through `Transaction::new`
         // directly would still see a consistent guard.
         if current < tx.total_amount {
-            return Err(AccountOperationError::InsufficientCash {
+            return Err(AccountError::InsufficientCash {
                 current_balance_micros: current,
                 currency: self.currency.clone(),
             });
@@ -674,10 +667,7 @@ impl Account {
     /// The paying asset's holding (`asset_id`) is left untouched (DIV-024):
     /// only the Cash Holding is updated. Never raises `InsufficientCash` —
     /// dividends are credit-only.
-    pub fn apply_dividend(
-        &mut self,
-        tx: Transaction,
-    ) -> StdResult<Transaction, AccountOperationError> {
+    pub fn apply_dividend(&mut self, tx: Transaction) -> StdResult<Transaction, AccountError> {
         // DIV-023/024 — credit-only, identical to a Deposit: push to history,
         // queue the insert, replay the cash holding (credits it per CSH-012).
         // The paying asset's holding is intentionally not recomputed — a dividend
@@ -736,10 +726,10 @@ impl Account {
     /// memory. CSH-013: the Cash Holding is never deleted here — it persists at
     /// quantity 0 when no cash remains (removed only when the account is deleted).
     ///
-    /// Returns a typed `AccountOperationError` rather than `anyhow::Result` because
+    /// Returns a typed `AccountError` rather than `anyhow::Result` because
     /// `InsufficientCash` is the only failure mode and callers benefit from knowing it
     /// statically.
-    fn replay_cash_holding(&mut self) -> Result<(), AccountOperationError> {
+    fn replay_cash_holding(&mut self) -> Result<(), AccountError> {
         let cash_asset_id = self.cash_asset_id();
 
         // Walk cash-affecting transactions chronologically.
@@ -771,7 +761,7 @@ impl Account {
                 }
                 TransactionType::Withdrawal | TransactionType::Purchase => {
                     if running < t.total_amount {
-                        return Err(AccountOperationError::InsufficientCash {
+                        return Err(AccountError::InsufficientCash {
                             current_balance_micros: running,
                             currency: self.currency.clone(),
                         });
@@ -841,7 +831,7 @@ impl Account {
     /// transaction slice (TRX-030, SEL-024, SEL-025, SEL-026, SEL-027, SEL-032).
     ///
     /// Returns `(updated_holding, sell_tx_id → realized_pnl)`.
-    /// Returns `AccountOperationError::CascadingOversell` if any sell exceeds running qty.
+    /// Returns `AccountError::CascadingOversell` if any sell exceeds running qty.
     fn recalculate_holding(
         &self,
         asset_id: &str,
@@ -877,7 +867,7 @@ impl Account {
                 }
                 TransactionType::Sell => {
                     if t.quantity as i128 > total_quantity {
-                        return Err(AccountOperationError::CascadingOversell.into());
+                        return Err(AccountError::CascadingOversell.into());
                     }
                     let vwap_before: i64 = if total_quantity > 0 {
                         (vwap_numerator / total_quantity) as i64
@@ -929,7 +919,7 @@ impl Account {
                 // is shared with Sell oversell which is a CascadingOversell, a different error.
                 TransactionType::Withdrawal => {
                     if t.quantity as i128 > total_quantity {
-                        return Err(AccountOperationError::InsufficientCash {
+                        return Err(AccountError::InsufficientCash {
                             current_balance_micros: total_quantity as i64,
                             currency: self.currency.clone(),
                         }
@@ -1023,9 +1013,9 @@ impl Account {
         total_sell_amount - cost_basis
     }
 
-    fn validate_currency(currency: &str) -> StdResult<(), AccountDomainError> {
+    fn validate_currency(currency: &str) -> StdResult<(), AccountError> {
         if Currency::from_str(currency).is_err() {
-            return Err(AccountDomainError::InvalidCurrency {
+            return Err(AccountError::InvalidCurrency {
                 currency: currency.to_string(),
             });
         }
@@ -1060,7 +1050,7 @@ pub trait AccountRepository: Send + Sync {
 /// the same logic at the application layer (`AccountService::record_deposit` /
 /// `record_withdrawal`); these helpers exist purely so existing tests can
 /// continue to call `acc.record_deposit(...)` without spelling out the
-/// factory + apply two-step on every line. They return `AccountOperationError`
+/// factory + apply two-step on every line. They return `AccountError`
 /// directly (the only possible non-input failure source on valid test data);
 /// factory failures are `.expect()`-ed since test inputs are assumed valid.
 #[cfg(test)]
@@ -1075,7 +1065,7 @@ impl Account {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> StdResult<Transaction, AccountOperationError> {
+    ) -> StdResult<Transaction, AccountError> {
         let tx =
             Transaction::new_deposit(self.id.clone(), self.cash_asset_id(), date, amount, note)
                 .expect("test transaction inputs must be valid");
@@ -1089,7 +1079,7 @@ impl Account {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> StdResult<Transaction, AccountOperationError> {
+    ) -> StdResult<Transaction, AccountError> {
         let tx =
             Transaction::new_withdrawal(self.id.clone(), self.cash_asset_id(), date, amount, note)
                 .expect("test transaction inputs must be valid");
@@ -1238,8 +1228,8 @@ mod tests {
             )
             .unwrap_err();
         assert!(
-            err.downcast_ref::<AccountOperationError>()
-                .map(|e| matches!(e, AccountOperationError::ClosedPosition))
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::ClosedPosition))
                 .unwrap_or(false),
             "expected ClosedPosition, got: {err}"
         );
@@ -1271,8 +1261,8 @@ mod tests {
             )
             .unwrap_err();
         assert!(
-            err.downcast_ref::<AccountOperationError>()
-                .map(|e| matches!(e, AccountOperationError::Oversell { .. }))
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::Oversell { .. }))
                 .unwrap_or(false),
             "expected Oversell, got: {err}"
         );
@@ -1430,10 +1420,10 @@ mod tests {
             )
             .unwrap_err();
         let op_err = err
-            .downcast_ref::<AccountOperationError>()
-            .unwrap_or_else(|| panic!("expected AccountOperationError, got: {err}"));
+            .downcast_ref::<AccountError>()
+            .unwrap_or_else(|| panic!("expected AccountError, got: {err}"));
         assert!(
-            matches!(op_err, AccountOperationError::CascadingOversell),
+            matches!(op_err, AccountError::CascadingOversell),
             "expected CascadingOversell when moving a sell before its buy, got: {op_err}"
         );
     }
@@ -1472,7 +1462,7 @@ mod tests {
     // -------------------------------------------------------------------------
 
     // TRX-044 — open_holding rejects quantity ≤ 0
-    // TransactionDomainError::QuantityNotPositive is checked via error message;
+    // AccountError::QuantityNotPositive is checked via error message;
     // the exact variant will be confirmed by the downcast once the impl imports it.
     #[test]
     fn open_holding_rejects_zero_quantity() {
@@ -1485,7 +1475,7 @@ mod tests {
                 micro(100),
             )
             .unwrap_err();
-        // Check via error message — TransactionDomainError::QuantityNotPositive message:
+        // Check via error message — AccountError::QuantityNotPositive message:
         // "Quantity must be strictly positive"
         assert!(
             err.to_string().contains("positive"),
@@ -1535,10 +1525,10 @@ mod tests {
                 -micro(1),
             )
             .unwrap_err();
-        // OpeningBalanceDomainError is in scope via `use super::*` once implemented
+        // AccountError is in scope via `use super::*` once implemented
         assert!(
-            err.downcast_ref::<OpeningBalanceDomainError>()
-                .map(|e| matches!(e, OpeningBalanceDomainError::InvalidTotalCost))
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::InvalidTotalCost))
                 .unwrap_or(false),
             "expected InvalidTotalCost, got: {err}"
         );
@@ -1556,7 +1546,7 @@ mod tests {
                 micro(100),
             )
             .unwrap_err();
-        // TransactionDomainError::DateInFuture message: "Transaction date cannot be in the future"
+        // AccountError::DateInFuture message: "Transaction date cannot be in the future"
         assert!(
             err.to_string().contains("future"),
             "expected DateInFuture error, got: {err}"
@@ -1575,7 +1565,7 @@ mod tests {
                 micro(100),
             )
             .unwrap_err();
-        // TransactionDomainError::DateTooOld message: "Transaction date cannot be before 1900-01-01"
+        // AccountError::DateTooOld message: "Transaction date cannot be before 1900-01-01"
         assert!(
             err.to_string().contains("1900-01-01"),
             "expected DateTooOld error, got: {err}"
@@ -2026,8 +2016,8 @@ mod tests {
         let err = acc.cancel_transaction(&dep.id).unwrap_err();
         assert!(
             matches!(
-                err.downcast_ref::<AccountOperationError>(),
-                Some(AccountOperationError::InsufficientCash { .. })
+                err.downcast_ref::<AccountError>(),
+                Some(AccountError::InsufficientCash { .. })
             ),
             "expected InsufficientCash, got: {err}"
         );
@@ -2141,8 +2131,8 @@ mod tests {
             .unwrap_err();
         assert!(
             matches!(
-                err.downcast_ref::<AccountOperationError>(),
-                Some(AccountOperationError::InsufficientCash { .. })
+                err.downcast_ref::<AccountError>(),
+                Some(AccountError::InsufficientCash { .. })
             ),
             "expected InsufficientCash, got: {err}"
         );
@@ -2182,8 +2172,8 @@ mod tests {
             .unwrap_err();
         assert!(
             matches!(
-                err.downcast_ref::<AccountOperationError>(),
-                Some(AccountOperationError::InsufficientCash { .. })
+                err.downcast_ref::<AccountError>(),
+                Some(AccountError::InsufficientCash { .. })
             ),
             "expected InsufficientCash on overspending edit, got: {err}"
         );
@@ -2263,7 +2253,7 @@ mod tests {
             .record_withdrawal("2020-02-01".to_string(), 500_000_000, None)
             .unwrap_err();
         match err {
-            AccountOperationError::InsufficientCash {
+            AccountError::InsufficientCash {
                 current_balance_micros,
                 currency,
             } => {
@@ -2358,7 +2348,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                AccountOperationError::InsufficientCash {
+                AccountError::InsufficientCash {
                     current_balance_micros: 0,
                     ..
                 }
@@ -2600,8 +2590,8 @@ mod tests {
         let err = acc.cancel_transaction(&div_id).unwrap_err();
         assert!(
             matches!(
-                err.downcast_ref::<AccountOperationError>(),
-                Some(AccountOperationError::InsufficientCash { .. })
+                err.downcast_ref::<AccountError>(),
+                Some(AccountError::InsufficientCash { .. })
             ),
             "expected InsufficientCash when cancelling dividend would overdraw, got: {err}"
         );
@@ -3071,8 +3061,8 @@ mod tests {
         let err = acc.cancel_transaction(&fs_id).unwrap_err();
         assert!(
             matches!(
-                err.downcast_ref::<AccountOperationError>(),
-                Some(AccountOperationError::CascadingOversell)
+                err.downcast_ref::<AccountError>(),
+                Some(AccountError::CascadingOversell)
             ),
             "expected CascadingOversell when cancelling free shares that a later sell requires, got: {err}"
         );
@@ -3169,7 +3159,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                AccountOperationError::InsufficientCash {
+                AccountError::InsufficientCash {
                     current_balance_micros: 100_000_000,
                     ..
                 }

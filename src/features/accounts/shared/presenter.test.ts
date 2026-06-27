@@ -7,9 +7,9 @@ import {
   formatAccountRowYtdPerformancePct,
 } from "./presenter";
 
-// F27 layer-3 presenter — exhaustive variant coverage across AccountCrudError
-// and AccountApplicationError (the two account-BC error surfaces consumed by
-// useAccounts: add/update use Crud, delete + deletion-summary use Application).
+// F27 layer-3 presenter — covers the reachable `AccountError` codes for the
+// account-BC mutation surface (add / update / delete / deletion-summary), all
+// consumed by useAccounts.
 describe("accountMutationErrorToI18n", () => {
   it("InvalidCurrency interpolates the currency payload", () => {
     expect(accountMutationErrorToI18n({ code: "InvalidCurrency", currency: "ZZZ" })).toEqual({
@@ -34,7 +34,7 @@ describe("accountMutationErrorToI18n", () => {
 });
 
 // F27 layer-3 presenter — exhaustive variant coverage for fetch-price snackbar
-// dispatch. Composes AssetError + AccountApplicationError + FetchPriceTask
+// dispatch. Composes AssetError + AccountError + FetchPriceTask
 // (the AssetError contribution is the same DatabaseError code as the account-side).
 describe("fetchPriceErrorToI18n", () => {
   it("FetchAlreadyRunning dispatches info snackbar", () => {

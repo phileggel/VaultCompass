@@ -1,4 +1,4 @@
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use crate::context::asset::AssetError;
 use serde::Serialize;
 use specta::Type;
@@ -27,10 +27,13 @@ pub enum FetchPriceForDateTask {
 /// `#[serde(untagged)]` lets every arm surface its inner `{ "code": "..." }` payload
 /// directly on the wire; each arm carries a tagged inner type so the discriminator
 /// survives the untagging.
-// The `Asset` and `Account` arms both carry a `DatabaseError` code; under
-// `#[serde(untagged)]` they collide to the same wire shape. This mirrors the shipped
-// sibling `FetchAccountAssetPricesError` and is intentional — the frontend maps both
-// to the single `error.DatabaseError` key, so the collision is unobservable.
+// The `Account` arm carries the BC-wide `AccountError`, so it shares codes with the other
+// arms under `#[serde(untagged)]`: `DatabaseError` (with `Asset`) and `InvalidDate` /
+// `DateInFuture` (with `Failure`'s `FetchPriceForDateTask`). The collisions are
+// unobservable: this orchestrator only calls account lookups (`get_by_id`, holdings,
+// asset-ids), which raise `AccountNotFound` or `DatabaseError` only — never the
+// transaction-validation `InvalidDate` / `DateInFuture`. The frontend maps each shared code
+// to one key regardless of arm. Mirrors the shipped sibling `FetchAccountAssetPricesError`.
 #[derive(Debug, thiserror::Error, Serialize, Type)]
 #[serde(untagged)]
 pub enum FetchAccountAssetPricesForDateError {
@@ -39,7 +42,7 @@ pub enum FetchAccountAssetPricesForDateError {
     Asset(#[from] AssetError),
     /// Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
     #[error(transparent)]
-    Account(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case-specific failures (`InvalidDate`, `DateInFuture`, `UnknownError`).
     #[error(transparent)]
     Failure(#[from] FetchPriceForDateTask),
