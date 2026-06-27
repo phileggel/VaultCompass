@@ -1,3 +1,12 @@
+import type { CorrectTransactionDTO } from "@/bindings";
+
+/**
+ * The user-editable fields of a transaction correction. The gateway injects
+ * `account_id` + `transaction_id` (from the existing-transaction edit context)
+ * into the wire DTO before calling the command, so callers supply only these.
+ */
+export type CorrectTransactionFields = Omit<CorrectTransactionDTO, "account_id" | "transaction_id">;
+
 /**
  * Form state for a transaction (add or edit).
  * All numeric fields are decimal strings — converted to i64 micro-units at submit (TRX-024).

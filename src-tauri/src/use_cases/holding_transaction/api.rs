@@ -74,9 +74,13 @@ pub struct SellHoldingDTO {
 }
 
 /// Parameters for correcting an existing transaction.
-/// `account_id` and `asset_id` are immutable — taken from the existing transaction.
+/// `asset_id` is immutable — taken from the existing transaction.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CorrectTransactionDTO {
+    /// Account that owns the transaction being corrected.
+    pub account_id: String,
+    /// Identifier of the transaction being corrected.
+    pub transaction_id: String,
     /// Corrected transaction date (YYYY-MM-DD).
     pub date: String,
     /// Corrected quantity in micro-units.
@@ -89,6 +93,15 @@ pub struct CorrectTransactionDTO {
     pub fees: i64,
     /// Optional user note.
     pub note: Option<String>,
+}
+
+/// Parameters for cancelling an existing transaction.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CancelTransactionDTO {
+    /// Account that owns the transaction being cancelled.
+    pub account_id: String,
+    /// Identifier of the transaction being cancelled.
+    pub transaction_id: String,
 }
 
 // =============================================================================
@@ -157,13 +170,11 @@ pub async fn sell_holding(
 #[specta::specta]
 pub async fn correct_transaction(
     uc: State<'_, HoldingTransactionUseCase>,
-    id: String,
-    account_id: String,
     dto: CorrectTransactionDTO,
 ) -> Result<Transaction, AccountError> {
     uc.correct_transaction(
-        &account_id,
-        &id,
+        &dto.account_id,
+        &dto.transaction_id,
         dto.date,
         dto.quantity,
         dto.unit_price,
@@ -179,10 +190,10 @@ pub async fn correct_transaction(
 #[specta::specta]
 pub async fn cancel_transaction(
     uc: State<'_, HoldingTransactionUseCase>,
-    id: String,
-    account_id: String,
+    dto: CancelTransactionDTO,
 ) -> Result<(), AccountError> {
-    uc.cancel_transaction(&account_id, &id).await
+    uc.cancel_transaction(&dto.account_id, &dto.transaction_id)
+        .await
 }
 
 // =============================================================================

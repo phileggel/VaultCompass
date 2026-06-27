@@ -197,7 +197,7 @@ describe("useTransactions", () => {
     const tx = makeTx();
     mockCorrectTransaction.mockResolvedValue({ status: "ok", data: tx });
     const { result } = renderHook(() => useTransactions());
-    const dto: CorrectTransactionDTO = {
+    const dto: Omit<CorrectTransactionDTO, "account_id" | "transaction_id"> = {
       date: "2024-01-20",
       quantity: 2_000_000,
       unit_price: 90_000_000,
@@ -223,7 +223,7 @@ describe("useTransactions", () => {
       error: { code: "TransactionNotFound" },
     });
     const { result } = renderHook(() => useTransactions());
-    const dto: CorrectTransactionDTO = {
+    const dto: Omit<CorrectTransactionDTO, "account_id" | "transaction_id"> = {
       date: "2024-01-20",
       quantity: 2_000_000,
       unit_price: 90_000_000,

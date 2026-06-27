@@ -1,9 +1,10 @@
 import { useCallback } from "react";
-import type { BuyHoldingDTO, CorrectTransactionDTO, SellHoldingDTO, Transaction } from "@/bindings";
+import type { BuyHoldingDTO, SellHoldingDTO, Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { transactionGateway } from "./gateway";
 import { transactionMutationErrorToI18n } from "./shared/presenter";
+import type { CorrectTransactionFields } from "./shared/types";
 
 const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
@@ -39,7 +40,7 @@ export function useTransactions() {
   }, []);
 
   const correctTransaction = useCallback(
-    async (id: string, accountId: string, dto: CorrectTransactionDTO) => {
+    async (id: string, accountId: string, dto: CorrectTransactionFields) => {
       try {
         const res = await transactionGateway.correctTransaction(id, accountId, dto);
         if (res.status === "ok") {

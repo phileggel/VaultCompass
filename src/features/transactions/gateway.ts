@@ -2,12 +2,12 @@ import type {
   AccountError,
   AssetPriceError,
   BuyHoldingDTO,
-  CorrectTransactionDTO,
   Event,
   SellHoldingDTO,
   Transaction,
 } from "../../bindings";
 import { commands, events, type Result } from "../../bindings";
+import type { CorrectTransactionFields } from "./shared/types";
 
 /**
  * Gateway for Transaction-related backend communication.
@@ -25,13 +25,13 @@ export const transactionGateway = {
   async correctTransaction(
     id: string,
     accountId: string,
-    dto: CorrectTransactionDTO,
+    dto: CorrectTransactionFields,
   ): Promise<Result<Transaction, AccountError>> {
-    return await commands.correctTransaction(id, accountId, dto);
+    return await commands.correctTransaction({ ...dto, account_id: accountId, transaction_id: id });
   },
 
   async cancelTransaction(id: string, accountId: string): Promise<Result<null, AccountError>> {
-    return await commands.cancelTransaction(id, accountId);
+    return await commands.cancelTransaction({ account_id: accountId, transaction_id: id });
   },
 
   async getTransactions(
