@@ -25,6 +25,17 @@ pub struct Holding {
     pub last_sold_date: Option<String>,
 }
 
+/// Point-in-time reconstruction of a single holding's quantity and VWAP cost
+/// basis as of a date — the read-only "as of" valuation behind the trade-dialog
+/// insights (TDI-010). All financial fields are i64 micro-units (ADR-001).
+#[derive(Debug, Serialize, Deserialize, Clone, Type)]
+pub struct HoldingSnapshot {
+    /// Units held as of the queried date (micro-units), 0 when nothing is held.
+    pub quantity: i64,
+    /// VWAP cost basis per unit, account currency (micro-units), 0 when never held.
+    pub average_price: i64,
+}
+
 impl Holding {
     /// Creates a new Holding with a generated ID.
     pub fn new(

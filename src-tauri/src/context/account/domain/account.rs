@@ -1,4 +1,4 @@
-use super::holding::Holding;
+use super::holding::{Holding, HoldingSnapshot};
 use super::transaction::{Transaction, TransactionType};
 use crate::context::account::error::AccountError;
 use anyhow::{anyhow, Result};
@@ -969,6 +969,80 @@ impl Account {
         Ok((holding, pnl_map))
     }
 
+    /// TDI-010 — Reconstructs an asset holding's quantity and VWAP average cost
+    /// as of `as_of` by replaying only the transactions (for `asset_id`) dated on
+    /// or before that date. A read-only valuation over already-validated history,
+    /// so it omits the oversell / insufficient-cash guards of
+    /// `recalculate_holding` (TDI-013); the VWAP accumulation is otherwise the
+    /// same (TRX-040 / SEL-026). `as_of` must be an ISO `YYYY-MM-DD` string for the
+    /// lexicographic date cut-off to be correct (validated by the caller).
+    pub fn holding_snapshot_as_of(
+        transactions: &[Transaction],
+        asset_id: &str,
+        as_of: &str,
+    ) -> HoldingSnapshot {
+        const MICRO: i128 = 1_000_000;
+
+        let mut txs: Vec<&Transaction> = transactions
+            .iter()
+            .filter(|t| t.asset_id == asset_id && t.date.as_str() <= as_of)
+            .collect();
+        txs.sort_by(|a, b| {
+            a.date
+                .cmp(&b.date)
+                .then_with(|| a.created_at.cmp(&b.created_at))
+        });
+
+        let mut total_quantity: i128 = 0;
+        let mut vwap_numerator: i128 = 0;
+        let mut last_vwap: i64 = 0;
+        for t in &txs {
+            match t.transaction_type {
+                TransactionType::Purchase
+                | TransactionType::OpeningBalance
+                | TransactionType::Deposit => {
+                    total_quantity += t.quantity as i128;
+                    vwap_numerator += t.total_amount as i128 * MICRO;
+                }
+                TransactionType::Sell => {
+                    let vwap_before: i64 = if total_quantity > 0 {
+                        (vwap_numerator / total_quantity) as i64
+                    } else {
+                        0
+                    };
+                    last_vwap = vwap_before;
+                    let qty = t.quantity as i128;
+                    vwap_numerator -= vwap_before as i128 * qty;
+                    total_quantity -= qty;
+                }
+                TransactionType::Withdrawal => {
+                    total_quantity -= t.quantity as i128;
+                    vwap_numerator = if total_quantity > 0 {
+                        total_quantity * MICRO
+                    } else {
+                        0
+                    };
+                }
+                // FSD-022/023 — free shares add quantity at zero cost (dilutes VWAP).
+                TransactionType::FreeShares => {
+                    total_quantity += t.quantity as i128;
+                }
+                // DIV-024 — a Dividend never affects the paying asset's holding.
+                TransactionType::Dividend => {}
+            }
+        }
+
+        let average_price: i64 = if total_quantity > 0 {
+            (vwap_numerator / total_quantity) as i64
+        } else {
+            last_vwap
+        };
+        HoldingSnapshot {
+            quantity: total_quantity as i64,
+            average_price,
+        }
+    }
+
     /// Computes total_amount for a Purchase (TRX-026).
     /// Formula: floor(floor(qty × price / MICRO) × rate / MICRO) + fees
     fn compute_purchase_total(
@@ -1376,6 +1450,133 @@ mod tests {
             .recalculate_holding("asset-1", &[&sell, &buy])
             .expect("chronologically valid history must not oversell regardless of storage order");
         assert_eq!(holding.quantity, micro(1));
+    }
+
+    // TDI-010 — holding_snapshot_as_of: as-of-date quantity + VWAP reconstruction.
+    fn snap_tx(
+        id: &str,
+        asset: &str,
+        tx_type: TransactionType,
+        date: &str,
+        qty_units: i64,
+        total_units: i64,
+    ) -> Transaction {
+        Transaction::restore(
+            id.to_string(),
+            "acc-1".to_string(),
+            asset.to_string(),
+            tx_type,
+            date.to_string(),
+            micro(qty_units),
+            0,
+            micro(1),
+            0,
+            micro(total_units),
+            None,
+            None,
+            format!("{date}T00:00:00.000001Z"),
+        )
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_includes_only_txs_on_or_before_the_date() {
+        let txs = vec![
+            snap_tx(
+                "buy-1",
+                "asset-1",
+                TransactionType::Purchase,
+                "2024-06-01",
+                2,
+                200,
+            ),
+            snap_tx(
+                "buy-2",
+                "asset-1",
+                TransactionType::Purchase,
+                "2024-08-01",
+                2,
+                400,
+            ),
+        ];
+        // As of 2024-07-01 — only the first buy is in scope.
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-01");
+        assert_eq!(snap.quantity, micro(2));
+        assert_eq!(snap.average_price, micro(100));
+        // As of 2024-08-01 — both buys: VWAP = 600 / 4 = 150.
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-08-01");
+        assert_eq!(snap.quantity, micro(4));
+        assert_eq!(snap.average_price, micro(150));
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_is_empty_when_nothing_held() {
+        let snap = Account::holding_snapshot_as_of(&[], "asset-1", "2024-07-01");
+        assert_eq!(snap.quantity, 0);
+        assert_eq!(snap.average_price, 0);
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_preserves_vwap_after_a_sell() {
+        let txs = vec![
+            snap_tx(
+                "buy-1",
+                "asset-1",
+                TransactionType::Purchase,
+                "2024-06-01",
+                2,
+                200,
+            ),
+            snap_tx(
+                "sell-1",
+                "asset-1",
+                TransactionType::Sell,
+                "2024-07-01",
+                1,
+                150,
+            ),
+        ];
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-15");
+        assert_eq!(snap.quantity, micro(1)); // 1 unit remains
+        assert_eq!(snap.average_price, micro(100)); // VWAP preserved across the sell (SEL-026)
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_includes_a_tx_dated_exactly_on_the_cutoff() {
+        let txs = vec![snap_tx(
+            "buy-1",
+            "asset-1",
+            TransactionType::Purchase,
+            "2024-06-01",
+            2,
+            200,
+        )];
+        // TDI-011 — inclusive cut-off.
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-06-01");
+        assert_eq!(snap.quantity, micro(2));
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_ignores_other_assets() {
+        let txs = vec![
+            snap_tx(
+                "buy-1",
+                "asset-1",
+                TransactionType::Purchase,
+                "2024-06-01",
+                2,
+                200,
+            ),
+            snap_tx(
+                "buy-2",
+                "asset-2",
+                TransactionType::Purchase,
+                "2024-06-01",
+                5,
+                500,
+            ),
+        ];
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-01");
+        assert_eq!(snap.quantity, micro(2)); // only asset-1's transactions
     }
 
     // SEL-024 / SEL-030 — correcting a sell to a date that precedes its buy is rejected:

@@ -31,6 +31,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::Account>()
         .typ::<account::UpdateFrequency>()
         .typ::<account::Holding>()
+        .typ::<account::HoldingSnapshot>()
         .typ::<account::AccountError>()
         .typ::<account::Transaction>()
         .typ::<account::TransactionType>()
@@ -100,6 +101,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::get_asset_ids_for_account,
             account::get_transactions,
             account::get_all_transactions_for_account,
+            account::get_holding_snapshot_as_of,
             // ----- currency BC (FXR) -----
             currency::declare_currency_pair,
             currency::record_currency_rate,
