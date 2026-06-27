@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
 import { TextField } from "@/ui/components/field/TextField";
@@ -89,27 +90,21 @@ export function OpenBalanceModal({
         />
 
         {/* Quantity */}
-        <TextField
+        <CalcField
           id="ob-quantity"
           label={t("transaction.form_quantity_label")}
-          type="number"
-          min="0"
-          step="any"
           value={formData.quantity}
-          onChange={(e) => handleChange("quantity", e.target.value)}
+          onValueChange={(v) => handleChange("quantity", v)}
           placeholder={t("open_balance.form_quantity_placeholder")}
           required
         />
 
         {/* Total Cost (TRX-043: no fees, no exchange_rate, no unit_price) */}
-        <TextField
+        <CalcField
           id="ob-total-cost"
           label={t("open_balance.form_total_cost_label")}
-          type="number"
-          min="0"
-          step="any"
           value={formData.totalCost}
-          onChange={(e) => handleChange("totalCost", e.target.value)}
+          onValueChange={(v) => handleChange("totalCost", v)}
           placeholder={t("open_balance.form_total_cost_placeholder")}
           required
         />

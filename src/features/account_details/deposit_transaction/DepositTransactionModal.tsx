@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { DateField } from "@/ui/components/field/DateField";
 import { TextareaField } from "@/ui/components/field/TextareaField";
 import { TextField } from "@/ui/components/field/TextField";
@@ -85,14 +86,11 @@ export function DepositTransactionModal({
           required
         />
 
-        <TextField
+        <CalcField
           id="deposit-trx-amount"
           label={`${t("cash.form_amount_label")} (${accountCurrency})`}
-          type="number"
-          min="0"
-          step="any"
           value={formData.amount}
-          onChange={(e) => handleChange("amount", e.target.value)}
+          onValueChange={(v) => handleChange("amount", v)}
           placeholder={t("cash.form_amount_placeholder")}
           required
         />

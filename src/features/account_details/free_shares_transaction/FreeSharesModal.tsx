@@ -2,10 +2,10 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { DateField } from "@/ui/components/field/DateField";
 import { SelectField } from "@/ui/components/field/SelectField";
 import { TextareaField } from "@/ui/components/field/TextareaField";
-import { TextField } from "@/ui/components/field/TextField";
 import { FormModal } from "@/ui/components/modal/FormModal";
 import type { FreeSharesEditMode, FreeSharesHolding } from "./useFreeSharesTransaction";
 import { useFreeSharesTransaction } from "./useFreeSharesTransaction";
@@ -104,15 +104,12 @@ export function FreeSharesModal({
         />
 
         {/* FSD-020 — quantity of free shares received; no amount / price / fees */}
-        <TextField
+        <CalcField
           id="free-shares-quantity"
           data-testid="free-shares-quantity"
           label={t("free_shares.form_quantity_label")}
-          type="number"
-          min="0"
-          step="any"
           value={formData.quantity}
-          onChange={(e) => handleChange("quantity", e.target.value)}
+          onValueChange={(v) => handleChange("quantity", v)}
           placeholder={t("free_shares.form_quantity_placeholder")}
           required
         />

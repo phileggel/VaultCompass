@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { AssetPrice } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { DateField } from "@/ui/components/field/DateField";
 import { TextField } from "@/ui/components/field/TextField";
 import { FormModal } from "@/ui/components/modal/FormModal";
@@ -88,14 +89,11 @@ export function EditPriceForm({
           onChange={(e) => setDate(e.target.value)}
           required
         />
-        <TextField
+        <CalcField
           id="edit-price-price"
           label={`${t("price_modal.price_label")} (${assetCurrency})`}
-          type="number"
-          min="0.000001"
-          step="any"
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onValueChange={(v) => setPrice(v)}
           placeholder={t("price_modal.form_price_placeholder")}
           required
         />

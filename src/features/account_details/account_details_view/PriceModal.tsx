@@ -2,9 +2,9 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
-import { TextField } from "@/ui/components/field/TextField";
 import { FormModal } from "@/ui/components/modal/FormModal";
 import type { PriceableAsset } from "../shared/types";
 import { usePriceModal } from "./usePriceModal";
@@ -119,14 +119,11 @@ export function PriceModal({
         />
 
         {/* Price with currency label (MKT-023) */}
-        <TextField
+        <CalcField
           id="price-modal-price"
           label={`${t("price_modal.price_label")} (${selectedCurrency})`}
-          type="number"
-          min="0.000001"
-          step="any"
           value={price}
-          onChange={(e) => handleChange("price", e.target.value)}
+          onValueChange={(v) => handleChange("price", v)}
           placeholder={t("price_modal.form_price_placeholder")}
           required
         />

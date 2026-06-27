@@ -2,10 +2,10 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
 import { TextareaField } from "@/ui/components/field/TextareaField";
-import { TextField } from "@/ui/components/field/TextField";
 import { FormModal } from "@/ui/components/modal/FormModal";
 import type { DividendPayingAsset } from "./useDividendTransaction";
 import { useDividendTransaction } from "./useDividendTransaction";
@@ -120,30 +120,24 @@ export function DividendTransactionModal({
         />
 
         {/* DIV-021 — net amount in the paying asset's native currency */}
-        <TextField
+        <CalcField
           id="dividend-trx-amount"
           data-testid="dividend-trx-amount"
           label={`${t("dividend.form_amount_label")} (${selectedCurrency})`}
-          type="number"
-          min="0"
-          step="any"
           value={formData.amount}
-          onChange={(e) => handleChange("amount", e.target.value)}
+          onValueChange={(v) => handleChange("amount", v)}
           placeholder={t("dividend.form_amount_placeholder")}
           required
         />
 
         {/* DIV-022 — exchange rate only when asset currency differs from account currency */}
         {showExchangeRate && (
-          <TextField
+          <CalcField
             id="dividend-trx-exchange-rate"
             data-testid="dividend-trx-exchange-rate"
             label={t("transaction.form_exchange_rate_label")}
-            type="number"
-            min="0"
-            step="any"
             value={formData.exchangeRate}
-            onChange={(e) => handleChange("exchangeRate", e.target.value)}
+            onValueChange={(v) => handleChange("exchangeRate", v)}
             placeholder={t("transaction.form_exchange_rate_placeholder")}
           />
         )}
