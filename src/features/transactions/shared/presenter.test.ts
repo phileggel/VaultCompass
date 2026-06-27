@@ -182,4 +182,14 @@ describe("transactionMutationErrorToI18n", () => {
         : ({ code } as Parameters<typeof transactionMutationErrorToI18n>[0]);
     expect(transactionMutationErrorToI18n(err)).toEqual({ key: `error.${code}` });
   });
+
+  it.each([
+    "NameEmpty",
+    "InvalidCurrency",
+    "NegativeQuantity",
+    "NegativeAveragePrice",
+  ] as const)("unreachable account-only code %s falls back to error.Unknown", (code) => {
+    const err = { code } as Parameters<typeof transactionMutationErrorToI18n>[0];
+    expect(transactionMutationErrorToI18n(err)).toEqual({ key: "error.Unknown" });
+  });
 });
