@@ -104,6 +104,10 @@ export function useAccountDetailsView(accountId: string) {
     setDividendOpen(false);
     data.retry();
   }, [data]);
+  // DIV-010 — "add another" refreshes the data but keeps the modal open.
+  const handleDividendRecorded = useCallback(() => {
+    data.retry();
+  }, [data]);
 
   // FSD-010/012 — free-shares modal state (entered from the header "Record" menu).
   const handleFreeSharesOpen = useCallback(() => setFreeSharesOpen(true), []);
@@ -206,6 +210,7 @@ export function useAccountDetailsView(accountId: string) {
     handleDividendOpen,
     handleDividendClose,
     handleDividendSuccess,
+    handleDividendRecorded,
     handleFreeSharesOpen,
     handleFreeSharesClose,
     handleFreeSharesSuccess,

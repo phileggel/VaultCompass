@@ -80,6 +80,7 @@ const BASE_PROPS = {
   accountCurrency: "EUR",
   heldAssets,
   onSubmitSuccess: vi.fn(),
+  onRecorded: vi.fn(),
 };
 
 describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
@@ -144,7 +145,7 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     mockUseDividendTransaction.mockReturnValue(makeHookReturn({ isFormValid: false }));
     render(<DividendTransactionModal {...BASE_PROPS} />);
     const submitButton = screen.getByRole("button", {
-      name: /dividend\.action_record/i,
+      name: /^dividend\.action_record$/i,
     });
     expect(submitButton).toBeDisabled();
   });
@@ -154,7 +155,7 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     mockUseDividendTransaction.mockReturnValue(makeHookReturn({ isFormValid: true }));
     render(<DividendTransactionModal {...BASE_PROPS} />);
     const submitButton = screen.getByRole("button", {
-      name: /dividend\.action_record/i,
+      name: /^dividend\.action_record$/i,
     });
     expect(submitButton).not.toBeDisabled();
   });
@@ -184,7 +185,7 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     );
     render(<DividendTransactionModal {...BASE_PROPS} />);
     const submitButton = screen.getByRole("button", {
-      name: /dividend\.action_record/i,
+      name: /^dividend\.action_record$/i,
     });
     expect(submitButton).toBeDisabled();
   });

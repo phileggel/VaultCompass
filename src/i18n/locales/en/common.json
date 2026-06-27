@@ -427,6 +427,7 @@
     "form_amount_label": "Net amount",
     "form_amount_placeholder": "0.00",
     "action_record": "Record dividend",
+    "action_record_and_add_another": "Record & add another",
     "recorded": "Dividend recorded."
   },
   "free_shares": {
