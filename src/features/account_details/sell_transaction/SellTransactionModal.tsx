@@ -47,6 +47,8 @@ export function SellTransactionModal({
     formData,
     totalAmountDisplay,
     maxQuantityDisplay,
+    averageCostAsOfDate,
+    potentialPnl,
     error,
     isSubmitting,
     isFormValid,
@@ -139,18 +141,25 @@ export function SellTransactionModal({
           </span>
         </div>
 
-        {/* Unit Price */}
-        <TextField
-          id="sell-trx-unit-price"
-          label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
-          type="number"
-          min="0"
-          step="any"
-          value={formData.unitPrice}
-          onChange={(e) => handleChange("unitPrice", e.target.value)}
-          placeholder={t("transaction.form_unit_price_placeholder")}
-          required
-        />
+        {/* Unit Price + average-cost insight (TDI-020) */}
+        <div className="flex flex-col gap-1">
+          <TextField
+            id="sell-trx-unit-price"
+            label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
+            type="number"
+            min="0"
+            step="any"
+            value={formData.unitPrice}
+            onChange={(e) => handleChange("unitPrice", e.target.value)}
+            placeholder={t("transaction.form_unit_price_placeholder")}
+            required
+          />
+          {averageCostAsOfDate !== null && (
+            <span id="sell-trx-avg-cost" className="text-xs text-m3-on-surface-variant">
+              {t("transaction.form_avg_cost_hint", { value: averageCostAsOfDate })}
+            </span>
+          )}
+        </div>
 
         {/* Exchange Rate (SEL-036) */}
         {showExchangeRate && (
@@ -187,6 +196,16 @@ export function SellTransactionModal({
             aria-readonly="true"
           />
         </div>
+
+        {/* Potential realized P&L of the typed sell (TDI-030/032) */}
+        {potentialPnl !== null && (
+          <span
+            id="sell-trx-potential-pnl"
+            className={`text-xs ${potentialPnl.raw < 0 ? "text-m3-error" : "text-m3-success"}`}
+          >
+            {t("transaction.form_potential_pnl_hint", { value: potentialPnl.formatted })}
+          </span>
+        )}
 
         {/* Note */}
         <TextareaField

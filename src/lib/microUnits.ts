@@ -110,3 +110,12 @@ export function computeSellTotalMicro(
 ): number {
   return Math.floor((Math.floor((qtyMicro * priceMicro) / MICRO) * rateMicro) / MICRO) - feesMicro;
 }
+
+/**
+ * Computes the VWAP cost basis of a quantity (the account-currency cost of
+ * `qtyMicro` units at `avgPriceMicro` per unit): floor(avgPrice × qty / MICRO).
+ * Mirrors the backend realized-P&L cost term (SEL-024 / TDI-030).
+ */
+export function computeCostBasisMicro(avgPriceMicro: number, qtyMicro: number): number {
+  return Math.floor((avgPriceMicro * qtyMicro) / MICRO);
+}

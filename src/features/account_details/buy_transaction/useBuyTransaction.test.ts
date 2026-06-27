@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Account, Asset } from "@/bindings";
 import { useAppStore } from "@/lib/store";
@@ -6,9 +6,10 @@ import { useBuyTransaction } from "./useBuyTransaction";
 
 const AUTO_RECORD_PRICE_KEY = "auto_record_price";
 
-const { mockBuyHolding, mockRecordAssetPrice } = vi.hoisted(() => ({
+const { mockBuyHolding, mockRecordAssetPrice, mockGetSnapshot } = vi.hoisted(() => ({
   mockBuyHolding: vi.fn(),
   mockRecordAssetPrice: vi.fn(),
+  mockGetSnapshot: vi.fn(),
 }));
 
 vi.mock("@/features/transactions/useTransactions", () => ({
@@ -24,6 +25,7 @@ vi.mock("@/features/transactions/useTransactions", () => ({
 vi.mock("../gateway", () => ({
   accountDetailsGateway: {
     recordAssetPrice: mockRecordAssetPrice,
+    getHoldingSnapshotAsOf: mockGetSnapshot,
   },
 }));
 
@@ -46,6 +48,8 @@ describe("useBuyTransaction", () => {
     localStorage.clear();
     mockBuyHolding.mockReset();
     mockRecordAssetPrice.mockReset();
+    mockGetSnapshot.mockReset();
+    mockGetSnapshot.mockResolvedValue({ status: "ok", data: { quantity: 0, average_price: 0 } });
     useAppStore.setState({
       assets: [{ id: "asset-1", name: "Apple", is_archived: false, currency: "USD" }] as Asset[],
       accounts: [{ id: "account-1", name: "My Account" }] as Account[],
@@ -56,6 +60,23 @@ describe("useBuyTransaction", () => {
   it("recordPrice defaults to false when localStorage auto_record_price is absent", () => {
     const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
     expect(result.current.recordPrice).toBe(false);
+  });
+
+  // TDI-020 — average cost is exposed when the asset is held as of the date.
+  it("exposes averageCostAsOfDate when the asset is held as of the date", async () => {
+    mockGetSnapshot.mockResolvedValue({
+      status: "ok",
+      data: { quantity: 2_000_000, average_price: 100_000_000 },
+    });
+    const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
+    await waitFor(() => expect(result.current.averageCostAsOfDate).not.toBeNull());
+  });
+
+  // TDI-021 — average cost is hidden when nothing is held as of the date.
+  it("hides averageCostAsOfDate when nothing is held as of the date", async () => {
+    const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
+    await waitFor(() => expect(mockGetSnapshot).toHaveBeenCalled());
+    expect(result.current.averageCostAsOfDate).toBeNull();
   });
 
   // MKT-052 — recordPrice is true at mount when localStorage key is "true"

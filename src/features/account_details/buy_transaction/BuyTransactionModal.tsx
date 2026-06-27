@@ -44,6 +44,7 @@ export function BuyTransactionModal({
   const {
     formData,
     totalAmountDisplay,
+    averageCostAsOfDate,
     error,
     isSubmitting,
     isFormValid,
@@ -132,18 +133,25 @@ export function BuyTransactionModal({
             required
           />
 
-          {/* Unit Price */}
-          <TextField
-            id="buy-trx-unit-price"
-            label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
-            type="number"
-            min="0"
-            step="any"
-            value={formData.unitPrice}
-            onChange={(e) => handleChange("unitPrice", e.target.value)}
-            placeholder={t("transaction.form_unit_price_placeholder")}
-            required
-          />
+          {/* Unit Price + average-cost insight (TDI-020) */}
+          <div className="flex flex-col gap-1">
+            <TextField
+              id="buy-trx-unit-price"
+              label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
+              type="number"
+              min="0"
+              step="any"
+              value={formData.unitPrice}
+              onChange={(e) => handleChange("unitPrice", e.target.value)}
+              placeholder={t("transaction.form_unit_price_placeholder")}
+              required
+            />
+            {averageCostAsOfDate !== null && (
+              <span id="buy-trx-avg-cost" className="text-xs text-m3-on-surface-variant">
+                {t("transaction.form_avg_cost_hint", { value: averageCostAsOfDate })}
+              </span>
+            )}
+          </div>
 
           {/* Exchange Rate (TRX-041) */}
           {showExchangeRate && (
