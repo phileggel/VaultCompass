@@ -270,6 +270,18 @@ async getAllTransactionsForAccount(accountId: string) : Promise<Result<Transacti
 }
 },
 /**
+ * TDI-010 — Returns the (account, asset) holding's quantity and VWAP average
+ * cost as of `date`, for the trade-dialog insights.
+ */
+async getHoldingSnapshotAsOf(accountId: string, assetId: string, date: string) : Promise<Result<HoldingSnapshot, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_holding_snapshot_as_of", { accountId, assetId, date }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Declares a currency pair (FXR-054). Idempotent: returns the existing pair
  * rather than duplicating it.
  */
@@ -2184,6 +2196,20 @@ total_return_pct: number | null;
  * converted value backed by a real rate is shown.
  */
 fx_rate_date: string | null }
+/**
+ * Point-in-time reconstruction of a single holding's quantity and VWAP cost
+ * basis as of a date — the read-only "as of" valuation behind the trade-dialog
+ * insights (TDI-010). All financial fields are i64 micro-units (ADR-001).
+ */
+export type HoldingSnapshot = { 
+/**
+ * Units held as of the queried date (micro-units), 0 when nothing is held.
+ */
+quantity: number; 
+/**
+ * VWAP cost basis in the asset's currency (micro-units), 0 when never held.
+ */
+average_price: number }
 /**
  * Explicit lookup path selector passed by the frontend (WEB-014).
  * 

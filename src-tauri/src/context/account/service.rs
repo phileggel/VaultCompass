@@ -1,10 +1,11 @@
 use super::domain::{
-    Account, AccountRepository, Holding, HoldingRepository, Transaction, TransactionRepository,
-    UpdateFrequency,
+    Account, AccountRepository, Holding, HoldingRepository, HoldingSnapshot, Transaction,
+    TransactionRepository, UpdateFrequency,
 };
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use crate::use_cases::holding_transaction::OpenHoldingError;
+use chrono::NaiveDate;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 use tracing::info;
@@ -205,6 +206,32 @@ impl AccountService {
                 tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "get_transactions: repository failure");
                 AccountError::DatabaseError
             })
+    }
+
+    /// TDI-010 — Computes the (account, asset) holding's quantity and VWAP
+    /// average cost as of `date` by replaying the pair's transactions dated on or
+    /// before it. Unknown account/asset yields an empty snapshot (`0`/`0`); an
+    /// unparseable `date` is rejected with `InvalidDate` (TDI-012).
+    pub async fn holding_snapshot_as_of(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+        date: &str,
+    ) -> StdResult<HoldingSnapshot, AccountError> {
+        NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| AccountError::InvalidDate)?;
+        let transactions = self
+            .transaction_repo
+            .get_by_account_asset(account_id, asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "holding_snapshot_as_of: repository failure");
+                AccountError::DatabaseError
+            })?;
+        Ok(Account::holding_snapshot_as_of(
+            &transactions,
+            asset_id,
+            date,
+        ))
     }
 
     /// Retrieves every transaction for an account across all assets, ordered
@@ -1202,6 +1229,42 @@ mod tests {
             matches!(err, AccountError::DatabaseError),
             "buy_holding must surface save failures as Application(DatabaseError), got: {err:?}"
         );
+    }
+
+    // TDI-012 — an unparseable date is rejected before any repository call.
+    #[tokio::test]
+    async fn holding_snapshot_as_of_rejects_an_unparseable_date() {
+        let svc = AccountService::new(
+            Box::new(MockAccountRepository::new()),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(MockTransactionRepository::new()),
+        );
+        let err = svc
+            .holding_snapshot_as_of("acc-1", "asset-1", "not-a-date")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AccountError::InvalidDate));
+    }
+
+    // TDI-010 — a valid date over an empty history yields an empty snapshot.
+    #[tokio::test]
+    async fn holding_snapshot_as_of_returns_empty_for_an_account_with_no_transactions() {
+        let mut mock_tr = MockTransactionRepository::new();
+        mock_tr
+            .expect_get_by_account_asset()
+            .once()
+            .returning(|_, _| Ok(vec![]));
+        let svc = AccountService::new(
+            Box::new(MockAccountRepository::new()),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(mock_tr),
+        );
+        let snap = svc
+            .holding_snapshot_as_of("acc-1", "asset-1", "2024-07-01")
+            .await
+            .expect("a valid date with no transactions yields an empty snapshot");
+        assert_eq!(snap.quantity, 0);
+        assert_eq!(snap.average_price, 0);
     }
 
     // -------------------------------------------------------------------------

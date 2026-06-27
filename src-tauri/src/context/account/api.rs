@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::domain::{Account, UpdateFrequency};
-use crate::context::account::{AccountError, Transaction};
+use crate::context::account::{AccountError, HoldingSnapshot, Transaction};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -76,6 +76,22 @@ pub async fn get_transactions(
     state
         .account_service
         .get_transactions(&account_id, &asset_id)
+        .await
+}
+
+/// TDI-010 — Returns the (account, asset) holding's quantity and VWAP average
+/// cost as of `date`, for the trade-dialog insights.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_holding_snapshot_as_of(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset_id: String,
+    date: String,
+) -> Result<HoldingSnapshot, AccountError> {
+    state
+        .account_service
+        .holding_snapshot_as_of(&account_id, &asset_id, &date)
         .await
 }
 
