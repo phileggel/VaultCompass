@@ -1267,6 +1267,26 @@ mod tests {
         assert_eq!(snap.average_price, 0);
     }
 
+    // A repository failure on the transaction fetch surfaces as DatabaseError.
+    #[tokio::test]
+    async fn holding_snapshot_as_of_surfaces_repository_failure_as_database_error() {
+        let mut mock_tr = MockTransactionRepository::new();
+        mock_tr
+            .expect_get_by_account_asset()
+            .once()
+            .returning(|_, _| Err(anyhow::anyhow!("db down")));
+        let svc = AccountService::new(
+            Box::new(MockAccountRepository::new()),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(mock_tr),
+        );
+        let err = svc
+            .holding_snapshot_as_of("acc-1", "asset-1", "2024-07-01")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AccountError::DatabaseError));
+    }
+
     // -------------------------------------------------------------------------
     // open_holding service tests (TRX-042 through TRX-056)
     // -------------------------------------------------------------------------

@@ -76,6 +76,24 @@ describe("useSellTransaction", () => {
     expect(result.current.potentialPnl).toBeNull();
   });
 
+  // TDI-030 — cross-currency: average_price (account CCY) and proceeds (account CCY,
+  // rate-converted) are the same currency, so the P&L is correct even when rate ≠ 1.
+  it("computes potentialPnl correctly for a cross-currency sell", async () => {
+    mockGetSnapshot.mockResolvedValue({
+      status: "ok",
+      data: { quantity: 2_000_000, average_price: 100_000_000 },
+    });
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    await waitFor(() => expect(result.current.averageCostAsOfDate).not.toBeNull());
+    await act(async () => {
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "60");
+      result.current.handleChange("exchangeRate", "2");
+    });
+    // proceeds (1 × 60 × 2) = 120 account CCY; cost basis (avg 100 × 1) = 100; P&L = 20.
+    expect(result.current.potentialPnl?.raw).toBe(20_000_000);
+  });
+
   // SEL-023 — sell total = floor(floor(qty × price / MICRO) × rate / MICRO) − fees
   it("computes sell total with fees subtracted (SEL-023)", async () => {
     const { result } = renderHook(() => useSellTransaction(BASE_PROPS));

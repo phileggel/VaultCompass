@@ -62,7 +62,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
 
   // TDI-020 — average cost as of the entered trade date (or today). Hidden when
   // nothing is held as of that date (TDI-021).
-  const snapshot = useHoldingSnapshotAsOf(accountId, assetId, formData.date);
+  const { snapshot } = useHoldingSnapshotAsOf(accountId, assetId, formData.date);
   const averageCostAsOfDate = useMemo(
     () => (snapshot && snapshot.quantity > 0 ? microToFormatted(snapshot.average_price) : null),
     [snapshot],
