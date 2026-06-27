@@ -685,6 +685,13 @@ describe("freeSharesErrorToI18n", () => {
   ] as const)("edit-path %s maps to its flat error key", (code) => {
     expect(freeSharesErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
   });
+
+  it.each([
+    "NegativeQuantity",
+    "NegativeAveragePrice",
+  ] as const)("keyless holding-internal code %s falls back to error.Unknown", (code) => {
+    expect(freeSharesErrorToI18n({ code } as never)).toEqual({ key: "error.Unknown" });
+  });
 });
 
 // ---------------------------------------------------------------------------

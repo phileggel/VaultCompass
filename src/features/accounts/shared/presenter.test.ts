@@ -31,6 +31,12 @@ describe("accountMutationErrorToI18n", () => {
   ] as const)("%s unit variant maps to its flat error key", (code) => {
     expect(accountMutationErrorToI18n({ code })).toEqual({ key: `error.${code}` });
   });
+
+  it("an unreachable BC-wide code falls back to error.Unknown", () => {
+    expect(accountMutationErrorToI18n({ code: "Oversell", available: 1, requested: 2 })).toEqual({
+      key: "error.Unknown",
+    });
+  });
 });
 
 // F27 layer-3 presenter — exhaustive variant coverage for fetch-price snackbar
@@ -68,6 +74,13 @@ describe("fetchPriceErrorToI18n", () => {
       severity: "error",
     });
   });
+
+  it("an unreachable BC-wide code falls back to the generic error.Unknown snackbar", () => {
+    expect(fetchPriceErrorToI18n({ code: "Oversell", available: 1, requested: 2 })).toEqual({
+      key: "error.Unknown",
+      severity: "error",
+    });
+  });
 });
 
 describe("fetchPriceForDateErrorToI18n", () => {
@@ -98,6 +111,13 @@ describe("fetchPriceForDateErrorToI18n", () => {
   ] as const)("%s falls through to the generic DatabaseError snackbar", (code) => {
     expect(fetchPriceForDateErrorToI18n({ code })).toEqual({
       key: "error.DatabaseError",
+      severity: "error",
+    });
+  });
+
+  it("an unreachable BC-wide code falls back to the generic error.Unknown snackbar", () => {
+    expect(fetchPriceForDateErrorToI18n({ code: "Oversell", available: 1, requested: 2 })).toEqual({
+      key: "error.Unknown",
       severity: "error",
     });
   });

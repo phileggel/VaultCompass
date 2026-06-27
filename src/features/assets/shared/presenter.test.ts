@@ -116,4 +116,10 @@ describe("assetMutationErrorToI18n", () => {
   ] as const)("%s unit variant maps to its flat error key", (code) => {
     expect(assetMutationErrorToI18n({ code })).toEqual({ key: `error.${code}` });
   });
+
+  it("an unreachable BC-wide code falls back to error.Unknown", () => {
+    expect(assetMutationErrorToI18n({ code: "Oversell", available: 1, requested: 2 })).toEqual({
+      key: "error.Unknown",
+    });
+  });
 });
