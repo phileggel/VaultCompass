@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { evaluateArithmetic } from "@/lib/arithmetic";
+import { evaluateArithmetic } from "./arithmetic";
 
 interface CalcFieldProps {
   id: string;
@@ -20,16 +20,20 @@ function hasArithmetic(raw: string): boolean {
   return /[+*/()]/.test(compact) || /\d-/.test(compact);
 }
 
-/** The value to report up: the evaluated result for expressions, raw otherwise. */
+/**
+ * Normalises a result to ≤6 decimals (micro precision) with trailing zeros
+ * trimmed, so float artifacts like `50 * 0.1 = 5.000000000000001` render and
+ * commit as "5" (dot decimal).
+ */
+function formatResult(n: number): string {
+  return String(Number(n.toFixed(6)));
+}
+
+/** The value to report up: the formatted result for expressions, raw otherwise. */
 function reportedValue(raw: string): string {
   if (!hasArithmetic(raw)) return raw;
   const result = evaluateArithmetic(raw);
-  return result !== null ? String(result) : raw;
-}
-
-/** Formats the live preview result with trailing zeros trimmed (dot decimal). */
-function formatResult(n: number): string {
-  return String(Number(n.toFixed(6)));
+  return result !== null ? formatResult(result) : raw;
 }
 
 /**
@@ -73,7 +77,7 @@ export function CalcField({
   const handleBlur = () => {
     if (hasArithmetic(display)) {
       const result = evaluateArithmetic(display);
-      if (result !== null) setDisplay(String(result));
+      if (result !== null) setDisplay(formatResult(result));
     }
   };
 
