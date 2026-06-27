@@ -145,6 +145,33 @@ describe("useDividendTransaction (DIV-020/021/022/025)", () => {
     expect(BASE_PROPS.onSubmitSuccess).toHaveBeenCalled();
   });
 
+  // DIV-010 — "add another" records, refreshes via onRecorded (not onSubmitSuccess),
+  // and clears amount + note while keeping the asset + date for the next entry.
+  it("handleAddAnother records, calls onRecorded, and clears amount + note", async () => {
+    mockRecordDividend.mockResolvedValue({ status: "ok", data: { id: "tx-div-1" } });
+    const onRecorded = vi.fn();
+    const onSubmitSuccess = vi.fn();
+    const { result } = renderHook(() =>
+      useDividendTransaction({ ...BASE_PROPS, onRecorded, onSubmitSuccess }),
+    );
+
+    act(() => {
+      result.current.handleChange("assetId", "asset-eur-1");
+      result.current.handleChange("amount", "100");
+      result.current.handleChange("note", "Q1 payout");
+    });
+
+    await act(async () => {
+      await result.current.handleAddAnother();
+    });
+
+    expect(onRecorded).toHaveBeenCalledTimes(1);
+    expect(onSubmitSuccess).not.toHaveBeenCalled();
+    expect(result.current.formData.amount).toBe("");
+    expect(result.current.formData.note).toBe("");
+    expect(result.current.formData.assetId).toBe("asset-eur-1"); // kept for repeat entry
+  });
+
   // DIV-025 — error result sets inline error via presenter
   it("surfaces backend error code as inline error on error result", async () => {
     mockRecordDividend.mockResolvedValue({

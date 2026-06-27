@@ -427,6 +427,7 @@
     "form_amount_label": "Montant net",
     "form_amount_placeholder": "0.00",
     "action_record": "Enregistrer le dividende",
+    "action_record_and_add_another": "Enregistrer et en ajouter un autre",
     "recorded": "Dividende enregistré."
   },
   "free_shares": {

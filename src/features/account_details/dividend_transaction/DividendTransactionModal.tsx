@@ -18,6 +18,8 @@ interface DividendTransactionModalProps {
   /** Active non-cash holdings the dividend can be attributed to (DIV-011/020). */
   heldAssets: DividendPayingAsset[];
   onSubmitSuccess: () => void;
+  /** Refresh-only callback for "Record & add another" — keeps the modal open (DIV-010). */
+  onRecorded: () => void;
 }
 
 export function DividendTransactionModal({
@@ -27,6 +29,7 @@ export function DividendTransactionModal({
   accountCurrency,
   heldAssets,
   onSubmitSuccess,
+  onRecorded,
 }: DividendTransactionModalProps) {
   const { t } = useTranslation();
 
@@ -42,7 +45,14 @@ export function DividendTransactionModal({
     showExchangeRate,
     handleChange,
     handleSubmit,
-  } = useDividendTransaction({ accountId, accountCurrency, heldAssets, onSubmitSuccess });
+    handleAddAnother,
+  } = useDividendTransaction({
+    accountId,
+    accountCurrency,
+    heldAssets,
+    onSubmitSuccess,
+    onRecorded,
+  });
 
   const selectedCurrency =
     heldAssets.find((a) => a.assetId === formData.assetId)?.assetCurrency ?? accountCurrency;
@@ -54,6 +64,17 @@ export function DividendTransactionModal({
           {t("action.cancel")}
         </Button>
         <Button
+          id="dividend-trx-add-another"
+          type="button"
+          variant="secondary"
+          onClick={handleAddAnother}
+          loading={isSubmitting}
+          disabled={isSubmitting || !isFormValid}
+        >
+          {t("dividend.action_record_and_add_another")}
+        </Button>
+        <Button
+          id="dividend-trx-record"
           type="submit"
           form="dividend-transaction-form"
           variant="primary"
@@ -64,7 +85,7 @@ export function DividendTransactionModal({
         </Button>
       </div>
     ),
-    [isSubmitting, isFormValid, t, onClose],
+    [isSubmitting, isFormValid, t, onClose, handleAddAnother],
   );
 
   return (

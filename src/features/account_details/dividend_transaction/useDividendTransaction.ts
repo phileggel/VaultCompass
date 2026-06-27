@@ -20,7 +20,10 @@ interface UseDividendTransactionProps {
   accountId: string;
   accountCurrency: string;
   heldAssets: DividendPayingAsset[];
+  /** Called after a successful record via the primary button (caller closes + refreshes). */
   onSubmitSuccess?: () => void;
+  /** Called after a successful record via "add another" (caller refreshes, modal stays open). */
+  onRecorded?: () => void;
 }
 
 interface DividendFormData {
@@ -36,6 +39,7 @@ export function useDividendTransaction({
   accountCurrency,
   heldAssets,
   onSubmitSuccess,
+  onRecorded,
 }: UseDividendTransactionProps) {
   const { t } = useTranslation();
   const showSnackbar = useSnackbar();
@@ -75,43 +79,62 @@ export function useDividendTransaction({
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  // Records the dividend; returns true on success, false on validation/backend
+  // error (the error is set on state). Shared by both the primary submit and the
+  // "add another" flow (DIV-010).
+  const record = useCallback(async (): Promise<boolean> => {
+    const amountErr = validateAmount(formData.amount);
+    const dateErr = validateDate(formData.date);
+    const validationError =
+      formData.assetId === "" ? { key: "error.AssetNotHeld" } : (amountErr ?? dateErr);
+    if (validationError) {
+      setError(validationError);
+      return false;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const result = await accountDetailsGateway.recordDividend({
+        account_id: accountId,
+        asset_id: formData.assetId,
+        date: formData.date,
+        amount_micros: decimalToMicro(formData.amount),
+        exchange_rate: decimalToMicro(formData.exchangeRate),
+        note: formData.note || null,
+      });
+      if (result.status === "error") {
+        logger.error("[useDividendTransaction] recordDividend failed", { error: result.error });
+        setError(dividendErrorToI18n(result.error));
+        return false;
+      }
+      setLastOperationDate(accountId, formData.date);
+      showSnackbar(t("dividend.recorded"), "success");
+      return true;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [accountId, formData, t, showSnackbar]);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      const amountErr = validateAmount(formData.amount);
-      const dateErr = validateDate(formData.date);
-      const validationError =
-        formData.assetId === "" ? { key: "error.AssetNotHeld" } : (amountErr ?? dateErr);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-
-      setError(null);
-      setIsSubmitting(true);
-      try {
-        const result = await accountDetailsGateway.recordDividend({
-          account_id: accountId,
-          asset_id: formData.assetId,
-          date: formData.date,
-          amount_micros: decimalToMicro(formData.amount),
-          exchange_rate: decimalToMicro(formData.exchangeRate),
-          note: formData.note || null,
-        });
-        if (result.status === "error") {
-          logger.error("[useDividendTransaction] recordDividend failed", { error: result.error });
-          setError(dividendErrorToI18n(result.error));
-          return;
-        }
-        setLastOperationDate(accountId, formData.date);
-        showSnackbar(t("dividend.recorded"), "success");
+      if (await record()) {
         onSubmitSuccess?.();
-      } finally {
-        setIsSubmitting(false);
       }
     },
-    [accountId, formData, t, showSnackbar, onSubmitSuccess],
+    [record, onSubmitSuccess],
   );
+
+  // DIV-010 — record and keep the modal open for the next dividend: refresh the
+  // background data, then clear the per-dividend fields (amount + note) while
+  // keeping the asset, date and rate for quick repeat entry.
+  const handleAddAnother = useCallback(async () => {
+    if (await record()) {
+      onRecorded?.();
+      setFormData((prev) => ({ ...prev, amount: "", note: "" }));
+    }
+  }, [record, onRecorded]);
 
   return {
     formData,
@@ -121,5 +144,6 @@ export function useDividendTransaction({
     showExchangeRate,
     handleChange,
     handleSubmit,
+    handleAddAnother,
   };
 }

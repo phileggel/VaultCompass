@@ -472,6 +472,7 @@ export function AccountDetailsView() {
           accountCurrency={view.accountCurrency}
           heldAssets={view.dividendPayingAssets}
           onSubmitSuccess={view.handleDividendSuccess}
+          onRecorded={view.handleDividendRecorded}
         />
       )}
 
