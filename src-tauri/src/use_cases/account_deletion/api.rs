@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::{AccountDeletionSummary, AccountDeletionUseCase};
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use tauri::State;
 
 /// Returns the number of active holdings and transactions for an account (ACC-020).
@@ -14,6 +14,6 @@ use tauri::State;
 pub async fn get_account_deletion_summary(
     uc: State<'_, AccountDeletionUseCase>,
     account_id: String,
-) -> Result<AccountDeletionSummary, AccountApplicationError> {
+) -> Result<AccountDeletionSummary, AccountError> {
     uc.get_summary(&account_id).await
 }

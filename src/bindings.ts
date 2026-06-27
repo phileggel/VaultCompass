@@ -193,7 +193,7 @@ async deleteAssetPrice(assetId: string, date: string) : Promise<Result<null, Ass
 /**
  * Retrieves all accounts.
  */
-async getAccounts() : Promise<Result<Account[], AccountApplicationError>> {
+async getAccounts() : Promise<Result<Account[], AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_accounts") };
 } catch (e) {
@@ -205,7 +205,7 @@ async getAccounts() : Promise<Result<Account[], AccountApplicationError>> {
  * Adds a new account, eagerly seeding its Cash Asset + 0-balance Cash Holding
  * (ACC-025, CSH-010 / CSH-012).
  */
-async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, AccountCrudError>> {
+async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_account", { dto }) };
 } catch (e) {
@@ -216,7 +216,7 @@ async addAccount(dto: CreateAccountDTO) : Promise<Result<Account, AccountCrudErr
 /**
  * Updates an existing account.
  */
-async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, AccountCrudError>> {
+async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_account", { dto }) };
 } catch (e) {
@@ -227,7 +227,7 @@ async updateAccount(dto: UpdateAccountDTO) : Promise<Result<Account, AccountCrud
 /**
  * Deletes an account (R5 — cascades to its holdings at the repo level).
  */
-async deleteAccount(id: string) : Promise<Result<null, AccountApplicationError>> {
+async deleteAccount(id: string) : Promise<Result<null, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_account", { id }) };
 } catch (e) {
@@ -238,7 +238,7 @@ async deleteAccount(id: string) : Promise<Result<null, AccountApplicationError>>
 /**
  * Returns the distinct asset IDs that have transactions for the given account (TXL-013).
  */
-async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], AccountApplicationError>> {
+async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_asset_ids_for_account", { accountId }) };
 } catch (e) {
@@ -249,7 +249,7 @@ async getAssetIdsForAccount(accountId: string) : Promise<Result<string[], Accoun
 /**
  * Retrieves all transactions for an account/asset pair (TRX-036).
  */
-async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], AccountApplicationError>> {
+async getTransactions(accountId: string, assetId: string) : Promise<Result<Transaction[], AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_transactions", { accountId, assetId }) };
 } catch (e) {
@@ -261,7 +261,7 @@ async getTransactions(accountId: string, assetId: string) : Promise<Result<Trans
  * Retrieves every transaction for an account across all assets, ordered
  * chronologically by `(date, created_at)` (TRX-036).
  */
-async getAllTransactionsForAccount(accountId: string) : Promise<Result<Transaction[], AccountApplicationError>> {
+async getAllTransactionsForAccount(accountId: string) : Promise<Result<Transaction[], AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_all_transactions_for_account", { accountId }) };
 } catch (e) {
@@ -378,7 +378,7 @@ async openHolding(dto: OpenHoldingDTO) : Promise<Result<Transaction, OpenHolding
 /**
  * Records a purchase of an asset into an account (TRX-027).
  */
-async buyHolding(dto: BuyHoldingDTO) : Promise<Result<Transaction, HoldingTransactionError>> {
+async buyHolding(dto: BuyHoldingDTO) : Promise<Result<Transaction, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("buy_holding", { dto }) };
 } catch (e) {
@@ -389,7 +389,7 @@ async buyHolding(dto: BuyHoldingDTO) : Promise<Result<Transaction, HoldingTransa
 /**
  * Records a sale of an asset from an account (SEL-012, SEL-021, SEL-023, SEL-024).
  */
-async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, HoldingTransactionError>> {
+async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("sell_holding", { dto }) };
 } catch (e) {
@@ -400,7 +400,7 @@ async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, HoldingTran
 /**
  * Corrects an existing transaction and recalculates the affected holding (TRX-031).
  */
-async correctTransaction(id: string, accountId: string, dto: CorrectTransactionDTO) : Promise<Result<Transaction, HoldingTransactionError>> {
+async correctTransaction(id: string, accountId: string, dto: CorrectTransactionDTO) : Promise<Result<Transaction, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("correct_transaction", { id, accountId, dto }) };
 } catch (e) {
@@ -411,7 +411,7 @@ async correctTransaction(id: string, accountId: string, dto: CorrectTransactionD
 /**
  * Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
  */
-async cancelTransaction(id: string, accountId: string) : Promise<Result<null, HoldingTransactionError>> {
+async cancelTransaction(id: string, accountId: string) : Promise<Result<null, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("cancel_transaction", { id, accountId }) };
 } catch (e) {
@@ -422,7 +422,7 @@ async cancelTransaction(id: string, accountId: string) : Promise<Result<null, Ho
 /**
  * Records a cash deposit into an account (CSH-022).
  */
-async recordDeposit(dto: DepositDTO) : Promise<Result<Transaction, HoldingTransactionError>> {
+async recordDeposit(dto: DepositDTO) : Promise<Result<Transaction, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("record_deposit", { dto }) };
 } catch (e) {
@@ -433,7 +433,7 @@ async recordDeposit(dto: DepositDTO) : Promise<Result<Transaction, HoldingTransa
 /**
  * Records a cash withdrawal from an account (CSH-032).
  */
-async recordWithdrawal(dto: WithdrawalDTO) : Promise<Result<Transaction, HoldingTransactionError>> {
+async recordWithdrawal(dto: WithdrawalDTO) : Promise<Result<Transaction, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("record_withdrawal", { dto }) };
 } catch (e) {
@@ -466,7 +466,7 @@ async recordFreeShares(dto: FreeSharesDTO) : Promise<Result<Transaction, FreeSha
 /**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
  */
-async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountApplicationError>> {
+async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_account_details", { accountId }) };
 } catch (e) {
@@ -477,7 +477,7 @@ async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsRespon
 /**
  * Returns one `AccountSummary` per non-deleted account (ACC-021).
  */
-async getAccountSummaries() : Promise<Result<AccountSummary[], AccountApplicationError>> {
+async getAccountSummaries() : Promise<Result<AccountSummary[], AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_account_summaries") };
 } catch (e) {
@@ -488,7 +488,7 @@ async getAccountSummaries() : Promise<Result<AccountSummary[], AccountApplicatio
 /**
  * Returns per-period performance figures for a single account (PRF spec).
  */
-async getAccountPerformance(accountId: string) : Promise<Result<AccountPerformanceResponse, AccountApplicationError>> {
+async getAccountPerformance(accountId: string) : Promise<Result<AccountPerformanceResponse, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_account_performance", { accountId }) };
 } catch (e) {
@@ -502,7 +502,7 @@ async getAccountPerformance(accountId: string) : Promise<Result<AccountPerforman
  * Used by the frontend to decide whether to show the standard or reinforced
  * delete confirmation dialog (ACC-018 vs ACC-019).
  */
-async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDeletionSummary, AccountApplicationError>> {
+async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDeletionSummary, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_account_deletion_summary", { accountId }) };
 } catch (e) {
@@ -663,49 +663,6 @@ currency: string;
  */
 update_frequency: UpdateFrequency }
 /**
- * Application-layer errors raised by the Account bounded context.
- * 
- * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
- * Tauri boundary into a flat `{ code: "...", ... }` shape.
- */
-export type AccountApplicationError = 
-/**
- * No account exists with the requested ID.
- */
-{ code: "AccountNotFound"; account_id: string } | 
-/**
- * Account name (case-insensitive) collides with an existing one.
- */
-{ code: "NameAlreadyExists" } | 
-/**
- * Application-layer translation of any infrastructure failure from an
- * account-side repository call. Unit variant — no `hint` payload on the
- * wire; the full diagnostic chain is preserved server-side via
- * `tracing::error!` at the translation site. FE shows the i18n key
- * `error.DatabaseError`.
- */
-{ code: "DatabaseError" }
-/**
- * Service-layer composite for the **Account CRUD** failure surface — the
- * write commands `add_account` and `update_account`.
- * 
- * Each leaf lives in its rightful layer:
- * - `AccountApplicationError` — application layer (this module) — raises
- * `NameAlreadyExists` and `DatabaseError`.
- * - `AccountDomainError` — domain layer (`account/domain/`) — raises
- * `NameEmpty` / `InvalidCurrency` from the `Account::new` /
- * `Account::with_id` constructors on their own input.
- */
-export type AccountCrudError = 
-/**
- * Service-layer rejection (`NameAlreadyExists`, `DatabaseError`).
- */
-AccountApplicationError | 
-/**
- * Aggregate-constructor rejection (`NameEmpty`, `InvalidCurrency`).
- */
-AccountDomainError
-/**
  * Pre-deletion counts for an account (ACC-020).
  */
 export type AccountDeletionSummary = { 
@@ -763,32 +720,36 @@ total_global_value: number;
  */
 total_dividends_received: number }
 /**
- * Typed errors for the account bounded context.
+ * Single flat error enum for the `account` bounded context (gold error model).
  * 
- * All domain error enums in this module derive `serde::Serialize` + `specta::Type` +
- * `#[serde(tag = "code")]` so they can be exposed verbatim at the Tauri boundary.
- * Boundary error types compose them via untagged unions to avoid redefining variants
- * (review feedback on PR #5).
+ * Every failure the BC can raise — aggregate-invariant rejections from domain
+ * methods, transaction-factory validation, holding validation, and service-layer
+ * lookup / uniqueness / infrastructure translation — lives in this one type.
+ * `#[serde(tag = "code")]` makes each variant serialize as
+ * `{ "code": "VariantName", ...payload }` on the wire.
  */
-export type AccountDomainError = 
+export type AccountError = 
 /**
- * Account name is empty or whitespace-only. Raised by the `Account`
- * aggregate constructor on its own input — value-object validation,
- * domain-class per Rule B'.
+ * Account name is empty or whitespace-only.
  */
 { code: "NameEmpty" } | 
 /**
- * The currency string is not a valid ISO 4217 code. Raised by the
- * `Account` aggregate constructor on its own input. Struct variant so the
- * internally-tagged serde representation (`#[serde(tag = "code")]`) can
- * flatten the offending currency alongside `code` at the FE boundary
- * (serde does not support internally-tagged tuple variants).
+ * The currency string is not a valid ISO 4217 code.
  */
-{ code: "InvalidCurrency"; currency: string }
+{ code: "InvalidCurrency"; currency: string } | 
 /**
- * Typed errors raised by Account aggregate operations (buy/sell/correct/cancel/cash).
+ * Holding quantity is negative.
  */
-export type AccountOperationError = 
+{ code: "NegativeQuantity" } | 
+/**
+ * Holding average_price is negative.
+ */
+{ code: "NegativeAveragePrice" } | 
+/**
+ * total_cost was negative (TRX-045). A zero total cost is valid (e.g. a
+ * mined / gifted / airdropped position).
+ */
+{ code: "InvalidTotalCost" } | 
 /**
  * Attempt to sell an asset with no open position (quantity = 0).
  */
@@ -806,9 +767,64 @@ export type AccountOperationError =
  */
 { code: "TransactionNotFound" } | 
 /**
- * Attempted cash debit (or chronological replay step) would drive the cash holding strictly negative (CSH-080).
+ * Attempted cash debit (or chronological replay step) would drive the cash
+ * holding strictly negative (CSH-080).
  */
-{ code: "InsufficientCash"; current_balance_micros: number; currency: string }
+{ code: "InsufficientCash"; current_balance_micros: number; currency: string } | 
+/**
+ * Date string could not be parsed as YYYY-MM-DD.
+ */
+{ code: "InvalidDate" } | 
+/**
+ * Transaction date is in the future.
+ */
+{ code: "DateInFuture" } | 
+/**
+ * Transaction date is before 1900-01-01.
+ */
+{ code: "DateTooOld" } | 
+/**
+ * Quantity is zero or negative.
+ */
+{ code: "QuantityNotPositive" } | 
+/**
+ * Cash deposit/withdrawal amount was zero or negative (CSH-021/CSH-031).
+ * Cash-specific framing of the same TRX-020 constraint that surfaces as
+ * `QuantityNotPositive` for non-cash transactions; raised by the cash
+ * factories before the generic check so the FE sees the cash-specific code.
+ */
+{ code: "AmountNotPositive" } | 
+/**
+ * Unit price is negative.
+ */
+{ code: "UnitPriceNegative" } | 
+/**
+ * Fees amount is negative.
+ */
+{ code: "FeesNegative" } | 
+/**
+ * Exchange rate is zero or negative.
+ */
+{ code: "ExchangeRateNotPositive" } | 
+/**
+ * Total amount is zero or negative.
+ */
+{ code: "TotalAmountNotPositive" } | 
+/**
+ * No account exists with the requested ID.
+ */
+{ code: "AccountNotFound"; account_id: string } | 
+/**
+ * Account name (case-insensitive) collides with an existing one.
+ */
+{ code: "NameAlreadyExists" } | 
+/**
+ * Application-layer translation of any infrastructure failure from an
+ * account-side repository call. No `hint` payload on the wire; the full
+ * diagnostic chain is preserved server-side via `tracing::error!` at the
+ * translation site. FE shows the i18n key `error.DatabaseError`.
+ */
+{ code: "DatabaseError" }
 /**
  * Top-level response for `get_account_performance` — recomputed on read (ADR-013).
  */
@@ -912,7 +928,7 @@ export type ArchiveAssetApplicationError =
  * `AssetApplicationError::NotFound` and
  * `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
  * composition-over-redefinition rule.
- * - `AccountApplicationError` — account BC (`account/application/`), surfaces
+ * - `AccountError` — account BC (`account/application/`), surfaces
  * `DatabaseError` from the cross-BC active-holdings check.
  * - `ArchiveAssetApplicationError` — use-case-owned (this file), raises
  * `ActiveHoldings` from the orchestrator.
@@ -927,7 +943,7 @@ AssetCrudError |
  * Account BC rejection (`DatabaseError` from the cross-BC
  * active-holdings check).
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case orchestration rejection (`ActiveHoldings`).
  */
@@ -1703,7 +1719,7 @@ export type DeleteAssetApplicationError =
  * `AssetApplicationError::NotFound` and
  * `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
  * composition-over-redefinition rule.
- * - `AccountApplicationError` — account BC (`account/application/`), surfaces
+ * - `AccountError` — account BC (`account/application/`), surfaces
  * `DatabaseError` from the cross-BC transaction-history check.
  * - `DeleteAssetApplicationError` — use-case-owned (this file), raises
  * `ExistingTransactions` from the orchestrator.
@@ -1718,7 +1734,7 @@ AssetCrudError |
  * Account BC rejection (`DatabaseError` from the cross-BC
  * transaction-history check).
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case orchestration rejection (`ExistingTransactions`).
  */
@@ -1796,27 +1812,20 @@ note: string | null }
 /**
  * Use-case composite for the **record dividend** failure surface.
  * 
- * Each leaf lives in its rightful layer:
- * - `AccountApplicationError` — application layer, raises `AccountNotFound`
- * and `DatabaseError`.
- * - `DividendApplicationError` — use-case-owned (this file), raises the
- * cross-BC asset/holding checks.
- * - `TransactionDomainError` — domain layer, raises date / amount / rate
- * validation errors.
+ * - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+ * the transaction-factory date / amount / rate validation).
+ * - `DividendApplicationError` — use-case-owned (this file), the cross-BC
+ * asset/holding checks.
  */
 export type DividendError = 
 /**
- * Account-side rejection (`AccountNotFound`, `DatabaseError`).
+ * Account-BC rejection (lookup, infra, transaction validation).
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case-layer rejection (cross-BC asset checks).
  */
-DividendApplicationError | 
-/**
- * Transaction-factory / domain validation rejection.
- */
-TransactionDomainError
+DividendApplicationError
 /**
  * All possible side-effect events that can be published across the application.
  * Each variant represents a specific business event that features may need to react to.
@@ -1882,7 +1891,7 @@ AssetError |
 /**
  * Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case-specific failures (`FetchAlreadyRunning`, `NoFetchableHoldings`, `UnknownError`).
  */
@@ -1902,7 +1911,7 @@ AssetError |
 /**
  * Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case-specific failures (`InvalidDate`, `DateInFuture`, `UnknownError`).
  */
@@ -1922,7 +1931,7 @@ AssetError |
 /**
  * Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case-specific failures (`FetchAlreadyRunning`, `NoFetchableHoldings`, `UnknownError`).
  */
@@ -2034,27 +2043,20 @@ note: string | null }
 /**
  * Use-case composite for the **record free shares** failure surface.
  * 
- * Each leaf lives in its rightful layer:
- * - `AccountApplicationError` — application layer, raises `AccountNotFound`
- * and `DatabaseError`.
- * - `FreeSharesApplicationError` — use-case-owned (this file), raises the
- * cross-BC asset/holding checks.
- * - `TransactionDomainError` — domain layer, raises date / quantity
- * validation errors.
+ * - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+ * the transaction-factory date / quantity validation).
+ * - `FreeSharesApplicationError` — use-case-owned (this file), the cross-BC
+ * asset/holding checks.
  */
 export type FreeSharesError = 
 /**
- * Account-side rejection (`AccountNotFound`, `DatabaseError`).
+ * Account-BC rejection (lookup, infra, transaction validation).
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case-layer rejection (cross-BC asset checks).
  */
-FreeSharesApplicationError | 
-/**
- * Transaction-factory / domain validation rejection.
- */
-TransactionDomainError
+FreeSharesApplicationError
 /**
  * Current state of a financial position: an asset held within an account (ADR-002).
  * All financial fields are stored as i64 micro-units (ADR-001).
@@ -2165,32 +2167,6 @@ total_return_pct: number | null;
  */
 fx_rate_date: string | null }
 /**
- * Service-layer composite for the **holding-transaction** failure surface —
- * every operation that mutates an Account's holdings ledger:
- * `record_deposit`, `record_withdrawal`, `buy_holding`, `sell_holding`,
- * `correct_transaction`, `cancel_transaction`.
- * 
- * Each leaf lives in its rightful layer:
- * - `AccountApplicationError` — application layer (this module)
- * - `AccountOperationError` — domain layer (`account/domain/`)
- * - `TransactionDomainError` — domain layer (`account/domain/`)
- */
-export type HoldingTransactionError = 
-/**
- * Application-layer rejection (`AccountNotFound`, `DatabaseError`).
- */
-AccountApplicationError | 
-/**
- * Aggregate-level domain rejection (e.g. `InsufficientCash` from
- * `Account::apply_withdrawal`, `Oversell` from `sell_holding`).
- */
-AccountOperationError | 
-/**
- * Transaction-factory validation rejection (invalid date, negative
- * quantity, `AmountNotPositive` from cash factories, etc.).
- */
-TransactionDomainError
-/**
  * Explicit lookup path selector passed by the frontend (WEB-014).
  * 
  * `Isin` routes the query through `/v3/mapping` after ISO 6166 format
@@ -2259,49 +2235,22 @@ total_cost: number }
  * Use-case composite for the **open holding** failure surface — the single
  * command `open_holding` (TRX-042) and its full chain of rejections.
  * 
- * Each leaf lives in its rightful layer:
- * - `AccountApplicationError` — application layer (`account/application/`),
- * raises `AccountNotFound { account_id }` and `DatabaseError` from
- * account-side service operations. Asset-side `DatabaseError` from the
- * cross-BC `get_asset_by_id` lookup is also tunnelled through this leaf
- * (the orchestrator translates at the call site) so the FE wire surface
- * carries a single `{ code: "DatabaseError" }` shape.
- * - `OpenHoldingApplicationError` — use-case-owned (this file), raises the
- * 3 cross-BC rejections (`AssetNotFound`, `ArchivedAsset`,
- * `OpeningBalanceOnCashAsset`).
- * - `OpeningBalanceDomainError` — domain layer (`account/domain/`), raises
- * `InvalidTotalCost` from `Account::open_holding` on its own input.
- * - `TransactionDomainError` — domain layer (`account/domain/`), raises
- * the date / quantity invariants enforced by `Transaction::new`.
+ * - `AccountError` — every account-BC rejection: `AccountNotFound`,
+ * `DatabaseError` (incl. asset-side `get_asset_by_id` infra failures
+ * tunnelled here so the wire carries a single `{ code: "DatabaseError" }`),
+ * `InvalidTotalCost`, and the transaction-factory date / quantity invariants.
+ * - `OpenHoldingApplicationError` — use-case-owned (this file), the 3 cross-BC
+ * rejections (`AssetNotFound`, `ArchivedAsset`, `OpeningBalanceOnCashAsset`).
  */
 export type OpenHoldingError = 
 /**
- * Account-side rejection (`AccountNotFound`, `DatabaseError`).
+ * Account-BC rejection (lookup, infra, opening-balance + transaction validation).
  */
-AccountApplicationError | 
+AccountError | 
 /**
  * Use-case-layer rejection (cross-BC asset checks).
  */
-OpenHoldingApplicationError | 
-/**
- * Aggregate-level domain rejection (`InvalidTotalCost`).
- */
-OpeningBalanceDomainError | 
-/**
- * Transaction-factory validation rejection (invalid date, negative
- * quantity, etc. — subset of variants reachable from `open_holding`).
- */
-TransactionDomainError
-/**
- * Aggregate-level domain rejection raised by `Account::open_holding` on its
- * own input — currently only the `total_cost >= 0` invariant (TRX-045). A zero
- * total cost is valid (e.g. a mined / gifted / airdropped position).
- */
-export type OpeningBalanceDomainError = 
-/**
- * total_cost was negative (TRX-045).
- */
-{ code: "InvalidTotalCost" }
+OpenHoldingApplicationError
 /**
  * Net-of-flows performance figures for one period (PRF-031, PRF-032).
  */
@@ -2460,54 +2409,6 @@ realized_pnl: number | null;
  * ISO 8601 timestamp of record creation — used for same-date tie-breaking (SEL-024).
  */
 created_at: string }
-/**
- * Typed errors for transaction domain validation (TRX-020).
- * 
- * Derives `Serialize + specta::Type + #[serde(tag = "code")]` so it can be exposed
- * at the Tauri boundary verbatim — boundary error types compose this enum via
- * untagged unions instead of redefining its variants (PR #5 review feedback).
- */
-export type TransactionDomainError = 
-/**
- * Date string could not be parsed as YYYY-MM-DD.
- */
-{ code: "InvalidDate" } | 
-/**
- * Transaction date is in the future.
- */
-{ code: "DateInFuture" } | 
-/**
- * Transaction date is before 1900-01-01.
- */
-{ code: "DateTooOld" } | 
-/**
- * Quantity is zero or negative.
- */
-{ code: "QuantityNotPositive" } | 
-/**
- * Cash deposit/withdrawal amount was zero or negative (CSH-021/CSH-031).
- * Cash-specific framing of the same TRX-020 constraint that surfaces as
- * `QuantityNotPositive` for non-cash transactions; raised by the cash
- * factories (`Transaction::new_deposit` / `new_withdrawal`) BEFORE the
- * generic check, so the FE sees the cash-specific error code.
- */
-{ code: "AmountNotPositive" } | 
-/**
- * Unit price is negative.
- */
-{ code: "UnitPriceNegative" } | 
-/**
- * Fees amount is negative.
- */
-{ code: "FeesNegative" } | 
-/**
- * Exchange rate is zero or negative.
- */
-{ code: "ExchangeRateNotPositive" } | 
-/**
- * Total amount is zero or negative.
- */
-{ code: "TotalAmountNotPositive" }
 /**
  * Type of financial transaction.
  */

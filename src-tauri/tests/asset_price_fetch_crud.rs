@@ -127,7 +127,7 @@ async fn fetch_all_returns_no_fetchable_holdings_on_empty_db() {
 /// Exercises the full existence-check stack.
 #[tokio::test]
 async fn fetch_for_account_returns_account_not_found_for_unknown_id() {
-    use vault_compass_lib::context::account::AccountApplicationError;
+    use vault_compass_lib::context::account::AccountError;
     use vault_compass_lib::use_cases::asset_price_fetch::FetchAccountAssetPricesError;
 
     let ctx = build_ctx().await;
@@ -137,7 +137,7 @@ async fn fetch_for_account_returns_account_not_found_for_unknown_id() {
         matches!(
             result,
             Err(FetchAccountAssetPricesError::Account(
-                AccountApplicationError::AccountNotFound { .. }
+                AccountError::AccountNotFound { .. }
             ))
         ),
         "expected Account(AccountNotFound), got: {result:?}"

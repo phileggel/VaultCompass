@@ -1,10 +1,10 @@
-import type { AccountApplicationError, AccountPerformanceResponse, Result } from "@/bindings";
+import type { AccountError, AccountPerformanceResponse, Result } from "@/bindings";
 import { commands, events } from "@/bindings";
 
 export const accountPerformanceGateway = {
   async getAccountPerformance(
     accountId: string,
-  ): Promise<Result<AccountPerformanceResponse, AccountApplicationError>> {
+  ): Promise<Result<AccountPerformanceResponse, AccountError>> {
     return commands.getAccountPerformance(accountId);
   },
 

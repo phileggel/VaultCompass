@@ -1,4 +1,4 @@
-use crate::context::account::{Account, AccountApplicationError, AccountService, UpdateFrequency};
+use crate::context::account::{Account, AccountError, AccountService, UpdateFrequency};
 use crate::context::asset::{AssetClass, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
@@ -64,9 +64,7 @@ impl AccountSummaryUseCase {
     }
 
     /// Builds a summary row for every non-deleted account.
-    pub async fn get_account_summaries(
-        &self,
-    ) -> StdResult<Vec<AccountSummary>, AccountApplicationError> {
+    pub async fn get_account_summaries(&self) -> StdResult<Vec<AccountSummary>, AccountError> {
         let accounts = self.account_service.get_all().await?;
         let mut summaries = Vec::with_capacity(accounts.len());
         let today = chrono::Local::now().date_naive();
@@ -115,7 +113,7 @@ impl AccountSummaryUseCase {
         &self,
         account: &Account,
         today: chrono::NaiveDate,
-    ) -> StdResult<Option<i64>, AccountApplicationError> {
+    ) -> StdResult<Option<i64>, AccountError> {
         let holdings = self
             .account_service
             .get_holdings_for_account(&account.id)
@@ -133,11 +131,11 @@ impl AccountSummaryUseCase {
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: get_asset_by_id failed (unrealized_pnl)");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
                 .ok_or_else(|| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, "get_account_summaries: holding references missing asset (unrealized_pnl)");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?;
 
             // MKT-040 — cash holdings carry no unrealized P&L; they never qualify.
@@ -152,7 +150,7 @@ impl AccountSummaryUseCase {
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: resolve_rate_micros failed (unrealized_pnl)");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
             else {
                 continue;
@@ -183,10 +181,7 @@ impl AccountSummaryUseCase {
     /// inlined accumulator in `account_details::orchestrator::get_account_details`;
     /// kept duplicated to avoid double-iterating the holdings loop on the detail
     /// path. Tracked as tech debt for a future shared helper.
-    async fn compute_global_value(
-        &self,
-        account: &Account,
-    ) -> StdResult<i64, AccountApplicationError> {
+    async fn compute_global_value(&self, account: &Account) -> StdResult<i64, AccountError> {
         let holdings = self
             .account_service
             .get_holdings_for_account(&account.id)
@@ -205,11 +200,11 @@ impl AccountSummaryUseCase {
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: get_asset_by_id failed");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
                 .ok_or_else(|| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, "get_account_summaries: holding references missing asset");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?;
 
             if asset.class == AssetClass::Cash {
@@ -224,7 +219,7 @@ impl AccountSummaryUseCase {
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: resolve_rate_micros failed");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
             else {
                 continue;

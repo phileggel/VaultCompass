@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::orchestrator::{AccountSummary, AccountSummaryUseCase};
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use tauri::State;
 
 /// Returns one `AccountSummary` per non-deleted account (ACC-021).
@@ -10,6 +10,6 @@ use tauri::State;
 #[specta::specta]
 pub async fn get_account_summaries(
     state: State<'_, AccountSummaryUseCase>,
-) -> Result<Vec<AccountSummary>, AccountApplicationError> {
+) -> Result<Vec<AccountSummary>, AccountError> {
     state.get_account_summaries().await
 }

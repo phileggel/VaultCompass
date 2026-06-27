@@ -1,10 +1,9 @@
 import type {
-  AccountApplicationError,
+  AccountError,
   AssetPriceError,
   BuyHoldingDTO,
   CorrectTransactionDTO,
   Event,
-  HoldingTransactionError,
   SellHoldingDTO,
   Transaction,
 } from "../../bindings";
@@ -15,11 +14,11 @@ import { commands, events, type Result } from "../../bindings";
  * Centralizes all Tauri command calls for the Transaction feature.
  */
 export const transactionGateway = {
-  async buyHolding(dto: BuyHoldingDTO): Promise<Result<Transaction, HoldingTransactionError>> {
+  async buyHolding(dto: BuyHoldingDTO): Promise<Result<Transaction, AccountError>> {
     return await commands.buyHolding(dto);
   },
 
-  async sellHolding(dto: SellHoldingDTO): Promise<Result<Transaction, HoldingTransactionError>> {
+  async sellHolding(dto: SellHoldingDTO): Promise<Result<Transaction, AccountError>> {
     return await commands.sellHolding(dto);
   },
 
@@ -27,33 +26,28 @@ export const transactionGateway = {
     id: string,
     accountId: string,
     dto: CorrectTransactionDTO,
-  ): Promise<Result<Transaction, HoldingTransactionError>> {
+  ): Promise<Result<Transaction, AccountError>> {
     return await commands.correctTransaction(id, accountId, dto);
   },
 
-  async cancelTransaction(
-    id: string,
-    accountId: string,
-  ): Promise<Result<null, HoldingTransactionError>> {
+  async cancelTransaction(id: string, accountId: string): Promise<Result<null, AccountError>> {
     return await commands.cancelTransaction(id, accountId);
   },
 
   async getTransactions(
     accountId: string,
     assetId: string,
-  ): Promise<Result<Transaction[], AccountApplicationError>> {
+  ): Promise<Result<Transaction[], AccountError>> {
     return await commands.getTransactions(accountId, assetId);
   },
 
   async getAllTransactionsForAccount(
     accountId: string,
-  ): Promise<Result<Transaction[], AccountApplicationError>> {
+  ): Promise<Result<Transaction[], AccountError>> {
     return await commands.getAllTransactionsForAccount(accountId);
   },
 
-  async getAssetIdsForAccount(
-    accountId: string,
-  ): Promise<Result<string[], AccountApplicationError>> {
+  async getAssetIdsForAccount(accountId: string): Promise<Result<string[], AccountError>> {
     return await commands.getAssetIdsForAccount(accountId);
   },
 

@@ -1,4 +1,4 @@
-use crate::context::account::{AccountApplicationError, AccountService};
+use crate::context::account::{AccountError, AccountService};
 use crate::context::asset::{AssetPriceSource, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
@@ -124,13 +124,13 @@ impl AccountDetailsUseCase {
     pub async fn get_account_details(
         &self,
         account_id: &str,
-    ) -> StdResult<AccountDetailsResponse, AccountApplicationError> {
+    ) -> StdResult<AccountDetailsResponse, AccountError> {
         // ACD-032 — fetch account; bail with not-found if missing (ACD-012)
         let account = self
             .account_service
             .get_by_id(account_id)
             .await?
-            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+            .ok_or_else(|| AccountError::AccountNotFound {
                 account_id: account_id.to_string(),
             })?;
 
@@ -190,11 +190,11 @@ impl AccountDetailsUseCase {
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_details: get_asset_by_id failed");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
                 .ok_or_else(|| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, "get_account_details: holding references missing asset");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?;
 
             let is_cash = asset.class == crate::context::asset::AssetClass::Cash;
@@ -231,7 +231,7 @@ impl AccountDetailsUseCase {
                     .await
                     .map_err(|e| {
                         tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_details: resolve_rate failed");
-                        AccountApplicationError::DatabaseError
+                        AccountError::DatabaseError
                     })?
             };
             let conversion_rate: Option<i64> =
@@ -363,11 +363,11 @@ impl AccountDetailsUseCase {
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_details: get_asset_by_id failed (closed)");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
                 .ok_or_else(|| {
                     tracing::error!(target: BACKEND, asset_id = %holding.asset_id, "get_account_details: closed holding references missing asset");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?;
             // DIV-073 — carry forward dividends received while the position was open.
             let dividends_received = *dividends_by_asset.get(&holding.asset_id).unwrap_or(&0);
@@ -443,7 +443,7 @@ mod tests {
         pool
     }
 
-    // ACD-012 — unknown account returns AccountApplicationError::AccountNotFound with id payload
+    // ACD-012 — unknown account returns AccountError::AccountNotFound with id payload
     #[tokio::test]
     async fn unknown_account_returns_error() {
         let pool = make_pool().await;
@@ -457,7 +457,7 @@ mod tests {
         assert!(
             matches!(
                 &err,
-                AccountApplicationError::AccountNotFound { account_id }
+                AccountError::AccountNotFound { account_id }
                     if account_id == "nonexistent-id"
             ),
             "got: {err:?}"
@@ -2037,10 +2037,7 @@ mod tests {
         );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // Active loop: asset-repo Ok(None) (FK integrity violation) → DatabaseError
@@ -2061,10 +2058,7 @@ mod tests {
         );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // Closed loop: asset-repo Err → DatabaseError
@@ -2086,10 +2080,7 @@ mod tests {
         );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // Closed loop: asset-repo Ok(None) (FK integrity violation) → DatabaseError
@@ -2110,10 +2101,7 @@ mod tests {
         );
 
         let err = uc.get_account_details(&account_id).await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // -------------------------------------------------------------------------

@@ -3,9 +3,7 @@ use super::error::{
     OpenHoldingApplicationError, OpenHoldingError,
 };
 use super::shared::ensure_cash_asset;
-use crate::context::account::{
-    AccountApplicationError, AccountService, HoldingTransactionError, Transaction,
-};
+use crate::context::account::{AccountError, AccountService, Transaction};
 use crate::context::asset::{AssetClass, AssetService};
 use crate::core::logger::BACKEND;
 use std::sync::Arc;
@@ -37,7 +35,7 @@ impl HoldingTransactionUseCase {
     /// (TRX-056), is archived (TRX-050), or is a system Cash Asset (CSH-061).
     /// Delegates the account-side write to `AccountService::open_holding`.
     /// Returns the typed `OpenHoldingError` composite. Asset-side repo failures
-    /// from `get_asset_by_id` are translated to `AccountApplicationError::DatabaseError`
+    /// from `get_asset_by_id` are translated to `AccountError::DatabaseError`
     /// (matching the `ensure_cash_for` precedent) so the FE wire surface carries a
     /// single `{ code: "DatabaseError" }` shape rather than two indistinguishable arms.
     pub async fn open_holding(
@@ -54,7 +52,7 @@ impl HoldingTransactionUseCase {
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "open_holding: get_asset_by_id failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
         match asset {
             None => return Err(OpenHoldingApplicationError::AssetNotFound.into()),
@@ -87,7 +85,7 @@ impl HoldingTransactionUseCase {
         exchange_rate: i64,
         fees: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "buy_holding").await?;
         self.account_service
             .buy_holding(
@@ -117,7 +115,7 @@ impl HoldingTransactionUseCase {
         exchange_rate: i64,
         fees: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "sell_holding").await?;
         self.account_service
             .sell_holding(
@@ -147,7 +145,7 @@ impl HoldingTransactionUseCase {
         exchange_rate: i64,
         fees: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "correct_transaction")
             .await?;
         self.account_service
@@ -170,7 +168,7 @@ impl HoldingTransactionUseCase {
         &self,
         account_id: &str,
         transaction_id: &str,
-    ) -> Result<(), HoldingTransactionError> {
+    ) -> Result<(), AccountError> {
         self.ensure_cash_for(account_id, "cancel_transaction")
             .await?;
         self.account_service
@@ -181,16 +179,15 @@ impl HoldingTransactionUseCase {
     /// Records a Deposit into an account (CSH-022).
     /// Seeds the system Cash Asset (CSH-010) before delegating; the aggregate
     /// lazy-creates the Cash Holding (CSH-012) and persists the Transaction.
-    /// Returns a typed `HoldingTransactionError`: in-account and cross-BC
-    /// asset-seed failures both surface through `Application(AccountApplicationError)`
-    /// (see `ensure_cash_for`).
+    /// Returns a typed `AccountError`: in-account and cross-BC asset-seed
+    /// failures both surface as `AccountError` (see `ensure_cash_for`).
     pub async fn record_deposit(
         &self,
         account_id: &str,
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "record_deposit").await?;
         self.account_service
             .record_deposit(account_id, date, amount, note)
@@ -205,7 +202,7 @@ impl HoldingTransactionUseCase {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "record_withdrawal")
             .await?;
         self.account_service
@@ -237,7 +234,7 @@ impl HoldingTransactionUseCase {
             .account_service
             .get_by_id(account_id)
             .await?
-            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+            .ok_or_else(|| AccountError::AccountNotFound {
                 account_id: account_id.to_string(),
             })?;
 
@@ -248,7 +245,7 @@ impl HoldingTransactionUseCase {
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_dividend: get_asset_by_id failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
         match asset {
             None => return Err(DividendApplicationError::AssetNotFound.into()),
@@ -274,23 +271,22 @@ impl HoldingTransactionUseCase {
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "record_dividend: ensure_cash_asset failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
 
-        // Delegate the credit + persistence to the account BC; map its composite
-        // error into the dividend surface (Operation is unreachable — credit-only).
-        let asset_id_for_log = asset_id.clone();
+        // Delegate the credit + persistence to the account BC; its `AccountError`
+        // surfaces on the dividend wire as `DividendError::Account`.
         self.account_service
-            .record_dividend(account_id, asset_id, date, amount_micros, exchange_rate, note)
+            .record_dividend(
+                account_id,
+                asset_id,
+                date,
+                amount_micros,
+                exchange_rate,
+                note,
+            )
             .await
-            .map_err(|e| match e {
-                HoldingTransactionError::Application(a) => DividendError::Application(a),
-                HoldingTransactionError::Validation(v) => DividendError::Validation(v),
-                HoldingTransactionError::Operation(op) => {
-                    tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id_for_log, amount_micros, exchange_rate, err = ?op, "record_dividend: unexpected operation error on a credit-only path");
-                    DividendError::Application(AccountApplicationError::DatabaseError)
-                }
-            })
+            .map_err(DividendError::Account)
     }
 
     /// Records a FreeShares distribution attributed to a held distributing asset
@@ -311,7 +307,7 @@ impl HoldingTransactionUseCase {
         self.account_service
             .get_by_id(account_id)
             .await?
-            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+            .ok_or_else(|| AccountError::AccountNotFound {
                 account_id: account_id.to_string(),
             })?;
 
@@ -322,7 +318,7 @@ impl HoldingTransactionUseCase {
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_free_shares: get_asset_by_id failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
         match asset {
             None => return Err(FreeSharesApplicationError::AssetNotFound.into()),
@@ -342,51 +338,38 @@ impl HoldingTransactionUseCase {
             _ => return Err(FreeSharesApplicationError::AssetNotHeld.into()),
         }
 
-        // Delegate to the account BC; map its composite into the free-shares
-        // surface (Operation is unreachable — a distribution only adds quantity:
-        // no cash leg, no oversell).
-        let asset_id_for_log = asset_id.clone();
+        // Delegate to the account BC; its `AccountError` surfaces on the
+        // free-shares wire as `FreeSharesError::Account`.
         self.account_service
             .record_free_shares(account_id, asset_id, date, quantity, note)
             .await
-            .map_err(|e| match e {
-                HoldingTransactionError::Application(a) => FreeSharesError::Application(a),
-                HoldingTransactionError::Validation(v) => FreeSharesError::Validation(v),
-                HoldingTransactionError::Operation(op) => {
-                    tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id_for_log, quantity, err = ?op, "record_free_shares: unexpected operation error on a quantity-only path");
-                    FreeSharesError::Application(AccountApplicationError::DatabaseError)
-                }
-            })
+            .map_err(FreeSharesError::Account)
     }
 
     /// Loads the account, then ensures the system Cash Asset for its currency
     /// exists (CSH-010, CSH-011, CSH-017). Idempotent: safe to call on every
-    /// cash-affecting command. Returns a typed `HoldingTransactionError` so
+    /// cash-affecting command. Returns a typed `AccountError` so
     /// callers can propagate via `?` and stay typed end-to-end.
     ///
-    /// Both error sources flow through `HoldingTransactionError::Application(...)`:
+    /// Both error sources surface as `AccountError`:
     /// - **In-account failures**: `AccountNotFound { account_id }` when the row
     ///   is missing, `DatabaseError` when the account-repo call fails.
     /// - **Cross-BC asset-side failure** (`ensure_cash_asset` failure):
     ///   surfaced as `DatabaseError` after `tracing::error!` preserves the
     ///   asset-side diagnostic chain server-side.
-    async fn ensure_cash_for(
-        &self,
-        account_id: &str,
-        op: &str,
-    ) -> Result<(), HoldingTransactionError> {
+    async fn ensure_cash_for(&self, account_id: &str, op: &str) -> Result<(), AccountError> {
         let account = self
             .account_service
             .get_by_id(account_id)
             .await?
-            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+            .ok_or_else(|| AccountError::AccountNotFound {
                 account_id: account_id.to_string(),
             })?;
         ensure_cash_asset(&self.asset_service, &account.currency)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, op = %op, err = ?e, "ensure_cash_for: ensure_cash_asset failed");
-                AccountApplicationError::DatabaseError.into()
+                AccountError::DatabaseError
             })
     }
 }
@@ -672,12 +655,10 @@ mod tests {
             .unwrap_err();
 
         match err {
-            HoldingTransactionError::Application(AccountApplicationError::AccountNotFound {
-                account_id,
-            }) => {
+            AccountError::AccountNotFound { account_id } => {
                 assert_eq!(account_id, "nonexistent-account-id");
             }
-            other => panic!("expected Application(AccountNotFound), got: {other:?}"),
+            other => panic!("expected AccountNotFound, got: {other:?}"),
         }
     }
 
@@ -804,12 +785,12 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::AccountApplicationError;
+        use crate::context::account::AccountError;
         use crate::use_cases::holding_transaction::DividendError;
         assert!(
             matches!(
                 err,
-                DividendError::Application(AccountApplicationError::AccountNotFound { .. })
+                DividendError::Account(AccountError::AccountNotFound { .. })
             ),
             "expected Application(AccountNotFound), got: {err:?}"
         );
@@ -971,13 +952,10 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::TransactionDomainError;
+        use crate::context::account::AccountError;
         use crate::use_cases::holding_transaction::DividendError;
         assert!(
-            matches!(
-                err,
-                DividendError::Validation(TransactionDomainError::AmountNotPositive)
-            ),
+            matches!(err, DividendError::Account(AccountError::AmountNotPositive)),
             "expected Validation(AmountNotPositive), got: {err:?}"
         );
     }
@@ -1025,12 +1003,12 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::TransactionDomainError;
+        use crate::context::account::AccountError;
         use crate::use_cases::holding_transaction::DividendError;
         assert!(
             matches!(
                 err,
-                DividendError::Validation(TransactionDomainError::ExchangeRateNotPositive)
+                DividendError::Account(AccountError::ExchangeRateNotPositive)
             ),
             "expected Validation(ExchangeRateNotPositive), got: {err:?}"
         );
@@ -1274,12 +1252,12 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::AccountApplicationError;
+        use crate::context::account::AccountError;
         use crate::use_cases::holding_transaction::FreeSharesError;
         assert!(
             matches!(
                 err,
-                FreeSharesError::Application(AccountApplicationError::AccountNotFound { .. })
+                FreeSharesError::Account(AccountError::AccountNotFound { .. })
             ),
             "expected Application(AccountNotFound), got: {err:?}"
         );
@@ -1441,12 +1419,12 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::TransactionDomainError;
+        use crate::context::account::AccountError;
         use crate::use_cases::holding_transaction::FreeSharesError;
         assert!(
             matches!(
                 err,
-                FreeSharesError::Validation(TransactionDomainError::QuantityNotPositive)
+                FreeSharesError::Account(AccountError::QuantityNotPositive)
             ),
             "expected Validation(QuantityNotPositive), got: {err:?}"
         );
@@ -1495,13 +1473,10 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::TransactionDomainError;
+        use crate::context::account::AccountError;
         use crate::use_cases::holding_transaction::FreeSharesError;
         assert!(
-            matches!(
-                err,
-                FreeSharesError::Validation(TransactionDomainError::DateInFuture)
-            ),
+            matches!(err, FreeSharesError::Account(AccountError::DateInFuture)),
             "expected Validation(DateInFuture), got: {err:?}"
         );
     }

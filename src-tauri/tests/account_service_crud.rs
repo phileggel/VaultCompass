@@ -11,8 +11,8 @@ use common::micro;
 use sqlx::sqlite::SqlitePoolOptions;
 use vault_compass_lib::context::account::AccountService;
 use vault_compass_lib::context::account::{
-    AccountOperationError, HoldingTransactionError, SqliteAccountRepository,
-    SqliteHoldingRepository, SqliteTransactionRepository, UpdateFrequency,
+    AccountError, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+    UpdateFrequency,
 };
 
 async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
@@ -600,10 +600,7 @@ async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
         .await
         .expect_err("moving a sell before its buy must be rejected");
     assert!(
-        matches!(
-            err,
-            HoldingTransactionError::Operation(AccountOperationError::CascadingOversell)
-        ),
+        matches!(err, AccountError::CascadingOversell),
         "expected CascadingOversell, got: {err:?}"
     );
 

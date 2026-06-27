@@ -1,6 +1,4 @@
-use crate::context::account::{
-    Account, AccountApplicationError, AccountCrudError, AccountService, UpdateFrequency,
-};
+use crate::context::account::{Account, AccountError, AccountService, UpdateFrequency};
 use crate::context::asset::AssetService;
 use crate::core::logger::BACKEND;
 use std::result::Result as StdResult;
@@ -36,14 +34,14 @@ impl AccountCreationUseCase {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
-    ) -> StdResult<Account, AccountCrudError> {
+    ) -> StdResult<Account, AccountError> {
         // CSH-010 — the Cash Asset must exist before the Cash Holding references it (FK).
         self.asset_service
             .seed_cash_asset(&currency)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, currency = %currency, err = ?e, "create_account: seed_cash_asset failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
         // Account row — unchanged create path (enforces ACC-001 / ACC-002 / ACC-003).
         let account = self

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  AccountApplicationError,
+  AccountError,
   ArchiveAssetApplicationError,
   Asset,
   AssetApplicationError,
@@ -228,7 +228,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("archiveAsset surfaces DatabaseError from cross-BC Account leaf", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.archiveAsset("asset-1");
     expect(result).toEqual({ status: "error", error: err });

@@ -98,7 +98,7 @@ Read this when:
 
 **Pattern**: When one BC consumes another's model, an anti-corruption layer (ACL) translates the foreign types so the consumer doesn't depend on them.
 
-**Practice**: `delete_asset` use case directly imports `AccountService::transaction_count_for_asset(...)` and `AccountApplicationError`. No translation layer.
+**Practice**: `delete_asset` use case directly imports `AccountService::transaction_count_for_asset(...)` and `AccountError`. No translation layer.
 
 **Trade**: Both BCs are first-party, evolving together in the same monorepo. An ACL would protect against the foreign BC changing its types — but we control both. If `AccountService` changes, the use case changes. Pure ceremony otherwise.
 
@@ -134,11 +134,11 @@ Read this when:
 
 **Pattern**: Aggregate methods raise typed domain errors that the application service consumes directly.
 
-**Practice**: `AccountOperationError` and `OpeningBalanceDomainError` are raised by aggregate methods that return `anyhow::Result`. Service-layer bridges (`to_holding_tx_error`, `to_open_holding_error` in `context/account/service.rs`) downcast the typed errors out and translate the rest to `DatabaseError`.
+**Practice**: Several aggregate methods (buy/sell/correct/cancel/open_holding) return `anyhow::Result` and box `AccountError` values. Service-layer bridges (`to_holding_tx_error`, `to_open_holding_error` in `context/account/service.rs`) downcast the `AccountError` out and translate the rest to `DatabaseError`.
 
-**Trade**: Splitting these aggregate methods into typed factory + apply pairs (so they return `Result<_, AccountError>` directly) is a real refactor across the account BC and pairs cleanly with the broader collapse of `*ApplicationError` + `*DomainError` + composite into a single flat `AccountError` per the new error-model rule. Doing the bridge cleanup separately would be wasted motion. The bridges are intentional until that retrofit happens.
+**Trade**: Splitting these aggregate methods into typed factory + apply pairs (so they return `Result<_, AccountError>` directly) is a real refactor across the account BC. The error-enum collapse into a single flat `AccountError` has now landed (v0.28.0 T1); this aggregate-method retrofit is the remaining step. The bridges are intentional until it happens.
 
-**When to revisit**: When the account BC retrofit lands (collapse split application/domain enums into one flat `AccountError`), fold the aggregate methods into typed `Result` at the same time and delete the bridges.
+**When to revisit**: Now that the flat `AccountError` has landed, fold the aggregate methods into typed `Result<_, AccountError>` and delete the bridges (`to_holding_tx_error`, `to_open_holding_error`). This is also the prerequisite for the `replay_cash_holding` factory-call fix tracked in `docs/techdebt.md` (2026-06-20), whose `Holding::new`/`with_id` calls need typed `AccountError` rather than `anyhow::Result`.
 
 ---
 

@@ -1,5 +1,5 @@
 use crate::context::account::{
-    AccountApplicationError, AccountService, Transaction, TransactionType, UpdateFrequency,
+    AccountError, AccountService, Transaction, TransactionType, UpdateFrequency,
 };
 use crate::context::asset::{AssetClass, AssetPrice, AssetService};
 use crate::context::currency::CurrencyService;
@@ -116,12 +116,12 @@ impl AccountPerformanceUseCase {
     pub async fn get_account_performance(
         &self,
         account_id: &str,
-    ) -> StdResult<AccountPerformanceResponse, AccountApplicationError> {
+    ) -> StdResult<AccountPerformanceResponse, AccountError> {
         let account = self
             .account_service
             .get_by_id(account_id)
             .await?
-            .ok_or_else(|| AccountApplicationError::AccountNotFound {
+            .ok_or_else(|| AccountError::AccountNotFound {
                 account_id: account_id.to_string(),
             })?;
 
@@ -412,7 +412,7 @@ impl AccountPerformanceUseCase {
 pub(crate) async fn load_priced_assets(
     asset_service: &AssetService,
     transactions: &[Transaction],
-) -> StdResult<HashMap<String, PricedAsset>, AccountApplicationError> {
+) -> StdResult<HashMap<String, PricedAsset>, AccountError> {
     let mut priced_assets: HashMap<String, PricedAsset> = HashMap::new();
     for transaction in transactions {
         if priced_assets.contains_key(&transaction.asset_id) {
@@ -423,11 +423,11 @@ pub(crate) async fn load_priced_assets(
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, err = ?e, "load_priced_assets: get_asset_by_id failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?
             .ok_or_else(|| {
                 tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, "load_priced_assets: transaction references missing asset");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
 
         if asset.class == AssetClass::Cash {
@@ -448,7 +448,7 @@ pub(crate) async fn load_priced_assets(
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, asset_id = %transaction.asset_id, err = ?e, "load_priced_assets: get_asset_prices failed");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })?;
         prices.sort_by(|a, b| a.date.cmp(&b.date));
         priced_assets.insert(
@@ -474,7 +474,7 @@ pub(crate) async fn load_rate_map(
     month_view_available: bool,
     earliest_date: NaiveDate,
     today: NaiveDate,
-) -> StdResult<RateMap, AccountApplicationError> {
+) -> StdResult<RateMap, AccountError> {
     let mut foreign_currencies: Vec<String> = priced_assets
         .values()
         .filter(|p| p.class != AssetClass::Cash && p.currency != account_currency)
@@ -496,7 +496,7 @@ pub(crate) async fn load_rate_map(
                 .await
                 .map_err(|e| {
                     tracing::error!(target: BACKEND, currency = %currency, err = ?e, "load_rate_map: resolve_rate_micros failed");
-                    AccountApplicationError::DatabaseError
+                    AccountError::DatabaseError
                 })?
             {
                 rate_map.insert((currency.clone(), period_end), rate);
@@ -521,7 +521,7 @@ pub(crate) async fn compute_current_ytd_pct(
     currency_service: &CurrencyService,
     transactions: &[Transaction],
     today: NaiveDate,
-) -> StdResult<Option<i64>, AccountApplicationError> {
+) -> StdResult<Option<i64>, AccountError> {
     // PRF-043 — no transactions means no data span and no YTD period.
     let Some(earliest_date) = transactions
         .iter()
@@ -1001,7 +1001,7 @@ mod tests {
         assert!(
             matches!(
                 &err,
-                AccountApplicationError::AccountNotFound { account_id }
+                AccountError::AccountNotFound { account_id }
                     if account_id == "nonexistent-id"
             ),
             "got: {err:?}"

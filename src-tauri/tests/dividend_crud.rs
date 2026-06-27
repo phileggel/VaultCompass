@@ -337,12 +337,12 @@ async fn record_dividend_account_not_found_propagates() {
         .await
         .unwrap_err();
 
-    use vault_compass_lib::context::account::AccountApplicationError;
+    use vault_compass_lib::context::account::AccountError;
     use vault_compass_lib::use_cases::holding_transaction::DividendError;
     assert!(
         matches!(
             err,
-            DividendError::Application(AccountApplicationError::AccountNotFound { .. })
+            DividendError::Account(AccountError::AccountNotFound { .. })
         ),
         "expected Application(AccountNotFound), got: {err:?}"
     );

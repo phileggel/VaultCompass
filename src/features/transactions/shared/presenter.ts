@@ -1,4 +1,4 @@
-import type { HoldingTransactionError, OpenHoldingError, Transaction } from "@/bindings";
+import type { AccountError, OpenHoldingError, Transaction } from "@/bindings";
 import { microToFormatted } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 
@@ -9,11 +9,10 @@ import type { I18nMessage } from "@/ui/format/i18n";
  * here (via the project's `microToFormatted` data helper) so components do not
  * need to know about the underlying numeric scale.
  *
- * Exhaustive switch on `code`: TypeScript catches new variants at compile time.
+ * Handles the codes reachable for these commands; `AccountError` is a BC-wide
+ * union, so any unreachable variant falls through to `error.Unknown`.
  */
-export function transactionMutationErrorToI18n(
-  err: HoldingTransactionError | OpenHoldingError,
-): I18nMessage {
+export function transactionMutationErrorToI18n(err: AccountError | OpenHoldingError): I18nMessage {
   switch (err.code) {
     case "InsufficientCash":
       return {
@@ -51,10 +50,8 @@ export function transactionMutationErrorToI18n(
     case "OpeningBalanceOnCashAsset":
     case "InvalidTotalCost":
       return { key: `error.${err.code}` };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
+    default:
+      return { key: "error.Unknown" };
   }
 }
 

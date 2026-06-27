@@ -1,6 +1,5 @@
 import type {
-  AccountApplicationError,
-  AccountCrudError,
+  AccountError,
   FetchAccountAssetPricesError,
   FetchAccountAssetPricesForDateError,
   FetchAllAssetPricesError,
@@ -33,7 +32,7 @@ export function formatAccountRowYtdPerformancePct(pct: number | null): string {
  * snackbar message + severity. Pure function, no React, no useTranslation.
  *
  * Covers `FetchAccountAssetPricesError | FetchAllAssetPricesError` — both
- * compose AssetError + AccountApplicationError + FetchPriceTask on the wire.
+ * compose AssetError + AccountError + FetchPriceTask on the wire.
  *
  * reviewer-arch FP: severity is intentionally narrower than SnackbarVariant
  * (no "success") because an error presenter never returns success — the narrow
@@ -53,10 +52,8 @@ export function fetchPriceErrorToI18n(
     case "DatabaseError":
     case "UnknownError":
       return { key: "error.DatabaseError", severity: "error" };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
+    default:
+      return { key: "error.Unknown", severity: "error" };
   }
 }
 
@@ -65,7 +62,7 @@ export function fetchPriceErrorToI18n(
  * Pure function, no React, no useTranslation.
  *
  * Covers `FetchAccountAssetPricesForDateError` — composes AssetError +
- * AccountApplicationError + FetchPriceForDateTask on the wire.
+ * AccountError + FetchPriceForDateTask on the wire.
  */
 export function fetchPriceForDateErrorToI18n(
   err: FetchAccountAssetPricesForDateError,
@@ -81,10 +78,8 @@ export function fetchPriceForDateErrorToI18n(
     case "DatabaseError":
     case "UnknownError":
       return { key: "error.DatabaseError", severity: "error" };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
+    default:
+      return { key: "error.Unknown", severity: "error" };
   }
 }
 
@@ -92,12 +87,11 @@ export function fetchPriceForDateErrorToI18n(
  * F27 — Maps any account-BC mutation error (add / update / delete / deletion-summary)
  * to an i18n key + interpolation vars. Pure function, no React, no useTranslation.
  *
- * Covers AccountCrudError (add/update) and AccountApplicationError (delete and the
- * pre-deletion summary lookup) — both unions share the same variant pool.
+ * Covers the account-BC mutation surface (add / update / delete and the
+ * pre-deletion summary lookup), all typed `AccountError`. Lists the reachable
+ * codes and falls back to `error.Unknown` for the rest of the BC-wide union.
  */
-export function accountMutationErrorToI18n(
-  err: AccountCrudError | AccountApplicationError,
-): I18nMessage {
+export function accountMutationErrorToI18n(err: AccountError): I18nMessage {
   switch (err.code) {
     case "InvalidCurrency":
       return { key: "error.InvalidCurrency", vars: { currency: err.currency } };
@@ -106,10 +100,8 @@ export function accountMutationErrorToI18n(
     case "NameAlreadyExists":
     case "DatabaseError":
       return { key: `error.${err.code}` };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
+    default:
+      return { key: "error.Unknown" };
   }
 }
 

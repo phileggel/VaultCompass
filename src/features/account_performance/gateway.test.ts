@@ -1,10 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  AccountApplicationError,
-  AccountPerformanceResponse,
-  PerformancePeriod,
-} from "@/bindings";
+import type { AccountError, AccountPerformanceResponse, PerformancePeriod } from "@/bindings";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -83,7 +79,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
   // F27 — gateway does NOT throw; it returns the error result unchanged
   // PRF-016 — AccountNotFound when account_id does not correspond to an existing account
   it("passes through AccountNotFound error result (PRF-016)", async () => {
-    const err: AccountApplicationError = {
+    const err: AccountError = {
       code: "AccountNotFound",
       account_id: "no-such-account",
     };
@@ -102,7 +98,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
 
   // PRF-027 — DatabaseError when the read fails during computation
   it("passes through DatabaseError result (PRF-027)", async () => {
-    const err: AccountApplicationError = { code: "DatabaseError" };
+    const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
 
     const result = await accountPerformanceGateway.getAccountPerformance("account-1");

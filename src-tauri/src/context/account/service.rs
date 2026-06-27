@@ -1,8 +1,8 @@
-use super::application::{AccountApplicationError, AccountCrudError, HoldingTransactionError};
 use super::domain::{
-    Account, AccountOperationError, AccountRepository, Holding, HoldingRepository, Transaction,
-    TransactionDomainError, TransactionRepository, UpdateFrequency,
+    Account, AccountRepository, Holding, HoldingRepository, Transaction, TransactionRepository,
+    UpdateFrequency,
 };
+use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use crate::use_cases::holding_transaction::OpenHoldingError;
 use std::result::Result as StdResult;
@@ -43,18 +43,18 @@ impl AccountService {
     // -------------------------------------------------------------------------
 
     /// Retrieves all non-deleted accounts.
-    pub async fn get_all(&self) -> StdResult<Vec<Account>, AccountApplicationError> {
+    pub async fn get_all(&self) -> StdResult<Vec<Account>, AccountError> {
         self.account_repo.get_all().await.map_err(|e| {
             tracing::error!(target: BACKEND, err = ?e, "get_all: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })
     }
 
     /// Retrieves an account by ID.
-    pub async fn get_by_id(&self, id: &str) -> StdResult<Option<Account>, AccountApplicationError> {
+    pub async fn get_by_id(&self, id: &str) -> StdResult<Option<Account>, AccountError> {
         self.account_repo.get_by_id(id).await.map_err(|e| {
             tracing::error!(target: BACKEND, account_id = %id, err = ?e, "get_by_id: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })
     }
 
@@ -64,18 +64,18 @@ impl AccountService {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
-    ) -> Result<Account, AccountCrudError> {
+    ) -> Result<Account, AccountError> {
         let account = Account::new(name, currency, update_frequency)?;
         if find_account_by_name(&*self.account_repo, &account.name)
             .await?
             .is_some()
         {
-            return Err(AccountApplicationError::NameAlreadyExists.into());
+            return Err(AccountError::NameAlreadyExists);
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "creating account");
         let created = self.account_repo.create(account).await.map_err(|e| {
             tracing::error!(target: BACKEND, err = ?e, "create: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })?;
         self.emit_account_updated();
         Ok(created)
@@ -85,9 +85,9 @@ impl AccountService {
     /// account-creation use case after the Cash Asset has been ensured (FK).
     /// Idempotent — `Account::seed_cash_holding` is a no-op if one already exists.
     ///
-    /// Uses its own CRUD-typed load/save (returning `AccountCrudError`) rather than
-    /// the `HoldingTransactionError`-typed `load_account`/`save_account` helpers.
-    pub async fn seed_cash_holding(&self, account_id: &str) -> Result<(), AccountCrudError> {
+    /// Uses inline load/save logic rather than the module-level
+    /// `load_account`/`save_account` helpers.
+    pub async fn seed_cash_holding(&self, account_id: &str) -> Result<(), AccountError> {
         let mut account = match self
             .account_repo
             .get_with_holdings_and_transactions(account_id)
@@ -95,20 +95,19 @@ impl AccountService {
         {
             Ok(Some(acc)) => acc,
             Ok(None) => {
-                return Err(AccountApplicationError::AccountNotFound {
+                return Err(AccountError::AccountNotFound {
                     account_id: account_id.to_string(),
-                }
-                .into());
+                });
             }
             Err(e) => {
                 tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "seed_cash_holding: load failure");
-                return Err(AccountApplicationError::DatabaseError.into());
+                return Err(AccountError::DatabaseError);
             }
         };
         account.seed_cash_holding();
         self.account_repo.save(&mut account).await.map_err(|e| {
             tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "seed_cash_holding: save failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })?;
         self.emit_account_updated();
         Ok(())
@@ -121,28 +120,28 @@ impl AccountService {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
-    ) -> Result<Account, AccountCrudError> {
+    ) -> Result<Account, AccountError> {
         let account = Account::with_id(id, name, currency, update_frequency)?;
         if let Some(existing) = find_account_by_name(&*self.account_repo, &account.name).await? {
             if existing.id != account.id {
-                return Err(AccountApplicationError::NameAlreadyExists.into());
+                return Err(AccountError::NameAlreadyExists);
             }
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "updating account");
         let updated = self.account_repo.update(account).await.map_err(|e| {
             tracing::error!(target: BACKEND, err = ?e, "update: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })?;
         self.emit_account_updated();
         Ok(updated)
     }
 
     /// Permanently deletes an account and cascades to its holdings (R5).
-    pub async fn delete(&self, id: &str) -> StdResult<(), AccountApplicationError> {
+    pub async fn delete(&self, id: &str) -> StdResult<(), AccountError> {
         info!(target: BACKEND, account_id = %id, "deleting account");
         self.account_repo.delete(id).await.map_err(|e| {
             tracing::error!(target: BACKEND, account_id = %id, err = ?e, "delete: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })?;
         self.emit_account_updated();
         Ok(())
@@ -156,10 +155,10 @@ impl AccountService {
     pub async fn get_holdings_for_account(
         &self,
         account_id: &str,
-    ) -> StdResult<Vec<Holding>, AccountApplicationError> {
+    ) -> StdResult<Vec<Holding>, AccountError> {
         self.holding_repo.get_by_account(account_id).await.map_err(|e| {
             tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_holdings_for_account: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })
     }
 
@@ -168,13 +167,13 @@ impl AccountService {
         &self,
         account_id: &str,
         asset_id: &str,
-    ) -> StdResult<Option<Holding>, AccountApplicationError> {
+    ) -> StdResult<Option<Holding>, AccountError> {
         self.holding_repo
             .get_by_account_asset(account_id, asset_id)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "get_holding_by_account_asset: repository failure");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })
     }
 
@@ -186,10 +185,10 @@ impl AccountService {
     pub async fn get_transaction_by_id(
         &self,
         id: &str,
-    ) -> StdResult<Option<Transaction>, AccountApplicationError> {
+    ) -> StdResult<Option<Transaction>, AccountError> {
         self.transaction_repo.get_by_id(id).await.map_err(|e| {
             tracing::error!(target: BACKEND, transaction_id = %id, err = ?e, "get_transaction_by_id: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })
     }
 
@@ -198,13 +197,13 @@ impl AccountService {
         &self,
         account_id: &str,
         asset_id: &str,
-    ) -> StdResult<Vec<Transaction>, AccountApplicationError> {
+    ) -> StdResult<Vec<Transaction>, AccountError> {
         self.transaction_repo
             .get_by_account_asset(account_id, asset_id)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "get_transactions: repository failure");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })
     }
 
@@ -214,13 +213,13 @@ impl AccountService {
     pub async fn get_all_transactions_for_account(
         &self,
         account_id: &str,
-    ) -> StdResult<Vec<Transaction>, AccountApplicationError> {
+    ) -> StdResult<Vec<Transaction>, AccountError> {
         self.transaction_repo
             .get_all_for_account(account_id)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_all_transactions_for_account: repository failure");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })
     }
 
@@ -228,13 +227,13 @@ impl AccountService {
     pub async fn get_asset_ids_for_account(
         &self,
         account_id: &str,
-    ) -> StdResult<Vec<String>, AccountApplicationError> {
+    ) -> StdResult<Vec<String>, AccountError> {
         self.transaction_repo
             .get_asset_ids_for_account(account_id)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_asset_ids_for_account: repository failure");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })
     }
 
@@ -245,7 +244,7 @@ impl AccountService {
     /// Records a purchase of an asset into the account (TRX-020, TRX-026).
     ///
     /// Loads the Account aggregate, delegates to `Account::buy_holding`, saves
-    /// atomically. Returns a typed `HoldingTransactionError` — same composite as
+    /// atomically. Returns a typed `AccountError` — same composite as
     /// the cash methods, since cash deposit/withdrawal and asset buy/sell are
     /// all kinds of holding transaction.
     #[allow(clippy::too_many_arguments)]
@@ -259,7 +258,7 @@ impl AccountService {
         exchange_rate: i64,
         fees: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "buy_holding");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = account
@@ -293,7 +292,7 @@ impl AccountService {
         exchange_rate: i64,
         fees: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "sell_holding");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = account
@@ -327,7 +326,7 @@ impl AccountService {
         exchange_rate: i64,
         fees: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "correct_transaction");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = account
@@ -346,7 +345,7 @@ impl AccountService {
         &self,
         account_id: &str,
         tx_id: &str,
-    ) -> Result<(), HoldingTransactionError> {
+    ) -> Result<(), AccountError> {
         info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "cancel_transaction");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         account
@@ -390,7 +389,7 @@ impl AccountService {
     /// Application-layer composition: loads the Account, builds the Transaction
     /// via `Transaction::new_deposit` (TRX-020 enforced by the factory), applies
     /// it via `Account::apply_deposit` (CSH-080 enforced by the aggregate),
-    /// then saves atomically. Returns a typed `HoldingTransactionError` — no
+    /// then saves atomically. Returns a typed `AccountError` — no
     /// `anyhow` at this boundary; the caller (orchestrator / api) propagates
     /// the typed enum directly.
     pub async fn record_deposit(
@@ -399,7 +398,7 @@ impl AccountService {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, amount = amount, "record_deposit");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = Transaction::new_deposit(
@@ -426,7 +425,7 @@ impl AccountService {
         date: String,
         amount: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, amount = amount, "record_withdrawal");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = Transaction::new_withdrawal(
@@ -448,35 +447,35 @@ impl AccountService {
 
     /// Returns true if any account holds a non-zero quantity of the given asset.
     /// Used by the archive_asset use case to enforce OQ-6. Translates raw
-    /// infra failure into `AccountApplicationError::DatabaseError` per the
+    /// infra failure into `AccountError::DatabaseError` per the
     /// gold infra-translation rule.
     pub async fn has_active_holdings_for_asset(
         &self,
         asset_id: &str,
-    ) -> StdResult<bool, AccountApplicationError> {
+    ) -> StdResult<bool, AccountError> {
         self.holding_repo
             .has_active_holdings_for_asset(asset_id)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "has_active_holdings_for_asset: repository failure");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })
     }
 
     /// Returns true if any transaction references the given asset.
     /// Used by the delete_asset use case to block hard-deletion when history
     /// exists. Translates raw infra failure into
-    /// `AccountApplicationError::DatabaseError` per the gold infra-translation rule.
+    /// `AccountError::DatabaseError` per the gold infra-translation rule.
     pub async fn has_holding_entries_for_asset(
         &self,
         asset_id: &str,
-    ) -> StdResult<bool, AccountApplicationError> {
+    ) -> StdResult<bool, AccountError> {
         self.transaction_repo
             .has_transactions_for_asset(asset_id)
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "has_holding_entries_for_asset: repository failure");
-                AccountApplicationError::DatabaseError
+                AccountError::DatabaseError
             })
     }
 
@@ -484,14 +483,14 @@ impl AccountService {
     pub async fn get_deletion_summary(
         &self,
         account_id: &str,
-    ) -> StdResult<(u32, u32), AccountApplicationError> {
+    ) -> StdResult<(u32, u32), AccountError> {
         tokio::try_join!(
             self.holding_repo.count_active_for_account(account_id),
             self.transaction_repo.count_by_account(account_id),
         )
         .map_err(|e| {
             tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_deletion_summary: repository failure");
-            AccountApplicationError::DatabaseError
+            AccountError::DatabaseError
         })
     }
 
@@ -500,7 +499,7 @@ impl AccountService {
     /// Application-layer composition: loads the Account, builds the Transaction
     /// via `Transaction::new_dividend` (DIV-021/022 enforced by the factory),
     /// applies it via `Account::apply_dividend` (credit-only; no InsufficientCash),
-    /// then saves atomically. Returns a typed `HoldingTransactionError`.
+    /// then saves atomically. Returns a typed `AccountError`.
     pub async fn record_dividend(
         &self,
         account_id: &str,
@@ -509,7 +508,7 @@ impl AccountService {
         amount_micros: i64,
         exchange_rate: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %paying_asset_id, amount = amount_micros, "record_dividend");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = Transaction::new_dividend(
@@ -533,7 +532,7 @@ impl AccountService {
     /// via `Transaction::free_shares` (FSD-021 enforced by the factory), applies
     /// it via `Account::apply_free_shares` (holding quantity rises at zero cost,
     /// no cash leg), then saves atomically. Returns a typed
-    /// `HoldingTransactionError`.
+    /// `AccountError`.
     pub async fn record_free_shares(
         &self,
         account_id: &str,
@@ -541,7 +540,7 @@ impl AccountService {
         date: String,
         quantity: i64,
         note: Option<String>,
-    ) -> Result<Transaction, HoldingTransactionError> {
+    ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, quantity = quantity, "record_free_shares");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = Transaction::free_shares(account.id.clone(), asset_id, date, quantity, note)?;
@@ -570,53 +569,51 @@ impl AccountService {
 
 /// Loads an Account aggregate (with holdings + transactions) for the
 /// holding-transaction family. Translates repository failures into typed
-/// `HoldingTransactionError::Application(...)` variants — `AccountNotFound` for
-/// `Ok(None)`, `DatabaseError` for any anyhow error (logged at the same site).
+/// `AccountError` — `AccountNotFound` for `Ok(None)`, `DatabaseError` for any
+/// anyhow error (logged at the same site).
 async fn load_account(
     repo: &dyn AccountRepository,
     account_id: &str,
-) -> Result<Account, HoldingTransactionError> {
+) -> Result<Account, AccountError> {
     match repo.get_with_holdings_and_transactions(account_id).await {
         Ok(Some(acc)) => Ok(acc),
-        Ok(None) => Err(AccountApplicationError::AccountNotFound {
+        Ok(None) => Err(AccountError::AccountNotFound {
             account_id: account_id.to_string(),
-        }
-        .into()),
+        }),
         Err(e) => {
             tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "load_account: repository failure");
-            Err(AccountApplicationError::DatabaseError.into())
+            Err(AccountError::DatabaseError)
         }
     }
 }
 
 /// Persists an Account aggregate's pending changes for the holding-transaction
-/// family. Translates repository failures into
-/// `AccountApplicationError::DatabaseError` (composed into
-/// `HoldingTransactionError` via `#[from]`) after logging the underlying error.
+/// family. Translates repository failures into `AccountError::DatabaseError`
+/// after logging the underlying error.
 async fn save_account(
     repo: &dyn AccountRepository,
     account: &mut Account,
-) -> Result<(), HoldingTransactionError> {
+) -> Result<(), AccountError> {
     repo.save(account).await.map_err(|e| {
         tracing::error!(target: BACKEND, account_id = %account.id, err = ?e, "save_account: repository failure");
-        AccountApplicationError::DatabaseError.into()
+        AccountError::DatabaseError
     })
 }
 
 /// CRUD-family parallel to the load/save helpers above. Wraps the
 /// `find_by_name` uniqueness pre-check used by `create` and `update`,
 /// translating any repository failure into
-/// `AccountApplicationError::DatabaseError`.
+/// `AccountError::DatabaseError`.
 ///
 /// Unlike `load_account`, `Ok(None)` is the **success** path here (the name
 /// is available); the caller decides what to do with `Some(existing)`.
 async fn find_account_by_name(
     repo: &dyn AccountRepository,
     name: &str,
-) -> Result<Option<Account>, AccountCrudError> {
+) -> Result<Option<Account>, AccountError> {
     repo.find_by_name(name).await.map_err(|e| {
         tracing::error!(target: BACKEND, name = %name, err = ?e, "find_by_name: repository failure");
-        AccountApplicationError::DatabaseError.into()
+        AccountError::DatabaseError
     })
 }
 
@@ -627,13 +624,13 @@ async fn load_account_for_open_holding(
 ) -> Result<Account, OpenHoldingError> {
     match repo.get_with_holdings_and_transactions(account_id).await {
         Ok(Some(acc)) => Ok(acc),
-        Ok(None) => Err(AccountApplicationError::AccountNotFound {
+        Ok(None) => Err(AccountError::AccountNotFound {
             account_id: account_id.to_string(),
         }
         .into()),
         Err(e) => {
             tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "load_account_for_open_holding: repository failure");
-            Err(AccountApplicationError::DatabaseError.into())
+            Err(AccountError::DatabaseError.into())
         }
     }
 }
@@ -645,48 +642,37 @@ async fn save_account_for_open_holding(
 ) -> Result<(), OpenHoldingError> {
     repo.save(account).await.map_err(|e| {
         tracing::error!(target: BACKEND, account_id = %account.id, err = ?e, "save_account_for_open_holding: repository failure");
-        AccountApplicationError::DatabaseError.into()
+        AccountError::DatabaseError.into()
     })
 }
 
 /// Converts the `anyhow::Error` returned by the buy/sell/correct/cancel
-/// aggregate methods into a typed `HoldingTransactionError` leaf. Bridge for
-/// the period before those aggregate methods are themselves migrated to typed
-/// Result (planned follow-up: split each into factory + apply per the cash
-/// pattern). Until then, this helper preserves the typed surface at the
-/// service boundary by downcasting.
-///
-/// Errors that don't downcast to a known leaf are logged and surfaced as
-/// `AccountApplicationError::DatabaseError` — the same translation target as
-/// the load/save helpers above.
-fn to_holding_tx_error(e: anyhow::Error) -> HoldingTransactionError {
-    let e = match e.downcast::<AccountOperationError>() {
-        Ok(err) => return err.into(),
-        Err(e) => e,
-    };
-    let e = match e.downcast::<TransactionDomainError>() {
-        Ok(err) => return err.into(),
-        Err(e) => e,
-    };
-    tracing::error!(target: BACKEND, err = ?e, "unexpected error in holding-tx service method");
-    AccountApplicationError::DatabaseError.into()
+/// aggregate methods into the typed `AccountError` it boxes. Errors that don't
+/// downcast to `AccountError` are logged and surfaced as
+/// `AccountError::DatabaseError` — the same translation target as the
+/// load/save helpers above.
+fn to_holding_tx_error(e: anyhow::Error) -> AccountError {
+    match e.downcast::<AccountError>() {
+        Ok(err) => err,
+        Err(e) => {
+            tracing::error!(target: BACKEND, err = ?e, "unexpected error in holding-tx service method");
+            AccountError::DatabaseError
+        }
+    }
 }
 
 /// Bridge for the open_holding aggregate method, which still returns
-/// `anyhow::Result` and can raise `OpeningBalanceDomainError::InvalidTotalCost`
-/// or any `TransactionDomainError` reachable from `Transaction::new`. Same
-/// shape as `to_holding_tx_error`; targets `OpenHoldingError` instead.
+/// `anyhow::Result` boxing an `AccountError` (`InvalidTotalCost` or any variant
+/// reachable from `Transaction::new`). Same shape as `to_holding_tx_error`;
+/// targets `OpenHoldingError` instead.
 fn to_open_holding_error(e: anyhow::Error) -> OpenHoldingError {
-    let e = match e.downcast::<super::domain::OpeningBalanceDomainError>() {
-        Ok(err) => return err.into(),
-        Err(e) => e,
-    };
-    let e = match e.downcast::<TransactionDomainError>() {
-        Ok(err) => return err.into(),
-        Err(e) => e,
-    };
-    tracing::error!(target: BACKEND, err = ?e, "unexpected error in open_holding service method");
-    AccountApplicationError::DatabaseError.into()
+    match e.downcast::<AccountError>() {
+        Ok(err) => err.into(),
+        Err(e) => {
+            tracing::error!(target: BACKEND, err = ?e, "unexpected error in open_holding service method");
+            AccountError::DatabaseError.into()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -696,10 +682,9 @@ mod tests {
     // catch constraint violations) and mock-based unit tests (fast delegation checks).
     // SQLite tests are grouped first; mock-based unit tests follow after the section header.
     use crate::context::account::{
-        AccountApplicationError, AccountOperationError, Holding, HoldingTransactionError,
-        MockAccountRepository, MockHoldingRepository, MockTransactionRepository,
-        SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
-        TransactionDomainError,
+        AccountError, Holding, MockAccountRepository, MockHoldingRepository,
+        MockTransactionRepository, SqliteAccountRepository, SqliteHoldingRepository,
+        SqliteTransactionRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -714,29 +699,29 @@ mod tests {
     // to Application(DatabaseError).
     #[test]
     fn to_holding_tx_error_maps_every_branch() {
-        // AccountOperationError leaf → Operation
-        let op_err = AccountOperationError::Oversell {
+        // AccountError leaf → Operation
+        let op_err = AccountError::Oversell {
             available: 10,
             requested: 99,
         };
         assert!(matches!(
             to_holding_tx_error(anyhow::Error::new(op_err)),
-            HoldingTransactionError::Operation(AccountOperationError::Oversell {
+            AccountError::Oversell {
                 available: 10,
                 requested: 99
-            })
+            }
         ));
 
-        // TransactionDomainError leaf → Validation
+        // AccountError leaf → Validation
         assert!(matches!(
-            to_holding_tx_error(anyhow::Error::new(TransactionDomainError::DateInFuture)),
-            HoldingTransactionError::Validation(TransactionDomainError::DateInFuture)
+            to_holding_tx_error(anyhow::Error::new(AccountError::DateInFuture)),
+            AccountError::DateInFuture
         ));
 
         // Anything else → Application(DatabaseError) (the catch-all path)
         assert!(matches!(
             to_holding_tx_error(anyhow::anyhow!("synthetic infra failure")),
-            HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
+            AccountError::DatabaseError
         ));
     }
 
@@ -746,29 +731,25 @@ mod tests {
     // errors translate to Application(DatabaseError).
     #[test]
     fn to_open_holding_error_maps_every_branch() {
-        use crate::context::account::OpeningBalanceDomainError;
+        use crate::context::account::AccountError;
         use OpenHoldingError;
 
-        // OpeningBalanceDomainError leaf → Validation
+        // AccountError leaf → Validation
         assert!(matches!(
-            to_open_holding_error(anyhow::Error::new(
-                OpeningBalanceDomainError::InvalidTotalCost
-            )),
-            OpenHoldingError::Validation(OpeningBalanceDomainError::InvalidTotalCost)
+            to_open_holding_error(anyhow::Error::new(AccountError::InvalidTotalCost)),
+            OpenHoldingError::Account(AccountError::InvalidTotalCost)
         ));
 
-        // TransactionDomainError leaf → TxValidation
+        // AccountError leaf → TxValidation
         assert!(matches!(
-            to_open_holding_error(anyhow::Error::new(
-                TransactionDomainError::QuantityNotPositive
-            )),
-            OpenHoldingError::TxValidation(TransactionDomainError::QuantityNotPositive)
+            to_open_holding_error(anyhow::Error::new(AccountError::QuantityNotPositive)),
+            OpenHoldingError::Account(AccountError::QuantityNotPositive)
         ));
 
         // Anything else → Application(DatabaseError) (the catch-all path)
         assert!(matches!(
             to_open_holding_error(anyhow::anyhow!("synthetic infra failure")),
-            OpenHoldingError::Application(AccountApplicationError::DatabaseError)
+            OpenHoldingError::Account(AccountError::DatabaseError)
         ));
     }
 
@@ -875,10 +856,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(
-                err,
-                AccountCrudError::Application(AccountApplicationError::NameAlreadyExists)
-            ),
+            matches!(err, AccountError::NameAlreadyExists),
             "got: {err:?}"
         );
     }
@@ -912,10 +890,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(
-                err,
-                AccountCrudError::Application(AccountApplicationError::NameAlreadyExists)
-            ),
+            matches!(err, AccountError::NameAlreadyExists),
             "got: {err:?}"
         );
     }
@@ -985,7 +960,7 @@ mod tests {
         assert_eq!(asset_holding.average_price, micro(100));
     }
 
-    // SEL-021 — sell_holding rejects oversell via AccountOperationError
+    // SEL-021 — sell_holding rejects oversell via AccountError
     #[tokio::test]
     async fn test_sell_holding_rejects_oversell() {
         let pool = make_pool().await;
@@ -1025,10 +1000,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Operation(AccountOperationError::Oversell { .. })
-            ),
+            matches!(err, AccountError::Oversell { .. }),
             "expected Oversell, got: {err:?}"
         );
     }
@@ -1173,10 +1145,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Operation(AccountOperationError::CascadingOversell)
-            ),
+            matches!(err, AccountError::CascadingOversell),
             "expected CascadingOversell, got: {err:?}"
         );
     }
@@ -1227,13 +1196,10 @@ mod tests {
 
         let err = result.unwrap_err();
         // The repo save error is opaqued at the service boundary — translated
-        // to AccountApplicationError::DatabaseError; the hint is preserved
+        // to AccountError::DatabaseError; the hint is preserved
         // server-side via tracing::error! at the same site.
         assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
-            ),
+            matches!(err, AccountError::DatabaseError),
             "buy_holding must surface save failures as Application(DatabaseError), got: {err:?}"
         );
     }
@@ -1284,10 +1250,7 @@ mod tests {
         let err = result.unwrap_err();
         use crate::use_cases::holding_transaction::OpenHoldingError;
         assert!(
-            matches!(
-                err,
-                OpenHoldingError::Application(AccountApplicationError::DatabaseError)
-            ),
+            matches!(err, OpenHoldingError::Account(AccountError::DatabaseError)),
             "open_holding must surface save failures as Application(DatabaseError), got: {err:?}"
         );
     }
@@ -1323,10 +1286,7 @@ mod tests {
         let err = result.unwrap_err();
         use crate::use_cases::holding_transaction::OpenHoldingError;
         assert!(
-            matches!(
-                err,
-                OpenHoldingError::Application(AccountApplicationError::DatabaseError)
-            ),
+            matches!(err, OpenHoldingError::Account(AccountError::DatabaseError)),
             "open_holding must surface load failures as Application(DatabaseError), got: {err:?}"
         );
     }
@@ -1349,7 +1309,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                OpenHoldingError::Application(AccountApplicationError::AccountNotFound { .. })
+                OpenHoldingError::Account(AccountError::AccountNotFound { .. })
             ),
             "expected Application(AccountNotFound), got: {err:?}"
         );
@@ -1380,12 +1340,12 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::context::account::TransactionDomainError;
+        use crate::context::account::AccountError;
         use OpenHoldingError;
         assert!(
             matches!(
                 err,
-                OpenHoldingError::TxValidation(TransactionDomainError::QuantityNotPositive)
+                OpenHoldingError::Account(AccountError::QuantityNotPositive)
             ),
             "expected TxValidation(QuantityNotPositive), got: {err:?}"
         );
@@ -1394,7 +1354,7 @@ mod tests {
     // TRX-045 — open_holding propagates InvalidTotalCost through the service
     #[tokio::test]
     async fn test_open_holding_propagates_invalid_total_cost() {
-        use crate::context::account::OpeningBalanceDomainError;
+        use crate::context::account::AccountError;
         use OpenHoldingError;
         let pool = make_pool().await;
         let (svc, asset_id) = setup(&pool).await;
@@ -1421,7 +1381,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                OpenHoldingError::Validation(OpeningBalanceDomainError::InvalidTotalCost)
+                OpenHoldingError::Account(AccountError::InvalidTotalCost)
             ),
             "expected Validation(InvalidTotalCost), got: {err:?}"
         );
@@ -1697,7 +1657,7 @@ mod tests {
     // -------------------------------------------------------------------------
     // Typed cash service error paths (B34) — mock-based unit tests for
     // record_deposit / record_withdrawal covering all four typed-Result
-    // variants of HoldingTransactionError. Happy paths are covered by the SQLite
+    // variants of AccountError. Happy paths are covered by the SQLite
     // csh_100_* tests above.
     // -------------------------------------------------------------------------
 
@@ -1733,15 +1693,12 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Validation(TransactionDomainError::AmountNotPositive)
-            ),
+            matches!(err, AccountError::AmountNotPositive),
             "got: {err:?}"
         );
     }
 
-    // load_account translates Ok(None) → AccountApplicationError::AccountNotFound.
+    // load_account translates Ok(None) → AccountError::AccountNotFound.
     #[tokio::test]
     async fn record_deposit_returns_account_not_found_when_repo_returns_none() {
         let mut mock_ar = MockAccountRepository::new();
@@ -1755,16 +1712,14 @@ mod tests {
             .await
             .unwrap_err();
         match err {
-            HoldingTransactionError::Application(AccountApplicationError::AccountNotFound {
-                account_id,
-            }) => {
+            AccountError::AccountNotFound { account_id } => {
                 assert_eq!(account_id, "missing");
             }
             other => panic!("expected AccountNotFound{{missing}}, got: {other:?}"),
         }
     }
 
-    // load_account translates a repo Err → HoldingTransactionError::Application(AccountApplicationError::DatabaseError).
+    // load_account translates a repo Err → AccountError::DatabaseError.
     #[tokio::test]
     async fn record_deposit_returns_infrastructure_when_load_fails() {
         let mut mock_ar = MockAccountRepository::new();
@@ -1777,16 +1732,10 @@ mod tests {
             .record_deposit("acc", "2020-01-01".to_string(), 100, None)
             .await
             .unwrap_err();
-        assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
-            ),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
-    // save_account translates a repo Err → HoldingTransactionError::Application(AccountApplicationError::DatabaseError).
+    // save_account translates a repo Err → AccountError::DatabaseError.
     #[tokio::test]
     async fn record_deposit_returns_infrastructure_when_save_fails() {
         let mut mock_ar = MockAccountRepository::new();
@@ -1811,13 +1760,7 @@ mod tests {
             .record_deposit("acc", "2020-01-01".to_string(), 100, None)
             .await
             .unwrap_err();
-        assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
-            ),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // CSH-031 — non-positive withdrawal amount surfaces from
@@ -1844,15 +1787,12 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Validation(TransactionDomainError::AmountNotPositive)
-            ),
+            matches!(err, AccountError::AmountNotPositive),
             "got: {err:?}"
         );
     }
 
-    // load_account translates Ok(None) → AccountApplicationError::AccountNotFound.
+    // load_account translates Ok(None) → AccountError::AccountNotFound.
     #[tokio::test]
     async fn record_withdrawal_returns_account_not_found_when_repo_returns_none() {
         let mut mock_ar = MockAccountRepository::new();
@@ -1866,16 +1806,14 @@ mod tests {
             .await
             .unwrap_err();
         match err {
-            HoldingTransactionError::Application(AccountApplicationError::AccountNotFound {
-                account_id,
-            }) => {
+            AccountError::AccountNotFound { account_id } => {
                 assert_eq!(account_id, "missing");
             }
             other => panic!("expected AccountNotFound{{missing}}, got: {other:?}"),
         }
     }
 
-    // load_account translates a repo Err → HoldingTransactionError::Application(AccountApplicationError::DatabaseError).
+    // load_account translates a repo Err → AccountError::DatabaseError.
     #[tokio::test]
     async fn record_withdrawal_returns_infrastructure_when_load_fails() {
         let mut mock_ar = MockAccountRepository::new();
@@ -1888,16 +1826,10 @@ mod tests {
             .record_withdrawal("acc", "2020-01-01".to_string(), 100, None)
             .await
             .unwrap_err();
-        assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
-            ),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
-    // save_account translates a repo Err → HoldingTransactionError::Application(AccountApplicationError::DatabaseError).
+    // save_account translates a repo Err → AccountError::DatabaseError.
     #[tokio::test]
     async fn record_withdrawal_returns_infrastructure_when_save_fails() {
         let mut mock_ar = MockAccountRepository::new();
@@ -1956,13 +1888,7 @@ mod tests {
             .record_withdrawal("acc", "2020-02-01".to_string(), micro(100), None)
             .await
             .unwrap_err();
-        assert!(
-            matches!(
-                err,
-                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
-            ),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // -------------------------------------------------------------------------
@@ -1990,13 +1916,7 @@ mod tests {
             )
             .await
             .unwrap_err();
-        assert!(
-            matches!(
-                err,
-                AccountCrudError::Application(AccountApplicationError::DatabaseError)
-            ),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // create surfaces repo.create failure (after passing the uniqueness
@@ -2022,16 +1942,10 @@ mod tests {
             )
             .await
             .unwrap_err();
-        assert!(
-            matches!(
-                err,
-                AccountCrudError::Application(AccountApplicationError::DatabaseError)
-            ),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
-    // delete surfaces repo failure as AccountApplicationError::DatabaseError.
+    // delete surfaces repo failure as AccountError::DatabaseError.
     #[tokio::test]
     async fn test_delete_returns_database_error_when_repo_fails() {
         let mut mock_ar = MockAccountRepository::new();
@@ -2045,13 +1959,10 @@ mod tests {
             Box::new(MockTransactionRepository::new()),
         );
         let err = svc.delete("any-id").await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
-    // get_by_id translates raw repo failure to AccountApplicationError::DatabaseError.
+    // get_by_id translates raw repo failure to AccountError::DatabaseError.
     #[tokio::test]
     async fn get_by_id_translates_repo_failure_to_database_error() {
         let mut mock_ar = MockAccountRepository::new();
@@ -2065,13 +1976,10 @@ mod tests {
             Box::new(MockTransactionRepository::new()),
         );
         let err = svc.get_by_id("any-id").await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
-    // get_holdings_for_account translates raw repo failure to AccountApplicationError::DatabaseError.
+    // get_holdings_for_account translates raw repo failure to AccountError::DatabaseError.
     #[tokio::test]
     async fn get_holdings_for_account_translates_repo_failure_to_database_error() {
         let mut mock_hr = MockHoldingRepository::new();
@@ -2085,10 +1993,7 @@ mod tests {
             Box::new(MockTransactionRepository::new()),
         );
         let err = svc.get_holdings_for_account("any-id").await.unwrap_err();
-        assert!(
-            matches!(err, AccountApplicationError::DatabaseError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
     // -------------------------------------------------------------------------
@@ -2301,7 +2206,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                HoldingTransactionError::Application(AccountApplicationError::DatabaseError)
+                AccountError::DatabaseError
             ),
             "record_free_shares must surface save failures as Application(DatabaseError), got: {err:?}"
         );

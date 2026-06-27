@@ -3,7 +3,7 @@
 
 use super::error::{DividendError, OpenHoldingError};
 use super::HoldingTransactionUseCase;
-use crate::context::account::{HoldingTransactionError, Transaction};
+use crate::context::account::{AccountError, Transaction};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -28,7 +28,7 @@ pub struct OpenHoldingDTO {
 }
 
 // =============================================================================
-// Buy / Sell / Correct — DTOs (shared HoldingTransactionError composite)
+// Buy / Sell / Correct — DTOs (shared AccountError composite)
 // =============================================================================
 
 /// Parameters for recording a purchase of an asset into an account.
@@ -118,7 +118,7 @@ pub async fn open_holding(
 pub async fn buy_holding(
     uc: State<'_, HoldingTransactionUseCase>,
     dto: BuyHoldingDTO,
-) -> Result<Transaction, HoldingTransactionError> {
+) -> Result<Transaction, AccountError> {
     uc.buy_holding(
         &dto.account_id,
         dto.asset_id,
@@ -138,7 +138,7 @@ pub async fn buy_holding(
 pub async fn sell_holding(
     uc: State<'_, HoldingTransactionUseCase>,
     dto: SellHoldingDTO,
-) -> Result<Transaction, HoldingTransactionError> {
+) -> Result<Transaction, AccountError> {
     uc.sell_holding(
         &dto.account_id,
         dto.asset_id,
@@ -160,7 +160,7 @@ pub async fn correct_transaction(
     id: String,
     account_id: String,
     dto: CorrectTransactionDTO,
-) -> Result<Transaction, HoldingTransactionError> {
+) -> Result<Transaction, AccountError> {
     uc.correct_transaction(
         &account_id,
         &id,
@@ -181,7 +181,7 @@ pub async fn cancel_transaction(
     uc: State<'_, HoldingTransactionUseCase>,
     id: String,
     account_id: String,
-) -> Result<(), HoldingTransactionError> {
+) -> Result<(), AccountError> {
     uc.cancel_transaction(&account_id, &id).await
 }
 
@@ -221,7 +221,7 @@ pub struct WithdrawalDTO {
 pub async fn record_deposit(
     uc: State<'_, HoldingTransactionUseCase>,
     dto: DepositDTO,
-) -> Result<Transaction, HoldingTransactionError> {
+) -> Result<Transaction, AccountError> {
     uc.record_deposit(&dto.account_id, dto.date, dto.amount_micros, dto.note)
         .await
 }
@@ -232,7 +232,7 @@ pub async fn record_deposit(
 pub async fn record_withdrawal(
     uc: State<'_, HoldingTransactionUseCase>,
     dto: WithdrawalDTO,
-) -> Result<Transaction, HoldingTransactionError> {
+) -> Result<Transaction, AccountError> {
     uc.record_withdrawal(&dto.account_id, dto.date, dto.amount_micros, dto.note)
         .await
 }

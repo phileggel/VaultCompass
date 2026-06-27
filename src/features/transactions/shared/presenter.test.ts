@@ -123,7 +123,7 @@ describe("toTransactionRow — FreeShares (FSD-022/050)", () => {
   });
 });
 
-// F27 layer-3 presenter — exhaustive variant coverage across HoldingTransactionError
+// F27 layer-3 presenter — exhaustive variant coverage across AccountError
 // and OpenHoldingError. Payload-bearing variants get pre-formatted micros (presenter
 // owns the data formatting; component owns t()).
 describe("transactionMutationErrorToI18n", () => {

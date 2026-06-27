@@ -1,4 +1,4 @@
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use crate::context::asset::AssetError;
 use serde::Serialize;
 use specta::Type;
@@ -29,6 +29,10 @@ pub enum FetchPriceTask {
 /// `#[serde(untagged)]` lets every arm surface its inner `{ "code": "..." }` payload
 /// directly on the wire. Each arm carries a tagged inner type (BC enum or
 /// `FetchPriceTask`) so the discriminator survives the untagging.
+// The `Account` arm carries the BC-wide `AccountError`; it shares `DatabaseError` and
+// `DateInFuture` codes with the `Asset` arm under `#[serde(untagged)]`. Unobservable: this
+// orchestrator's account calls raise only `AccountNotFound` / `DatabaseError`, and the
+// frontend maps each shared code to one key regardless of which arm produced it.
 #[derive(Debug, thiserror::Error, Serialize, Type)]
 #[serde(untagged)]
 pub enum FetchAllAssetPricesError {
@@ -37,7 +41,7 @@ pub enum FetchAllAssetPricesError {
     Asset(#[from] AssetError),
     /// Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
     #[error(transparent)]
-    Account(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case-specific failures (`FetchAlreadyRunning`, `NoFetchableHoldings`, `UnknownError`).
     #[error(transparent)]
     Failure(#[from] FetchPriceTask),
@@ -54,7 +58,7 @@ pub enum FetchAccountAssetPricesError {
     Asset(#[from] AssetError),
     /// Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
     #[error(transparent)]
-    Account(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case-specific failures (`FetchAlreadyRunning`, `NoFetchableHoldings`, `UnknownError`).
     #[error(transparent)]
     Failure(#[from] FetchPriceTask),

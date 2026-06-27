@@ -1,6 +1,6 @@
 import type {
-  AccountApplicationError,
   AccountDetailsResponse,
+  AccountError,
   AssetCrudError,
   AssetPrice,
   AssetPriceError,
@@ -13,7 +13,6 @@ import type {
   FetchForDateOutcome,
   FreeSharesDTO,
   FreeSharesError,
-  HoldingTransactionError,
   OpenHoldingDTO,
   OpenHoldingError,
   Result,
@@ -25,7 +24,7 @@ import { commands, events } from "@/bindings";
 export const accountDetailsGateway = {
   async getAccountDetails(
     accountId: string,
-  ): Promise<Result<AccountDetailsResponse, AccountApplicationError>> {
+  ): Promise<Result<AccountDetailsResponse, AccountError>> {
     return commands.getAccountDetails(accountId);
   },
 
@@ -58,13 +57,11 @@ export const accountDetailsGateway = {
     return commands.openHolding(dto);
   },
 
-  async recordDeposit(dto: DepositDTO): Promise<Result<Transaction, HoldingTransactionError>> {
+  async recordDeposit(dto: DepositDTO): Promise<Result<Transaction, AccountError>> {
     return commands.recordDeposit(dto);
   },
 
-  async recordWithdrawal(
-    dto: WithdrawalDTO,
-  ): Promise<Result<Transaction, HoldingTransactionError>> {
+  async recordWithdrawal(dto: WithdrawalDTO): Promise<Result<Transaction, AccountError>> {
     return commands.recordWithdrawal(dto);
   },
 
@@ -82,7 +79,7 @@ export const accountDetailsGateway = {
     id: string,
     accountId: string,
     dto: CorrectTransactionDTO,
-  ): Promise<Result<Transaction, HoldingTransactionError>> {
+  ): Promise<Result<Transaction, AccountError>> {
     return commands.correctTransaction(id, accountId, dto);
   },
 

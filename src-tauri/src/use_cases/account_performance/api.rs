@@ -2,7 +2,7 @@
 #![allow(clippy::unreachable)]
 
 use super::orchestrator::{AccountPerformanceResponse, AccountPerformanceUseCase};
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use tauri::State;
 
 /// Returns per-period performance figures for a single account (PRF spec).
@@ -11,6 +11,6 @@ use tauri::State;
 pub async fn get_account_performance(
     account_id: String,
     state: State<'_, AccountPerformanceUseCase>,
-) -> Result<AccountPerformanceResponse, AccountApplicationError> {
+) -> Result<AccountPerformanceResponse, AccountError> {
     state.get_account_performance(&account_id).await
 }

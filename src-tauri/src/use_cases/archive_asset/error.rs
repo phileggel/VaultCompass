@@ -1,4 +1,4 @@
-use crate::context::account::AccountApplicationError;
+use crate::context::account::AccountError;
 use crate::context::asset::AssetCrudError;
 
 /// Application-layer rejection specific to the `archive_asset` use case —
@@ -34,7 +34,7 @@ pub enum ArchiveAssetApplicationError {
 ///   `AssetApplicationError::NotFound` and
 ///   `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
 ///   composition-over-redefinition rule.
-/// - `AccountApplicationError` — account BC (`account/application/`), surfaces
+/// - `AccountError` — account BC (`account/application/`), surfaces
 ///   `DatabaseError` from the cross-BC active-holdings check.
 /// - `ArchiveAssetApplicationError` — use-case-owned (this file), raises
 ///   `ActiveHoldings` from the orchestrator.
@@ -48,7 +48,7 @@ pub enum ArchiveAssetError {
     /// Account BC rejection (`DatabaseError` from the cross-BC
     /// active-holdings check).
     #[error(transparent)]
-    Account(#[from] AccountApplicationError),
+    Account(#[from] AccountError),
     /// Use-case orchestration rejection (`ActiveHoldings`).
     #[error(transparent)]
     Application(#[from] ArchiveAssetApplicationError),
@@ -98,11 +98,11 @@ mod tests {
     // (cross-BC active-holdings check repo failure)
     #[test]
     fn account_database_error_surfaces_through_account_leaf() {
-        let composite: ArchiveAssetError = AccountApplicationError::DatabaseError.into();
+        let composite: ArchiveAssetError = AccountError::DatabaseError.into();
         assert!(
             matches!(
                 composite,
-                ArchiveAssetError::Account(AccountApplicationError::DatabaseError)
+                ArchiveAssetError::Account(AccountError::DatabaseError)
             ),
             "got: {composite:?}"
         );
