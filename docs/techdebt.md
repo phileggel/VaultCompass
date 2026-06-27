@@ -76,7 +76,7 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
 **Ordering**: BC-1 first (internal-only, low blast radius). UC-1 can ship any time (mechanical rename). BC-2 last (the wire-visible variant rename forces contract + FE coordination — easier to batch once the project is comfortable with the BC-1 pattern).
 
-**Status (2026-06-27, v0.28.0)**: ✅ BC-1 (account collapse → single `AccountError`) shipped in commit `112c14a`. ✅ UC-1 (use-case task sub-enum rename to gold) shipped in commit `a10b5ea`. Only **BC-2** (asset BC collapse, wire-visible) remains — this entry is trimmed to BC-2 only at the v0.28.0 release.
+**Status (2026-06-27, v0.28.0 released)**: ✅ BC-1 (account collapse → single `AccountError`) shipped in commit `112c14a`. ✅ UC-1 (use-case task sub-enum rename to gold) shipped in commit `a10b5ea`. Only **BC-2** (asset BC collapse, wire-visible) remains. The account-BC and use-case inventory above is intentionally retained as BC-2 implementation reference — it holds the asset-BC variant list and the `NotFound{id}` → `AssetNotFound{id}` / `CategoryNotFound{id}` wire-rename + FE/i18n coordination BC-2 will need.
 
 ---
 
@@ -222,3 +222,10 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Context: branch `feat/journal-bank-statement` @ HEAD
 - Severity: 🔵
 - Observation: The M3 `error`/`success` semantic color tokens are reused to express financial debit/credit (and gain/loss) polarity — cash out = `text-m3-error` (red), cash in = `text-m3-success` (green). Visually conventional and consistent with the pre-existing P&L sign-coloring, but it overloads tokens whose semantics are failure/confirmation, which a high-contrast or screen-reader-driven theme may interpret differently from "money out / money in". A dedicated `text-m3-debit`/`text-m3-credit` (and `-gain`/`-loss`) alias mapping to the same palette entries — or an ADR ratifying the reuse — would carry the correct intent. Cross-cutting (affects the P&L column too), so larger than one PR.
+
+## 2026-06-27 — update*checker commands return `Result<*, String>` (error-model gold)
+
+- Found by: reviewer-security (v0.28.0 release sweep)
+- Where: `src-tauri/src/use_cases/update_checker/api.rs` (`check_for_update`, `download_update`, `install_update`)
+- Severity: 🟡
+- Observation: The three update*checker commands use `Result<*, String>`with`.map_err(|e| e.to_string())`, serialising the full anyhow chain (OS paths, HTTP status codes, updater-plugin internals) onto the IPC wire. The exposure is only to our own trusted renderer — no external/credential leak — but it diverges from the gold error model every other command family follows (typed `{serde(tag="code")}`enums). Fix: an`UpdateError`enum consistent with`AccountError`. Pre-existing; not touched by v0.28.0.

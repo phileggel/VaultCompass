@@ -28,3 +28,7 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
 `cargo audit` flags `rsa 0.9.10` (timing sidechannel, CVSS 5.9 medium) with no upstream fix. Pulled transitively via `sqlx-mysql 0.8.6` because the `sqlx` macro crate compiles all backends regardless of enabled features. We only enable `sqlite`, so the vulnerable RSA path is never reached at runtime. Re-evaluate when sqlx ships a fix or when we change DB backend.
+
+## (deps) — Accepted risk: RUSTSEC-2026-0185 (quinn-proto, not compiled)
+
+`cargo audit` flags `quinn-proto 0.11.14` (RUSTSEC-2026-0185, remote memory exhaustion via unbounded out-of-order stream reassembly, 7.5 high, fixed in ≥0.11.15). It is only an **optional** dependency of `reqwest 0.13.3` (pulled via `tauri`) behind the `http3` feature, which is **not enabled** — `cargo tree -i quinn-proto` is empty, confirming it is not compiled into the shipped binary (the active reqwest is 0.12.28). Non-applicable; flagged at the v0.28.0 release. Clears when the stale reqwest-0.13 lock entries are pruned (`cargo update`) or the reqwest-0.13 upgrade lands. Re-evaluate if `http3` is ever enabled.
