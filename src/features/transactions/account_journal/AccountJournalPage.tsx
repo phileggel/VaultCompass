@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { SelectField } from "@/ui/components/field/SelectField";
-import { TextField } from "@/ui/components/field/TextField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { EditTransactionModal } from "../edit_transaction_modal/EditTransactionModal";
@@ -112,23 +112,19 @@ export function AccountJournalPage() {
             />
           </div>
           <div className="w-32">
-            <TextField
+            <CalcField
               id="journal-filter-amount-min"
               label={t("transaction.filter_amount_min")}
-              type="number"
-              inputMode="decimal"
               value={filters.amountMin}
-              onChange={(e) => setFilter("amountMin", e.target.value)}
+              onValueChange={(v) => setFilter("amountMin", v)}
             />
           </div>
           <div className="w-32">
-            <TextField
+            <CalcField
               id="journal-filter-amount-max"
               label={t("transaction.filter_amount_max")}
-              type="number"
-              inputMode="decimal"
               value={filters.amountMax}
-              onChange={(e) => setFilter("amountMax", e.target.value)}
+              onValueChange={(v) => setFilter("amountMax", v)}
             />
           </div>
           <Button id="journal-clear-filters" variant="secondary" size="sm" onClick={clearFilters}>

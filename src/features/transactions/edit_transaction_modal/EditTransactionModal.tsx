@@ -4,6 +4,7 @@ import type { Transaction } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
 import { SelectField } from "@/ui/components/field/SelectField";
@@ -131,29 +132,23 @@ export function EditTransactionModal({
 
           {/* Quantity + Unit Price (or Total Cost for OpeningBalance — TRX-051) */}
           <div className="grid grid-cols-2 gap-4">
-            <TextField
+            <CalcField
               id="edit-trx-quantity"
               label={t("transaction.form_quantity_label")}
-              type="number"
-              min="0"
-              step="any"
               value={formData.quantity}
-              onChange={(e) => handleChange("quantity", e.target.value)}
+              onValueChange={(v) => handleChange("quantity", v)}
               placeholder={t("transaction.form_quantity_placeholder")}
               required
             />
-            <TextField
+            <CalcField
               id={isOpeningBalance ? "edit-trx-total-cost" : "edit-trx-unit-price"}
               label={
                 isOpeningBalance
                   ? t("open_balance.form_total_cost_label")
                   : `${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`
               }
-              type="number"
-              min="0"
-              step="any"
               value={formData.unitPrice}
-              onChange={(e) => handleChange("unitPrice", e.target.value)}
+              onValueChange={(v) => handleChange("unitPrice", v)}
               placeholder={t("transaction.form_unit_price_placeholder")}
               required
             />
@@ -161,14 +156,11 @@ export function EditTransactionModal({
 
           {/* Exchange Rate — hidden for OpeningBalance (TRX-051) */}
           {showExchangeRate && (
-            <TextField
+            <CalcField
               id="edit-trx-exchange-rate"
               label={t("transaction.form_exchange_rate_label")}
-              type="number"
-              min="0"
-              step="any"
               value={formData.exchangeRate}
-              onChange={(e) => handleChange("exchangeRate", e.target.value)}
+              onValueChange={(v) => handleChange("exchangeRate", v)}
               placeholder={t("transaction.form_exchange_rate_placeholder")}
             />
           )}
@@ -176,14 +168,11 @@ export function EditTransactionModal({
           {/* Fees + Total Amount (fees hidden for OpeningBalance — TRX-051) */}
           {!isOpeningBalance && (
             <div className="grid grid-cols-2 gap-4">
-              <TextField
+              <CalcField
                 id="edit-trx-fees"
                 label={t("transaction.form_fees_label")}
-                type="number"
-                min="0"
-                step="any"
                 value={formData.fees}
-                onChange={(e) => handleChange("fees", e.target.value)}
+                onValueChange={(v) => handleChange("fees", v)}
                 placeholder={t("transaction.form_fees_placeholder")}
               />
               <TextField

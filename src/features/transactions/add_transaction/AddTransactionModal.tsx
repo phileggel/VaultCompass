@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
+import { CalcField } from "@/ui/components/field/CalcField";
 import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
 import { SelectField } from "@/ui/components/field/SelectField";
@@ -129,25 +130,19 @@ export function AddTransactionModal({
 
           {/* Quantity + Unit Price side by side */}
           <div className="grid grid-cols-2 gap-4">
-            <TextField
+            <CalcField
               id="trx-quantity"
               label={t("transaction.form_quantity_label")}
-              type="number"
-              min="0"
-              step="any"
               value={formData.quantity}
-              onChange={(e) => handleChange("quantity", e.target.value)}
+              onValueChange={(v) => handleChange("quantity", v)}
               placeholder={t("transaction.form_quantity_placeholder")}
               required
             />
-            <TextField
+            <CalcField
               id="trx-unit-price"
               label={`${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`}
-              type="number"
-              min="0"
-              step="any"
               value={formData.unitPrice}
-              onChange={(e) => handleChange("unitPrice", e.target.value)}
+              onValueChange={(v) => handleChange("unitPrice", v)}
               placeholder={t("transaction.form_unit_price_placeholder")}
               required
             />
@@ -155,28 +150,22 @@ export function AddTransactionModal({
 
           {/* Exchange Rate (hidden when asset currency = account currency) */}
           {showExchangeRate && (
-            <TextField
+            <CalcField
               id="trx-exchange-rate"
               label={t("transaction.form_exchange_rate_label")}
-              type="number"
-              min="0"
-              step="any"
               value={formData.exchangeRate}
-              onChange={(e) => handleChange("exchangeRate", e.target.value)}
+              onValueChange={(v) => handleChange("exchangeRate", v)}
               placeholder={t("transaction.form_exchange_rate_placeholder")}
             />
           )}
 
           {/* Fees + Total Amount side by side */}
           <div className="grid grid-cols-2 gap-4">
-            <TextField
+            <CalcField
               id="trx-fees"
               label={t("transaction.form_fees_label")}
-              type="number"
-              min="0"
-              step="any"
               value={formData.fees}
-              onChange={(e) => handleChange("fees", e.target.value)}
+              onValueChange={(v) => handleChange("fees", v)}
               placeholder={t("transaction.form_fees_placeholder")}
             />
             <TextField
