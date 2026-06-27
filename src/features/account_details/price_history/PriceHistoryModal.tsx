@@ -12,6 +12,7 @@ import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { PriceModal } from "../account_details_view/PriceModal";
 import { formatIsoDate } from "../shared/formatDate";
 import { formatSource } from "../shared/presenter";
+import type { PriceableAsset } from "../shared/types";
 import { EditPriceForm } from "./EditPriceForm";
 import { usePriceHistory } from "./usePriceHistory";
 
@@ -19,9 +20,19 @@ interface PriceHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   holding: HoldingDetail;
+  /** Account whose holdings are selectable in the add-price combobox (MKT-011). */
+  accountId: string;
+  /** Active non-cash holdings selectable when adding a price. */
+  priceableAssets: PriceableAsset[];
 }
 
-export function PriceHistoryModal({ isOpen, onClose, holding }: PriceHistoryModalProps) {
+export function PriceHistoryModal({
+  isOpen,
+  onClose,
+  holding,
+  accountId,
+  priceableAssets,
+}: PriceHistoryModalProps) {
   const { t, i18n } = useTranslation();
   const showSnackbar = useSnackbar();
   const { prices, isLoading, fetchError, deleteError, deletingDate, confirmDelete, refetch } =
@@ -189,8 +200,15 @@ export function PriceHistoryModal({ isOpen, onClose, holding }: PriceHistoryModa
         <PriceModal
           isOpen
           onClose={() => setShowAddPrice(false)}
-          holding={holding}
+          assets={priceableAssets}
+          initialAssetId={holding.asset_id}
+          accountId={accountId}
           onSubmitSuccess={handleAddPriceSuccess}
+          onRecorded={(recordedAssetId) => {
+            // Only the displayed asset's history needs refreshing; a price for a
+            // switched-to asset shows on its own history (MKT-014).
+            if (recordedAssetId === holding.asset_id) refetch();
+          }}
         />
       )}
 

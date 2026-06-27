@@ -16,6 +16,7 @@ import {
 } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { formatStalenessLabel, type StalenessLabel } from "@/ui/format/staleness";
+import type { PriceableAsset } from "./types";
 
 /**
  * F27 — Maps any asset-price mutation error (record / update / delete /
@@ -271,6 +272,20 @@ export function formatSource(source: AssetPriceSource | null): string | null {
     case "YahooFinance":
       return "mkt.source_yahoo";
   }
+}
+
+/**
+ * MKT-011 — the active non-cash holdings selectable when recording a price, in
+ * the shape the price modal's asset combobox consumes.
+ */
+export function toPriceableAssets(holdings: HoldingRowViewModel[]): PriceableAsset[] {
+  return holdings
+    .filter((h) => h.canEnterPrice)
+    .map((h) => ({
+      assetId: h.assetId,
+      assetName: h.assetName,
+      assetCurrency: h.assetCurrency,
+    }));
 }
 
 export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {

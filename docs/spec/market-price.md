@@ -66,11 +66,13 @@ The `Asset` entity (owned by the AST spec) gains one field for this feature.
 
 **MKT-010 — Entry point (frontend)**: An "Enter price" action is available on each **active** holding row in the Account Details view, alongside the existing Buy and Sell actions. It is not shown on closed holdings.
 
-**MKT-011 — Modal pre-fill — asset and date (frontend)**: Opening the "Enter price" form pre-fills the asset name as a read-only label and the date field with today's date (editable by the user, e.g. to backdate to yesterday's closing price).
+**MKT-011 — Modal asset + date (frontend)**: The "Enter price" form's asset field is a fuzzy-search combobox over the account's active non-cash holdings, **pre-selected** to the holding the form was launched from (and switchable, so prices for several holdings can be entered without reopening). The date field seeds from the account's stored last-operation date (editable, e.g. to backdate to yesterday's closing price). Switching the asset clears the price (a price belongs to one asset) and updates the currency label (MKT-023).
 
-**MKT-012 — Modal pre-fill — price (frontend)**: When `HoldingDetail.current_price_date` equals today's ISO date at the time the modal is opened, the price field is pre-filled with `HoldingDetail.current_price`. When the latest recorded price is from a prior date, the price field opens empty.
+**MKT-012 — Price opens empty (frontend)**: The price field always opens empty. (The earlier today's-price pre-fill is incompatible with the selectable-asset combobox — the holdings list carries no per-asset current price — and with the stored-date default; the user types the price.)
 
-**MKT-013 — No additional backend call for pre-fill (frontend)**: The pre-fill data (MKT-011, MKT-012) is sourced from the `HoldingDetail` already loaded by the Account Details view. Opening the modal requires no additional IPC request.
+**MKT-013 — No additional backend call (frontend)**: The asset list and date default are sourced from data already loaded by the Account Details view (the holdings and the stored last-operation date). Opening the modal requires no additional IPC request.
+
+**MKT-014 — Save & add another (frontend)**: A secondary "Save & add another" button records the price, refreshes the price history, and keeps the modal open with the price cleared (asset + date retained) for rapid entry across multiple holdings. The account holdings table refreshes via the `AssetPriceUpdated` event subscription, so no explicit account re-fetch is needed.
 
 ### Recording a Price (020–029)
 

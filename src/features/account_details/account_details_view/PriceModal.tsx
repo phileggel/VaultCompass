@@ -1,24 +1,51 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { ComboboxField } from "@/ui/components/field/ComboboxField";
 import { DateField } from "@/ui/components/field/DateField";
 import { TextField } from "@/ui/components/field/TextField";
 import { FormModal } from "@/ui/components/modal/FormModal";
+import type { PriceableAsset } from "../shared/types";
 import { usePriceModal } from "./usePriceModal";
 
 interface PriceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  holding: HoldingDetail;
+  /** Active non-cash holdings selectable in the asset combobox (MKT-011). */
+  assets: PriceableAsset[];
+  /** Asset pre-selected when the modal opens. */
+  initialAssetId: string;
+  /** Account whose stored last-operation date seeds the date field. */
+  accountId: string;
   onSubmitSuccess: () => void;
+  /** Refresh-only callback for "record & add another" — keeps the modal open (MKT-014). */
+  onRecorded: (assetId: string) => void;
 }
 
-export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceModalProps) {
+export function PriceModal({
+  isOpen,
+  onClose,
+  assets,
+  initialAssetId,
+  accountId,
+  onSubmitSuccess,
+  onRecorded,
+}: PriceModalProps) {
   const { t } = useTranslation();
-  const { date, price, error, isSubmitting, isFormValid, handleChange, handleSubmit } =
-    usePriceModal({ holding, onSubmitSuccess });
+  const {
+    assetId,
+    date,
+    price,
+    selectedCurrency,
+    error,
+    isSubmitting,
+    isFormValid,
+    handleAssetChange,
+    handleChange,
+    handleSubmit,
+    handleAddAnother,
+  } = usePriceModal({ assets, initialAssetId, accountId, onSubmitSuccess, onRecorded });
 
   useEffect(() => {
     logger.info("[PriceModal] mounted");
@@ -27,10 +54,26 @@ export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceM
   const footer = useMemo(
     () => (
       <div className="flex items-center justify-end gap-2">
-        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+        <Button
+          id="price-modal-cancel"
+          variant="secondary"
+          onClick={onClose}
+          disabled={isSubmitting}
+        >
           {t("action.cancel")}
         </Button>
         <Button
+          id="price-modal-add-another"
+          type="button"
+          variant="secondary"
+          onClick={handleAddAnother}
+          loading={isSubmitting}
+          disabled={isSubmitting || !isFormValid}
+        >
+          {t("price_modal.submit_and_add_another")}
+        </Button>
+        <Button
+          id="price-modal-submit"
           type="submit"
           form="price-modal-form"
           variant="primary"
@@ -41,7 +84,7 @@ export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceM
         </Button>
       </div>
     ),
-    [isSubmitting, isFormValid, t, onClose],
+    [isSubmitting, isFormValid, t, onClose, handleAddAnother],
   );
 
   return (
@@ -53,17 +96,20 @@ export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceM
       maxWidth="max-w-md"
     >
       <form id="price-modal-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* Asset name — read-only (MKT-011) */}
-        <TextField
+        {/* Asset — fuzzy-search combobox, pre-selected to the launched holding (MKT-011) */}
+        <ComboboxField
           id="price-modal-asset"
           label={t("price_modal.asset_label")}
-          type="text"
-          value={holding.asset_name}
-          readOnly
-          aria-readonly="true"
+          items={assets}
+          displayKey="assetName"
+          idKey="assetId"
+          value={assetId}
+          onChange={handleAssetChange}
+          searchKeys={["assetName"]}
+          placeholder={t("price_modal.asset_placeholder")}
         />
 
-        {/* Date — editable, pre-filled with today (MKT-011) */}
+        {/* Date — editable, pre-filled with the account's stored last-operation date (MKT-011) */}
         <DateField
           id="price-modal-date"
           label={t("price_modal.date_label")}
@@ -75,7 +121,7 @@ export function PriceModal({ isOpen, onClose, holding, onSubmitSuccess }: PriceM
         {/* Price with currency label (MKT-023) */}
         <TextField
           id="price-modal-price"
-          label={`${t("price_modal.price_label")} (${holding.asset_currency})`}
+          label={`${t("price_modal.price_label")} (${selectedCurrency})`}
           type="number"
           min="0.000001"
           step="any"
