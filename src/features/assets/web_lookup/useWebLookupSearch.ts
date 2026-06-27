@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { AssetLookupResult, LookupMode, WebLookupApplicationError } from "@/bindings";
+import type { AssetLookupResult, LookupMode, WebLookupError } from "@/bindings";
 import { assetGateway } from "../gateway";
 
 export type WebLookupSearchState =
@@ -7,7 +7,7 @@ export type WebLookupSearchState =
   | { status: "loading" }
   | { status: "results"; results: AssetLookupResult[] }
   | { status: "empty" }
-  | { status: "error"; code: WebLookupApplicationError["code"] };
+  | { status: "error"; code: WebLookupError["code"] };
 
 export interface UseWebLookupSearchReturn {
   query: string;

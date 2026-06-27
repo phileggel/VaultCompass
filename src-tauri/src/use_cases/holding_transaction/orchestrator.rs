@@ -1,6 +1,5 @@
 use super::error::{
-    DividendApplicationError, DividendError, FreeSharesApplicationError, FreeSharesError,
-    OpenHoldingApplicationError, OpenHoldingError,
+    DividendError, DividendTask, FreeSharesError, FreeSharesTask, OpenHoldingError, OpenHoldingTask,
 };
 use super::shared::ensure_cash_asset;
 use crate::context::account::{AccountError, AccountService, Transaction};
@@ -55,14 +54,12 @@ impl HoldingTransactionUseCase {
                 AccountError::DatabaseError
             })?;
         match asset {
-            None => return Err(OpenHoldingApplicationError::AssetNotFound.into()),
-            Some(a) if a.is_archived => {
-                return Err(OpenHoldingApplicationError::ArchivedAsset.into())
-            }
+            None => return Err(OpenHoldingTask::AssetNotFound.into()),
+            Some(a) if a.is_archived => return Err(OpenHoldingTask::ArchivedAsset.into()),
             // CSH-061 — Cash Assets cannot be seeded via OpeningBalance; user records
             // initial cash via `record_deposit` instead.
             Some(a) if a.class == AssetClass::Cash => {
-                return Err(OpenHoldingApplicationError::OpeningBalanceOnCashAsset.into())
+                return Err(OpenHoldingTask::OpeningBalanceOnCashAsset.into())
             }
             Some(_) => {}
         }
@@ -248,9 +245,9 @@ impl HoldingTransactionUseCase {
                 AccountError::DatabaseError
             })?;
         match asset {
-            None => return Err(DividendApplicationError::AssetNotFound.into()),
+            None => return Err(DividendTask::AssetNotFound.into()),
             Some(a) if a.class == AssetClass::Cash => {
-                return Err(DividendApplicationError::DividendOnCashAsset.into())
+                return Err(DividendTask::DividendOnCashAsset.into())
             }
             Some(_) => {}
         }
@@ -263,7 +260,7 @@ impl HoldingTransactionUseCase {
             .await?;
         match held {
             Some(h) if h.quantity > 0 => {}
-            _ => return Err(DividendApplicationError::AssetNotHeld.into()),
+            _ => return Err(DividendTask::AssetNotHeld.into()),
         }
 
         // CSH-010 — ensure the system Cash Asset for the account's currency exists.
@@ -321,9 +318,9 @@ impl HoldingTransactionUseCase {
                 AccountError::DatabaseError
             })?;
         match asset {
-            None => return Err(FreeSharesApplicationError::AssetNotFound.into()),
+            None => return Err(FreeSharesTask::AssetNotFound.into()),
             Some(a) if a.class == AssetClass::Cash => {
-                return Err(FreeSharesApplicationError::FreeSharesOnCashAsset.into())
+                return Err(FreeSharesTask::FreeSharesOnCashAsset.into())
             }
             Some(_) => {}
         }
@@ -335,7 +332,7 @@ impl HoldingTransactionUseCase {
             .await?;
         match held {
             Some(h) if h.quantity > 0 => {}
-            _ => return Err(FreeSharesApplicationError::AssetNotHeld.into()),
+            _ => return Err(FreeSharesTask::AssetNotHeld.into()),
         }
 
         // Delegate to the account BC; its `AccountError` surfaces on the
@@ -460,7 +457,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                OpenHoldingError::UseCase(OpenHoldingApplicationError::AssetNotFound)
+                OpenHoldingError::UseCase(OpenHoldingTask::AssetNotFound)
             ),
             "expected UseCase(AssetNotFound), got: {err:?}"
         );
@@ -497,7 +494,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                OpenHoldingError::UseCase(OpenHoldingApplicationError::ArchivedAsset)
+                OpenHoldingError::UseCase(OpenHoldingTask::ArchivedAsset)
             ),
             "expected UseCase(ArchivedAsset), got: {err:?}"
         );
@@ -534,7 +531,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                OpenHoldingError::UseCase(OpenHoldingApplicationError::OpeningBalanceOnCashAsset)
+                OpenHoldingError::UseCase(OpenHoldingTask::OpeningBalanceOnCashAsset)
             ),
             "expected UseCase(OpeningBalanceOnCashAsset), got: {err:?}"
         );
@@ -823,12 +820,9 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::use_cases::holding_transaction::{DividendApplicationError, DividendError};
+        use crate::use_cases::holding_transaction::{DividendError, DividendTask};
         assert!(
-            matches!(
-                err,
-                DividendError::UseCase(DividendApplicationError::AssetNotFound)
-            ),
+            matches!(err, DividendError::UseCase(DividendTask::AssetNotFound)),
             "expected UseCase(AssetNotFound), got: {err:?}"
         );
     }
@@ -861,12 +855,9 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::use_cases::holding_transaction::{DividendApplicationError, DividendError};
+        use crate::use_cases::holding_transaction::{DividendError, DividendTask};
         assert!(
-            matches!(
-                err,
-                DividendError::UseCase(DividendApplicationError::AssetNotHeld)
-            ),
+            matches!(err, DividendError::UseCase(DividendTask::AssetNotHeld)),
             "expected UseCase(AssetNotHeld), got: {err:?}"
         );
     }
@@ -899,11 +890,11 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::use_cases::holding_transaction::{DividendApplicationError, DividendError};
+        use crate::use_cases::holding_transaction::{DividendError, DividendTask};
         assert!(
             matches!(
                 err,
-                DividendError::UseCase(DividendApplicationError::DividendOnCashAsset)
+                DividendError::UseCase(DividendTask::DividendOnCashAsset)
             ),
             "expected UseCase(DividendOnCashAsset), got: {err:?}"
         );
@@ -1290,12 +1281,9 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::use_cases::holding_transaction::{FreeSharesApplicationError, FreeSharesError};
+        use crate::use_cases::holding_transaction::{FreeSharesError, FreeSharesTask};
         assert!(
-            matches!(
-                err,
-                FreeSharesError::UseCase(FreeSharesApplicationError::AssetNotFound)
-            ),
+            matches!(err, FreeSharesError::UseCase(FreeSharesTask::AssetNotFound)),
             "expected UseCase(AssetNotFound), got: {err:?}"
         );
     }
@@ -1328,12 +1316,9 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::use_cases::holding_transaction::{FreeSharesApplicationError, FreeSharesError};
+        use crate::use_cases::holding_transaction::{FreeSharesError, FreeSharesTask};
         assert!(
-            matches!(
-                err,
-                FreeSharesError::UseCase(FreeSharesApplicationError::AssetNotHeld)
-            ),
+            matches!(err, FreeSharesError::UseCase(FreeSharesTask::AssetNotHeld)),
             "expected UseCase(AssetNotHeld), got: {err:?}"
         );
     }
@@ -1366,11 +1351,11 @@ mod tests {
             .await
             .unwrap_err();
 
-        use crate::use_cases::holding_transaction::{FreeSharesApplicationError, FreeSharesError};
+        use crate::use_cases::holding_transaction::{FreeSharesError, FreeSharesTask};
         assert!(
             matches!(
                 err,
-                FreeSharesError::UseCase(FreeSharesApplicationError::FreeSharesOnCashAsset)
+                FreeSharesError::UseCase(FreeSharesTask::FreeSharesOnCashAsset)
             ),
             "expected UseCase(FreeSharesOnCashAsset), got: {err:?}"
         );

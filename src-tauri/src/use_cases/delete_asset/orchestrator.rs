@@ -1,4 +1,4 @@
-use super::error::{DeleteAssetApplicationError, DeleteAssetError};
+use super::error::{DeleteAssetError, DeleteAssetTask};
 use crate::context::account::AccountService;
 use crate::context::asset::AssetService;
 use std::result::Result as StdResult;
@@ -27,7 +27,7 @@ impl DeleteAssetUseCase {
             .has_holding_entries_for_asset(asset_id)
             .await?
         {
-            return Err(DeleteAssetApplicationError::ExistingTransactions.into());
+            return Err(DeleteAssetTask::ExistingTransactions.into());
         }
         self.asset_service.delete_asset(asset_id).await?;
         Ok(())
@@ -132,7 +132,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                DeleteAssetError::Application(DeleteAssetApplicationError::ExistingTransactions)
+                DeleteAssetError::Application(DeleteAssetTask::ExistingTransactions)
             ),
             "got: {err:?}"
         );

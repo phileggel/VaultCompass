@@ -1,4 +1,4 @@
-use super::error::{ArchiveAssetApplicationError, ArchiveAssetError};
+use super::error::{ArchiveAssetError, ArchiveAssetTask};
 use crate::context::account::AccountService;
 use crate::context::asset::AssetService;
 use std::result::Result as StdResult;
@@ -26,7 +26,7 @@ impl ArchiveAssetUseCase {
             .has_active_holdings_for_asset(asset_id)
             .await?
         {
-            return Err(ArchiveAssetApplicationError::ActiveHoldings.into());
+            return Err(ArchiveAssetTask::ActiveHoldings.into());
         }
         self.asset_service.archive_asset(asset_id).await?;
         Ok(())
@@ -131,7 +131,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                ArchiveAssetError::Application(ArchiveAssetApplicationError::ActiveHoldings)
+                ArchiveAssetError::Application(ArchiveAssetTask::ActiveHoldings)
             ),
             "got: {err:?}"
         );

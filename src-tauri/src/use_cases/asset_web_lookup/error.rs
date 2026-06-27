@@ -1,7 +1,7 @@
 /// Application-layer errors raised by the asset web-lookup use case (WEB-025).
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
-pub enum WebLookupApplicationError {
+pub enum WebLookupError {
     /// OpenFIGI returned HTTP 429 Too Many Requests — transient, recoverable
     /// after a short wait. Surfaced distinctly so the frontend can render
     /// retry-after-wait copy (WEB-033).
@@ -29,14 +29,14 @@ pub enum WebLookupApplicationError {
 mod tests {
     use super::*;
 
-    fn to_json(err: &WebLookupApplicationError) -> serde_json::Value {
+    fn to_json(err: &WebLookupError) -> serde_json::Value {
         serde_json::to_value(err).expect("serialize")
     }
 
     #[test]
     fn serializes_rate_limited() {
         assert_eq!(
-            to_json(&WebLookupApplicationError::RateLimited),
+            to_json(&WebLookupError::RateLimited),
             serde_json::json!({ "code": "RateLimited" })
         );
     }
@@ -44,7 +44,7 @@ mod tests {
     #[test]
     fn serializes_network_error() {
         assert_eq!(
-            to_json(&WebLookupApplicationError::NetworkError),
+            to_json(&WebLookupError::NetworkError),
             serde_json::json!({ "code": "NetworkError" })
         );
     }
@@ -52,7 +52,7 @@ mod tests {
     #[test]
     fn serializes_invalid_isin_format() {
         assert_eq!(
-            to_json(&WebLookupApplicationError::InvalidIsinFormat),
+            to_json(&WebLookupError::InvalidIsinFormat),
             serde_json::json!({ "code": "InvalidIsinFormat" })
         );
     }

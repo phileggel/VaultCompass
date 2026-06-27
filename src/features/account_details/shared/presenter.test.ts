@@ -620,7 +620,7 @@ describe("priceRefreshLockErrorToI18n", () => {
 // ---------------------------------------------------------------------------
 // dividendErrorToI18n — F27 presenter for record_dividend error surface (DIV)
 // Reachable codes per contract: AccountNotFound, DatabaseError (AccountError);
-// AssetNotFound, AssetNotHeld, DividendOnCashAsset (DividendApplicationError);
+// AssetNotFound, AssetNotHeld, DividendOnCashAsset (DividendTask);
 // AmountNotPositive, ExchangeRateNotPositive, DateInFuture, DateTooOld, InvalidDate
 // (AccountError). Unknown codes fall to error.Unknown.
 // ---------------------------------------------------------------------------

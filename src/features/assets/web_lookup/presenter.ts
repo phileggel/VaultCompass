@@ -1,10 +1,10 @@
-import type { WebLookupApplicationError } from "@/bindings";
+import type { WebLookupError } from "@/bindings";
 
 /**
- * Maps a `WebLookupApplicationError` to the i18n key for its inline copy.
+ * Maps a `WebLookupError` to the i18n key for its inline copy.
  * Pure function — call `t(key)` at render time (F27).
  */
-export function presentWebLookupError(error: WebLookupApplicationError): string {
+export function presentWebLookupError(error: WebLookupError): string {
   switch (error.code) {
     case "InvalidIsinFormat":
       return "asset.web_lookup.error_invalid_isin";

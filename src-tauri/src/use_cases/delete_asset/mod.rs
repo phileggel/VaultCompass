@@ -6,5 +6,5 @@ mod error;
 mod orchestrator;
 
 pub use api::*;
-pub use error::{DeleteAssetApplicationError, DeleteAssetError};
+pub use error::{DeleteAssetError, DeleteAssetTask};
 pub use orchestrator::DeleteAssetUseCase;

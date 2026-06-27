@@ -15,7 +15,7 @@ use crate::context::asset::AssetCrudError;
 /// `ArchiveAssetError` untagged composite.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
-pub enum ArchiveAssetApplicationError {
+pub enum ArchiveAssetTask {
     /// Asset still has non-zero holdings in at least one account (OQ-6).
     #[error("Cannot archive an asset with active holdings")]
     ActiveHoldings,
@@ -36,7 +36,7 @@ pub enum ArchiveAssetApplicationError {
 ///   composition-over-redefinition rule.
 /// - `AccountError` — account BC (`account/application/`), surfaces
 ///   `DatabaseError` from the cross-BC active-holdings check.
-/// - `ArchiveAssetApplicationError` — use-case-owned (this file), raises
+/// - `ArchiveAssetTask` — use-case-owned (this file), raises
 ///   `ActiveHoldings` from the orchestrator.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
@@ -51,7 +51,7 @@ pub enum ArchiveAssetError {
     Account(#[from] AccountError),
     /// Use-case orchestration rejection (`ActiveHoldings`).
     #[error(transparent)]
-    Application(#[from] ArchiveAssetApplicationError),
+    Application(#[from] ArchiveAssetTask),
 }
 
 #[cfg(test)]
@@ -111,11 +111,11 @@ mod tests {
     // OQ-6 — ActiveHoldings surfaces through the Application leaf
     #[test]
     fn active_holdings_surfaces_through_application_leaf() {
-        let composite: ArchiveAssetError = ArchiveAssetApplicationError::ActiveHoldings.into();
+        let composite: ArchiveAssetError = ArchiveAssetTask::ActiveHoldings.into();
         assert!(
             matches!(
                 composite,
-                ArchiveAssetError::Application(ArchiveAssetApplicationError::ActiveHoldings)
+                ArchiveAssetError::Application(ArchiveAssetTask::ActiveHoldings)
             ),
             "got: {composite:?}"
         );
