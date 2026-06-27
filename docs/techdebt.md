@@ -76,6 +76,8 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
 **Ordering**: BC-1 first (internal-only, low blast radius). UC-1 can ship any time (mechanical rename). BC-2 last (the wire-visible variant rename forces contract + FE coordination — easier to batch once the project is comfortable with the BC-1 pattern).
 
+**Status (2026-06-27, v0.28.0)**: ✅ BC-1 (account collapse → single `AccountError`) shipped in commit `112c14a`. ✅ UC-1 (use-case task sub-enum rename to gold) shipped in commit `a10b5ea`. Only **BC-2** (asset BC collapse, wire-visible) remains — this entry is trimmed to BC-2 only at the v0.28.0 release.
+
 ---
 
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide

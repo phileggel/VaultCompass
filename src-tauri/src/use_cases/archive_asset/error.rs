@@ -24,9 +24,8 @@ pub enum ArchiveAssetTask {
 /// Use-case composite for the **archive asset** failure surface — the single
 /// command `archive_asset` (OQ-6) and its full chain of rejections.
 ///
-/// Replaces the anyhow-era `ArchiveAssetCommandError` boundary type. This IS
-/// the FE-facing contract for the `archive_asset` Tauri command — each leaf
-/// already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
+/// This IS the FE-facing contract for the `archive_asset` Tauri command — each
+/// leaf already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
 /// here flattens them into a single FE-visible union.
 ///
 /// Each leaf lives in its rightful layer:

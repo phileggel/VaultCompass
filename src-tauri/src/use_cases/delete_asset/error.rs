@@ -24,9 +24,8 @@ pub enum DeleteAssetTask {
 /// Use-case composite for the **delete asset** failure surface — the single
 /// command `delete_asset` and its full chain of rejections.
 ///
-/// Replaces the anyhow-era `DeleteAssetCommandError` boundary type. This IS
-/// the FE-facing contract for the `delete_asset` Tauri command — each leaf
-/// already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
+/// This IS the FE-facing contract for the `delete_asset` Tauri command — each
+/// leaf already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
 /// here flattens them into a single FE-visible union.
 ///
 /// Each leaf lives in its rightful layer:
