@@ -475,9 +475,11 @@
   "price_modal": {
     "title": "Enter Market Price",
     "asset_label": "Asset",
+    "asset_placeholder": "Search for a holding…",
     "date_label": "Date",
     "price_label": "Price",
     "submit": "Save Price",
+    "submit_and_add_another": "Save & add another",
     "success": "Price recorded",
     "error_price_not_positive": "Price must be greater than zero",
     "error_invalid_date": "Date must be a valid date (YYYY-MM-DD)",

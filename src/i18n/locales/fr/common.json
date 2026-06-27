@@ -475,9 +475,11 @@
   "price_modal": {
     "title": "Saisir le cours de marché",
     "asset_label": "Actif",
+    "asset_placeholder": "Rechercher une position…",
     "date_label": "Date",
     "price_label": "Prix",
     "submit": "Enregistrer",
+    "submit_and_add_another": "Enregistrer et en ajouter un autre",
     "success": "Prix enregistré",
     "error_price_not_positive": "Le prix doit être supérieur à zéro",
     "error_invalid_date": "La date doit être au format AAAA-MM-JJ",

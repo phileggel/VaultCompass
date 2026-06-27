@@ -7,7 +7,7 @@ import { patchModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
-import { isCashAsset, priceRefreshLockErrorToI18n } from "../shared/presenter";
+import { isCashAsset, priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
@@ -165,6 +165,10 @@ export function useAccountDetailsView(accountId: string) {
         })),
     [data.holdingDetails],
   );
+  // MKT-011 — priceable holdings for the price modal's asset combobox. Memoized
+  // so the stable reference does not thrash the combobox on every parent render
+  // (e.g. an AssetPriceUpdated event while the modal is open).
+  const priceableAssets = useMemo(() => toPriceableAssets(data.holdings), [data.holdings]);
   return {
     // Data layer (re-exposed)
     isLoading: data.isLoading,
@@ -179,6 +183,7 @@ export function useAccountDetailsView(accountId: string) {
     hasNonCashActiveHoldings,
     hasClosedHoldings,
     dividendPayingAssets,
+    priceableAssets,
     // Modal targets / flags
     buyTarget,
     sellTarget,

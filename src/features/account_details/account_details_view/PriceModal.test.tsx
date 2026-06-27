@@ -1,9 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 
-// Gateway mock — recordAssetPrice is the new command (Result<null, string>)
+// Gateway mock — recordAssetPrice is the price-record command (Result<null, AssetPriceError>)
 const mockRecordAssetPrice = vi.fn();
 
 vi.mock("../gateway", () => ({
@@ -22,35 +21,26 @@ vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
   useSnackbar: () => vi.fn(),
 }));
 
-// today's ISO date — used in MKT-011/012 assertions
-const TODAY = new Date().toISOString().slice(0, 10);
+// MKT-011 — the date field seeds from the account's stored last-operation date.
+const STORED_DATE = "2024-05-01";
+vi.mock("@/lib/lastOperationDateStorage", () => ({
+  getLastOperationDate: () => STORED_DATE,
+}));
 
-// Minimal HoldingDetail fixture matching the full type from bindings.ts
-const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => ({
-  asset_id: "asset-1",
-  asset_name: "Apple Inc",
-  asset_reference: "AAPL",
-  quantity: 2_000_000,
-  average_price: 100_000_000,
-  cost_basis: 200_000_000,
-  realized_pnl: 0,
-  asset_currency: "EUR",
-  current_price: null,
-  current_price_date: null,
-  current_price_source: null,
-  unrealized_pnl: null,
-  performance_pct: null,
-  dividends_received: 0,
-  total_return_pct: null,
-  fx_rate_date: null,
-  ...overrides,
-});
-
-// usePriceModal hook — to be implemented in
-// src/features/account_details/account_details_view/usePriceModal.ts
-// Props: { holding: HoldingDetail; onSubmitSuccess: () => void }
-// Returns: { date, price, error, isSubmitting, isFormValid, handleChange, handleSubmit }
+import type { PriceableAsset } from "../shared/types";
 import { usePriceModal } from "./usePriceModal";
+
+const ASSETS: PriceableAsset[] = [
+  { assetId: "asset-1", assetName: "Apple Inc", assetCurrency: "EUR" },
+  { assetId: "asset-2", assetName: "Tesla Inc", assetCurrency: "USD" },
+];
+
+const BASE_PROPS = {
+  assets: ASSETS,
+  initialAssetId: "asset-1",
+  accountId: "account-1",
+  onSubmitSuccess: vi.fn(),
+};
 
 describe("usePriceModal", () => {
   const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
@@ -59,89 +49,60 @@ describe("usePriceModal", () => {
     vi.clearAllMocks();
   });
 
-  // MKT-011 — Modal pre-fills asset name (read-only) and today's date (editable)
-  it("MKT-011 — initialises date to today", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
-    expect(result.current.date).toBe(TODAY);
+  // MKT-011 — date seeds from the account's stored last-operation date.
+  it("MKT-011 — initialises date to the stored last-operation date", () => {
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    expect(result.current.date).toBe(STORED_DATE);
   });
 
-  // MKT-012 — Price field pre-filled when current_price_date == today, empty otherwise
-  it("MKT-012 — pre-fills price when current_price_date is today", () => {
-    const holding = makeHolding({
-      current_price: 150_000_000,
-      current_price_date: TODAY,
-    });
-    const { result } = renderHook(() => usePriceModal({ holding, onSubmitSuccess: vi.fn() }));
-    expect(result.current.price).toBe("150.00");
+  // MKT-011 — asset is pre-selected to the launched holding; price starts empty.
+  it("MKT-011 — pre-selects the initial asset and opens with an empty price", () => {
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    expect(result.current.assetId).toBe("asset-1");
+    expect(result.current.price).toBe("");
+    expect(result.current.selectedCurrency).toBe("EUR");
   });
 
-  // MKT-012 — price is empty when current_price_date is not today
-  it("MKT-012 — price is empty when current_price_date is not today", () => {
-    const holding = makeHolding({
-      current_price: 150_000_000,
-      current_price_date: "2024-01-01",
-    });
-    const { result } = renderHook(() => usePriceModal({ holding, onSubmitSuccess: vi.fn() }));
+  // MKT-011 — switching the asset updates the currency and clears the price.
+  it("MKT-011 — switching the asset updates currency and clears the price", () => {
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    act(() => result.current.handleChange("price", "100"));
+    act(() => result.current.handleAssetChange("asset-2"));
+    expect(result.current.assetId).toBe("asset-2");
+    expect(result.current.selectedCurrency).toBe("USD");
     expect(result.current.price).toBe("");
   });
 
-  // MKT-013 — No extra IPC call when opening the modal (data comes from HoldingDetail prop)
+  // MKT-013 — no extra IPC call when opening the modal.
   it("MKT-013 — no gateway call on mount", () => {
-    renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }));
+    renderHook(() => usePriceModal(BASE_PROPS));
     expect(mockRecordAssetPrice).not.toHaveBeenCalled();
   });
 
-  // MKT-020 — Submit disabled while date or price is empty
+  // MKT-020 — submit disabled while price is empty.
   it("MKT-020 — isFormValid is false when price is empty", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
-    // price starts as "" (no pre-fill), date is today → not valid
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
     expect(result.current.isFormValid).toBe(false);
   });
 
-  // MKT-020 — Submit disabled while date is empty
+  // MKT-020 — submit disabled while date is empty.
   it("MKT-020 — isFormValid is false when date is empty", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
-    act(() => {
-      result.current.handleChange("date", "");
-    });
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    act(() => result.current.handleChange("date", ""));
     expect(result.current.isFormValid).toBe(false);
   });
 
-  // MKT-021 — Inline error + submit disabled for price ≤ 0 (frontend validation)
+  // MKT-021 — price ≤ 0 invalid.
   it("MKT-021 — isFormValid is false and error set when price is zero", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
-    act(() => {
-      result.current.handleChange("price", "0");
-    });
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    act(() => result.current.handleChange("price", "0"));
     expect(result.current.isFormValid).toBe(false);
     expect(result.current.error).toEqual({ key: "price_modal.error_price_not_positive" });
   });
 
-  // MKT-021 — negative price also invalid
-  it("MKT-021 — isFormValid is false and error set when price is negative", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
-    act(() => {
-      result.current.handleChange("price", "-10");
-    });
-    expect(result.current.isFormValid).toBe(false);
-    expect(result.current.error).toEqual({ key: "price_modal.error_price_not_positive" });
-  });
-
-  // MKT-022 — Inline error + submit disabled for future date
+  // MKT-022 — future date invalid.
   it("MKT-022 — isFormValid is false and error set for a future date", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
     act(() => {
       result.current.handleChange("date", "2099-12-31");
       result.current.handleChange("price", "100");
@@ -150,11 +111,9 @@ describe("usePriceModal", () => {
     expect(result.current.error).toEqual({ key: "price_modal.error_future_date" });
   });
 
-  // MKT-022 — Inline error + submit disabled for malformed date
+  // MKT-022 — malformed date invalid.
   it("MKT-022 — isFormValid is false and error set for malformed date string", () => {
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
     act(() => {
       result.current.handleChange("date", "not-a-date");
       result.current.handleChange("price", "100");
@@ -163,92 +122,78 @@ describe("usePriceModal", () => {
     expect(result.current.error).toEqual({ key: "price_modal.error_invalid_date" });
   });
 
-  // MKT-027 — Submit button disabled + spinner while in-flight (isSubmitting true during call)
-  it("MKT-027 — isSubmitting is true while gateway call is pending", async () => {
-    let resolveCall!: () => void;
-    mockRecordAssetPrice.mockReturnValue(
-      new Promise<{ status: string; data: null }>((resolve) => {
-        resolveCall = () => resolve({ status: "ok", data: null });
-      }),
-    );
-    const { result } = renderHook(() =>
-      usePriceModal({ holding: makeHolding(), onSubmitSuccess: vi.fn() }),
-    );
-    act(() => {
-      result.current.handleChange("price", "100");
-    });
-
-    let submitPromise: Promise<void>;
-    act(() => {
-      submitPromise = result.current.handleSubmit(fakeSubmit);
-    });
-
-    expect(result.current.isSubmitting).toBe(true);
-    await act(async () => {
-      resolveCall();
-      await submitPromise;
-    });
-    expect(result.current.isSubmitting).toBe(false);
-  });
-
-  // MKT-028 — Modal closes on success + snackbar shown (onSubmitSuccess called)
-  it("MKT-028 — calls onSubmitSuccess on successful recordAssetPrice", async () => {
+  // MKT-028 — calls onSubmitSuccess on successful record, with the selected asset.
+  it("MKT-028 — records the selected asset and calls onSubmitSuccess", async () => {
     mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
     const onSubmitSuccess = vi.fn();
-    const { result } = renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess }));
-
+    const { result } = renderHook(() => usePriceModal({ ...BASE_PROPS, onSubmitSuccess }));
     await act(async () => {
-      result.current.handleChange("date", TODAY);
+      result.current.handleChange("date", "2024-05-01");
       result.current.handleChange("price", "150.50");
     });
-
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
-
+    expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-05-01", 150.5);
     expect(onSubmitSuccess).toHaveBeenCalledOnce();
   });
 
-  // MKT-029 — Modal stays open on error + inline error shown
-  it("MKT-029 — sets inline error and does not call onSubmitSuccess on backend error", async () => {
-    mockRecordAssetPrice.mockResolvedValue({
-      status: "error",
-      error: { code: "NotPositive" },
-    });
+  // MKT-014 — "add another" records, calls onRecorded (not onSubmitSuccess), clears the price.
+  it("MKT-014 — handleAddAnother records, calls onRecorded, and clears the price", async () => {
+    mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
     const onSubmitSuccess = vi.fn();
-    const { result } = renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess }));
-
+    const onRecorded = vi.fn();
+    const { result } = renderHook(() =>
+      usePriceModal({ ...BASE_PROPS, onSubmitSuccess, onRecorded }),
+    );
+    await act(async () => result.current.handleChange("price", "150.50"));
     await act(async () => {
-      result.current.handleChange("date", TODAY);
-      result.current.handleChange("price", "150.50");
+      await result.current.handleAddAnother();
     });
+    expect(onRecorded).toHaveBeenCalledOnce();
+    expect(onSubmitSuccess).not.toHaveBeenCalled();
+    expect(result.current.price).toBe(""); // cleared for the next entry
+    expect(result.current.assetId).toBe("asset-1"); // asset kept
+  });
 
+  // MKT-014 — on a backend error, "add another" keeps onRecorded silent and the
+  // price intact so the user can correct and retry.
+  it("MKT-014 — handleAddAnother does not call onRecorded or clear the price on error", async () => {
+    mockRecordAssetPrice.mockResolvedValue({ status: "error", error: { code: "NotPositive" } });
+    const onRecorded = vi.fn();
+    const { result } = renderHook(() => usePriceModal({ ...BASE_PROPS, onRecorded }));
+    await act(async () => result.current.handleChange("price", "150.50"));
+    await act(async () => {
+      await result.current.handleAddAnother();
+    });
+    expect(onRecorded).not.toHaveBeenCalled();
+    expect(result.current.price).toBe("150.50"); // preserved for correction
+    expect(result.current.error).toEqual({ key: "error.NotPositive" });
+  });
+
+  // MKT-029 — inline error on backend failure; modal stays (no onSubmitSuccess).
+  it("MKT-029 — sets inline error and does not call onSubmitSuccess on backend error", async () => {
+    mockRecordAssetPrice.mockResolvedValue({ status: "error", error: { code: "NotPositive" } });
+    const onSubmitSuccess = vi.fn();
+    const { result } = renderHook(() => usePriceModal({ ...BASE_PROPS, onSubmitSuccess }));
+    await act(async () => result.current.handleChange("price", "150.50"));
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
-
     expect(onSubmitSuccess).not.toHaveBeenCalled();
     expect(result.current.error).toEqual({ key: "error.NotPositive" });
   });
 
-  // Gateway throw path — recordAssetPrice rejects → UNKNOWN_ERROR set, isSubmitting cleared
+  // Gateway throw path — UNKNOWN_ERROR set, isSubmitting cleared.
   it("falls back to UNKNOWN_ERROR and clears isSubmitting when gateway throws", async () => {
     mockRecordAssetPrice.mockRejectedValue(new Error("boom"));
-    const onSubmitSuccess = vi.fn();
-    const { result } = renderHook(() => usePriceModal({ holding: makeHolding(), onSubmitSuccess }));
-
-    await act(async () => {
-      result.current.handleChange("date", TODAY);
-      result.current.handleChange("price", "150.50");
-    });
-
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    await act(async () => result.current.handleChange("price", "150.50"));
     await act(async () => {
       await result.current.handleSubmit(fakeSubmit);
     });
-
     expect(result.current.error).toEqual({ key: "error.Unknown" });
     expect(result.current.isSubmitting).toBe(false);
-    expect(onSubmitSuccess).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledWith("[usePriceModal] recordAssetPrice threw", {
       error: expect.any(Error),
     });

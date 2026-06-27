@@ -429,7 +429,13 @@ export function AccountDetailsView() {
 
       {/* MKT-072 — Price history modal (price entry lives inside via "Add price") */}
       {view.historyTarget && (
-        <PriceHistoryModal isOpen onClose={view.handleHistoryClose} holding={view.historyTarget} />
+        <PriceHistoryModal
+          isOpen
+          onClose={view.handleHistoryClose}
+          holding={view.historyTarget}
+          accountId={accountId}
+          priceableAssets={view.priceableAssets}
+        />
       )}
 
       {/* TRX-055 — Open balance modal (account pre-filled, user picks asset inside) */}

@@ -12,10 +12,12 @@ import {
   formatSource,
   formatStaleness,
   freeSharesErrorToI18n,
+  type HoldingRowViewModel,
   priceRefreshLockErrorToI18n,
   toAccountSummary,
   toClosedHoldingRow,
   toHoldingRow,
+  toPriceableAssets,
 } from "./presenter";
 
 const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => ({
@@ -745,5 +747,28 @@ describe("toAccountSummary — dividend total (DIV-073)", () => {
   it("formats totalDividendsReceived as '0,00' when no dividends (DIV-073)", () => {
     const summary = toAccountSummary(makeResponse({ total_dividends_received: 0 }));
     expect(summary.totalDividendsReceived).toBe("0,00");
+  });
+});
+
+describe("toPriceableAssets", () => {
+  const row = (over: Partial<HoldingRowViewModel>): HoldingRowViewModel =>
+    ({
+      assetId: "a",
+      assetName: "A",
+      assetCurrency: "EUR",
+      canEnterPrice: true,
+      ...over,
+    }) as HoldingRowViewModel;
+
+  it("keeps only canEnterPrice holdings, mapped to the combobox shape (MKT-011)", () => {
+    const rows = [
+      row({ assetId: "a1", assetName: "Apple", assetCurrency: "EUR", canEnterPrice: true }),
+      row({ assetId: "cash", assetName: "Cash", assetCurrency: "EUR", canEnterPrice: false }),
+      row({ assetId: "a2", assetName: "Tesla", assetCurrency: "USD", canEnterPrice: true }),
+    ];
+    expect(toPriceableAssets(rows)).toEqual([
+      { assetId: "a1", assetName: "Apple", assetCurrency: "EUR" },
+      { assetId: "a2", assetName: "Tesla", assetCurrency: "USD" },
+    ]);
   });
 });
