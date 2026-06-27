@@ -4,7 +4,6 @@ import type {
   AssetCrudError,
   AssetPrice,
   AssetPriceError,
-  CorrectTransactionDTO,
   DepositDTO,
   DividendDTO,
   DividendError,
@@ -20,6 +19,7 @@ import type {
   WithdrawalDTO,
 } from "@/bindings";
 import { commands, events } from "@/bindings";
+import type { CorrectTransactionFields } from "@/features/transactions/shared/types";
 
 export const accountDetailsGateway = {
   async getAccountDetails(
@@ -78,9 +78,9 @@ export const accountDetailsGateway = {
   async correctTransaction(
     id: string,
     accountId: string,
-    dto: CorrectTransactionDTO,
+    dto: CorrectTransactionFields,
   ): Promise<Result<Transaction, AccountError>> {
-    return commands.correctTransaction(id, accountId, dto);
+    return commands.correctTransaction({ ...dto, account_id: accountId, transaction_id: id });
   },
 
   async fetchAccountAssetPrices(

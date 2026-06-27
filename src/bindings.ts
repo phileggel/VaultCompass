@@ -400,9 +400,9 @@ async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, AccountErro
 /**
  * Corrects an existing transaction and recalculates the affected holding (TRX-031).
  */
-async correctTransaction(id: string, accountId: string, dto: CorrectTransactionDTO) : Promise<Result<Transaction, AccountError>> {
+async correctTransaction(dto: CorrectTransactionDTO) : Promise<Result<Transaction, AccountError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("correct_transaction", { id, accountId, dto }) };
+    return { status: "ok", data: await TAURI_INVOKE("correct_transaction", { dto }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -411,9 +411,9 @@ async correctTransaction(id: string, accountId: string, dto: CorrectTransactionD
 /**
  * Cancels a transaction and recalculates (or removes) the associated holding (TRX-034).
  */
-async cancelTransaction(id: string, accountId: string) : Promise<Result<null, AccountError>> {
+async cancelTransaction(dto: CancelTransactionDTO) : Promise<Result<null, AccountError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("cancel_transaction", { id, accountId }) };
+    return { status: "ok", data: await TAURI_INVOKE("cancel_transaction", { dto }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -899,9 +899,8 @@ ytd_performance_pct: number | null }
  * Use-case composite for the **archive asset** failure surface — the single
  * command `archive_asset` (OQ-6) and its full chain of rejections.
  * 
- * Replaces the anyhow-era `ArchiveAssetCommandError` boundary type. This IS
- * the FE-facing contract for the `archive_asset` Tauri command — each leaf
- * already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
+ * This IS the FE-facing contract for the `archive_asset` Tauri command — each
+ * leaf already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
  * here flattens them into a single FE-visible union.
  * 
  * Each leaf lives in its rightful layer:
@@ -1363,6 +1362,18 @@ fees: number;
  */
 note: string | null }
 /**
+ * Parameters for cancelling an existing transaction.
+ */
+export type CancelTransactionDTO = { 
+/**
+ * Account that owns the transaction being cancelled.
+ */
+account_id: string; 
+/**
+ * Identifier of the transaction being cancelled.
+ */
+transaction_id: string }
+/**
  * Application-layer rejections for the Category sub-aggregate of the Asset
  * bounded context — concerns raised at the service layer rather than by an
  * aggregate method on its own loaded state.
@@ -1481,9 +1492,17 @@ dividends_received: number;
 last_sold_date: string }
 /**
  * Parameters for correcting an existing transaction.
- * `account_id` and `asset_id` are immutable — taken from the existing transaction.
+ * `asset_id` is immutable — taken from the existing transaction.
  */
 export type CorrectTransactionDTO = { 
+/**
+ * Account that owns the transaction being corrected.
+ */
+account_id: string; 
+/**
+ * Identifier of the transaction being corrected.
+ */
+transaction_id: string; 
 /**
  * Corrected transaction date (YYYY-MM-DD).
  */
@@ -1690,9 +1709,8 @@ export type CurrencyRateSource =
  * Use-case composite for the **delete asset** failure surface — the single
  * command `delete_asset` and its full chain of rejections.
  * 
- * Replaces the anyhow-era `DeleteAssetCommandError` boundary type. This IS
- * the FE-facing contract for the `delete_asset` Tauri command — each leaf
- * already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
+ * This IS the FE-facing contract for the `delete_asset` Tauri command — each
+ * leaf already serializes with `#[serde(tag = "code")]`, and `#[serde(untagged)]`
  * here flattens them into a single FE-visible union.
  * 
  * Each leaf lives in its rightful layer:

@@ -107,7 +107,7 @@ describe("transactionGateway", () => {
   // ── correctTransaction ───────────────────────────────────────────────────────
 
   it("correctTransaction returns updated Transaction on success", async () => {
-    const dto: CorrectTransactionDTO = {
+    const dto: Omit<CorrectTransactionDTO, "account_id" | "transaction_id"> = {
       date: "2024-01-20",
       quantity: 2_000_000,
       unit_price: 90_000_000,
@@ -120,16 +120,14 @@ describe("transactionGateway", () => {
     const result = await transactionGateway.correctTransaction("tx-1", "acc-1", dto);
     expect(result).toEqual({ status: "ok", data: tx });
     expect(mockInvoke).toHaveBeenCalledWith("correct_transaction", {
-      id: "tx-1",
-      accountId: "acc-1",
-      dto,
+      dto: { ...dto, account_id: "acc-1", transaction_id: "tx-1" },
     });
   });
 
   it("correctTransaction returns error on failure", async () => {
     const err: AccountError = { code: "TransactionNotFound" };
     mockInvoke.mockRejectedValue(err);
-    const dto: CorrectTransactionDTO = {
+    const dto: Omit<CorrectTransactionDTO, "account_id" | "transaction_id"> = {
       date: "2024-01-20",
       quantity: 2_000_000,
       unit_price: 90_000_000,
@@ -148,8 +146,7 @@ describe("transactionGateway", () => {
     const result = await transactionGateway.cancelTransaction("tx-1", "acc-1");
     expect(result).toEqual({ status: "ok", data: null });
     expect(mockInvoke).toHaveBeenCalledWith("cancel_transaction", {
-      id: "tx-1",
-      accountId: "acc-1",
+      dto: { account_id: "acc-1", transaction_id: "tx-1" },
     });
   });
 
