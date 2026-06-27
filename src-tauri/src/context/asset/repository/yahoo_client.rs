@@ -24,19 +24,15 @@ pub struct ReqwestYahooClient {
 }
 
 impl ReqwestYahooClient {
-    /// Creates a new client with a 10-second per-request timeout.
-    pub fn new() -> Self {
+    /// Creates a new client with a 10-second per-request timeout. Fails only if
+    /// the TLS backend cannot be initialised — an unrecoverable environment
+    /// fault surfaced at startup rather than panicked on.
+    pub fn new() -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
-            .expect("reqwest client build");
-        Self { client }
-    }
-}
-
-impl Default for ReqwestYahooClient {
-    fn default() -> Self {
-        Self::new()
+            .context("building the Yahoo Finance HTTP client")?;
+        Ok(Self { client })
     }
 }
 
@@ -298,6 +294,12 @@ fn normalize_minor_unit(price: f64, currency: Option<&str>) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The constructor builds a reqwest client successfully in a normal environment.
+    #[test]
+    fn new_builds_a_client() {
+        assert!(ReqwestYahooClient::new().is_ok());
+    }
 
     // MKT-102/117 — a US quote: price to micros, date from the regular-market timestamp.
     #[test]

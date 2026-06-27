@@ -17,19 +17,15 @@ pub struct ReqwestEcbClient {
 }
 
 impl ReqwestEcbClient {
-    /// Creates a new client with a 10-second per-request timeout.
-    pub fn new() -> Self {
+    /// Creates a new client with a 10-second per-request timeout. Fails only if
+    /// the TLS backend cannot be initialised — an unrecoverable environment
+    /// fault surfaced at startup rather than panicked on.
+    pub fn new() -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
-            .expect("reqwest client build");
-        Self { client }
-    }
-}
-
-impl Default for ReqwestEcbClient {
-    fn default() -> Self {
-        Self::new()
+            .context("building the ECB HTTP client")?;
+        Ok(Self { client })
     }
 }
 
@@ -134,6 +130,12 @@ mod tests {
    <Cube currency='JPY' rate='185.74'/>
  </Cube></Cube>
 </gesmes:Envelope>"#;
+
+    // The constructor builds a reqwest client successfully in a normal environment.
+    #[test]
+    fn new_builds_a_client() {
+        assert!(ReqwestEcbClient::new().is_ok());
+    }
 
     // FXR-070 — parses date from the `time` attribute and sets source = Ecb
     #[test]
