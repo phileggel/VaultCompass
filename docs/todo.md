@@ -6,10 +6,6 @@
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.
 
-## (backend) — `correct_transaction` / `cancel_transaction` parameter style
-
-`correct_transaction(id: String, account_id: String, dto: CorrectTransactionDTO)` and `cancel_transaction(id: String, account_id: String)` mix primitives + DTO; the rest of the holding-transaction commands are DTO-only. Move `id`/`account_id` into the DTOs for consistency. Frontend impact: gateway call sites change. Surfaced during cash-tracking spec review (2026-05-05); per-command-error-enums concern from the original entry is subsumed by `docs/plan/error-model-refactor.md` PR 3.
-
 ## (backend) — Promote BC application services to traits, mock with mockall
 
 `AccountService` and `AssetService` are concrete structs, so cross-BC orchestrators (`HoldingTransactionUseCase`, `ArchiveAssetUseCase`, `DeleteAssetUseCase`, `AccountDetailsUseCase`, …) cannot mockall-mock them and instead test against real services + in-memory SQLite. That's against the spirit of `docs/backend-rules.md` B34 ("Tests for services and orchestrators SHOULD mock external dependencies using mockall-generated mocks") — repositories already follow B34 via `#[cfg_attr(test, mockall::automock)]` on each domain.rs trait, but the service layer above them does not.
@@ -32,25 +28,3 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
 `cargo audit` flags `rsa 0.9.10` (timing sidechannel, CVSS 5.9 medium) with no upstream fix. Pulled transitively via `sqlx-mysql 0.8.6` because the `sqlx` macro crate compiles all backends regardless of enabled features. We only enable `sqlite`, so the vulnerable RSA path is never reached at runtime. Re-evaluate when sqlx ships a fix or when we change DB backend.
-
-## display average price to date on the sell/buy dialog
-
-Indicate the price as an info just under the price inputfield. Based on the sell/buy date (or current date if none is typed).
-
-## display potential p&l to date on the sell dialog
-
-Indicate the potential p&l as an info just under the calculated global amount. Based on the sell date, average price, typed sell price, qty on this date (if no date, current date, if no qty or no typed sell price, no info is indicated)
-
-## inline calcul in buy/sell dialog (ok if in any number inputfield)
-
-need to refine it for ux part.
-
-## dividende view, button "other dividend input"
-
-add a button in dividend dialog if the user wants to add another dividend
-
-## price view
-
-add a button in price dialog if the user wants to add another price.
-the asset should be dropdown fuzzy asset search. the asset can be pre-selected.
-the date should be the same as standard "stored date" per default
