@@ -16,6 +16,7 @@ import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
+import { useHoldingSnapshotAsOf } from "../shared/useHoldingSnapshotAsOf";
 
 interface UseBuyTransactionProps {
   accountId: string;
@@ -57,6 +58,14 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
   const isFormValid = useMemo(
     () => validateTransactionForm(formData, microValues.qtyMicro, microValues.totalMicro) === null,
     [formData, microValues.qtyMicro, microValues.totalMicro],
+  );
+
+  // TDI-020 — average cost as of the entered trade date (or today). Hidden when
+  // nothing is held as of that date (TDI-021).
+  const snapshot = useHoldingSnapshotAsOf(accountId, assetId, formData.date);
+  const averageCostAsOfDate = useMemo(
+    () => (snapshot && snapshot.quantity > 0 ? microToFormatted(snapshot.average_price) : null),
+    [snapshot],
   );
 
   // TRX-029 — is the pre-determined asset archived?
@@ -143,6 +152,8 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
   return {
     formData,
     totalAmountDisplay: microToFormatted(microValues.totalMicro),
+    /** TDI-020 — formatted account-currency average cost as of the date, or null when not held. */
+    averageCostAsOfDate,
     error,
     isSubmitting,
     isFormValid,

@@ -7,6 +7,7 @@ import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
 import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import {
+  computeCostBasisMicro,
   computeSellTotalMicro,
   decimalToMicro,
   microToDecimal,
@@ -15,6 +16,7 @@ import {
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
+import { useHoldingSnapshotAsOf } from "../shared/useHoldingSnapshotAsOf";
 
 interface UseSellTransactionProps {
   accountId: string;
@@ -68,6 +70,25 @@ export function useSellTransaction({
       ) === null,
     [formData, microValues.qtyMicro, microValues.totalMicro, holdingQuantityMicro],
   );
+
+  // TDI-020 — average cost as of the entered sell date (or today). Hidden when
+  // nothing is held as of that date (TDI-021).
+  const snapshot = useHoldingSnapshotAsOf(accountId, assetId, formData.date);
+  const averageCostAsOfDate = useMemo(
+    () => (snapshot && snapshot.quantity > 0 ? microToFormatted(snapshot.average_price) : null),
+    [snapshot],
+  );
+
+  // TDI-030/031 — potential realized P&L of the typed sell: proceeds minus the
+  // VWAP cost basis of the sold quantity. Shown only when a quantity and price
+  // are entered and the holding is held as of the date.
+  const potentialPnl = useMemo(() => {
+    if (!snapshot || snapshot.quantity <= 0) return null;
+    if (microValues.qtyMicro <= 0 || microValues.priceMicro <= 0) return null;
+    const costBasis = computeCostBasisMicro(snapshot.average_price, microValues.qtyMicro);
+    const pnlMicro = microValues.totalMicro - costBasis;
+    return { formatted: microToFormatted(pnlMicro), raw: pnlMicro };
+  }, [snapshot, microValues.qtyMicro, microValues.priceMicro, microValues.totalMicro]);
 
   const handleChange = useCallback((field: keyof TransactionFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -148,6 +169,10 @@ export function useSellTransaction({
     totalAmountDisplay: microToFormatted(microValues.totalMicro),
     /** Maximum sellable quantity formatted for display (SEL-022). */
     maxQuantityDisplay: microToFormatted(holdingQuantityMicro, 6),
+    /** TDI-020 — formatted account-currency average cost as of the date, or null when not held. */
+    averageCostAsOfDate,
+    /** TDI-030 — potential realized P&L of the typed sell (`{ formatted, raw }`), or null. */
+    potentialPnl,
     error,
     isSubmitting,
     isFormValid,

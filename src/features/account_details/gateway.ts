@@ -12,6 +12,7 @@ import type {
   FetchForDateOutcome,
   FreeSharesDTO,
   FreeSharesError,
+  HoldingSnapshot,
   OpenHoldingDTO,
   OpenHoldingError,
   Result,
@@ -81,6 +82,15 @@ export const accountDetailsGateway = {
     dto: CorrectTransactionFields,
   ): Promise<Result<Transaction, AccountError>> {
     return commands.correctTransaction({ ...dto, account_id: accountId, transaction_id: id });
+  },
+
+  // TDI-010 — holding quantity + VWAP average cost as of a date (trade-dialog insights).
+  async getHoldingSnapshotAsOf(
+    accountId: string,
+    assetId: string,
+    date: string,
+  ): Promise<Result<HoldingSnapshot, AccountError>> {
+    return commands.getHoldingSnapshotAsOf(accountId, assetId, date);
   },
 
   async fetchAccountAssetPrices(

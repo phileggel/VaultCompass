@@ -1,10 +1,11 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSellTransaction } from "./useSellTransaction";
 
-const { mockSellHolding, mockRecordAssetPrice } = vi.hoisted(() => ({
+const { mockSellHolding, mockRecordAssetPrice, mockGetSnapshot } = vi.hoisted(() => ({
   mockSellHolding: vi.fn(),
   mockRecordAssetPrice: vi.fn(),
+  mockGetSnapshot: vi.fn(),
 }));
 
 vi.mock("@/features/transactions/useTransactions", () => ({
@@ -20,6 +21,7 @@ vi.mock("@/features/transactions/useTransactions", () => ({
 vi.mock("../gateway", () => ({
   accountDetailsGateway: {
     recordAssetPrice: mockRecordAssetPrice,
+    getHoldingSnapshotAsOf: mockGetSnapshot,
   },
 }));
 
@@ -43,6 +45,35 @@ describe("useSellTransaction", () => {
     localStorage.clear();
     mockSellHolding.mockReset();
     mockRecordAssetPrice.mockReset();
+    mockGetSnapshot.mockReset();
+    mockGetSnapshot.mockResolvedValue({ status: "ok", data: { quantity: 0, average_price: 0 } });
+  });
+
+  // TDI-030 — potential P&L = proceeds − VWAP cost basis of the sold quantity.
+  it("computes potentialPnl from the as-of snapshot and the typed sell", async () => {
+    mockGetSnapshot.mockResolvedValue({
+      status: "ok",
+      data: { quantity: 2_000_000, average_price: 100_000_000 },
+    });
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    await waitFor(() => expect(result.current.averageCostAsOfDate).not.toBeNull());
+    await act(async () => {
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "150");
+    });
+    // proceeds 150 − cost basis (100 × 1) = 50 → 50_000_000 micro
+    expect(result.current.potentialPnl?.raw).toBe(50_000_000);
+  });
+
+  // TDI-031 — no potential P&L until a quantity and price are entered.
+  it("hides potentialPnl when quantity or price is missing", async () => {
+    mockGetSnapshot.mockResolvedValue({
+      status: "ok",
+      data: { quantity: 2_000_000, average_price: 100_000_000 },
+    });
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    await waitFor(() => expect(result.current.averageCostAsOfDate).not.toBeNull());
+    expect(result.current.potentialPnl).toBeNull();
   });
 
   // SEL-023 — sell total = floor(floor(qty × price / MICRO) × rate / MICRO) − fees

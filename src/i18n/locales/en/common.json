@@ -276,6 +276,8 @@
     "buy_modal_title": "Buy position",
     "sell_modal_title": "Sell position",
     "form_max_quantity_hint": "Max: {{max}}",
+    "form_avg_cost_hint": "Average cost to date: {{value}}",
+    "form_potential_pnl_hint": "Potential P&L: {{value}}",
     "error_validation_oversell": "Quantity exceeds current holding ({{max}}).",
     "error_closed_position": "No units available to sell.",
     "error_archived_asset_sell": "Cannot sell an archived asset.",
