@@ -1038,7 +1038,10 @@ impl Account {
             last_vwap
         };
         HoldingSnapshot {
-            quantity: total_quantity as i64,
+            // A read-only replay over already-validated history never goes negative;
+            // clamp defensively so internally-inconsistent stored data can never
+            // surface a negative quantity (the field contract is "0 when not held").
+            quantity: total_quantity.max(0) as i64,
             average_price,
         }
     }
@@ -1577,6 +1580,58 @@ mod tests {
         ];
         let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-01");
         assert_eq!(snap.quantity, micro(2)); // only asset-1's transactions
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_dilutes_vwap_with_free_shares() {
+        // Buy 2 @ cost 200 (avg 100), then receive 2 free shares at zero cost.
+        let txs = vec![
+            snap_tx(
+                "buy-1",
+                "asset-1",
+                TransactionType::Purchase,
+                "2024-06-01",
+                2,
+                200,
+            ),
+            snap_tx(
+                "fsd-1",
+                "asset-1",
+                TransactionType::FreeShares,
+                "2024-06-15",
+                2,
+                0,
+            ),
+        ];
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-01");
+        assert_eq!(snap.quantity, micro(4));
+        assert_eq!(snap.average_price, micro(50)); // FSD-023 — VWAP dilutes to 200/4
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_handles_cash_deposit_and_withdrawal() {
+        // Cash unit price stays 1.0: deposit 100, withdraw 30 → 70 held at avg 1.0.
+        let txs = vec![
+            snap_tx(
+                "dep-1",
+                "cash-1",
+                TransactionType::Deposit,
+                "2024-06-01",
+                100,
+                100,
+            ),
+            snap_tx(
+                "wd-1",
+                "cash-1",
+                TransactionType::Withdrawal,
+                "2024-06-10",
+                30,
+                30,
+            ),
+        ];
+        let snap = Account::holding_snapshot_as_of(&txs, "cash-1", "2024-07-01");
+        assert_eq!(snap.quantity, micro(70));
+        assert_eq!(snap.average_price, micro(1)); // CSH — cash VWAP stays at 1.0
     }
 
     // SEL-024 / SEL-030 — correcting a sell to a date that precedes its buy is rejected:

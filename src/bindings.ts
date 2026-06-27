@@ -2207,7 +2207,7 @@ export type HoldingSnapshot = {
  */
 quantity: number; 
 /**
- * VWAP cost basis in the asset's currency (micro-units), 0 when never held.
+ * VWAP cost basis per unit, account currency (micro-units), 0 when never held.
  */
 average_price: number }
 /**
