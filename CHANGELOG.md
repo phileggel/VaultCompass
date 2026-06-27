@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-06-27
+
+### Added
+
+- accept inline arithmetic in transactions number fields
+  Swap numeric TextField → CalcField in the add-transaction page + modal, edit-transaction modal, and the account-journal amount filters (A3).
+- accept inline arithmetic in account-details number fields
+  Swap numeric TextField → CalcField in the buy, sell, dividend, price, deposit, withdrawal, free-shares, open-balance and edit-price forms (A3).
+- add inline-arithmetic CalcField primitive
+  evaluateArithmetic parses + - \* / and parentheses (no eval); CalcField shows a live '= result' hint and commits the result on blur, reporting the evaluated value while plain numbers pass through. Wired into fields in follow-up commits.
+- price dialog fuzzy asset search + 'save & add another'
+  The price modal's asset becomes a fuzzy combobox over the account's priceable holdings (pre-selected to the launched holding, switchable); the date seeds from the stored last-operation date; a 'Save & add another' button records and keeps the modal open. Amends MKT-011/012/013 + adds MKT-014. Visual-proof deferred to the pre-release todo.
+- add "record & add another" to the dividend dialog
+  A secondary button records the dividend, refreshes via a refresh-only onRecorded callback, clears amount + note, and keeps the modal open for the next entry (DIV-010). Visual-proof deferred to the pre-release todo.
+- show as-of-date avg cost and potential P&L on trade dialogs
+  Buy/sell dialogs show the holding's avg cost as of the trade date (TDI-020); the sell dialog also shows the typed sell's potential P&L (TDI-030). Visual-proof of the new modal info lines is a pre-release todo (interactive + needs IPC mocking).
+- add as-of-date holding snapshot query
+  get_holding_snapshot_as_of replays a (account, asset) pair's transactions up to a date to reconstruct quantity + VWAP cost (TDI-010). Read-only; powers the trade-dialog insights. Also corrects the contract's stale correct/cancel arg rows (now DTO-only).
+
+### Fixed
+
+- T8 review follow-ups — float formatting + colocate arithmetic
+  CalcField commits formatResult() (not raw String) so float artifacts like 5.000000000000001 render and store as 5. Move arithmetic.ts next to its only consumer (gold for the new file).
+- T5 review follow-ups — snapshot error pass-through + coverage
+  useHoldingSnapshotAsOf surfaces the typed AccountError instead of dropping it (F27). Defensive qty clamp + FreeShares/Withdrawal/DatabaseError/cross-currency-P&L tests. Regenerate bindings so HoldingSnapshot.average_price reads account currency (was stale).
+
 ## [0.27.0] - 2026-06-23
 
 ### Added
