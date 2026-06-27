@@ -8,7 +8,7 @@ use crate::context::account::AccountError;
 /// Tauri boundary into a flat `{ code: "..." }` shape.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
-pub enum DividendApplicationError {
+pub enum DividendTask {
     /// No asset exists with the requested ID (DIV-011).
     #[error("Asset not found")]
     AssetNotFound,
@@ -25,7 +25,7 @@ pub enum DividendApplicationError {
 ///
 /// - `AccountError` — every account-BC rejection (lookup, infrastructure, and
 ///   the transaction-factory date / amount / rate validation).
-/// - `DividendApplicationError` — use-case-owned (this file), the cross-BC
+/// - `DividendTask` — use-case-owned (this file), the cross-BC
 ///   asset/holding checks.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
@@ -35,7 +35,7 @@ pub enum DividendError {
     Account(#[from] AccountError),
     /// Use-case-layer rejection (cross-BC asset checks).
     #[error(transparent)]
-    UseCase(#[from] DividendApplicationError),
+    UseCase(#[from] DividendTask),
 }
 
 #[cfg(test)]
@@ -52,9 +52,9 @@ mod dividend_error_wire_tests {
                 account_id: "acc-1".to_string(),
             }
             .into(),
-            DividendApplicationError::AssetNotFound.into(),
-            DividendApplicationError::AssetNotHeld.into(),
-            DividendApplicationError::DividendOnCashAsset.into(),
+            DividendTask::AssetNotFound.into(),
+            DividendTask::AssetNotHeld.into(),
+            DividendTask::DividendOnCashAsset.into(),
             AccountError::AmountNotPositive.into(),
             AccountError::ExchangeRateNotPositive.into(),
         ];
@@ -76,7 +76,7 @@ mod dividend_error_wire_tests {
 /// Tauri boundary into a flat `{ code: "..." }` shape.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
-pub enum FreeSharesApplicationError {
+pub enum FreeSharesTask {
     /// No asset exists with the requested ID (FSD-011).
     #[error("Asset not found")]
     AssetNotFound,
@@ -93,7 +93,7 @@ pub enum FreeSharesApplicationError {
 ///
 /// - `AccountError` — every account-BC rejection (lookup, infrastructure, and
 ///   the transaction-factory date / quantity validation).
-/// - `FreeSharesApplicationError` — use-case-owned (this file), the cross-BC
+/// - `FreeSharesTask` — use-case-owned (this file), the cross-BC
 ///   asset/holding checks.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
@@ -103,7 +103,7 @@ pub enum FreeSharesError {
     Account(#[from] AccountError),
     /// Use-case-layer rejection (cross-BC asset checks).
     #[error(transparent)]
-    UseCase(#[from] FreeSharesApplicationError),
+    UseCase(#[from] FreeSharesTask),
 }
 
 #[cfg(test)]
@@ -121,9 +121,9 @@ mod free_shares_error_wire_tests {
                 account_id: "acc-1".to_string(),
             }
             .into(),
-            FreeSharesApplicationError::AssetNotFound.into(),
-            FreeSharesApplicationError::AssetNotHeld.into(),
-            FreeSharesApplicationError::FreeSharesOnCashAsset.into(),
+            FreeSharesTask::AssetNotFound.into(),
+            FreeSharesTask::AssetNotHeld.into(),
+            FreeSharesTask::FreeSharesOnCashAsset.into(),
             AccountError::QuantityNotPositive.into(),
             AccountError::DateInFuture.into(),
         ];
@@ -145,7 +145,7 @@ mod free_shares_error_wire_tests {
 /// Tauri boundary into a flat `{ code: "..." }` shape.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
-pub enum OpenHoldingApplicationError {
+pub enum OpenHoldingTask {
     /// No asset exists with the requested ID (TRX-056).
     #[error("Asset not found")]
     AssetNotFound,
@@ -168,7 +168,7 @@ pub enum OpenHoldingApplicationError {
 ///   `DatabaseError` (incl. asset-side `get_asset_by_id` infra failures
 ///   tunnelled here so the wire carries a single `{ code: "DatabaseError" }`),
 ///   `InvalidTotalCost`, and the transaction-factory date / quantity invariants.
-/// - `OpenHoldingApplicationError` — use-case-owned (this file), the 3 cross-BC
+/// - `OpenHoldingTask` — use-case-owned (this file), the 3 cross-BC
 ///   rejections (`AssetNotFound`, `ArchivedAsset`, `OpeningBalanceOnCashAsset`).
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
@@ -178,5 +178,5 @@ pub enum OpenHoldingError {
     Account(#[from] AccountError),
     /// Use-case-layer rejection (cross-BC asset checks).
     #[error(transparent)]
-    UseCase(#[from] OpenHoldingApplicationError),
+    UseCase(#[from] OpenHoldingTask),
 }

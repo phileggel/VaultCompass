@@ -11,7 +11,7 @@ import {
   type LookupMode,
   type Result,
   type UpdateAssetDTO,
-  type WebLookupApplicationError,
+  type WebLookupError,
 } from "../../bindings";
 
 /**
@@ -50,7 +50,7 @@ export const assetGateway = {
   async lookupAsset(
     query: string,
     mode: LookupMode,
-  ): Promise<Result<AssetLookupResult[], WebLookupApplicationError>> {
+  ): Promise<Result<AssetLookupResult[], WebLookupError>> {
     return await commands.lookupAsset(query, mode);
   },
 

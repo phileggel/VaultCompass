@@ -15,7 +15,7 @@ use crate::context::asset::AssetCrudError;
 /// `DeleteAssetError` untagged composite.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
 #[serde(tag = "code")]
-pub enum DeleteAssetApplicationError {
+pub enum DeleteAssetTask {
     /// At least one transaction references this asset; deletion would break history.
     #[error("Cannot delete an asset with existing transactions")]
     ExistingTransactions,
@@ -36,7 +36,7 @@ pub enum DeleteAssetApplicationError {
 ///   composition-over-redefinition rule.
 /// - `AccountError` — account BC (`account/application/`), surfaces
 ///   `DatabaseError` from the cross-BC transaction-history check.
-/// - `DeleteAssetApplicationError` — use-case-owned (this file), raises
+/// - `DeleteAssetTask` — use-case-owned (this file), raises
 ///   `ExistingTransactions` from the orchestrator.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
@@ -51,7 +51,7 @@ pub enum DeleteAssetError {
     Account(#[from] AccountError),
     /// Use-case orchestration rejection (`ExistingTransactions`).
     #[error(transparent)]
-    Application(#[from] DeleteAssetApplicationError),
+    Application(#[from] DeleteAssetTask),
 }
 
 #[cfg(test)]
@@ -111,11 +111,11 @@ mod tests {
     // ExistingTransactions surfaces through the Application leaf
     #[test]
     fn existing_transactions_surfaces_through_application_leaf() {
-        let composite: DeleteAssetError = DeleteAssetApplicationError::ExistingTransactions.into();
+        let composite: DeleteAssetError = DeleteAssetTask::ExistingTransactions.into();
         assert!(
             matches!(
                 composite,
-                DeleteAssetError::Application(DeleteAssetApplicationError::ExistingTransactions)
+                DeleteAssetError::Application(DeleteAssetTask::ExistingTransactions)
             ),
             "got: {composite:?}"
         );

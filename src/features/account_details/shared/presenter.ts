@@ -64,7 +64,7 @@ export function priceRefreshLockErrorToI18n(err: AssetCrudError): I18nMessage {
 /**
  * F27 — Maps the `record_dividend` error surface to an i18n key. `DividendError`
  * is an untagged union of two tagged leaves (`AccountError` |
- * `DividendApplicationError`) whose combined `code` set is wider than what the
+ * `DividendTask`) whose combined `code` set is wider than what the
  * command can actually raise, so this switch lists the reachable codes (per the
  * account contract) and falls back to a generic key for any other — mirroring
  * `priceRefreshLockErrorToI18n` rather than the `never`-exhaustive style used

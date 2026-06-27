@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AccountError,
-  ArchiveAssetApplicationError,
+  ArchiveAssetTask,
   Asset,
   AssetApplicationError,
   AssetCrudError,
@@ -10,9 +10,9 @@ import type {
   AssetLookupResult,
   CategoryApplicationError,
   CreateAssetDTO,
-  DeleteAssetApplicationError,
+  DeleteAssetTask,
   UpdateAssetDTO,
-  WebLookupApplicationError,
+  WebLookupError,
 } from "@/bindings";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -214,7 +214,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("archiveAsset surfaces ActiveHoldings via Application leaf", async () => {
-    const err: ArchiveAssetApplicationError = { code: "ActiveHoldings" };
+    const err: ArchiveAssetTask = { code: "ActiveHoldings" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.archiveAsset("asset-1");
     expect(result).toEqual({ status: "error", error: err });
@@ -244,7 +244,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("deleteAsset surfaces ExistingTransactions via Application leaf", async () => {
-    const err: DeleteAssetApplicationError = { code: "ExistingTransactions" };
+    const err: DeleteAssetTask = { code: "ExistingTransactions" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.deleteAsset("asset-1");
     expect(result).toEqual({ status: "error", error: err });
@@ -420,7 +420,7 @@ describe("asset gateway — lookupAsset", () => {
 
   // WEB-025 — NetworkError is surfaced as { status: "error", error: { code: "NetworkError" } }
   it("lookupAsset returns NetworkError on network failure", async () => {
-    const err: WebLookupApplicationError = { code: "NetworkError" };
+    const err: WebLookupError = { code: "NetworkError" };
     // bindings.ts catches the rejection and returns { status: "error", error: e }
     mockInvoke.mockRejectedValue(err);
 
@@ -451,7 +451,7 @@ describe("asset gateway — lookupAsset", () => {
 
   // WEB-025 — InvalidIsinFormat is surfaced as { status: "error", error: { code: "InvalidIsinFormat" } }
   it("lookupAsset returns InvalidIsinFormat when ISIN path rejects the query", async () => {
-    const err: WebLookupApplicationError = { code: "InvalidIsinFormat" };
+    const err: WebLookupError = { code: "InvalidIsinFormat" };
     mockInvoke.mockRejectedValue(err);
 
     const res = await assetGateway.lookupAsset("NOTANISIN", "Isin");
@@ -502,7 +502,7 @@ describe("asset gateway — lookupAsset", () => {
 
   // WEB-025 — RateLimited pass-through still works (regression guard)
   it("lookupAsset returns RateLimited on HTTP 429 from OpenFIGI", async () => {
-    const err: WebLookupApplicationError = { code: "RateLimited" };
+    const err: WebLookupError = { code: "RateLimited" };
     mockInvoke.mockRejectedValue(err);
 
     const res = await assetGateway.lookupAsset("AAPL", "Keyword");

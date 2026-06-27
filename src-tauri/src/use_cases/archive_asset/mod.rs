@@ -6,5 +6,5 @@ mod error;
 mod orchestrator;
 
 pub use api::*;
-pub use error::{ArchiveAssetApplicationError, ArchiveAssetError};
+pub use error::{ArchiveAssetError, ArchiveAssetTask};
 pub use orchestrator::ArchiveAssetUseCase;

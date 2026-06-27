@@ -380,14 +380,9 @@ async fn record_dividend_asset_not_held_propagates() {
         .await
         .unwrap_err();
 
-    use vault_compass_lib::use_cases::holding_transaction::{
-        DividendApplicationError, DividendError,
-    };
+    use vault_compass_lib::use_cases::holding_transaction::{DividendError, DividendTask};
     assert!(
-        matches!(
-            err,
-            DividendError::UseCase(DividendApplicationError::AssetNotHeld)
-        ),
+        matches!(err, DividendError::UseCase(DividendTask::AssetNotHeld)),
         "expected UseCase(AssetNotHeld), got: {err:?}"
     );
 }

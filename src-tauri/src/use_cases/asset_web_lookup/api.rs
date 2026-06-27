@@ -2,7 +2,7 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::error::WebLookupApplicationError;
+use super::error::WebLookupError;
 use super::orchestrator::{AssetWebLookupUseCase, LookupMode};
 use super::primary_listing_processor::AssetLookupResult;
 
@@ -20,6 +20,6 @@ pub async fn lookup_asset(
     uc: tauri::State<'_, AssetWebLookupUseCase>,
     query: String,
     mode: LookupMode,
-) -> Result<Vec<AssetLookupResult>, WebLookupApplicationError> {
+) -> Result<Vec<AssetLookupResult>, WebLookupError> {
     uc.search(query, mode).await
 }

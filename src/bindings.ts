@@ -520,7 +520,7 @@ async getAccountDeletionSummary(accountId: string) : Promise<Result<AccountDelet
  * surfaces as `RateLimited`; every other reachability failure surfaces as
  * `NetworkError`; ISIN format failures surface as `InvalidIsinFormat` (WEB-025).
  */
-async lookupAsset(query: string, mode: LookupMode) : Promise<Result<AssetLookupResult[], WebLookupApplicationError>> {
+async lookupAsset(query: string, mode: LookupMode) : Promise<Result<AssetLookupResult[], WebLookupError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("lookup_asset", { query, mode }) };
 } catch (e) {
@@ -896,25 +896,6 @@ total_unrealized_pnl: number | null;
  */
 ytd_performance_pct: number | null }
 /**
- * Application-layer rejection specific to the `archive_asset` use case —
- * the cross-BC active-holdings check performed by the orchestrator before
- * delegating to `AssetService::archive_asset`.
- * 
- * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors): this
- * rejection is born at the orchestrator (it queries the account service and
- * decides whether to proceed), not by an aggregate method on its own loaded
- * state — application-class.
- * 
- * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
- * Tauri boundary into a flat `{ code: "..." }` shape through the
- * `ArchiveAssetError` untagged composite.
- */
-export type ArchiveAssetApplicationError = 
-/**
- * Asset still has non-zero holdings in at least one account (OQ-6).
- */
-{ code: "ActiveHoldings" }
-/**
  * Use-case composite for the **archive asset** failure surface — the single
  * command `archive_asset` (OQ-6) and its full chain of rejections.
  * 
@@ -930,7 +911,7 @@ export type ArchiveAssetApplicationError =
  * composition-over-redefinition rule.
  * - `AccountError` — account BC (`account/application/`), surfaces
  * `DatabaseError` from the cross-BC active-holdings check.
- * - `ArchiveAssetApplicationError` — use-case-owned (this file), raises
+ * - `ArchiveAssetTask` — use-case-owned (this file), raises
  * `ActiveHoldings` from the orchestrator.
  */
 export type ArchiveAssetError = 
@@ -947,7 +928,26 @@ AccountError |
 /**
  * Use-case orchestration rejection (`ActiveHoldings`).
  */
-ArchiveAssetApplicationError
+ArchiveAssetTask
+/**
+ * Application-layer rejection specific to the `archive_asset` use case —
+ * the cross-BC active-holdings check performed by the orchestrator before
+ * delegating to `AssetService::archive_asset`.
+ * 
+ * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors): this
+ * rejection is born at the orchestrator (it queries the account service and
+ * decides whether to proceed), not by an aggregate method on its own loaded
+ * state — application-class.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape through the
+ * `ArchiveAssetError` untagged composite.
+ */
+export type ArchiveAssetTask = 
+/**
+ * Asset still has non-zero holdings in at least one account (OQ-6).
+ */
+{ code: "ActiveHoldings" }
 /**
  * A financial instrument or resource held by a user.
  */
@@ -1687,25 +1687,6 @@ export type CurrencyRateSource =
  */
 "Ecb"
 /**
- * Application-layer rejection specific to the `delete_asset` use case —
- * the cross-BC transaction-history check performed by the orchestrator
- * before delegating to `AssetService::delete_asset`.
- * 
- * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors): this
- * rejection is born at the orchestrator (it queries the account service and
- * decides whether to proceed), not by an aggregate method on its own loaded
- * state — application-class.
- * 
- * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
- * Tauri boundary into a flat `{ code: "..." }` shape through the
- * `DeleteAssetError` untagged composite.
- */
-export type DeleteAssetApplicationError = 
-/**
- * At least one transaction references this asset; deletion would break history.
- */
-{ code: "ExistingTransactions" }
-/**
  * Use-case composite for the **delete asset** failure surface — the single
  * command `delete_asset` and its full chain of rejections.
  * 
@@ -1721,7 +1702,7 @@ export type DeleteAssetApplicationError =
  * composition-over-redefinition rule.
  * - `AccountError` — account BC (`account/application/`), surfaces
  * `DatabaseError` from the cross-BC transaction-history check.
- * - `DeleteAssetApplicationError` — use-case-owned (this file), raises
+ * - `DeleteAssetTask` — use-case-owned (this file), raises
  * `ExistingTransactions` from the orchestrator.
  */
 export type DeleteAssetError = 
@@ -1738,7 +1719,26 @@ AccountError |
 /**
  * Use-case orchestration rejection (`ExistingTransactions`).
  */
-DeleteAssetApplicationError
+DeleteAssetTask
+/**
+ * Application-layer rejection specific to the `delete_asset` use case —
+ * the cross-BC transaction-history check performed by the orchestrator
+ * before delegating to `AssetService::delete_asset`.
+ * 
+ * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors): this
+ * rejection is born at the orchestrator (it queries the account service and
+ * decides whether to proceed), not by an aggregate method on its own loaded
+ * state — application-class.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape through the
+ * `DeleteAssetError` untagged composite.
+ */
+export type DeleteAssetTask = 
+/**
+ * At least one transaction references this asset; deletion would break history.
+ */
+{ code: "ExistingTransactions" }
 /**
  * Parameters for recording a cash deposit (CSH-020).
  */
@@ -1759,28 +1759,6 @@ amount_micros: number;
  * Optional user note.
  */
 note: string | null }
-/**
- * Application-layer rejections specific to the `record_dividend` use case —
- * cross-BC asset and holding checks performed by the orchestrator before
- * delegating to `AccountService::record_dividend`.
- * 
- * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
- * Tauri boundary into a flat `{ code: "..." }` shape.
- */
-export type DividendApplicationError = 
-/**
- * No asset exists with the requested ID (DIV-011).
- */
-{ code: "AssetNotFound" } | 
-/**
- * The asset is not currently held (quantity = 0 or no holding) (DIV-011).
- */
-{ code: "AssetNotHeld" } | 
-/**
- * Target asset is a system Cash Asset — dividends must be on non-cash
- * holdings (DIV-011).
- */
-{ code: "DividendOnCashAsset" }
 /**
  * Parameters for recording a cash dividend attributed to a held asset (DIV-020).
  */
@@ -1814,7 +1792,7 @@ note: string | null }
  * 
  * - `AccountError` — every account-BC rejection (lookup, infrastructure, and
  * the transaction-factory date / amount / rate validation).
- * - `DividendApplicationError` — use-case-owned (this file), the cross-BC
+ * - `DividendTask` — use-case-owned (this file), the cross-BC
  * asset/holding checks.
  */
 export type DividendError = 
@@ -1825,7 +1803,29 @@ AccountError |
 /**
  * Use-case-layer rejection (cross-BC asset checks).
  */
-DividendApplicationError
+DividendTask
+/**
+ * Application-layer rejections specific to the `record_dividend` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_dividend`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type DividendTask = 
+/**
+ * No asset exists with the requested ID (DIV-011).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The asset is not currently held (quantity = 0 or no holding) (DIV-011).
+ */
+{ code: "AssetNotHeld" } | 
+/**
+ * Target asset is a system Cash Asset — dividends must be on non-cash
+ * holdings (DIV-011).
+ */
+{ code: "DividendOnCashAsset" }
 /**
  * All possible side-effect events that can be published across the application.
  * Each variant represents a specific business event that features may need to react to.
@@ -1993,28 +1993,6 @@ export type FetchPriceTask =
  */
 { code: "UnknownError" }
 /**
- * Application-layer rejections specific to the `record_free_shares` use case —
- * cross-BC asset and holding checks performed by the orchestrator before
- * delegating to `AccountService::record_free_shares`.
- * 
- * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
- * Tauri boundary into a flat `{ code: "..." }` shape.
- */
-export type FreeSharesApplicationError = 
-/**
- * No asset exists with the requested ID (FSD-011).
- */
-{ code: "AssetNotFound" } | 
-/**
- * The asset is not currently held (quantity = 0 or no holding) (FSD-011).
- */
-{ code: "AssetNotHeld" } | 
-/**
- * Target asset is a system Cash Asset — free shares must be on non-cash
- * holdings (FSD-011).
- */
-{ code: "FreeSharesOnCashAsset" }
-/**
  * Parameters for recording a zero-cost free-share distribution from a held
  * distributing asset (FSD-020). No amount, no unit price, no exchange rate,
  * no fees — no money changes hands.
@@ -2045,7 +2023,7 @@ note: string | null }
  * 
  * - `AccountError` — every account-BC rejection (lookup, infrastructure, and
  * the transaction-factory date / quantity validation).
- * - `FreeSharesApplicationError` — use-case-owned (this file), the cross-BC
+ * - `FreeSharesTask` — use-case-owned (this file), the cross-BC
  * asset/holding checks.
  */
 export type FreeSharesError = 
@@ -2056,7 +2034,29 @@ AccountError |
 /**
  * Use-case-layer rejection (cross-BC asset checks).
  */
-FreeSharesApplicationError
+FreeSharesTask
+/**
+ * Application-layer rejections specific to the `record_free_shares` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_free_shares`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type FreeSharesTask = 
+/**
+ * No asset exists with the requested ID (FSD-011).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The asset is not currently held (quantity = 0 or no holding) (FSD-011).
+ */
+{ code: "AssetNotHeld" } | 
+/**
+ * Target asset is a system Cash Asset — free shares must be on non-cash
+ * holdings (FSD-011).
+ */
+{ code: "FreeSharesOnCashAsset" }
 /**
  * Current state of a financial position: an asset held within an account (ADR-002).
  * All financial fields are stored as i64 micro-units (ADR-001).
@@ -2183,31 +2183,6 @@ export type LookupMode =
  */
 "Keyword"
 /**
- * Application-layer rejections specific to the `open_holding` use case —
- * cross-BC asset checks performed by the orchestrator before delegating to
- * `AccountService::open_holding`.
- * 
- * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
- * Tauri boundary into a flat `{ code: "..." }` shape.
- */
-export type OpenHoldingApplicationError = 
-/**
- * No asset exists with the requested ID (TRX-056).
- */
-{ code: "AssetNotFound" } | 
-/**
- * Target asset is archived — cannot open a holding (TRX-050).
- * The orchestrator does not auto-unarchive; the caller must unarchive
- * explicitly through the asset BC first.
- */
-{ code: "ArchivedAsset" } | 
-/**
- * Target asset is a system Cash Asset (CSH-061). Initial cash should be
- * recorded via `record_deposit`, which goes through the cash-recording
- * path and lazy-creates the Cash Holding.
- */
-{ code: "OpeningBalanceOnCashAsset" }
-/**
  * Parameters for recording an opening balance for an asset in an account (TRX-042).
  */
 export type OpenHoldingDTO = { 
@@ -2239,7 +2214,7 @@ total_cost: number }
  * `DatabaseError` (incl. asset-side `get_asset_by_id` infra failures
  * tunnelled here so the wire carries a single `{ code: "DatabaseError" }`),
  * `InvalidTotalCost`, and the transaction-factory date / quantity invariants.
- * - `OpenHoldingApplicationError` — use-case-owned (this file), the 3 cross-BC
+ * - `OpenHoldingTask` — use-case-owned (this file), the 3 cross-BC
  * rejections (`AssetNotFound`, `ArchivedAsset`, `OpeningBalanceOnCashAsset`).
  */
 export type OpenHoldingError = 
@@ -2250,7 +2225,32 @@ AccountError |
 /**
  * Use-case-layer rejection (cross-BC asset checks).
  */
-OpenHoldingApplicationError
+OpenHoldingTask
+/**
+ * Application-layer rejections specific to the `open_holding` use case —
+ * cross-BC asset checks performed by the orchestrator before delegating to
+ * `AccountService::open_holding`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type OpenHoldingTask = 
+/**
+ * No asset exists with the requested ID (TRX-056).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * Target asset is archived — cannot open a holding (TRX-050).
+ * The orchestrator does not auto-unarchive; the caller must unarchive
+ * explicitly through the asset BC first.
+ */
+{ code: "ArchivedAsset" } | 
+/**
+ * Target asset is a system Cash Asset (CSH-061). Initial cash should be
+ * recorded via `record_deposit`, which goes through the cash-recording
+ * path and lazy-creates the Cash Holding.
+ */
+{ code: "OpeningBalanceOnCashAsset" }
 /**
  * Net-of-flows performance figures for one period (PRF-031, PRF-032).
  */
@@ -2572,7 +2572,7 @@ version: string }
 /**
  * Application-layer errors raised by the asset web-lookup use case (WEB-025).
  */
-export type WebLookupApplicationError = 
+export type WebLookupError = 
 /**
  * OpenFIGI returned HTTP 429 Too Many Requests — transient, recoverable
  * after a short wait. Surfaced distinctly so the frontend can render

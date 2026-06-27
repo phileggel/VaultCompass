@@ -18,7 +18,7 @@ use vault_compass_lib::context::currency::{
 use vault_compass_lib::core::SideEffectEventBus;
 use vault_compass_lib::use_cases::account_performance::AccountPerformanceUseCase;
 use vault_compass_lib::use_cases::holding_transaction::{
-    FreeSharesApplicationError, FreeSharesError, HoldingTransactionUseCase,
+    FreeSharesError, FreeSharesTask, HoldingTransactionUseCase,
 };
 
 fn micro(v: i64) -> i64 {
@@ -332,10 +332,7 @@ async fn record_free_shares_asset_not_held_propagates() {
         .unwrap_err();
 
     assert!(
-        matches!(
-            err,
-            FreeSharesError::UseCase(FreeSharesApplicationError::AssetNotHeld)
-        ),
+        matches!(err, FreeSharesError::UseCase(FreeSharesTask::AssetNotHeld)),
         "expected UseCase(AssetNotHeld), got: {err:?}"
     );
 }

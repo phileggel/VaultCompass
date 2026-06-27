@@ -11,7 +11,7 @@ use std::result::Result as StdResult;
 use std::sync::Arc;
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
-use super::error::WebLookupApplicationError;
+use super::error::WebLookupError;
 use super::primary_listing_processor::{self, AssetLookupResult, QueryContext, RawFigiHit};
 use crate::context::asset::isin::validate_isin;
 use crate::core::logger::BACKEND;
@@ -35,7 +35,7 @@ pub enum LookupMode {
 
 /// Sentinel error raised by `ReqwestOpenFigiClient` when OpenFIGI returns
 /// HTTP 429. Translation closures in `search` / `collect_keyword_hits`
-/// downcast against this type to route to `WebLookupApplicationError::RateLimited`
+/// downcast against this type to route to `WebLookupError::RateLimited`
 /// (WEB-025) instead of the generic `NetworkError`.
 #[derive(Debug, thiserror::Error)]
 #[error("OpenFIGI rate-limit (HTTP 429)")]
@@ -97,11 +97,11 @@ impl AssetWebLookupUseCase {
         &self,
         query: String,
         mode: LookupMode,
-    ) -> StdResult<Vec<AssetLookupResult>, WebLookupApplicationError> {
+    ) -> StdResult<Vec<AssetLookupResult>, WebLookupError> {
         match mode {
             LookupMode::Isin => {
-                let normalized_isin = validate_isin(&query)
-                    .map_err(|_| WebLookupApplicationError::InvalidIsinFormat)?;
+                let normalized_isin =
+                    validate_isin(&query).map_err(|_| WebLookupError::InvalidIsinFormat)?;
                 let ctx = QueryContext {
                     isin: Some(normalized_isin.clone()),
                 };
@@ -132,7 +132,7 @@ impl AssetWebLookupUseCase {
     async fn collect_keyword_hits(
         &self,
         query: &str,
-    ) -> StdResult<Vec<RawFigiHit>, WebLookupApplicationError> {
+    ) -> StdResult<Vec<RawFigiHit>, WebLookupError> {
         let initial = self.client.search_keyword(query).await.map_err(|e| {
             translate_client_error(e, query, "collect_keyword_hits: search_keyword")
         })?;
@@ -356,22 +356,18 @@ fn hit_to_raw(h: OpenFigiHit) -> RawFigiHit {
 // Application-layer translation
 // ---------------------------------------------------------------------------
 
-/// Routes a client error to the right [`WebLookupApplicationError`] variant
+/// Routes a client error to the right [`WebLookupError`] variant
 /// (WEB-025): `RateLimitedError` → `RateLimited` (transient, user-recoverable);
 /// every other error → `NetworkError`. The full diagnostic chain is preserved
 /// server-side via `tracing::warn!`.
-fn translate_client_error(
-    err: anyhow::Error,
-    query: &str,
-    site: &str,
-) -> WebLookupApplicationError {
+fn translate_client_error(err: anyhow::Error, query: &str, site: &str) -> WebLookupError {
     if err.downcast_ref::<RateLimitedError>().is_some() {
         tracing::warn!(
             target: BACKEND,
             query = %query,
             "{site} rate-limited (WEB-025)",
         );
-        WebLookupApplicationError::RateLimited
+        WebLookupError::RateLimited
     } else {
         tracing::warn!(
             target: BACKEND,
@@ -379,7 +375,7 @@ fn translate_client_error(
             err = ?err,
             "{site} failed (WEB-025)",
         );
-        WebLookupApplicationError::NetworkError
+        WebLookupError::NetworkError
     }
 }
 
@@ -784,10 +780,7 @@ mod tests {
             .search("AAPL".to_string(), LookupMode::Keyword)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, WebLookupApplicationError::NetworkError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, WebLookupError::NetworkError), "got: {err:?}");
     }
 
     #[tokio::test]
@@ -813,10 +806,7 @@ mod tests {
             .search("anything".to_string(), LookupMode::Keyword)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, WebLookupApplicationError::NetworkError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, WebLookupError::NetworkError), "got: {err:?}");
     }
 
     #[tokio::test]
@@ -831,10 +821,7 @@ mod tests {
             .search("FR0000120073".to_string(), LookupMode::Isin)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, WebLookupApplicationError::NetworkError),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, WebLookupError::NetworkError), "got: {err:?}");
     }
 
     // ------------------------------------------------------------------
@@ -853,10 +840,7 @@ mod tests {
             .search("FR0000120073".to_string(), LookupMode::Isin)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, WebLookupApplicationError::RateLimited),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, WebLookupError::RateLimited), "got: {err:?}");
     }
 
     #[tokio::test]
@@ -871,10 +855,7 @@ mod tests {
             .search("AAPL".to_string(), LookupMode::Keyword)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, WebLookupApplicationError::RateLimited),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, WebLookupError::RateLimited), "got: {err:?}");
     }
 
     #[tokio::test]
@@ -900,10 +881,7 @@ mod tests {
             .search("anything".to_string(), LookupMode::Keyword)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, WebLookupApplicationError::RateLimited),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, WebLookupError::RateLimited), "got: {err:?}");
     }
 
     // ------------------------------------------------------------------
@@ -962,7 +940,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            matches!(err, WebLookupApplicationError::InvalidIsinFormat),
+            matches!(err, WebLookupError::InvalidIsinFormat),
             "got: {err:?}"
         );
     }
