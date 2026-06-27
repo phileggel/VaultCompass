@@ -32,3 +32,25 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
 `cargo audit` flags `rsa 0.9.10` (timing sidechannel, CVSS 5.9 medium) with no upstream fix. Pulled transitively via `sqlx-mysql 0.8.6` because the `sqlx` macro crate compiles all backends regardless of enabled features. We only enable `sqlite`, so the vulnerable RSA path is never reached at runtime. Re-evaluate when sqlx ships a fix or when we change DB backend.
+
+## display average price to date on the sell/buy dialog
+
+Indicate the price as an info just under the price inputfield. Based on the sell/buy date (or current date if none is typed).
+
+## display potential p&l to date on the sell dialog
+
+Indicate the potential p&l as an info just under the calculated global amount. Based on the sell date, average price, typed sell price, qty on this date (if no date, current date, if no qty or no typed sell price, no info is indicated)
+
+## inline calcul in buy/sell dialog (ok if in any number inputfield)
+
+need to refine it for ux part.
+
+## dividende view, button "other dividend input"
+
+add a button in dividend dialog if the user wants to add another dividend
+
+## price view
+
+add a button in price dialog if the user wants to add another price.
+the asset should be dropdown fuzzy asset search. the asset can be pre-selected.
+the date should be the same as standard "stored date" per default
