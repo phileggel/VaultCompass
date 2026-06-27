@@ -183,14 +183,6 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Severity: 🟡
 - Observation: `period_end_dates` enumerates the valuation period-ends by re-deriving the year iteration in `build_yearly` and the month iteration + prior-year-end YTD baseline in `build_monthly`. The three loops must stay in lockstep — if a new valuation point is ever added to a build method but not to `period_end_dates`, the pre-resolved FX `rate_map` misses that date and `end_value_as_of` degrades foreign holdings to 0 (FXR-034) rather than erroring, so the resulting performance drift is silent. The duplication is currently correct and commented; the risk is future divergence, not a present bug.
 
-## 2026-06-06 — `expect()` in reqwest client constructors
-
-- Found by: reviewer-backend
-- Where: `src-tauri/src/context/asset/repository/yahoo_client.rs` + `context/currency/infrastructure/{frankfurter,ecb}_client.rs`
-- Context: branch `docs/techdebt-reqwest-expect` @ `51a27df`
-- Severity: 🔵
-- Observation: All three reqwest client constructors (`ReqwestYahooClient` / `ReqwestFrankfurterClient` / `ReqwestEcbClient`) call `.expect("reqwest client build")`, an `expect()` on a production path. The `lib.rs` lint set denies `clippy::unwrap_used` but not `clippy::expect_used`, so it passes CI. Practically unreachable — the builder fails only on invalid TLS config from a compile-time-constant setup, which surfaces in dev — but it is the lone `expect()`-family call in those constructors.
-
 ## 2026-06-16 — YTD summary helper over-fetches the FX rate map
 
 - Found by: reviewer-backend (accounts-overview-metrics review)

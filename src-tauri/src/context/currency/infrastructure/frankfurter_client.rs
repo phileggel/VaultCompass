@@ -15,19 +15,15 @@ pub struct ReqwestFrankfurterClient {
 }
 
 impl ReqwestFrankfurterClient {
-    /// Creates a new client with a 10-second per-request timeout.
-    pub fn new() -> Self {
+    /// Creates a new client with a 10-second per-request timeout. Fails only if
+    /// the TLS backend cannot be initialised — an unrecoverable environment
+    /// fault surfaced at startup rather than panicked on.
+    pub fn new() -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
-            .expect("reqwest client build");
-        Self { client }
-    }
-}
-
-impl Default for ReqwestFrankfurterClient {
-    fn default() -> Self {
-        Self::new()
+            .context("building the Frankfurter HTTP client")?;
+        Ok(Self { client })
     }
 }
 
@@ -91,6 +87,12 @@ mod tests {
     use crate::context::currency::domain::CurrencyRateSource;
 
     const FIXTURE: &str = r#"{"amount":1.0,"base":"EUR","date":"2026-06-01","rates":{"USD":1.1646,"GBP":0.86493,"JPY":185.74}}"#;
+
+    // The constructor builds a reqwest client successfully in a normal environment.
+    #[test]
+    fn new_builds_a_client() {
+        assert!(ReqwestFrankfurterClient::new().is_ok());
+    }
 
     // FXR-070 — parses date and source from the Frankfurter JSON body
     #[test]

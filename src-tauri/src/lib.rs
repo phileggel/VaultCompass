@@ -111,6 +111,14 @@ pub fn run() {
             // Manage update state before DB init so it is available even on migration failure (R10, R18)
             app_handle.manage(Arc::new(UpdateState::new()) as ManagedUpdateState);
 
+            // HTTP clients (ADR-009 rate providers, ADR-017 price provider) are built here,
+            // outside the keep-running async block, so a TLS-init failure surfaces as a
+            // graceful setup error rather than a panic.
+            let frankfurter_client = ReqwestFrankfurterClient::new()?;
+            let ecb_client = ReqwestEcbClient::new()?;
+            let yahoo_price_client = ReqwestYahooClient::new()?;
+            let yahoo_historical_client = ReqwestYahooClient::new()?;
+
             tauri::async_runtime::block_on(async move {
                 // R18 — emit migration error and keep app running so frontend can show error screen
                 let db = match Database::new(dirs.local_data_dir).await {
@@ -172,8 +180,8 @@ pub fn run() {
                 // piggybacked auto-fetch (FXR-070).
                 let rate_provider_chain: Arc<dyn RateProvider> = Arc::new(ChainedRateProvider::new(
                     vec![
-                        Arc::new(ReqwestFrankfurterClient::new()) as Arc<dyn RateProvider>,
-                        Arc::new(ReqwestEcbClient::new()) as Arc<dyn RateProvider>,
+                        Arc::new(frankfurter_client) as Arc<dyn RateProvider>,
+                        Arc::new(ecb_client) as Arc<dyn RateProvider>,
                     ],
                 ));
                 let currency_service = Arc::new(
@@ -238,7 +246,7 @@ pub fn run() {
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 
                 // ----- asset price fetch (keyless Yahoo Finance, ADR-017) -----
-                let price_provider: Arc<dyn PriceProvider> = Arc::new(ReqwestYahooClient::new());
+                let price_provider: Arc<dyn PriceProvider> = Arc::new(yahoo_price_client);
                 let fetch_guard = Arc::new(FetchGuard::new());
                 let dispatcher = Arc::new(PriceFetchDispatcher::new(
                     price_provider,
@@ -258,7 +266,7 @@ pub fn run() {
 
                 // ----- date-scoped price fetch (isolated from the latest auto-fetch) -----
                 let historical_provider: Arc<dyn HistoricalPriceProvider> =
-                    Arc::new(ReqwestYahooClient::new());
+                    Arc::new(yahoo_historical_client);
                 let asset_price_fetch_for_date_uc = Arc::new(AssetPriceFetchForDateUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
