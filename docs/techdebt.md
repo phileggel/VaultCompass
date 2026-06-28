@@ -223,6 +223,13 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Severity: 🔵
 - Observation: The M3 `error`/`success` semantic color tokens are reused to express financial debit/credit (and gain/loss) polarity — cash out = `text-m3-error` (red), cash in = `text-m3-success` (green). Visually conventional and consistent with the pre-existing P&L sign-coloring, but it overloads tokens whose semantics are failure/confirmation, which a high-contrast or screen-reader-driven theme may interpret differently from "money out / money in". A dedicated `text-m3-debit`/`text-m3-credit` (and `-gain`/`-loss`) alias mapping to the same palette entries — or an ADR ratifying the reuse — would carry the correct intent. Cross-cutting (affects the P&L column too), so larger than one PR.
 
+## 2026-06-28 — ComboboxField `createLabel` default is a hardcoded French string
+
+- Found by: reviewer-frontend (v0.29.0 T3 combobox-open-on-focus review)
+- Where: `src/ui/components/field/ComboboxField.tsx` (`createLabel = "+ Créer"` default prop; JSDoc example `"+ Créer un patient"`)
+- Severity: 🔵
+- Observation: The `createLabel` prop defaults to a hardcoded French string rendered straight to the DOM (F16). A consumer that passes `onCreateNew` without an explicit `createLabel` ships untranslated text. No current consumer hits the default (`AddTransactionModal` passes `t("asset.create_new")`), so it is latent. Fixing it properly needs the leaf to either require `createLabel` (drop the default) or accept an i18n key — a small API decision on a shared primitive, hence deferred rather than folded into T3. Pre-dates v0.29.0.
+
 ## 2026-06-27 — update*checker commands return `Result<*, String>` (error-model gold)
 
 - Found by: reviewer-security (v0.28.0 release sweep)

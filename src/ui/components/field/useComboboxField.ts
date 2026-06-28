@@ -1,29 +1,23 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useFuzzySearch } from "@/lib/useFuzzySearch";
 
 /**
  * useComboboxField - Logic for the generic ComboboxField component.
  *
- * Manages the text query, fuzzy-filtered suggestions, and resolves the
- * display label from the currently selected id.
+ * Manages the text query and the fuzzy-filtered suggestions.
  */
 export function useComboboxField<T extends object>(
   items: T[],
   displayKey: keyof T,
-  idKey: keyof T,
-  selectedId: string,
   searchKeys?: (keyof T)[],
 ) {
   const [query, setQuery] = useState("");
 
   const keys = searchKeys ? searchKeys.map(String) : [String(displayKey)];
-  const filteredItems = useFuzzySearch(query, items, keys);
+  const fuzzyResults = useFuzzySearch(query, items, keys);
+  // Fuzzy search only kicks in at 2 characters; below that, offer the full list
+  // so the field reads as a browsable dropdown rather than a readonly input.
+  const filteredItems = query.length >= 2 ? fuzzyResults : items;
 
-  const displayValue = useMemo(() => {
-    if (!selectedId) return "";
-    const found = items.find((item) => String(item[idKey]) === selectedId);
-    return found ? String(found[displayKey]) : "";
-  }, [items, idKey, displayKey, selectedId]);
-
-  return { query, setQuery, filteredItems, displayValue };
+  return { query, setQuery, filteredItems };
 }
