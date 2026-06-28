@@ -7,6 +7,7 @@ use std::sync::{
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
 
+use super::error::UpdateError;
 use crate::core::BACKEND;
 
 /// Information about an available application update.
@@ -52,12 +53,12 @@ impl UpdateState {
 /// Returns `None` silently on network or server errors (R21), logging them for
 /// diagnostics (R22). Emits `"update:available"` on the app handle if an update
 /// is found, so that all listeners (banner, manual check) react consistently.
-pub async fn check(app_handle: &AppHandle) -> anyhow::Result<Option<UpdateInfo>> {
+pub async fn check(app_handle: &AppHandle) -> Option<UpdateInfo> {
     let updater = match app_handle.updater() {
         Ok(u) => u,
         Err(e) => {
             tracing::warn!(target: BACKEND, error = %e, "Failed to initialize updater (R22)");
-            return Ok(None);
+            return None;
         }
     };
 
@@ -67,15 +68,15 @@ pub async fn check(app_handle: &AppHandle) -> anyhow::Result<Option<UpdateInfo>>
             tracing::info!(target: BACKEND, version = %version, "Update available");
             let info = UpdateInfo { version };
             let _ = app_handle.emit("update:available", &info);
-            Ok(Some(info))
+            Some(info)
         }
         Ok(None) => {
             tracing::info!(target: BACKEND, "Application is up to date");
-            Ok(None)
+            None
         }
         Err(e) => {
             tracing::warn!(target: BACKEND, error = %e, "Update check failed — silent (R21, R22)");
-            Ok(None)
+            None
         }
     }
 }
@@ -151,24 +152,30 @@ async fn do_download(app_handle: &AppHandle, state: &UpdateState) -> anyhow::Res
 ///
 /// Re-checks for the update to obtain a fresh handle for the install call.
 /// Requires that `download` has been called successfully beforehand.
-pub async fn install(app_handle: AppHandle, state: Arc<UpdateState>) -> anyhow::Result<()> {
-    use anyhow::Context;
+pub async fn install(app_handle: AppHandle, state: Arc<UpdateState>) -> Result<(), UpdateError> {
+    let bytes = state.take_bytes().ok_or(UpdateError::NoDownloadedUpdate)?;
 
-    let bytes = state
-        .take_bytes()
-        .ok_or_else(|| anyhow::anyhow!("No downloaded update available — call download first"))?;
-
-    let updater = app_handle
-        .updater()
-        .context("Failed to initialize updater for install")?;
+    let updater = app_handle.updater().map_err(|e| {
+        tracing::error!(target: BACKEND, error = %e, "Failed to initialize updater for install");
+        UpdateError::OperationFailed
+    })?;
 
     let update = updater
         .check()
         .await
-        .context("Failed to get update for installation")?
-        .ok_or_else(|| anyhow::anyhow!("No update found for installation"))?;
+        .map_err(|e| {
+            tracing::error!(target: BACKEND, error = %e, "Failed to get update for installation");
+            UpdateError::OperationFailed
+        })?
+        .ok_or_else(|| {
+            tracing::error!(target: BACKEND, "No update found for installation");
+            UpdateError::OperationFailed
+        })?;
 
-    update.install(bytes).context("Installation failed")?;
+    update.install(bytes).map_err(|e| {
+        tracing::error!(target: BACKEND, error = %e, "Installation failed");
+        UpdateError::OperationFailed
+    })?;
     tracing::info!(target: BACKEND, "Update installed — restarting application (R13)");
     app_handle.restart();
 }

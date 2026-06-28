@@ -5,7 +5,9 @@
 //! via `app_handle.manage()` at startup.
 
 pub mod api;
+pub mod error;
 pub mod service;
 
 pub use api::*;
+pub use error::UpdateError;
 pub use service::{UpdateInfo, UpdateState};
