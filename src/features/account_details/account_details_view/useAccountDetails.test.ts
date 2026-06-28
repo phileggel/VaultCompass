@@ -12,6 +12,8 @@ vi.mock("../gateway", () => ({
     getAccountDetails: (...args: unknown[]) => mockGetAccountDetails(...args),
     subscribeToEvents: vi.fn(() => Promise.resolve(() => {})),
   },
+  // Reads the real store so the setState-driven asset tests still drive it.
+  useCachedAssets: () => useAppStore((state) => state.assets),
 }));
 
 vi.mock("@/lib/logger", () => ({

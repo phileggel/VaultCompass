@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
 import { accountMutationErrorToI18n } from "@/features/accounts/shared/presenter";
 import { logger } from "@/lib/logger";
-import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
-import { accountDetailsGateway } from "../gateway";
+import { accountDetailsGateway, useCachedAssets } from "../gateway";
 import {
   type AccountSummaryViewModel,
   type ClosedHoldingRowViewModel,
@@ -32,7 +31,7 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<I18nMessage | null>(null);
   // ACD-051 — asset class is read from the loaded asset catalog to group holdings.
-  const assets = useAppStore((state) => state.assets);
+  const assets = useCachedAssets();
 
   const fetchDetails = useCallback(async () => {
     setIsLoading(true);
