@@ -367,6 +367,11 @@
     "column_since_inception": "Depuis l'origine",
     "subcol_value": "Valeur",
     "subcol_pct": "%",
+    "chart": {
+      "title": "Valeur dans le temps",
+      "value_label": "Valeur",
+      "empty": "Pas encore d'historique de valeur à afficher"
+    },
     "error": {
       "account_not_found": "Compte introuvable.",
       "database_error": "Une erreur inattendue s'est produite lors du calcul de la performance. Veuillez réessayer."

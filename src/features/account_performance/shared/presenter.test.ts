@@ -9,6 +9,7 @@ import {
   pnlColorClass,
   presentAccountPerformanceError,
   presentPeriodRow,
+  presentValueChartSeries,
 } from "./presenter";
 
 // ---- Helpers ----------------------------------------------------------------
@@ -253,5 +254,36 @@ describe("presentPeriodRow — year label", () => {
   it("exposes the year as the period label for year rows", () => {
     const row = presentPeriodRow(makeYearRow({ year: 2024 }));
     expect(String(row.periodLabel)).toContain("2024");
+  });
+});
+
+// ---- presentValueChartSeries (value-over-time chart) --------------------------
+
+describe("presentValueChartSeries", () => {
+  it("reverses backend (most-recent-first) order into chronological order", () => {
+    const series = presentValueChartSeries([
+      makeMonthRow({ month: 3, end_value: 10_200_000_000 }),
+      makeMonthRow({ month: 2, end_value: 9_500_000_000 }),
+      makeMonthRow({ month: 1, end_value: 9_000_000_000 }),
+    ]);
+    expect(series.map((point) => point.month)).toEqual([1, 2, 3]);
+  });
+
+  it("converts end_value micros to a decimal number and keeps a formatted string", () => {
+    const point = presentValueChartSeries([makeYearRow({ end_value: 10_000_000_000 })])[0];
+    expect(point?.value).toBe(10_000);
+    expect(typeof point?.valueFormatted).toBe("string");
+    expect((point?.valueFormatted ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("keys year points by year and month points by year-month", () => {
+    expect(presentValueChartSeries([makeYearRow({ year: 2024 })])[0]?.key).toBe("2024");
+    expect(presentValueChartSeries([makeMonthRow({ year: 2024, month: 7 })])[0]?.key).toBe(
+      "2024-7",
+    );
+  });
+
+  it("returns an empty series for no periods", () => {
+    expect(presentValueChartSeries([])).toEqual([]);
   });
 });

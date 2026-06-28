@@ -367,6 +367,11 @@
     "column_since_inception": "Since Inception",
     "subcol_value": "Value",
     "subcol_pct": "%",
+    "chart": {
+      "title": "Value over time",
+      "value_label": "Value",
+      "empty": "No value history to chart yet"
+    },
     "error": {
       "account_not_found": "Account not found.",
       "database_error": "An unexpected error occurred while computing performance. Please try again."

@@ -130,6 +130,44 @@ export interface PeriodRowViewModel {
   sinceInception: MetricCellViewModel;
 }
 
+const MICRO = 1_000_000;
+
+/**
+ * A single plottable point on the account-value-over-time line chart. Carries the
+ * period-end Global Value both as a decimal number (Y-axis plotting) and a
+ * pre-formatted display string (tooltip), plus the calendar coordinates the chart
+ * needs to build a translated X-axis label at render time (month i18n key vs year).
+ */
+export interface ValueChartPoint {
+  /** Stable key (year for year points, year-month for month points). */
+  key: string;
+  /** Calendar year of the point. */
+  year: number;
+  /** Some(1..=12) for month points; null for year points. */
+  month: number | null;
+  /** Period-end Global Value as a decimal number, account-currency — the plotted Y value. */
+  value: number;
+  /** Pre-formatted period-end Global Value for the tooltip (PRF-020). */
+  valueFormatted: string;
+}
+
+/**
+ * Builds the value-over-time series from a slice of performance periods. The
+ * backend returns periods most-recent first; the chart reads left-to-right as
+ * oldest→newest, so the series is reversed into chronological order.
+ */
+export function presentValueChartSeries(periods: PerformancePeriod[]): ValueChartPoint[] {
+  return periods
+    .map((period) => ({
+      key: period.month === null ? String(period.year) : `${period.year}-${period.month}`,
+      year: period.year,
+      month: period.month,
+      value: period.end_value / MICRO,
+      valueFormatted: formatEndValue(period.end_value),
+    }))
+    .reverse();
+}
+
 /**
  * PRF-036 / PRF-037 / PRF-041 / PRF-042 — Maps a backend PerformancePeriod to a
  * row view model. Year rows (month === null) omit the year-to-date cell.
