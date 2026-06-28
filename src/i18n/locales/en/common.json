@@ -329,7 +329,21 @@
     "column_total_revenues": "Total Revenues",
     "action_add_menu": "Record",
     "action_record_dividend": "Dividend",
-    "action_record_free_shares": "Free shares"
+    "action_record_free_shares": "Free shares",
+    "action_holdings_as_of": "Holdings at date"
+  },
+  "holdings_as_of": {
+    "title": "Holdings at a past date",
+    "as_of_label": "As of date",
+    "empty": "No holdings as of this date",
+    "column_asset": "Asset",
+    "column_quantity": "Quantity",
+    "column_avg_cost": "Avg. Cost",
+    "column_price": "Price",
+    "column_market_value": "Market Value",
+    "column_unrealized_pnl": "Unrealized P&L",
+    "total_cost_basis": "Total Cost Basis",
+    "total_market_value": "Total Market Value"
   },
   "account_performance": {
     "title": "Performance",

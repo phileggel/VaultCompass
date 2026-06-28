@@ -33,6 +33,19 @@ pub(crate) struct PricedAsset {
     prices: Vec<AssetPrice>,
 }
 
+impl PricedAsset {
+    /// Most recent recorded price with date on or before `as_of` (PRF-022
+    /// carry-forward), as `(price_micros, observation_date)` in the asset's
+    /// native currency. `None` when no price is recorded on or before the date.
+    pub(crate) fn price_as_of(&self, as_of: NaiveDate) -> Option<(i64, String)> {
+        self.prices
+            .iter()
+            .rev()
+            .find(|p| parse_date(&p.date).is_some_and(|d| d <= as_of))
+            .map(|p| (p.price, p.date.clone()))
+    }
+}
+
 /// Net-of-flows performance figures for one period (PRF-031, PRF-032).
 #[derive(Debug, Serialize, Clone, Type)]
 pub struct PerformanceMetric {

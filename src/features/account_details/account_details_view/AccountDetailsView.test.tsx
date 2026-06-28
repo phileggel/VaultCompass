@@ -44,6 +44,9 @@ vi.mock("../dividend_transaction/DividendTransactionModal", () => ({
 }));
 vi.mock("./HoldingRow", () => ({ HoldingRow: () => <tr data-testid="holding-row" /> }));
 vi.mock("./ClosedHoldingRow", () => ({ ClosedHoldingRow: () => <tr /> }));
+vi.mock("../holdings_as_of/HoldingsAsOfModal", () => ({
+  HoldingsAsOfModal: () => <div data-testid="holdings-as-of-modal-mounted" />,
+}));
 
 const handlers = {
   handleDepositOpen: vi.fn(),
@@ -51,6 +54,7 @@ const handlers = {
   handleOpenBalanceOpen: vi.fn(),
   handleDividendOpen: vi.fn(),
   handleAddTransaction: vi.fn(),
+  handleAsOfOpen: vi.fn(),
 };
 
 const makeView = (overrides: Record<string, unknown> = {}) => ({
@@ -83,7 +87,9 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   depositOpen: false,
   withdrawalOpen: false,
   dividendOpen: false,
+  asOfOpen: false,
   ...handlers,
+  handleAsOfClose: vi.fn(),
   handleBuyOpen: vi.fn(),
   handleBuyClose: vi.fn(),
   handleBuySuccess: vi.fn(),
@@ -171,6 +177,15 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     mockUseAccountDetailsView.mockReturnValue(makeView({ withdrawalOpen: true }));
     rerender(<AccountDetailsView />);
     expect(screen.getByTestId("withdrawal-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("mounts the holdings-as-of modal only while asOfOpen is true", () => {
+    const { rerender } = render(<AccountDetailsView />);
+    expect(screen.queryByTestId("holdings-as-of-modal-mounted")).toBeNull();
+
+    mockUseAccountDetailsView.mockReturnValue(makeView({ asOfOpen: true }));
+    rerender(<AccountDetailsView />);
+    expect(screen.getByTestId("holdings-as-of-modal-mounted")).toBeInTheDocument();
   });
 
   it("surfaces the total dividends received in the header when non-zero (DIV-073)", () => {

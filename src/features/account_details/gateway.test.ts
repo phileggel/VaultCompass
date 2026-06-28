@@ -845,3 +845,56 @@ describe("accountDetailsGateway — recordDividend (DIV-023)", () => {
     expect(result).toEqual({ status: "error", error: err });
   });
 });
+
+describe("accountDetailsGateway — getAccountHoldingsAsOf", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns the HoldingsAsOfResponse on success", async () => {
+    const response = {
+      account_name: "Acme",
+      as_of_date: "2024-06-01",
+      account_currency: "EUR",
+      holdings: [],
+      total_cost_basis: 0,
+      total_market_value: 0,
+    };
+    mockInvoke.mockResolvedValue(response);
+
+    const result = await accountDetailsGateway.getAccountHoldingsAsOf("account-1", "2024-06-01");
+
+    expect(result).toEqual({ status: "ok", data: response });
+    expect(mockInvoke).toHaveBeenCalledWith("get_account_holdings_as_of", {
+      accountId: "account-1",
+      asOfDate: "2024-06-01",
+    });
+  });
+
+  it("surfaces InvalidDate for a malformed date", async () => {
+    const err: AccountError = { code: "InvalidDate" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.getAccountHoldingsAsOf("account-1", "not-a-date");
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  it("surfaces DateInFuture for a future date", async () => {
+    const err: AccountError = { code: "DateInFuture" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.getAccountHoldingsAsOf("account-1", "2999-12-31");
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+
+  it("surfaces AccountNotFound for an unknown account", async () => {
+    const err: AccountError = { code: "AccountNotFound", account_id: "no-such" };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountDetailsGateway.getAccountHoldingsAsOf("no-such", "2024-06-01");
+
+    expect(result).toEqual({ status: "error", error: err });
+  });
+});
