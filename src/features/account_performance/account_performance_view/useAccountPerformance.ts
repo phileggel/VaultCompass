@@ -8,6 +8,8 @@ import {
   type PeriodRowViewModel,
   presentAccountPerformanceError,
   presentPeriodRow,
+  presentValueChartSeries,
+  type ValueChartPoint,
 } from "../shared/presenter";
 
 export type PerformanceViewMode = "month" | "year";
@@ -41,6 +43,8 @@ interface UseAccountPerformanceResult {
   setSelectedYear: (year: number) => void;
   /** Rows for the active view: yearly rows in year view, the selected year's months in month view. */
   rows: PeriodRowViewModel[];
+  /** Account-value-over-time series for the line chart, chronological (oldest→newest). */
+  chartPoints: ValueChartPoint[];
 }
 
 export function useAccountPerformance(accountId: string): UseAccountPerformanceResult {
@@ -121,16 +125,26 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     return [...years].sort((a, b) => b - a);
   }, [data]);
 
-  // PRF-015 — in month view, slice the monthly rows to the selected year.
-  const rows = useMemo<PeriodRowViewModel[]>(() => {
+  // PRF-015 — the periods backing the active view: all yearly rows in year view,
+  // the selected year's months in month view. Backend order (most-recent first).
+  const activePeriods = useMemo(() => {
     if (!data) return [];
     if (viewMode === "year") {
-      return data.yearly.map(presentPeriodRow);
+      return data.yearly;
     }
-    return data.monthly
-      .filter((row) => selectedYear === null || row.year === selectedYear)
-      .map(presentPeriodRow);
+    return data.monthly.filter((row) => selectedYear === null || row.year === selectedYear);
   }, [data, viewMode, selectedYear]);
+
+  const rows = useMemo<PeriodRowViewModel[]>(
+    () => activePeriods.map(presentPeriodRow),
+    [activePeriods],
+  );
+
+  // Value-over-time series for the chart, chronological (oldest→newest) for the X axis.
+  const chartPoints = useMemo<ValueChartPoint[]>(
+    () => presentValueChartSeries(activePeriods),
+    [activePeriods],
+  );
 
   return {
     isLoading,
@@ -144,5 +158,6 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     selectedYear,
     setSelectedYear,
     rows,
+    chartPoints,
   };
 }

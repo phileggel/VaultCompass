@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { AccountValueChart } from "../value_chart/AccountValueChart";
 import { AccountPerformanceTable } from "./AccountPerformanceTable";
 import { useAccountPerformance } from "./useAccountPerformance";
 
@@ -151,6 +152,9 @@ export function AccountPerformancePage() {
                   </select>
                 </div>
               )}
+
+              {/* Account value over time — fed by the same active-view series as the table. */}
+              <AccountValueChart points={view.chartPoints} />
 
               <AccountPerformanceTable rows={view.rows} showYtd={showYtdColumn} />
             </div>
