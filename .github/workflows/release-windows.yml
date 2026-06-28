@@ -80,6 +80,10 @@ jobs:
           SQLX_OFFLINE: true
           CARGO_INCREMENTAL: 0
           RUSTFLAGS: "-C debuginfo=0"
+          # reqwest 0.13's rustls feature pulls aws-lc-sys, whose Windows build
+          # needs NASM; use the crate's prebuilt NASM objects so the runner does
+          # not have to provide the assembler.
+          AWS_LC_SYS_PREBUILT_NASM: "1"
         with:
           tauriScript: npm run tauri
           args: --target x86_64-pc-windows-msvc
