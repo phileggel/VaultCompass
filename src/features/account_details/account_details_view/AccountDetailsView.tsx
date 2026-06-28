@@ -449,25 +449,31 @@ export function AccountDetailsView() {
         onSubmitSuccess={view.handleOpenBalanceSuccess}
       />
 
-      {/* CSH-022 — Deposit modal */}
-      <DepositTransactionModal
-        isOpen={view.depositOpen}
-        onClose={view.handleDepositClose}
-        accountId={accountId}
-        accountName={view.summary?.accountName ?? ""}
-        accountCurrency={view.accountCurrency}
-        onSubmitSuccess={view.handleDepositSuccess}
-      />
+      {/* CSH-022 — Deposit modal. Mounted only while open so the hook re-seeds the
+          date from the stored last-operation date on every open (matches the
+          buy/sell/dividend modals). */}
+      {view.depositOpen && (
+        <DepositTransactionModal
+          isOpen
+          onClose={view.handleDepositClose}
+          accountId={accountId}
+          accountName={view.summary?.accountName ?? ""}
+          accountCurrency={view.accountCurrency}
+          onSubmitSuccess={view.handleDepositSuccess}
+        />
+      )}
 
-      {/* CSH-032 — Withdrawal modal */}
-      <WithdrawalTransactionModal
-        isOpen={view.withdrawalOpen}
-        onClose={view.handleWithdrawalClose}
-        accountId={accountId}
-        accountName={view.summary?.accountName ?? ""}
-        accountCurrency={view.accountCurrency}
-        onSubmitSuccess={view.handleWithdrawalSuccess}
-      />
+      {/* CSH-032 — Withdrawal modal. Mounted only while open (see deposit note). */}
+      {view.withdrawalOpen && (
+        <WithdrawalTransactionModal
+          isOpen
+          onClose={view.handleWithdrawalClose}
+          accountId={accountId}
+          accountName={view.summary?.accountName ?? ""}
+          accountCurrency={view.accountCurrency}
+          onSubmitSuccess={view.handleWithdrawalSuccess}
+        />
+      )}
 
       {/* DIV-010/020 — Dividend modal (paying asset chosen inside) */}
       {view.dividendOpen && (
