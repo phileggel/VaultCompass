@@ -28,39 +28,3 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 ## (deps) — Accepted risk: RUSTSEC-2026-0185 (quinn-proto, not compiled)
 
 `cargo audit` flags `quinn-proto 0.11.14` (RUSTSEC-2026-0185, remote memory exhaustion via unbounded out-of-order stream reassembly, 7.5 high, fixed in ≥0.11.15). It is only an **optional** dependency of `reqwest 0.13.3` behind the `http3` feature, which is **not enabled** — `cargo tree -i quinn-proto` is empty, confirming it is not compiled into the shipped binary. Non-applicable; flagged at the v0.28.0 release. The v0.29.0 T6 reqwest 0.13 upgrade did **not** prune it (the earlier expectation was wrong): `quinn` is reqwest 0.13's own optional `http3` dependency, resolved into `Cargo.lock` regardless of activation but never compiled. It will only clear if reqwest drops the optional `quinn` entry upstream. Re-evaluate if `http3` is ever enabled.
-
-## (v0.29.0) Account history & dialog fixes — see `docs/plan/v0.29.0-plan.md`
-
-Five user-reported items, audited against the code and scheduled in v0.29.0.
-Removed from this file by the v0.29.0 housekeeping commit once shipped.
-
-### (feature) Account detail on a specific date — T1
-
-Account details renders as of today only. Goal: view the account
-retrospectively on a previous date. Backend `get_holding_snapshot_as_of` exists
-but is wired only into the buy/sell dialogs; a full as-of-date view needs an
-all-holdings-as-of-date command + a date selector on `AccountDetailsView`.
-
-### (feature) Historical graphic of account value — T2
-
-No chart of account value over time exists, and no charting library is in the
-repo. Reuse the `account_performance` valuation/FX engine for the series.
-
-### (bug) Market-price asset combobox feels readonly — T3
-
-The "add market price" modal's asset field appears readonly: `ComboboxField`
-only reveals options at `query.length >= 2`, with no open-on-focus and no
-dropdown affordance. Make it a proper switchable selector.
-
-### (bug) Price date is not remembered — T4
-
-`usePriceModal.record()` never calls `setLastOperationDate`, so a price entered
-at a new date is not stored as the account's last-operation date (every other
-operation hook does this).
-
-### (bug) Cash add/remove ignores the stored date — T5
-
-The deposit/withdrawal date defaults to today instead of the stored
-last-operation date: `useState(() => getLastOperationDate(accountId))` is a
-once-only initializer that runs before `accountId` resolves. Re-seed on resolve
-and verify the writeback fires.
