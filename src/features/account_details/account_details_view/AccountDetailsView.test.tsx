@@ -32,10 +32,10 @@ vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
 vi.mock("../buy_transaction/BuyTransactionModal", () => ({ BuyTransactionModal: () => null }));
 vi.mock("../sell_transaction/SellTransactionModal", () => ({ SellTransactionModal: () => null }));
 vi.mock("../deposit_transaction/DepositTransactionModal", () => ({
-  DepositTransactionModal: () => null,
+  DepositTransactionModal: () => <div data-testid="deposit-modal-mounted" />,
 }));
 vi.mock("../withdrawal_transaction/WithdrawalTransactionModal", () => ({
-  WithdrawalTransactionModal: () => null,
+  WithdrawalTransactionModal: () => <div data-testid="withdrawal-modal-mounted" />,
 }));
 vi.mock("../open_balance/OpenBalanceModal", () => ({ OpenBalanceModal: () => null }));
 vi.mock("../price_history/PriceHistoryModal", () => ({ PriceHistoryModal: () => null }));
@@ -153,6 +153,24 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     mockUseAccountDetailsView.mockReturnValue(makeView({ dividendOpen: true }));
     rerender(<AccountDetailsView />);
     expect(screen.getByTestId("dividend-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("mounts the deposit modal only while depositOpen is true (CSH-022)", () => {
+    const { rerender } = render(<AccountDetailsView />);
+    expect(screen.queryByTestId("deposit-modal-mounted")).toBeNull();
+
+    mockUseAccountDetailsView.mockReturnValue(makeView({ depositOpen: true }));
+    rerender(<AccountDetailsView />);
+    expect(screen.getByTestId("deposit-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("mounts the withdrawal modal only while withdrawalOpen is true (CSH-032)", () => {
+    const { rerender } = render(<AccountDetailsView />);
+    expect(screen.queryByTestId("withdrawal-modal-mounted")).toBeNull();
+
+    mockUseAccountDetailsView.mockReturnValue(makeView({ withdrawalOpen: true }));
+    rerender(<AccountDetailsView />);
+    expect(screen.getByTestId("withdrawal-modal-mounted")).toBeInTheDocument();
   });
 
   it("surfaces the total dividends received in the header when non-zero (DIV-073)", () => {
