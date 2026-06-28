@@ -36,6 +36,9 @@ vi.mock("../gateway", () => ({
     getAccountDetails: (...args: unknown[]) => mockGetAccountDetails(...args),
     subscribeToEvents: vi.fn(() => Promise.resolve(() => {})),
   },
+  // useAccountDetails reads the asset catalog via this selector; back it with the
+  // real store so the setState-driven tests still drive it.
+  useCachedAssets: () => useAppStore((state) => state.assets),
 }));
 
 describe("useAccountDetailsView — price-refresh lock toggle (MKT-156/157)", () => {

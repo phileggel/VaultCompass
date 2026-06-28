@@ -12,8 +12,8 @@ import {
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { patchModalSearch } from "@/lib/modalSearch";
-import { useAppStore } from "@/lib/store";
 import { IconButton } from "@/ui/components/button/IconButton";
+import { useCachedAccounts, useCachedAssets } from "../gateway";
 import { PnlCell } from "../shared/PnlCell";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
@@ -44,8 +44,8 @@ export function HoldingRow({
 }: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const assets = useAppStore((state) => state.assets);
-  const accounts = useAppStore((state) => state.accounts);
+  const assets = useCachedAssets();
+  const accounts = useCachedAccounts();
 
   const buildTarget = useCallback((): ModalTarget => {
     const asset = assets.find((a) => a.id === row.assetId);

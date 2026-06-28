@@ -21,6 +21,7 @@ import type {
 } from "@/bindings";
 import { commands, events } from "@/bindings";
 import type { CorrectTransactionFields } from "@/features/transactions/shared/types";
+import { useAppStore } from "@/lib/store";
 
 export const accountDetailsGateway = {
   async getAccountDetails(
@@ -120,3 +121,16 @@ export const accountDetailsGateway = {
     });
   },
 };
+
+/**
+ * Asset catalog from the shared BE/FE cache (F28). Feature code reads the cache
+ * through its own gateway rather than importing the store directly.
+ */
+export function useCachedAssets() {
+  return useAppStore((state) => state.assets);
+}
+
+/** Account list from the shared BE/FE cache (F28). */
+export function useCachedAccounts() {
+  return useAppStore((state) => state.accounts);
+}
