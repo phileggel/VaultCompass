@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getLastOperationDate } from "@/lib/lastOperationDateStorage";
+import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
@@ -109,6 +109,9 @@ export function usePriceModal({
     try {
       const result = await accountDetailsGateway.recordAssetPrice(assetId, date, parseFloat(price));
       if (result.status === "ok") {
+        // Remember the date so the next operation on this account pre-fills it,
+        // consistent with every other operation hook (MKT-011).
+        setLastOperationDate(accountId, date);
         showSnackbar(t("price_modal.success"));
         return true;
       }
@@ -122,7 +125,7 @@ export function usePriceModal({
     } finally {
       setIsSubmitting(false);
     }
-  }, [isFormValid, assetId, date, price, showSnackbar, t]);
+  }, [isFormValid, assetId, accountId, date, price, showSnackbar, t]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {

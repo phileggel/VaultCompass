@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 
 // Gateway mock — recordAssetPrice is the price-record command (Result<null, AssetPriceError>)
 const mockRecordAssetPrice = vi.fn();
+const mockSetLastOperationDate = vi.fn();
 
 vi.mock("../gateway", () => ({
   accountDetailsGateway: {
@@ -25,6 +26,7 @@ vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
 const STORED_DATE = "2024-05-01";
 vi.mock("@/lib/lastOperationDateStorage", () => ({
   getLastOperationDate: () => STORED_DATE,
+  setLastOperationDate: (...args: unknown[]) => mockSetLastOperationDate(...args),
 }));
 
 import type { PriceableAsset } from "../shared/types";
@@ -136,6 +138,31 @@ describe("usePriceModal", () => {
     });
     expect(mockRecordAssetPrice).toHaveBeenCalledWith("asset-1", "2024-05-01", 150.5);
     expect(onSubmitSuccess).toHaveBeenCalledOnce();
+  });
+
+  // MKT-011 — a recorded price stores its date as the account's last-operation date.
+  it("MKT-011 — stores the entered date as the account's last-operation date on success", async () => {
+    mockRecordAssetPrice.mockResolvedValue({ status: "ok", data: null });
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-15");
+      result.current.handleChange("price", "150.50");
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(mockSetLastOperationDate).toHaveBeenCalledWith("account-1", "2024-06-15");
+  });
+
+  // MKT-011 — a failed record does not persist the date.
+  it("MKT-011 — does not store the date when the record fails", async () => {
+    mockRecordAssetPrice.mockResolvedValue({ status: "error", error: { code: "NotPositive" } });
+    const { result } = renderHook(() => usePriceModal(BASE_PROPS));
+    await act(async () => result.current.handleChange("price", "150.50"));
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(mockSetLastOperationDate).not.toHaveBeenCalled();
   });
 
   // MKT-014 — "add another" records, calls onRecorded (not onSubmitSuccess), clears the price.
