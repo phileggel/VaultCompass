@@ -1,9 +1,8 @@
 import type {
   AccountDetailsResponse,
   AccountError,
-  AssetCrudError,
+  AssetError,
   AssetPrice,
-  AssetPriceError,
   DepositDTO,
   DividendDTO,
   DividendError,
@@ -34,11 +33,11 @@ export const accountDetailsGateway = {
     assetId: string,
     date: string,
     price: number,
-  ): Promise<Result<null, AssetPriceError>> {
+  ): Promise<Result<null, AssetError>> {
     return commands.recordAssetPrice(assetId, date, price);
   },
 
-  async getAssetPrices(assetId: string): Promise<Result<AssetPrice[], AssetPriceError>> {
+  async getAssetPrices(assetId: string): Promise<Result<AssetPrice[], AssetError>> {
     return commands.getAssetPrices(assetId);
   },
 
@@ -47,11 +46,11 @@ export const accountDetailsGateway = {
     originalDate: string,
     newDate: string,
     newPrice: number,
-  ): Promise<Result<null, AssetPriceError>> {
+  ): Promise<Result<null, AssetError>> {
     return commands.updateAssetPrice(assetId, originalDate, newDate, newPrice);
   },
 
-  async deleteAssetPrice(assetId: string, date: string): Promise<Result<null, AssetPriceError>> {
+  async deleteAssetPrice(assetId: string, date: string): Promise<Result<null, AssetError>> {
     return commands.deleteAssetPrice(assetId, date);
   },
 
@@ -107,11 +106,11 @@ export const accountDetailsGateway = {
     return commands.fetchAccountAssetPricesForDate(accountId, date);
   },
 
-  async blockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetCrudError>> {
+  async blockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetError>> {
     return commands.blockAssetPriceRefresh(assetId);
   },
 
-  async unblockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetCrudError>> {
+  async unblockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetError>> {
     return commands.unblockAssetPriceRefresh(assetId);
   },
 

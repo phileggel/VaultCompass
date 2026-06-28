@@ -11,7 +11,7 @@ export const commands = {
 /**
  * Fetches all active (non-archived) assets.
  */
-async getAssets() : Promise<Result<Asset[], AssetApplicationError>> {
+async getAssets() : Promise<Result<Asset[], AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_assets") };
 } catch (e) {
@@ -22,7 +22,7 @@ async getAssets() : Promise<Result<Asset[], AssetApplicationError>> {
 /**
  * Fetches all assets including archived ones.
  */
-async getAssetsWithArchived() : Promise<Result<Asset[], AssetApplicationError>> {
+async getAssetsWithArchived() : Promise<Result<Asset[], AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_assets_with_archived") };
 } catch (e) {
@@ -33,7 +33,7 @@ async getAssetsWithArchived() : Promise<Result<Asset[], AssetApplicationError>> 
 /**
  * Adds a new asset.
  */
-async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, AssetCrudError>> {
+async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_asset", { dto }) };
 } catch (e) {
@@ -44,7 +44,7 @@ async addAsset(dto: CreateAssetDTO) : Promise<Result<Asset, AssetCrudError>> {
 /**
  * Updates an existing asset.
  */
-async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, AssetCrudError>> {
+async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_asset", { dto }) };
 } catch (e) {
@@ -55,7 +55,7 @@ async updateAsset(dto: UpdateAssetDTO) : Promise<Result<Asset, AssetCrudError>> 
 /**
  * Unarchives an asset (R18).
  */
-async unarchiveAsset(id: string) : Promise<Result<null, AssetCrudError>> {
+async unarchiveAsset(id: string) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("unarchive_asset", { id }) };
 } catch (e) {
@@ -66,7 +66,7 @@ async unarchiveAsset(id: string) : Promise<Result<null, AssetCrudError>> {
 /**
  * Blocks automated price fetches for an asset (the lock — MKT-156, ADR-014).
  */
-async blockAssetPriceRefresh(id: string) : Promise<Result<null, AssetCrudError>> {
+async blockAssetPriceRefresh(id: string) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("block_asset_price_refresh", { id }) };
 } catch (e) {
@@ -77,7 +77,7 @@ async blockAssetPriceRefresh(id: string) : Promise<Result<null, AssetCrudError>>
 /**
  * Re-allows automated price fetches for an asset (MKT-156).
  */
-async unblockAssetPriceRefresh(id: string) : Promise<Result<null, AssetCrudError>> {
+async unblockAssetPriceRefresh(id: string) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("unblock_asset_price_refresh", { id }) };
 } catch (e) {
@@ -96,9 +96,9 @@ async getSupportedExchanges() : Promise<Exchange[]> {
  * Fetches all active categories.
  * 
  * Read-only — only infrastructure failures can fire here, so the surface is
- * the narrow `CategoryApplicationError` (only `DatabaseError` is reachable).
+ * the narrow `AssetError` (only `DatabaseError` is reachable).
  */
-async getCategories() : Promise<Result<AssetCategory[], CategoryApplicationError>> {
+async getCategories() : Promise<Result<AssetCategory[], AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_categories") };
 } catch (e) {
@@ -109,13 +109,13 @@ async getCategories() : Promise<Result<AssetCategory[], CategoryApplicationError
 /**
  * Creates a new category.
  * 
- * Returns the typed `CategoryCrudError` directly — no boundary type or mapper
- * is needed because every leaf in the composite (`CategoryApplicationError`,
- * `CategoryDomainError`) already serializes with `#[serde(tag = "code")]`,
- * and `CategoryCrudError`'s `#[serde(untagged)]` flattens them into a single
+ * Returns the typed `AssetError` directly — no boundary type or mapper
+ * is needed because every leaf in the composite (`AssetError`,
+ * `AssetError`) already serializes with `#[serde(tag = "code")]`,
+ * and `AssetError`'s `#[serde(untagged)]` flattens them into a single
  * FE-visible union.
  */
-async addCategory(label: string) : Promise<Result<AssetCategory, CategoryCrudError>> {
+async addCategory(label: string) : Promise<Result<AssetCategory, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("add_category", { label }) };
 } catch (e) {
@@ -126,7 +126,7 @@ async addCategory(label: string) : Promise<Result<AssetCategory, CategoryCrudErr
 /**
  * Updates an existing category.
  */
-async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, CategoryCrudError>> {
+async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_category", { id, label }) };
 } catch (e) {
@@ -137,7 +137,7 @@ async updateCategory(id: string, label: string) : Promise<Result<AssetCategory, 
 /**
  * Deletes a category.
  */
-async deleteCategory(id: string) : Promise<Result<null, CategoryCrudError>> {
+async deleteCategory(id: string) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_category", { id }) };
 } catch (e) {
@@ -149,7 +149,7 @@ async deleteCategory(id: string) : Promise<Result<null, CategoryCrudError>> {
  * Records (or overwrites) a market price for an asset on a given date (MKT-024/025).
  * price is a human-readable decimal; the backend converts to i64 micros at this boundary (MKT-024).
  */
-async recordAssetPrice(assetId: string, date: string, price: number) : Promise<Result<null, AssetPriceError>> {
+async recordAssetPrice(assetId: string, date: string, price: number) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("record_asset_price", { assetId, date, price }) };
 } catch (e) {
@@ -160,7 +160,7 @@ async recordAssetPrice(assetId: string, date: string, price: number) : Promise<R
 /**
  * Returns all recorded prices for the given asset, sorted date descending (MKT-072).
  */
-async getAssetPrices(assetId: string) : Promise<Result<AssetPrice[], AssetPriceError>> {
+async getAssetPrices(assetId: string) : Promise<Result<AssetPrice[], AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_asset_prices", { assetId }) };
 } catch (e) {
@@ -171,7 +171,7 @@ async getAssetPrices(assetId: string) : Promise<Result<AssetPrice[], AssetPriceE
 /**
  * Updates the date and/or price of an existing price record (MKT-083/084).
  */
-async updateAssetPrice(assetId: string, originalDate: string, newDate: string, newPrice: number) : Promise<Result<null, AssetPriceError>> {
+async updateAssetPrice(assetId: string, originalDate: string, newDate: string, newPrice: number) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_asset_price", { assetId, originalDate, newDate, newPrice }) };
 } catch (e) {
@@ -182,7 +182,7 @@ async updateAssetPrice(assetId: string, originalDate: string, newDate: string, n
 /**
  * Deletes a specific price record by (asset_id, date) (MKT-090).
  */
-async deleteAssetPrice(assetId: string, date: string) : Promise<Result<null, AssetPriceError>> {
+async deleteAssetPrice(assetId: string, date: string) : Promise<Result<null, AssetError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("delete_asset_price", { assetId, date }) };
 } catch (e) {
@@ -916,21 +916,20 @@ ytd_performance_pct: number | null }
  * here flattens them into a single FE-visible union.
  * 
  * Each leaf lives in its rightful layer:
- * - `AssetCrudError` — asset BC composite (`asset/application/`), carries
- * `AssetApplicationError::NotFound` and
- * `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
+ * - `AssetError` — asset BC enum, carries `AssetNotFound` and
+ * `CashAssetNotEditable` propagated verbatim per the
  * composition-over-redefinition rule.
- * - `AccountError` — account BC (`account/application/`), surfaces
- * `DatabaseError` from the cross-BC active-holdings check.
+ * - `AccountError` — account BC, surfaces `DatabaseError` from the cross-BC
+ * active-holdings check.
  * - `ArchiveAssetTask` — use-case-owned (this file), raises
  * `ActiveHoldings` from the orchestrator.
  */
 export type ArchiveAssetError = 
 /**
- * Asset BC rejection (`NotFound`, `CashAssetNotEditable`, propagated
+ * Asset BC rejection (`AssetNotFound`, `CashAssetNotEditable`, propagated
  * `DatabaseError`).
  */
-AssetCrudError | 
+AssetError | 
 /**
  * Account BC rejection (`DatabaseError` from the cross-BC
  * active-holdings check).
@@ -1014,34 +1013,6 @@ exchange: Exchange | null;
  */
 price_refresh_blocked: boolean }
 /**
- * Application-layer rejections for the Asset aggregate of the Asset BC —
- * concerns raised at the service layer rather than by an aggregate method on
- * its own loaded state.
- * 
- * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors):
- * - `NotFound` is born when `asset_repo.get_by_id` returns `Ok(None)` — a
- * service-level translation, not an aggregate invariant. Carries the
- * requested ID for FE diagnostic surfacing.
- * - `DatabaseError` is the application-layer translation of any raw
- * infrastructure failure from an asset-repo call. The diagnostic chain is
- * preserved via `tracing::error!` at the same translation site; the
- * variant carries no payload (per the project-specific infra-translation
- * rule in `docs/plan/error-model-refactor.md`).
- */
-export type AssetApplicationError = 
-/**
- * No asset exists with the requested ID. Born at the service layer when
- * `asset_repo.get_by_id` returns `None`.
- */
-{ code: "NotFound"; id: string } | 
-/**
- * Application-layer translation of any infrastructure failure from an
- * asset-repo call. Unit variant — no `hint` payload on the wire; the full
- * diagnostic chain is preserved server-side via `tracing::error!` at the
- * translation site. FE shows the i18n key `error.DatabaseError`.
- */
-{ code: "DatabaseError" }
-/**
  * A user-defined grouping for assets.
  */
 export type AssetCategory = { 
@@ -1097,40 +1068,15 @@ export type AssetClass =
  */
 "Derivatives"
 /**
- * Service-layer composite for the Asset CRUD failure surface — the write
- * commands `add_asset`, `update_asset`, `unarchive_asset`, plus the
- * service-internal `archive_asset` / `delete_asset` consumed by use cases.
+ * Single flat error enum for the `asset` bounded context (gold error model).
  * 
- * Composes three leaves: `AssetApplicationError` (NotFound, DatabaseError),
- * `AssetDomainError` (input validation + archive / cash / system-managed
- * invariants), `CategoryApplicationError` (cross-aggregate category lookup
- * in create/update).
+ * Every failure the BC can raise — asset / category / price value-object and
+ * aggregate-invariant rejections from domain methods, plus service-layer
+ * lookup / uniqueness / infrastructure translation — lives in this one type.
+ * `#[serde(tag = "code")]` makes each variant serialize as
+ * `{ "code": "VariantName", ...payload }` on the wire.
  */
-export type AssetCrudError = 
-/**
- * Service-layer rejection (`NotFound`, `DatabaseError`).
- */
-AssetApplicationError | 
-/**
- * Aggregate-level domain rejection (input validation, archive / cash /
- * system-managed invariants on loaded state).
- */
-AssetDomainError | 
-/**
- * Category-side application rejection — surfaces `NotFound { id }` from the
- * cross-aggregate category lookup in `create_asset` / `update_asset`.
- */
-CategoryApplicationError
-/**
- * Typed errors for asset domain validation. Only aggregate-method or
- * value-object rejections live here per the rejection-layer rule
- * (`docs/ddd-reference.md` § Errors).
- * 
- * Tagged with `#[serde(tag = "code")]` for exposure through the
- * `AssetCrudError` untagged composite. Payload-bearing variants are
- * struct-shaped (internally-tagged serde rejects tuple variants).
- */
-export type AssetDomainError = 
+export type AssetError = 
 /**
  * Asset name is empty or whitespace-only.
  */
@@ -1148,7 +1094,7 @@ export type AssetDomainError =
  */
 { code: "InvalidCurrency"; currency: string } | 
 /**
- * The asset is archived and cannot be edited.
+ * The asset is archived and cannot be edited, nor can its prices be mutated.
  */
 { code: "Archived" } | 
 /**
@@ -1161,22 +1107,62 @@ export type AssetDomainError =
 { code: "InvalidExchange"; exchange_code: string } | 
 /**
  * The supplied ISIN fails the ISO 6166 format validation (AST-023, WEB-016).
- * Sub-variants of the `IsinFormatError` (wrong length, invalid charset, bad
- * check digit) collapse to this single wire code per the `isin.rs` doc.
+ * Sub-variants of `IsinFormatError` (wrong length, invalid charset, bad
+ * check digit) collapse to this single wire code.
  */
-{ code: "InvalidIsinFormat" }
+{ code: "InvalidIsinFormat" } | 
 /**
- * Flat error enum for the asset bounded context (per error-model.md).
- * 
- * Holds every variant the asset BC can raise on the new fetch surface. The
- * existing `AssetApplicationError`, `AssetPriceApplicationError`, and the
- * legacy composites remain untouched on the existing CRUD / price-history
- * surfaces (see docs/techdebt.md for the planned retrofit).
+ * Price must be strictly positive.
  */
-export type AssetError = 
+{ code: "NotPositive" } | 
+/**
+ * Price value is not a finite floating-point number.
+ */
+{ code: "NonFinite" } | 
+/**
+ * Price date is in the future.
+ */
+{ code: "DateInFuture" } | 
+/**
+ * The supplied date string is not parseable as ISO 8601 (`YYYY-MM-DD`).
+ */
+{ code: "InvalidDateFormat"; date: string } | 
+/**
+ * Category label is empty or whitespace-only.
+ */
+{ code: "LabelEmpty" } | 
+/**
+ * Attempt to rename the system default category.
+ */
+{ code: "SystemReadonly" } | 
+/**
+ * Attempt to delete the system default category.
+ */
+{ code: "SystemProtected" } | 
+/**
+ * No asset exists with the requested ID. Born at the service layer when
+ * `asset_repo.get_by_id` returns `None`.
+ */
+{ code: "AssetNotFound"; id: string } | 
+/**
+ * No category exists with the requested ID. Born at the service layer when
+ * `category_repo.get_by_id` returns `None`.
+ */
+{ code: "CategoryNotFound"; id: string } | 
+/**
+ * A category with the same name (case-insensitive) already exists. Born at
+ * the service layer from a `find_by_name` uniqueness pre-check.
+ */
+{ code: "DuplicateName" } | 
+/**
+ * No price record exists for the given (asset_id, date) pair (MKT-083 / MKT-090).
+ */
+{ code: "PriceNotFound"; asset_id: string; date: string } | 
 /**
  * Application-layer translation of any infrastructure failure from an
- * asset-repo call on the fetch surface.
+ * asset-side repository call. No `hint` payload on the wire; the full
+ * diagnostic chain is preserved server-side via `tracing::error!` at the
+ * translation site. FE shows the i18n key `error.DatabaseError`.
  */
 { code: "DatabaseError" }
 /**
@@ -1235,96 +1221,6 @@ price: number;
  * Provenance of this price record (MKT-100).
  */
 source: AssetPriceSource }
-/**
- * Application-layer rejections for the AssetPrice sub-aggregate of the Asset
- * BC — concerns raised at the service layer rather than by an aggregate method
- * on its own loaded state.
- * 
- * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors):
- * - `PriceNotFound` is born when `price_repo.get_by_asset_and_date` returns
- * `Ok(None)` for an `(asset_id, date)` pair the service expected to exist
- * (update / delete) — a service-level translation, not an aggregate
- * invariant. Carries both keys for FE diagnostic surfacing.
- * - `DatabaseError` is the application-layer translation of any raw infra
- * failure from a price-repo call. The diagnostic chain is preserved via
- * `tracing::error!` at the same translation site; the variant carries no
- * payload (per the project-specific infra-translation rule in
- * `docs/plan/error-model-refactor.md`).
- */
-export type AssetPriceApplicationError = 
-/**
- * No price record exists for the given (asset_id, date) pair (MKT-083 / MKT-090).
- */
-{ code: "PriceNotFound"; asset_id: string; date: string } | 
-/**
- * The target asset is archived (AST-006). Mutating price commands
- * (record / update / delete) reject; reads remain allowed.
- */
-{ code: "Archived" } | 
-/**
- * Application-layer translation of any infrastructure failure from a
- * price-repo call. Unit variant — no `hint` payload on the wire; the full
- * diagnostic chain is preserved server-side via `tracing::error!` at the
- * translation site. FE shows the i18n key `error.DatabaseError`.
- */
-{ code: "DatabaseError" }
-/**
- * Typed errors for asset price value-object validation. Only aggregate-method
- * or value-object rejections live here per the rejection-layer rule
- * (`docs/ddd-reference.md` § Errors); the "no record at this (asset_id, date)"
- * rejection is service-level and lives in `AssetPriceApplicationError`.
- * 
- * Tagged with `#[serde(tag = "code")]` for exposure through the
- * `AssetPriceError` untagged composite. Payload-bearing variants are
- * struct-shaped (internally-tagged serde rejects tuple variants).
- */
-export type AssetPriceDomainError = 
-/**
- * Price must be strictly positive.
- */
-{ code: "NotPositive" } | 
-/**
- * Price value is not a finite floating-point number.
- * Emitted by the service boundary before micro conversion; `AssetPrice::new()` never produces this.
- */
-{ code: "NonFinite" } | 
-/**
- * Price date is in the future.
- */
-{ code: "DateInFuture" } | 
-/**
- * The supplied date string is not parseable as ISO 8601 (`YYYY-MM-DD`).
- */
-{ code: "InvalidDateFormat"; date: string }
-/**
- * Service-layer composite for the **AssetPrice** failure surface — the write
- * commands `record_asset_price` / `update_asset_price` / `delete_asset_price`
- * and the read `get_asset_prices`.
- * 
- * Composes three leaves:
- * - `AssetApplicationError` — cross-aggregate asset-existence check
- * (`record_asset_price` and `get_asset_prices` reject when the asset row
- * itself is missing — MKT-043).
- * - `AssetPriceApplicationError` — price-row rejection (`PriceNotFound`,
- * `DatabaseError`).
- * - `AssetPriceDomainError` — value-object validation
- * (`NotPositive` / `NonFinite` / `DateInFuture` / `InvalidDateFormat`).
- */
-export type AssetPriceError = 
-/**
- * Asset-row rejection (`NotFound`, `DatabaseError`) from the
- * asset-existence check that gates write commands.
- */
-AssetApplicationError | 
-/**
- * Price-row rejection (`PriceNotFound`, `DatabaseError`).
- */
-AssetPriceApplicationError | 
-/**
- * Value-object validation (`NotPositive`, `NonFinite`, `DateInFuture`,
- * `InvalidDateFormat`).
- */
-AssetPriceDomainError
 /**
  * Provenance qualifier for an AssetPrice record (MKT-100).
  */
@@ -1385,95 +1281,6 @@ account_id: string;
  * Identifier of the transaction being cancelled.
  */
 transaction_id: string }
-/**
- * Application-layer rejections for the Category sub-aggregate of the Asset
- * bounded context — concerns raised at the service layer rather than by an
- * aggregate method on its own loaded state.
- * 
- * Per the rejection-layer rule (`docs/ddd-reference.md` § Errors):
- * - `NotFound` is born when `category_repo.get_by_id` returns `Ok(None)` —
- * a service-level translation, not an aggregate invariant.
- * - `DuplicateName` is born when the service-layer `find_by_name` uniqueness
- * pre-check matches an existing row — a cross-aggregate invariant.
- * - `DatabaseError` is the application-layer translation of any raw
- * infrastructure failure from a category-repo call. The diagnostic chain
- * is preserved via `tracing::error!` at the same translation site; the
- * variant carries no payload (per the project-specific infra-translation
- * rule in `docs/plan/error-model-refactor.md`).
- * 
- * Tagged with `#[serde(tag = "code")]` so each variant serializes as a flat
- * `{ code: "..." }` shape across the Tauri boundary. `NotFound` carries the
- * requested ID as a struct field so the FE can surface it diagnostically.
- */
-export type CategoryApplicationError = 
-/**
- * No category exists with the requested ID. Born at the service layer
- * when `category_repo.get_by_id` returns `None`.
- */
-{ code: "NotFound"; id: string } | 
-/**
- * A category with the same name (case-insensitive) already exists. Born
- * at the service layer from a `find_by_name` uniqueness pre-check before
- * the repository write — a cross-aggregate invariant, not a single-
- * aggregate state rule.
- */
-{ code: "DuplicateName" } | 
-/**
- * Application-layer translation of any infrastructure failure from a
- * category-repo call. Unit variant — no `hint` payload on the wire; the
- * full diagnostic chain is preserved server-side via `tracing::error!`
- * at the translation site. FE shows the i18n key `error.DatabaseError`.
- */
-{ code: "DatabaseError" }
-/**
- * Service-layer composite for the **Category CRUD** failure surface — the
- * write commands `add_category`, `update_category`, `delete_category`.
- * `get_categories` (read-only) returns the narrower `CategoryApplicationError`
- * directly because it has no domain-rejection paths.
- * 
- * Each leaf lives in its rightful layer:
- * - `CategoryApplicationError` — application layer (this module) — raises
- * `NotFound`, `DuplicateName`, `DatabaseError`.
- * - `CategoryDomainError` — domain layer (`asset/domain/`) — raises
- * `LabelEmpty` (value-object validation), `SystemReadonly` /
- * `SystemProtected` (aggregate-method invariants on loaded state).
- */
-export type CategoryCrudError = 
-/**
- * Service-layer rejection (`NotFound`, `DuplicateName`, `DatabaseError`).
- */
-CategoryApplicationError | 
-/**
- * Aggregate-level domain rejection (`LabelEmpty`, `SystemReadonly`,
- * `SystemProtected`).
- */
-CategoryDomainError
-/**
- * Typed errors for category domain validation.
- * 
- * Only genuine aggregate-method or value-object rejections live here per the
- * rejection-layer rule (`docs/ddd-reference.md` § Errors):
- * - `LabelEmpty` — value-object validation in `AssetCategory::new` /
- * `update_from`.
- * - `SystemReadonly` / `SystemProtected` — aggregate methods
- * `ensure_renameable` / `ensure_deletable` enforced on loaded state.
- * 
- * Tagged with `#[serde(tag = "code")]` so it can be exposed verbatim at the
- * Tauri boundary through the `CategoryCrudError` untagged composite.
- */
-export type CategoryDomainError = 
-/**
- * Category label is empty or whitespace-only.
- */
-{ code: "LabelEmpty" } | 
-/**
- * Attempt to rename the system default category.
- */
-{ code: "SystemReadonly" } | 
-/**
- * Attempt to delete the system default category.
- */
-{ code: "SystemProtected" }
 /**
  * Enriched view of a fully-closed position (quantity == 0, ACD-044).
  */
@@ -1726,21 +1533,20 @@ export type CurrencyRateSource =
  * here flattens them into a single FE-visible union.
  * 
  * Each leaf lives in its rightful layer:
- * - `AssetCrudError` — asset BC composite (`asset/application/`), carries
- * `AssetApplicationError::NotFound` and
- * `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
+ * - `AssetError` — asset BC enum, carries `AssetNotFound` and
+ * `CashAssetNotEditable` propagated verbatim per the
  * composition-over-redefinition rule.
- * - `AccountError` — account BC (`account/application/`), surfaces
- * `DatabaseError` from the cross-BC transaction-history check.
+ * - `AccountError` — account BC, surfaces `DatabaseError` from the cross-BC
+ * transaction-history check.
  * - `DeleteAssetTask` — use-case-owned (this file), raises
  * `ExistingTransactions` from the orchestrator.
  */
 export type DeleteAssetError = 
 /**
- * Asset BC rejection (`NotFound`, `CashAssetNotEditable`, propagated
+ * Asset BC rejection (`AssetNotFound`, `CashAssetNotEditable`, propagated
  * `DatabaseError`).
  */
-AssetCrudError | 
+AssetError | 
 /**
  * Account BC rejection (`DatabaseError` from the cross-BC
  * transaction-history check).

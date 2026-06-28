@@ -1,4 +1,4 @@
-use super::error::AssetPriceDomainError;
+use crate::context::asset::error::AssetError;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -31,15 +31,15 @@ impl AssetPrice {
         date: String,
         price: i64,
         source: AssetPriceSource,
-    ) -> StdResult<Self, AssetPriceDomainError> {
+    ) -> StdResult<Self, AssetError> {
         if price <= 0 {
-            return Err(AssetPriceDomainError::NotPositive);
+            return Err(AssetError::NotPositive);
         }
         let parsed = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
-            .map_err(|_| AssetPriceDomainError::InvalidDateFormat { date: date.clone() })?;
+            .map_err(|_| AssetError::InvalidDateFormat { date: date.clone() })?;
         let today = chrono::Local::now().date_naive();
         if parsed > today {
-            return Err(AssetPriceDomainError::DateInFuture);
+            return Err(AssetError::DateInFuture);
         }
         Ok(Self {
             asset_id,
@@ -222,10 +222,7 @@ mod tests {
             AssetPriceSource::Manual,
         )
         .unwrap_err();
-        assert!(
-            matches!(err, AssetPriceDomainError::NotPositive),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AssetError::NotPositive), "got: {err:?}");
         let err = AssetPrice::new(
             "a".to_string(),
             "2026-01-01".to_string(),
@@ -233,10 +230,7 @@ mod tests {
             AssetPriceSource::Manual,
         )
         .unwrap_err();
-        assert!(
-            matches!(err, AssetPriceDomainError::NotPositive),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AssetError::NotPositive), "got: {err:?}");
     }
 
     // MKT-022 — new() rejects a malformed date string with the offending input echoed back
@@ -250,7 +244,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            matches!(&err, AssetPriceDomainError::InvalidDateFormat { date } if date == "not-a-date"),
+            matches!(&err, AssetError::InvalidDateFormat { date } if date == "not-a-date"),
             "got: {err:?}"
         );
     }
@@ -265,10 +259,7 @@ mod tests {
             AssetPriceSource::Manual,
         )
         .unwrap_err();
-        assert!(
-            matches!(err, AssetPriceDomainError::DateInFuture),
-            "got: {err:?}"
-        );
+        assert!(matches!(err, AssetError::DateInFuture), "got: {err:?}");
     }
 
     // MKT-021/022 — new() accepts a valid past price and date

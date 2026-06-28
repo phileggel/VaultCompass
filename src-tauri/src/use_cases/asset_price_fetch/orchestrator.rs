@@ -1,7 +1,5 @@
 use crate::context::account::{AccountError, AccountService};
-use crate::context::asset::{
-    derive_yahoo_symbol_with_exchange, Asset, AssetApplicationError, AssetError, AssetService,
-};
+use crate::context::asset::{derive_yahoo_symbol_with_exchange, Asset, AssetError, AssetService};
 use crate::context::currency::CurrencyPair;
 use crate::core::cash::system_cash_asset_id;
 use crate::core::logger::BACKEND;
@@ -155,7 +153,7 @@ impl AssetPriceFetchUseCase {
                         err = ?application_error,
                         "fetch_scope: get_asset_by_id failed"
                     );
-                    return Err(translate_asset_application_error(application_error));
+                    return Err(application_error);
                 }
             };
             currency_by_asset.insert(asset_id, asset.currency.clone());
@@ -209,16 +207,6 @@ fn build_fx_pairs(
     pairs
 }
 
-fn translate_asset_application_error(error: AssetApplicationError) -> AssetError {
-    // The fetch wire-surface (`AssetError`) exposes only `DatabaseError`; a holding
-    // referencing a missing asset mid-fetch is an internal inconsistency surfaced
-    // generically, so every variant maps to it.
-    match error {
-        AssetApplicationError::NotFound { .. } => AssetError::DatabaseError,
-        AssetApplicationError::DatabaseError => AssetError::DatabaseError,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,20 +224,6 @@ mod tests {
     use crate::core::SideEffectEventBus;
     use chrono::NaiveDate;
     use sqlx::sqlite::SqlitePoolOptions;
-
-    // Both AssetApplicationError variants map to the single AssetError::DatabaseError
-    // the fetch surface exposes; locks the NotFound → DatabaseError mapping.
-    #[test]
-    fn translate_asset_application_error_maps_every_variant_to_database_error() {
-        assert!(matches!(
-            translate_asset_application_error(AssetApplicationError::NotFound { id: "x".into() }),
-            AssetError::DatabaseError
-        ));
-        assert!(matches!(
-            translate_asset_application_error(AssetApplicationError::DatabaseError),
-            AssetError::DatabaseError
-        ));
-    }
 
     async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
         let pool = SqlitePoolOptions::new()

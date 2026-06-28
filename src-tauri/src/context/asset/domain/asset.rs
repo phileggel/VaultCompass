@@ -1,7 +1,7 @@
 use super::category::AssetCategory;
-use super::error::AssetDomainError;
 use super::exchange::{self, Exchange};
 use super::isin::validate_isin;
+use crate::context::asset::error::AssetError;
 use anyhow::Result;
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -112,7 +112,7 @@ impl Asset {
         reference: String,
         isin: Option<String>,
         exchange: Option<Exchange>,
-    ) -> StdResult<Self, AssetDomainError> {
+    ) -> StdResult<Self, AssetError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
         let reference = reference.trim().to_uppercase();
@@ -147,7 +147,7 @@ impl Asset {
         is_archived: bool,
         exchange: Option<Exchange>,
         price_refresh_blocked: bool,
-    ) -> StdResult<Self, AssetDomainError> {
+    ) -> StdResult<Self, AssetError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
         let reference = reference.trim().to_uppercase();
@@ -174,26 +174,26 @@ impl Asset {
         currency: &str,
         reference: &str,
         exchange: Option<&Exchange>,
-    ) -> StdResult<(), AssetDomainError> {
+    ) -> StdResult<(), AssetError> {
         if name.trim().is_empty() {
-            return Err(AssetDomainError::NameEmpty);
+            return Err(AssetError::NameEmpty);
         }
         if reference.trim().is_empty() {
-            return Err(AssetDomainError::ReferenceEmpty);
+            return Err(AssetError::ReferenceEmpty);
         }
         if !(1..=5).contains(&risk_level) {
-            return Err(AssetDomainError::InvalidRiskLevel {
+            return Err(AssetError::InvalidRiskLevel {
                 received: risk_level,
             });
         }
         if Currency::from_str(currency).is_err() {
-            return Err(AssetDomainError::InvalidCurrency {
+            return Err(AssetError::InvalidCurrency {
                 currency: currency.to_string(),
             });
         }
         if let Some(exchange) = exchange {
             if exchange::lookup(&exchange.code).is_none() {
-                return Err(AssetDomainError::InvalidExchange {
+                return Err(AssetError::InvalidExchange {
                     exchange_code: exchange.code.clone(),
                 });
             }
@@ -238,18 +238,18 @@ impl Asset {
 
     /// Aggregate-level invariant: the system Cash Asset cannot be edited, archived,
     /// unarchived, or deleted by the user (CSH-016).
-    pub fn ensure_user_managed(&self) -> Result<(), AssetDomainError> {
+    pub fn ensure_user_managed(&self) -> Result<(), AssetError> {
         if self.is_cash() {
-            return Err(AssetDomainError::CashAssetNotEditable);
+            return Err(AssetError::CashAssetNotEditable);
         }
         Ok(())
     }
 
     /// Aggregate-level invariant: an archived asset cannot be edited (R6). Archive
     /// must be reverted (`unarchive`) first.
-    pub fn ensure_not_archived(&self) -> Result<(), AssetDomainError> {
+    pub fn ensure_not_archived(&self) -> Result<(), AssetError> {
         if self.is_archived {
-            return Err(AssetDomainError::Archived);
+            return Err(AssetError::Archived);
         }
         Ok(())
     }
@@ -272,7 +272,7 @@ impl Asset {
         reference: String,
         isin: Option<String>,
         exchange: Option<Exchange>,
-    ) -> Result<Self, AssetDomainError> {
+    ) -> Result<Self, AssetError> {
         self.ensure_user_managed()?;
         self.ensure_not_archived()?;
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
@@ -295,7 +295,7 @@ impl Asset {
 
     /// Aggregate root method: archives this asset (R6 — reversible).
     /// Enforces the system-asset invariant (CSH-016).
-    pub fn archive(self) -> Result<Self, AssetDomainError> {
+    pub fn archive(self) -> Result<Self, AssetError> {
         self.ensure_user_managed()?;
         Ok(Self {
             is_archived: true,
@@ -305,7 +305,7 @@ impl Asset {
 
     /// Aggregate root method: unarchives this asset (R18). Enforces the
     /// system-asset invariant (CSH-016).
-    pub fn unarchive(self) -> Result<Self, AssetDomainError> {
+    pub fn unarchive(self) -> Result<Self, AssetError> {
         self.ensure_user_managed()?;
         Ok(Self {
             is_archived: false,
@@ -316,7 +316,7 @@ impl Asset {
     /// Aggregate root method: blocks automated price fetches for this asset
     /// (MKT-150 / MKT-151, ADR-014 — the lock). Enforces the system-asset
     /// invariant (CSH-016 / MKT-154). Idempotent.
-    pub fn block_price_refresh(self) -> Result<Self, AssetDomainError> {
+    pub fn block_price_refresh(self) -> Result<Self, AssetError> {
         self.ensure_user_managed()?;
         Ok(Self {
             price_refresh_blocked: true,
@@ -327,7 +327,7 @@ impl Asset {
     /// Aggregate root method: re-allows automated price fetches for this asset
     /// (MKT-156). Enforces the system-asset invariant (CSH-016 / MKT-154).
     /// Idempotent.
-    pub fn unblock_price_refresh(self) -> Result<Self, AssetDomainError> {
+    pub fn unblock_price_refresh(self) -> Result<Self, AssetError> {
         self.ensure_user_managed()?;
         Ok(Self {
             price_refresh_blocked: false,
@@ -341,7 +341,7 @@ impl Asset {
 /// the single domain code `InvalidIsinFormat` (per `isin.rs` doc — the wire
 /// does not need sub-variant granularity); the sub-variant is preserved
 /// server-side via `tracing::debug!` for diagnostics.
-fn normalize_optional_isin(isin: Option<String>) -> StdResult<Option<String>, AssetDomainError> {
+fn normalize_optional_isin(isin: Option<String>) -> StdResult<Option<String>, AssetError> {
     match isin {
         Some(raw) => validate_isin(&raw).map(Some).map_err(|err| {
             tracing::debug!(
@@ -350,7 +350,7 @@ fn normalize_optional_isin(isin: Option<String>) -> StdResult<Option<String>, As
                 err = ?err,
                 "ISIN validation failed; collapsing to InvalidIsinFormat",
             );
-            AssetDomainError::InvalidIsinFormat
+            AssetError::InvalidIsinFormat
         }),
         None => Ok(None),
     }
@@ -407,7 +407,7 @@ mod aggregate_tests {
                 None,
             )
             .unwrap_err();
-        assert!(matches!(err, AssetDomainError::CashAssetNotEditable));
+        assert!(matches!(err, AssetError::CashAssetNotEditable));
     }
 
     // R6 — archived asset cannot be edited via update_from.
@@ -425,7 +425,7 @@ mod aggregate_tests {
                 None,
             )
             .unwrap_err();
-        assert!(matches!(err, AssetDomainError::Archived));
+        assert!(matches!(err, AssetError::Archived));
     }
 
     // update_from validates input after the state checks pass.
@@ -443,7 +443,7 @@ mod aggregate_tests {
                 None,
             )
             .unwrap_err();
-        assert!(matches!(err, AssetDomainError::NameEmpty));
+        assert!(matches!(err, AssetError::NameEmpty));
     }
 
     // CSH-016 — system Cash Asset cannot be archived.
@@ -451,7 +451,7 @@ mod aggregate_tests {
     fn archive_rejects_system_cash_asset() {
         assert!(matches!(
             cash().archive().unwrap_err(),
-            AssetDomainError::CashAssetNotEditable
+            AssetError::CashAssetNotEditable
         ));
     }
 
@@ -460,7 +460,7 @@ mod aggregate_tests {
     fn unarchive_rejects_system_cash_asset() {
         assert!(matches!(
             cash().unarchive().unwrap_err(),
-            AssetDomainError::CashAssetNotEditable
+            AssetError::CashAssetNotEditable
         ));
     }
 
@@ -498,7 +498,7 @@ mod aggregate_tests {
     fn block_price_refresh_rejects_system_cash_asset() {
         assert!(matches!(
             cash().block_price_refresh().unwrap_err(),
-            AssetDomainError::CashAssetNotEditable
+            AssetError::CashAssetNotEditable
         ));
     }
 
@@ -507,7 +507,7 @@ mod aggregate_tests {
     fn unblock_price_refresh_rejects_system_cash_asset() {
         assert!(matches!(
             cash().unblock_price_refresh().unwrap_err(),
-            AssetDomainError::CashAssetNotEditable
+            AssetError::CashAssetNotEditable
         ));
     }
 
@@ -546,7 +546,7 @@ mod aggregate_tests {
     fn ensure_user_managed_rejects_system_cash_asset() {
         assert!(matches!(
             cash().ensure_user_managed().unwrap_err(),
-            AssetDomainError::CashAssetNotEditable
+            AssetError::CashAssetNotEditable
         ));
     }
 
@@ -622,7 +622,7 @@ mod aggregate_tests {
                 None,
             )
             .unwrap_err();
-        assert!(matches!(err, AssetDomainError::CashAssetNotEditable));
+        assert!(matches!(err, AssetError::CashAssetNotEditable));
     }
 
     // archive preserves all other fields (only is_archived flips).
@@ -709,7 +709,7 @@ mod isin_tests {
             None,
         )
         .unwrap_err();
-        assert!(matches!(err, AssetDomainError::InvalidIsinFormat));
+        assert!(matches!(err, AssetError::InvalidIsinFormat));
     }
 
     // AST-023 — ISIN with a bad Luhn check digit also collapses to
@@ -727,7 +727,7 @@ mod isin_tests {
             None,
         )
         .unwrap_err();
-        assert!(matches!(err, AssetDomainError::InvalidIsinFormat));
+        assert!(matches!(err, AssetError::InvalidIsinFormat));
     }
 
     // AST-023 — update_from can set ISIN when previously None and clear it
@@ -877,7 +877,7 @@ mod exchange_tests {
         )
         .unwrap_err();
         assert!(
-            matches!(&err, AssetDomainError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
+            matches!(&err, AssetError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
             "expected InvalidExchange {{ code: \"BOGUS\" }}, got: {err:?}"
         );
     }
@@ -964,7 +964,7 @@ mod exchange_tests {
             )
             .unwrap_err();
         assert!(
-            matches!(&err, AssetDomainError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
+            matches!(&err, AssetError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
             "expected InvalidExchange {{ code: \"BOGUS\" }}, got: {err:?}"
         );
     }

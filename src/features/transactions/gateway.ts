@@ -1,6 +1,6 @@
 import type {
   AccountError,
-  AssetPriceError,
+  AssetError,
   BuyHoldingDTO,
   Event,
   SellHoldingDTO,
@@ -55,7 +55,7 @@ export const transactionGateway = {
     assetId: string,
     date: string,
     price: number,
-  ): Promise<Result<null, AssetPriceError>> {
+  ): Promise<Result<null, AssetError>> {
     return await commands.recordAssetPrice(assetId, date, price);
   },
 

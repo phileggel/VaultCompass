@@ -442,7 +442,7 @@ pub(crate) async fn load_priced_assets(
             continue;
         }
 
-        // get_asset_by_id above already confirmed the asset exists, so AssetPriceError's NotFound arm is unreachable here.
+        // get_asset_by_id above already confirmed the asset exists, so AssetError's AssetNotFound arm is unreachable here.
         let mut prices = asset_service
             .get_asset_prices(&transaction.asset_id)
             .await

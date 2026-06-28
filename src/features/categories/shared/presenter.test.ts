@@ -44,7 +44,7 @@ describe("categoryMutationErrorToI18n", () => {
   });
 
   it.each([
-    [{ code: "NotFound" as const, id: "cat-missing" }],
+    [{ code: "CategoryNotFound" as const, id: "cat-missing" }],
     [{ code: "DatabaseError" as const }],
     [{ code: "LabelEmpty" as const }],
   ])("%j falls through to generic error key", (err) => {

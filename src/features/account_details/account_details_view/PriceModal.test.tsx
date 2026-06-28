@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { logger } from "@/lib/logger";
 
-// Gateway mock — recordAssetPrice is the price-record command (Result<null, AssetPriceError>)
+// Gateway mock — recordAssetPrice is the price-record command (Result<null, AssetError>)
 const mockRecordAssetPrice = vi.fn();
 const mockSetLastOperationDate = vi.fn();
 

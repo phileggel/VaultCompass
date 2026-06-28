@@ -545,7 +545,6 @@
     "InvalidRiskLevel": "Risk level must be between 1 and 5.",
     "Archived": "This asset is archived and cannot be edited.",
     "CashAssetNotEditable": "The system Cash Asset cannot be edited, archived, or deleted.",
-    "NotFound": "The requested item was not found.",
     "ActiveHoldings": "Cannot archive an asset that still has active holdings.",
     "ExistingTransactions": "Cannot delete an asset that has existing transactions.",
     "LabelEmpty": "Category name cannot be empty.",

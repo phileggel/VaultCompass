@@ -91,9 +91,15 @@ describe("assetMutationErrorToI18n", () => {
     });
   });
 
-  it("NotFound maps to its flat key (id payload not surfaced)", () => {
-    expect(assetMutationErrorToI18n({ code: "NotFound", id: "asset-1" })).toEqual({
-      key: "error.NotFound",
+  it("AssetNotFound maps to its flat key (id payload not surfaced)", () => {
+    expect(assetMutationErrorToI18n({ code: "AssetNotFound", id: "asset-1" })).toEqual({
+      key: "error.AssetNotFound",
+    });
+  });
+
+  it("CategoryNotFound (cross-aggregate lookup) maps to its flat key", () => {
+    expect(assetMutationErrorToI18n({ code: "CategoryNotFound", id: "cat-1" })).toEqual({
+      key: "error.CategoryNotFound",
     });
   });
 
@@ -106,6 +112,7 @@ describe("assetMutationErrorToI18n", () => {
   it.each([
     "NameEmpty",
     "ReferenceEmpty",
+    "InvalidIsinFormat",
     "Archived",
     "CashAssetNotEditable",
     "DatabaseError",

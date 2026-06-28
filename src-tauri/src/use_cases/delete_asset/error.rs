@@ -1,5 +1,5 @@
 use crate::context::account::AccountError;
-use crate::context::asset::AssetCrudError;
+use crate::context::asset::AssetError;
 
 /// Application-layer rejection specific to the `delete_asset` use case —
 /// the cross-BC transaction-history check performed by the orchestrator
@@ -29,21 +29,20 @@ pub enum DeleteAssetTask {
 /// here flattens them into a single FE-visible union.
 ///
 /// Each leaf lives in its rightful layer:
-/// - `AssetCrudError` — asset BC composite (`asset/application/`), carries
-///   `AssetApplicationError::NotFound` and
-///   `AssetDomainError::CashAssetNotEditable` propagated verbatim per the
+/// - `AssetError` — asset BC enum, carries `AssetNotFound` and
+///   `CashAssetNotEditable` propagated verbatim per the
 ///   composition-over-redefinition rule.
-/// - `AccountError` — account BC (`account/application/`), surfaces
-///   `DatabaseError` from the cross-BC transaction-history check.
+/// - `AccountError` — account BC, surfaces `DatabaseError` from the cross-BC
+///   transaction-history check.
 /// - `DeleteAssetTask` — use-case-owned (this file), raises
 ///   `ExistingTransactions` from the orchestrator.
 #[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
 #[serde(untagged)]
 pub enum DeleteAssetError {
-    /// Asset BC rejection (`NotFound`, `CashAssetNotEditable`, propagated
+    /// Asset BC rejection (`AssetNotFound`, `CashAssetNotEditable`, propagated
     /// `DatabaseError`).
     #[error(transparent)]
-    Asset(#[from] AssetCrudError),
+    Asset(#[from] AssetError),
     /// Account BC rejection (`DatabaseError` from the cross-BC
     /// transaction-history check).
     #[error(transparent)]
@@ -56,38 +55,31 @@ pub enum DeleteAssetError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::asset::{AssetApplicationError, AssetDomainError};
 
     // CSH-016 — domain CashAssetNotEditable propagates through Asset leaf
     #[test]
     fn cash_asset_not_editable_propagates_through_asset_leaf() {
-        let crud_err: AssetCrudError = AssetDomainError::CashAssetNotEditable.into();
-        let composite: DeleteAssetError = crud_err.into();
+        let composite: DeleteAssetError = AssetError::CashAssetNotEditable.into();
         assert!(
             matches!(
                 composite,
-                DeleteAssetError::Asset(AssetCrudError::Validation(
-                    AssetDomainError::CashAssetNotEditable
-                ))
+                DeleteAssetError::Asset(AssetError::CashAssetNotEditable)
             ),
             "got: {composite:?}"
         );
     }
 
-    // Asset-side NotFound propagates verbatim with id payload preserved
+    // Asset-side AssetNotFound propagates verbatim with id payload preserved
     #[test]
     fn asset_not_found_propagates_with_id_payload() {
-        let crud_err: AssetCrudError = AssetApplicationError::NotFound {
+        let composite: DeleteAssetError = AssetError::AssetNotFound {
             id: "missing-asset".into(),
         }
         .into();
-        let composite: DeleteAssetError = crud_err.into();
         assert!(
             matches!(
                 &composite,
-                DeleteAssetError::Asset(AssetCrudError::Application(
-                    AssetApplicationError::NotFound { id }
-                )) if id == "missing-asset"
+                DeleteAssetError::Asset(AssetError::AssetNotFound { id }) if id == "missing-asset"
             ),
             "got: {composite:?}"
         );

@@ -1,8 +1,7 @@
 import type {
   AccountDetailsResponse,
   AccountError,
-  AssetCrudError,
-  AssetPriceError,
+  AssetError,
   AssetPriceSource,
   ClosedHoldingDetail,
   DividendError,
@@ -21,14 +20,15 @@ import type { PriceableAsset } from "./types";
 /**
  * F27 — Maps any asset-price mutation error (record / update / delete /
  * get prices) to an i18n key + optional interpolation vars. Pure function:
- * no React, no useTranslation. Exhaustive switch on `code`; TypeScript
- * catches new variants at compile time.
+ * no React, no useTranslation. `err` is the BC-wide `AssetError` union, so the
+ * switch lists the codes these price commands can raise and falls back to a
+ * generic key for any other.
  */
-export function assetPriceMutationErrorToI18n(err: AssetPriceError): I18nMessage {
+export function assetPriceMutationErrorToI18n(err: AssetError): I18nMessage {
   switch (err.code) {
     case "InvalidDateFormat":
       return { key: "error.InvalidDateFormat", vars: { date: err.date } };
-    case "NotFound":
+    case "AssetNotFound":
     case "Archived":
     case "DatabaseError":
     case "PriceNotFound":
@@ -36,24 +36,21 @@ export function assetPriceMutationErrorToI18n(err: AssetPriceError): I18nMessage
     case "NonFinite":
     case "DateInFuture":
       return { key: `error.${err.code}` };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
+    default:
+      return { key: "error.Unknown" };
   }
 }
 
 /**
- * F27 — Maps the AssetCrudError variants reachable by the price-refresh lock
- * toggle commands (MKT-156) to an i18n key. Narrowed exhaustive switch over
- * the three reachable codes per the asset contract: `NotFound`,
- * `CashAssetNotEditable`, `DatabaseError`. Other AssetCrudError variants
- * cannot be produced by `block_asset_price_refresh` / `unblock_asset_price_refresh`
- * so they map to a generic key without triggering the exhaustiveness check.
+ * F27 — Maps the AssetError variants reachable by the price-refresh lock
+ * toggle commands (MKT-156) to an i18n key. The reachable codes per the asset
+ * contract are `AssetNotFound`, `CashAssetNotEditable`, `DatabaseError`; other
+ * `AssetError` variants cannot be produced by `block_asset_price_refresh` /
+ * `unblock_asset_price_refresh` so they map to a generic key.
  */
-export function priceRefreshLockErrorToI18n(err: AssetCrudError): I18nMessage {
+export function priceRefreshLockErrorToI18n(err: AssetError): I18nMessage {
   switch (err.code) {
-    case "NotFound":
+    case "AssetNotFound":
     case "CashAssetNotEditable":
     case "DatabaseError":
       return { key: `error.${err.code}` };

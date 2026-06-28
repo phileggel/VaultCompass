@@ -4,8 +4,6 @@ pub mod asset;
 pub mod asset_price;
 /// AssetCategory aggregate and repository trait.
 pub mod category;
-/// Typed error enums for the asset domain.
-pub mod error;
 /// Canonical trading venue value object (Exchange) and curated set (AST-021).
 pub mod exchange;
 /// ISIN format validator and error type (WEB-016).
@@ -23,7 +21,6 @@ pub use asset_price::{
     HistoricalPriceRequest, PriceProvider, Quote,
 };
 pub use category::*;
-pub use error::{AssetDomainError, AssetPriceDomainError, CategoryDomainError};
 pub use exchange::Exchange;
 pub use yahoo_symbol::{derive_yahoo_symbol, derive_yahoo_symbol_with_exchange};
 

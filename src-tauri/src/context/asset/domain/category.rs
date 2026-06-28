@@ -1,4 +1,4 @@
-use super::error::CategoryDomainError;
+use crate::context::asset::error::AssetError;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -29,9 +29,9 @@ impl Default for AssetCategory {
 
 impl AssetCategory {
     /// Creates a new AssetCategory.
-    pub fn new(label: String) -> StdResult<Self, CategoryDomainError> {
+    pub fn new(label: String) -> StdResult<Self, AssetError> {
         if label.trim().is_empty() {
-            return Err(CategoryDomainError::LabelEmpty);
+            return Err(AssetError::LabelEmpty);
         }
         Ok(Self {
             id: Uuid::new_v4().to_string(),
@@ -41,9 +41,9 @@ impl AssetCategory {
 
     /// Creates a new AssetCategory with a known deterministic ID.
     /// Used by system-seeded categories (e.g. the Cash category, CSH-017).
-    pub fn with_id(id: String, label: String) -> StdResult<Self, CategoryDomainError> {
+    pub fn with_id(id: String, label: String) -> StdResult<Self, AssetError> {
         if label.trim().is_empty() {
-            return Err(CategoryDomainError::LabelEmpty);
+            return Err(AssetError::LabelEmpty);
         }
         Ok(Self { id, name: label })
     }
@@ -52,10 +52,10 @@ impl AssetCategory {
     /// system-category invariant (raises `SystemReadonly` for the seeded
     /// system category, via `ensure_renameable`) and validates the new label.
     /// Returns the updated `AssetCategory` for the caller to persist.
-    pub fn update_from(self, label: String) -> Result<Self, CategoryDomainError> {
+    pub fn update_from(self, label: String) -> Result<Self, AssetError> {
         self.ensure_renameable()?;
         if label.trim().is_empty() {
-            return Err(CategoryDomainError::LabelEmpty);
+            return Err(AssetError::LabelEmpty);
         }
         Ok(Self {
             id: self.id,
@@ -70,18 +70,18 @@ impl AssetCategory {
 
     /// Aggregate-level invariant: the system category is read-only — its
     /// label cannot be changed by the user.
-    pub fn ensure_renameable(&self) -> Result<(), CategoryDomainError> {
+    pub fn ensure_renameable(&self) -> Result<(), AssetError> {
         if self.is_system() {
-            return Err(CategoryDomainError::SystemReadonly);
+            return Err(AssetError::SystemReadonly);
         }
         Ok(())
     }
 
     /// Aggregate-level invariant: the system category is protected — it
     /// cannot be deleted.
-    pub fn ensure_deletable(&self) -> Result<(), CategoryDomainError> {
+    pub fn ensure_deletable(&self) -> Result<(), AssetError> {
         if self.is_system() {
-            return Err(CategoryDomainError::SystemProtected);
+            return Err(AssetError::SystemProtected);
         }
         Ok(())
     }
@@ -111,14 +111,14 @@ mod aggregate_tests {
     #[test]
     fn update_from_rejects_system_category() {
         let err = system_category().update_from("Renamed".into()).unwrap_err();
-        assert!(matches!(err, CategoryDomainError::SystemReadonly));
+        assert!(matches!(err, AssetError::SystemReadonly));
     }
 
     // update_from validates label after the state check passes.
     #[test]
     fn update_from_rejects_empty_label() {
         let err = user_category().update_from("   ".into()).unwrap_err();
-        assert!(matches!(err, CategoryDomainError::LabelEmpty));
+        assert!(matches!(err, AssetError::LabelEmpty));
     }
 
     // update_from on a user category renames in place, preserving id.
@@ -134,7 +134,7 @@ mod aggregate_tests {
     fn ensure_deletable_rejects_system_category() {
         assert!(matches!(
             system_category().ensure_deletable().unwrap_err(),
-            CategoryDomainError::SystemProtected
+            AssetError::SystemProtected
         ));
     }
 
@@ -143,7 +143,7 @@ mod aggregate_tests {
     fn ensure_renameable_rejects_system_category() {
         assert!(matches!(
             system_category().ensure_renameable().unwrap_err(),
-            CategoryDomainError::SystemReadonly
+            AssetError::SystemReadonly
         ));
     }
 
@@ -152,7 +152,7 @@ mod aggregate_tests {
     #[test]
     fn update_from_check_order_system_before_label() {
         let err = system_category().update_from("   ".into()).unwrap_err();
-        assert!(matches!(err, CategoryDomainError::SystemReadonly));
+        assert!(matches!(err, AssetError::SystemReadonly));
     }
 }
 

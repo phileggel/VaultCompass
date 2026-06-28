@@ -1,4 +1,4 @@
-import type { CategoryCrudError } from "@/bindings";
+import type { AssetError } from "@/bindings";
 import type { I18nMessage } from "@/ui/format/i18n";
 
 export const SYSTEM_CATEGORY_ID = "default-uncategorized";
@@ -16,12 +16,13 @@ export function isSystemCategory(id: string): boolean {
  * Encodes the project's domain mapping:
  * - `DuplicateName` → name-collision wording
  * - `SystemReadonly` / `SystemProtected` → system-category protection wording
- * - Everything else (LabelEmpty / NotFound / DatabaseError) → generic fallback
+ * - Everything else (LabelEmpty / CategoryNotFound / DatabaseError) → generic fallback
  *
- * No payload-bearing variants worth interpolating today — `NotFound { id }`
- * exposes internal IDs that don't help the user.
+ * No payload-bearing variants worth interpolating today — `CategoryNotFound { id }`
+ * exposes internal IDs that don't help the user. `err` is the BC-wide `AssetError`
+ * union, so unreachable category codes fall through to the generic key.
  */
-export function categoryMutationErrorToI18n(err: CategoryCrudError): I18nMessage {
+export function categoryMutationErrorToI18n(err: AssetError): I18nMessage {
   switch (err.code) {
     case "DuplicateName":
       return { key: "category.error_duplicate" };
@@ -29,13 +30,7 @@ export function categoryMutationErrorToI18n(err: CategoryCrudError): I18nMessage
       return { key: "category.error_system_readonly" };
     case "SystemProtected":
       return { key: "category.error_system_protected" };
-    case "NotFound":
-    case "DatabaseError":
-    case "LabelEmpty":
+    default:
       return { key: "category.error_generic" };
-    default: {
-      const _exhaustive: never = err;
-      return _exhaustive;
-    }
   }
 }
