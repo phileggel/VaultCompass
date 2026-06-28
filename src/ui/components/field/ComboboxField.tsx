@@ -1,4 +1,5 @@
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from "@headlessui/react";
+import { ChevronDown } from "lucide-react";
 import { useMemo } from "react";
 import { useComboboxField } from "./useComboboxField";
 
@@ -55,21 +56,16 @@ export function ComboboxField<T extends object>({
   onCreateNew,
   createLabel = "+ Créer",
 }: ComboboxFieldProps<T>) {
-  const { query, setQuery, filteredItems } = useComboboxField(
-    items,
-    displayKey,
-    idKey,
-    value,
-    searchKeys,
-  );
+  const { query, setQuery, filteredItems } = useComboboxField(items, displayKey, searchKeys);
 
   const selectedItem = useMemo(
     () => items.find((item) => String(item[idKey]) === value) ?? null,
     [items, idKey, value],
   );
 
-  const hasResults = filteredItems.length > 0;
-  const showDropdown = query.length >= 2 && (hasResults || !!onCreateNew);
+  // HeadlessUI owns the open/close state (opened on focus via `immediate`); this
+  // flag only avoids rendering an empty options panel when there's nothing to show.
+  const showDropdown = filteredItems.length > 0 || !!onCreateNew;
 
   const handleChange = (selected: T | typeof CREATE_MARKER | null) => {
     if (!selected) return;
@@ -82,7 +78,7 @@ export function ComboboxField<T extends object>({
   };
 
   const inputClassName = [
-    "m3-input w-full",
+    "m3-input w-full pr-10",
     error ? "border-m3-error" : "",
     disabled ? "opacity-50 cursor-not-allowed" : "",
   ]
@@ -95,7 +91,7 @@ export function ComboboxField<T extends object>({
         {label}
       </label>
 
-      <Combobox disabled={disabled} value={selectedItem} onChange={handleChange}>
+      <Combobox immediate disabled={disabled} value={selectedItem} onChange={handleChange}>
         <div className="relative group">
           <ComboboxInput
             id={id}
@@ -105,6 +101,9 @@ export function ComboboxField<T extends object>({
             placeholder={placeholder}
             autoComplete="off"
           />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-m3-on-surface-variant group-focus-within:text-m3-primary transition-colors">
+            <ChevronDown size={20} />
+          </div>
 
           {showDropdown && (
             <ComboboxOptions
