@@ -41,6 +41,7 @@ export function useAccountDetailsView(accountId: string) {
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [dividendOpen, setDividendOpen] = useState(false);
   const [freeSharesOpen, setFreeSharesOpen] = useState(false);
+  const [asOfOpen, setAsOfOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -116,6 +117,10 @@ export function useAccountDetailsView(accountId: string) {
     setFreeSharesOpen(false);
     data.retry();
   }, [data]);
+
+  // Holdings-as-of modal state (read-only past-date valuation).
+  const handleAsOfOpen = useCallback(() => setAsOfOpen(true), []);
+  const handleAsOfClose = useCallback(() => setAsOfOpen(false), []);
 
   // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
   // block/unblock command, then re-reads the asset list (so the row's lock
@@ -193,6 +198,7 @@ export function useAccountDetailsView(accountId: string) {
     withdrawalOpen,
     dividendOpen,
     freeSharesOpen,
+    asOfOpen,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -219,6 +225,8 @@ export function useAccountDetailsView(accountId: string) {
     handleFreeSharesOpen,
     handleFreeSharesClose,
     handleFreeSharesSuccess,
+    handleAsOfOpen,
+    handleAsOfClose,
     handleTogglePriceRefreshLock,
   };
 }

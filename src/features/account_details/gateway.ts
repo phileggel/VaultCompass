@@ -12,6 +12,7 @@ import type {
   FreeSharesDTO,
   FreeSharesError,
   HoldingSnapshot,
+  HoldingsAsOfResponse,
   OpenHoldingDTO,
   OpenHoldingError,
   Result,
@@ -82,6 +83,14 @@ export const accountDetailsGateway = {
     dto: CorrectTransactionFields,
   ): Promise<Result<Transaction, AccountError>> {
     return commands.correctTransaction({ ...dto, account_id: accountId, transaction_id: id });
+  },
+
+  // Holdings reconstructed as they stood on a past date (read-only valuation).
+  async getAccountHoldingsAsOf(
+    accountId: string,
+    date: string,
+  ): Promise<Result<HoldingsAsOfResponse, AccountError>> {
+    return commands.getAccountHoldingsAsOf(accountId, date);
   },
 
   // TDI-010 — holding quantity + VWAP average cost as of a date (trade-dialog insights).

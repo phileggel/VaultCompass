@@ -1,5 +1,12 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { CalendarClock, ChevronDown, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronDown,
+  History,
+  RefreshCw,
+  ScrollText,
+  TrendingUp,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,6 +21,7 @@ import { DepositTransactionModal } from "../deposit_transaction/DepositTransacti
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
 import { FetchPricesForDateModal } from "../fetch_prices_for_date/FetchPricesForDateModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
+import { HoldingsAsOfModal } from "../holdings_as_of/HoldingsAsOfModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
@@ -149,6 +157,17 @@ export function AccountDetailsView() {
                   aria-label={t("account_details.action_journal")}
                 >
                   {t("account_details.action_journal")}
+                </Button>
+                {/* Read-only "holdings as of a past date" entry point */}
+                <Button
+                  id="account-details-as-of"
+                  variant="secondary"
+                  size="sm"
+                  icon={<History size={14} />}
+                  onClick={view.handleAsOfOpen}
+                  aria-label={t("account_details.action_holdings_as_of")}
+                >
+                  {t("account_details.action_holdings_as_of")}
                 </Button>
                 {/* MKT-131 — per-account "Refresh prices" entry point */}
                 <Button
@@ -497,6 +516,12 @@ export function AccountDetailsView() {
           heldAssets={view.dividendPayingAssets}
           onSubmitSuccess={view.handleFreeSharesSuccess}
         />
+      )}
+
+      {/* Read-only holdings-as-of modal (mounted only while open so the hook
+          re-seeds the date to today on every open) */}
+      {view.asOfOpen && (
+        <HoldingsAsOfModal isOpen onClose={view.handleAsOfClose} accountId={accountId} />
       )}
 
       {/* Date-scoped price fetch modal (historical close at a user-picked date) */}
