@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-06-28
+
+### Added
+
+- add account value-over-time chart
+  Plots the account's period-end Global Value over time on the performance
+  page, reusing the existing performance data (no new backend command). Adds
+  recharts; the line chart is themed with M3 CSS variables so it tracks
+  light/dark. Chart dataset derived in a colocated hook (F10).
+- view account holdings as of a past date
+  New read-only get_account_holdings_as_of command reconstructs per-asset
+  quantity + VWAP, price, and value as they stood on a chosen past date
+  (reusing holding_snapshot_as_of + the performance price loader + as-of FX).
+  Surfaced via a holdings-as-of modal launched from the account header.
+
+### Fixed
+
+- re-seed cash modal date on each open
+  Deposit/withdrawal modals were always mounted, so their once-only date
+  initializer read the stored last-operation date just at page load and went
+  stale. Mount them only while open (like the buy/sell/dividend modals) so the
+  hook re-seeds on every open. No visual change — modals render identically.
+- persist price-modal date as last-operation date
+  record() seeded the date field from the stored last-operation date but
+  never wrote it back on success, unlike every other operation hook. Now
+  calls setLastOperationDate on a successful record.
+- open market-price asset combobox on focus
+  The asset selector felt readonly: useFuzzySearch returns nothing below 2
+  chars and the options panel was gated on that, so focusing showed no list.
+  Now opens on focus with the full list (HeadlessUI immediate) and a chevron
+  affordance. Drops the hook's unused displayValue/idKey/selectedId.
+
 ## [0.28.0] - 2026-06-27
 
 ### Added
