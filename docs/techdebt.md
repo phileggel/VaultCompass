@@ -223,6 +223,13 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 - Severity: 🔵
 - Observation: The M3 `error`/`success` semantic color tokens are reused to express financial debit/credit (and gain/loss) polarity — cash out = `text-m3-error` (red), cash in = `text-m3-success` (green). Visually conventional and consistent with the pre-existing P&L sign-coloring, but it overloads tokens whose semantics are failure/confirmation, which a high-contrast or screen-reader-driven theme may interpret differently from "money out / money in". A dedicated `text-m3-debit`/`text-m3-credit` (and `-gain`/`-loss`) alias mapping to the same palette entries — or an ADR ratifying the reuse — would carry the correct intent. Cross-cutting (affects the P&L column too), so larger than one PR.
 
+## 2026-06-28 — `download` emits the raw anyhow error string on the `update:error` event
+
+- Found by: reviewer-backend / reviewer-security / reviewer-arch (v0.29.0 T8 review)
+- Where: `src-tauri/src/use_cases/update_checker/service.rs` (`download` → `app_handle.emit("update:error", e.to_string())`)
+- Severity: 🔵
+- Observation: T8 closed the `Result<_, String>` leak on the three update commands, but the `download` flow reports failure via a one-way `update:error` event whose payload is `e.to_string()` — the full anyhow chain. The current `.context(...)` strings are developer-authored literals (no OS paths/URLs today), and events carry no Specta binding, so the exposure is low. But it is the same anti-pattern T8 removed from the command surface: a future `.context` omission or a system error whose `Display` includes a path would leak silently. Follow-up: migrate the event payload to a typed `UpdateError` shape. `download`/`do_download` also still return `anyhow::Result` (B31) — fold both together.
+
 ## 2026-06-28 — ComboboxField `createLabel` default is a hardcoded French string
 
 - Found by: reviewer-frontend (v0.29.0 T3 combobox-open-on-focus review)

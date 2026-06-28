@@ -586,7 +586,7 @@ async fetchAccountAssetPricesForDate(accountId: string, date: string) : Promise<
  * to network or server errors (R21). Emits `"update:available"` on the app
  * handle if an update is found.
  */
-async checkForUpdate() : Promise<Result<UpdateInfo | null, string>> {
+async checkForUpdate() : Promise<Result<UpdateInfo | null, UpdateError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("check_for_update") };
 } catch (e) {
@@ -603,7 +603,7 @@ async checkForUpdate() : Promise<Result<UpdateInfo | null, string>> {
  * On failure, emits `"update:error"` (R23).
  * Concurrent download requests are silently ignored (R10).
  */
-async downloadUpdate() : Promise<Result<null, string>> {
+async downloadUpdate() : Promise<Result<null, UpdateError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("download_update") };
 } catch (e) {
@@ -617,7 +617,7 @@ async downloadUpdate() : Promise<Result<null, string>> {
  * Must be called after `download_update` has completed successfully.
  * Returns an error if no downloaded update is available.
  */
-async installUpdate() : Promise<Result<null, string>> {
+async installUpdate() : Promise<Result<null, UpdateError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("install_update") };
 } catch (e) {
@@ -2581,6 +2581,24 @@ category_id: string;
  * New optional canonical trading venue (AST-021 / AST-022).
  */
 exchange: Exchange | null }
+/**
+ * Failures the update-checker commands can surface to the renderer.
+ * 
+ * `#[serde(tag = "code")]` serialises each variant as `{ "code": "..." }`,
+ * matching the gold error model. Underlying infrastructure details (updater
+ * plugin internals, OS paths, HTTP status codes) are logged server-side via
+ * `tracing::error!` and never cross the IPC wire.
+ */
+export type UpdateError = 
+/**
+ * `install` was called before a successful `download` — no bytes are staged.
+ */
+{ code: "NoDownloadedUpdate" } | 
+/**
+ * The update operation failed (updater init, fetch, or install). The
+ * underlying cause is logged server-side, not exposed on the wire.
+ */
+{ code: "OperationFailed" }
 /**
  * Defines how often an account's data should be updated.
  */

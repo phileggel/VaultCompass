@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use tauri::AppHandle;
 
+use super::error::UpdateError;
 use super::service::{self, UpdateInfo, UpdateState};
 
 /// Checks whether a new application version is available (R1, R25).
@@ -14,8 +15,8 @@ use super::service::{self, UpdateInfo, UpdateState};
 /// handle if an update is found.
 #[tauri::command]
 #[specta::specta]
-pub async fn check_for_update(app_handle: AppHandle) -> Result<Option<UpdateInfo>, String> {
-    service::check(&app_handle).await.map_err(|e| e.to_string())
+pub async fn check_for_update(app_handle: AppHandle) -> Result<Option<UpdateInfo>, UpdateError> {
+    Ok(service::check(&app_handle).await)
 }
 
 /// Starts downloading the available update in the background (R6).
@@ -30,7 +31,7 @@ pub async fn check_for_update(app_handle: AppHandle) -> Result<Option<UpdateInfo
 pub async fn download_update(
     app_handle: AppHandle,
     update_state: tauri::State<'_, Arc<UpdateState>>,
-) -> Result<(), String> {
+) -> Result<(), UpdateError> {
     let state = Arc::clone(&update_state);
     // service::download already logs and emits update:error on failure
     tauri::async_runtime::spawn(async move {
@@ -48,8 +49,6 @@ pub async fn download_update(
 pub async fn install_update(
     app_handle: AppHandle,
     update_state: tauri::State<'_, Arc<UpdateState>>,
-) -> Result<(), String> {
-    service::install(app_handle, Arc::clone(&update_state))
-        .await
-        .map_err(|e| e.to_string())
+) -> Result<(), UpdateError> {
+    service::install(app_handle, Arc::clone(&update_state)).await
 }
