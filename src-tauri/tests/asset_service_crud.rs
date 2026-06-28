@@ -7,9 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use vault_compass_lib::context::asset::exchange::Exchange;
 use vault_compass_lib::context::asset::{
-    AssetClass, AssetCrudError, AssetDomainError, AssetService, CreateAssetDTO,
-    SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
-    UpdateAssetDTO, SYSTEM_CATEGORY_ID,
+    AssetClass, AssetError, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
+    SqliteAssetPriceRepository, SqliteAssetRepository, UpdateAssetDTO, SYSTEM_CATEGORY_ID,
 };
 use vault_compass_lib::core::{Event, SideEffectEventBus};
 
@@ -134,9 +133,9 @@ async fn test_update_asset_rejected_when_archived() {
         .await
         .unwrap_err();
 
-    use vault_compass_lib::context::asset::{AssetCrudError, AssetDomainError};
+    use vault_compass_lib::context::asset::AssetError;
     assert!(
-        matches!(&err, AssetCrudError::Validation(AssetDomainError::Archived)),
+        matches!(&err, AssetError::Archived),
         "expected Archived, got: {err:?}"
     );
 }
@@ -163,13 +162,10 @@ async fn test_update_asset_rejected_when_category_not_found() {
         .await
         .unwrap_err();
 
-    use vault_compass_lib::context::asset::{AssetCrudError, CategoryApplicationError};
+    use vault_compass_lib::context::asset::AssetError;
     assert!(
-        matches!(
-            &err,
-            AssetCrudError::CategoryApplication(CategoryApplicationError::NotFound { .. })
-        ),
-        "expected CategoryApplicationError::NotFound, got: {err:?}"
+        matches!(&err, AssetError::CategoryNotFound { .. }),
+        "expected AssetError::CategoryNotFound, got: {err:?}"
     );
 }
 
@@ -329,7 +325,7 @@ async fn test_create_asset_with_non_curated_exchange_returns_invalid_exchange() 
         .unwrap_err();
 
     assert!(
-        matches!(&err, AssetCrudError::Validation(AssetDomainError::InvalidExchange { exchange_code }) if exchange_code == "BOGUS"),
+        matches!(&err, AssetError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
         "expected InvalidExchange {{ exchange_code: \"BOGUS\" }}, got: {err:?}"
     );
 }
@@ -516,7 +512,7 @@ async fn test_update_asset_with_non_curated_exchange_returns_invalid_exchange() 
         .unwrap_err();
 
     assert!(
-        matches!(&err, AssetCrudError::Validation(AssetDomainError::InvalidExchange { exchange_code }) if exchange_code == "BOGUS"),
+        matches!(&err, AssetError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
         "expected InvalidExchange {{ exchange_code: \"BOGUS\" }}, got: {err:?}"
     );
 }

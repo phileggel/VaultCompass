@@ -564,7 +564,7 @@ describe("toHoldingRow — staleness and sourceLabel fields (MKT-140, MKT-142)",
   });
 });
 
-// F27 layer-3 presenter — exhaustive variant coverage across AssetPriceError.
+// F27 layer-3 presenter — variant coverage across the AssetError price surface.
 // One payload-bearing variant (`InvalidDateFormat { date }`) gets interpolation;
 // the rest fall through to the flat error key.
 describe("assetPriceMutationErrorToI18n", () => {
@@ -577,9 +577,9 @@ describe("assetPriceMutationErrorToI18n", () => {
     });
   });
 
-  it("NotFound (carries id payload) maps to its flat key", () => {
-    expect(assetPriceMutationErrorToI18n({ code: "NotFound", id: "asset-1" })).toEqual({
-      key: "error.NotFound",
+  it("AssetNotFound (carries id payload) maps to its flat key", () => {
+    expect(assetPriceMutationErrorToI18n({ code: "AssetNotFound", id: "asset-1" })).toEqual({
+      key: "error.AssetNotFound",
     });
   });
 
@@ -605,9 +605,9 @@ describe("assetPriceMutationErrorToI18n", () => {
 
 // MKT-156 — F27 presenter for the price-refresh lock commands' error surface
 describe("priceRefreshLockErrorToI18n", () => {
-  it("NotFound (carries id payload) maps to its flat key", () => {
-    expect(priceRefreshLockErrorToI18n({ code: "NotFound", id: "asset-1" })).toEqual({
-      key: "error.NotFound",
+  it("AssetNotFound (carries id payload) maps to its flat key", () => {
+    expect(priceRefreshLockErrorToI18n({ code: "AssetNotFound", id: "asset-1" })).toEqual({
+      key: "error.AssetNotFound",
     });
   });
 

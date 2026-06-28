@@ -16,9 +16,9 @@ describe("recordPriceErrorToI18n (F27)", () => {
     });
   });
 
-  it("carries the id for NotFound", () => {
-    expect(recordPriceErrorToI18n({ code: "NotFound", id: "asset-9" })).toEqual({
-      key: "error.NotFound",
+  it("carries the id for AssetNotFound", () => {
+    expect(recordPriceErrorToI18n({ code: "AssetNotFound", id: "asset-9" })).toEqual({
+      key: "error.AssetNotFound",
     });
   });
 });

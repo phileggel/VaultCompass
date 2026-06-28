@@ -1,8 +1,7 @@
 use crate::context::account::{AccountError, AccountService};
 use crate::context::asset::{
-    derive_yahoo_symbol_with_exchange, AssetApplicationError, AssetError, AssetPrice,
-    AssetPriceRepository, AssetPriceSource, AssetService, HistoricalPriceProvider,
-    HistoricalPriceRequest,
+    derive_yahoo_symbol_with_exchange, AssetPrice, AssetPriceRepository, AssetPriceSource,
+    AssetService, HistoricalPriceProvider, HistoricalPriceRequest,
 };
 use crate::core::cash::system_cash_asset_id;
 use crate::core::event_bus::Event;
@@ -105,7 +104,7 @@ impl AssetPriceFetchForDateUseCase {
                         err = ?application_error,
                         "fetch_for_date: get_asset_by_id failed"
                     );
-                    return Err(translate_asset_application_error(application_error).into());
+                    return Err(application_error.into());
                 }
             };
             // ADR-014 / MKT-151 — a locked asset is excluded from fetch scope, same as
@@ -173,16 +172,6 @@ impl AssetPriceFetchForDateUseCase {
         }
         missing.sort();
         Ok(FetchForDateOutcome { stored, missing })
-    }
-}
-
-/// The fetch wire-surface (`AssetError`) exposes only `DatabaseError`; a holding
-/// referencing a missing asset mid-fetch is an internal inconsistency surfaced
-/// generically, so every variant maps to it.
-fn translate_asset_application_error(error: AssetApplicationError) -> AssetError {
-    match error {
-        AssetApplicationError::NotFound { .. } => AssetError::DatabaseError,
-        AssetApplicationError::DatabaseError => AssetError::DatabaseError,
     }
 }
 

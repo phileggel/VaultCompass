@@ -27,13 +27,13 @@ pub enum FetchPriceForDateTask {
 /// `#[serde(untagged)]` lets every arm surface its inner `{ "code": "..." }` payload
 /// directly on the wire; each arm carries a tagged inner type so the discriminator
 /// survives the untagging.
-// The `Account` arm carries the BC-wide `AccountError`, so it shares codes with the other
-// arms under `#[serde(untagged)]`: `DatabaseError` (with `Asset`) and `InvalidDate` /
-// `DateInFuture` (with `Failure`'s `FetchPriceForDateTask`). The collisions are
-// unobservable: this orchestrator only calls account lookups (`get_by_id`, holdings,
-// asset-ids), which raise `AccountNotFound` or `DatabaseError` only — never the
-// transaction-validation `InvalidDate` / `DateInFuture`. The frontend maps each shared code
-// to one key regardless of arm. Mirrors the shipped sibling `FetchAccountAssetPricesError`.
+// The BC-wide `Asset` and `Account` arms share codes with each other and with `Failure`
+// under `#[serde(untagged)]`: `DatabaseError` (Asset + Account); `DateInFuture` (Asset +
+// Account + `Failure`'s `FetchPriceForDateTask`); `InvalidDate` (Failure only). The
+// collisions are unobservable: this orchestrator's asset/account calls raise only
+// `AccountNotFound` / `DatabaseError`, never the transaction-validation `DateInFuture`, so
+// the only reachable `DateInFuture` is `Failure`'s. The frontend maps each shared code to
+// one key regardless of arm. Mirrors the shipped sibling `FetchAccountAssetPricesError`.
 #[derive(Debug, thiserror::Error, Serialize, Type)]
 #[serde(untagged)]
 pub enum FetchAccountAssetPricesForDateError {

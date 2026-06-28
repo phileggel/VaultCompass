@@ -84,7 +84,7 @@ describe("useCategories", () => {
   it("updateCategory returns error key on failure", async () => {
     mockUpdateCategory.mockResolvedValue({
       status: "error",
-      error: { code: "NotFound" },
+      error: { code: "CategoryNotFound", id: "missing" },
     });
     const { result } = renderHook(() => useCategories());
     let ret: { error?: I18nMessage } = {};

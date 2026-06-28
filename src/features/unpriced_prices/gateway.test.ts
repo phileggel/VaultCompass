@@ -61,15 +61,15 @@ describe("unpricedPricesGateway — recordPrice (MKT-175)", () => {
     }
   });
 
-  // F27 — NotFound error is passed through.
-  it("recordPrice passes through NotFound error result without throwing", async () => {
-    mockInvoke.mockRejectedValue({ code: "NotFound", id: "asset-999" });
+  // F27 — AssetNotFound error is passed through.
+  it("recordPrice passes through AssetNotFound error result without throwing", async () => {
+    mockInvoke.mockRejectedValue({ code: "AssetNotFound", id: "asset-999" });
 
     const result = await unpricedPricesGateway.recordPrice("asset-999", "2026-06-19", 10);
 
     expect(result.status).toBe("error");
     if (result.status === "error") {
-      expect(result.error.code).toBe("NotFound");
+      expect(result.error.code).toBe("AssetNotFound");
     }
   });
 

@@ -1,7 +1,7 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use crate::context::asset::application::{AssetApplicationError, AssetCrudError, AssetPriceError};
+use crate::context::asset::error::AssetError;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -62,7 +62,7 @@ pub struct UpdateAssetDTO {
 /// Fetches all active (non-archived) assets.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_assets(state: State<'_, AppState>) -> Result<Vec<Asset>, AssetApplicationError> {
+pub async fn get_assets(state: State<'_, AppState>) -> Result<Vec<Asset>, AssetError> {
     state.asset_service.get_all_assets().await
 }
 
@@ -71,7 +71,7 @@ pub async fn get_assets(state: State<'_, AppState>) -> Result<Vec<Asset>, AssetA
 #[specta::specta]
 pub async fn get_assets_with_archived(
     state: State<'_, AppState>,
-) -> Result<Vec<Asset>, AssetApplicationError> {
+) -> Result<Vec<Asset>, AssetError> {
     state.asset_service.get_all_assets_with_archived().await
 }
 
@@ -81,7 +81,7 @@ pub async fn get_assets_with_archived(
 pub async fn add_asset(
     state: State<'_, AppState>,
     dto: CreateAssetDTO,
-) -> Result<Asset, AssetCrudError> {
+) -> Result<Asset, AssetError> {
     state.asset_service.create_asset(dto).await
 }
 
@@ -91,14 +91,14 @@ pub async fn add_asset(
 pub async fn update_asset(
     state: State<'_, AppState>,
     dto: UpdateAssetDTO,
-) -> Result<Asset, AssetCrudError> {
+) -> Result<Asset, AssetError> {
     state.asset_service.update_asset(dto).await
 }
 
 /// Unarchives an asset (R18).
 #[tauri::command]
 #[specta::specta]
-pub async fn unarchive_asset(state: State<'_, AppState>, id: String) -> Result<(), AssetCrudError> {
+pub async fn unarchive_asset(state: State<'_, AppState>, id: String) -> Result<(), AssetError> {
     state.asset_service.unarchive_asset(&id).await
 }
 
@@ -108,7 +108,7 @@ pub async fn unarchive_asset(state: State<'_, AppState>, id: String) -> Result<(
 pub async fn block_asset_price_refresh(
     state: State<'_, AppState>,
     id: String,
-) -> Result<(), AssetCrudError> {
+) -> Result<(), AssetError> {
     state.asset_service.block_price_refresh(&id).await
 }
 
@@ -118,7 +118,7 @@ pub async fn block_asset_price_refresh(
 pub async fn unblock_asset_price_refresh(
     state: State<'_, AppState>,
     id: String,
-) -> Result<(), AssetCrudError> {
+) -> Result<(), AssetError> {
     state.asset_service.unblock_price_refresh(&id).await
 }
 
@@ -135,28 +135,25 @@ pub fn get_supported_exchanges() -> Vec<Exchange> {
 /// Fetches all active categories.
 ///
 /// Read-only — only infrastructure failures can fire here, so the surface is
-/// the narrow `CategoryApplicationError` (only `DatabaseError` is reachable).
+/// the narrow `AssetError` (only `DatabaseError` is reachable).
 #[tauri::command]
 #[specta::specta]
 pub async fn get_categories(
     state: State<'_, AppState>,
-) -> Result<Vec<AssetCategory>, crate::context::asset::CategoryApplicationError> {
+) -> Result<Vec<AssetCategory>, crate::context::asset::AssetError> {
     state.asset_service.get_all_categories().await
 }
 
 /// Creates a new category.
 ///
-/// Returns the typed `CategoryCrudError` directly — no boundary type or mapper
-/// is needed because every leaf in the composite (`CategoryApplicationError`,
-/// `CategoryDomainError`) already serializes with `#[serde(tag = "code")]`,
-/// and `CategoryCrudError`'s `#[serde(untagged)]` flattens them into a single
-/// FE-visible union.
+/// Returns the typed `AssetError` directly; each variant serializes as
+/// `{ "code": "..." }` on the wire via `#[serde(tag = "code")]`.
 #[tauri::command]
 #[specta::specta]
 pub async fn add_category(
     label: String,
     state: State<'_, AppState>,
-) -> Result<AssetCategory, crate::context::asset::CategoryCrudError> {
+) -> Result<AssetCategory, crate::context::asset::AssetError> {
     state.asset_service.create_category(&label).await
 }
 
@@ -167,7 +164,7 @@ pub async fn update_category(
     id: String,
     label: String,
     state: State<'_, AppState>,
-) -> Result<AssetCategory, crate::context::asset::CategoryCrudError> {
+) -> Result<AssetCategory, crate::context::asset::AssetError> {
     state.asset_service.update_category(&id, &label).await
 }
 
@@ -177,7 +174,7 @@ pub async fn update_category(
 pub async fn delete_category(
     id: String,
     state: State<'_, AppState>,
-) -> Result<(), crate::context::asset::CategoryCrudError> {
+) -> Result<(), crate::context::asset::AssetError> {
     state.asset_service.delete_category(&id).await
 }
 
@@ -192,7 +189,7 @@ pub async fn record_asset_price(
     asset_id: String,
     date: String,
     price: f64,
-) -> Result<(), AssetPriceError> {
+) -> Result<(), AssetError> {
     state
         .asset_service
         .record_asset_price(&asset_id, &date, price)
@@ -205,7 +202,7 @@ pub async fn record_asset_price(
 pub async fn get_asset_prices(
     state: State<'_, AppState>,
     asset_id: String,
-) -> Result<Vec<AssetPrice>, AssetPriceError> {
+) -> Result<Vec<AssetPrice>, AssetError> {
     state.asset_service.get_asset_prices(&asset_id).await
 }
 
@@ -218,7 +215,7 @@ pub async fn update_asset_price(
     original_date: String,
     new_date: String,
     new_price: f64,
-) -> Result<(), AssetPriceError> {
+) -> Result<(), AssetError> {
     state
         .asset_service
         .update_asset_price(&asset_id, &original_date, &new_date, new_price)
@@ -232,7 +229,7 @@ pub async fn delete_asset_price(
     state: State<'_, AppState>,
     asset_id: String,
     date: String,
-) -> Result<(), AssetPriceError> {
+) -> Result<(), AssetError> {
     state
         .asset_service
         .delete_asset_price(&asset_id, &date)

@@ -63,7 +63,7 @@ describe("usePriceHistory", () => {
   it("surfaces fetchError when gateway returns an error", async () => {
     mockGetAssetPrices.mockResolvedValue({
       status: "error",
-      error: { code: "NotFound", id: "asset-unknown" },
+      error: { code: "AssetNotFound", id: "asset-unknown" },
     });
 
     const { result } = renderHook(() => usePriceHistory({ assetId: "asset-unknown" }));
@@ -71,7 +71,7 @@ describe("usePriceHistory", () => {
     await act(async () => {});
 
     expect(result.current.prices).toEqual([]);
-    expect(result.current.fetchError).toEqual({ key: "error.NotFound" });
+    expect(result.current.fetchError).toEqual({ key: "error.AssetNotFound" });
     expect(result.current.isLoading).toBe(false);
     expect(mockGetAssetPrices).toHaveBeenCalledWith("asset-unknown");
   });

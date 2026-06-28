@@ -1,4 +1,4 @@
-import type { ArchiveAssetError, AssetClass, AssetCrudError, DeleteAssetError } from "@/bindings";
+import type { ArchiveAssetError, AssetClass, AssetError, DeleteAssetError } from "@/bindings";
 import type { I18nMessage } from "@/ui/format/i18n";
 
 /**
@@ -9,7 +9,7 @@ import type { I18nMessage } from "@/ui/format/i18n";
  * BC-wide union, so any unreachable variant falls through to `error.Unknown`.
  */
 export function assetMutationErrorToI18n(
-  err: AssetCrudError | ArchiveAssetError | DeleteAssetError,
+  err: AssetError | ArchiveAssetError | DeleteAssetError,
 ): I18nMessage {
   switch (err.code) {
     case "InvalidExchange":
@@ -22,7 +22,8 @@ export function assetMutationErrorToI18n(
     case "InvalidRiskLevel":
     case "Archived":
     case "CashAssetNotEditable":
-    case "NotFound":
+    case "AssetNotFound":
+    case "CategoryNotFound":
     case "DatabaseError":
     case "AccountNotFound":
     case "NameAlreadyExists":

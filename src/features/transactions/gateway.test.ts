@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AccountError,
-  AssetPriceApplicationError,
+  AssetError,
   BuyHoldingDTO,
   CorrectTransactionDTO,
   SellHoldingDTO,
@@ -202,7 +202,7 @@ describe("transactionGateway", () => {
   });
 
   it("recordAssetPrice surfaces price-side DatabaseError on repo failure", async () => {
-    const err: AssetPriceApplicationError = { code: "DatabaseError" };
+    const err: AssetError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await transactionGateway.recordAssetPrice("asset-1", "2024-01-15", 150.5);
     expect(result).toEqual({ status: "error", error: err });

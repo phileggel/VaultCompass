@@ -4,11 +4,8 @@ import type {
   AccountError,
   ArchiveAssetTask,
   Asset,
-  AssetApplicationError,
-  AssetCrudError,
-  AssetDomainError,
+  AssetError,
   AssetLookupResult,
-  CategoryApplicationError,
   CreateAssetDTO,
   DeleteAssetTask,
   UpdateAssetDTO,
@@ -73,14 +70,14 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("getAssets surfaces DatabaseError on repo failure", async () => {
-    const err: AssetApplicationError = { code: "DatabaseError" };
+    const err: AssetError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.getAssets();
     expect(result).toEqual({ status: "error", error: err });
   });
 
   it("getAssetsWithArchived surfaces DatabaseError on repo failure", async () => {
-    const err: AssetApplicationError = { code: "DatabaseError" };
+    const err: AssetError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.getAssetsWithArchived();
     expect(result).toEqual({ status: "error", error: err });
@@ -97,35 +94,35 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("createAsset surfaces NameEmpty domain leaf", async () => {
-    const err: AssetDomainError = { code: "NameEmpty" };
+    const err: AssetError = { code: "NameEmpty" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset({ ...baseCreateDto, name: "" });
     expect(result).toEqual({ status: "error", error: err });
   });
 
   it("createAsset surfaces ReferenceEmpty domain leaf", async () => {
-    const err: AssetDomainError = { code: "ReferenceEmpty" };
+    const err: AssetError = { code: "ReferenceEmpty" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset({ ...baseCreateDto, reference: "" });
     expect(result).toEqual({ status: "error", error: err });
   });
 
   it("createAsset surfaces InvalidCurrency with currency payload", async () => {
-    const err: AssetDomainError = { code: "InvalidCurrency", currency: "XYZ" };
+    const err: AssetError = { code: "InvalidCurrency", currency: "XYZ" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset({ ...baseCreateDto, currency: "XYZ" });
     expect(result).toEqual({ status: "error", error: err });
   });
 
   it("createAsset surfaces InvalidRiskLevel with received payload", async () => {
-    const err: AssetDomainError = { code: "InvalidRiskLevel", received: 9 };
+    const err: AssetError = { code: "InvalidRiskLevel", received: 9 };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset({ ...baseCreateDto, risk_level: 9 });
     expect(result).toEqual({ status: "error", error: err });
   });
 
-  it("createAsset surfaces CategoryApplicationError NotFound from cross-aggregate lookup", async () => {
-    const err: CategoryApplicationError = { code: "NotFound", id: "missing-cat" };
+  it("createAsset surfaces CategoryNotFound from cross-aggregate category lookup", async () => {
+    const err: AssetError = { code: "CategoryNotFound", id: "missing-cat" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset({
       ...baseCreateDto,
@@ -136,7 +133,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("createAsset surfaces DatabaseError on repo write failure", async () => {
-    const err: AssetApplicationError = { code: "DatabaseError" };
+    const err: AssetError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset(baseCreateDto);
     expect(result).toEqual({ status: "error", error: err });
@@ -153,7 +150,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("updateAsset surfaces NotFound with asset id payload", async () => {
-    const err: AssetApplicationError = { code: "NotFound", id: "missing-id" };
+    const err: AssetError = { code: "AssetNotFound", id: "missing-id" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.updateAsset({
       ...baseUpdateDto,
@@ -164,14 +161,14 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("updateAsset surfaces Archived domain leaf", async () => {
-    const err: AssetDomainError = { code: "Archived" };
+    const err: AssetError = { code: "Archived" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.updateAsset(baseUpdateDto);
     expect(result).toEqual({ status: "error", error: err });
   });
 
   it("updateAsset surfaces CashAssetNotEditable for system Cash Asset", async () => {
-    const err: AssetDomainError = { code: "CashAssetNotEditable" };
+    const err: AssetError = { code: "CashAssetNotEditable" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.updateAsset({
       ...baseUpdateDto,
@@ -191,14 +188,14 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("unarchiveAsset surfaces CashAssetNotEditable for system Cash Asset", async () => {
-    const err: AssetCrudError = { code: "CashAssetNotEditable" };
+    const err: AssetError = { code: "CashAssetNotEditable" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.unarchiveAsset("system-cash-eur");
     expect(result).toEqual({ status: "error", error: err });
   });
 
   it("unarchiveAsset surfaces NotFound with id payload", async () => {
-    const err: AssetCrudError = { code: "NotFound", id: "missing" };
+    const err: AssetError = { code: "AssetNotFound", id: "missing" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.unarchiveAsset("missing");
     expect(result).toEqual({ status: "error", error: err });
@@ -221,7 +218,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("archiveAsset surfaces NotFound propagated through Asset leaf", async () => {
-    const err: AssetCrudError = { code: "NotFound", id: "missing" };
+    const err: AssetError = { code: "AssetNotFound", id: "missing" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.archiveAsset("missing");
     expect(result).toEqual({ status: "error", error: err });
@@ -251,7 +248,7 @@ describe("asset gateway — CRUD", () => {
   });
 
   it("deleteAsset surfaces CashAssetNotEditable propagated through Asset leaf", async () => {
-    const err: AssetCrudError = { code: "CashAssetNotEditable" };
+    const err: AssetError = { code: "CashAssetNotEditable" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.deleteAsset("system-cash-eur");
     expect(result).toEqual({ status: "error", error: err });
@@ -306,7 +303,7 @@ describe("asset gateway — exchange DTO pass-through", () => {
 
   // createAsset — InvalidExchange error surface (AST-001)
   it("createAsset surfaces InvalidExchange with exchange_code payload", async () => {
-    const err: AssetDomainError = { code: "InvalidExchange", exchange_code: "BOGUS" };
+    const err: AssetError = { code: "InvalidExchange", exchange_code: "BOGUS" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.createAsset({
       ...baseCreateDto,
@@ -336,7 +333,7 @@ describe("asset gateway — exchange DTO pass-through", () => {
 
   // updateAsset — InvalidExchange error surface (AST-001)
   it("updateAsset surfaces InvalidExchange with exchange_code payload", async () => {
-    const err: AssetDomainError = { code: "InvalidExchange", exchange_code: "BOGUS" };
+    const err: AssetError = { code: "InvalidExchange", exchange_code: "BOGUS" };
     mockInvoke.mockRejectedValue(err);
     const result = await assetGateway.updateAsset({
       ...baseUpdateDto,

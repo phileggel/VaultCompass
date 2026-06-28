@@ -1,8 +1,7 @@
 import {
   type ArchiveAssetError,
   type Asset,
-  type AssetApplicationError,
-  type AssetCrudError,
+  type AssetError,
   type AssetLookupResult,
   type CreateAssetDTO,
   commands,
@@ -19,19 +18,19 @@ import {
  * Centralizes all Tauri command calls for the Asset feature.
  */
 export const assetGateway = {
-  async getAssets(): Promise<Result<Asset[], AssetApplicationError>> {
+  async getAssets(): Promise<Result<Asset[], AssetError>> {
     return await commands.getAssets();
   },
 
-  async getAssetsWithArchived(): Promise<Result<Asset[], AssetApplicationError>> {
+  async getAssetsWithArchived(): Promise<Result<Asset[], AssetError>> {
     return await commands.getAssetsWithArchived();
   },
 
-  async createAsset(dto: CreateAssetDTO): Promise<Result<Asset, AssetCrudError>> {
+  async createAsset(dto: CreateAssetDTO): Promise<Result<Asset, AssetError>> {
     return await commands.addAsset(dto);
   },
 
-  async updateAsset(dto: UpdateAssetDTO): Promise<Result<Asset, AssetCrudError>> {
+  async updateAsset(dto: UpdateAssetDTO): Promise<Result<Asset, AssetError>> {
     return await commands.updateAsset(dto);
   },
 
@@ -39,7 +38,7 @@ export const assetGateway = {
     return await commands.archiveAsset(id);
   },
 
-  async unarchiveAsset(id: string): Promise<Result<null, AssetCrudError>> {
+  async unarchiveAsset(id: string): Promise<Result<null, AssetError>> {
     return await commands.unarchiveAsset(id);
   },
 

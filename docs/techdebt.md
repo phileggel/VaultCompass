@@ -76,7 +76,7 @@ Use cases without their own `error.rs` (return a BC enum directly, gold-conforma
 
 **Ordering**: BC-1 first (internal-only, low blast radius). UC-1 can ship any time (mechanical rename). BC-2 last (the wire-visible variant rename forces contract + FE coordination — easier to batch once the project is comfortable with the BC-1 pattern).
 
-**Status (2026-06-27, v0.28.0 released)**: ✅ BC-1 (account collapse → single `AccountError`) shipped in commit `112c14a`. ✅ UC-1 (use-case task sub-enum rename to gold) shipped in commit `a10b5ea`. Only **BC-2** (asset BC collapse, wire-visible) remains. The account-BC and use-case inventory above is intentionally retained as BC-2 implementation reference — it holds the asset-BC variant list and the `NotFound{id}` → `AssetNotFound{id}` / `CategoryNotFound{id}` wire-rename + FE/i18n coordination BC-2 will need.
+**Status (2026-06-28)**: ✅ BC-1 (account collapse → single `AccountError`) shipped in commit `112c14a`. ✅ UC-1 (use-case task sub-enum rename to gold) shipped in commit `a10b5ea`. ✅ BC-2 (asset BC collapse → single `AssetError`, with the wire-visible `NotFound{id}` → `AssetNotFound{id}` / `CategoryNotFound{id}` rename + FE/i18n/contract coordination) shipped on `feat/v0.29.0`. All three sequenced steps are now complete — the per-BC error-split anti-pattern is fully resolved across the codebase; this entry is retained only as a historical record and can be removed.
 
 ---
 
