@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] - 2026-06-29
+
+### Added
+
+- rework account details header into icon-button toolbar
+  Replace the labelled buttons + Record dropdown with six big square icon
+  buttons (tooltips name each action). The as-of date field leads, label-less
+  and width-constrained, showing a "Today" placeholder in the live view.
+  Header info trimmed to Global Value only — the now-unrendered summary fields
+  and their presenter mapping/tests were removed as dead code.
+
 ## [0.30.0] - 2026-06-29
 
 ### Added
