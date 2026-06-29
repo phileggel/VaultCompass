@@ -218,16 +218,16 @@ impl AccountPerformanceUseCase {
         // PRF-040 — the span opens on the period containing the first transaction.
         // PRF-042 — that earliest row has no preceding period, so its
         // period_over_period is None; its performance is carried by since_inception.
+        let periods = year_periods(earliest_date, today);
         let first_year = earliest_date.year();
-        let mut rows = Vec::with_capacity((today.year() - first_year + 1).max(0) as usize);
+        let mut rows = Vec::with_capacity(periods.len());
         let mut previous_end_value: i64 = 0;
-        for year in first_year..=today.year() {
-            let period_start = first_day_of_year(year);
-            let period_end = if year == today.year() {
-                today
-            } else {
-                last_day_of_year(year)
-            };
+        for YearPeriod {
+            year,
+            period_start,
+            period_end,
+        } in periods
+        {
             let end_value = end_value_as_of(
                 transactions,
                 priced_assets,
@@ -312,18 +312,19 @@ impl AccountPerformanceUseCase {
         // PRF-040 — the span opens on the month containing the first transaction.
         // PRF-042 — that earliest row has no preceding period, so its
         // period_over_period is None; its performance is carried by since_inception.
+        let periods = month_periods(earliest_date, today);
         let (first_year, first_month) = (earliest_date.year(), earliest_date.month());
-        let months_in_span =
-            ((today.year() - first_year) * 12 + today.month() as i32 - first_month as i32 + 1)
-                .max(0) as usize;
-        let mut rows = Vec::with_capacity(months_in_span);
+        let mut rows = Vec::with_capacity(periods.len());
         let mut previous_end_value: i64 = 0;
-        let mut year = first_year;
-        let mut month = first_month;
-        loop {
-            let period_start = first_day_of_month(year, month);
-            let last_day = last_day_of_month(year, month);
-            let period_end = if last_day > today { today } else { last_day };
+        for MonthPeriod {
+            year,
+            month,
+            period_start,
+            period_end,
+            year_start,
+            year_start_baseline,
+        } in periods
+        {
             let end_value = end_value_as_of(
                 transactions,
                 priced_assets,
@@ -346,17 +347,16 @@ impl AccountPerformanceUseCase {
             };
 
             // PRF-034 — year-to-date baseline is the prior 31 December end value.
-            let year_start_baseline = end_value_as_of(
+            let year_start_baseline_value = end_value_as_of(
                 transactions,
                 priced_assets,
                 rate_map,
                 account_currency,
-                last_day_of_year(year - 1),
+                year_start_baseline,
             );
-            let year_start = first_day_of_year(year);
             let year_to_date = Some(metric_for_span(
                 transactions,
-                year_start_baseline,
+                year_start_baseline_value,
                 end_value,
                 year_start,
                 period_end,
@@ -404,16 +404,6 @@ impl AccountPerformanceUseCase {
                 annualized_yield: None,
             });
             previous_end_value = end_value;
-
-            if year == today.year() && month == today.month() {
-                break;
-            }
-            if month == 12 {
-                year += 1;
-                month = 1;
-            } else {
-                month += 1;
-            }
         }
         rows.reverse();
         rows
@@ -590,10 +580,76 @@ fn parse_date(raw: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok()
 }
 
-/// Enumerates every period-end date the valuation loop visits — mirrors the
-/// year/month iteration in `build_yearly` and `build_monthly` (including the
-/// prior-year-end YTD baseline) so FX rates can be pre-resolved for the
-/// synchronous valuation (FXR-035/042).
+/// One yearly valuation period (PRF-040, PRF-041). The current year clamps its
+/// end to `today`.
+struct YearPeriod {
+    year: i32,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+}
+
+/// One monthly valuation period (PRF-040, PRF-041). The current month clamps its
+/// end to `today`; `year_start` opens the calendar year and `year_start_baseline`
+/// is the prior 31 December the YTD metric values against (PRF-034).
+struct MonthPeriod {
+    year: i32,
+    month: u32,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+    year_start: NaiveDate,
+    year_start_baseline: NaiveDate,
+}
+
+/// The single source of truth for the yearly period iteration, from the first
+/// transaction year through the current year, oldest first. `build_yearly` and
+/// `period_end_dates` both derive their dates from this so they cannot drift.
+fn year_periods(earliest_date: NaiveDate, today: NaiveDate) -> Vec<YearPeriod> {
+    (earliest_date.year()..=today.year())
+        .map(|year| YearPeriod {
+            year,
+            period_start: first_day_of_year(year),
+            period_end: if year == today.year() {
+                today
+            } else {
+                last_day_of_year(year)
+            },
+        })
+        .collect()
+}
+
+/// The single source of truth for the monthly period iteration, from the month of
+/// the first transaction through the current month, oldest first. `build_monthly`
+/// and `period_end_dates` both derive their dates from this so they cannot drift.
+fn month_periods(earliest_date: NaiveDate, today: NaiveDate) -> Vec<MonthPeriod> {
+    let (mut year, mut month) = (earliest_date.year(), earliest_date.month());
+    let mut periods = Vec::new();
+    loop {
+        let last_day = last_day_of_month(year, month);
+        periods.push(MonthPeriod {
+            year,
+            month,
+            period_start: first_day_of_month(year, month),
+            period_end: if last_day > today { today } else { last_day },
+            year_start: first_day_of_year(year),
+            year_start_baseline: last_day_of_year(year - 1),
+        });
+        if year == today.year() && month == today.month() {
+            break;
+        }
+        if month == 12 {
+            year += 1;
+            month = 1;
+        } else {
+            month += 1;
+        }
+    }
+    periods
+}
+
+/// Enumerates every period-end date the valuation loop visits, collected from the
+/// same `year_periods` / `month_periods` the `build_*` methods iterate (including
+/// the prior-year-end YTD baseline) so FX rates can be pre-resolved for the
+/// synchronous valuation (FXR-035/042) without drifting from the series.
 fn period_end_dates(
     month_view_available: bool,
     earliest_date: NaiveDate,
@@ -602,29 +658,13 @@ fn period_end_dates(
     // A set deduplicates the prior-year-end baselines (one per month in a year)
     // and any overlap between the yearly and monthly series.
     let mut dates = BTreeSet::new();
-    for year in earliest_date.year()..=today.year() {
-        dates.insert(if year == today.year() {
-            today
-        } else {
-            last_day_of_year(year)
-        });
+    for period in year_periods(earliest_date, today) {
+        dates.insert(period.period_end);
     }
     if month_view_available {
-        let (first_year, first_month) = (earliest_date.year(), earliest_date.month());
-        let (mut year, mut month) = (first_year, first_month);
-        loop {
-            let last_day = last_day_of_month(year, month);
-            dates.insert(if last_day > today { today } else { last_day });
-            dates.insert(last_day_of_year(year - 1));
-            if year == today.year() && month == today.month() {
-                break;
-            }
-            if month == 12 {
-                year += 1;
-                month = 1;
-            } else {
-                month += 1;
-            }
+        for period in month_periods(earliest_date, today) {
+            dates.insert(period.period_end);
+            dates.insert(period.year_start_baseline);
         }
     }
     dates
@@ -1032,6 +1072,48 @@ mod tests {
             Box::new(SqliteAssetPriceRepository::new(pool.clone())),
         ));
         (account_svc, asset_svc)
+    }
+
+    // FXR-035/042 — period_end_dates must pre-resolve a rate for every date the
+    // build_* methods actually value (end_value_as_of), or a foreign holding
+    // silently degrades to 0 (FXR-034). Lock that the FX pre-resolution set is a
+    // superset of every valued date the shared period series exposes.
+    #[test]
+    fn period_end_dates_cover_every_valued_date() {
+        let earliest = NaiveDate::from_ymd_opt(2022, 3, 15).expect("valid date");
+        let today = NaiveDate::from_ymd_opt(2024, 6, 10).expect("valid date");
+
+        // month_view_available = true: yearly ends + monthly ends + YTD baselines.
+        let dates = period_end_dates(true, earliest, today);
+        for period in year_periods(earliest, today) {
+            assert!(
+                dates.contains(&period.period_end),
+                "yearly period_end {} not pre-resolved",
+                period.period_end
+            );
+        }
+        for period in month_periods(earliest, today) {
+            assert!(
+                dates.contains(&period.period_end),
+                "monthly period_end {} not pre-resolved",
+                period.period_end
+            );
+            assert!(
+                dates.contains(&period.year_start_baseline),
+                "YTD baseline {} not pre-resolved",
+                period.year_start_baseline
+            );
+        }
+
+        // month_view_available = false: only the yearly ends are pre-resolved.
+        let yearly_only = period_end_dates(false, earliest, today);
+        for period in year_periods(earliest, today) {
+            assert!(
+                yearly_only.contains(&period.period_end),
+                "yearly-only period_end {} not pre-resolved",
+                period.period_end
+            );
+        }
     }
 
     // PRF-016 — unknown account returns AccountNotFound with the supplied id
@@ -3241,7 +3323,12 @@ mod tests {
             .find(|p| p.year == 2024)
             .expect("2024 row");
         assert!(
-            year_2024.since_inception.as_ref().unwrap().pct.is_none(),
+            year_2024
+                .since_inception
+                .as_ref()
+                .expect("since_inception must be Some for precondition check")
+                .pct
+                .is_none(),
             "precondition: since-inception pct is None"
         );
         assert!(
@@ -3308,7 +3395,11 @@ mod tests {
             .find(|p| p.year == 2024)
             .expect("2024 row");
         assert_eq!(
-            year_2024.since_inception.as_ref().unwrap().pct,
+            year_2024
+                .since_inception
+                .as_ref()
+                .expect("since_inception must be Some for precondition check")
+                .pct,
             Some(-100_000_000),
             "precondition: cumulative is −100%"
         );
