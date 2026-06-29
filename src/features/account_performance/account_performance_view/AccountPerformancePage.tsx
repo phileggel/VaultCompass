@@ -18,6 +18,7 @@ export function AccountPerformancePage() {
   }, []);
 
   const showYtdColumn = view.viewMode === "month";
+  const showAnnualizedColumn = view.viewMode === "year";
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden py-2 px-2">
@@ -156,7 +157,11 @@ export function AccountPerformancePage() {
               {/* Account value over time — fed by the same active-view series as the table. */}
               <AccountValueChart points={view.chartPoints} />
 
-              <AccountPerformanceTable rows={view.rows} showYtd={showYtdColumn} />
+              <AccountPerformanceTable
+                rows={view.rows}
+                showYtd={showYtdColumn}
+                showAnnualized={showAnnualizedColumn}
+              />
             </div>
           )}
         </div>

@@ -23,6 +23,9 @@ pub(crate) type RateMap = HashMap<(String, NaiveDate), i64>;
 /// Percentage scale applied to the Simple Dietz numerator (PRF-032): `× 100`
 /// turns a ratio into percent, `× 1_000_000` into micro-percent.
 const PERCENT_SCALE: i128 = 100_000_000;
+/// Average days per calendar year (leap-year aware) used to convert an elapsed
+/// span into fractional years for the annualized-yield calculation.
+const DAYS_PER_YEAR: f64 = 365.25;
 
 /// Non-cash asset metadata plus its full recorded price history, preloaded once
 /// per asset so the per-period valuation loop never re-queries the asset context.
@@ -71,6 +74,11 @@ pub struct PerformancePeriod {
     pub year_to_date: Option<PerformanceMetric>,
     /// Performance from inception to this period end, vs net invested (PRF-035).
     pub since_inception: Option<PerformanceMetric>,
+    /// Annualized cumulative since-inception return (CAGR) — populated only for
+    /// year rows; None for month rows. `pct` is the annualized rate; `gain`
+    /// reuses the cumulative since-inception gain. None when the since-inception
+    /// percentage is absent or the cumulative is a total loss (root undefined).
+    pub annualized_yield: Option<PerformanceMetric>,
 }
 
 /// Top-level response for `get_account_performance` — recomputed on read (ADR-013).
@@ -245,6 +253,10 @@ impl AccountPerformanceUseCase {
                 earliest_date,
                 period_end,
             ));
+            // Annualize the cumulative since-inception return over the elapsed years.
+            let annualized_yield = since_inception
+                .as_ref()
+                .and_then(|metric| annualized_yield_metric(metric, earliest_date, period_end));
             let bridge = period_bridge(
                 transactions,
                 priced_assets,
@@ -279,6 +291,7 @@ impl AccountPerformanceUseCase {
                 // PRF-037 — year_to_date is omitted on year rows.
                 year_to_date: None,
                 since_inception,
+                annualized_yield,
             });
             previous_end_value = end_value;
         }
@@ -387,6 +400,8 @@ impl AccountPerformanceUseCase {
                 period_over_period,
                 year_to_date,
                 since_inception,
+                // Annualized yield is a year-row concept only.
+                annualized_yield: None,
             });
             previous_end_value = end_value;
 
@@ -943,6 +958,41 @@ fn since_inception_metric(
     metric_for_span(transactions, 0, end_value, earliest_date, period_end)
 }
 
+/// Annualized cumulative since-inception return (CAGR) for a year row. Annualizes
+/// the cash-flow-adjusted cumulative return carried by `since_inception` over the
+/// elapsed years from inception (`earliest_date`) to `period_end`. The headline
+/// `pct` is the annualized rate; `gain` reuses the cumulative since-inception gain.
+///
+/// `f64` is used because this is a derived percentage, not a money value (money
+/// stays integer micro-units elsewhere).
+///
+/// Returns None when the since-inception percentage is absent (PRF-032 denominator
+/// 0) or when the cumulative is a total loss (`1 + cumulative <= 0`, root undefined).
+/// A sub-1-year first period is not annualized — extrapolating a fraction of a year
+/// would overstate the return — so the cumulative is reported as-is.
+fn annualized_yield_metric(
+    since_inception: &PerformanceMetric,
+    earliest_date: NaiveDate,
+    period_end: NaiveDate,
+) -> Option<PerformanceMetric> {
+    // Cumulative since-inception return as a fraction (micro-percent → ratio).
+    let cumulative = since_inception.pct? as f64 / PERCENT_SCALE as f64;
+    let base = 1.0 + cumulative;
+    if base <= 0.0 {
+        return None;
+    }
+    let years = (period_end - earliest_date).num_days() as f64 / DAYS_PER_YEAR;
+    let cagr = if years >= 1.0 {
+        base.powf(1.0 / years) - 1.0
+    } else {
+        cumulative
+    };
+    Some(PerformanceMetric {
+        gain: since_inception.gain,
+        pct: Some((cagr * PERCENT_SCALE as f64).round() as i64),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1341,6 +1391,11 @@ mod tests {
         assert!(
             is_descending,
             "monthly rows must be most-recent first; got {pairs:?}"
+        );
+        // Annualized yield (CAGR) is a year-row-only metric.
+        assert!(
+            resp.monthly.iter().all(|p| p.annualized_yield.is_none()),
+            "month rows must not carry annualized_yield"
         );
     }
 
@@ -2955,6 +3010,311 @@ mod tests {
             year_2024.end_value, 0,
             "end_value must be 0 when no rate for foreign holding; got {}",
             year_2024.end_value
+        );
+    }
+
+    // ----- T3 — annualized cumulative since-inception return (CAGR) -----------
+
+    /// Builds an account whose entire deposit is invested into one EUR stock at
+    /// inception, leaving zero residual cash so the year-end Global Value is just
+    /// `quantity × price`. `price_points` are recorded asset prices `(date, price)`.
+    /// Deposit and purchase land on `inception` so the since-inception weighted flow
+    /// equals the full deposit (denominator = invested), giving a clean cumulative.
+    async fn setup_single_stock_account(
+        deposit_micros: i64,
+        unit_price_eur: f64,
+        inception: &str,
+        price_points: &[(&str, f64)],
+    ) -> (Arc<AccountService>, Arc<AssetService>, String) {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "CAGR".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "CAGR Stock".to_string(),
+                reference: "CGR".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, inception.to_string(), deposit_micros, None)
+            .await
+            .unwrap();
+        // Buy 1 unit at the deposit price so all cash converts to the holding.
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                inception.to_string(),
+                1_000_000, // 1 unit
+                (unit_price_eur * 1_000_000.0) as i64,
+                1_000_000, // exchange_rate 1:1
+                0,         // no fees
+                None,
+            )
+            .await
+            .unwrap();
+        for (date, price) in price_points {
+            asset_svc
+                .record_asset_price(&stock.id, date, *price)
+                .await
+                .unwrap();
+        }
+        (account_svc, asset_svc, account.id)
+    }
+
+    fn assert_pct_within(actual: i64, expected: i64, tolerance: i64, label: &str) {
+        assert!(
+            (actual - expected).abs() <= tolerance,
+            "{label}: expected ~{expected} micro-percent, got {actual} (tolerance {tolerance})"
+        );
+    }
+
+    // (a) Two-year clean case (no extra flows): the worked example.
+    //   Invest 100 at 2023-01-01. Year-end 2023 value 105 → cumulative +5%.
+    //   Year-end 2024 value 121 → cumulative +21% over ~2 years → CAGR ≈ 10%.
+    #[tokio::test]
+    async fn annualized_yield_two_year_clean_case() {
+        let (account_svc, asset_svc, account_id) = setup_single_stock_account(
+            100_000_000, // deposit 100 EUR
+            100.0,       // buy 1 unit at 100 EUR (zero residual cash)
+            "2023-01-01",
+            &[("2023-12-31", 105.0), ("2024-12-31", 121.0)],
+        )
+        .await;
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account_id).await.unwrap();
+
+        let year_2023 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2023)
+            .expect("2023 row");
+        let ann_2023 = year_2023
+            .annualized_yield
+            .as_ref()
+            .expect("2023 annualized present")
+            .pct
+            .expect("2023 annualized pct present");
+        // First calendar year elapses < 365.25 days → reported as-is (cumulative +5%).
+        assert_pct_within(ann_2023, 5_000_000, 1_000, "year 2023 CAGR");
+
+        let year_2024 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        let ann_2024 = year_2024
+            .annualized_yield
+            .as_ref()
+            .expect("2024 annualized present")
+            .pct
+            .expect("2024 annualized pct present");
+        // (1.21)^(1/~2) − 1 ≈ 10%.
+        assert_pct_within(ann_2024, 10_000_000, 50_000, "year 2024 CAGR");
+    }
+
+    // (b) One-year case: 2024 is a leap year, so Jan 1 → Dec 31 is 365 elapsed
+    //     days (365/365.25 ≈ 0.999 < 1.0). The sub-year pass-through fires, so
+    //     the row reports its cumulative as-is without invoking the CAGR root.
+    #[tokio::test]
+    async fn annualized_yield_one_year_equals_cumulative() {
+        let (account_svc, asset_svc, account_id) = setup_single_stock_account(
+            100_000_000,
+            100.0,
+            "2024-01-01",
+            &[("2024-12-31", 108.0)], // +8% cumulative
+        )
+        .await;
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account_id).await.unwrap();
+
+        let year_2024 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        let cumulative = year_2024
+            .since_inception
+            .as_ref()
+            .expect("since_inception present for one-year case")
+            .pct
+            .expect("cumulative pct present");
+        let annualized = year_2024
+            .annualized_yield
+            .as_ref()
+            .expect("annualized_yield present for one-year case")
+            .pct
+            .expect("annualized pct present");
+        assert_pct_within(annualized, cumulative, 1_000, "1-year CAGR == cumulative");
+    }
+
+    // (c) Sub-1-year first period: the current (incomplete) year must NOT annualize
+    //     — the cumulative is reported as-is, never extrapolated upward.
+    #[tokio::test]
+    async fn annualized_yield_sub_year_not_extrapolated() {
+        let today = Local::now().date_naive();
+        let inception = format!("{}-01-05", today.year());
+        let price_date = format!("{}-01-06", today.year());
+        let (account_svc, asset_svc, account_id) =
+            setup_single_stock_account(100_000_000, 100.0, &inception, &[(&price_date, 110.0)])
+                .await;
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account_id).await.unwrap();
+
+        let current = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == today.year())
+            .expect("current year row");
+        let cumulative = current
+            .since_inception
+            .as_ref()
+            .expect("since_inception present for sub-year case")
+            .pct
+            .expect("cumulative pct present");
+        let annualized = current
+            .annualized_yield
+            .as_ref()
+            .expect("annualized_yield present for sub-year case")
+            .pct
+            .expect("annualized pct present");
+        // Reported as-is, not annualized (which would inflate +10% over a fraction of a year).
+        assert_pct_within(annualized, cumulative, 1_000, "sub-year CAGR == cumulative");
+    }
+
+    // (d) since-inception percentage absent (Dietz denominator 0) → annualized None.
+    #[tokio::test]
+    async fn annualized_yield_none_when_since_inception_pct_absent() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Denom Zero Year".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        // Deposit on the very last day of a past year → the 2024 row's since-inception
+        // span has 0 days, so the Dietz denominator is 0 and pct is None.
+        account_svc
+            .record_deposit(&account.id, "2024-12-31".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let year_2024 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        assert!(
+            year_2024.since_inception.as_ref().unwrap().pct.is_none(),
+            "precondition: since-inception pct is None"
+        );
+        assert!(
+            year_2024.annualized_yield.is_none(),
+            "annualized must be None when since-inception pct is absent"
+        );
+    }
+
+    // (e) Total-loss guard: cumulative ≤ −100% makes the annualization root undefined → None.
+    #[tokio::test]
+    async fn annualized_yield_none_on_total_loss() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Total Loss".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Wipeout".to_string(),
+                reference: "WIP".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        // Deposit 100, buy a stock that is never priced → end_value 0, net invested 100.
+        // since-inception gain = −100, denominator = 100 → pct = −100% (base 1 + (−1) = 0).
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-01-01".to_string(),
+                1_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let year_2024 = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        assert_eq!(
+            year_2024.since_inception.as_ref().unwrap().pct,
+            Some(-100_000_000),
+            "precondition: cumulative is −100%"
+        );
+        assert!(
+            year_2024.annualized_yield.is_none(),
+            "annualized must be None on total loss (root undefined)"
         );
     }
 }

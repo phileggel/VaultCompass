@@ -349,6 +349,8 @@
     "column_period_over_period": "Period Change",
     "column_year_to_date": "Year to Date",
     "column_since_inception": "Since Inception",
+    "column_annualized_yield": "Annualized yield",
+    "column_annualized_yield_tooltip": "Cumulative return since inception, annualized (CAGR), cash-flow adjusted",
     "subcol_value": "Value",
     "subcol_pct": "%",
     "chart": {

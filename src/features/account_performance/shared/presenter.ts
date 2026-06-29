@@ -128,6 +128,12 @@ export interface PeriodRowViewModel {
   yearToDate?: MetricCellViewModel;
   /** Since-inception metric cell (PRF-035) — always present. */
   sinceInception: MetricCellViewModel;
+  /**
+   * Annualized cumulative since-inception return (CAGR) — present only for year
+   * rows; undefined for month rows. The `pctFormatted` is the headline; the
+   * `gainFormatted` (cumulative since-inception gain) serves as the secondary.
+   */
+  annualizedYield?: MetricCellViewModel;
 }
 
 const MICRO = 1_000_000;
@@ -188,5 +194,6 @@ export function presentPeriodRow(period: PerformancePeriod): PeriodRowViewModel 
     periodOverPeriod: toMetricCell(period.period_over_period),
     yearToDate: isYearRow ? undefined : toMetricCell(period.year_to_date),
     sinceInception: toMetricCell(period.since_inception),
+    annualizedYield: isYearRow ? toMetricCell(period.annualized_yield) : undefined,
   };
 }

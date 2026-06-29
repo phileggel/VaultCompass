@@ -47,6 +47,7 @@ const makeYearRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePer
   period_over_period: makeMetric(),
   year_to_date: null,
   since_inception: makeMetric(2_000_000_000, 20_000_000),
+  annualized_yield: makeMetric(2_000_000_000, 10_000_000),
   ...overrides,
 });
 
@@ -61,6 +62,7 @@ const makeMonthRow = (
   period_over_period: makeMetric(),
   year_to_date: makeMetric(350_000_000, 3_500_000),
   since_inception: makeMetric(2_000_000_000, 20_000_000),
+  annualized_yield: null,
   ...overrides,
 });
 
@@ -311,6 +313,25 @@ describe("AccountPerformancePage", () => {
     await userEvent.click(screen.getByTestId("account-performance-view-toggle-year"));
 
     expect(screen.queryByTestId("account-performance-col-ytd")).not.toBeInTheDocument();
+  });
+
+  // T3 — annualized-yield column present in year view, absent in month view
+  it("renders the annualized-yield column only in year view (T3)", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({ month_view_available: true }),
+    });
+
+    render(<AccountPerformancePage />);
+
+    // Month view is the default when available → no annualized column.
+    await screen.findByTestId("account-performance-year-selector");
+    expect(screen.queryByTestId("account-performance-col-annualized")).not.toBeInTheDocument();
+
+    // Switching to year view reveals the annualized column and its per-row cell.
+    await userEvent.click(screen.getByTestId("account-performance-view-toggle-year"));
+    expect(screen.getByTestId("account-performance-col-annualized")).toBeInTheDocument();
+    expect(screen.getByTestId("account-performance-annualized-2025")).toHaveTextContent("%");
   });
 
   // PRF-041 — rows rendered as-is (most-recent first from backend)

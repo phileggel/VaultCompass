@@ -349,6 +349,8 @@
     "column_period_over_period": "Variation période",
     "column_year_to_date": "Depuis le début de l'année",
     "column_since_inception": "Depuis l'origine",
+    "column_annualized_yield": "Rendement annualisé",
+    "column_annualized_yield_tooltip": "Rendement cumulé depuis l'origine, annualisé (TCAC), ajusté des flux de trésorerie",
     "subcol_value": "Valeur",
     "subcol_pct": "%",
     "chart": {
