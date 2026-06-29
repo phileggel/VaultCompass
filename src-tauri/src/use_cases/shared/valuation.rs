@@ -563,4 +563,54 @@ mod tests {
             );
         }
     }
+
+    fn price_at(date: &str, price: i64) -> AssetPrice {
+        AssetPrice {
+            asset_id: "asset-1".to_string(),
+            date: date.to_string(),
+            price,
+            source: crate::context::asset::AssetPriceSource::Manual,
+        }
+    }
+
+    fn priced_with(prices: Vec<AssetPrice>) -> PricedAsset {
+        PricedAsset {
+            currency: "USD".to_string(),
+            class: AssetClass::Stocks,
+            prices,
+        }
+    }
+
+    // PRF-022 carry-forward: the reverse scan over an ascending-sorted price vec
+    // returns the latest price dated on or before the query date.
+    #[test]
+    fn price_as_of_returns_latest_price_on_or_before_date() {
+        let priced = priced_with(vec![
+            price_at("2024-01-10", 100_000_000),
+            price_at("2024-03-15", 120_000_000),
+            price_at("2024-06-01", 130_000_000),
+        ]);
+
+        // Between two observations — carries the earlier one forward.
+        let mid = NaiveDate::from_ymd_opt(2024, 4, 1).expect("valid date");
+        assert_eq!(priced.price_as_of(mid), Some(120_000_000));
+
+        // Exact-match date qualifies (boundary is inclusive).
+        let exact = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid date");
+        assert_eq!(priced.price_as_of(exact), Some(130_000_000));
+    }
+
+    #[test]
+    fn price_as_of_returns_none_when_all_prices_postdate() {
+        let priced = priced_with(vec![price_at("2024-03-15", 120_000_000)]);
+        let before = NaiveDate::from_ymd_opt(2024, 1, 1).expect("valid date");
+        assert_eq!(priced.price_as_of(before), None);
+    }
+
+    #[test]
+    fn price_as_of_returns_none_on_empty_price_list() {
+        let priced = priced_with(Vec::new());
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).expect("valid date");
+        assert_eq!(priced.price_as_of(date), None);
+    }
 }
