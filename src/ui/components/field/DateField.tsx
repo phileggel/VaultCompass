@@ -7,7 +7,8 @@ import { useDateField } from "./useDateField";
 
 interface DateFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
   id: string;
-  label: string;
+  /** Visible field label. Omit for a label-less field — pass `aria-label` instead (F24). */
+  label?: string;
   error?: string;
   locale?: string;
 }
@@ -94,9 +95,11 @@ export function DateField({
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="m3-input-label">
-        {label}
-      </label>
+      {label && (
+        <label htmlFor={id} className="m3-input-label">
+          {label}
+        </label>
+      )}
       <div className="relative">
         <input
           ref={inputRef}

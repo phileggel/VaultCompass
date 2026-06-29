@@ -50,6 +50,7 @@ const handlers = {
   handleWithdrawalOpen: vi.fn(),
   handleOpenBalanceOpen: vi.fn(),
   handleDividendOpen: vi.fn(),
+  handleFreeSharesOpen: vi.fn(),
   handleAddTransaction: vi.fn(),
 };
 
@@ -59,13 +60,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   retry: vi.fn(),
   summary: {
     accountName: "Main",
-    totalCostBasis: "1.000,00",
-    totalRealizedPnl: "0,00",
-    totalRealizedPnlRaw: 0,
-    totalUnrealizedPnl: "—",
     totalGlobalValue: "1.100,00",
-    totalDividendsReceived: "100,00",
-    totalDividendsReceivedRaw: 100_000_000,
     isEmpty: false,
     isAllClosed: false,
     hasClosedHoldings: false,
@@ -108,46 +103,48 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe("AccountDetailsView — header Record menu (DIV-012)", () => {
+describe("AccountDetailsView — header actions (DIV-012)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
     mockUseAccountDetailsView.mockReturnValue(makeView());
   });
 
-  it("renders the consolidated Record menu trigger and hides items until opened", () => {
+  it("renders the record actions as direct buttons — no dropdown trigger", () => {
     render(<AccountDetailsView />);
-    expect(document.querySelector("#account-details-add-menu")).toBeInTheDocument();
-    // Closed by default — items absent.
-    expect(document.querySelector("#add-menu-dividend")).toBeNull();
-  });
-
-  it("opens the menu showing Open balance / Dividend / Free shares, with NO cash actions (DIV-012/CSH-019)", () => {
-    render(<AccountDetailsView />);
-    fireEvent.click(document.querySelector("#account-details-add-menu")!);
-    // CSH-019 — cash Deposit/Withdraw live on the cash row, not this menu.
-    expect(document.querySelector("#add-menu-deposit")).toBeNull();
-    expect(document.querySelector("#add-menu-withdraw")).toBeNull();
-    // Non-cash entries remain.
+    // The former consolidated dropdown is gone; actions are direct icon buttons.
+    expect(document.querySelector("#account-details-add-menu")).toBeNull();
     expect(document.querySelector("#add-menu-open-balance")).toBeInTheDocument();
     expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
     expect(document.querySelector("#add-menu-free-shares")).toBeInTheDocument();
   });
 
-  it("invokes the dividend handler and closes the menu when Dividend is chosen (DIV-010)", () => {
+  it("shows Open balance / Dividend / Free shares, with NO cash actions (DIV-012/CSH-019)", () => {
     render(<AccountDetailsView />);
-    fireEvent.click(document.querySelector("#account-details-add-menu")!);
-    fireEvent.click(document.querySelector("#add-menu-dividend")!);
-    expect(handlers.handleDividendOpen).toHaveBeenCalledTimes(1);
-    // Menu closes after selection.
-    expect(document.querySelector("#add-menu-dividend")).toBeNull();
+    // CSH-019 — cash Deposit/Withdraw live on the cash row, not the header.
+    expect(document.querySelector("#add-menu-deposit")).toBeNull();
+    expect(document.querySelector("#add-menu-withdraw")).toBeNull();
+    expect(document.querySelector("#add-menu-open-balance")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-free-shares")).toBeInTheDocument();
   });
 
-  it("routes the Open balance menu item to its handler", () => {
+  it("invokes the dividend handler when the Dividend button is clicked (DIV-010)", () => {
     render(<AccountDetailsView />);
-    fireEvent.click(document.querySelector("#account-details-add-menu")!);
+    fireEvent.click(document.querySelector("#add-menu-dividend")!);
+    expect(handlers.handleDividendOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes the Open balance button to its handler", () => {
+    render(<AccountDetailsView />);
     fireEvent.click(document.querySelector("#add-menu-open-balance")!);
     expect(handlers.handleOpenBalanceOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes the Free shares button to its handler (FSD-010)", () => {
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#add-menu-free-shares")!);
+    expect(handlers.handleFreeSharesOpen).toHaveBeenCalledTimes(1);
   });
 
   it("mounts the dividend modal only when dividendOpen is true (DIV-010/020)", () => {
@@ -175,21 +172,6 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     mockUseAccountDetailsView.mockReturnValue(makeView({ withdrawalOpen: true }));
     rerender(<AccountDetailsView />);
     expect(screen.getByTestId("withdrawal-modal-mounted")).toBeInTheDocument();
-  });
-
-  it("surfaces the total dividends received in the header when non-zero (DIV-073)", () => {
-    render(<AccountDetailsView />);
-    expect(document.querySelector("#account-details-total-dividends")).toBeInTheDocument();
-  });
-
-  it("hides the total-dividends tile when none recorded (DIV-073)", () => {
-    mockUseAccountDetailsView.mockReturnValue(
-      makeView({
-        summary: { ...makeView().summary, totalDividendsReceivedRaw: 0 },
-      }),
-    );
-    render(<AccountDetailsView />);
-    expect(document.querySelector("#account-details-total-dividends")).toBeNull();
   });
 
   it("renders the Dividends and Total Return column headers when holdings exist (DIV-072)", () => {
@@ -278,7 +260,9 @@ describe("AccountDetailsView — read-only as-of view", () => {
 
     // Mutating controls hidden.
     expect(document.querySelector("#account-details-refresh-prices")).toBeNull();
-    expect(document.querySelector("#account-details-add-menu")).toBeNull();
+    expect(document.querySelector("#add-menu-open-balance")).toBeNull();
+    expect(document.querySelector("#add-menu-dividend")).toBeNull();
+    expect(document.querySelector("#add-menu-free-shares")).toBeNull();
     expect(document.querySelector("#account-details-add-transaction-fab")).toBeNull();
   });
 
@@ -287,7 +271,9 @@ describe("AccountDetailsView — read-only as-of view", () => {
     render(<AccountDetailsView />);
     expect(document.querySelector("#account-details-as-of-banner")).toBeNull();
     expect(document.querySelector("#account-details-refresh-prices")).toBeInTheDocument();
-    expect(document.querySelector("#account-details-add-menu")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-open-balance")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
+    expect(document.querySelector("#add-menu-free-shares")).toBeInTheDocument();
     expect(document.querySelector("#account-details-add-transaction-fab")).toBeInTheDocument();
   });
 });

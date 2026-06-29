@@ -193,26 +193,15 @@ export interface ClosedHoldingRowViewModel {
 
 export interface AccountSummaryViewModel {
   accountName: string;
-  totalCostBasis: string;
-  /** Formatted total realized P&L string (2 decimal places, SEL-042). */
-  totalRealizedPnl: string;
-  /** Raw total realized P&L in micro-units — used for sign-based color styling (SEL-043). */
-  totalRealizedPnlRaw: number;
   holdingCount: number;
   isEmpty: boolean;
   isAllClosed: boolean;
   /** True when there is at least one closed holding to display (ACD-048). */
   hasClosedHoldings: boolean;
-  /** Formatted total unrealized P&L (2 decimals) or "—" when no qualifying holdings (MKT-041). */
-  totalUnrealizedPnl: string;
   /** Formatted total Global Value (cash + priced holdings, 2 decimals, CSH-094). */
   totalGlobalValue: string;
   /** Raw total Global Value in micro-units (CSH-094). */
   totalGlobalValueRaw: number;
-  /** Formatted cumulative dividends received across the account, account currency (DIV-073). */
-  totalDividendsReceived: string;
-  /** Raw cumulative dividends received in micro-units — used to gate header display (DIV-073). */
-  totalDividendsReceivedRaw: number;
   /** True when the account currently holds a non-zero cash balance (CSH-019/095). */
   hasCashHolding: boolean;
 }
@@ -380,9 +369,6 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
   const hasCashHolding = response.holdings.some((h) => isCashAsset(h.asset_id) && h.quantity > 0);
   return {
     accountName: response.account_name,
-    totalCostBasis: microToFormatted(response.total_cost_basis, 2),
-    totalRealizedPnl: microToFormatted(response.total_realized_pnl, 2),
-    totalRealizedPnlRaw: response.total_realized_pnl,
     holdingCount: response.total_holding_count,
     // CSH-098 — cash is excluded from both counts. With eager cash, every account
     // has a Cash Holding (total_holding_count >= 1), so these key off non-cash active
@@ -390,14 +376,8 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
     isEmpty: nonCashActive.length === 0 && response.closed_holdings.length === 0,
     isAllClosed: nonCashActive.length === 0 && response.closed_holdings.length > 0,
     hasClosedHoldings: response.closed_holdings.length > 0,
-    totalUnrealizedPnl:
-      response.total_unrealized_pnl !== null
-        ? microToFormatted(response.total_unrealized_pnl, 2)
-        : DASH,
     totalGlobalValue: microToFormatted(response.total_global_value, 2),
     totalGlobalValueRaw: response.total_global_value,
-    totalDividendsReceived: microToFormatted(response.total_dividends_received, 2),
-    totalDividendsReceivedRaw: response.total_dividends_received,
     hasCashHolding,
   };
 }

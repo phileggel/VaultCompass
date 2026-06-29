@@ -5,8 +5,8 @@
  * Contract: docs/contracts/account-contract.md § Dividend
  * Spec rules covered:
  *   DIV-023    — recording credits the account's Cash Holding (cash row present after)
- *   DIV-072    — paying asset's holding row remains intact (quantity unchanged)
- *   DIV-073    — account header surfaces total_dividends_received once recorded
+ *   DIV-072    — paying asset's holding row stays intact and its dividends-received
+ *                cell surfaces the recorded amount
  *   DIV-021    — submit stays disabled until the form is valid
  *
  * Seed strategy:
@@ -26,7 +26,11 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
-import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
+import {
+  clickHeaderAction,
+  navigateToAccountDetails,
+  navigateToAccounts,
+} from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory, seedDividend } from "../helpers/seed";
 
@@ -63,11 +67,11 @@ describe("dividend", () => {
   });
 
   // -------------------------------------------------------------------------
-  // DIV-023/072/073 — record a dividend via IPC (ADR 007: combobox cannot be
+  // DIV-023/072 — record a dividend via IPC (ADR 007: combobox cannot be
   //   UI-automated), then assert the resulting account-details UI state: cash
-  //   holding credited, paying asset holding intact, header total surfaced.
+  //   holding credited, paying asset holding intact, dividends-received cell surfaced.
   // -------------------------------------------------------------------------
-  it("DIV-023/072/073: a recorded dividend credits cash and surfaces the dividend totals", async () => {
+  it("DIV-023/072: a recorded dividend credits cash and surfaces in the holding's dividends cell", async () => {
     // 75 EUR dividend on the held asset (EUR == account currency, rate 1:1).
     await seedDividend(accId, astId, DATES.dividend, 75_000_000);
 
@@ -91,16 +95,16 @@ describe("dividend", () => {
       "Paying asset holding row must remain after recording dividend (DIV-072 quantity unchanged)",
     );
 
-    // DIV-073 — the dedicated header total-dividends tile must surface the
-    // formatted amount. Scoped to its stable id (E4) so the assertion can't be
-    // satisfied by a coincidental "75,00" elsewhere on the page.
+    // DIV-072 — the paying asset's row must surface the dividend in its
+    // "Dividends received" cell. Scoped to its stable id (E4) so the assertion
+    // can't be satisfied by a coincidental "75,00" elsewhere on the page.
     // 75 EUR — locale formats as "75,00" (fr-FR) or "75.00" (en-US).
-    const totalDividends = await $("#account-details-total-dividends");
-    await totalDividends.waitForExist({ timeout: 8000 });
-    const totalDividendsText = await totalDividends.getText();
+    const dividendsCell = await $(`#holding-dividends-received-${astId}`);
+    await dividendsCell.waitForExist({ timeout: 8000 });
+    const dividendsCellText = await dividendsCell.getText();
     assert.ok(
-      totalDividendsText.includes("75,00") || totalDividendsText.includes("75.00"),
-      `Header total-dividends tile should surface the 75 EUR dividend (DIV-073) — got: ${totalDividendsText}`,
+      dividendsCellText.includes("75,00") || dividendsCellText.includes("75.00"),
+      `Holding row dividends cell should surface the 75 EUR dividend (DIV-072) — got: ${dividendsCellText}`,
     );
   });
 
@@ -113,13 +117,7 @@ describe("dividend", () => {
     await navigateToAccounts();
     await navigateToAccountDetails(accId);
 
-    const addMenuBtn = await $("#account-details-add-menu");
-    await addMenuBtn.waitForExist({ timeout: 10000 });
-    await addMenuBtn.click();
-
-    const dividendItem = await $("#add-menu-dividend");
-    await dividendItem.waitForExist({ timeout: 5000 });
-    await dividendItem.click();
+    await clickHeaderAction("add-menu-dividend");
 
     const form = await $("form#dividend-transaction-form");
     await form.waitForExist({ timeout: 8000 });

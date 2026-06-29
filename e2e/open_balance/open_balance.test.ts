@@ -18,9 +18,9 @@ import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import {
+  clickHeaderAction,
   navigateToAccountDetails,
   navigateToAccounts,
-  openAddMenuItem,
 } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
@@ -71,7 +71,7 @@ describe("open_balance", () => {
   // TRX-055 — open-balance trigger in Account Details header opens the modal
   // -------------------------------------------------------------------------
   it("TRX-055: clicking the open-balance trigger opens ob-form modal", async () => {
-    await openAddMenuItem("add-menu-open-balance");
+    await clickHeaderAction("add-menu-open-balance");
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });
@@ -85,7 +85,7 @@ describe("open_balance", () => {
   // TRX-042 — form contains date, quantity, total-cost; no fees/exchange-rate
   // -------------------------------------------------------------------------
   it("TRX-042: ob-form exposes account, asset-select, date, quantity, total-cost — no fees", async () => {
-    await openAddMenuItem("add-menu-open-balance");
+    await clickHeaderAction("add-menu-open-balance");
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });
@@ -124,7 +124,7 @@ describe("open_balance", () => {
   // composite isFormValid check. Full form validation is covered by RTL tests.
   // -------------------------------------------------------------------------
   it("TRX-046: submit button stays disabled when date is in the future", async () => {
-    await openAddMenuItem("add-menu-open-balance");
+    await clickHeaderAction("add-menu-open-balance");
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });

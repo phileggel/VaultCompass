@@ -36,9 +36,9 @@ import { $, $$, browser } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
 import {
+  clickHeaderAction,
   navigateToAccountDetails,
   navigateToAccounts,
-  openAddMenuItem,
 } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
@@ -88,10 +88,9 @@ describe("free_shares", () => {
     await navigateToAccountDetails(accId);
 
     // -------------------------------------------------------------------
-    // Step 1 — Open the consolidated "Add" menu (DIV-012 → FSD-010),
-    //           then click "Free shares".
+    // Step 1 — Click the "Free shares" header action (DIV-012 → FSD-010).
     // -------------------------------------------------------------------
-    await openAddMenuItem("add-menu-free-shares");
+    await clickHeaderAction("add-menu-free-shares");
 
     // -------------------------------------------------------------------
     // Step 2 — Wait for the free-shares form (FSD-020).

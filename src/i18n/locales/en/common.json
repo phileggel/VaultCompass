@@ -322,10 +322,10 @@
     "column_dividends_received": "Dividends",
     "column_total_return_pct": "Total Return",
     "column_total_revenues": "Total Revenues",
-    "action_add_menu": "Record",
     "action_record_dividend": "Dividend",
     "action_record_free_shares": "Free shares",
     "as_of_date_label": "As of date",
+    "as_of_today_placeholder": "Today",
     "as_of_banner": "Viewing as of {{date}}",
     "as_of_back_to_today": "Back to today"
   },

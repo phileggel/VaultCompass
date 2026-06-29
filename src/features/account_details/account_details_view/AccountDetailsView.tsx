@@ -1,5 +1,14 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDown, RefreshCw, RotateCcw, ScrollText, TrendingUp } from "lucide-react";
+import {
+  ChevronDown,
+  Coins,
+  Gift,
+  PlusCircle,
+  RefreshCw,
+  RotateCcw,
+  ScrollText,
+  TrendingUp,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -8,6 +17,7 @@ import {
 } from "@/lib/closedSectionStorage";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { IconButton } from "@/ui/components/button/IconButton";
 import { FAB } from "@/ui/components/fab/FAB";
 import { DateField } from "@/ui/components/field/DateField";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
@@ -30,8 +40,6 @@ export function AccountDetailsView() {
   const view = useAccountDetailsView(accountId);
   const { isPending: isRefreshPending, refresh: refreshPrices } =
     useRefreshAccountPrices(accountId);
-  // DIV-012 — consolidated header "Add" dropdown open/close state.
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
   // ACD-048 — closed positions section is collapsible; fold state is remembered per account.
   const [closedSectionOpen, setClosedSectionOpen] = useState(() => getClosedSectionOpen(accountId));
 
@@ -46,11 +54,6 @@ export function AccountDetailsView() {
     persistClosedSectionOpen(accountId, next);
   }, [accountId, closedSectionOpen]);
 
-  const runFromAddMenu = useCallback((action: () => void) => {
-    setAddMenuOpen(false);
-    action();
-  }, []);
-
   useEffect(() => {
     logger.info("[AccountDetailsView] mounted");
   }, []);
@@ -63,64 +66,40 @@ export function AccountDetailsView() {
           {view.isLoading ? (
             <div className="h-4 w-32 bg-m3-surface-variant rounded animate-pulse" />
           ) : view.summary ? (
-            <div className="flex items-center justify-between">
-              <div className="flex gap-6 flex-wrap">
-                <p className="text-sm text-m3-on-surface-variant">
-                  {t("account_details.total_cost_basis")}:{" "}
-                  <span className="font-semibold text-m3-on-surface">
-                    {view.summary.totalCostBasis}
-                  </span>
-                </p>
-                {view.summary.totalRealizedPnlRaw !== 0 && (
-                  <p className="text-sm text-m3-on-surface-variant">
-                    {t("account_details.total_realized_pnl")}:{" "}
-                    <span
-                      className={`font-semibold ${
-                        view.summary.totalRealizedPnlRaw < 0 ? "text-m3-error" : "text-m3-success"
-                      }`}
-                    >
-                      {view.summary.totalRealizedPnl}
-                    </span>
-                  </p>
-                )}
-                {/* MKT-041 — total unrealized P&L */}
-                {view.summary.totalUnrealizedPnl !== "—" && (
-                  <p className="text-sm text-m3-on-surface-variant">
-                    {t("account_details.total_unrealized_pnl")}:{" "}
-                    <span className="font-semibold text-m3-on-surface">
-                      {view.summary.totalUnrealizedPnl}
-                    </span>
-                  </p>
-                )}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                {/* Read-only "holdings as of a past date" selector. Leads the
+                    header, label-less (named via aria-label, F24). Picking a past
+                    date switches the page into the read-only as-of view; clearing
+                    it (or picking today) returns to the live view. */}
+                <div className="w-44 shrink-0">
+                  <DateField
+                    id="account-details-as-of-date"
+                    aria-label={t("account_details.as_of_date_label")}
+                    title={t("account_details.as_of_date_label")}
+                    placeholder={t("account_details.as_of_today_placeholder")}
+                    value={view.asOfDisplayDate}
+                    onChange={(e) => view.setAsOfDate(e.target.value)}
+                  />
+                </div>
                 {/* CSH-094 — Global Value (cash + priced holdings, account currency) */}
-                <p className="text-sm text-m3-on-surface-variant">
+                <p className="text-sm text-m3-on-surface-variant whitespace-nowrap">
                   {t("account_details.total_global_value")}:{" "}
                   <span className="font-semibold text-m3-on-surface">
                     {view.summary.totalGlobalValue}
                   </span>
                 </p>
-                {/* DIV-073 — total dividends received (shown only when any recorded) */}
-                {view.summary.totalDividendsReceivedRaw !== 0 && (
-                  <p
-                    id="account-details-total-dividends"
-                    className="text-sm text-m3-on-surface-variant"
-                  >
-                    {t("account_details.total_dividends_received")}:{" "}
-                    <span className="font-semibold text-m3-on-surface">
-                      {view.summary.totalDividendsReceived}
-                    </span>
-                  </p>
-                )}
               </div>
               {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
-              {/* ACD-036 — add transaction only when active holdings exist */}
-              <div className="flex gap-2">
+              {/* ACD-036 — header actions: big square icon buttons, name shown as tooltip */}
+              <div className="flex items-center gap-2">
                 {/* PRF-010 — per-account "Performance" entry point (navigates via router path) */}
-                <Button
+                <IconButton
                   id="account-details-performance"
-                  variant="secondary"
-                  size="sm"
-                  icon={<TrendingUp size={14} />}
+                  shape="square"
+                  size="lg"
+                  variant="tonal"
+                  icon={<TrendingUp size={20} />}
                   onClick={() =>
                     void navigate({
                       to: "/accounts/$accountId/performance",
@@ -128,16 +107,15 @@ export function AccountDetailsView() {
                     })
                   }
                   aria-label={t("account_details.action_performance")}
-                >
-                  {t("account_details.action_performance")}
-                </Button>
-
+                  title={t("account_details.action_performance")}
+                />
                 {/* TRX-036 — per-account overall transaction journal */}
-                <Button
+                <IconButton
                   id="account-details-journal"
-                  variant="secondary"
-                  size="sm"
-                  icon={<ScrollText size={14} />}
+                  shape="square"
+                  size="lg"
+                  variant="tonal"
+                  icon={<ScrollText size={20} />}
                   onClick={() =>
                     void navigate({
                       to: "/accounts/$accountId/journal",
@@ -145,105 +123,63 @@ export function AccountDetailsView() {
                     })
                   }
                   aria-label={t("account_details.action_journal")}
-                >
-                  {t("account_details.action_journal")}
-                </Button>
-                {/* Read-only "holdings as of a past date" selector. Picking a past
-                    date switches the page into the read-only as-of view; clearing
-                    it (or picking today) returns to the live view. */}
-                <DateField
-                  id="account-details-as-of-date"
-                  label={t("account_details.as_of_date_label")}
-                  value={view.asOfDisplayDate}
-                  onChange={(e) => view.setAsOfDate(e.target.value)}
+                  title={t("account_details.action_journal")}
                 />
                 {/* MKT-131 — per-account "Refresh prices"; hidden in read-only as-of */}
                 {!view.isAsOf && (
-                  <Button
+                  <IconButton
                     id="account-details-refresh-prices"
-                    variant="secondary"
-                    size="sm"
-                    icon={<RefreshCw size={14} />}
-                    loading={isRefreshPending}
+                    shape="square"
+                    size="lg"
+                    variant="tonal"
+                    icon={
+                      <RefreshCw size={20} className={isRefreshPending ? "animate-spin" : ""} />
+                    }
+                    disabled={isRefreshPending}
                     onClick={() => void refreshPrices()}
                     aria-label={t("account_details.action_refresh_prices")}
-                  >
-                    {t("account_details.action_refresh_prices")}
-                  </Button>
+                    title={t("account_details.action_refresh_prices")}
+                  />
                 )}
-                {/* DIV-012 — consolidated "Record" dropdown (Open balance /
-                    Dividend / Free shares). Cash Deposit/Withdraw are NOT here —
-                    they live on the always-present cash row (CSH-019). Hidden in
-                    the read-only as-of view. */}
+                {/* DIV-012 — Record actions, flattened from the former dropdown into
+                    big square buttons. Cash Deposit/Withdraw are NOT here — they live
+                    on the always-present cash row (CSH-019). Hidden in read-only as-of. */}
                 {!view.isAsOf && (
-                  <div className="relative">
-                    <Button
-                      id="account-details-add-menu"
-                      variant="secondary"
-                      size="sm"
-                      icon={<ChevronDown size={14} />}
-                      aria-haspopup="menu"
-                      aria-expanded={addMenuOpen}
-                      onClick={() => setAddMenuOpen((open) => !open)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") setAddMenuOpen(false);
-                      }}
-                    >
-                      {t("account_details.action_add_menu")}
-                    </Button>
-                    {addMenuOpen && (
-                      <>
-                        {/* click-away backdrop */}
-                        <button
-                          type="button"
-                          aria-hidden="true"
-                          tabIndex={-1}
-                          className="fixed inset-0 z-20 cursor-default"
-                          onClick={() => setAddMenuOpen(false)}
-                        />
-                        <div
-                          role="menu"
-                          aria-label={t("account_details.action_add_menu")}
-                          className="absolute right-0 mt-1 z-30 min-w-[200px] rounded-2xl bg-m3-surface-container-high shadow-elevation-2 py-1"
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") setAddMenuOpen(false);
-                          }}
-                        >
-                          {/* CSH-019 — cash Deposit/Withdraw live on the cash row, not this menu */}
-                          {/* TRX-055 — Open balance (keeps its shipped "Add a position" label) */}
-                          <button
-                            type="button"
-                            role="menuitem"
-                            id="add-menu-open-balance"
-                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                            onClick={() => runFromAddMenu(view.handleOpenBalanceOpen)}
-                          >
-                            {t("account_details.action_open_balance")}
-                          </button>
-                          {/* DIV-010 — Record dividend */}
-                          <button
-                            type="button"
-                            role="menuitem"
-                            id="add-menu-dividend"
-                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                            onClick={() => runFromAddMenu(view.handleDividendOpen)}
-                          >
-                            {t("account_details.action_record_dividend")}
-                          </button>
-                          {/* FSD-010 — Record free shares */}
-                          <button
-                            type="button"
-                            role="menuitem"
-                            id="add-menu-free-shares"
-                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                            onClick={() => runFromAddMenu(view.handleFreeSharesOpen)}
-                          >
-                            {t("account_details.action_record_free_shares")}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  <>
+                    {/* TRX-055 — Open balance ("Add a position") */}
+                    <IconButton
+                      id="add-menu-open-balance"
+                      shape="square"
+                      size="lg"
+                      variant="tonal"
+                      icon={<PlusCircle size={20} />}
+                      onClick={view.handleOpenBalanceOpen}
+                      aria-label={t("account_details.action_open_balance")}
+                      title={t("account_details.action_open_balance")}
+                    />
+                    {/* DIV-010 — Record dividend */}
+                    <IconButton
+                      id="add-menu-dividend"
+                      shape="square"
+                      size="lg"
+                      variant="tonal"
+                      icon={<Coins size={20} />}
+                      onClick={view.handleDividendOpen}
+                      aria-label={t("account_details.action_record_dividend")}
+                      title={t("account_details.action_record_dividend")}
+                    />
+                    {/* FSD-010 — Record free shares */}
+                    <IconButton
+                      id="add-menu-free-shares"
+                      shape="square"
+                      size="lg"
+                      variant="tonal"
+                      icon={<Gift size={20} />}
+                      onClick={view.handleFreeSharesOpen}
+                      aria-label={t("account_details.action_record_free_shares")}
+                      title={t("account_details.action_record_free_shares")}
+                    />
+                  </>
                 )}
               </div>
             </div>

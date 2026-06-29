@@ -31,26 +31,25 @@ export async function navigateToAccounts(): Promise<void> {
  * its stable `id` (E1/E4). Clicks the name cell (first column) rather than the
  * `<tr>` — the row centre overlaps action buttons that stopPropagation; the name
  * cell bubbles to the row's onClick. Assumes `navigateToAccounts()` ran first.
- * Waits for the header Add menu (DIV-012), present on every account details view.
+ * Waits for the header Performance button (PRF-010), present on every account
+ * details view (live and read-only as-of).
  */
 export async function navigateToAccountDetails(accountId: string): Promise<void> {
   const nameCell = await $(`#account-row-${accountId} td:first-child`);
   await nameCell.waitForExist({ timeout: 10000 });
   await nameCell.click();
-  await $("#account-details-add-menu").waitForExist({ timeout: 10000 });
+  await $("#account-details-performance").waitForExist({ timeout: 10000 });
 }
 
 /**
- * Opens the Account Details header "Record" dropdown (DIV-012) and clicks one of
- * its menu items by stable id (`add-menu-open-balance`, `add-menu-dividend`,
- * `add-menu-free-shares`). Cash Deposit/Withdraw are NOT in this menu — they live
- * on the always-present cash row's inline actions (CSH-019).
+ * Clicks an Account Details header record action by its stable id
+ * (`add-menu-open-balance`, `add-menu-dividend`, `add-menu-free-shares`). These are
+ * direct big square buttons (DIV-012; the former dropdown was flattened). Cash
+ * Deposit/Withdraw are NOT here — they live on the always-present cash row's inline
+ * actions (CSH-019).
  */
-export async function openAddMenuItem(menuItemId: string): Promise<void> {
-  const addMenuBtn = await $("#account-details-add-menu");
-  await addMenuBtn.waitForExist({ timeout: 15000 });
-  await addMenuBtn.click();
-  const item = await $(`#${menuItemId}`);
-  await item.waitForExist({ timeout: 5000 });
-  await item.click();
+export async function clickHeaderAction(actionId: string): Promise<void> {
+  const btn = await $(`#${actionId}`);
+  await btn.waitForExist({ timeout: 15000 });
+  await btn.click();
 }

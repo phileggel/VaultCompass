@@ -226,8 +226,9 @@ export function useAccountDetailsView(accountId: string) {
     asOfDate,
     // As-of date formatted in the user's locale, for the read-only banner (F5).
     asOfDateFormatted: formatIsoDate(asOfDate, i18n.language),
-    // Date shown in the selector: the chosen date, or today when none is chosen.
-    asOfDisplayDate: asOfDate || todayIso(),
+    // Date shown in the selector: the chosen past date, or "" in the live view so
+    // the field renders its "Today" placeholder instead of the literal current date.
+    asOfDisplayDate: isAsOf ? asOfDate : "",
     setAsOfDate,
     isAsOf,
     // Derived

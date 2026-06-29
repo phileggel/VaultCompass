@@ -80,18 +80,6 @@ describe("useAccountDetails — closed holdings (ACD-044–ACD-050)", () => {
     expect(result.current.closedHoldings.at(1)?.assetName).toBe("Alpha");
   });
 
-  // ACD-047 — summary.totalRealizedPnl reflects combined active + closed pnl from backend
-  it("summary totalRealizedPnl reflects total_realized_pnl from response (ACD-047)", async () => {
-    mockGetAccountDetails.mockResolvedValue({
-      status: "ok",
-      data: makeResponse({ total_realized_pnl: 35_000_000 }),
-    });
-    const { result } = renderHook(() => useAccountDetails("account-1"));
-    await act(async () => {});
-    expect(result.current.summary?.totalRealizedPnl).toBe("35,00");
-    expect(result.current.summary?.totalRealizedPnlRaw).toBe(35_000_000);
-  });
-
   // ACD-050 — closedHoldings is empty array when response.closed_holdings is empty
   it("returns empty closedHoldings when response.closed_holdings is empty (ACD-050)", async () => {
     mockGetAccountDetails.mockResolvedValue({

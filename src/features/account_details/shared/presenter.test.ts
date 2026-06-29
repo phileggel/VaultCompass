@@ -131,16 +131,6 @@ describe("toHoldingRow", () => {
 });
 
 describe("toAccountSummary", () => {
-  it("formats totalCostBasis with 2 decimals", () => {
-    const summary = toAccountSummary(makeResponse({ total_cost_basis: 250_000_000 }));
-    expect(summary.totalCostBasis).toBe("250,00");
-  });
-
-  it("formats totalRealizedPnl with 2 decimals (SEL-042)", () => {
-    const summary = toAccountSummary(makeResponse({ total_realized_pnl: 12_500_000 }));
-    expect(summary.totalRealizedPnl).toBe("12,50");
-  });
-
   it("isEmpty true when total_holding_count is 0", () => {
     const summary = toAccountSummary(makeResponse({ total_holding_count: 0, holdings: [] }));
     expect(summary.isEmpty).toBe(true);
@@ -207,17 +197,6 @@ describe("toClosedHoldingRow", () => {
     );
     expect(row.totalRevenues).toBe("20,00");
     expect(row.totalRevenuesRaw).toBe(20_000_000);
-  });
-
-  // ACD-047 — toAccountSummary totalRealizedPnl covers active + closed (backend sums, presenter passes through)
-  it("toAccountSummary totalRealizedPnl includes closed positions pnl (ACD-047)", () => {
-    const summary = toAccountSummary(
-      makeResponse({
-        total_realized_pnl: 35_000_000,
-        closed_holdings: [makeClosedHolding({ realized_pnl: 25_000_000 })],
-      }),
-    );
-    expect(summary.totalRealizedPnl).toBe("35,00");
   });
 
   // ACD-050 — empty closed_holdings list → hasClosedHoldings false
@@ -306,20 +285,6 @@ describe("toHoldingRow — market price fields (MKT)", () => {
   it("MKT-034 — currentPrice is formatted even when unrealized_pnl is null (currency mismatch)", () => {
     const row = toHoldingRow(makeHolding({ current_price: 110_000_000, unrealized_pnl: null }));
     expect(row.currentPrice).toEqual({ kind: "present", formatted: "110,00" });
-  });
-});
-
-describe("toAccountSummary — market price fields (MKT)", () => {
-  // MKT-041 — total_unrealized_pnl formatted with 2 decimals when present
-  it("MKT-041 — totalUnrealizedPnl is formatted with 2 decimals when total_unrealized_pnl is set", () => {
-    const summary = toAccountSummary(makeResponse({ total_unrealized_pnl: 20_000_000 }));
-    expect(summary.totalUnrealizedPnl).toBe("20,00");
-  });
-
-  // MKT-041 — "—" when total_unrealized_pnl is null
-  it("MKT-041 — totalUnrealizedPnl is '—' when total_unrealized_pnl is null", () => {
-    const summary = toAccountSummary(makeResponse({ total_unrealized_pnl: null }));
-    expect(summary.totalUnrealizedPnl).toBe("—");
   });
 });
 
@@ -729,24 +694,6 @@ describe("toHoldingRow — dividend fields (DIV-072)", () => {
     const row = toHoldingRow(makeCashHolding());
     expect(row.dividendsReceived).toBe("");
     expect(row.totalReturnPct).toBe("");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// toAccountSummary — DIV-073: totalDividendsReceived new field
-// ---------------------------------------------------------------------------
-
-describe("toAccountSummary — dividend total (DIV-073)", () => {
-  // DIV-073 — totalDividendsReceived formatted with 2 decimals when non-zero
-  it("formats totalDividendsReceived with 2 decimals when non-zero (DIV-073)", () => {
-    const summary = toAccountSummary(makeResponse({ total_dividends_received: 120_000_000 }));
-    expect(summary.totalDividendsReceived).toBe("120,00");
-  });
-
-  // DIV-073 — totalDividendsReceived is '0,00' when no dividends recorded
-  it("formats totalDividendsReceived as '0,00' when no dividends (DIV-073)", () => {
-    const summary = toAccountSummary(makeResponse({ total_dividends_received: 0 }));
-    expect(summary.totalDividendsReceived).toBe("0,00");
   });
 });
 

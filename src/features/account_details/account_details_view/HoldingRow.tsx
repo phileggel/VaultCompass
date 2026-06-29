@@ -280,7 +280,12 @@ export function HoldingRow({
         )}
       </td>
       {/* DIV-072 — Dividends received (always shown) */}
-      <td className="m3-td text-right tabular-nums">{row.dividendsReceived}</td>
+      <td
+        id={`holding-dividends-received-${row.assetId}`}
+        className="m3-td text-right tabular-nums"
+      >
+        {row.dividendsReceived}
+      </td>
       {/* DIV-072 — Total return % (price + dividends); "—" when not computable */}
       <td className="m3-td text-right tabular-nums">
         {row.totalReturnPct !== "—" ? (
