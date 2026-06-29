@@ -65,6 +65,24 @@ describe("DateField", () => {
     expect(screen.getByTestId("iso")).toBeEmptyDOMElement();
   });
 
+  // Regression (techdebt 2026-06-21): a half-typed entry left stale text after focus
+  // left, because its "" emit is indistinguishable from an external reset to "".
+  it("reverts a half-typed entry to the committed value on blur", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial="2026-06-20" />);
+    const input = screen.getByLabelText("Date");
+
+    await user.clear(input);
+    await user.type(input, "05/0"); // partial → emits "", display lingers as "05/0"
+    expect(input).toHaveValue("05/0");
+
+    fireEvent.blur(input);
+
+    // Display re-syncs to the committed value ("" here) — no stale partial text.
+    expect(input).toHaveValue("");
+    expect(screen.getByTestId("iso")).toBeEmptyDOMElement();
+  });
+
   it("renders a prefilled ISO value in locale (fr) format", () => {
     render(<Harness initial="2026-06-20" />);
     expect(screen.getByLabelText("Date")).toHaveValue("20/06/2026");

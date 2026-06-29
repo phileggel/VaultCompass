@@ -103,7 +103,14 @@ export function useDateField(
     setShowCalendar(true);
   };
 
-  const closeCalendar = () => setTimeout(() => setShowCalendar(false), 200);
+  const closeCalendar = () => {
+    // Revert the display to the last committed value when focus leaves: a half-typed
+    // entry (which emits "" and leaves stale partial text) — or a stale display after
+    // an external reset to "" that the echo-skip guard can't distinguish — is resolved
+    // to the authoritative value instead of lingering.
+    setDisplayValue(formatDateForDisplay(lastEmittedIso.current));
+    setTimeout(() => setShowCalendar(false), 200);
+  };
 
   const clearDate = () => {
     setDisplayValue("");
