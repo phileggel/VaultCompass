@@ -4,5 +4,6 @@
 mod api;
 mod orchestrator;
 
+pub use crate::use_cases::shared::valuation::PerformanceMetric;
 pub use api::*;
-pub use orchestrator::*;
+pub use orchestrator::{AccountPerformanceResponse, AccountPerformanceUseCase, PerformancePeriod};

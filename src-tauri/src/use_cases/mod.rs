@@ -24,5 +24,7 @@ pub mod asset_web_lookup;
 pub mod delete_asset;
 /// Holding transaction: unified cross-BC orchestrators for buy/sell/correct/cancel/open (TRX, SEL, CSH).
 pub mod holding_transaction;
+/// Shared stateless valuation helpers reused across performance/summary use cases — owned by neither.
+pub mod shared;
 /// Application auto-update: detection, download, and installation (R1–R27).
 pub mod update_checker;

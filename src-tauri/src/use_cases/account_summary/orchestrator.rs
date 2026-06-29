@@ -2,7 +2,7 @@ use crate::context::account::{Account, AccountError, AccountService, UpdateFrequ
 use crate::context::asset::{AssetClass, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
-use crate::use_cases::account_performance::compute_current_ytd_pct;
+use crate::use_cases::shared::valuation::compute_current_ytd_pct;
 use serde::Serialize;
 use specta::Type;
 use std::result::Result as StdResult;
