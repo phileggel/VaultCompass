@@ -1,12 +1,5 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import {
-  CalendarClock,
-  ChevronDown,
-  History,
-  RefreshCw,
-  ScrollText,
-  TrendingUp,
-} from "lucide-react";
+import { ChevronDown, History, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,7 +12,6 @@ import { FAB } from "@/ui/components/fab/FAB";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
-import { FetchPricesForDateModal } from "../fetch_prices_for_date/FetchPricesForDateModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
 import { HoldingsAsOfModal } from "../holdings_as_of/HoldingsAsOfModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
@@ -42,8 +34,6 @@ export function AccountDetailsView() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   // ACD-048 — closed positions section is collapsible; fold state is remembered per account.
   const [closedSectionOpen, setClosedSectionOpen] = useState(() => getClosedSectionOpen(accountId));
-  // Date-scoped price fetch modal open/close state.
-  const [fetchDateOpen, setFetchDateOpen] = useState(false);
 
   // Restore the remembered fold state when switching to another account without a remount.
   useEffect(() => {
@@ -180,17 +170,6 @@ export function AccountDetailsView() {
                   aria-label={t("account_details.action_refresh_prices")}
                 >
                   {t("account_details.action_refresh_prices")}
-                </Button>
-                {/* Date-scoped price fetch (historical close at a picked date) */}
-                <Button
-                  id="account-details-fetch-prices-for-date"
-                  variant="secondary"
-                  size="sm"
-                  icon={<CalendarClock size={14} />}
-                  onClick={() => setFetchDateOpen(true)}
-                  aria-label={t("account_details.action_fetch_prices_for_date")}
-                >
-                  {t("account_details.action_fetch_prices_for_date")}
                 </Button>
                 {/* DIV-012 — consolidated "Record" dropdown (Open balance /
                     Dividend / Free shares). Cash Deposit/Withdraw are NOT here —
@@ -523,13 +502,6 @@ export function AccountDetailsView() {
       {view.asOfOpen && (
         <HoldingsAsOfModal isOpen onClose={view.handleAsOfClose} accountId={accountId} />
       )}
-
-      {/* Date-scoped price fetch modal (historical close at a user-picked date) */}
-      <FetchPricesForDateModal
-        isOpen={fetchDateOpen}
-        onClose={() => setFetchDateOpen(false)}
-        accountId={accountId}
-      />
 
       {/* ACD-035/036 — add-transaction entry point is a global FAB (replaces the
           former contextual "Add Transaction" buttons in the header / empty states) */}

@@ -574,20 +574,6 @@ async fetchAccountAssetPrices(accountId: string) : Promise<Result<null, FetchAcc
 }
 },
 /**
- * Fetches each fetchable holding's close at (or carried back to) `date` for the
- * account and stores it keyed to that date. Keyless (ADR-017). Unlike the latest
- * auto-fetch, this awaits every fetch and returns a [`FetchForDateOutcome`]
- * summarizing how many prices were stored and which assets had no data.
- */
-async fetchAccountAssetPricesForDate(accountId: string, date: string) : Promise<Result<FetchForDateOutcome, FetchAccountAssetPricesForDateError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_account_asset_prices_for_date", { accountId, date }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Checks whether a new application version is available (R1, R25).
  * 
  * Returns `None` if the application is up to date or if the check fails due
@@ -1741,26 +1727,6 @@ AccountError |
  */
 FetchPriceTask
 /**
- * Wire-facing error composite for `fetch_account_asset_prices_for_date`.
- * 
- * `#[serde(untagged)]` lets every arm surface its inner `{ "code": "..." }` payload
- * directly on the wire; each arm carries a tagged inner type so the discriminator
- * survives the untagging.
- */
-export type FetchAccountAssetPricesForDateError = 
-/**
- * Propagates asset-BC failures (e.g. `DatabaseError`) via `?`.
- */
-AssetError | 
-/**
- * Propagates account-BC failures (`AccountNotFound`, `DatabaseError`) via `?`.
- */
-AccountError | 
-/**
- * Use-case-specific failures (`InvalidDate`, `DateInFuture`, `UnknownError`).
- */
-FetchPriceForDateTask
-/**
  * Wire-facing error composite for `fetch_all_asset_prices` (MKT-113, MKT-111, MKT-122).
  * 
  * `#[serde(untagged)]` lets every arm surface its inner `{ "code": "..." }` payload
@@ -1780,40 +1746,6 @@ AccountError |
  * Use-case-specific failures (`FetchAlreadyRunning`, `NoFetchableHoldings`, `UnknownError`).
  */
 FetchPriceTask
-/**
- * Summary of a date-scoped fetch run, surfaced to the modal so it can report how
- * many prices landed and which assets had no data at the chosen date.
- */
-export type FetchForDateOutcome = { 
-/**
- * Count of fetchable assets whose price was stored at the picked date.
- */
-stored: number; 
-/**
- * Names of fetchable assets the provider had no usable price for (sorted),
- * e.g. the date predates the listing or the symbol was unknown.
- */
-missing: string[] }
-/**
- * Use-case-specific outcomes for the date-scoped price fetch.
- * 
- * `#[serde(tag = "code")]` gives every variant a `{ "code": "..." }` payload so the
- * surrounding `#[serde(untagged)]` composite emits a flat, narrowable wire shape.
- */
-export type FetchPriceForDateTask = 
-/**
- * The supplied date is not a well-formed ISO `yyyy-mm-dd` string. The raw input
- * is not echoed back on the wire — the caller already holds it.
- */
-{ code: "InvalidDate" } | 
-/**
- * The supplied date is in the future — no price can exist for it.
- */
-{ code: "DateInFuture" } | 
-/**
- * Catch-all for unexpected runtime failures not attributable to a specific BC.
- */
-{ code: "UnknownError" }
 /**
  * Use-case-specific outcomes for the asset-price fetch tasks shared by
  * `FetchAllAssetPricesError` and `FetchAccountAssetPricesError`.
