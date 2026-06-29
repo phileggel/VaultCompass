@@ -26,6 +26,7 @@ const makeYearRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePer
   period_over_period: { gain: 500_000_000, pct: 5_000_000 },
   year_to_date: null,
   since_inception: { gain: 500_000_000, pct: 5_000_000 },
+  annualized_yield: { gain: 500_000_000, pct: 5_000_000 },
   ...overrides,
 });
 
@@ -37,6 +38,7 @@ const makeMonthRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePe
   period_over_period: { gain: 200_000_000, pct: 2_000_000 },
   year_to_date: { gain: 350_000_000, pct: 3_500_000 },
   since_inception: { gain: 500_000_000, pct: 5_000_000 },
+  annualized_yield: null,
   ...overrides,
 });
 

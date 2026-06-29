@@ -4,9 +4,14 @@ import type { PeriodRowViewModel } from "../shared/presenter";
 interface AccountPerformanceTableProps {
   rows: PeriodRowViewModel[];
   showYtd: boolean;
+  showAnnualized: boolean;
 }
 
-export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTableProps) {
+export function AccountPerformanceTable({
+  rows,
+  showYtd,
+  showAnnualized,
+}: AccountPerformanceTableProps) {
   const { t } = useTranslation();
 
   return (
@@ -60,6 +65,19 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
             <th scope="colgroup" colSpan={2} className="m3-th text-center">
               {t("account_performance.column_since_inception")}
             </th>
+            {/* Year-view only: annualized cumulative since-inception return (CAGR). */}
+            {showAnnualized && (
+              <th
+                id="account-performance-col-annualized"
+                data-testid="account-performance-col-annualized"
+                scope="col"
+                rowSpan={2}
+                className="m3-th text-right align-bottom"
+                title={t("account_performance.column_annualized_yield_tooltip")}
+              >
+                {t("account_performance.column_annualized_yield")}
+              </th>
+            )}
           </tr>
           <tr>
             <th scope="col" id="account-performance-subcol-pop-value" className="m3-th text-right">
@@ -178,6 +196,14 @@ export function AccountPerformanceTable({ rows, showYtd }: AccountPerformanceTab
               >
                 {row.sinceInception.pctFormatted}
               </td>
+              {showAnnualized && (
+                <td
+                  data-testid={`account-performance-annualized-${row.rowKey}`}
+                  className={`m3-td text-right ${row.annualizedYield?.colorClass ?? ""}`}
+                >
+                  {row.annualizedYield?.pctFormatted ?? "—"}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

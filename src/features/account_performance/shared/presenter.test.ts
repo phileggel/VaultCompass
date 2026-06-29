@@ -37,6 +37,7 @@ const makeYearRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePer
   period_over_period: makeMetric(),
   year_to_date: null, // always null for year rows (PRF-037)
   since_inception: makeMetric({ gain: 2_000_000_000, pct: 20_000_000 }),
+  annualized_yield: makeMetric({ gain: 2_000_000_000, pct: 10_000_000 }),
   ...overrides,
 });
 
@@ -48,6 +49,7 @@ const makeMonthRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePe
   period_over_period: makeMetric(),
   year_to_date: makeMetric({ gain: 350_000_000, pct: 3_500_000 }),
   since_inception: makeMetric({ gain: 2_000_000_000, pct: 20_000_000 }),
+  annualized_yield: null, // year-row concept only
   ...overrides,
 });
 
@@ -190,6 +192,21 @@ describe("presentPeriodRow — year row", () => {
     expect(row.sinceInception).toBeDefined();
   });
 
+  it("maps annualized_yield (CAGR) for year rows; pct is the headline (T3)", () => {
+    const row = presentPeriodRow(
+      makeYearRow({ annualized_yield: makeMetric({ gain: 2_000_000_000, pct: 10_000_000 }) }),
+    );
+    expect(row.annualizedYield).toBeDefined();
+    expect(row.annualizedYield?.pctFormatted).toContain("%");
+    // The cumulative gain is carried as the secondary value.
+    expect(row.annualizedYield?.gainFormatted).toBeTruthy();
+  });
+
+  it("renders '—' for an absent annualized_yield on a year row (T3)", () => {
+    const row = presentPeriodRow(makeYearRow({ annualized_yield: null }));
+    expect(row.annualizedYield?.pctFormatted).toBe("—");
+  });
+
   it("maps the bridge columns and the terms sum to end value (PRF-070–074)", () => {
     const row = presentPeriodRow(
       makeYearRow({
@@ -227,6 +244,11 @@ describe("presentPeriodRow — month row", () => {
     const row = presentPeriodRow(makeMonthRow());
     expect(row.yearToDate).toBeDefined();
     expect(row.yearToDate?.gainFormatted).not.toBe(undefined);
+  });
+
+  it("omits annualized_yield from month rows (year-row concept only, T3)", () => {
+    const row = presentPeriodRow(makeMonthRow());
+    expect(row.annualizedYield).toBeUndefined();
   });
 
   it("renders '—' for absent period_over_period on the earliest month row (PRF-042)", () => {

@@ -2096,7 +2096,14 @@ year_to_date: PerformanceMetric | null;
 /**
  * Performance from inception to this period end, vs net invested (PRF-035).
  */
-since_inception: PerformanceMetric | null }
+since_inception: PerformanceMetric | null; 
+/**
+ * Annualized cumulative since-inception return (CAGR) — populated only for
+ * year rows; None for month rows. `pct` is the annualized rate; `gain`
+ * reuses the cumulative since-inception gain. None when the since-inception
+ * percentage is absent or the cumulative is a total loss (root undefined).
+ */
+annualized_yield: PerformanceMetric | null }
 /**
  * Parameters for recording a sale of an asset from an account.
  */
