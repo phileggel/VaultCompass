@@ -30,6 +30,8 @@ type HoldingRowProps = {
   onWithdraw?: () => void;
   /** MKT-153/156 — toggle the asset's price-refresh lock. */
   onTogglePriceRefreshLock?: (assetId: string, currentlyBlocked: boolean) => void;
+  /** As-of (read-only past-date view): hide every mutating action button. */
+  readOnly?: boolean;
 };
 
 export function HoldingRow({
@@ -41,6 +43,7 @@ export function HoldingRow({
   onDeposit,
   onWithdraw,
   onTogglePriceRefreshLock,
+  readOnly = false,
 }: HoldingRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -136,23 +139,28 @@ export function HoldingRow({
         <td className="m3-td" />
         <td className="m3-td">
           <div className="flex items-center gap-1">
-            <IconButton
-              icon={<ArrowDownToLine size={16} />}
-              variant="success"
-              size="sm"
-              id={`action-record-deposit-${row.assetId}`}
-              aria-label={t("cash.action_record_deposit")}
-              onClick={onDeposit}
-            />
-            <IconButton
-              icon={<ArrowUpFromLine size={16} />}
-              variant="error"
-              size="sm"
-              id={`action-record-withdrawal-${row.assetId}`}
-              aria-label={t("cash.action_record_withdrawal")}
-              onClick={onWithdraw}
-              disabled={row.quantityMicro <= 0}
-            />
+            {/* As-of view is read-only: Deposit/Withdraw are hidden (CSH-091). */}
+            {!readOnly && (
+              <>
+                <IconButton
+                  icon={<ArrowDownToLine size={16} />}
+                  variant="success"
+                  size="sm"
+                  id={`action-record-deposit-${row.assetId}`}
+                  aria-label={t("cash.action_record_deposit")}
+                  onClick={onDeposit}
+                />
+                <IconButton
+                  icon={<ArrowUpFromLine size={16} />}
+                  variant="error"
+                  size="sm"
+                  id={`action-record-withdrawal-${row.assetId}`}
+                  aria-label={t("cash.action_record_withdrawal")}
+                  onClick={onWithdraw}
+                  disabled={row.quantityMicro <= 0}
+                />
+              </>
+            )}
             {/* CSH-110 — view the cash transaction history (deposits/withdrawals) */}
             <IconButton
               icon={<Search size={16} />}
@@ -168,7 +176,7 @@ export function HoldingRow({
   }
 
   return (
-    <tr className="m3-tr" onDoubleClick={handleOpenAssetDetail}>
+    <tr className="m3-tr" onDoubleClick={readOnly ? undefined : handleOpenAssetDetail}>
       <td className="m3-td">
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
@@ -202,14 +210,22 @@ export function HoldingRow({
             </div>
           </div>
         ) : row.currentPrice.kind === "missing_ticker" ? (
-          <button
-            type="button"
-            id={`action-edit-missing-ticker-${row.assetId}`}
-            onClick={handleEditMissingTicker}
-            className="text-m3-primary text-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
-          >
-            {t("mkt.price_state.missing_ticker")}
-          </button>
+          /* As-of view is read-only: the edit-missing-ticker shortcut (a write)
+             is hidden; the plain state text shows instead. */
+          !readOnly ? (
+            <button
+              type="button"
+              id={`action-edit-missing-ticker-${row.assetId}`}
+              onClick={handleEditMissingTicker}
+              className="text-m3-primary text-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
+            >
+              {t("mkt.price_state.missing_ticker")}
+            </button>
+          ) : (
+            <span className="text-m3-on-surface-variant text-sm">
+              {t("mkt.price_state.missing_ticker")}
+            </span>
+          )
         ) : (
           <span className="text-m3-on-surface-variant text-sm">
             {t("mkt.price_state.no_price_available")}
@@ -232,7 +248,9 @@ export function HoldingRow({
               </span>
             )}
           </div>
-        ) : row.currentPrice.kind === "present" ? (
+        ) : row.currentPrice.kind === "present" && !readOnly ? (
+          /* As-of view is read-only: the Record-FX-rate shortcut (a write) is
+             hidden. */
           <button
             type="button"
             data-testid={`action-record-fx-rate-${row.assetId}`}
@@ -281,46 +299,51 @@ export function HoldingRow({
       </td>
       <td className="m3-td">
         <div className="flex items-center gap-1">
-          {/* TRX-041 — Buy modal from holding row */}
-          <IconButton
-            icon={<Plus size={16} />}
-            variant="success"
-            size="sm"
-            id={`action-buy-${row.assetId}`}
-            aria-label={t("transaction.action_buy")}
-            onClick={handleBuy}
-          />
-          {/* SEL-010 — Sell button; disabled when asset is archived (SEL-037) */}
-          <IconButton
-            icon={<Minus size={16} />}
-            variant="error"
-            size="sm"
-            id={`action-sell-${row.assetId}`}
-            aria-label={t("transaction.action_sell")}
-            onClick={handleSell}
-            disabled={isArchived}
-          />
-          {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}
-          {row.canEnterPrice && (
-            <IconButton
-              icon={<History size={16} />}
-              size="sm"
-              id={`action-price-history-${row.assetId}`}
-              aria-label={t("account_details.action_price_history")}
-              onClick={handlePriceHistory}
-            />
-          )}
-          {/* MKT-153 — Lock toggle: blocks/allows automated price fetches (ADR-014) */}
-          {onTogglePriceRefreshLock && (
-            <IconButton
-              icon={isPriceRefreshBlocked ? <Lock size={16} /> : <LockOpen size={16} />}
-              size="sm"
-              id={`action-toggle-price-refresh-${row.assetId}`}
-              aria-label={t(
-                isPriceRefreshBlocked ? "mkt.lock.action_unblock" : "mkt.lock.action_block",
+          {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}
+          {!readOnly && (
+            <>
+              {/* TRX-041 — Buy modal from holding row */}
+              <IconButton
+                icon={<Plus size={16} />}
+                variant="success"
+                size="sm"
+                id={`action-buy-${row.assetId}`}
+                aria-label={t("transaction.action_buy")}
+                onClick={handleBuy}
+              />
+              {/* SEL-010 — Sell button; disabled when asset is archived (SEL-037) */}
+              <IconButton
+                icon={<Minus size={16} />}
+                variant="error"
+                size="sm"
+                id={`action-sell-${row.assetId}`}
+                aria-label={t("transaction.action_sell")}
+                onClick={handleSell}
+                disabled={isArchived}
+              />
+              {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}
+              {row.canEnterPrice && (
+                <IconButton
+                  icon={<History size={16} />}
+                  size="sm"
+                  id={`action-price-history-${row.assetId}`}
+                  aria-label={t("account_details.action_price_history")}
+                  onClick={handlePriceHistory}
+                />
               )}
-              onClick={handleTogglePriceRefreshLock}
-            />
+              {/* MKT-153 — Lock toggle: blocks/allows automated price fetches (ADR-014) */}
+              {onTogglePriceRefreshLock && (
+                <IconButton
+                  icon={isPriceRefreshBlocked ? <Lock size={16} /> : <LockOpen size={16} />}
+                  size="sm"
+                  id={`action-toggle-price-refresh-${row.assetId}`}
+                  aria-label={t(
+                    isPriceRefreshBlocked ? "mkt.lock.action_unblock" : "mkt.lock.action_block",
+                  )}
+                  onClick={handleTogglePriceRefreshLock}
+                />
+              )}
+            </>
           )}
           <IconButton
             icon={<Search size={16} />}

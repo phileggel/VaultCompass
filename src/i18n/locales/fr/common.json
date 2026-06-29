@@ -325,20 +325,9 @@
     "action_add_menu": "Enregistrer",
     "action_record_dividend": "Dividende",
     "action_record_free_shares": "Actions gratuites",
-    "action_holdings_as_of": "Positions à une date"
-  },
-  "holdings_as_of": {
-    "title": "Positions à une date passée",
-    "as_of_label": "À la date du",
-    "empty": "Aucune position à cette date",
-    "column_asset": "Actif",
-    "column_quantity": "Quantité",
-    "column_avg_cost": "Coût moyen",
-    "column_price": "Prix",
-    "column_market_value": "Valeur de marché",
-    "column_unrealized_pnl": "P&L latent",
-    "total_cost_basis": "Coût de revient total",
-    "total_market_value": "Valeur de marché totale"
+    "as_of_date_label": "À la date du",
+    "as_of_banner": "Affichage à la date du {{date}}",
+    "as_of_back_to_today": "Revenir à aujourd'hui"
   },
   "account_performance": {
     "title": "Performance",

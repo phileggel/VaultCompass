@@ -7,9 +7,19 @@ import { patchModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { accountDetailsGateway } from "../gateway";
+import { formatIsoDate } from "../shared/formatDate";
 import { isCashAsset, priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
+
+/** Local calendar date as ISO `YYYY-MM-DD` — the as-of selector's "today" default. */
+function todayIso(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 /**
  * Orchestration hook for AccountDetailsView. Bundles the data hook
@@ -23,11 +33,16 @@ import { useAccountDetails } from "./useAccountDetails";
  */
 export function useAccountDetailsView(accountId: string) {
   const navigate = useNavigate();
-  const data = useAccountDetails(accountId);
+  // As-of valuation date: "" = live view (today); a non-empty ISO date loads a
+  // read-only reconstruction. `isAsOf` is true only for a non-today date — picking
+  // today (or clearing) keeps the live, mutable view.
+  const [asOfDate, setAsOfDate] = useState("");
+  const isAsOf = asOfDate !== "" && asOfDate !== todayIso();
+  const data = useAccountDetails(accountId, isAsOf ? asOfDate : "");
   const accounts = useAppStore((state) => state.accounts);
   const fetchAssets = useAppStore((state) => state.fetchAssets);
   const showSnackbar = useSnackbar();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const accountCurrency = accounts.find((a) => a.id === accountId)?.currency ?? "";
 
   // ---------------------------------------------------------------------------
@@ -41,26 +56,38 @@ export function useAccountDetailsView(accountId: string) {
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [dividendOpen, setDividendOpen] = useState(false);
   const [freeSharesOpen, setFreeSharesOpen] = useState(false);
-  const [asOfOpen, setAsOfOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
   // ACD-035/036 — open the Add Transaction modal in place via the shell-mounted
   // AddTransactionModalMount (URL-driven), rather than navigating to a page. No
-  // cross-feature import: the FAB only mutates URL params.
+  // cross-feature import: the FAB only mutates URL params. No-op in as-of (read-only).
   const handleAddTransaction = useCallback(() => {
+    if (isAsOf) return;
     patchModalSearch(navigate, { modal: "add-transaction", prefillAccountId: accountId });
-  }, [navigate, accountId]);
+  }, [navigate, accountId, isAsOf]);
 
-  const handleBuyOpen = useCallback((target: ModalTarget) => setBuyTarget(target), []);
+  const handleBuyOpen = useCallback(
+    (target: ModalTarget) => {
+      if (isAsOf) return;
+      setBuyTarget(target);
+    },
+    [isAsOf],
+  );
   const handleBuyClose = useCallback(() => setBuyTarget(null), []);
   const handleBuySuccess = useCallback(() => {
     setBuyTarget(null);
     data.retry();
   }, [data]);
 
-  const handleSellOpen = useCallback((target: SellTarget) => setSellTarget(target), []);
+  const handleSellOpen = useCallback(
+    (target: SellTarget) => {
+      if (isAsOf) return;
+      setSellTarget(target);
+    },
+    [isAsOf],
+  );
   const handleSellClose = useCallback(() => setSellTarget(null), []);
   const handleSellSuccess = useCallback(() => {
     setSellTarget(null);
@@ -77,21 +104,30 @@ export function useAccountDetailsView(accountId: string) {
   );
   const handleHistoryClose = useCallback(() => setHistoryTarget(null), []);
 
-  const handleOpenBalanceOpen = useCallback(() => setOpenBalanceOpen(true), []);
+  const handleOpenBalanceOpen = useCallback(() => {
+    if (isAsOf) return;
+    setOpenBalanceOpen(true);
+  }, [isAsOf]);
   const handleOpenBalanceClose = useCallback(() => setOpenBalanceOpen(false), []);
   const handleOpenBalanceSuccess = useCallback(() => {
     setOpenBalanceOpen(false);
     data.retry();
   }, [data]);
 
-  const handleDepositOpen = useCallback(() => setDepositOpen(true), []);
+  const handleDepositOpen = useCallback(() => {
+    if (isAsOf) return;
+    setDepositOpen(true);
+  }, [isAsOf]);
   const handleDepositClose = useCallback(() => setDepositOpen(false), []);
   const handleDepositSuccess = useCallback(() => {
     setDepositOpen(false);
     data.retry();
   }, [data]);
 
-  const handleWithdrawalOpen = useCallback(() => setWithdrawalOpen(true), []);
+  const handleWithdrawalOpen = useCallback(() => {
+    if (isAsOf) return;
+    setWithdrawalOpen(true);
+  }, [isAsOf]);
   const handleWithdrawalClose = useCallback(() => setWithdrawalOpen(false), []);
   const handleWithdrawalSuccess = useCallback(() => {
     setWithdrawalOpen(false);
@@ -99,7 +135,10 @@ export function useAccountDetailsView(accountId: string) {
   }, [data]);
 
   // DIV-012 — dividend modal state (entered from the header "Add" menu)
-  const handleDividendOpen = useCallback(() => setDividendOpen(true), []);
+  const handleDividendOpen = useCallback(() => {
+    if (isAsOf) return;
+    setDividendOpen(true);
+  }, [isAsOf]);
   const handleDividendClose = useCallback(() => setDividendOpen(false), []);
   const handleDividendSuccess = useCallback(() => {
     setDividendOpen(false);
@@ -111,16 +150,15 @@ export function useAccountDetailsView(accountId: string) {
   }, [data]);
 
   // FSD-010/012 — free-shares modal state (entered from the header "Record" menu).
-  const handleFreeSharesOpen = useCallback(() => setFreeSharesOpen(true), []);
+  const handleFreeSharesOpen = useCallback(() => {
+    if (isAsOf) return;
+    setFreeSharesOpen(true);
+  }, [isAsOf]);
   const handleFreeSharesClose = useCallback(() => setFreeSharesOpen(false), []);
   const handleFreeSharesSuccess = useCallback(() => {
     setFreeSharesOpen(false);
     data.retry();
   }, [data]);
-
-  // Holdings-as-of modal state (read-only past-date valuation).
-  const handleAsOfOpen = useCallback(() => setAsOfOpen(true), []);
-  const handleAsOfClose = useCallback(() => setAsOfOpen(false), []);
 
   // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
   // block/unblock command, then re-reads the asset list (so the row's lock
@@ -128,6 +166,7 @@ export function useAccountDetailsView(accountId: string) {
   // with a snackbar. Errors surface via the snackbar's i18n pipeline.
   const handleTogglePriceRefreshLock = useCallback(
     async (assetId: string, currentlyBlocked: boolean) => {
+      if (isAsOf) return;
       try {
         const res = currentlyBlocked
           ? await accountDetailsGateway.unblockAssetPriceRefresh(assetId)
@@ -147,7 +186,7 @@ export function useAccountDetailsView(accountId: string) {
         showSnackbar(t("error.Unknown"), "error");
       }
     },
-    [fetchAssets, showSnackbar, t],
+    [fetchAssets, showSnackbar, t, isAsOf],
   );
 
   // ---------------------------------------------------------------------------
@@ -183,6 +222,14 @@ export function useAccountDetailsView(accountId: string) {
     holdings: data.holdings,
     holdingDetails: data.holdingDetails,
     closedHoldings: data.closedHoldings,
+    // As-of (read-only past-date valuation)
+    asOfDate,
+    // As-of date formatted in the user's locale, for the read-only banner (F5).
+    asOfDateFormatted: formatIsoDate(asOfDate, i18n.language),
+    // Date shown in the selector: the chosen date, or today when none is chosen.
+    asOfDisplayDate: asOfDate || todayIso(),
+    setAsOfDate,
+    isAsOf,
     // Derived
     accountCurrency,
     hasNonCashActiveHoldings,
@@ -198,7 +245,6 @@ export function useAccountDetailsView(accountId: string) {
     withdrawalOpen,
     dividendOpen,
     freeSharesOpen,
-    asOfOpen,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -225,8 +271,6 @@ export function useAccountDetailsView(accountId: string) {
     handleFreeSharesOpen,
     handleFreeSharesClose,
     handleFreeSharesSuccess,
-    handleAsOfOpen,
-    handleAsOfClose,
     handleTogglePriceRefreshLock,
   };
 }

@@ -44,9 +44,6 @@ vi.mock("../dividend_transaction/DividendTransactionModal", () => ({
 }));
 vi.mock("./HoldingRow", () => ({ HoldingRow: () => <tr data-testid="holding-row" /> }));
 vi.mock("./ClosedHoldingRow", () => ({ ClosedHoldingRow: () => <tr /> }));
-vi.mock("../holdings_as_of/HoldingsAsOfModal", () => ({
-  HoldingsAsOfModal: () => <div data-testid="holdings-as-of-modal-mounted" />,
-}));
 
 const handlers = {
   handleDepositOpen: vi.fn(),
@@ -54,7 +51,6 @@ const handlers = {
   handleOpenBalanceOpen: vi.fn(),
   handleDividendOpen: vi.fn(),
   handleAddTransaction: vi.fn(),
-  handleAsOfOpen: vi.fn(),
 };
 
 const makeView = (overrides: Record<string, unknown> = {}) => ({
@@ -87,9 +83,11 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   depositOpen: false,
   withdrawalOpen: false,
   dividendOpen: false,
-  asOfOpen: false,
+  asOfDate: "",
+  asOfDisplayDate: "2024-06-01",
+  isAsOf: false,
+  setAsOfDate: vi.fn(),
   ...handlers,
-  handleAsOfClose: vi.fn(),
   handleBuyOpen: vi.fn(),
   handleBuyClose: vi.fn(),
   handleBuySuccess: vi.fn(),
@@ -179,15 +177,6 @@ describe("AccountDetailsView — header Record menu (DIV-012)", () => {
     expect(screen.getByTestId("withdrawal-modal-mounted")).toBeInTheDocument();
   });
 
-  it("mounts the holdings-as-of modal only while asOfOpen is true", () => {
-    const { rerender } = render(<AccountDetailsView />);
-    expect(screen.queryByTestId("holdings-as-of-modal-mounted")).toBeNull();
-
-    mockUseAccountDetailsView.mockReturnValue(makeView({ asOfOpen: true }));
-    rerender(<AccountDetailsView />);
-    expect(screen.getByTestId("holdings-as-of-modal-mounted")).toBeInTheDocument();
-  });
-
   it("surfaces the total dividends received in the header when non-zero (DIV-073)", () => {
     render(<AccountDetailsView />);
     expect(document.querySelector("#account-details-total-dividends")).toBeInTheDocument();
@@ -258,5 +247,47 @@ describe("AccountDetailsView — add-transaction FAB (ACD-035/036)", () => {
     render(<AccountDetailsView />);
     expect(screen.getByText("account_details.empty_all_closed")).toBeInTheDocument();
     expect(screen.queryByText("account_details.empty_no_positions")).toBeNull();
+  });
+});
+
+describe("AccountDetailsView — read-only as-of view", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
+  });
+
+  it("renders the as-of date selector in the header", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#account-details-as-of-date")).toBeInTheDocument();
+  });
+
+  it("shows the as-of banner + reset and hides the mutating controls when isAsOf", () => {
+    const setAsOfDate = vi.fn();
+    mockUseAccountDetailsView.mockReturnValue(
+      makeView({ isAsOf: true, asOfDate: "2024-06-01", setAsOfDate }),
+    );
+    render(<AccountDetailsView />);
+
+    // Banner + reset present.
+    expect(document.querySelector("#account-details-as-of-banner")).toBeInTheDocument();
+    const reset = document.querySelector("#account-details-as-of-reset")!;
+    expect(reset).toBeInTheDocument();
+    fireEvent.click(reset);
+    expect(setAsOfDate).toHaveBeenCalledWith("");
+
+    // Mutating controls hidden.
+    expect(document.querySelector("#account-details-refresh-prices")).toBeNull();
+    expect(document.querySelector("#account-details-add-menu")).toBeNull();
+    expect(document.querySelector("#account-details-add-transaction-fab")).toBeNull();
+  });
+
+  it("keeps the mutating controls in the live view (isAsOf false)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ isAsOf: false }));
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#account-details-as-of-banner")).toBeNull();
+    expect(document.querySelector("#account-details-refresh-prices")).toBeInTheDocument();
+    expect(document.querySelector("#account-details-add-menu")).toBeInTheDocument();
+    expect(document.querySelector("#account-details-add-transaction-fab")).toBeInTheDocument();
   });
 });

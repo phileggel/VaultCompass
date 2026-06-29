@@ -474,21 +474,13 @@ async recordFreeShares(dto: FreeSharesDTO) : Promise<Result<Transaction, FreeSha
 },
 /**
  * Returns the full account details view for the given account (ACD-012 to ACD-041).
+ * 
+ * `as_of_date` selects the valuation date: `None` is the live view (today),
+ * `Some("YYYY-MM-DD")` reconstructs the account read-only as it stood on a past date.
  */
-async getAccountDetails(accountId: string) : Promise<Result<AccountDetailsResponse, AccountError>> {
+async getAccountDetails(accountId: string, asOfDate: string | null) : Promise<Result<AccountDetailsResponse, AccountError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_account_details", { accountId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Returns the account's holdings reconstructed as of a past date (read-only).
- */
-async getAccountHoldingsAsOf(accountId: string, asOfDate: string) : Promise<Result<HoldingsAsOfResponse, AccountError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_account_holdings_as_of", { accountId, asOfDate }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_account_details", { accountId, asOfDate }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1867,55 +1859,6 @@ total_realized_pnl: number;
  */
 last_sold_date: string | null }
 /**
- * One reconstructed holding as it stood on the as-of date. All monetary fields
- * are i64 micro-units (ADR-001); foreign holdings are valued in the account
- * currency using the FX rate as of the date.
- */
-export type HoldingAsOf = { 
-/**
- * ID of the held asset.
- */
-asset_id: string; 
-/**
- * Display name of the asset.
- */
-asset_name: string; 
-/**
- * ISO 4217 currency code of the asset's native currency.
- */
-asset_currency: string; 
-/**
- * Units held on the as-of date (> 0; the Cash Holding carries its balance).
- */
-quantity: number; 
-/**
- * VWAP average cost as of the date, account currency (1.0 for the Cash Holding).
- */
-average_price: number; 
-/**
- * Cost of the position: quantity × average_price / MICRO (0 for the Cash Holding).
- */
-cost_basis: number; 
-/**
- * Market value in account currency. `None` when no price is recorded on or
- * before the date, or a foreign holding has no usable FX rate as of the date.
- */
-market_value: number | null; 
-/**
- * Most recent recorded price on or before the date, in the asset's native
- * currency. `None` when no such price exists (and for the Cash Holding).
- */
-price: number | null; 
-/**
- * ISO date of the price observation; `None` when `price` is `None`.
- */
-price_date: string | null; 
-/**
- * Unrealized P&L in account currency. `None` under the same conditions as
- * `market_value` (no price, or no usable FX rate).
- */
-unrealized_pnl: number | null }
-/**
  * Enriched view of a single active holding (quantity > 0) with asset metadata (ACD-020).
  */
 export type HoldingDetail = { 
@@ -2005,35 +1948,6 @@ quantity: number;
  * VWAP cost basis per unit, account currency (micro-units), 0 when never held.
  */
 average_price: number }
-/**
- * Top-level response for `get_account_holdings_as_of` — a read-only valuation of
- * the account's holdings reconstructed as of a past date.
- */
-export type HoldingsAsOfResponse = { 
-/**
- * Display name of the account.
- */
-account_name: string; 
-/**
- * The as-of date echoed back ("YYYY-MM-DD").
- */
-as_of_date: string; 
-/**
- * ISO 4217 currency code of the account.
- */
-account_currency: string; 
-/**
- * Holdings with quantity > 0 on the date, sorted by asset_name ascending.
- */
-holdings: HoldingAsOf[]; 
-/**
- * Sum of cost_basis across all holdings (cash contributes 0).
- */
-total_cost_basis: number; 
-/**
- * Sum of present market values plus the cash balance.
- */
-total_market_value: number }
 /**
  * Explicit lookup path selector passed by the frontend (WEB-014).
  * 

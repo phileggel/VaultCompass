@@ -1,4 +1,4 @@
-use super::holding::{Holding, HoldingSnapshot};
+use super::holding::{Holding, HoldingAsOfReconstruction, HoldingSnapshot};
 use super::transaction::{Transaction, TransactionType};
 use crate::context::account::error::AccountError;
 use anyhow::{anyhow, Result};
@@ -981,6 +981,26 @@ impl Account {
         asset_id: &str,
         as_of: &str,
     ) -> HoldingSnapshot {
+        let reconstruction = Self::reconstruct_holding_as_of(transactions, asset_id, as_of);
+        HoldingSnapshot {
+            quantity: reconstruction.quantity,
+            average_price: reconstruction.average_price,
+        }
+    }
+
+    /// Full point-in-time reconstruction of a holding as of `as_of`: quantity,
+    /// VWAP average cost, cumulative realized P&L, and the most recent sell date —
+    /// replayed from the asset's transactions dated on or before that date. A
+    /// read-only valuation over already-validated history, so it omits the
+    /// oversell / insufficient-cash guards of `recalculate_holding`; the VWAP
+    /// accumulation and realized-P&L formula are otherwise the same (TRX-040 /
+    /// SEL-024 / SEL-026). `as_of` must be an ISO `YYYY-MM-DD` string for the
+    /// lexicographic date cut-off to be correct (validated by the caller).
+    pub(crate) fn reconstruct_holding_as_of(
+        transactions: &[Transaction],
+        asset_id: &str,
+        as_of: &str,
+    ) -> HoldingAsOfReconstruction {
         const MICRO: i128 = 1_000_000;
 
         let mut txs: Vec<&Transaction> = transactions
@@ -996,6 +1016,8 @@ impl Account {
         let mut total_quantity: i128 = 0;
         let mut vwap_numerator: i128 = 0;
         let mut last_vwap: i64 = 0;
+        let mut total_realized_pnl: i64 = 0;
+        let mut last_sold_date: Option<String> = None;
         for t in &txs {
             match t.transaction_type {
                 TransactionType::Purchase
@@ -1011,6 +1033,12 @@ impl Account {
                         0
                     };
                     last_vwap = vwap_before;
+                    // SEL-024 — realized P&L for the sell, accumulated as of the date.
+                    let pnl = Self::compute_realized_pnl(t.total_amount, vwap_before, t.quantity);
+                    total_realized_pnl = total_realized_pnl.saturating_add(pnl);
+                    if last_sold_date.as_deref() < Some(t.date.as_str()) {
+                        last_sold_date = Some(t.date.clone());
+                    }
                     let qty = t.quantity as i128;
                     vwap_numerator -= vwap_before as i128 * qty;
                     total_quantity -= qty;
@@ -1037,13 +1065,45 @@ impl Account {
         } else {
             last_vwap
         };
-        HoldingSnapshot {
+        HoldingAsOfReconstruction {
             // A read-only replay over already-validated history never goes negative;
             // clamp defensively so internally-inconsistent stored data can never
             // surface a negative quantity (the field contract is "0 when not held").
             quantity: total_quantity.max(0) as i64,
             average_price,
+            total_realized_pnl,
+            last_sold_date,
         }
+    }
+
+    /// Cash balance as of `as_of_date` (inclusive), reconstructed from the cash-
+    /// affecting transactions: Deposit / Sell / Dividend credit, Withdrawal /
+    /// Purchase debit. ISO `YYYY-MM-DD` dates compare lexicographically, so a
+    /// string cut-off matches the chronological one. Clamped at 0. A read-only
+    /// valuation over already-validated history, mirroring the placement of
+    /// `reconstruct_holding_as_of`.
+    pub(crate) fn cash_balance_as_of(transactions: &[Transaction], as_of_date: &str) -> i64 {
+        let mut balance: i128 = 0;
+        for transaction in transactions {
+            if transaction.date.as_str() > as_of_date {
+                continue;
+            }
+            match transaction.transaction_type {
+                TransactionType::Deposit | TransactionType::Sell | TransactionType::Dividend => {
+                    balance += transaction.total_amount as i128;
+                }
+                TransactionType::Withdrawal | TransactionType::Purchase => {
+                    balance -= transaction.total_amount as i128;
+                }
+                TransactionType::OpeningBalance | TransactionType::FreeShares => {}
+            }
+        }
+        let value = balance.max(0);
+        debug_assert!(
+            value <= i64::MAX as i128 && value >= i64::MIN as i128,
+            "cash_balance_as_of overflows i64: {value}"
+        );
+        value as i64
     }
 
     /// Computes total_amount for a Purchase (TRX-026).
