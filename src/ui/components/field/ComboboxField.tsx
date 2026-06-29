@@ -16,6 +16,11 @@ interface ComboboxFieldProps<T extends object> {
   error?: string;
   disabled?: boolean;
   onCreateNew?: (query: string) => void;
+  /**
+   * Label for the inline "create new" entry — caller-supplied (typically `t(...)`)
+   * so no untranslated string ships. The entry renders only when BOTH `onCreateNew`
+   * and `createLabel` are provided; there is intentionally no default (F16).
+   */
   createLabel?: string;
 }
 
@@ -38,7 +43,7 @@ const CREATE_MARKER = "@@CREATE";
  *   value={patientId}
  *   onChange={setPatientId}
  *   onCreateNew={(q) => openCreatePatient(q)}
- *   createLabel="+ Créer un patient"
+ *   createLabel={t("patient.create_new")}
  * />
  */
 export function ComboboxField<T extends object>({
@@ -54,7 +59,7 @@ export function ComboboxField<T extends object>({
   error,
   disabled,
   onCreateNew,
-  createLabel = "+ Créer",
+  createLabel,
 }: ComboboxFieldProps<T>) {
   const { query, setQuery, filteredItems } = useComboboxField(items, displayKey, searchKeys);
 
@@ -65,7 +70,7 @@ export function ComboboxField<T extends object>({
 
   // HeadlessUI owns the open/close state (opened on focus via `immediate`); this
   // flag only avoids rendering an empty options panel when there's nothing to show.
-  const showDropdown = filteredItems.length > 0 || !!onCreateNew;
+  const showDropdown = filteredItems.length > 0 || !!(onCreateNew && createLabel);
 
   const handleChange = (selected: T | typeof CREATE_MARKER | null) => {
     if (!selected) return;
@@ -120,7 +125,7 @@ export function ComboboxField<T extends object>({
                 </ComboboxOption>
               ))}
 
-              {onCreateNew && (
+              {onCreateNew && createLabel && (
                 <ComboboxOption
                   value={CREATE_MARKER}
                   className="px-4 py-2 text-sm font-medium text-m3-primary cursor-pointer border-t border-m3-outline/10 data-focus:bg-m3-primary/10"
