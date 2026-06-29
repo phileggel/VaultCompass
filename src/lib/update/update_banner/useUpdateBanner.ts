@@ -8,7 +8,6 @@ export interface UpdateBannerData {
   state: UpdateBannerState;
   version: string | null;
   progress: number;
-  errorMessage: string | null;
   isRestarting: boolean;
   handleInstall: () => void;
   handleDismiss: () => void;
@@ -20,7 +19,6 @@ export function useUpdateBanner(): UpdateBannerData {
   const [state, setState] = useState<UpdateBannerState>("idle");
   const [version, setVersion] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
 
   // Track if dismissed so we can ignore a re-emitted update:available in same session
@@ -62,11 +60,12 @@ export function useUpdateBanner(): UpdateBannerData {
       setProgress(100);
     });
 
-    // Listen for download error (R23)
-    const unlistenError = updateGateway.onUpdateError((message) => {
+    // Listen for download error (R23). The typed UpdateError variant is logged
+    // server-side; the banner shows a single generic message, so the payload is
+    // not surfaced to the user.
+    const unlistenError = updateGateway.onUpdateError(() => {
       if (!mounted) return;
       setState("error");
-      setErrorMessage(message);
     });
 
     return () => {
@@ -82,11 +81,9 @@ export function useUpdateBanner(): UpdateBannerData {
   const handleInstall = useCallback(() => {
     setState("downloading");
     setProgress(0);
-    setErrorMessage(null);
     updateGateway.downloadUpdate().catch((e) => {
       logger.error("[UpdateBanner] downloadUpdate command failed", e);
       setState("error");
-      setErrorMessage(null); // backend will emit update:error with message
     });
   }, []);
 
@@ -101,11 +98,9 @@ export function useUpdateBanner(): UpdateBannerData {
   const handleRetry = useCallback(() => {
     setState("downloading");
     setProgress(0);
-    setErrorMessage(null);
     updateGateway.downloadUpdate().catch((e) => {
       logger.error("[UpdateBanner] downloadUpdate retry failed", e);
       setState("error");
-      setErrorMessage(null); // backend will emit update:error with message
     });
   }, []);
 
@@ -125,7 +120,6 @@ export function useUpdateBanner(): UpdateBannerData {
     state,
     version,
     progress,
-    errorMessage,
     isRestarting,
     handleInstall,
     handleDismiss,

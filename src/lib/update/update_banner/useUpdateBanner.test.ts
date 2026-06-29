@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { UpdateError } from "@/bindings";
 
 // --- mocks ---
 
@@ -9,7 +10,7 @@ const mockInstallUpdate = vi.fn().mockResolvedValue(undefined);
 
 type AvailableCallback = (info: { version: string }) => void;
 type CompleteCallback = () => void;
-type ErrorCallback = (message: string) => void;
+type ErrorCallback = (error: UpdateError) => void;
 
 let onAvailableCb: AvailableCallback | null = null;
 let onCompleteCb: CompleteCallback | null = null;
@@ -117,11 +118,10 @@ describe("useUpdateBanner", () => {
       result.current.handleInstall();
     });
     act(() => {
-      onErrorCb?.("Disk full");
+      onErrorCb?.({ code: "OperationFailed" });
     });
 
     expect(result.current.state).toBe("error");
-    expect(result.current.errorMessage).toBe("Disk full");
   });
 
   // R24 — error → downloading on handleRetry
@@ -135,7 +135,7 @@ describe("useUpdateBanner", () => {
       result.current.handleInstall();
     });
     act(() => {
-      onErrorCb?.("Network error");
+      onErrorCb?.({ code: "OperationFailed" });
     });
     act(() => {
       result.current.handleRetry();

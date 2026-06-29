@@ -15,7 +15,6 @@ export function UpdateBanner({ data }: UpdateBannerProps) {
     state,
     version,
     progress,
-    errorMessage,
     isRestarting,
     handleInstall,
     handleDismiss,
@@ -97,7 +96,7 @@ export function UpdateBanner({ data }: UpdateBannerProps) {
       {/* R23 — error state with retry */}
       {state === "error" && (
         <>
-          <span className="text-m3-error">{errorMessage ?? t("update.error")}</span>
+          <span className="text-m3-error">{t("update.error")}</span>
           <Button size="sm" variant="primary" onClick={handleRetry}>
             {t("update.action_retry")}
           </Button>

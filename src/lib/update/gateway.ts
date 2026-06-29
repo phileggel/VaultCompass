@@ -1,8 +1,8 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { commands, type UpdateInfo } from "@/bindings";
+import { commands, type UpdateError, type UpdateInfo } from "@/bindings";
 import { logger } from "@/lib/logger";
 
-export type { UpdateInfo };
+export type { UpdateError, UpdateInfo };
 
 export const updateGateway = {
   async checkForUpdate(): Promise<UpdateInfo | null> {
@@ -32,7 +32,7 @@ export const updateGateway = {
     return listen<null>("update:complete", () => cb());
   },
 
-  onUpdateError(cb: (message: string) => void): Promise<UnlistenFn> {
-    return listen<string>("update:error", (event) => cb(event.payload));
+  onUpdateError(cb: (error: UpdateError) => void): Promise<UnlistenFn> {
+    return listen<UpdateError>("update:error", (event) => cb(event.payload));
   },
 };

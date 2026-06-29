@@ -87,7 +87,7 @@ pub async fn check(app_handle: &AppHandle) -> Option<UpdateInfo> {
 /// Emits `"update:progress"` (percent 0–100) during download,
 /// `"update:complete"` on success, or `"update:error"` on failure (R23).
 /// Checksum verification is performed by the Tauri updater plugin (R9).
-pub async fn download(app_handle: AppHandle, state: Arc<UpdateState>) -> anyhow::Result<()> {
+pub async fn download(app_handle: AppHandle, state: Arc<UpdateState>) -> Result<(), UpdateError> {
     // R10 — prevent concurrent downloads
     if state
         .is_downloading
@@ -101,26 +101,32 @@ pub async fn download(app_handle: AppHandle, state: Arc<UpdateState>) -> anyhow:
     let result = do_download(&app_handle, &state).await;
     state.is_downloading.store(false, Ordering::SeqCst);
 
-    if let Err(ref e) = result {
-        tracing::error!(target: BACKEND, error = %e, "Update download failed (R23)");
-        let _ = app_handle.emit("update:error", e.to_string());
+    if let Err(ref error) = result {
+        // The underlying cause is logged inside do_download; emit the typed error
+        // (never the raw cause string) so the renderer can localise it (R23).
+        let _ = app_handle.emit("update:error", error);
     }
 
     result
 }
 
-async fn do_download(app_handle: &AppHandle, state: &UpdateState) -> anyhow::Result<()> {
-    use anyhow::Context;
-
-    let updater = app_handle
-        .updater()
-        .context("Failed to initialize updater")?;
+async fn do_download(app_handle: &AppHandle, state: &UpdateState) -> Result<(), UpdateError> {
+    let updater = app_handle.updater().map_err(|e| {
+        tracing::error!(target: BACKEND, error = %e, "Failed to initialize updater (R23)");
+        UpdateError::OperationFailed
+    })?;
 
     let update = updater
         .check()
         .await
-        .context("Failed to check for update during download")?
-        .ok_or_else(|| anyhow::anyhow!("No update available to download"))?;
+        .map_err(|e| {
+            tracing::error!(target: BACKEND, error = %e, "Failed to check for update during download (R23)");
+            UpdateError::OperationFailed
+        })?
+        .ok_or_else(|| {
+            tracing::error!(target: BACKEND, "No update available to download (R23)");
+            UpdateError::OperationFailed
+        })?;
 
     let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let ah = app_handle.clone();
@@ -139,7 +145,10 @@ async fn do_download(app_handle: &AppHandle, state: &UpdateState) -> anyhow::Res
             || {},
         )
         .await
-        .context("Download or checksum verification failed (R9, R23)")?;
+        .map_err(|e| {
+            tracing::error!(target: BACKEND, error = %e, "Download or checksum verification failed (R9, R23)");
+            UpdateError::OperationFailed
+        })?;
 
     // Store bytes BEFORE emitting complete — prevents install racing (R11)
     state.set_bytes(bytes);
