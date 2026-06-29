@@ -10,7 +10,6 @@ import type {
   FreeSharesDTO,
   FreeSharesError,
   HoldingSnapshot,
-  HoldingsAsOfResponse,
   OpenHoldingDTO,
   OpenHoldingError,
   Result,
@@ -22,10 +21,13 @@ import type { CorrectTransactionFields } from "@/features/transactions/shared/ty
 import { useAppStore } from "@/lib/store";
 
 export const accountDetailsGateway = {
+  // `asOfDate` selects the valuation date: null/omitted is the live view (today),
+  // an ISO "YYYY-MM-DD" reconstructs the account read-only as of that past date.
   async getAccountDetails(
     accountId: string,
+    asOfDate?: string | null,
   ): Promise<Result<AccountDetailsResponse, AccountError>> {
-    return commands.getAccountDetails(accountId);
+    return commands.getAccountDetails(accountId, asOfDate ?? null);
   },
 
   async recordAssetPrice(
@@ -81,14 +83,6 @@ export const accountDetailsGateway = {
     dto: CorrectTransactionFields,
   ): Promise<Result<Transaction, AccountError>> {
     return commands.correctTransaction({ ...dto, account_id: accountId, transaction_id: id });
-  },
-
-  // Holdings reconstructed as they stood on a past date (read-only valuation).
-  async getAccountHoldingsAsOf(
-    accountId: string,
-    date: string,
-  ): Promise<Result<HoldingsAsOfResponse, AccountError>> {
-    return commands.getAccountHoldingsAsOf(accountId, date);
   },
 
   // TDI-010 — holding quantity + VWAP average cost as of a date (trade-dialog insights).

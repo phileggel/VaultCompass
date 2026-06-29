@@ -7,10 +7,9 @@
 pub mod account_creation;
 /// Account Deletion: pre-deletion summary of holdings and transactions (ACC-020).
 pub mod account_deletion;
-/// Account Details: cross-context read of holdings + asset metadata (ACD feature).
+/// Account Details: cross-context read of holdings + asset metadata (ACD feature),
+/// live or reconstructed as of a past date.
 pub mod account_details;
-/// Account Holdings As-Of: read-only reconstruction of holdings on a past date.
-pub mod account_holdings_as_of;
 /// Account Performance: recompute-on-read per-period values and Simple Dietz metrics (PRF spec, ADR-013).
 pub mod account_performance;
 /// Account Summary: per-account global value for the Accounts list (ACC-021).

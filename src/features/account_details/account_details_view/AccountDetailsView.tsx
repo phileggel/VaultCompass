@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDown, History, RefreshCw, ScrollText, TrendingUp } from "lucide-react";
+import { ChevronDown, RefreshCw, RotateCcw, ScrollText, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,11 +9,11 @@ import {
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
 import { FAB } from "@/ui/components/fab/FAB";
+import { DateField } from "@/ui/components/field/DateField";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
-import { HoldingsAsOfModal } from "../holdings_as_of/HoldingsAsOfModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
@@ -148,104 +148,126 @@ export function AccountDetailsView() {
                 >
                   {t("account_details.action_journal")}
                 </Button>
-                {/* Read-only "holdings as of a past date" entry point */}
-                <Button
-                  id="account-details-as-of"
-                  variant="secondary"
-                  size="sm"
-                  icon={<History size={14} />}
-                  onClick={view.handleAsOfOpen}
-                  aria-label={t("account_details.action_holdings_as_of")}
-                >
-                  {t("account_details.action_holdings_as_of")}
-                </Button>
-                {/* MKT-131 — per-account "Refresh prices" entry point */}
-                <Button
-                  id="account-details-refresh-prices"
-                  variant="secondary"
-                  size="sm"
-                  icon={<RefreshCw size={14} />}
-                  loading={isRefreshPending}
-                  onClick={() => void refreshPrices()}
-                  aria-label={t("account_details.action_refresh_prices")}
-                >
-                  {t("account_details.action_refresh_prices")}
-                </Button>
-                {/* DIV-012 — consolidated "Record" dropdown (Open balance /
-                    Dividend / Free shares). Cash Deposit/Withdraw are NOT here —
-                    they live on the always-present cash row (CSH-019). */}
-                <div className="relative">
+                {/* Read-only "holdings as of a past date" selector. Picking a past
+                    date switches the page into the read-only as-of view; clearing
+                    it (or picking today) returns to the live view. */}
+                <DateField
+                  id="account-details-as-of-date"
+                  label={t("account_details.as_of_date_label")}
+                  value={view.asOfDisplayDate}
+                  onChange={(e) => view.setAsOfDate(e.target.value)}
+                />
+                {/* MKT-131 — per-account "Refresh prices"; hidden in read-only as-of */}
+                {!view.isAsOf && (
                   <Button
-                    id="account-details-add-menu"
+                    id="account-details-refresh-prices"
                     variant="secondary"
                     size="sm"
-                    icon={<ChevronDown size={14} />}
-                    aria-haspopup="menu"
-                    aria-expanded={addMenuOpen}
-                    onClick={() => setAddMenuOpen((open) => !open)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") setAddMenuOpen(false);
-                    }}
+                    icon={<RefreshCw size={14} />}
+                    loading={isRefreshPending}
+                    onClick={() => void refreshPrices()}
+                    aria-label={t("account_details.action_refresh_prices")}
                   >
-                    {t("account_details.action_add_menu")}
+                    {t("account_details.action_refresh_prices")}
                   </Button>
-                  {addMenuOpen && (
-                    <>
-                      {/* click-away backdrop */}
-                      <button
-                        type="button"
-                        aria-hidden="true"
-                        tabIndex={-1}
-                        className="fixed inset-0 z-20 cursor-default"
-                        onClick={() => setAddMenuOpen(false)}
-                      />
-                      <div
-                        role="menu"
-                        aria-label={t("account_details.action_add_menu")}
-                        className="absolute right-0 mt-1 z-30 min-w-[200px] rounded-2xl bg-m3-surface-container-high shadow-elevation-2 py-1"
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") setAddMenuOpen(false);
-                        }}
-                      >
-                        {/* CSH-019 — cash Deposit/Withdraw live on the cash row, not this menu */}
-                        {/* TRX-055 — Open balance (keeps its shipped "Add a position" label) */}
+                )}
+                {/* DIV-012 — consolidated "Record" dropdown (Open balance /
+                    Dividend / Free shares). Cash Deposit/Withdraw are NOT here —
+                    they live on the always-present cash row (CSH-019). Hidden in
+                    the read-only as-of view. */}
+                {!view.isAsOf && (
+                  <div className="relative">
+                    <Button
+                      id="account-details-add-menu"
+                      variant="secondary"
+                      size="sm"
+                      icon={<ChevronDown size={14} />}
+                      aria-haspopup="menu"
+                      aria-expanded={addMenuOpen}
+                      onClick={() => setAddMenuOpen((open) => !open)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setAddMenuOpen(false);
+                      }}
+                    >
+                      {t("account_details.action_add_menu")}
+                    </Button>
+                    {addMenuOpen && (
+                      <>
+                        {/* click-away backdrop */}
                         <button
                           type="button"
-                          role="menuitem"
-                          id="add-menu-open-balance"
-                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                          onClick={() => runFromAddMenu(view.handleOpenBalanceOpen)}
+                          aria-hidden="true"
+                          tabIndex={-1}
+                          className="fixed inset-0 z-20 cursor-default"
+                          onClick={() => setAddMenuOpen(false)}
+                        />
+                        <div
+                          role="menu"
+                          aria-label={t("account_details.action_add_menu")}
+                          className="absolute right-0 mt-1 z-30 min-w-[200px] rounded-2xl bg-m3-surface-container-high shadow-elevation-2 py-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") setAddMenuOpen(false);
+                          }}
                         >
-                          {t("account_details.action_open_balance")}
-                        </button>
-                        {/* DIV-010 — Record dividend */}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          id="add-menu-dividend"
-                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                          onClick={() => runFromAddMenu(view.handleDividendOpen)}
-                        >
-                          {t("account_details.action_record_dividend")}
-                        </button>
-                        {/* FSD-010 — Record free shares */}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          id="add-menu-free-shares"
-                          className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
-                          onClick={() => runFromAddMenu(view.handleFreeSharesOpen)}
-                        >
-                          {t("account_details.action_record_free_shares")}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                          {/* CSH-019 — cash Deposit/Withdraw live on the cash row, not this menu */}
+                          {/* TRX-055 — Open balance (keeps its shipped "Add a position" label) */}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            id="add-menu-open-balance"
+                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                            onClick={() => runFromAddMenu(view.handleOpenBalanceOpen)}
+                          >
+                            {t("account_details.action_open_balance")}
+                          </button>
+                          {/* DIV-010 — Record dividend */}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            id="add-menu-dividend"
+                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                            onClick={() => runFromAddMenu(view.handleDividendOpen)}
+                          >
+                            {t("account_details.action_record_dividend")}
+                          </button>
+                          {/* FSD-010 — Record free shares */}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            id="add-menu-free-shares"
+                            className="w-full text-left px-4 py-2 text-sm text-m3-on-surface hover:bg-m3-surface-container-highest"
+                            onClick={() => runFromAddMenu(view.handleFreeSharesOpen)}
+                          >
+                            {t("account_details.action_record_free_shares")}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
         </div>
+
+        {/* Read-only as-of banner: shown while a past date is selected. */}
+        {view.isAsOf && (
+          <div
+            id="account-details-as-of-banner"
+            className="flex items-center justify-between gap-3 px-6 py-2 bg-m3-tertiary-container text-m3-on-tertiary-container text-sm"
+          >
+            <span>{t("account_details.as_of_banner", { date: view.asOfDateFormatted })}</span>
+            <Button
+              id="account-details-as-of-reset"
+              variant="secondary"
+              size="sm"
+              icon={<RotateCcw size={14} />}
+              onClick={() => view.setAsOfDate("")}
+            >
+              {t("account_details.as_of_back_to_today")}
+            </Button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-auto">
@@ -318,6 +340,7 @@ export function AccountDetailsView() {
                         onDeposit={view.handleDepositOpen}
                         onWithdraw={view.handleWithdrawalOpen}
                         onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
+                        readOnly={view.isAsOf}
                       />
                     ))}
                   </tbody>
@@ -497,19 +520,16 @@ export function AccountDetailsView() {
         />
       )}
 
-      {/* Read-only holdings-as-of modal (mounted only while open so the hook
-          re-seeds the date to today on every open) */}
-      {view.asOfOpen && (
-        <HoldingsAsOfModal isOpen onClose={view.handleAsOfClose} accountId={accountId} />
-      )}
-
       {/* ACD-035/036 — add-transaction entry point is a global FAB (replaces the
-          former contextual "Add Transaction" buttons in the header / empty states) */}
-      <FAB
-        id="account-details-add-transaction-fab"
-        onClick={view.handleAddTransaction}
-        label={t("account_details.add_transaction")}
-      />
+          former contextual "Add Transaction" buttons in the header / empty states).
+          Hidden in the read-only as-of view. */}
+      {!view.isAsOf && (
+        <FAB
+          id="account-details-add-transaction-fab"
+          onClick={view.handleAddTransaction}
+          label={t("account_details.add_transaction")}
+        />
+      )}
     </div>
   );
 }

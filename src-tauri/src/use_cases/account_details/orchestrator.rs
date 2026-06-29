@@ -1,10 +1,12 @@
-use crate::context::account::{AccountError, AccountService};
+use crate::context::account::{Account, AccountError, AccountService, TransactionType};
 use crate::context::asset::{AssetPriceSource, AssetService};
 use crate::context::currency::CurrencyService;
+use crate::core::cash::{is_cash_asset, system_cash_asset_id};
 use crate::core::logger::BACKEND;
+use chrono::{Local, NaiveDate};
 use serde::Serialize;
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -121,7 +123,25 @@ impl AccountDetailsUseCase {
     }
 
     /// Builds an AccountDetailsResponse for the given account (ACD-012 to ACD-050).
+    ///
+    /// `as_of_date` selects the valuation date: `None` is the live view (holdings
+    /// as they stand today), `Some("YYYY-MM-DD")` reconstructs the account as it
+    /// stood on a past date (read-only). The as-of date must be a valid ISO date
+    /// not in the future (`InvalidDate` / `DateInFuture`).
     pub async fn get_account_details(
+        &self,
+        account_id: &str,
+        as_of_date: Option<&str>,
+    ) -> StdResult<AccountDetailsResponse, AccountError> {
+        match as_of_date {
+            None => self.get_account_details_live(account_id).await,
+            Some(date) => self.get_account_details_as_of(account_id, date).await,
+        }
+    }
+
+    /// Live view: holdings as they stand today, read from the stored Holding
+    /// aggregates (ACD-012 to ACD-050).
+    async fn get_account_details_live(
         &self,
         account_id: &str,
     ) -> StdResult<AccountDetailsResponse, AccountError> {
@@ -398,6 +418,276 @@ impl AccountDetailsUseCase {
             total_dividends_received,
         })
     }
+
+    /// As-of view: reconstructs the account exactly as it stood on `as_of_date`
+    /// from the transaction history (read-only). Mirrors the live view's DTO and
+    /// arithmetic (i128 intermediates, Option-on-missing-price/FX), substituting
+    /// per-asset replay for the stored Holding aggregates and carry-forward
+    /// price/FX lookups for the live "latest" ones.
+    async fn get_account_details_as_of(
+        &self,
+        account_id: &str,
+        as_of_date: &str,
+    ) -> StdResult<AccountDetailsResponse, AccountError> {
+        // Validate the date: ISO YYYY-MM-DD, not in the future.
+        let as_of = NaiveDate::parse_from_str(as_of_date, "%Y-%m-%d")
+            .map_err(|_| AccountError::InvalidDate)?;
+        if as_of > Local::now().date_naive() {
+            return Err(AccountError::DateInFuture);
+        }
+
+        let account = self
+            .account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+
+        let all_txs = self
+            .account_service
+            .get_all_transactions_for_account(account_id)
+            .await?;
+
+        // DIV-070/073 — dividends credited on or before the as-of date, per asset
+        // and in total. Dividends are stored in account currency.
+        let mut dividends_by_asset: HashMap<String, i64> = HashMap::new();
+        let mut total_dividends_received: i64 = 0;
+        for t in &all_txs {
+            if t.transaction_type == TransactionType::Dividend && t.date.as_str() <= as_of_date {
+                let entry = dividends_by_asset.entry(t.asset_id.clone()).or_insert(0);
+                *entry = entry.saturating_add(t.total_amount);
+                total_dividends_received = total_dividends_received.saturating_add(t.total_amount);
+            }
+        }
+
+        let mut details: Vec<HoldingDetail> = Vec::new();
+        let mut closed_details: Vec<ClosedHoldingDetail> = Vec::new();
+        let mut total_global_value: i64 = 0;
+        let mut total_cost_basis: i64 = 0;
+        let mut total_realized_pnl: i64 = 0;
+
+        // Distinct non-cash assets with at least one transaction on or before the
+        // as-of date. Each reconstructs to an active (qty > 0), closed (qty 0 with
+        // a sell), or absent holding on the date.
+        let mut seen: HashSet<&str> = HashSet::new();
+        for transaction in &all_txs {
+            let asset_id = transaction.asset_id.as_str();
+            if is_cash_asset(asset_id) || transaction.date.as_str() > as_of_date {
+                continue;
+            }
+            if !seen.insert(asset_id) {
+                continue;
+            }
+
+            let reconstruction = Account::reconstruct_holding_as_of(&all_txs, asset_id, as_of_date);
+            let realized_pnl = reconstruction.total_realized_pnl;
+            total_realized_pnl = total_realized_pnl.saturating_add(realized_pnl);
+
+            let asset = self
+                .asset_service
+                .get_asset_by_id(asset_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "get_account_details_as_of: get_asset_by_id failed");
+                    AccountError::DatabaseError
+                })?
+                .ok_or_else(|| {
+                    tracing::error!(target: BACKEND, asset_id = %asset_id, "get_account_details_as_of: transaction references missing asset");
+                    AccountError::DatabaseError
+                })?;
+
+            // Closed-as-of: qty 0 on the date with a recorded sell → closed row.
+            if reconstruction.quantity <= 0 {
+                if let Some(last_sold_date) = reconstruction.last_sold_date {
+                    let dividends_received = *dividends_by_asset.get(asset_id).unwrap_or(&0);
+                    closed_details.push(ClosedHoldingDetail {
+                        asset_id: asset_id.to_string(),
+                        asset_name: asset.name,
+                        asset_reference: asset.reference,
+                        realized_pnl,
+                        dividends_received,
+                        last_sold_date,
+                    });
+                }
+                continue;
+            }
+
+            // Active-as-of: enrich with the carry-forward price + FX as of the date.
+            let cost_basis = (reconstruction.quantity as i128
+                * reconstruction.average_price as i128
+                / 1_000_000) as i64;
+            total_cost_basis = total_cost_basis.saturating_add(cost_basis);
+
+            // FXR-035 — resolve the rate to value this holding in the account
+            // currency as of the date. Identity pair → 1.0 without a lookup.
+            let resolved_rate = self
+                .currency_service
+                .resolve_rate(&asset.currency, &account.currency, as_of_date)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "get_account_details_as_of: resolve_rate failed");
+                    AccountError::DatabaseError
+                })?;
+            let conversion_rate: Option<i64> =
+                resolved_rate.as_ref().map(|resolved| resolved.rate_micros);
+            let fx_rate_date: Option<String> =
+                resolved_rate.and_then(|resolved| resolved.rate_date);
+
+            // Carry-forward price: latest recorded price dated on or before the
+            // as-of date (asset native currency). get_asset_prices is date DESC,
+            // so the first match is the most recent on or before the date.
+            let prices = self
+                .asset_service
+                .get_asset_prices(asset_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "get_account_details_as_of: get_asset_prices failed");
+                    AccountError::DatabaseError
+                })?;
+            let price_as_of = prices.iter().find(|p| p.date.as_str() <= as_of_date);
+
+            let (
+                current_price,
+                current_price_date,
+                current_price_source,
+                unrealized_pnl,
+                performance_pct,
+            ) = if let Some(price) = price_as_of {
+                let current_price = price.price;
+                // FXR-030/031/032 — value in account currency using the resolved
+                // rate; same-currency resolves to 1.0. No usable rate → P&L None.
+                let (unrealized_pnl, performance_pct) = match conversion_rate {
+                    Some(rate) => {
+                        let converted_price =
+                            (current_price as i128 * rate as i128 / 1_000_000) as i64;
+                        let unrealized_pnl = ((converted_price as i128
+                            - reconstruction.average_price as i128)
+                            * reconstruction.quantity as i128
+                            / 1_000_000) as i64;
+                        let performance_pct = if cost_basis != 0 {
+                            Some((unrealized_pnl as i128 * 100_000_000 / cost_basis as i128) as i64)
+                        } else {
+                            None
+                        };
+                        (Some(unrealized_pnl), performance_pct)
+                    }
+                    None => (None, None),
+                };
+                (
+                    Some(current_price),
+                    Some(price.date.clone()),
+                    Some(price.source.clone()),
+                    unrealized_pnl,
+                    performance_pct,
+                )
+            } else {
+                (None, None, None, None, None)
+            };
+
+            // CSH-094 / FXR-041 — a priced holding contributes its converted market
+            // value to the Global Value; foreign with no usable rate contributes 0.
+            if let (Some(cp), Some(rate)) = (current_price, conversion_rate) {
+                let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
+                let market_value =
+                    (reconstruction.quantity as i128 * converted_price as i128 / 1_000_000) as i64;
+                total_global_value = total_global_value.saturating_add(market_value);
+            }
+
+            let dividends_received = *dividends_by_asset.get(asset_id).unwrap_or(&0);
+            let total_return_pct: Option<i64> = match unrealized_pnl {
+                Some(upnl) if cost_basis != 0 => Some(
+                    ((upnl as i128 + dividends_received as i128) * 100_000_000 / cost_basis as i128)
+                        as i64,
+                ),
+                _ => None,
+            };
+
+            details.push(HoldingDetail {
+                asset_id: asset_id.to_string(),
+                asset_name: asset.name,
+                asset_reference: asset.reference,
+                quantity: reconstruction.quantity,
+                average_price: reconstruction.average_price,
+                cost_basis,
+                realized_pnl,
+                asset_currency: asset.currency,
+                current_price,
+                current_price_date,
+                current_price_source,
+                unrealized_pnl,
+                performance_pct,
+                dividends_received,
+                total_return_pct,
+                fx_rate_date,
+            });
+        }
+
+        // CSH-090/094 — include the system Cash Holding with its balance on the
+        // date. Cash carries no cost basis and no price; its quantity counts as
+        // account-currency value directly.
+        let cash_balance = Account::cash_balance_as_of(&all_txs, as_of_date);
+        if cash_balance > 0 {
+            let cash_asset_id = system_cash_asset_id(&account.currency);
+            let cash_asset = self
+                .asset_service
+                .get_asset_by_id(&cash_asset_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, asset_id = %cash_asset_id, err = ?e, "get_account_details_as_of: get cash asset failed");
+                    AccountError::DatabaseError
+                })?
+                .ok_or_else(|| {
+                    tracing::error!(target: BACKEND, asset_id = %cash_asset_id, "get_account_details_as_of: cash asset missing");
+                    AccountError::DatabaseError
+                })?;
+            total_global_value = total_global_value.saturating_add(cash_balance);
+            details.push(HoldingDetail {
+                asset_id: cash_asset_id,
+                asset_name: cash_asset.name,
+                asset_reference: cash_asset.reference,
+                quantity: cash_balance,
+                average_price: 1_000_000,
+                cost_basis: 0,
+                realized_pnl: 0,
+                asset_currency: account.currency.clone(),
+                current_price: None,
+                current_price_date: None,
+                current_price_source: None,
+                unrealized_pnl: None,
+                performance_pct: None,
+                dividends_received: 0,
+                total_return_pct: None,
+                fx_rate_date: None,
+            });
+        }
+
+        // ACD-033/046 — sort each section alphabetically by asset_name ascending.
+        details.sort_by(|a, b| a.asset_name.cmp(&b.asset_name));
+        closed_details.sort_by(|a, b| a.asset_name.cmp(&b.asset_name));
+
+        // MKT-040 — sum unrealized_pnl across qualifying holdings; None when none.
+        let qualifying_pnls: Vec<i64> = details.iter().filter_map(|d| d.unrealized_pnl).collect();
+        let total_unrealized_pnl = if qualifying_pnls.is_empty() {
+            None
+        } else {
+            Some(qualifying_pnls.iter().sum())
+        };
+
+        let total_holding_count = (details.len() + closed_details.len()) as i64;
+
+        Ok(AccountDetailsResponse {
+            account_name: account.name,
+            holdings: details,
+            closed_holdings: closed_details,
+            total_holding_count,
+            total_cost_basis,
+            total_realized_pnl,
+            total_unrealized_pnl,
+            total_global_value,
+            total_dividends_received,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -453,7 +743,10 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let err = uc.get_account_details("nonexistent-id").await.unwrap_err();
+        let err = uc
+            .get_account_details("nonexistent-id", None)
+            .await
+            .unwrap_err();
         assert!(
             matches!(
                 &err,
@@ -504,7 +797,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 0, "active holdings should be empty");
         assert_eq!(
@@ -564,7 +857,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 1);
         assert_eq!(resp.holdings[0].cost_basis, 200_000_000);
@@ -624,7 +917,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         assert_eq!(
             resp.holdings.len(),
@@ -652,7 +945,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.account_name, "My Account");
     }
 
@@ -751,7 +1044,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.holdings.len(), 0);
         assert_eq!(resp.closed_holdings.len(), 1);
         assert_eq!(resp.closed_holdings[0].asset_reference, "CC");
@@ -804,7 +1097,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.closed_holdings[0].asset_name, "Meta Inc");
         assert_eq!(resp.closed_holdings[0].asset_reference, "META");
     }
@@ -856,7 +1149,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.closed_holdings[0].realized_pnl, 42_000_000);
     }
 
@@ -936,7 +1229,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.closed_holdings[0].dividends_received, 5_000_000);
     }
 
@@ -987,7 +1280,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.closed_holdings[0].last_sold_date, "2025-11-30");
     }
 
@@ -1029,7 +1322,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.closed_holdings.len(), 0);
     }
 
@@ -1082,7 +1375,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         let names: Vec<&str> = resp
             .closed_holdings
             .iter()
@@ -1169,7 +1462,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.total_realized_pnl, 35_000_000);
     }
 
@@ -1191,7 +1484,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.total_realized_pnl, 0);
     }
 
@@ -1213,7 +1506,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert!(resp.closed_holdings.is_empty());
     }
 
@@ -1263,7 +1556,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert!(resp.holdings[0].unrealized_pnl.is_none());
         assert!(resp.holdings[0].current_price.is_none());
     }
@@ -1320,7 +1613,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.holdings[0].unrealized_pnl, Some(20_000_000));
     }
 
@@ -1375,7 +1668,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         // current_price present (raw asset-currency price), but P&L is None — no usable rate
         assert!(resp.holdings[0].current_price.is_some());
         assert!(resp.holdings[0].unrealized_pnl.is_none());
@@ -1425,7 +1718,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert!(resp.holdings[0].performance_pct.is_none());
     }
 
@@ -1481,7 +1774,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.holdings[0].performance_pct, Some(10_000_000));
     }
 
@@ -1537,7 +1830,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.holdings[0].unrealized_pnl, Some(0));
     }
 
@@ -1593,7 +1886,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert_eq!(resp.holdings[0].unrealized_pnl, Some(0));
         assert_eq!(resp.holdings[0].performance_pct, Some(0));
     }
@@ -1617,7 +1910,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         assert!(resp.total_unrealized_pnl.is_none());
     }
 
@@ -1706,7 +1999,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
         // Only holding 1 qualifies: unrealized_pnl = 20_000_000
         assert_eq!(resp.total_unrealized_pnl, Some(20_000_000));
     }
@@ -1759,7 +2052,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         let names: Vec<&str> = resp
             .holdings
@@ -1829,7 +2122,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         // Two active holdings: cash + bond.
         assert_eq!(resp.holdings.len(), 2);
@@ -1892,7 +2185,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         let cash = resp
             .holdings
@@ -2036,7 +2329,7 @@ mod tests {
             make_currency_service_with_no_rate(),
         );
 
-        let err = uc.get_account_details(&account_id).await.unwrap_err();
+        let err = uc.get_account_details(&account_id, None).await.unwrap_err();
         assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
@@ -2057,7 +2350,7 @@ mod tests {
             make_currency_service_with_no_rate(),
         );
 
-        let err = uc.get_account_details(&account_id).await.unwrap_err();
+        let err = uc.get_account_details(&account_id, None).await.unwrap_err();
         assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
@@ -2079,7 +2372,7 @@ mod tests {
             make_currency_service_with_no_rate(),
         );
 
-        let err = uc.get_account_details(&account_id).await.unwrap_err();
+        let err = uc.get_account_details(&account_id, None).await.unwrap_err();
         assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
@@ -2100,7 +2393,7 @@ mod tests {
             make_currency_service_with_no_rate(),
         );
 
-        let err = uc.get_account_details(&account_id).await.unwrap_err();
+        let err = uc.get_account_details(&account_id, None).await.unwrap_err();
         assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
     }
 
@@ -2236,7 +2529,7 @@ mod tests {
 
         let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
         let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         assert_eq!(resp.holdings.len(), 1);
         let holding = &resp.holdings[0];
@@ -2341,7 +2634,7 @@ mod tests {
 
         let currency_svc = make_currency_service_with_no_rate();
         let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         let holding = &resp.holdings[0];
         assert!(
@@ -2440,7 +2733,7 @@ mod tests {
         ));
 
         let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
-        let resp = uc.get_account_details(&account.id).await.unwrap();
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
 
         let holding = &resp.holdings[0];
         assert_eq!(holding.unrealized_pnl, Some(20_000_000));
@@ -2453,5 +2746,497 @@ mod tests {
             holding.fx_rate_date.is_none(),
             "same-currency must have no fx_rate_date"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // As-of view (Some(date)) — read-only reconstruction on a past date
+    // -------------------------------------------------------------------------
+
+    async fn make_stock(asset_svc: &AssetService, name: &str, currency: &str) -> String {
+        asset_svc
+            .create_asset(CreateAssetDTO {
+                name: name.to_string(),
+                reference: name.to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: currency.to_string(),
+                risk_level: 3,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap()
+            .id
+    }
+
+    // A malformed as-of date is rejected with InvalidDate before any lookup.
+    #[tokio::test]
+    async fn as_of_malformed_date_returns_invalid_date() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let err = uc
+            .get_account_details("any-id", Some("not-a-date"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AccountError::InvalidDate), "got: {err:?}");
+    }
+
+    // A future as-of date is rejected with DateInFuture.
+    #[tokio::test]
+    async fn as_of_future_date_returns_date_in_future() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let err = uc
+            .get_account_details("any-id", Some("2999-12-31"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AccountError::DateInFuture), "got: {err:?}");
+    }
+
+    // A holding opened AFTER the as-of date is excluded; one opened before is
+    // reconstructed with the as-of quantity + VWAP and priced (carry-forward) as
+    // of the date, alongside the cash row at its as-of balance.
+    #[tokio::test]
+    async fn as_of_reconstructs_holdings_excluding_later_openings() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+
+        let early = make_stock(&asset_svc, "Early", "EUR").await;
+        let late = make_stock(&asset_svc, "Late", "EUR").await;
+        // Early: buy 2 @ 100 on 2024-02-01 (cost 200).
+        account_svc
+            .buy_holding(
+                &account.id,
+                early.clone(),
+                "2024-02-01".to_string(),
+                2_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Late: buy 5 @ 50 on 2024-08-01 — after the as-of date.
+        account_svc
+            .buy_holding(
+                &account.id,
+                late.clone(),
+                "2024-08-01".to_string(),
+                5_000_000,
+                50_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Price for Early: 120 on 2024-03-01 (carry-forward to the as-of date).
+        asset_svc
+            .record_asset_price(&early, "2024-03-01", 120.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+
+        // "Late" excluded; "Early" and cash present.
+        assert!(
+            resp.holdings.iter().all(|h| h.asset_name != "Late"),
+            "Late opened after the date must be excluded"
+        );
+        let early_row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_name == "Early")
+            .expect("Early present");
+        assert_eq!(early_row.quantity, 2_000_000);
+        assert_eq!(early_row.average_price, 100_000_000);
+        assert_eq!(early_row.cost_basis, 200_000_000);
+        assert_eq!(early_row.current_price, Some(120_000_000));
+        assert_eq!(early_row.current_price_date.as_deref(), Some("2024-03-01"));
+        // Same-currency: unrealized = (120-100) × 2 = 40; market value (in global) = 240.
+        assert_eq!(early_row.unrealized_pnl, Some(40_000_000));
+
+        let cash = resp
+            .holdings
+            .iter()
+            .find(|h| is_cash_asset(&h.asset_id))
+            .expect("cash row present");
+        // Cash on the date = 1000 deposit − 200 buy = 800.
+        assert_eq!(cash.quantity, 800_000_000);
+
+        assert_eq!(resp.total_cost_basis, 200_000_000);
+        // Global value = 240 (Early) + 800 (cash) = 1040.
+        assert_eq!(resp.total_global_value, 1_040_000_000);
+    }
+
+    // A partial sell BEFORE the as-of date lowers quantity but preserves VWAP,
+    // and the realized P&L from that sell is reflected as of the date.
+    #[tokio::test]
+    async fn as_of_partial_sell_before_date_preserves_vwap_and_realizes_pnl() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let stock = make_stock(&asset_svc, "Stock", "EUR").await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-02-01".to_string(),
+                4_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Sell 1 @ 150 on 2024-03-01 — before the as-of date. Realized = 150 − 100 = 50.
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.clone(),
+                "2024-03-01".to_string(),
+                1_000_000,
+                150_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_name == "Stock")
+            .expect("Stock present");
+        assert_eq!(row.quantity, 3_000_000, "4 bought − 1 sold = 3");
+        assert_eq!(
+            row.average_price, 100_000_000,
+            "VWAP preserved across the sell"
+        );
+        assert_eq!(row.realized_pnl, 50_000_000, "realized = (150 − 100) × 1");
+        assert_eq!(resp.total_realized_pnl, 50_000_000);
+    }
+
+    // A foreign holding is valued using the FX rate as of the date.
+    #[tokio::test]
+    async fn as_of_foreign_holding_valued_with_fx_rate() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let stock = make_stock(&asset_svc, "US Co", "USD").await;
+        // 2 units, avg 100.00 EUR (cost basis already in account currency).
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-02-01".to_string(),
+                2_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, "2024-03-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_fixed_rate(1_080_000),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_name == "US Co")
+            .expect("US Co present");
+        // converted_price = 110 × 1.08 = 118.8; unrealized = (118.8 − 100) × 2 = 37.6.
+        assert_eq!(row.current_price, Some(110_000_000));
+        assert_eq!(row.unrealized_pnl, Some(37_600_000));
+        assert_eq!(row.fx_rate_date.as_deref(), Some("2026-01-01"));
+        // Global value = converted market value (2 × 118.8 = 237.6) + cash 800.
+        assert_eq!(resp.total_global_value, 237_600_000 + 800_000_000);
+    }
+
+    // An asset fully sold BEFORE the as-of date appears as a closed holding (qty 0,
+    // last_sold_date set), carrying its realized P&L as of the date.
+    #[tokio::test]
+    async fn as_of_fully_sold_before_date_is_closed_holding() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let stock = make_stock(&asset_svc, "Gone Co", "EUR").await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-02-01".to_string(),
+                2_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Sell all 2 @ 130 on 2024-03-01 → realized = (130 − 100) × 2 = 60.
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.clone(),
+                "2024-03-01".to_string(),
+                2_000_000,
+                130_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+        assert!(
+            resp.holdings.iter().all(|h| h.asset_name != "Gone Co"),
+            "fully-sold asset must not be an active holding"
+        );
+        let closed = resp
+            .closed_holdings
+            .iter()
+            .find(|h| h.asset_name == "Gone Co")
+            .expect("Gone Co present in closed holdings");
+        assert_eq!(closed.realized_pnl, 60_000_000);
+        assert_eq!(closed.last_sold_date, "2024-03-01");
+        assert_eq!(resp.total_realized_pnl, 60_000_000);
+    }
+
+    // A sell AFTER the as-of date does not appear: the asset reconstructs to its
+    // pre-sell quantity and is an active holding with no realized P&L on the date.
+    #[tokio::test]
+    async fn as_of_excludes_sells_after_the_date() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let stock = make_stock(&asset_svc, "Hold Co", "EUR").await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-02-01".to_string(),
+                3_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Sell on 2024-09-01 — after the as-of date, so excluded.
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.clone(),
+                "2024-09-01".to_string(),
+                1_000_000,
+                150_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_name == "Hold Co")
+            .expect("Hold Co present");
+        assert_eq!(row.quantity, 3_000_000, "pre-sell quantity on the date");
+        assert_eq!(
+            row.realized_pnl, 0,
+            "later sell not realized as of the date"
+        );
+        assert_eq!(resp.total_realized_pnl, 0);
+    }
+
+    // DIV-070/073 — a dividend dated AFTER the as-of date is excluded from both
+    // the holding's dividends_received and the account-level total.
+    #[tokio::test]
+    async fn as_of_excludes_dividends_after_the_date() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let stock = make_stock(&asset_svc, "Payer Co", "EUR").await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-02-01".to_string(),
+                2_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // Dividend on 2024-09-01 — after the as-of date, so excluded.
+        account_svc
+            .record_dividend(
+                &account.id,
+                stock.clone(),
+                "2024-09-01".to_string(),
+                3_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_name == "Payer Co")
+            .expect("Payer Co present");
+        assert_eq!(
+            row.dividends_received, 0,
+            "later dividend not credited as of the date"
+        );
+        assert_eq!(resp.total_dividends_received, 0);
     }
 }

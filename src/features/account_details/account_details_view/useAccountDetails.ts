@@ -26,7 +26,11 @@ interface UseAccountDetailsResult {
   summary: AccountSummaryViewModel | null;
 }
 
-export function useAccountDetails(accountId: string): UseAccountDetailsResult {
+/**
+ * @param asOfDate "" for the live view (today), or an ISO "YYYY-MM-DD" to load a
+ * read-only reconstruction of the account as it stood on that past date.
+ */
+export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountDetailsResult {
   const [data, setData] = useState<AccountDetailsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<I18nMessage | null>(null);
@@ -37,7 +41,7 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await accountDetailsGateway.getAccountDetails(accountId);
+      const result = await accountDetailsGateway.getAccountDetails(accountId, asOfDate || null);
       if (result.status === "ok") {
         setData(result.data);
       } else {
@@ -50,7 +54,7 @@ export function useAccountDetails(accountId: string): UseAccountDetailsResult {
     } finally {
       setIsLoading(false);
     }
-  }, [accountId]);
+  }, [accountId, asOfDate]);
 
   // ACD-037 — fetch on mount and on accountId change
   useEffect(() => {

@@ -27,7 +27,6 @@ use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
 use crate::use_cases::account_creation::AccountCreationUseCase;
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
-use crate::use_cases::account_holdings_as_of::AccountHoldingsAsOfUseCase;
 use crate::use_cases::account_performance::AccountPerformanceUseCase;
 use crate::use_cases::account_summary::AccountSummaryUseCase;
 use crate::use_cases::archive_asset::ArchiveAssetUseCase;
@@ -198,12 +197,6 @@ pub fn run() {
                     Arc::clone(&currency_service),
                 );
 
-                let account_holdings_as_of_uc = AccountHoldingsAsOfUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
-                    Arc::clone(&currency_service),
-                );
-
                 let account_summary_uc = AccountSummaryUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
@@ -240,7 +233,6 @@ pub fn run() {
                 );
 
                 app_handle.manage(account_details_uc);
-                app_handle.manage(account_holdings_as_of_uc);
                 app_handle.manage(account_summary_uc);
                 app_handle.manage(account_performance_uc);
                 app_handle.manage(archive_asset_uc);

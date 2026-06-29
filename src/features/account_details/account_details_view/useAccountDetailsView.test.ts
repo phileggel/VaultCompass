@@ -6,6 +6,7 @@ import { useAccountDetailsView } from "./useAccountDetailsView";
 const mockBlock = vi.fn();
 const mockUnblock = vi.fn();
 const mockShowSnackbar = vi.fn();
+const mockNavigate = vi.fn();
 const mockFetchAssets = vi.fn().mockResolvedValue(undefined);
 // Defaults to an error response (most tests don't need holdings); individual
 // tests override per-call via `mockResolvedValueOnce` to supply holdings.
@@ -14,7 +15,7 @@ const mockGetAccountDetails = vi.fn((..._args: unknown[]) =>
 );
 
 vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -272,5 +273,85 @@ describe("useAccountDetailsView — dividendPayingAssets filter (DIV-011/020)", 
     expect(result.current.dividendPayingAssets).toEqual([
       { assetId: "asset-active", assetName: "Active Co", assetCurrency: "USD" },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// As-of read-only mode: selecting a past date sets isAsOf and no-ops every
+// mutation open-handler; clearing the date returns to the live, mutable view.
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetailsView — as-of read-only mode", () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("isAsOf is false by default (live view)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.isAsOf).toBe(false);
+  });
+
+  it("selecting a past date enters as-of mode and blocks every mutation handler", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.setAsOfDate("2020-01-01"));
+    expect(result.current.isAsOf).toBe(true);
+
+    act(() => result.current.handleDividendOpen());
+    act(() => result.current.handleFreeSharesOpen());
+    act(() => result.current.handleDepositOpen());
+    act(() => result.current.handleWithdrawalOpen());
+    act(() => result.current.handleOpenBalanceOpen());
+    act(() =>
+      result.current.handleBuyOpen({
+        accountName: "Main",
+        assetId: "a1",
+        assetName: "A1",
+        assetCurrency: "EUR",
+        showExchangeRate: false,
+      }),
+    );
+    act(() =>
+      result.current.handleSellOpen({
+        accountName: "Main",
+        assetId: "a1",
+        assetName: "A1",
+        assetCurrency: "EUR",
+        showExchangeRate: false,
+        holdingQuantityMicro: 1_000_000,
+      }),
+    );
+
+    expect(result.current.dividendOpen).toBe(false);
+    expect(result.current.freeSharesOpen).toBe(false);
+    expect(result.current.depositOpen).toBe(false);
+    expect(result.current.withdrawalOpen).toBe(false);
+    expect(result.current.openBalanceOpen).toBe(false);
+    expect(result.current.buyTarget).toBeNull();
+    expect(result.current.sellTarget).toBeNull();
+  });
+
+  it("clearing the date returns to the live view", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.setAsOfDate("2020-01-01"));
+    expect(result.current.isAsOf).toBe(true);
+    act(() => result.current.setAsOfDate(""));
+    expect(result.current.isAsOf).toBe(false);
+  });
+
+  // handleAddTransaction navigates (URL-driven modal) rather than setting state;
+  // in as-of mode it must be a no-op (no navigate call).
+  it("blocks handleAddTransaction in as-of mode (no navigate)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.setAsOfDate("2020-01-01"));
+    expect(result.current.isAsOf).toBe(true);
+
+    act(() => result.current.handleAddTransaction());
+
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

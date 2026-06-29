@@ -42,7 +42,7 @@ const baseRow: HoldingRowViewModel = {
   sourceLabel: "mkt.source_yahoo",
 };
 
-const renderInTable = (row: HoldingRowViewModel) =>
+const renderInTable = (row: HoldingRowViewModel, readOnly = false) =>
   render(
     <table>
       <tbody>
@@ -52,6 +52,9 @@ const renderInTable = (row: HoldingRowViewModel) =>
           onBuy={vi.fn()}
           onSell={vi.fn()}
           onPriceHistory={vi.fn()}
+          onDeposit={vi.fn()}
+          onWithdraw={vi.fn()}
+          readOnly={readOnly}
         />
       </tbody>
     </table>,
@@ -282,6 +285,73 @@ describe("HoldingRow — dividend columns (DIV-072)", () => {
     const cell = screen.getByText("-8.25%");
     expect(cell).toBeInTheDocument();
     expect(cell.className).toContain("text-m3-error");
+  });
+});
+
+describe("HoldingRow — read-only as-of view", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  it("hides Buy/Sell/price-history mutating actions but keeps view-transactions", () => {
+    renderInTable(baseRow, true);
+    expect(document.querySelector("#action-buy-asset-1")).toBeNull();
+    expect(document.querySelector("#action-sell-asset-1")).toBeNull();
+    expect(document.querySelector("#action-price-history-asset-1")).toBeNull();
+    expect(document.querySelector("#action-view-transactions-asset-1")).toBeInTheDocument();
+  });
+
+  it("hides Deposit/Withdraw on the cash row in read-only mode", () => {
+    const cashRow: HoldingRowViewModel = {
+      ...baseRow,
+      assetId: "system-cash-eur",
+      assetReference: "EUR",
+      isCash: true,
+    };
+    renderInTable(cashRow, true);
+    expect(document.querySelector("#action-record-deposit-system-cash-eur")).toBeNull();
+    expect(document.querySelector("#action-record-withdrawal-system-cash-eur")).toBeNull();
+    expect(document.querySelector("#action-view-transactions-system-cash-eur")).toBeInTheDocument();
+  });
+
+  it("does not open the Edit Asset modal on double-click in read-only mode", () => {
+    renderInTable(baseRow, true);
+    const row = screen.getByText("Apple Inc").closest("tr");
+    if (!row) throw new Error("expected a holding row");
+    fireEvent.doubleClick(row);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("hides the missing-ticker edit shortcut (shows plain text) in read-only mode", () => {
+    renderInTable(
+      {
+        ...baseRow,
+        currentPrice: { kind: "missing_ticker" },
+        staleness: null,
+        sourceLabel: null,
+      },
+      true,
+    );
+    expect(document.querySelector("#action-edit-missing-ticker-asset-1")).toBeNull();
+    // The plain state text still renders, just not as a clickable write affordance.
+    expect(screen.getByText("mkt.price_state.missing_ticker")).toBeInTheDocument();
+  });
+
+  it("hides the Record-FX-rate shortcut in read-only mode", () => {
+    renderInTable(
+      {
+        ...baseRow,
+        assetId: "asset-usd-1",
+        assetCurrency: "USD",
+        unrealizedPnl: "—",
+        unrealizedPnlRaw: null,
+        performancePct: "—",
+        currentPrice: { kind: "present", formatted: "150.00" },
+      },
+      true,
+    );
+    expect(screen.queryByTestId("action-record-fx-rate-asset-usd-1")).toBeNull();
   });
 });
 

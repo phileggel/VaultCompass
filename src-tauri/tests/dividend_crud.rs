@@ -532,7 +532,7 @@ async fn dividends_received_is_zero_when_no_dividend() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 
@@ -610,7 +610,7 @@ async fn dividends_received_sums_all_dividends_for_the_holding() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 
@@ -696,7 +696,7 @@ async fn dividends_received_scoped_to_account_asset_pair() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 
@@ -765,7 +765,7 @@ async fn total_return_pct_is_none_when_no_price_recorded() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 
@@ -846,7 +846,7 @@ async fn total_return_pct_combines_unrealized_pnl_and_dividends() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 
@@ -892,7 +892,7 @@ async fn total_dividends_received_is_zero_when_none() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 
@@ -984,7 +984,7 @@ async fn total_dividends_received_sums_all_account_dividends() {
 
     let resp = ctx
         .details_use_case
-        .get_account_details(&account.id)
+        .get_account_details(&account.id, None)
         .await
         .unwrap();
 

@@ -36,6 +36,22 @@ pub struct HoldingSnapshot {
     pub average_price: i64,
 }
 
+/// Full point-in-time reconstruction of a holding as of a date: quantity, VWAP
+/// cost basis, cumulative realized P&L, and the most recent sell date. Backs the
+/// account-details "as of a past date" view, which needs the realized-P&L and
+/// last-sold figures the lighter [`HoldingSnapshot`] omits. All financial fields
+/// are i64 micro-units (ADR-001). Crate-internal: never crosses the wire.
+pub(crate) struct HoldingAsOfReconstruction {
+    /// Units held as of the queried date (micro-units), 0 when nothing is held.
+    pub quantity: i64,
+    /// VWAP cost basis per unit, account currency (micro-units), 0 when never held.
+    pub average_price: i64,
+    /// Cumulative realized P&L from sells dated on or before the queried date.
+    pub total_realized_pnl: i64,
+    /// ISO date of the most recent sell on or before the queried date, if any.
+    pub last_sold_date: Option<String>,
+}
+
 impl Holding {
     /// Creates a new Holding with a generated ID.
     pub fn new(
