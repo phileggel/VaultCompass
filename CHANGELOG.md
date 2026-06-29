@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-06-29
+
+### Added
+
+- add per-year annualized yield (CAGR) on performance page
+  Each year row now shows the cash-flow-adjusted cumulative return annualized
+  over the elapsed years (CAGR) — the equivalent constant annual rate, for
+  comparing against a fixed-interest plan. Reuses the since-inception metric;
+  sub-1-year periods report the cumulative as-is (no extrapolation).
+- view live account details as of a past date
+  A header date selector (default today) reconstructs the full view as of a past
+  date (holdings, prices, FX, realized P&L, dividends) in read-only mode with a
+  back-to-today banner. Retires the v0.29.0 holdings-as-of modal +
+  get_account_holdings_as_of, folded into get_account_details.
+
+### Fixed
+
+- revert DateField to committed value on blur
+  A half-typed entry emits "" and left stale partial text — indistinguishable
+  from an external reset to "" (which the echo-skip guard can't re-sync). On
+  blur, re-sync the display to the last committed value so no stale partial
+  lingers.
+
 ## [0.29.0] - 2026-06-28
 
 ### Added
