@@ -2,17 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (v0.30.0) Account history rework + cleanup + per-year yield — see `docs/plan/v0.30.0-plan.md`
-
-Scheduled in v0.30.0; removed by its housekeeping commit once shipped.
-
-- **T1 (feature)** As-of-date moves into the LIVE account-details view (header date selector, default today, read-only in as-of mode); retires the v0.29.0 holdings-as-of modal + `get_account_holdings_as_of` (folded into `get_account_details`).
-- **T2 (cleanup)** Remove the fetch-prices-for-a-date feature (unreliable provider data, unused).
-- **T3 (feature)** Per-year total-return yield on the performance page (modified Dietz, P&L realized+unrealized **+ dividends**, cash-flow-adjusted) — a new metric distinct from the existing price-only `period_over_period`.
-- **T4 (techdebt)** Fix `DateField` stale display on external reset (2026-06-21).
-- **T5 (techdebt)** Dedupe `period_end_dates` vs build_yearly/build_monthly (2026-06-01).
-- **T6 (techdebt)** Extract shared valuation helpers to `use_cases/shared/` — resolves the B18 use-case-to-use-case import (2026-06-16 + the v0.29.0 deferred 🔴).
-
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.

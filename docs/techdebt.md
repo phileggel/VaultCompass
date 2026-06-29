@@ -10,6 +10,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-06-29 — Carry-forward price lookup duplicated in the valuation engine
+
+- Found by: reviewer-backend (v0.30.0 T6 review)
+- Where: `src-tauri/src/use_cases/shared/valuation.rs` — `end_value_as_of` and `free_shares_value` each inline `prices.iter().rev().find(|p| parse_date(&p.date).is_some_and(|d| d <= period_end))`
+- Severity: 🔵
+- Observation: The "latest price on or before a date" carry-forward search is written twice. It briefly existed as `PricedAsset::price_as_of` (v0.29.0) but was removed as dead code when `account_holdings_as_of` was deleted (v0.30.0 T1); T6 then materialised both copies in the shared module. Reintroduce a `PricedAsset::price_as_of(date)` accessor and route both callers through it — that also lets `PricedAsset::prices` drop back from `pub(crate)` to private. Trivial, deferred to keep T6 a pure move.
+
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)
@@ -97,14 +104,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Severity: 🟡
 - Observation: The row-level "edit asset" affordance (double-click on a holding row, and the analogous AssetTable row) is mouse-only; there is no keyboard equivalent. Designing keyboard parity (e.g. Enter-to-edit) needs a consistent decision across both tables, since AssetTable's Enter/Space currently selects the row rather than opening edit.
 
-## 2026-06-01 — `period_end_dates` mirrors the build_yearly/build_monthly period iteration
-
-- Found by: reviewer-backend
-- Where: `src-tauri/src/use_cases/account_performance/orchestrator.rs:462-493`
-- Context: branch `feat/fx-rate-valuation` @ `b358b4e`
-- Severity: 🟡
-- Observation: `period_end_dates` enumerates the valuation period-ends by re-deriving the year iteration in `build_yearly` and the month iteration + prior-year-end YTD baseline in `build_monthly`. The three loops must stay in lockstep — if a new valuation point is ever added to a build method but not to `period_end_dates`, the pre-resolved FX `rate_map` misses that date and `end_value_as_of` degrades foreign holdings to 0 (FXR-034) rather than erroring, so the resulting performance drift is silent. The duplication is currently correct and commented; the risk is future divergence, not a present bug.
-
 ## 2026-06-16 — YTD summary helper over-fetches the FX rate map
 
 - Found by: reviewer-backend (accounts-overview-metrics review)
@@ -112,22 +111,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `refactor/ux-improvements` @ HEAD
 - Severity: 🟡
 - Observation: `compute_current_ytd_pct` (called once per account by `get_account_summaries`) pre-resolves FX rates for every monthly/yearly period-end from the account's earliest date to today, but the YTD computation only consumes two dates (today + prior 31 Dec). For a long-lived account with foreign holdings this is O(months × foreign currencies) unnecessary rate lookups per summary row, multiplied across all accounts on the list. Correctness is unaffected (the two needed dates are always in the set). A targeted `load_rate_map_for_dates(&[today, prior_dec_31])` would bound it. Accepted at current scale per the ACC-024 dependency note; revisit if account/transaction volume grows.
-
-## 2026-06-16 — Shared performance/valuation helpers live inside account_performance, imported by account_summary
-
-- Found by: reviewer-arch (accounts-overview-metrics review)
-- Where: `src-tauri/src/use_cases/account_performance/orchestrator.rs` (`pub(crate)` `load_priced_assets` / `load_rate_map` / `compute_current_ytd_pct` / `PricedAsset` / `RateMap`) imported by `src-tauri/src/use_cases/account_summary/orchestrator.rs`
-- Context: branch `refactor/ux-improvements` @ HEAD
-- Severity: 🟡
-- Observation: ACC-024's YTD reuse is implemented by promoting performance-engine helpers to `pub(crate)` and importing them into the sibling `account_summary` use case — an asymmetric inter-module dependency within `use_cases/` (B18: a use case importing from another use case). Update 2026-06-28 (v0.29.0 T1): the new `account_holdings_as_of` use case became the **third** consumer — it imports `load_priced_assets` + `PricedAsset::price_as_of` from `account_performance`. reviewer-arch graded this a 🔴 B18 violation. It was deferred (b) for T1: it extends the existing accepted pattern, and the proper fix is a multi-use-case extraction with field-visibility design (the new `price_as_of` accessor and `PricedAsset`'s currently-private fields). Fix for all three at once: extract the stateless valuation helpers (`load_priced_assets`, `load_rate_map`, `compute_current_ytd_pct`, `PricedAsset` + `price_as_of`, `RateMap`) into a neutral `use_cases/shared/` module owned by neither use case, give `PricedAsset` proper accessors, and replace `account_performance/mod.rs`'s wildcard `pub use orchestrator::*` with an explicit re-export so internal helpers don't leak.
-
-## 2026-06-21 — DateField stale display on external reset during partial entry
-
-- Found by: reviewer-frontend (datefield-input-typing review)
-- Where: `src/ui/components/field/useDateField.ts` (sync `useEffect` + `lastEmittedIso` ref)
-- Context: branch `fix/datefield-input-typing` @ `c297767`
-- Severity: 🟡
-- Observation: When a parent resets `value` to `""` while the user has an in-progress partial entry (e.g. `05/06`), the field keeps showing the stale partial text. A partial entry parses to `""`, which is indistinguishable from an externally-imposed `""`, so the echo-skip guard cannot tell the two apart; React also skips the effect entirely when `value` is already `""`. The reachable variants (a committed date reset to empty) sync correctly, and the marginal path is masked today by modals unmounting the field on close. No covering test exists for this path.
 
 ## 2026-06-21 — Inconsistent date display style across the app (fr/us)
 
