@@ -357,42 +357,6 @@ describe("accountDetailsGateway — fetchAccountAssetPrices (MKT-131, MKT-132)",
   });
 });
 
-describe("accountDetailsGateway — fetchAccountAssetPricesForDate", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns the FetchForDateOutcome on success", async () => {
-    const outcome = { stored: 3, missing: ["Acme"] };
-    mockInvoke.mockResolvedValue(outcome);
-    const result = await accountDetailsGateway.fetchAccountAssetPricesForDate(
-      "account-1",
-      "2024-06-10",
-    );
-    expect(result).toEqual({ status: "ok", data: outcome });
-  });
-
-  it("surfaces DateInFuture for a future date", async () => {
-    const error = { code: "DateInFuture" };
-    mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPricesForDate(
-      "account-1",
-      "2099-01-01",
-    );
-    expect(result).toEqual({ status: "error", error });
-  });
-
-  it("surfaces AccountNotFound for an unknown account", async () => {
-    const error = { code: "AccountNotFound", account_id: "no-such" };
-    mockInvoke.mockRejectedValue(error);
-    const result = await accountDetailsGateway.fetchAccountAssetPricesForDate(
-      "no-such",
-      "2024-06-10",
-    );
-    expect(result).toEqual({ status: "error", error });
-  });
-});
-
 describe("accountDetailsGateway — recordWithdrawal (CSH-032)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
