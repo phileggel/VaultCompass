@@ -473,13 +473,7 @@ fn free_shares_value(
     if priced.class == AssetClass::Cash {
         return 0;
     }
-    let Some(price) = priced
-        .prices
-        .iter()
-        .rev()
-        .find(|p| parse_date(&p.date).is_some_and(|d| d <= period_end))
-        .map(|p| p.price as i128)
-    else {
+    let Some(price) = priced.price_as_of(period_end).map(|p| p as i128) else {
         return 0;
     };
     let quantity = transaction.quantity as i128;

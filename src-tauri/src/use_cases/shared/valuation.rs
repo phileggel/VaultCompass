@@ -31,7 +31,20 @@ pub(crate) struct PricedAsset {
     pub(crate) currency: String,
     pub(crate) class: AssetClass,
     /// Recorded prices sorted ascending by date (PRF-022 carry-forward lookup).
-    pub(crate) prices: Vec<AssetPrice>,
+    prices: Vec<AssetPrice>,
+}
+
+impl PricedAsset {
+    /// PRF-022 carry-forward: the most recent recorded price (asset-currency micros)
+    /// dated on or before `date`, or `None` when no recorded price qualifies. Prices
+    /// are stored ascending, so the reverse scan yields the latest qualifying match.
+    pub(crate) fn price_as_of(&self, date: NaiveDate) -> Option<i64> {
+        self.prices
+            .iter()
+            .rev()
+            .find(|p| parse_date(&p.date).is_some_and(|d| d <= date))
+            .map(|p| p.price)
+    }
 }
 
 /// Net-of-flows performance figures for one period (PRF-031, PRF-032).
@@ -397,13 +410,7 @@ pub(crate) fn end_value_as_of(
             continue;
         }
         // PRF-022 — carry-forward: most recent recorded price with date ≤ period_end.
-        let Some(price) = priced
-            .prices
-            .iter()
-            .rev()
-            .find(|p| parse_date(&p.date).is_some_and(|d| d <= period_end))
-            .map(|p| p.price as i128)
-        else {
+        let Some(price) = priced.price_as_of(period_end).map(|p| p as i128) else {
             continue;
         };
         if priced.currency == account_currency {
