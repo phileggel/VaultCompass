@@ -206,8 +206,65 @@ describe("useAccountDetailsView — free-shares modal state (FSD-012)", () => {
   });
 });
 
+describe("useAccountDetailsView — management-fee modal state (FEE-010)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("managementFeeOpen starts false and flips on open", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.managementFeeOpen).toBe(false);
+    act(() => result.current.handleManagementFeeOpen());
+    expect(result.current.managementFeeOpen).toBe(true);
+  });
+
+  it("handleManagementFeeClose and handleManagementFeeSuccess close the modal", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleManagementFeeOpen());
+    act(() => result.current.handleManagementFeeClose());
+    expect(result.current.managementFeeOpen).toBe(false);
+    act(() => result.current.handleManagementFeeOpen());
+    act(() => result.current.handleManagementFeeSuccess());
+    expect(result.current.managementFeeOpen).toBe(false);
+  });
+});
+
+describe("useAccountDetailsView — fee-schedule modal target (FEE-011)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("feeScheduleTarget starts null and captures asset id + name on open", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.feeScheduleTarget).toBeNull();
+    act(() => result.current.handleFeeScheduleOpen("asset-9", "Vanguard ETF"));
+    expect(result.current.feeScheduleTarget).toEqual({
+      assetId: "asset-9",
+      assetName: "Vanguard ETF",
+    });
+  });
+
+  it("handleFeeScheduleClose and handleFeeScheduleSuccess clear the target", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleFeeScheduleOpen("asset-9", "Vanguard ETF"));
+    act(() => result.current.handleFeeScheduleClose());
+    expect(result.current.feeScheduleTarget).toBeNull();
+    act(() => result.current.handleFeeScheduleOpen("asset-9", "Vanguard ETF"));
+    act(() => result.current.handleFeeScheduleSuccess());
+    expect(result.current.feeScheduleTarget).toBeNull();
+  });
+});
+
 // ---------------------------------------------------------------------------
-// DIV-011/020 — dividendPayingAssets exposes only active, non-cash holdings
+// DIV-011/020 — activeNonCashHoldings exposes only active, non-cash holdings
 // (quantity > 0) as candidates for the dividend modal's asset selector.
 // ---------------------------------------------------------------------------
 const makeHoldingDetail = (overrides: Record<string, unknown> = {}) => ({
@@ -229,7 +286,7 @@ const makeHoldingDetail = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe("useAccountDetailsView — dividendPayingAssets filter (DIV-011/020)", () => {
+describe("useAccountDetailsView — activeNonCashHoldings filter (DIV-011/020)", () => {
   beforeEach(() => {
     useAppStore.setState({
       assets: [],
@@ -270,7 +327,7 @@ describe("useAccountDetailsView — dividendPayingAssets filter (DIV-011/020)", 
     const { result } = renderHook(() => useAccountDetailsView("acc-1"));
     await act(async () => {});
 
-    expect(result.current.dividendPayingAssets).toEqual([
+    expect(result.current.activeNonCashHoldings).toEqual([
       { assetId: "asset-active", assetName: "Active Co", assetCurrency: "USD" },
     ]);
   });

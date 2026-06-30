@@ -22,6 +22,7 @@ vi.mock("./bindings", () => ({
     checkForUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
     downloadUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
     installUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
+    applyDueFeeDeductions: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
   },
   events: {
     event: {

@@ -13,6 +13,7 @@ import {
   formatStaleness,
   freeSharesErrorToI18n,
   type HoldingRowViewModel,
+  managementFeeErrorToI18n,
   priceRefreshLockErrorToI18n,
   toAccountSummary,
   toClosedHoldingRow,
@@ -660,6 +661,44 @@ describe("freeSharesErrorToI18n", () => {
     "NegativeAveragePrice",
   ] as const)("keyless holding-internal code %s falls back to error.Unknown", (code) => {
     expect(freeSharesErrorToI18n({ code } as never)).toEqual({ key: "error.Unknown" });
+  });
+});
+
+describe("managementFeeErrorToI18n (FEE-021/011/027)", () => {
+  it.each([
+    "AssetNotFound",
+    "AssetNotHeld",
+    "ManagementFeeOnCashAsset",
+    "PercentageNotPositive",
+    "PercentageAboveHundred",
+    "CascadingOversell",
+    "QuantityNotPositive",
+    "RateNotPositive",
+    "RateAboveHundred",
+    "EndBeforeStart",
+    "ScheduleAlreadyExists",
+    "ScheduleNotFound",
+    "DatabaseError",
+  ] as const)("%s maps to its flat error key", (code) => {
+    expect(managementFeeErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
+  });
+});
+
+describe("toHoldingRow / toAccountSummary — management fees (FEE-052/053)", () => {
+  it("formats a holding's cumulative management fees", () => {
+    const row = toHoldingRow(makeHolding({ management_fees: 4_250_000 }));
+    expect(row.managementFees).toBe("4,25");
+  });
+
+  it("leaves the cash row's management fees blank", () => {
+    const row = toHoldingRow(makeHolding({ asset_id: "system-cash-EUR" }));
+    expect(row.managementFees).toBe("");
+  });
+
+  it("formats the account total management fees", () => {
+    const summary = toAccountSummary(makeResponse({ total_management_fees: 12_500_000 }));
+    expect(summary.totalManagementFees).toBe("12,50");
+    expect(summary.totalManagementFeesRaw).toBe(12_500_000);
   });
 });
 

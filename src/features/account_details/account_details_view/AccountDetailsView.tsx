@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Coins,
   Gift,
+  Percent,
   PlusCircle,
   RefreshCw,
   RotateCcw,
@@ -23,7 +24,9 @@ import { DateField } from "@/ui/components/field/DateField";
 import { BuyTransactionModal } from "../buy_transaction/BuyTransactionModal";
 import { DepositTransactionModal } from "../deposit_transaction/DepositTransactionModal";
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
+import { FeeScheduleModal } from "../fee_schedule/FeeScheduleModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
+import { ManagementFeeModal } from "../management_fee_transaction/ManagementFeeModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
@@ -87,6 +90,16 @@ export function AccountDetailsView() {
                   {t("account_details.total_global_value")}:{" "}
                   <span className="font-semibold text-m3-on-surface">
                     {view.summary.totalGlobalValue}
+                  </span>
+                </p>
+                {/* FEE-053 — total management fees deducted across all holdings */}
+                <p
+                  id="account-details-total-management-fees"
+                  className="text-sm text-m3-on-surface-variant whitespace-nowrap"
+                >
+                  {t("account_details.total_management_fees")}:{" "}
+                  <span className="font-semibold text-m3-on-surface">
+                    {view.summary.totalManagementFees}
                   </span>
                 </p>
               </div>
@@ -179,6 +192,17 @@ export function AccountDetailsView() {
                       aria-label={t("account_details.action_record_free_shares")}
                       title={t("account_details.action_record_free_shares")}
                     />
+                    {/* FEE-010 — Record one-off management fee */}
+                    <IconButton
+                      id="add-menu-management-fee"
+                      shape="square"
+                      size="lg"
+                      variant="tonal"
+                      icon={<Percent size={20} />}
+                      onClick={view.handleManagementFeeOpen}
+                      aria-label={t("account_details.action_record_management_fee")}
+                      title={t("account_details.action_record_management_fee")}
+                    />
                   </>
                 )}
               </div>
@@ -261,6 +285,10 @@ export function AccountDetailsView() {
                       <th className="m3-th text-right">
                         {t("account_details.column_total_return_pct")}
                       </th>
+                      {/* FEE-052 — Management fees deducted column */}
+                      <th className="m3-th text-right">
+                        {t("account_details.column_management_fees")}
+                      </th>
                       <th className="m3-th">{t("transaction.column_actions")}</th>
                     </tr>
                   </thead>
@@ -276,6 +304,7 @@ export function AccountDetailsView() {
                         onDeposit={view.handleDepositOpen}
                         onWithdraw={view.handleWithdrawalOpen}
                         onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
+                        onManageFee={view.handleFeeScheduleOpen}
                         readOnly={view.isAsOf}
                       />
                     ))}
@@ -439,7 +468,7 @@ export function AccountDetailsView() {
           onClose={view.handleDividendClose}
           accountId={accountId}
           accountCurrency={view.accountCurrency}
-          heldAssets={view.dividendPayingAssets}
+          heldAssets={view.activeNonCashHoldings}
           onSubmitSuccess={view.handleDividendSuccess}
           onRecorded={view.handleDividendRecorded}
         />
@@ -451,8 +480,31 @@ export function AccountDetailsView() {
           isOpen
           onClose={view.handleFreeSharesClose}
           accountId={accountId}
-          heldAssets={view.dividendPayingAssets}
+          heldAssets={view.activeNonCashHoldings}
           onSubmitSuccess={view.handleFreeSharesSuccess}
+        />
+      )}
+
+      {/* FEE-010/011 — one-off management-fee modal (charged asset chosen inside) */}
+      {view.managementFeeOpen && (
+        <ManagementFeeModal
+          isOpen
+          onClose={view.handleManagementFeeClose}
+          accountId={accountId}
+          heldAssets={view.activeNonCashHoldings}
+          onSubmitSuccess={view.handleManagementFeeSuccess}
+        />
+      )}
+
+      {/* FEE-011/030 — recurring fee-schedule modal for a specific holding */}
+      {view.feeScheduleTarget && (
+        <FeeScheduleModal
+          isOpen
+          onClose={view.handleFeeScheduleClose}
+          accountId={accountId}
+          assetId={view.feeScheduleTarget.assetId}
+          assetName={view.feeScheduleTarget.assetName}
+          onSubmitSuccess={view.handleFeeScheduleSuccess}
         />
       )}
 

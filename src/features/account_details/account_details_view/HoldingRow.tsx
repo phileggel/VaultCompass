@@ -6,6 +6,7 @@ import {
   Lock,
   LockOpen,
   Minus,
+  Percent,
   Plus,
   Search,
 } from "lucide-react";
@@ -30,6 +31,8 @@ type HoldingRowProps = {
   onWithdraw?: () => void;
   /** MKT-153/156 — toggle the asset's price-refresh lock. */
   onTogglePriceRefreshLock?: (assetId: string, currentlyBlocked: boolean) => void;
+  /** FEE-011 — open the recurring fee-schedule modal for this holding. */
+  onManageFee?: (assetId: string, assetName: string) => void;
   /** As-of (read-only past-date view): hide every mutating action button. */
   readOnly?: boolean;
 };
@@ -43,6 +46,7 @@ export function HoldingRow({
   onDeposit,
   onWithdraw,
   onTogglePriceRefreshLock,
+  onManageFee,
   readOnly = false,
 }: HoldingRowProps) {
   const { t } = useTranslation();
@@ -102,6 +106,10 @@ export function HoldingRow({
     onPriceHistory(row.assetId);
   }, [onPriceHistory, row.assetId]);
 
+  const handleManageFee = useCallback(() => {
+    onManageFee?.(row.assetId, row.assetName);
+  }, [onManageFee, row.assetId, row.assetName]);
+
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
   const isPriceRefreshBlocked = asset?.price_refresh_blocked ?? false;
@@ -136,6 +144,8 @@ export function HoldingRow({
         <td className="m3-td" />
         {/* DIV-072 — dividends / total-return columns are blank for the cash row */}
         <td className="m3-td" />
+        <td className="m3-td" />
+        {/* FEE-052 — management fees column is blank for the cash row */}
         <td className="m3-td" />
         <td className="m3-td">
           <div className="flex items-center gap-1">
@@ -302,6 +312,10 @@ export function HoldingRow({
           <span className="text-m3-on-surface-variant">{row.totalReturnPct}</span>
         )}
       </td>
+      {/* FEE-052 — Management fees deducted (always shown) */}
+      <td id={`holding-management-fees-${row.assetId}`} className="m3-td text-right tabular-nums">
+        {row.managementFees}
+      </td>
       <td className="m3-td">
         <div className="flex items-center gap-1">
           {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}
@@ -346,6 +360,16 @@ export function HoldingRow({
                     isPriceRefreshBlocked ? "mkt.lock.action_unblock" : "mkt.lock.action_block",
                   )}
                   onClick={handleTogglePriceRefreshLock}
+                />
+              )}
+              {/* FEE-011 — manage the recurring management-fee schedule for this holding */}
+              {onManageFee && (
+                <IconButton
+                  icon={<Percent size={16} />}
+                  size="sm"
+                  id={`action-manage-fee-${row.assetId}`}
+                  aria-label={t("account_details.action_manage_fee")}
+                  onClick={handleManageFee}
                 />
               )}
             </>

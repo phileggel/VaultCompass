@@ -35,6 +35,7 @@ const baseRow: HoldingRowViewModel = {
   unrealizedPnlRaw: 100_000_000,
   performancePct: "50.00%",
   dividendsReceived: "0.00",
+  managementFees: "0.00",
   totalReturnPct: "50.00%",
   totalReturnPctRaw: 50_000_000,
   isCash: false,
@@ -482,5 +483,51 @@ describe("HoldingRow — cash row (CSH-110 view transactions)", () => {
     expect(navigateMock).toHaveBeenCalledTimes(1);
     const arg = navigateMock.mock.calls[0]?.[0] as { params: { assetId: string } };
     expect(arg.params.assetId).toBe("system-cash-eur");
+  });
+});
+
+describe("HoldingRow — management fees column + action (FEE-052/011)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  const renderWithManageFee = (
+    row: HoldingRowViewModel,
+    onManageFee: (assetId: string, assetName: string) => void,
+    readOnly = false,
+  ) =>
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={row}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onManageFee={onManageFee}
+            readOnly={readOnly}
+          />
+        </tbody>
+      </table>,
+    );
+
+  it("renders the management fees cell value (FEE-052)", () => {
+    renderWithManageFee({ ...baseRow, managementFees: "12.34" }, vi.fn());
+    const cell = document.querySelector("#holding-management-fees-asset-1");
+    expect(cell).toHaveTextContent("12.34");
+  });
+
+  it("opens the fee-schedule modal with asset id + name on manage-fee click (FEE-011)", () => {
+    const onManageFee = vi.fn();
+    renderWithManageFee(baseRow, onManageFee);
+    fireEvent.click(document.querySelector("#action-manage-fee-asset-1")!);
+    expect(onManageFee).toHaveBeenCalledWith("asset-1", "Apple Inc");
+  });
+
+  it("hides the manage-fee action in the read-only as-of view", () => {
+    renderWithManageFee(baseRow, vi.fn(), true);
+    expect(document.querySelector("#action-manage-fee-asset-1")).toBeNull();
   });
 });

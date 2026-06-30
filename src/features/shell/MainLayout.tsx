@@ -3,6 +3,7 @@ import { logger } from "@/lib/logger";
 import { UpdateBanner, useUpdateBanner } from "@/lib/update";
 import { Snackbar } from "@/ui/components";
 import { Content } from "./Content";
+import { useFeeGeneration } from "./fee_generation/useFeeGeneration";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 
@@ -26,6 +27,9 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   // R4 — banner is part of permanent shell layout, visible on all pages
   const updateBannerData = useUpdateBanner();
+
+  // FEE-040 — apply due recurring management-fee deductions once on app start.
+  useFeeGeneration();
 
   return (
     <div className="flex h-screen overflow-hidden bg-m3-surface">

@@ -56,6 +56,11 @@ export function useAccountDetailsView(accountId: string) {
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [dividendOpen, setDividendOpen] = useState(false);
   const [freeSharesOpen, setFreeSharesOpen] = useState(false);
+  const [managementFeeOpen, setManagementFeeOpen] = useState(false);
+  const [feeScheduleTarget, setFeeScheduleTarget] = useState<{
+    assetId: string;
+    assetName: string;
+  } | null>(null);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -160,6 +165,31 @@ export function useAccountDetailsView(accountId: string) {
     data.retry();
   }, [data]);
 
+  // FEE-010 — one-off management-fee modal state (entered from the header "Record" menu).
+  const handleManagementFeeOpen = useCallback(() => {
+    if (isAsOf) return;
+    setManagementFeeOpen(true);
+  }, [isAsOf]);
+  const handleManagementFeeClose = useCallback(() => setManagementFeeOpen(false), []);
+  const handleManagementFeeSuccess = useCallback(() => {
+    setManagementFeeOpen(false);
+    data.retry();
+  }, [data]);
+
+  // FEE-011 — recurring fee-schedule modal, opened per holding from its row action.
+  const handleFeeScheduleOpen = useCallback(
+    (assetId: string, assetName: string) => {
+      if (isAsOf) return;
+      setFeeScheduleTarget({ assetId, assetName });
+    },
+    [isAsOf],
+  );
+  const handleFeeScheduleClose = useCallback(() => setFeeScheduleTarget(null), []);
+  const handleFeeScheduleSuccess = useCallback(() => {
+    setFeeScheduleTarget(null);
+    data.retry();
+  }, [data]);
+
   // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
   // block/unblock command, then re-reads the asset list (so the row's lock
   // icon flips from the store, mirroring archive/unarchive) and confirms
@@ -195,10 +225,11 @@ export function useAccountDetailsView(accountId: string) {
   // CSH-098 — the asset-positions empty state excludes the always-present Cash row.
   const hasNonCashActiveHoldings = data.holdings.some((row) => !row.isCash);
   const hasClosedHoldings = data.summary?.hasClosedHoldings ?? false;
-  // DIV-011/020 — paying-asset candidates for the dividend modal: active,
-  // non-cash holdings (quantity > 0). Memoized so the stable reference does not
-  // invalidate the modal's `assetOptions` memo on every parent render.
-  const dividendPayingAssets = useMemo(
+  // Active, non-cash holdings (quantity > 0) — the candidate assets for the
+  // dividend, free-shares, and management-fee modals (DIV-011/020, FSD-011, FEE-011/012).
+  // Memoized so the stable reference does not invalidate each modal's `assetOptions`
+  // memo on every parent render.
+  const activeNonCashHoldings = useMemo(
     () =>
       data.holdingDetails
         .filter((h) => !isCashAsset(h.asset_id) && h.quantity > 0)
@@ -235,7 +266,7 @@ export function useAccountDetailsView(accountId: string) {
     accountCurrency,
     hasNonCashActiveHoldings,
     hasClosedHoldings,
-    dividendPayingAssets,
+    activeNonCashHoldings,
     priceableAssets,
     // Modal targets / flags
     buyTarget,
@@ -246,6 +277,8 @@ export function useAccountDetailsView(accountId: string) {
     withdrawalOpen,
     dividendOpen,
     freeSharesOpen,
+    managementFeeOpen,
+    feeScheduleTarget,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -272,6 +305,12 @@ export function useAccountDetailsView(accountId: string) {
     handleFreeSharesOpen,
     handleFreeSharesClose,
     handleFreeSharesSuccess,
+    handleManagementFeeOpen,
+    handleManagementFeeClose,
+    handleManagementFeeSuccess,
+    handleFeeScheduleOpen,
+    handleFeeScheduleClose,
+    handleFeeScheduleSuccess,
     handleTogglePriceRefreshLock,
   };
 }

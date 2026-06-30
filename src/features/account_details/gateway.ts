@@ -3,17 +3,22 @@ import type {
   AccountError,
   AssetError,
   AssetPrice,
+  CreateFeeScheduleDTO,
   DepositDTO,
   DividendDTO,
   DividendError,
+  FeeSchedule,
   FetchAccountAssetPricesError,
   FreeSharesDTO,
   FreeSharesError,
   HoldingSnapshot,
+  ManagementFeeDTO,
+  ManagementFeeError,
   OpenHoldingDTO,
   OpenHoldingError,
   Result,
   Transaction,
+  UpdateFeeScheduleDTO,
   WithdrawalDTO,
 } from "@/bindings";
 import { commands, events } from "@/bindings";
@@ -74,6 +79,36 @@ export const accountDetailsGateway = {
   // FSD-022 — record a zero-cost free-share distribution attributed to a held asset.
   async recordFreeShares(dto: FreeSharesDTO): Promise<Result<Transaction, FreeSharesError>> {
     return commands.recordFreeShares(dto);
+  },
+
+  // FEE-022 — record a one-off management fee as a percentage of the held quantity.
+  async recordManagementFee(
+    dto: ManagementFeeDTO,
+  ): Promise<Result<Transaction, ManagementFeeError>> {
+    return commands.recordManagementFee(dto);
+  },
+
+  // FEE-030 — create the recurring fee schedule for an (account, asset) pair.
+  async createFeeSchedule(dto: CreateFeeScheduleDTO): Promise<Result<FeeSchedule, AccountError>> {
+    return commands.createFeeSchedule(dto);
+  },
+
+  // FEE-060/061 — edit the rate / end date / active flag of an existing schedule.
+  async updateFeeSchedule(dto: UpdateFeeScheduleDTO): Promise<Result<FeeSchedule, AccountError>> {
+    return commands.updateFeeSchedule(dto);
+  },
+
+  // FEE-062 — remove the schedule for an (account, asset) pair.
+  async deleteFeeSchedule(accountId: string, assetId: string): Promise<Result<null, AccountError>> {
+    return commands.deleteFeeSchedule(accountId, assetId);
+  },
+
+  // FEE-030 — load the existing schedule for an (account, asset) pair, or null.
+  async getFeeSchedule(
+    accountId: string,
+    assetId: string,
+  ): Promise<Result<FeeSchedule | null, AccountError>> {
+    return commands.getFeeSchedule(accountId, assetId);
   },
 
   // CSH-111 — editing a cash Deposit/Withdrawal persists via correct_transaction.

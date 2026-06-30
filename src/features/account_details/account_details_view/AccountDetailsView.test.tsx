@@ -42,6 +42,12 @@ vi.mock("../price_history/PriceHistoryModal", () => ({ PriceHistoryModal: () => 
 vi.mock("../dividend_transaction/DividendTransactionModal", () => ({
   DividendTransactionModal: () => <div data-testid="dividend-modal-mounted" />,
 }));
+vi.mock("../management_fee_transaction/ManagementFeeModal", () => ({
+  ManagementFeeModal: () => <div data-testid="management-fee-modal-mounted" />,
+}));
+vi.mock("../fee_schedule/FeeScheduleModal", () => ({
+  FeeScheduleModal: () => <div data-testid="fee-schedule-modal-mounted" />,
+}));
 vi.mock("./HoldingRow", () => ({ HoldingRow: () => <tr data-testid="holding-row" /> }));
 vi.mock("./ClosedHoldingRow", () => ({ ClosedHoldingRow: () => <tr /> }));
 
@@ -51,6 +57,7 @@ const handlers = {
   handleOpenBalanceOpen: vi.fn(),
   handleDividendOpen: vi.fn(),
   handleFreeSharesOpen: vi.fn(),
+  handleManagementFeeOpen: vi.fn(),
   handleAddTransaction: vi.fn(),
 };
 
@@ -61,6 +68,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   summary: {
     accountName: "Main",
     totalGlobalValue: "1.100,00",
+    totalManagementFees: "0,00",
     isEmpty: false,
     isAllClosed: false,
     hasClosedHoldings: false,
@@ -70,7 +78,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   accountCurrency: "EUR",
   hasNonCashActiveHoldings: false,
   hasClosedHoldings: false,
-  dividendPayingAssets: [],
+  activeNonCashHoldings: [],
   buyTarget: null,
   sellTarget: null,
   historyTarget: null,
@@ -78,6 +86,8 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   depositOpen: false,
   withdrawalOpen: false,
   dividendOpen: false,
+  managementFeeOpen: false,
+  feeScheduleTarget: null,
   asOfDate: "",
   asOfDisplayDate: "2024-06-01",
   isAsOf: false,
@@ -99,6 +109,11 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   handleWithdrawalSuccess: vi.fn(),
   handleDividendClose: vi.fn(),
   handleDividendSuccess: vi.fn(),
+  handleManagementFeeClose: vi.fn(),
+  handleManagementFeeSuccess: vi.fn(),
+  handleFeeScheduleOpen: vi.fn(),
+  handleFeeScheduleClose: vi.fn(),
+  handleFeeScheduleSuccess: vi.fn(),
   handleTogglePriceRefreshLock: vi.fn(),
   ...overrides,
 });
@@ -275,5 +290,45 @@ describe("AccountDetailsView — read-only as-of view", () => {
     expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
     expect(document.querySelector("#add-menu-free-shares")).toBeInTheDocument();
     expect(document.querySelector("#account-details-add-transaction-fab")).toBeInTheDocument();
+  });
+});
+
+describe("AccountDetailsView — management fees (FEE-010/011/053)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+  });
+
+  it("shows the total management fees figure (FEE-053)", () => {
+    render(<AccountDetailsView />);
+    const total = document.querySelector("#account-details-total-management-fees");
+    expect(total).toHaveTextContent("0,00");
+  });
+
+  it("routes the Management fee button to its handler (FEE-010)", () => {
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#add-menu-management-fee")!);
+    expect(handlers.handleManagementFeeOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("mounts the management-fee modal when managementFeeOpen is true (FEE-010)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ managementFeeOpen: true }));
+    render(<AccountDetailsView />);
+    expect(screen.getByTestId("management-fee-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("mounts the fee-schedule modal when a target is set (FEE-011)", () => {
+    mockUseAccountDetailsView.mockReturnValue(
+      makeView({ feeScheduleTarget: { assetId: "a1", assetName: "ETF" } }),
+    );
+    render(<AccountDetailsView />);
+    expect(screen.getByTestId("fee-schedule-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("hides the Management fee button in the read-only as-of view", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ isAsOf: true, asOfDate: "2024-06-01" }));
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#add-menu-management-fee")).toBeNull();
   });
 });

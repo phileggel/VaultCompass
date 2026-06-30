@@ -7,6 +7,7 @@ import type {
   DividendError,
   FreeSharesError,
   HoldingDetail,
+  ManagementFeeError,
 } from "@/bindings";
 import {
   microToFormatted,
@@ -101,6 +102,17 @@ export function freeSharesErrorToI18n(err: FreeSharesError | AccountError): I18n
   return { key: `error.${err.code}` };
 }
 
+/**
+ * F27 — Maps the management-fee error surfaces to an i18n key (FEE-021/011/027).
+ * Covers the one-off record path (`ManagementFeeError`, which folds the cross-BC
+ * `AssetNotFound` / `AssetNotHeld` / `ManagementFeeOnCashAsset` checks together
+ * with account-BC rejections) and the schedule-CRUD path (`AccountError`). Every
+ * reachable code resolves to `error.{code}`.
+ */
+export function managementFeeErrorToI18n(err: ManagementFeeError | AccountError): I18nMessage {
+  return { key: `error.${err.code}` };
+}
+
 const DASH = "—";
 const CASH_ASSET_PREFIX = "system-cash-";
 
@@ -139,6 +151,8 @@ export interface HoldingRowViewModel {
   performancePct: string;
   /** Formatted cumulative dividends received for this holding, account currency (DIV-072). Always shown ("0,00" when none). */
   dividendsReceived: string;
+  /** Formatted cumulative management fees deducted for this holding, account currency (FEE-052). Always shown ("0,00" when none). */
+  managementFees: string;
   /** Formatted total return % (price + dividends) or "—" when not computable (DIV-071/072). */
   totalReturnPct: string;
   /** Raw total return % in micro-units, or null when not computable — used for sign-based color styling (DIV-072). */
@@ -204,6 +218,10 @@ export interface AccountSummaryViewModel {
   totalGlobalValueRaw: number;
   /** True when the account currently holds a non-zero cash balance (CSH-019/095). */
   hasCashHolding: boolean;
+  /** Formatted sum of management fees across all active holdings, account currency (FEE-053). */
+  totalManagementFees: string;
+  /** Raw total management fees in micro-units (FEE-053). */
+  totalManagementFeesRaw: number;
 }
 
 /**
@@ -298,6 +316,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       unrealizedPnlRaw: null,
       performancePct: "",
       dividendsReceived: "",
+      managementFees: "",
       totalReturnPct: "",
       totalReturnPctRaw: null,
       isCash: true,
@@ -334,6 +353,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
     performancePct:
       detail.performance_pct !== null ? `${microToFormatted(detail.performance_pct, 2)}%` : DASH,
     dividendsReceived: microToFormatted(detail.dividends_received, 2),
+    managementFees: microToFormatted(detail.management_fees, 2),
     totalReturnPct:
       detail.total_return_pct !== null ? `${microToFormatted(detail.total_return_pct, 2)}%` : DASH,
     totalReturnPctRaw: detail.total_return_pct,
@@ -379,5 +399,7 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
     totalGlobalValue: microToFormatted(response.total_global_value, 2),
     totalGlobalValueRaw: response.total_global_value,
     hasCashHolding,
+    totalManagementFees: microToFormatted(response.total_management_fees, 2),
+    totalManagementFeesRaw: response.total_management_fees,
   };
 }
