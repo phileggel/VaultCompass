@@ -1,7 +1,7 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::domain::{Account, UpdateFrequency};
+use super::domain::{Account, FeeFrequency, FeeSchedule, UpdateFrequency};
 use crate::context::account::{AccountError, HoldingSnapshot, Transaction};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
@@ -106,5 +106,109 @@ pub async fn get_all_transactions_for_account(
     state
         .account_service
         .get_all_transactions_for_account(&account_id)
+        .await
+}
+
+// =============================================================================
+// Management Fee Schedule — DTOs + commands (FEE-030/060/062)
+// =============================================================================
+
+/// Parameters for creating a recurring fee schedule (FEE-030).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct CreateFeeScheduleDTO {
+    /// Account the schedule applies to.
+    pub account_id: String,
+    /// The charged asset.
+    pub asset_id: String,
+    /// Annual fee rate in micro-percent (1% = 1_000_000), strictly positive and < 100% (FEE-032).
+    pub annual_rate_percent_micros: i64,
+    /// Deduction cadence (FEE-034).
+    pub frequency: FeeFrequency,
+    /// First business date deductions are generated from (YYYY-MM-DD, FEE-032).
+    pub start_date: String,
+    /// Optional date after which no further deductions are generated (FEE-045).
+    pub end_date: Option<String>,
+}
+
+/// Parameters for editing a fee schedule (FEE-060/061). `frequency` and
+/// `start_date` are intentionally absent — they are immutable after creation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct UpdateFeeScheduleDTO {
+    /// Account the schedule applies to.
+    pub account_id: String,
+    /// The charged asset (identifies the schedule together with `account_id`).
+    pub asset_id: String,
+    /// New annual fee rate in micro-percent (FEE-032).
+    pub annual_rate_percent_micros: i64,
+    /// New optional end date (FEE-045).
+    pub end_date: Option<String>,
+    /// Whether the schedule is active; `false` pauses generation (FEE-061).
+    pub active: bool,
+}
+
+/// Creates a recurring management fee schedule for an (account, asset) pair (FEE-030).
+#[tauri::command]
+#[specta::specta]
+pub async fn create_fee_schedule(
+    state: State<'_, AppState>,
+    dto: CreateFeeScheduleDTO,
+) -> Result<FeeSchedule, AccountError> {
+    state
+        .account_service
+        .create_fee_schedule(
+            &dto.account_id,
+            dto.asset_id,
+            dto.annual_rate_percent_micros,
+            dto.frequency,
+            dto.start_date,
+            dto.end_date,
+        )
+        .await
+}
+
+/// Edits an existing fee schedule's rate, end date, and active flag (FEE-060/061).
+#[tauri::command]
+#[specta::specta]
+pub async fn update_fee_schedule(
+    state: State<'_, AppState>,
+    dto: UpdateFeeScheduleDTO,
+) -> Result<FeeSchedule, AccountError> {
+    state
+        .account_service
+        .update_fee_schedule(
+            &dto.account_id,
+            &dto.asset_id,
+            dto.annual_rate_percent_micros,
+            dto.end_date,
+            dto.active,
+        )
+        .await
+}
+
+/// Deletes the fee schedule for an (account, asset) pair (FEE-062, silent if absent).
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_fee_schedule(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset_id: String,
+) -> Result<(), AccountError> {
+    state
+        .account_service
+        .delete_fee_schedule(&account_id, &asset_id)
+        .await
+}
+
+/// Returns the fee schedule for an (account, asset) pair, or `None` (FEE-030).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_fee_schedule(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset_id: String,
+) -> Result<Option<FeeSchedule>, AccountError> {
+    state
+        .account_service
+        .get_fee_schedule(&account_id, &asset_id)
         .await
 }

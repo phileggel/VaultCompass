@@ -324,3 +324,41 @@ pub async fn record_free_shares(
     )
     .await
 }
+
+// =============================================================================
+// Management Fee — DTO + command (FEE-020/022)
+// =============================================================================
+
+/// Parameters for recording a one-off management fee on a held asset (FEE-020).
+/// The fee is expressed as a percentage of the holding; no money changes hands.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct ManagementFeeDTO {
+    /// Account whose holding the fee is taken from.
+    pub account_id: String,
+    /// The charged asset — must be actively held (quantity > 0) and not a Cash Asset (FEE-012).
+    pub asset_id: String,
+    /// Business date the fee was applied (YYYY-MM-DD, FEE-021).
+    pub date: String,
+    /// Percentage of the holding to remove, in micro-percent (1% = 1_000_000),
+    /// strictly positive and at most 100_000_000 (FEE-021).
+    pub percent_micros: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Records a one-off quantity-reducing management fee on a held asset (FEE-022).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_management_fee(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: ManagementFeeDTO,
+) -> Result<Transaction, super::error::ManagementFeeError> {
+    uc.record_management_fee(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.percent_micros,
+        dto.note,
+    )
+    .await
+}

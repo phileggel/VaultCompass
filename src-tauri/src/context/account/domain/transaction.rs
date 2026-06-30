@@ -37,6 +37,8 @@ pub enum TransactionType {
     Dividend,
     /// Shares of a held asset received at no cost; quantity rises, cost basis unchanged (FSD-022).
     FreeShares,
+    /// Management fee deduction: shares removed at zero cost; cost basis unchanged, VWAP concentrates (FEE-012).
+    ManagementFee,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -327,6 +329,63 @@ impl Transaction {
         created_at: String,
     ) -> StdResult<Self, AccountError> {
         let mut tx = Self::free_shares(account_id, asset_id, date, quantity, note)?;
+        tx.id = id;
+        tx.created_at = created_at;
+        Ok(tx)
+    }
+
+    /// Factory: builds a ManagementFee transaction (FEE-012/021).
+    ///
+    /// Zero-cost-removal convention: `unit_price = 0`, `exchange_rate = 1_000_000`,
+    /// `fees = 0`, `total_amount = 0` (no cash moves), `realized_pnl = None`.
+    /// `asset_id` is the charged asset; `quantity` is the number of shares removed.
+    ///
+    /// FEE-021 — validates the date bounds and `quantity > 0` directly; the generic
+    /// validator does not apply because it rejects `total_amount = 0` for the
+    /// `ManagementFee` type (only `OpeningBalance` allows 0, TRX-045).
+    pub fn management_fee(
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> StdResult<Self, AccountError> {
+        Self::validate_date(&date)?;
+        if quantity <= 0 {
+            return Err(AccountError::QuantityNotPositive);
+        }
+        Ok(Self {
+            id: Uuid::new_v4().to_string(),
+            account_id,
+            asset_id,
+            transaction_type: TransactionType::ManagementFee,
+            date,
+            quantity,
+            unit_price: 0,
+            exchange_rate: 1_000_000,
+            fees: 0,
+            total_amount: 0,
+            note,
+            realized_pnl: None,
+            created_at: chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+                .to_string(),
+        })
+    }
+
+    /// Factory: rebuilds a ManagementFee transaction with a caller-supplied ID and
+    /// `created_at` (correction path). Same zero-cost packing and FEE-021 validation
+    /// as `management_fee`, but preserves the transaction's identity.
+    pub fn management_fee_with_id(
+        id: String,
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+        created_at: String,
+    ) -> StdResult<Self, AccountError> {
+        let mut tx = Self::management_fee(account_id, asset_id, date, quantity, note)?;
         tx.id = id;
         tx.created_at = created_at;
         Ok(tx)

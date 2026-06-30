@@ -353,6 +353,18 @@ impl Account {
                 note,
                 created_at,
             )?
+        } else if tx_type == TransactionType::ManagementFee {
+            // FEE-023 — like FreeShares, total_amount = 0 trips the generic validator;
+            // rebuild via the identity-preserving management-fee factory (FEE-021).
+            Transaction::management_fee_with_id(
+                tx_id.to_string(),
+                self.id.clone(),
+                asset_id.clone(),
+                date,
+                quantity,
+                note,
+                created_at,
+            )?
         } else {
             let total_amount = match tx_type {
                 TransactionType::Purchase => {
@@ -373,6 +385,8 @@ impl Account {
                 }
                 // Never reached — FreeShares takes the dedicated branch above.
                 TransactionType::FreeShares => 0,
+                // Never reached — ManagementFee takes the dedicated branch above.
+                TransactionType::ManagementFee => 0,
             };
 
             Transaction::with_id(
@@ -708,6 +722,36 @@ impl Account {
         Ok(tx)
     }
 
+    /// Applies a management fee deduction to the held asset (FEE-012/023).
+    ///
+    /// Removes `tx.quantity` shares at zero cost from the (account, asset) holding;
+    /// the VWAP numerator is unchanged so the average price concentrates.
+    /// No cash leg — the type never enters `replay_cash_holding`.
+    /// The `CascadingOversell` guard in `recalculate_holding` catches any deduction
+    /// that would drive the holding negative after a chronological replay.
+    pub fn apply_management_fee(&mut self, tx: Transaction) -> Result<Transaction> {
+        self.transactions.push(tx.clone());
+        let pair_txs: Vec<&Transaction> = self
+            .transactions
+            .iter()
+            .filter(|t| t.asset_id == tx.asset_id)
+            .collect();
+        let (holding, _) = match self.recalculate_holding(&tx.asset_id, &pair_txs) {
+            Ok(result) => result,
+            Err(e) => {
+                self.transactions.pop();
+                return Err(e);
+            }
+        };
+
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+        Ok(tx)
+    }
+
     // Cash deposit / withdrawal recording is composed at the application layer
     // (see `AccountService::record_deposit` / `record_withdrawal`) by chaining
     // `Transaction::new_deposit` / `new_withdrawal` (TRX-020) and `apply_deposit`
@@ -913,6 +957,12 @@ impl Account {
                 TransactionType::FreeShares => {
                     total_quantity += t.quantity as i128;
                 }
+                // FEE-023 — management fee removes quantity at zero cost: the VWAP numerator
+                // is unchanged, so the average price concentrates to cost_basis / new_quantity.
+                // No cash effect (the type never enters `replay_cash_holding`).
+                TransactionType::ManagementFee => {
+                    total_quantity -= t.quantity as i128;
+                }
                 // CSH-032: a Withdrawal debits cash quantity by total_amount; never realises P&L
                 // and never tracks last_sold_date. CSH-080's eligibility guard runs in
                 // `replay_cash_holding` (insufficient-cash check), not here — `recalculate_holding`
@@ -967,6 +1017,12 @@ impl Account {
         };
 
         Ok((holding, pnl_map))
+    }
+
+    /// FEE-022a — the held quantity of `asset_id` as of `date`, reconstructed from
+    /// this account's transactions (read-only replay; mirrors `holding_snapshot_as_of`).
+    pub fn holding_quantity_as_of(&self, asset_id: &str, date: &str) -> i64 {
+        Self::reconstruct_holding_as_of(&self.transactions, asset_id, date).quantity
     }
 
     /// TDI-010 — Reconstructs an asset holding's quantity and VWAP average cost
@@ -1055,6 +1111,10 @@ impl Account {
                 TransactionType::FreeShares => {
                     total_quantity += t.quantity as i128;
                 }
+                // FEE-023 — management fee removes quantity at zero cost (concentrates VWAP).
+                TransactionType::ManagementFee => {
+                    total_quantity -= t.quantity as i128;
+                }
                 // DIV-024 — a Dividend never affects the paying asset's holding.
                 TransactionType::Dividend => {}
             }
@@ -1095,7 +1155,9 @@ impl Account {
                 TransactionType::Withdrawal | TransactionType::Purchase => {
                     balance -= transaction.total_amount as i128;
                 }
-                TransactionType::OpeningBalance | TransactionType::FreeShares => {}
+                TransactionType::OpeningBalance
+                | TransactionType::FreeShares
+                | TransactionType::ManagementFee => {}
             }
         }
         let value = balance.max(0);
@@ -3442,6 +3504,64 @@ mod tests {
             holding.quantity,
             micro(13),
             "holding quantity must reflect corrected free-shares count (FSD-040)"
+        );
+    }
+
+    #[test]
+    fn fee_023_correct_management_fee_transaction_updates_holding() {
+        // FEE-023 — like FreeShares, a ManagementFee correction keeps total_amount = 0
+        // by routing through the dedicated management_fee_with_id branch (not the
+        // generic validator, which rejects total_amount = 0).
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        let fee_tx = Transaction::management_fee(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-01".to_string(),
+            micro(2),
+            None,
+        )
+        .unwrap();
+        let fee_id = fee_tx.id.clone();
+        acc.apply_management_fee(fee_tx).unwrap();
+        // Post: quantity = 8
+
+        // Correct the deduction: change the removed quantity from 2 to 3.
+        let corrected = acc
+            .correct_transaction(
+                &fee_id,
+                "2024-06-01".to_string(),
+                micro(3),  // new removed quantity
+                0,         // unit_price = 0 (no acquisition cost)
+                1_000_000, // exchange_rate = 1.0 (no FX leg)
+                0,         // fees = 0
+                Some("Corrected fee".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            corrected.total_amount, 0,
+            "corrected ManagementFee total_amount must remain 0"
+        );
+        let holding = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .expect("asset-xyz holding must exist after fee correction");
+        assert_eq!(
+            holding.quantity,
+            micro(7),
+            "holding quantity must reflect the corrected fee deduction (FEE-023)"
         );
     }
 

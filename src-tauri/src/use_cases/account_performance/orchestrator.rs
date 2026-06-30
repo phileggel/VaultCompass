@@ -439,7 +439,9 @@ fn period_bridge(
             // DIV-023 — a dividend credits cash income from a holding.
             TransactionType::Dividend => dividends += transaction.total_amount as i128,
             // Cash↔asset swaps; net zero to Global Value (a sell's realized gain → residual pnl).
-            TransactionType::Purchase | TransactionType::Sell => {}
+            // FEE-071 — a management fee is not a flow; its drag surfaces via the reduced
+            // position value at period end, not as a flow adjustment.
+            TransactionType::Purchase | TransactionType::Sell | TransactionType::ManagementFee => {}
         }
     }
 

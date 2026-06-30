@@ -1,0 +1,497 @@
+use super::error::FeeGenerationError;
+use crate::context::account::{AccountError, AccountService, FeeFrequency, FeeSchedule};
+use chrono::{Datelike, NaiveDate};
+use std::sync::Arc;
+
+/// Last calendar day of `year`/`month` (the period boundary, FEE-042). `None` only at
+/// chrono's representable ceiling — far beyond any real schedule date; callers skip.
+fn last_day_of_month(year: i32, month: u32) -> Option<NaiveDate> {
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
+    NaiveDate::from_ymd_opt(next_year, next_month, 1)?.pred_opt()
+}
+
+/// The period-boundary date (per `freq`) of the period that contains `date` (FEE-042).
+fn period_end_containing(freq: FeeFrequency, date: NaiveDate) -> Option<NaiveDate> {
+    match freq {
+        FeeFrequency::Monthly => last_day_of_month(date.year(), date.month()),
+        FeeFrequency::Quarterly => {
+            let quarter_end_month = ((date.month() - 1) / 3) * 3 + 3; // 3, 6, 9, or 12
+            last_day_of_month(date.year(), quarter_end_month)
+        }
+        FeeFrequency::Annually => last_day_of_month(date.year(), 12),
+    }
+}
+
+/// The boundary of the period immediately following the one ending at `boundary`.
+fn next_period_end(freq: FeeFrequency, boundary: NaiveDate) -> Option<NaiveDate> {
+    period_end_containing(freq, boundary.succ_opt()?)
+}
+
+/// Orchestrates periodic management fee deduction across all active fee schedules
+/// (FEE-040 — lazy catch-up generation).
+pub struct FeeGenerationOrchestrator {
+    account_service: Arc<AccountService>,
+}
+
+impl FeeGenerationOrchestrator {
+    /// Creates a new orchestrator.
+    pub fn new(account_service: Arc<AccountService>) -> Self {
+        Self { account_service }
+    }
+
+    /// Applies all due management fee deductions across every active fee schedule
+    /// (FEE-040/041/042/043/044/045/047). Reuses `AccountService::record_management_fee`
+    /// per due period — the per-period rate is `annual_rate ÷ periods_per_year`, which
+    /// gives the sequential per-period reduction and the oversell guard for free.
+    pub async fn apply_due_fee_deductions(&self) -> Result<(), FeeGenerationError> {
+        let today = chrono::Local::now().date_naive();
+        let schedules = self.account_service.list_active_fee_schedules().await?;
+        for schedule in schedules {
+            self.apply_schedule(&schedule, today).await?;
+        }
+        Ok(())
+    }
+
+    /// Generates the due deductions for one active schedule up to `today` (FEE-040–047).
+    async fn apply_schedule(
+        &self,
+        schedule: &FeeSchedule,
+        today: NaiveDate,
+    ) -> Result<(), FeeGenerationError> {
+        let Ok(start) = NaiveDate::parse_from_str(&schedule.start_date, "%Y-%m-%d") else {
+            return Ok(()); // malformed start_date — skip defensively
+        };
+        let cursor = schedule
+            .last_applied_period
+            .as_deref()
+            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let end = schedule
+            .end_date
+            .as_deref()
+            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        // FEE-041 — per-period rate is the annual rate scaled to the cadence.
+        let per_period_percent =
+            schedule.annual_rate_percent_micros / schedule.frequency.periods_per_year();
+
+        let Some(mut boundary) = period_end_containing(schedule.frequency, start) else {
+            return Ok(()); // unrepresentable boundary date — skip defensively
+        };
+        let mut last_processed: Option<NaiveDate> = None;
+        // FEE-040 — only completed periods (boundary ≤ today, never future-dated).
+        while boundary <= today {
+            // FEE-045 — stop once the period boundary passes end_date.
+            if let Some(end) = end {
+                if boundary > end {
+                    break;
+                }
+            }
+            let after_cursor = cursor.is_none_or(|c| boundary > c);
+            if boundary >= start && after_cursor {
+                if per_period_percent > 0 {
+                    let dated = boundary.format("%Y-%m-%d").to_string();
+                    let result = self
+                        .account_service
+                        .record_management_fee(
+                            &schedule.account_id,
+                            schedule.asset_id.clone(),
+                            dated,
+                            per_period_percent,
+                            None,
+                        )
+                        .await;
+                    match result {
+                        Ok(_) => {}
+                        // FEE-047 — holding qty is 0 or the removal rounds to 0: skip.
+                        Err(AccountError::QuantityNotPositive) => {}
+                        // FEE-044/047 — a backfilled deduction that would oversell: skip.
+                        Err(AccountError::CascadingOversell) => {}
+                        Err(other) => return Err(other.into()),
+                    }
+                }
+                // FEE-043 — cursor advances for every processed period, skipped or not.
+                last_processed = Some(boundary);
+            }
+            let Some(next) = next_period_end(schedule.frequency, boundary) else {
+                break; // unrepresentable next boundary — stop iterating
+            };
+            boundary = next;
+        }
+
+        if let Some(last) = last_processed {
+            self.account_service
+                .advance_fee_schedule_cursor(
+                    &schedule.account_id,
+                    &schedule.asset_id,
+                    last.format("%Y-%m-%d").to_string(),
+                )
+                .await?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::account::{
+        AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository,
+        SqliteHoldingRepository, SqliteTransactionRepository, TransactionType, UpdateFrequency,
+    };
+    use crate::context::asset::{
+        AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn setup_pool() -> sqlx::Pool<sqlx::Sqlite> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    fn make_account_service(pool: &sqlx::Pool<sqlx::Sqlite>) -> Arc<AccountService> {
+        Arc::new(
+            AccountService::new(
+                Box::new(SqliteAccountRepository::new(pool.clone())),
+                Box::new(SqliteHoldingRepository::new(pool.clone())),
+                Box::new(SqliteTransactionRepository::new(pool.clone())),
+            )
+            .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone()))),
+        )
+    }
+
+    fn make_asset_service(pool: &sqlx::Pool<sqlx::Sqlite>) -> Arc<AssetService> {
+        Arc::new(AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        ))
+    }
+
+    fn micro(v: i64) -> i64 {
+        v * 1_000_000
+    }
+
+    async fn seed_stock(asset_svc: &AssetService) -> String {
+        asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Fee Stock".to_string(),
+                reference: "FEES".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap()
+            .id
+    }
+
+    async fn seed_cash(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+        account_svc: &AccountService,
+        account_id: &str,
+    ) {
+        let cash_asset_id = "system-cash-eur".to_string();
+        sqlx::query(
+            "INSERT OR IGNORE INTO categories (id, name, is_deleted) VALUES ('system-cash-category', 'cash', 0)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed cash category");
+        sqlx::query(
+            "INSERT OR IGNORE INTO assets (id, name, reference, asset_class, category_id, currency, risk_level) \
+             VALUES (?, ?, ?, 'Cash', 'system-cash-category', ?, 1)",
+        )
+        .bind(&cash_asset_id)
+        .bind("Cash EUR")
+        .bind("EUR")
+        .bind("EUR")
+        .execute(pool)
+        .await
+        .expect("seed cash asset");
+        account_svc
+            .record_deposit(
+                account_id,
+                "2020-01-01".to_string(),
+                1_000_000_000_000,
+                None,
+            )
+            .await
+            .expect("seed cash deposit");
+    }
+
+    // FEE-040 — apply_due_fee_deductions: no schedules → no transactions created.
+    #[tokio::test]
+    async fn fee_040_no_schedules_no_transactions_created() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let account = account_svc
+            .create(
+                "Test".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        // Expect todo!() panic for now — this is the red baseline.
+        let result = uc.apply_due_fee_deductions().await;
+        // Once implemented: no schedules → no error.
+        // Until then, the todo!() panic IS the red signal.
+        assert!(
+            result.is_ok(),
+            "with no schedules, apply_due_fee_deductions must succeed: {:?}",
+            result
+        );
+        // No ManagementFee transactions should have been created.
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        assert!(
+            txs.iter()
+                .all(|t| t.transaction_type != TransactionType::ManagementFee),
+            "no ManagementFee transactions should exist"
+        );
+    }
+
+    // FEE-041 — apply_due_fee_deductions generates one deduction per completed period.
+    #[tokio::test]
+    async fn fee_041_generates_one_deduction_per_completed_period() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-041".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Create a monthly schedule starting 2024-01-01.
+        // As of 2024-04-01 (3 complete months have passed: Jan, Feb, Mar).
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                1_000_000, // 1% annual
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let fee_txs: Vec<_> = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .collect();
+        // FEE-041 — one deduction per completed period.
+        assert!(
+            !fee_txs.is_empty(),
+            "at least one ManagementFee transaction must be created for completed periods"
+        );
+    }
+
+    // FEE-043 — last_applied_period advances even when a period is skipped.
+    #[tokio::test]
+    async fn fee_043_cursor_advances_for_skipped_periods() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-043".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        // Create a schedule for a stock that is NOT held (so all periods skip).
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                1_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        // Cursor must have advanced past start_date even though all periods were skipped.
+        let schedule = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must still exist after skipped periods");
+        assert!(
+            schedule.last_applied_period.is_some(),
+            "last_applied_period must advance even when all periods skipped (FEE-043)"
+        );
+    }
+
+    // FEE-047 — period where holding qty is 0 is skipped (not an error).
+    #[tokio::test]
+    async fn fee_047_zero_holding_quantity_skips_period() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-047".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        // Schedule exists but the asset is never purchased → qty_as_of = 0 for all periods.
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                1_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        // Must succeed (not an error) even though all periods are skipped.
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let fee_txs: Vec<_> = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .collect();
+        assert!(
+            fee_txs.is_empty(),
+            "no ManagementFee transactions when holding qty was 0 for all periods (FEE-047)"
+        );
+    }
+
+    // FEE-070 — apply_due_fee_deductions is idempotent: re-running on the same
+    // state produces no additional transactions.
+    #[tokio::test]
+    async fn fee_070_apply_due_fee_deductions_is_idempotent() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-070".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                1_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        let txs_after_first = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let count_after_first = txs_after_first
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .count();
+
+        // Run again — must not create additional transactions.
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        let txs_after_second = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let count_after_second = txs_after_second
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .count();
+
+        assert_eq!(
+            count_after_first, count_after_second,
+            "second run must not create additional ManagementFee transactions (FEE-070)"
+        );
+    }
+}

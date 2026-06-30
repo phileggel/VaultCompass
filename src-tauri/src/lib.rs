@@ -12,7 +12,8 @@
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
 use crate::context::account::{
-    AccountService, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+    AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository, SqliteHoldingRepository,
+    SqliteTransactionRepository,
 };
 use crate::context::asset::{
     AssetPriceRepository, AssetService, PriceProvider, ReqwestYahooClient,
@@ -34,6 +35,7 @@ use crate::use_cases::asset_price_fetch::dispatcher::Dispatcher as PriceFetchDis
 use crate::use_cases::asset_price_fetch::{AssetPriceFetchUseCase, FetchGuard};
 use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
+use crate::use_cases::fee_generation::FeeGenerationOrchestrator;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
@@ -168,7 +170,10 @@ pub fn run() {
                         Box::new(holding_repo_for_svc),
                         Box::new(transaction_repo_for_svc),
                     )
-                    .with_event_bus(event_bus.clone()),
+                    .with_event_bus(event_bus.clone())
+                    .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(
+                        db.pool.clone(),
+                    ))),
                 );
 
                 // ----- currency BC (FXR) -----
@@ -232,6 +237,11 @@ pub fn run() {
                     Arc::clone(&asset_service),
                 );
 
+                // FEE-040 — lazy catch-up generation across all active fee schedules,
+                // invoked by the frontend on app startup.
+                let fee_generation_uc =
+                    FeeGenerationOrchestrator::new(Arc::clone(&account_service));
+
                 app_handle.manage(account_details_uc);
                 app_handle.manage(account_summary_uc);
                 app_handle.manage(account_performance_uc);
@@ -240,6 +250,7 @@ pub fn run() {
                 app_handle.manage(account_deletion_uc);
                 app_handle.manage(account_creation_uc);
                 app_handle.manage(holding_transaction_uc);
+                app_handle.manage(fee_generation_uc);
 
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 

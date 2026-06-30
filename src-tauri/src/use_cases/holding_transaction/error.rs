@@ -180,3 +180,72 @@ pub enum OpenHoldingError {
     #[error(transparent)]
     UseCase(#[from] OpenHoldingTask),
 }
+
+/// Application-layer rejections specific to the `record_management_fee` use case —
+/// cross-BC asset and holding checks performed by the orchestrator before
+/// delegating to `AccountService::record_management_fee`.
+///
+/// Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+/// Tauri boundary into a flat `{ code: "..." }` shape.
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
+#[serde(tag = "code")]
+pub enum ManagementFeeTask {
+    /// No asset exists with the requested ID (FEE-011).
+    #[error("Asset not found")]
+    AssetNotFound,
+    /// The asset is not currently held (quantity = 0 or no holding) (FEE-011).
+    #[error("Asset is not currently held in this account")]
+    AssetNotHeld,
+    /// Target asset is a system Cash Asset — management fees must be on non-cash
+    /// holdings (FEE-011).
+    #[error("Management fees cannot be recorded against a cash asset")]
+    ManagementFeeOnCashAsset,
+}
+
+/// Use-case composite for the **record management fee** failure surface.
+///
+/// - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+///   the transaction-factory date / percent validation).
+/// - `ManagementFeeTask` — use-case-owned (this file), the cross-BC
+///   asset/holding checks.
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
+#[serde(untagged)]
+pub enum ManagementFeeError {
+    /// Account-BC rejection (lookup, infra, transaction validation).
+    #[error(transparent)]
+    Account(#[from] AccountError),
+    /// Use-case-layer rejection (cross-BC asset checks).
+    #[error(transparent)]
+    UseCase(#[from] ManagementFeeTask),
+}
+
+#[cfg(test)]
+mod management_fee_error_wire_tests {
+    use super::*;
+
+    /// error-model.md — every `ManagementFeeError` variant must serialize to a flat
+    /// object carrying a string `code` (guards the `#[serde(untagged)]`
+    /// null-collapse regression across all three leaves).
+    #[test]
+    fn each_variant_emits_a_code() {
+        let cases: Vec<ManagementFeeError> = vec![
+            AccountError::AccountNotFound {
+                account_id: "acc-1".to_string(),
+            }
+            .into(),
+            ManagementFeeTask::AssetNotFound.into(),
+            ManagementFeeTask::AssetNotHeld.into(),
+            ManagementFeeTask::ManagementFeeOnCashAsset.into(),
+            AccountError::PercentageNotPositive.into(),
+            AccountError::PercentageAboveHundred.into(),
+            AccountError::DateInFuture.into(),
+        ];
+        for err in cases {
+            let value = serde_json::to_value(&err).expect("serialize ManagementFeeError");
+            assert!(
+                value.get("code").and_then(|c| c.as_str()).is_some(),
+                "ManagementFeeError variant did not emit a string `code`: {value}"
+            );
+        }
+    }
+}

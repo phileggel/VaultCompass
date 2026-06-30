@@ -1,6 +1,6 @@
 use super::domain::{
-    Account, AccountRepository, Holding, HoldingRepository, HoldingSnapshot, Transaction,
-    TransactionRepository, UpdateFrequency,
+    Account, AccountRepository, FeeSchedule, FeeScheduleRepository, Holding, HoldingRepository,
+    HoldingSnapshot, Transaction, TransactionRepository, UpdateFrequency,
 };
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
@@ -16,6 +16,7 @@ pub struct AccountService {
     holding_repo: Box<dyn HoldingRepository>,
     transaction_repo: Box<dyn TransactionRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
+    fee_schedule_repo: Option<Box<dyn FeeScheduleRepository>>,
 }
 
 impl AccountService {
@@ -30,6 +31,7 @@ impl AccountService {
             holding_repo,
             transaction_repo,
             event_bus: None,
+            fee_schedule_repo: None,
         }
     }
 
@@ -37,6 +39,22 @@ impl AccountService {
     pub fn with_event_bus(mut self, bus: Arc<SideEffectEventBus>) -> Self {
         self.event_bus = Some(bus);
         self
+    }
+
+    /// Attaches the fee-schedule repository (FEE-030) — required for the
+    /// `*_fee_schedule` methods; absent in constructions that never touch them.
+    pub fn with_fee_schedule_repo(mut self, repo: Box<dyn FeeScheduleRepository>) -> Self {
+        self.fee_schedule_repo = Some(repo);
+        self
+    }
+
+    /// Returns the wired fee-schedule repository or a `DatabaseError` if absent
+    /// (a wiring bug — the repo must be attached via `with_fee_schedule_repo`).
+    fn fee_schedule_repo(&self) -> StdResult<&dyn FeeScheduleRepository, AccountError> {
+        self.fee_schedule_repo.as_deref().ok_or_else(|| {
+            tracing::error!(target: BACKEND, "fee_schedule_repo not wired on AccountService");
+            AccountError::DatabaseError
+        })
     }
 
     // -------------------------------------------------------------------------
@@ -578,6 +596,196 @@ impl AccountService {
     }
 
     // -------------------------------------------------------------------------
+    // FEE-012/021/022/023/027 — management fee recording
+    // -------------------------------------------------------------------------
+
+    /// Records a one-off management fee deduction on a held asset (FEE-012).
+    ///
+    /// `percent_micros` is the fee in micro-percent (1% = 1_000_000). The number
+    /// of shares removed is `floor(holding_qty_as_of(date) × percent_micros /
+    /// 100_000_000)`. Cost basis is unchanged (VWAP concentrates — FEE-023).
+    /// No cash leg. Raises `CascadingOversell` if a chronological replay of
+    /// subsequent transactions would drive the holding negative (FEE-027).
+    pub async fn record_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, percent_micros = percent_micros, "record_management_fee");
+        // FEE-021 — percentage is micro-percent: strictly positive, at most 100%.
+        if percent_micros <= 0 {
+            return Err(AccountError::PercentageNotPositive);
+        }
+        if percent_micros > 100_000_000 {
+            return Err(AccountError::PercentageAboveHundred);
+        }
+        let mut account = load_account(&*self.account_repo, account_id).await?;
+        // FEE-022a — removed qty = floor(holding_qty_as_of(date) × percent / 100%).
+        let quantity_as_of = account.holding_quantity_as_of(&asset_id, &date);
+        let removed = (quantity_as_of as i128 * percent_micros as i128 / 100_000_000) as i64;
+        let tx = Transaction::management_fee(account.id.clone(), asset_id, date, removed, note)?;
+        let tx = account
+            .apply_management_fee(tx)
+            .map_err(to_holding_tx_error)?;
+        save_account(&*self.account_repo, &mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-030/031/032/033/034/060/061/062 — fee schedule CRUD
+    // -------------------------------------------------------------------------
+
+    /// Creates a new fee schedule for the (account, asset) pair (FEE-030).
+    ///
+    /// FEE-031 — rejects if a schedule already exists for the pair.
+    /// FEE-032 — validates rate > 0 (`RateNotPositive`), rate ≤ 100% micro-percent
+    /// (`RateAboveHundred`), end_date > start_date (`EndBeforeStart`).
+    pub async fn create_fee_schedule(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        annual_rate_percent_micros: i64,
+        frequency: super::domain::FeeFrequency,
+        start_date: String,
+        end_date: Option<String>,
+    ) -> Result<FeeSchedule, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "create_fee_schedule");
+        let repo = self.fee_schedule_repo()?;
+        // FEE-031 — at most one schedule per (account, asset).
+        let existing = repo
+            .get_by_account_asset(account_id, &asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "create_fee_schedule: lookup failed");
+                AccountError::DatabaseError
+            })?;
+        if existing.is_some() {
+            return Err(AccountError::ScheduleAlreadyExists);
+        }
+        // FEE-032 — validates rate (>0, ≤100%) and end_date > start_date.
+        let schedule = FeeSchedule::new(
+            account_id.to_string(),
+            asset_id,
+            annual_rate_percent_micros,
+            frequency,
+            start_date,
+            end_date,
+        )?;
+        repo.insert(&schedule).await.map_err(|e| {
+            tracing::error!(target: BACKEND, err = ?e, "create_fee_schedule: insert failed");
+            AccountError::DatabaseError
+        })?;
+        self.emit_fee_schedule_updated();
+        Ok(schedule)
+    }
+
+    /// Updates an existing fee schedule (FEE-060/061).
+    ///
+    /// FEE-060 — rejects with `ScheduleNotFound` if no schedule exists.
+    /// Editable fields: `annual_rate_percent_micros`, `end_date`, `active`.
+    /// `frequency` and `start_date` are immutable after creation.
+    pub async fn update_fee_schedule(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+        annual_rate_percent_micros: i64,
+        end_date: Option<String>,
+        active: bool,
+    ) -> Result<FeeSchedule, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "update_fee_schedule");
+        let repo = self.fee_schedule_repo()?;
+        let schedule = repo
+            .get_by_account_asset(account_id, asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "update_fee_schedule: lookup failed");
+                AccountError::DatabaseError
+            })?
+            .ok_or(AccountError::ScheduleNotFound)?
+            .update_from(annual_rate_percent_micros, end_date, active)?;
+        repo.update(&schedule).await.map_err(|e| {
+            tracing::error!(target: BACKEND, err = ?e, "update_fee_schedule: persist failed");
+            AccountError::DatabaseError
+        })?;
+        self.emit_fee_schedule_updated();
+        Ok(schedule)
+    }
+
+    /// Deletes the fee schedule for the (account, asset) pair (FEE-062).
+    ///
+    /// Silent no-op if no schedule exists (mirrors `delete_account` precedent).
+    pub async fn delete_fee_schedule(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<(), AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "delete_fee_schedule");
+        let repo = self.fee_schedule_repo()?;
+        repo.delete_by_account_asset(account_id, asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "delete_fee_schedule: delete failed");
+                AccountError::DatabaseError
+            })?;
+        self.emit_fee_schedule_updated();
+        Ok(())
+    }
+
+    /// Returns the fee schedule for the (account, asset) pair, or None (FEE-030).
+    pub async fn get_fee_schedule(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<Option<FeeSchedule>, AccountError> {
+        let repo = self.fee_schedule_repo()?;
+        repo.get_by_account_asset(account_id, asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "get_fee_schedule: lookup failed");
+                AccountError::DatabaseError
+            })
+    }
+
+    /// Returns every active fee schedule across all accounts (FEE-040 catch-up).
+    pub async fn list_active_fee_schedules(&self) -> Result<Vec<FeeSchedule>, AccountError> {
+        let repo = self.fee_schedule_repo()?;
+        repo.get_all_active().await.map_err(|e| {
+            tracing::error!(target: BACKEND, err = ?e, "list_active_fee_schedules: query failed");
+            AccountError::DatabaseError
+        })
+    }
+
+    /// Advances a schedule's catch-up cursor to `last_applied_period` (FEE-043).
+    /// Silent no-op if the schedule no longer exists.
+    pub async fn advance_fee_schedule_cursor(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+        last_applied_period: String,
+    ) -> Result<(), AccountError> {
+        let repo = self.fee_schedule_repo()?;
+        let existing = repo
+            .get_by_account_asset(account_id, asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "advance_fee_schedule_cursor: lookup failed");
+                AccountError::DatabaseError
+            })?;
+        if let Some(schedule) = existing {
+            let schedule = schedule.advance_cursor(last_applied_period);
+            repo.update(&schedule).await.map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "advance_fee_schedule_cursor: persist failed");
+                AccountError::DatabaseError
+            })?;
+        }
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
@@ -590,6 +798,12 @@ impl AccountService {
     fn emit_transaction_updated(&self) {
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::TransactionUpdated);
+        }
+    }
+
+    fn emit_fee_schedule_updated(&self) {
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::FeeScheduleUpdated);
         }
     }
 }
@@ -710,8 +924,8 @@ mod tests {
     // SQLite tests are grouped first; mock-based unit tests follow after the section header.
     use crate::context::account::{
         AccountError, Holding, MockAccountRepository, MockHoldingRepository,
-        MockTransactionRepository, SqliteAccountRepository, SqliteHoldingRepository,
-        SqliteTransactionRepository,
+        MockTransactionRepository, SqliteAccountRepository, SqliteFeeScheduleRepository,
+        SqliteHoldingRepository, SqliteTransactionRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -785,7 +999,8 @@ mod tests {
             Box::new(SqliteAccountRepository::new(pool.clone())),
             Box::new(SqliteHoldingRepository::new(pool.clone())),
             Box::new(SqliteTransactionRepository::new(pool.clone())),
-        );
+        )
+        .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())));
         let asset_id = "test-asset-id".to_string();
         sqlx::query(
             "INSERT INTO assets (id, name, reference, asset_class, category_id, currency, risk_level)
@@ -2293,5 +2508,582 @@ mod tests {
             ),
             "record_free_shares must surface save failures as Application(DatabaseError), got: {err:?}"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-012/021/022/023/027 — record_management_fee service method
+    // -------------------------------------------------------------------------
+
+    // FEE-012 — record_management_fee persists the transaction and updates the holding:
+    // quantity decreases, cost basis unchanged (VWAP concentrates).
+    #[tokio::test]
+    async fn fee_012_record_management_fee_persists_transaction_and_updates_holding() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FEE Account".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+        // Buy 100 units @ 50 (total cost = 5000 in account currency).
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(100),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Record a 1% management fee (1_000_000 micro-percent).
+        // Expected removed qty = floor(100_000_000 × 1_000_000 / 100_000_000) = 1_000_000 (1 unit).
+        let tx = svc
+            .record_management_fee(
+                &account.id,
+                asset_id.clone(),
+                "2024-06-30".to_string(),
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // FEE-012 — returned Transaction must carry ManagementFee type and zero-cost packing.
+        assert_eq!(
+            tx.transaction_type,
+            crate::context::account::TransactionType::ManagementFee
+        );
+        assert_eq!(tx.asset_id, asset_id);
+        assert_eq!(tx.unit_price, 0, "unit_price must be 0 (FEE-023)");
+        assert_eq!(
+            tx.exchange_rate, 1_000_000,
+            "exchange_rate must be 1_000_000"
+        );
+        assert_eq!(tx.fees, 0, "fees must be 0");
+        assert_eq!(tx.total_amount, 0, "total_amount must be 0 (FEE-023)");
+        assert!(tx.realized_pnl.is_none(), "realized_pnl must be None");
+
+        let holdings_after = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_after = holdings_after
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding for asset_id must exist after management fee deduction");
+
+        // FEE-023 — VWAP concentrates: qty decreases, cost basis unchanged.
+        assert!(
+            holding_after.quantity < micro(100),
+            "quantity must decrease after fee deduction"
+        );
+    }
+
+    // FEE-021 — PercentageNotPositive when percent_micros <= 0.
+    #[tokio::test]
+    async fn fee_021_record_management_fee_rejects_zero_percent() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FEE Zero".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .record_management_fee(
+                &account.id,
+                asset_id.clone(),
+                "2024-06-30".to_string(),
+                0,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::PercentageNotPositive),
+            "expected PercentageNotPositive, got: {err:?}"
+        );
+    }
+
+    // FEE-021 — PercentageAboveHundred when percent_micros > 100_000_000.
+    #[tokio::test]
+    async fn fee_021_record_management_fee_rejects_above_hundred_percent() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FEE Above100".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .record_management_fee(
+                &account.id,
+                asset_id.clone(),
+                "2024-06-30".to_string(),
+                100_000_001,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::PercentageAboveHundred),
+            "expected PercentageAboveHundred, got: {err:?}"
+        );
+    }
+
+    // FEE-022 — AccountNotFound when the account does not exist.
+    #[tokio::test]
+    async fn fee_022_record_management_fee_rejects_unknown_account() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+
+        let err = svc
+            .record_management_fee(
+                "nonexistent-account",
+                asset_id.clone(),
+                "2024-06-30".to_string(),
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::AccountNotFound { .. }),
+            "expected AccountNotFound, got: {err:?}"
+        );
+    }
+
+    // FEE-027 — record_management_fee propagates save failure as DatabaseError.
+    #[tokio::test]
+    async fn fee_027_record_management_fee_returns_database_error_when_save_fails() {
+        let mut mock_ar = MockAccountRepository::new();
+        mock_ar
+            .expect_get_with_holdings_and_transactions()
+            .once()
+            .returning(|_| {
+                let mut acc = Account::new(
+                    "Test".to_string(),
+                    "EUR".to_string(),
+                    UpdateFrequency::ManualMonth,
+                )
+                .unwrap();
+                acc.record_deposit("2024-01-01".to_string(), micro(1_000), None)
+                    .expect("seed deposit");
+                acc.buy_holding(
+                    "asset-1".to_string(),
+                    "2024-01-01".to_string(),
+                    micro(10),
+                    micro(100),
+                    micro(1),
+                    0,
+                    None,
+                )
+                .expect("seed buy");
+                acc.pending_changes.clear();
+                Ok(Some(acc))
+            });
+        mock_ar
+            .expect_save()
+            .once()
+            .returning(|_| Err(SimulatedSaveError.into()));
+
+        let svc = AccountService::new(
+            Box::new(mock_ar),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(MockTransactionRepository::new()),
+        );
+
+        let err = svc
+            .record_management_fee(
+                "any-id",
+                "asset-1".to_string(),
+                "2024-06-30".to_string(),
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::DatabaseError),
+            "record_management_fee must surface save failures as DatabaseError, got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-030/031/032/033/034 — create_fee_schedule service method
+    // -------------------------------------------------------------------------
+
+    // FEE-030 — create_fee_schedule persists the schedule and returns it.
+    #[tokio::test]
+    async fn fee_030_create_fee_schedule_returns_schedule() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Schedule Acct".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let schedule = svc
+            .create_fee_schedule(
+                &account.id,
+                asset_id.clone(),
+                1_000_000, // 1%
+                FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(schedule.account_id, account.id);
+        assert_eq!(schedule.asset_id, asset_id);
+        assert_eq!(schedule.annual_rate_percent_micros, 1_000_000);
+        assert!(matches!(schedule.frequency, FeeFrequency::Monthly));
+        assert!(schedule.active);
+        assert!(schedule.last_applied_period.is_none());
+    }
+
+    // FEE-031 — ScheduleAlreadyExists when a schedule exists for the (account, asset) pair.
+    #[tokio::test]
+    async fn fee_031_create_fee_schedule_rejects_duplicate() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Dup Sched".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        svc.create_fee_schedule(
+            &account.id,
+            asset_id.clone(),
+            1_000_000,
+            FeeFrequency::Monthly,
+            "2024-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = svc
+            .create_fee_schedule(
+                &account.id,
+                asset_id.clone(),
+                2_000_000,
+                FeeFrequency::Quarterly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::ScheduleAlreadyExists),
+            "expected ScheduleAlreadyExists, got: {err:?}"
+        );
+    }
+
+    // FEE-032 — RateNotPositive when annual_rate_percent_micros <= 0.
+    #[tokio::test]
+    async fn fee_032_create_fee_schedule_rejects_zero_rate() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Rate Zero".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .create_fee_schedule(
+                &account.id,
+                asset_id.clone(),
+                0,
+                FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::RateNotPositive),
+            "expected RateNotPositive, got: {err:?}"
+        );
+    }
+
+    // FEE-032 — RateAboveHundred when rate > 100_000_000.
+    #[tokio::test]
+    async fn fee_032_create_fee_schedule_rejects_rate_above_hundred() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Rate High".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .create_fee_schedule(
+                &account.id,
+                asset_id.clone(),
+                100_000_001,
+                FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::RateAboveHundred),
+            "expected RateAboveHundred, got: {err:?}"
+        );
+    }
+
+    // FEE-032 — EndBeforeStart when end_date <= start_date.
+    #[tokio::test]
+    async fn fee_032_create_fee_schedule_rejects_end_before_start() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "End Before".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .create_fee_schedule(
+                &account.id,
+                asset_id.clone(),
+                1_000_000,
+                FeeFrequency::Monthly,
+                "2024-12-01".to_string(),
+                Some("2024-01-01".to_string()),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::EndBeforeStart),
+            "expected EndBeforeStart, got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-060/061 — update_fee_schedule service method
+    // -------------------------------------------------------------------------
+
+    // FEE-060 — update_fee_schedule returns the updated schedule.
+    #[tokio::test]
+    async fn fee_060_update_fee_schedule_returns_updated_schedule() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Update Sched".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        svc.create_fee_schedule(
+            &account.id,
+            asset_id.clone(),
+            1_000_000,
+            FeeFrequency::Monthly,
+            "2024-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let updated = svc
+            .update_fee_schedule(
+                &account.id,
+                &asset_id,
+                2_000_000,
+                Some("2025-12-31".to_string()),
+                true,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.annual_rate_percent_micros, 2_000_000);
+        assert_eq!(updated.end_date, Some("2025-12-31".to_string()));
+        assert!(updated.active);
+        // FEE-061 — frequency and start_date are NOT changed by update.
+        assert!(matches!(updated.frequency, FeeFrequency::Monthly));
+        assert_eq!(updated.start_date, "2024-01-01");
+    }
+
+    // FEE-060 — ScheduleNotFound when no schedule exists for the pair.
+    #[tokio::test]
+    async fn fee_060_update_fee_schedule_rejects_missing_schedule() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "NoSched".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .update_fee_schedule(&account.id, &asset_id, 1_000_000, None, true)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::ScheduleNotFound),
+            "expected ScheduleNotFound, got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-062 — delete_fee_schedule service method
+    // -------------------------------------------------------------------------
+
+    // FEE-062 — delete_fee_schedule succeeds and the schedule is gone.
+    #[tokio::test]
+    async fn fee_062_delete_fee_schedule_removes_schedule() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Del Sched".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        svc.create_fee_schedule(
+            &account.id,
+            asset_id.clone(),
+            1_000_000,
+            FeeFrequency::Monthly,
+            "2024-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        svc.delete_fee_schedule(&account.id, &asset_id)
+            .await
+            .unwrap();
+
+        let found = svc.get_fee_schedule(&account.id, &asset_id).await.unwrap();
+        assert!(found.is_none(), "schedule must be absent after delete");
+    }
+
+    // FEE-062 — delete_fee_schedule is a no-op when no schedule exists (silent).
+    #[tokio::test]
+    async fn fee_062_delete_fee_schedule_is_silent_on_missing() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Del None".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        // Should not error when no schedule exists.
+        svc.delete_fee_schedule(&account.id, &asset_id)
+            .await
+            .unwrap();
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-030 (read) — get_fee_schedule service method
+    // -------------------------------------------------------------------------
+
+    // FEE-030 — get_fee_schedule returns None when no schedule exists.
+    #[tokio::test]
+    async fn fee_030_get_fee_schedule_returns_none_when_absent() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Get None".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let found = svc.get_fee_schedule(&account.id, &asset_id).await.unwrap();
+        assert!(found.is_none());
+    }
+
+    // FEE-030 — get_fee_schedule returns the schedule when it exists.
+    #[tokio::test]
+    async fn fee_030_get_fee_schedule_returns_schedule_when_present() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Get Present".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        svc.create_fee_schedule(
+            &account.id,
+            asset_id.clone(),
+            1_500_000,
+            FeeFrequency::Quarterly,
+            "2024-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let found = svc.get_fee_schedule(&account.id, &asset_id).await.unwrap();
+        assert!(found.is_some());
+        let schedule = found.unwrap();
+        assert_eq!(schedule.annual_rate_percent_micros, 1_500_000);
+        assert!(matches!(schedule.frequency, FeeFrequency::Quarterly));
     }
 }

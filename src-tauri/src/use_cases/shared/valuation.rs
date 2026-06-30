@@ -376,8 +376,10 @@ pub(crate) fn end_value_as_of(
             TransactionType::Withdrawal | TransactionType::Purchase => {
                 cash_balance -= transaction.total_amount as i128;
             }
-            // FSD-022d — a free-share distribution has no cash leg.
-            TransactionType::OpeningBalance | TransactionType::FreeShares => {}
+            // FSD-022d / FEE-022d — free-share and management-fee events have no cash leg.
+            TransactionType::OpeningBalance
+            | TransactionType::FreeShares
+            | TransactionType::ManagementFee => {}
         }
         match transaction.transaction_type {
             // FSD-070 — free shares enter the as-of-date unit reconstruction like a
@@ -389,7 +391,8 @@ pub(crate) fn end_value_as_of(
                     .entry(transaction.asset_id.as_str())
                     .or_insert(0) += transaction.quantity as i128;
             }
-            TransactionType::Sell => {
+            // FEE-046/050 — a management fee reduces the position quantity like a sell.
+            TransactionType::Sell | TransactionType::ManagementFee => {
                 *quantity_by_asset
                     .entry(transaction.asset_id.as_str())
                     .or_insert(0) -= transaction.quantity as i128;
@@ -453,11 +456,12 @@ fn net_external_flow_in_range(
             }
             // DIV-023: Dividend credits cash (internal income), not an external flow — excluded
             // from Simple Dietz net external flow (PRF-031) like Purchase/Sell.
-            // FSD-070: FreeShares is not an external flow either — no flow adjustment.
+            // FSD-070 / FEE-071: free-share and management-fee events are not external flows.
             TransactionType::Purchase
             | TransactionType::Sell
             | TransactionType::Dividend
-            | TransactionType::FreeShares => {}
+            | TransactionType::FreeShares
+            | TransactionType::ManagementFee => {}
         }
     }
     debug_assert!(
@@ -496,11 +500,12 @@ pub(crate) fn metric_for_span(
                 TransactionType::Withdrawal => -(transaction.total_amount as i128),
                 // DIV-023: Dividend is internal income (credit-only), not an external flow —
                 // excluded from Simple Dietz weighted flow (PRF-031) like Purchase/Sell.
-                // FSD-070: FreeShares is excluded the same way — no flow adjustment.
+                // FSD-070 / FEE-071: free-share and management-fee events are excluded.
                 TransactionType::Purchase
                 | TransactionType::Sell
                 | TransactionType::Dividend
-                | TransactionType::FreeShares => continue,
+                | TransactionType::FreeShares
+                | TransactionType::ManagementFee => continue,
             };
             let days_remaining = (period_end - date).num_days() as i128;
             weighted_flow += signed_flow * days_remaining / days_in_period as i128;

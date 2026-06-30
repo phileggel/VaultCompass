@@ -33,6 +33,8 @@ pub enum Event {
     },
     /// A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
     CurrencyRateUpdated,
+    /// A fee schedule was created, updated, paused, reactivated, or deleted (FEE-064).
+    FeeScheduleUpdated,
 }
 
 /// One asset a price-fetch task could not price (MKT-170/171), carried in the

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE fee_schedules\n               SET annual_rate_micros = ?, frequency = ?, start_date = ?, end_date = ?, active = ?, last_applied_period = ?\n               WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "7cd452830eacb6b0ac4b1d6f6f4d83114ffb5b95e19adbc1d11fa01ff96a908d"
+}

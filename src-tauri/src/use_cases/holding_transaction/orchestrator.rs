@@ -1,5 +1,6 @@
 use super::error::{
-    DividendError, DividendTask, FreeSharesError, FreeSharesTask, OpenHoldingError, OpenHoldingTask,
+    DividendError, DividendTask, FreeSharesError, FreeSharesTask, ManagementFeeError,
+    ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
 };
 use super::shared::ensure_cash_asset;
 use crate::context::account::{AccountError, AccountService, Transaction};
@@ -341,6 +342,63 @@ impl HoldingTransactionUseCase {
             .record_free_shares(account_id, asset_id, date, quantity, note)
             .await
             .map_err(FreeSharesError::Account)
+    }
+
+    /// Records a management fee deduction on a held asset (FEE-012/011).
+    ///
+    /// Cross-BC guards (FEE-011): rejects if account is unknown, asset is unknown,
+    /// asset is not currently held (quantity = 0), or asset is a Cash Asset.
+    /// No cash leg — does not call `ensure_cash_asset`.
+    /// Returns `ManagementFeeError`.
+    pub async fn record_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, ManagementFeeError> {
+        // FEE-012 — account must exist (checked before any asset work).
+        self.account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+
+        // FEE-012 — asset must exist and must not be a Cash Asset.
+        let asset = self
+            .asset_service
+            .get_asset_by_id(&asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_management_fee: get_asset_by_id failed");
+                AccountError::DatabaseError
+            })?;
+        match asset {
+            None => return Err(ManagementFeeTask::AssetNotFound.into()),
+            Some(a) if a.class == AssetClass::Cash => {
+                return Err(ManagementFeeTask::ManagementFeeOnCashAsset.into())
+            }
+            Some(_) => {}
+        }
+
+        // FEE-012 — asset must be currently held (quantity > 0).
+        let held = self
+            .account_service
+            .get_holding_by_account_asset(account_id, &asset_id)
+            .await?;
+        match held {
+            Some(h) if h.quantity > 0 => {}
+            _ => return Err(ManagementFeeTask::AssetNotHeld.into()),
+        }
+
+        // Delegate to the account BC; its `AccountError` surfaces on the
+        // management-fee wire as `ManagementFeeError::Account`.
+        self.account_service
+            .record_management_fee(account_id, asset_id, date, percent_micros, note)
+            .await
+            .map_err(ManagementFeeError::Account)
     }
 
     /// Loads the account, then ensures the system Cash Asset for its currency

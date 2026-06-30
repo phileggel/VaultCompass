@@ -1,4 +1,6 @@
-use crate::context::account::{Account, AccountError, AccountService, TransactionType};
+use crate::context::account::{
+    Account, AccountError, AccountService, Transaction, TransactionType,
+};
 use crate::context::asset::{AssetPriceSource, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::core::cash::{is_cash_asset, system_cash_asset_id};
@@ -53,6 +55,11 @@ pub struct HoldingDetail {
     /// a foreign holding with no usable rate, or cash — i.e. present only when a
     /// converted value backed by a real rate is shown.
     pub fx_rate_date: Option<String>,
+    /// Cumulative value removed via management fee deductions for this (account, asset),
+    /// in account-currency micros (FEE-051/052).
+    /// Computed on read as Σ(qty_removed × price_as_of(date)), FXR-converted.
+    /// 0 when no management fee transactions have been recorded.
+    pub management_fees: i64,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -98,6 +105,9 @@ pub struct AccountDetailsResponse {
     /// Sum of dividend cash credited across all of the account's dividend transactions, in account
     /// currency (i64 micros). 0 when none (DIV-073).
     pub total_dividends_received: i64,
+    /// Sum of `management_fees` across all active holdings, in account-currency micros (FEE-072/073).
+    /// 0 when no management fee transactions have been recorded.
+    pub total_management_fees: i64,
 }
 
 /// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
@@ -191,6 +201,11 @@ impl AccountDetailsUseCase {
                 total_dividends_received = total_dividends_received.saturating_add(t.total_amount);
             }
         }
+
+        // FEE-052/053 — cumulative management fees per asset + account total (all fees to date).
+        let (management_fees_by_asset, total_management_fees) = self
+            .compute_management_fees(&all_txs, &account.currency, None)
+            .await?;
 
         // FXR-035 — valuation date for resolving FX rates is "today"; the
         // write-guard (FXR-022) forbids future-dated rates, so the latest rate
@@ -336,6 +351,9 @@ impl AccountDetailsUseCase {
                 ),
                 _ => None,
             };
+            let management_fees = *management_fees_by_asset
+                .get(&holding.asset_id)
+                .unwrap_or(&0);
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -353,6 +371,7 @@ impl AccountDetailsUseCase {
                 dividends_received,
                 total_return_pct,
                 fx_rate_date,
+                management_fees, // FEE-052
             });
         }
 
@@ -416,7 +435,72 @@ impl AccountDetailsUseCase {
             total_unrealized_pnl,
             total_global_value,
             total_dividends_received,
+            total_management_fees, // FEE-053/072
         })
+    }
+
+    /// FEE-051/052/053 — cumulative management-fee value per `(account, asset)` and the
+    /// account total, in account currency. Each `ManagementFee` transaction is valued at the
+    /// carry-forward recorded price as of its own date (PRF-022); it contributes 0 when no
+    /// price is recorded on or before that date (FEE-054) or no usable FX rate exists
+    /// (FEE-073). When `as_of` is `Some`, only fees dated on or before it are counted (FEE-072).
+    async fn compute_management_fees(
+        &self,
+        all_txs: &[Transaction],
+        account_currency: &str,
+        as_of: Option<&str>,
+    ) -> StdResult<(HashMap<String, i64>, i64), AccountError> {
+        let mut by_asset: HashMap<String, i64> = HashMap::new();
+        let mut total: i64 = 0;
+        for t in all_txs {
+            if t.transaction_type != TransactionType::ManagementFee {
+                continue;
+            }
+            if let Some(as_of) = as_of {
+                if t.date.as_str() > as_of {
+                    continue;
+                }
+            }
+            let Some(asset) = self.asset_service.get_asset_by_id(&t.asset_id).await.map_err(|e| {
+                tracing::error!(target: BACKEND, asset_id = %t.asset_id, err = ?e, "compute_management_fees: get_asset_by_id failed");
+                AccountError::DatabaseError
+            })?
+            else {
+                continue;
+            };
+            let prices = self.asset_service.get_asset_prices(&t.asset_id).await.map_err(|e| {
+                tracing::error!(target: BACKEND, asset_id = %t.asset_id, err = ?e, "compute_management_fees: get_asset_prices failed");
+                AccountError::DatabaseError
+            })?;
+            // PRF-022 carry-forward: latest recorded price dated ≤ the fee's date (prices are date-desc).
+            let Some(price) = prices.iter().find(|p| p.date.as_str() <= t.date.as_str()) else {
+                continue; // FEE-054 — no recorded price → contributes 0
+            };
+            let value_asset_ccy = (t.quantity as i128 * price.price as i128 / 1_000_000) as i64;
+            let fee_value = if asset.currency == account_currency {
+                value_asset_ccy
+            } else {
+                match self
+                    .currency_service
+                    .resolve_rate(&asset.currency, account_currency, &t.date)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(target: BACKEND, err = ?e, "compute_management_fees: resolve_rate failed");
+                        AccountError::DatabaseError
+                    })? {
+                    // FEE-073 — convert the fee value to account currency as of the fee's date.
+                    Some(resolved) => {
+                        (value_asset_ccy as i128 * resolved.rate_micros as i128 / 1_000_000) as i64
+                    }
+                    // FEE-073/054 — no usable rate → contributes 0.
+                    None => 0,
+                }
+            };
+            let entry = by_asset.entry(t.asset_id.clone()).or_insert(0);
+            *entry = entry.saturating_add(fee_value);
+            total = total.saturating_add(fee_value);
+        }
+        Ok((by_asset, total))
     }
 
     /// As-of view: reconstructs the account exactly as it stood on `as_of_date`
@@ -460,6 +544,11 @@ impl AccountDetailsUseCase {
                 total_dividends_received = total_dividends_received.saturating_add(t.total_amount);
             }
         }
+
+        // FEE-052/053/072 — cumulative management fees per asset + total, fees dated ≤ as_of.
+        let (management_fees_by_asset, total_management_fees) = self
+            .compute_management_fees(&all_txs, &account.currency, Some(as_of_date))
+            .await?;
 
         let mut details: Vec<HoldingDetail> = Vec::new();
         let mut closed_details: Vec<ClosedHoldingDetail> = Vec::new();
@@ -620,6 +709,7 @@ impl AccountDetailsUseCase {
                 dividends_received,
                 total_return_pct,
                 fx_rate_date,
+                management_fees: *management_fees_by_asset.get(asset_id).unwrap_or(&0), // FEE-052
             });
         }
 
@@ -659,6 +749,7 @@ impl AccountDetailsUseCase {
                 dividends_received: 0,
                 total_return_pct: None,
                 fx_rate_date: None,
+                management_fees: 0, // cash holdings never have management fees
             });
         }
 
@@ -686,6 +777,7 @@ impl AccountDetailsUseCase {
             total_unrealized_pnl,
             total_global_value,
             total_dividends_received,
+            total_management_fees, // FEE-053/072
         })
     }
 }
@@ -3238,5 +3330,190 @@ mod tests {
             "later dividend not credited as of the date"
         );
         assert_eq!(resp.total_dividends_received, 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE-052/053/054/072/073 — management_fees aggregation in HoldingDetail
+    // and AccountDetailsResponse
+    // -------------------------------------------------------------------------
+
+    // FEE-052/053 — HoldingDetail.management_fees is 0 when no management fee
+    // transactions have been recorded for the (account, asset) pair.
+    #[tokio::test]
+    async fn fee_052_holding_detail_management_fees_is_zero_when_no_fees() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "FEE Zero Acct".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "No Fee Stock".to_string(),
+                reference: "NFS".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        let holding_repo = SqliteHoldingRepository::new(pool.clone());
+        holding_repo
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    1_000_000,
+                    50_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "NFS")
+            .expect("holding present");
+        assert_eq!(
+            row.management_fees, 0,
+            "management_fees must be 0 when no fee transactions recorded"
+        );
+    }
+
+    // FEE-072/073 — AccountDetailsResponse.total_management_fees is 0 when no
+    // management fee transactions have been recorded for the account.
+    #[tokio::test]
+    async fn fee_072_total_management_fees_is_zero_when_no_fees() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "FEE Total Zero".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        assert_eq!(
+            resp.total_management_fees, 0,
+            "total_management_fees must be 0 when no fees recorded"
+        );
+    }
+
+    // FEE-053/054 — HoldingDetail.management_fees equals Σ(qty_removed × price_as_of(date))
+    // for each ManagementFee transaction recorded for the (account, asset) pair.
+    #[tokio::test]
+    async fn fee_053_holding_detail_management_fees_sums_fee_value() {
+        // This test will fail until the FEE-051 aggregation logic is implemented.
+        // The stub returns management_fees = 0 for all holdings; the assertion
+        // below expects a non-zero value — establishing the red baseline.
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "FEE Aggregate".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Fee Stock".to_string(),
+                reference: "FEES".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        // Seed: buy 100 units @ 10, then a management fee that removed 1 unit.
+        // The fee value = 1 × 10 = 10_000_000 micros.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 10_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                asset.id.clone(),
+                "2024-01-01".to_string(),
+                100_000_000, // 100 units
+                10_000_000,  // 10.00
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Record a management fee that removes 1 unit (1_000_000 micro-units).
+        account_svc
+            .record_management_fee(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-30".to_string(),
+                1_000_000, // 1%
+                None,
+            )
+            .await
+            .unwrap();
+
+        // FEE-051/054 — value the fee at a recorded carry-forward price (10.00) on its date.
+        asset_svc
+            .record_asset_price(&asset.id, "2024-06-30", 10.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "FEES")
+            .expect("fee stock holding present");
+
+        // FEE-052/053 — management_fees = qty_removed × carry-forward price as of the fee date.
+        // qty_removed = floor(100 × 1%) = 1 unit = 1_000_000 micro-units; price = 10.00 = 10_000_000.
+        // Expected fee value = 1_000_000 × 10_000_000 / 1_000_000 = 10_000_000 micros.
+        assert_eq!(
+            row.management_fees, 10_000_000,
+            "management_fees must equal qty_removed × price_as_of (FEE-053), got: {}",
+            row.management_fees
+        );
     }
 }

@@ -279,6 +279,50 @@ async getHoldingSnapshotAsOf(accountId: string, assetId: string, date: string) :
 }
 },
 /**
+ * Creates a recurring management fee schedule for an (account, asset) pair (FEE-030).
+ */
+async createFeeSchedule(dto: CreateFeeScheduleDTO) : Promise<Result<FeeSchedule, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_fee_schedule", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Edits an existing fee schedule's rate, end date, and active flag (FEE-060/061).
+ */
+async updateFeeSchedule(dto: UpdateFeeScheduleDTO) : Promise<Result<FeeSchedule, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_fee_schedule", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes the fee schedule for an (account, asset) pair (FEE-062, silent if absent).
+ */
+async deleteFeeSchedule(accountId: string, assetId: string) : Promise<Result<null, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_fee_schedule", { accountId, assetId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Returns the fee schedule for an (account, asset) pair, or `None` (FEE-030).
+ */
+async getFeeSchedule(accountId: string, assetId: string) : Promise<Result<FeeSchedule | null, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_fee_schedule", { accountId, assetId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Declares a currency pair (FXR-054). Idempotent: returns the existing pair
  * rather than duplicating it.
  */
@@ -467,6 +511,34 @@ async recordDividend(dto: DividendDTO) : Promise<Result<Transaction, DividendErr
 async recordFreeShares(dto: FreeSharesDTO) : Promise<Result<Transaction, FreeSharesError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("record_free_shares", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Records a one-off quantity-reducing management fee on a held asset (FEE-022).
+ */
+async recordManagementFee(dto: ManagementFeeDTO) : Promise<Result<Transaction, ManagementFeeError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_management_fee", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Applies all due management fee deductions across all active schedules (FEE-040).
+ * 
+ * Lazy catch-up: for each active schedule, generates one deduction per completed
+ * period since `last_applied_period`, dated at the period boundary, in
+ * chronological order. Skips periods where the holding quantity was 0 (FEE-047)
+ * or where the deduction would oversell (FEE-044). Advances the cursor even
+ * for skipped periods (FEE-043).
+ */
+async applyDueFeeDeductions() : Promise<Result<null, FeeGenerationError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("apply_due_fee_deductions") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -716,7 +788,12 @@ total_global_value: number;
  * Sum of dividend cash credited across all of the account's dividend transactions, in account
  * currency (i64 micros). 0 when none (DIV-073).
  */
-total_dividends_received: number }
+total_dividends_received: number; 
+/**
+ * Sum of `management_fees` across all active holdings, in account-currency micros (FEE-072/073).
+ * 0 when no management fee transactions have been recorded.
+ */
+total_management_fees: number }
 /**
  * Single flat error enum for the `account` bounded context (gold error model).
  * 
@@ -808,6 +885,34 @@ export type AccountError =
  * Total amount is zero or negative.
  */
 { code: "TotalAmountNotPositive" } | 
+/**
+ * The management fee percentage is zero or negative (FEE-021).
+ */
+{ code: "PercentageNotPositive" } | 
+/**
+ * The management fee percentage exceeds 100% in micro-percent (FEE-021).
+ */
+{ code: "PercentageAboveHundred" } | 
+/**
+ * The annual rate is zero or negative (FEE-032).
+ */
+{ code: "RateNotPositive" } | 
+/**
+ * The annual rate exceeds 100% in micro-percent (FEE-032).
+ */
+{ code: "RateAboveHundred" } | 
+/**
+ * The schedule end_date is not strictly after start_date (FEE-032).
+ */
+{ code: "EndBeforeStart" } | 
+/**
+ * A fee schedule for this (account, asset) pair already exists (FEE-031).
+ */
+{ code: "ScheduleAlreadyExists" } | 
+/**
+ * No fee schedule found for the given (account, asset) pair (FEE-060).
+ */
+{ code: "ScheduleNotFound" } | 
 /**
  * No account exists with the requested ID.
  */
@@ -1386,6 +1491,34 @@ category_id: string;
  */
 exchange: Exchange | null }
 /**
+ * Parameters for creating a recurring fee schedule (FEE-030).
+ */
+export type CreateFeeScheduleDTO = { 
+/**
+ * Account the schedule applies to.
+ */
+account_id: string; 
+/**
+ * The charged asset.
+ */
+asset_id: string; 
+/**
+ * Annual fee rate in micro-percent (1% = 1_000_000), strictly positive and < 100% (FEE-032).
+ */
+annual_rate_percent_micros: number; 
+/**
+ * Deduction cadence (FEE-034).
+ */
+frequency: FeeFrequency; 
+/**
+ * First business date deductions are generated from (YYYY-MM-DD, FEE-032).
+ */
+start_date: string; 
+/**
+ * Optional date after which no further deductions are generated (FEE-045).
+ */
+end_date: string | null }
+/**
  * Single flat error enum for the `currency` bounded context (gold error model).
  * 
  * Every failure the BC can raise — validation, lookup, and infrastructure —
@@ -1687,7 +1820,11 @@ export type Event =
 /**
  * A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
  */
-{ type: "CurrencyRateUpdated" }
+{ type: "CurrencyRateUpdated" } | 
+/**
+ * A fee schedule was created, updated, paused, reactivated, or deleted (FEE-064).
+ */
+{ type: "FeeScheduleUpdated" }
 /**
  * A canonical trading venue identified by its ISO 10383 MIC code.
  */
@@ -1700,6 +1837,77 @@ code: string;
  * Human-readable display name (e.g. "Euronext Paris").
  */
 label: string }
+/**
+ * Recurrence frequency for a management fee schedule (FEE-030).
+ */
+export type FeeFrequency = 
+/**
+ * Deduction applied monthly (12 periods per year).
+ */
+"Monthly" | 
+/**
+ * Deduction applied quarterly (4 periods per year).
+ */
+"Quarterly" | 
+/**
+ * Deduction applied annually (1 period per year).
+ */
+"Annually"
+/**
+ * Use-case composite for the **apply_due_fee_deductions** failure surface (FEE-040+).
+ * 
+ * Wraps account-BC failures that may surface during batch fee deduction
+ * (e.g. `DatabaseError` when loading schedules or saving transactions).
+ */
+export type FeeGenerationError = 
+/**
+ * Account-BC rejection (lookup, infra, transaction validation).
+ */
+AccountError
+/**
+ * A recurring management fee schedule for an (account, asset) pair (FEE-030).
+ * 
+ * `annual_rate_percent_micros` is in micro-percent: 1% = 1_000_000,
+ * 100% = 100_000_000. Must be strictly positive and ≤ 100_000_000.
+ */
+export type FeeSchedule = { 
+/**
+ * Unique identifier.
+ */
+id: string; 
+/**
+ * The account this schedule applies to.
+ */
+account_id: string; 
+/**
+ * The asset being charged the management fee.
+ */
+asset_id: string; 
+/**
+ * Annual management fee rate in micro-percent (1% = 1_000_000, FEE-032).
+ */
+annual_rate_percent_micros: number; 
+/**
+ * How often the deduction is applied within a year.
+ */
+frequency: FeeFrequency; 
+/**
+ * ISO date when the schedule becomes effective (YYYY-MM-DD).
+ */
+start_date: string; 
+/**
+ * Optional ISO date when the schedule ends (YYYY-MM-DD). None = open-ended.
+ */
+end_date: string | null; 
+/**
+ * Whether the schedule is currently active (FEE-061).
+ */
+active: boolean; 
+/**
+ * The last completed period boundary that was applied, as ISO date (FEE-043).
+ * None when no periods have been applied yet.
+ */
+last_applied_period: string | null }
 /**
  * Wire-facing error composite for `fetch_account_asset_prices` (MKT-113, MKT-111, MKT-132).
  * 
@@ -1933,7 +2141,14 @@ total_return_pct: number | null;
  * a foreign holding with no usable rate, or cash — i.e. present only when a
  * converted value backed by a real rate is shown.
  */
-fx_rate_date: string | null }
+fx_rate_date: string | null; 
+/**
+ * Cumulative value removed via management fee deductions for this (account, asset),
+ * in account-currency micros (FEE-051/052).
+ * Computed on read as Σ(qty_removed × price_as_of(date)), FXR-converted.
+ * 0 when no management fee transactions have been recorded.
+ */
+management_fees: number }
 /**
  * Point-in-time reconstruction of a single holding's quantity and VWAP cost
  * basis as of a date — the read-only "as of" valuation behind the trade-dialog
@@ -1964,6 +2179,71 @@ export type LookupMode =
  * Keyword path: normalize diacritics (WEB-015) then call `/v3/search`.
  */
 "Keyword"
+/**
+ * Parameters for recording a one-off management fee on a held asset (FEE-020).
+ * The fee is expressed as a percentage of the holding; no money changes hands.
+ */
+export type ManagementFeeDTO = { 
+/**
+ * Account whose holding the fee is taken from.
+ */
+account_id: string; 
+/**
+ * The charged asset — must be actively held (quantity > 0) and not a Cash Asset (FEE-012).
+ */
+asset_id: string; 
+/**
+ * Business date the fee was applied (YYYY-MM-DD, FEE-021).
+ */
+date: string; 
+/**
+ * Percentage of the holding to remove, in micro-percent (1% = 1_000_000),
+ * strictly positive and at most 100_000_000 (FEE-021).
+ */
+percent_micros: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
+ * Use-case composite for the **record management fee** failure surface.
+ * 
+ * - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+ * the transaction-factory date / percent validation).
+ * - `ManagementFeeTask` — use-case-owned (this file), the cross-BC
+ * asset/holding checks.
+ */
+export type ManagementFeeError = 
+/**
+ * Account-BC rejection (lookup, infra, transaction validation).
+ */
+AccountError | 
+/**
+ * Use-case-layer rejection (cross-BC asset checks).
+ */
+ManagementFeeTask
+/**
+ * Application-layer rejections specific to the `record_management_fee` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_management_fee`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type ManagementFeeTask = 
+/**
+ * No asset exists with the requested ID (FEE-011).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The asset is not currently held (quantity = 0 or no holding) (FEE-011).
+ */
+{ code: "AssetNotHeld" } | 
+/**
+ * Target asset is a system Cash Asset — management fees must be on non-cash
+ * holdings (FEE-011).
+ */
+{ code: "ManagementFeeOnCashAsset" }
 /**
  * Parameters for recording an opening balance for an asset in an account (TRX-042).
  */
@@ -2229,7 +2509,11 @@ export type TransactionType =
 /**
  * Shares of a held asset received at no cost; quantity rises, cost basis unchanged (FSD-022).
  */
-"FreeShares"
+"FreeShares" | 
+/**
+ * Management fee deduction: shares removed at zero cost; cost basis unchanged, VWAP concentrates (FEE-012).
+ */
+"ManagementFee"
 /**
  * One asset a price-fetch task could not price (MKT-170/171), carried in the
  * `AssetPriceFetchCompleted` payload so the frontend can list it for manual entry.
@@ -2344,6 +2628,31 @@ export type UpdateError =
  * underlying cause is logged server-side, not exposed on the wire.
  */
 { code: "OperationFailed" }
+/**
+ * Parameters for editing a fee schedule (FEE-060/061). `frequency` and
+ * `start_date` are intentionally absent — they are immutable after creation.
+ */
+export type UpdateFeeScheduleDTO = { 
+/**
+ * Account the schedule applies to.
+ */
+account_id: string; 
+/**
+ * The charged asset (identifies the schedule together with `account_id`).
+ */
+asset_id: string; 
+/**
+ * New annual fee rate in micro-percent (FEE-032).
+ */
+annual_rate_percent_micros: number; 
+/**
+ * New optional end date (FEE-045).
+ */
+end_date: string | null; 
+/**
+ * Whether the schedule is active; `false` pauses generation (FEE-061).
+ */
+active: boolean }
 /**
  * Defines how often an account's data should be updated.
  */

@@ -93,6 +93,31 @@ pub enum AccountError {
     #[error("Total amount must be strictly positive")]
     TotalAmountNotPositive,
 
+    // --- ManagementFee factory validation (FEE-021) ---
+    /// The management fee percentage is zero or negative (FEE-021).
+    #[error("Percentage must be strictly positive")]
+    PercentageNotPositive,
+    /// The management fee percentage exceeds 100% in micro-percent (FEE-021).
+    #[error("Percentage cannot exceed 100%")]
+    PercentageAboveHundred,
+
+    // --- FeeSchedule validation (FEE-032) ---
+    /// The annual rate is zero or negative (FEE-032).
+    #[error("Annual rate must be strictly positive")]
+    RateNotPositive,
+    /// The annual rate exceeds 100% in micro-percent (FEE-032).
+    #[error("Annual rate cannot exceed 100%")]
+    RateAboveHundred,
+    /// The schedule end_date is not strictly after start_date (FEE-032).
+    #[error("End date must be after start date")]
+    EndBeforeStart,
+    /// A fee schedule for this (account, asset) pair already exists (FEE-031).
+    #[error("A fee schedule for this account and asset already exists")]
+    ScheduleAlreadyExists,
+    /// No fee schedule found for the given (account, asset) pair (FEE-060).
+    #[error("Fee schedule not found")]
+    ScheduleNotFound,
+
     // --- Service-layer lookup / uniqueness / infrastructure ---
     /// No account exists with the requested ID.
     #[error("Account not found: {account_id}")]
@@ -223,6 +248,35 @@ mod tests {
         assert_eq!(
             to_value(AccountError::DatabaseError).unwrap(),
             json!({ "code": "DatabaseError" })
+        );
+        // FEE variants
+        assert_eq!(
+            to_value(AccountError::PercentageNotPositive).unwrap(),
+            json!({ "code": "PercentageNotPositive" })
+        );
+        assert_eq!(
+            to_value(AccountError::PercentageAboveHundred).unwrap(),
+            json!({ "code": "PercentageAboveHundred" })
+        );
+        assert_eq!(
+            to_value(AccountError::RateNotPositive).unwrap(),
+            json!({ "code": "RateNotPositive" })
+        );
+        assert_eq!(
+            to_value(AccountError::RateAboveHundred).unwrap(),
+            json!({ "code": "RateAboveHundred" })
+        );
+        assert_eq!(
+            to_value(AccountError::EndBeforeStart).unwrap(),
+            json!({ "code": "EndBeforeStart" })
+        );
+        assert_eq!(
+            to_value(AccountError::ScheduleAlreadyExists).unwrap(),
+            json!({ "code": "ScheduleAlreadyExists" })
+        );
+        assert_eq!(
+            to_value(AccountError::ScheduleNotFound).unwrap(),
+            json!({ "code": "ScheduleNotFound" })
         );
     }
 }

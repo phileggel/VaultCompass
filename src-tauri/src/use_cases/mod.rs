@@ -22,6 +22,8 @@ pub mod asset_price_fetch;
 pub mod asset_web_lookup;
 /// Delete asset: guards hard-deletion against existing transactions.
 pub mod delete_asset;
+/// Fee generation: lazy catch-up management fee deduction across all active schedules (FEE-040+).
+pub mod fee_generation;
 /// Holding transaction: unified cross-BC orchestrators for buy/sell/correct/cancel/open (TRX, SEL, CSH).
 pub mod holding_transaction;
 /// Shared stateless valuation helpers reused across performance/summary use cases — owned by neither.

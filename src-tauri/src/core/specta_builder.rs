@@ -3,8 +3,8 @@ use crate::{
     core::{logger, Event},
     use_cases::{
         account_creation, account_deletion, account_details, account_performance, account_summary,
-        archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, holding_transaction,
-        update_checker,
+        archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, fee_generation,
+        holding_transaction, update_checker,
     },
 };
 
@@ -27,6 +27,14 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::AccountError>()
         .typ::<account::Transaction>()
         .typ::<account::TransactionType>()
+        .typ::<account::FeeSchedule>()
+        .typ::<account::FeeFrequency>()
+        .typ::<account::CreateFeeScheduleDTO>()
+        .typ::<account::UpdateFeeScheduleDTO>()
+        .typ::<holding_transaction::ManagementFeeDTO>()
+        .typ::<holding_transaction::ManagementFeeError>()
+        .typ::<holding_transaction::ManagementFeeTask>()
+        .typ::<fee_generation::FeeGenerationError>()
         // ----- currency BC (FXR) -----
         .typ::<currency::CurrencyPair>()
         .typ::<currency::CurrencyRate>()
@@ -91,6 +99,10 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::get_transactions,
             account::get_all_transactions_for_account,
             account::get_holding_snapshot_as_of,
+            account::create_fee_schedule,
+            account::update_fee_schedule,
+            account::delete_fee_schedule,
+            account::get_fee_schedule,
             // ----- currency BC (FXR) -----
             currency::declare_currency_pair,
             currency::record_currency_rate,
@@ -110,6 +122,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             holding_transaction::record_withdrawal,
             holding_transaction::record_dividend,
             holding_transaction::record_free_shares,
+            holding_transaction::record_management_fee,
+            fee_generation::apply_due_fee_deductions,
             account_details::get_account_details,
             account_summary::get_account_summaries,
             account_performance::get_account_performance,
