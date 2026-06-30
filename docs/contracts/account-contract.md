@@ -1,7 +1,7 @@
 # Contract — Account
 
 > Domain: `account`
-> Last updated by: `account` spec, `financial-asset-transaction` spec, `sell-transaction` spec, `transaction-list` spec, `account-details` spec, `cash-tracking` spec, `cash-dividend` spec, `free-share-distribution` spec
+> Last updated by: `account` spec, `financial-asset-transaction` spec, `sell-transaction` spec, `transaction-list` spec, `account-details` spec, `cash-tracking` spec, `cash-dividend` spec, `free-share-distribution` spec, `management-fee-deduction` spec
 
 > **Error model on the wire**: each command's error serializes as a flat `{ code: "VariantName", ...payload }` object. The FE matches on `code`. Per-command reachable codes are listed in the "Errors" column of each table below. Infrastructure failures surface as `{ code: "DatabaseError" }` (no payload; diagnostic chain preserved server-side via `tracing::error!`).
 >
@@ -57,16 +57,16 @@
 > single FE-visible surface. Mutation commands coordinate across the account and asset BCs
 > (cash-asset seeding, archived-asset guards, etc.).
 
-| Command                      | Args                                                 | Return             | Errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------- | ---------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_asset_ids_for_account`  | `account_id: String`                                 | `Vec<String>`      | `DatabaseError` (TXL-054) — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `get_transactions`           | `account_id: String, asset_id: String`               | `Vec<Transaction>` | `DatabaseError` (TXL-020)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `get_holding_snapshot_as_of` | `account_id: String, asset_id: String, date: String` | `HoldingSnapshot`  | `InvalidDate` (TDI-012), `DatabaseError` — unknown account/asset yields an empty snapshot `{ quantity: 0, average_price: 0 }`, never NotFound (TDI-010)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `buy_holding`                | `BuyHoldingDTO`                                      | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (TRX-020), `TotalAmountNotPositive` (TRX-020), `InsufficientCash { current_balance_micros, currency }` (CSH-041), `DatabaseError`                                                                                                                                                                                                                                    |
-| `sell_holding`               | `SellHoldingDTO`                                     | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (SEL-020), `TotalAmountNotPositive` (TRX-020), `ClosedPosition` (SEL-012), `Oversell { available, requested }` (SEL-021), `DatabaseError`                                                                                                                                                                                                                            |
-| `correct_transaction`        | `CorrectTransactionDTO`                              | `Transaction`      | `TransactionNotFound` (TRX-031), `AccountNotFound { account_id }` (TRX-031), `InvalidDate` (TRX-033), `DateInFuture` (TRX-033), `DateTooOld` (TRX-033), `QuantityNotPositive` (TRX-033), `UnitPriceNegative` (TRX-033), `ExchangeRateNotPositive` (TRX-033), `FeesNegative` (TRX-033), `TotalAmountNotPositive` (TRX-033), `CascadingOversell` (SEL-032 / FSD-040 — shrinking a free-share distribution can leave a later sell oversold on replay), `InsufficientCash { current_balance_micros, currency }` (CSH-042 / CSH-051 / DIV-040 — dividend edit re-applies the cash credit on replay), `DatabaseError` |
-| `cancel_transaction`         | `CancelTransactionDTO`                               | `()`               | `TransactionNotFound` (TRX-034), `AccountNotFound { account_id }` (TRX-034), `CascadingOversell` (SEL-033 / FSD-041 — replay after cancel can leave a later sell oversold, incl. removing a free-share distribution), `InsufficientCash { current_balance_micros, currency }` (CSH-024 / CSH-051 / DIV-041 — deleting a dividend removes a cash credit, which can underflow a later debit on replay), `DatabaseError`                                                                                                                                                                                           |
-| `open_holding`               | `OpenHoldingDTO`                                     | `Transaction`      | `AccountNotFound { account_id }` (TRX-056), `AssetNotFound` (TRX-056), `ArchivedAsset` (TRX-050), `OpeningBalanceOnCashAsset` (CSH-061), `QuantityNotPositive` (TRX-044), `InvalidTotalCost` (TRX-045), `InvalidDate` (TRX-046), `DateInFuture` (TRX-046), `DateTooOld` (TRX-046), `DatabaseError`                                                                                                                                                                                                                                                                                                              |
+| Command                      | Args                                                 | Return             | Errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------- | ---------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_asset_ids_for_account`  | `account_id: String`                                 | `Vec<String>`      | `DatabaseError` (TXL-054) — returns empty list for unknown or empty account, never NotFound (TXL-013)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `get_transactions`           | `account_id: String, asset_id: String`               | `Vec<Transaction>` | `DatabaseError` (TXL-020)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `get_holding_snapshot_as_of` | `account_id: String, asset_id: String, date: String` | `HoldingSnapshot`  | `InvalidDate` (TDI-012), `DatabaseError` — unknown account/asset yields an empty snapshot `{ quantity: 0, average_price: 0 }`, never NotFound (TDI-010)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `buy_holding`                | `BuyHoldingDTO`                                      | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (TRX-020), `TotalAmountNotPositive` (TRX-020), `InsufficientCash { current_balance_micros, currency }` (CSH-041), `DatabaseError`                                                                                                                                                                                                                                                                                            |
+| `sell_holding`               | `SellHoldingDTO`                                     | `Transaction`      | `AccountNotFound { account_id }` (TRX-020), `InvalidDate` (TRX-020), `DateInFuture` (TRX-020), `DateTooOld` (TRX-020), `QuantityNotPositive` (TRX-020), `UnitPriceNegative` (TRX-020), `ExchangeRateNotPositive` (TRX-020), `FeesNegative` (SEL-020), `TotalAmountNotPositive` (TRX-020), `ClosedPosition` (SEL-012), `Oversell { available, requested }` (SEL-021), `DatabaseError`                                                                                                                                                                                                                                                                                    |
+| `correct_transaction`        | `CorrectTransactionDTO`                              | `Transaction`      | `TransactionNotFound` (TRX-031), `AccountNotFound { account_id }` (TRX-031), `InvalidDate` (TRX-033), `DateInFuture` (TRX-033), `DateTooOld` (TRX-033), `QuantityNotPositive` (TRX-033), `UnitPriceNegative` (TRX-033), `ExchangeRateNotPositive` (TRX-033), `FeesNegative` (TRX-033), `TotalAmountNotPositive` (TRX-033), `CascadingOversell` (SEL-032 / FSD-040 — shrinking a free-share distribution can leave a later sell oversold on replay; FEE-063 — increasing a management-fee removal likewise), `InsufficientCash { current_balance_micros, currency }` (CSH-042 / CSH-051 / DIV-040 — dividend edit re-applies the cash credit on replay), `DatabaseError` |
+| `cancel_transaction`         | `CancelTransactionDTO`                               | `()`               | `TransactionNotFound` (TRX-034), `AccountNotFound { account_id }` (TRX-034), `CascadingOversell` (SEL-033 / FSD-041 — replay after cancel can leave a later sell oversold, incl. removing a free-share distribution), `InsufficientCash { current_balance_micros, currency }` (CSH-024 / CSH-051 / DIV-041 — deleting a dividend removes a cash credit, which can underflow a later debit on replay), `DatabaseError`                                                                                                                                                                                                                                                   |
+| `open_holding`               | `OpenHoldingDTO`                                     | `Transaction`      | `AccountNotFound { account_id }` (TRX-056), `AssetNotFound` (TRX-056), `ArchivedAsset` (TRX-050), `OpeningBalanceOnCashAsset` (CSH-061), `QuantityNotPositive` (TRX-044), `InvalidTotalCost` (TRX-045), `InvalidDate` (TRX-046), `DateInFuture` (TRX-046), `DateTooOld` (TRX-046), `DatabaseError`                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### Cash Transactions
 
@@ -108,6 +108,32 @@
 | Command              | Args            | Return        | Errors                                                                                                                                                                                                                                                                                                                                    |
 | -------------------- | --------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `record_free_shares` | `FreeSharesDTO` | `Transaction` | `AccountNotFound { account_id }` (FSD-011), `AssetNotFound` (FSD-011), `AssetNotHeld` (FSD-011 — no active holding, `quantity = 0` or never held), `FreeSharesOnCashAsset` (FSD-011 — asset is a Cash Asset), `QuantityNotPositive` (FSD-021), `InvalidDate` (FSD-021), `DateInFuture` (FSD-021), `DateTooOld` (FSD-021), `DatabaseError` |
+
+### Management Fee
+
+> `record_management_fee` records a one-off quantity-reducing fee attributed to the **charged
+> asset**: the holding's `quantity` drops by `floor(holding_as_of(date) × percent)`, the cost basis
+> is unchanged (average cost concentrates — FEE-022/023), and **no cash moves**. Because it removes
+> shares, it can leave a later sell oversold on replay (`CascadingOversell`, FEE-027) — the
+> quantity-reducing inverse of the FSD/Sell guards. `create_fee_schedule` / `update_fee_schedule` /
+> `delete_fee_schedule` / `get_fee_schedule` manage one recurring per-`(account, asset)` schedule;
+> `update_fee_schedule`'s DTO omits `frequency` and `start_date`, making them structurally immutable
+> (cadence change = delete + recreate, FEE-060). `apply_due_fee_deductions` is invoked by the
+> frontend on app startup to materialize every due **completed** period since each schedule's cursor
+> (FEE-040/044), skipping any period that would oversell (FEE-047). Edit / delete of an individual
+> fee deduction reuse `correct_transaction` / `cancel_transaction` (FEE-063): a correction that
+> increases the removal can surface `CascadingOversell`; a delete restores shares and is always
+> replay-safe. The cumulative Management Fees figures ride on `get_account_details`
+> (`HoldingDetail.management_fees`, `AccountDetailsResponse.total_management_fees`).
+
+| Command                    | Args                                   | Return                | Errors                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | -------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record_management_fee`    | `ManagementFeeDTO`                     | `Transaction`         | `AccountNotFound { account_id }` (FEE-012), `AssetNotFound` (FEE-012), `AssetNotHeld` (FEE-012), `ManagementFeeOnCashAsset` (FEE-012), `PercentageNotPositive` (FEE-021), `PercentageAboveHundred` (FEE-021), `InvalidDate` (FEE-021), `DateInFuture` (FEE-021), `DateTooOld` (FEE-021), `CascadingOversell` (FEE-027), `DatabaseError` |
+| `create_fee_schedule`      | `CreateFeeScheduleDTO`                 | `FeeSchedule`         | `AccountNotFound { account_id }` (FEE-012), `AssetNotFound` (FEE-012), `AssetNotHeld` (FEE-012), `ManagementFeeOnCashAsset` (FEE-012), `RateNotPositive` (FEE-032), `RateAboveHundred` (FEE-032), `InvalidDate` (FEE-032), `EndBeforeStart` (FEE-032), `ScheduleAlreadyExists` (FEE-031), `DatabaseError`                               |
+| `update_fee_schedule`      | `UpdateFeeScheduleDTO`                 | `FeeSchedule`         | `ScheduleNotFound` (FEE-060), `RateNotPositive` (FEE-032), `RateAboveHundred` (FEE-032), `InvalidDate` (FEE-032), `EndBeforeStart` (FEE-032), `DatabaseError`                                                                                                                                                                           |
+| `delete_fee_schedule`      | `account_id: String, asset_id: String` | `()`                  | `DatabaseError` (FEE-062 — silent on missing schedule, mirrors `delete_account`)                                                                                                                                                                                                                                                        |
+| `get_fee_schedule`         | `account_id: String, asset_id: String` | `Option<FeeSchedule>` | `DatabaseError` (FEE-030 — returns `None` when no schedule exists for the pair)                                                                                                                                                                                                                                                         |
+| `apply_due_fee_deductions` | —                                      | `()`                  | `DatabaseError` (FEE-040/044/047 — frontend-triggered on app startup; generates due completed periods for every active schedule, skipping any that would oversell)                                                                                                                                                                      |
 
 ---
 
@@ -240,6 +266,7 @@ enum TransactionType {
     Withdrawal,      // CSH-032 — cash outflow
     Dividend,        // DIV-023 — cash income; attributed to the paying asset, credits cash
     FreeShares,      // FSD-022 — zero-cost quantity event; attributed to the distributing asset, no cash leg
+    ManagementFee,   // FEE-022 — quantity-reducing fee; attributed to the charged asset, no cash leg
 }
 
 // Returned by buy_holding, sell_holding, correct_transaction, open_holding, record_deposit,
@@ -289,6 +316,7 @@ struct HoldingDetail {
     performance_pct: Option<i64>,       // micros (5.25% = 5_250_000); None when unrealized_pnl is None or cost_basis = 0; 0 (not None) when unrealized_pnl is 0 (MKT-035)
     dividends_received: i64,            // micros, account currency; sum of dividend cash for this (account, asset); 0 when none; always computable (DIV-070)
     total_return_pct: Option<i64>,      // micros; (unrealized_pnl + dividends_received) × 100 / cost_basis; None under the same conditions as performance_pct (DIV-071)
+    management_fees: i64,               // micros, account currency; cumulative fee value (Σ removed_qty × price_as_of(date)) for this (account, asset); 0 when none (FEE-052)
 }
 
 // Closed position — quantity = 0 (ACD-044)
@@ -311,6 +339,7 @@ struct AccountDetailsResponse {
     total_unrealized_pnl: Option<i64>,         // micros; sum across same-currency priced active holdings; None when none qualify (MKT-040)
     total_global_value: i64,                   // micros, account currency: cash_holding.quantity + Σ_h (h.quantity × latest_price(h)) over non-cash active holdings; unpriced non-cash holdings contribute 0 (CSH-094)
     total_dividends_received: i64,             // micros, account currency: sum of dividend cash across all the account's dividend transactions; 0 when none (DIV-073)
+    total_management_fees: i64,                // micros, account currency: sum of per-holding management_fees across the account; 0 when none (FEE-053)
 }
 
 // Row returned by get_account_summaries (ACC-021)
@@ -352,26 +381,82 @@ struct AccountPerformanceResponse {
 }
 ```
 
+```rust
+// Recurring-fee cadence (FEE-034). periods_per_year: Monthly 12, Quarterly 4, Annually 1.
+enum FeeFrequency {
+    Monthly,
+    Quarterly,
+    Annually,
+}
+
+// One-off management fee (FEE-020/022). `asset_id` is the CHARGED asset (active, non-cash holding).
+// Backend converts `percent_micros` to a removed quantity = floor(holding_as_of(date) × percent).
+struct ManagementFeeDTO {
+    account_id: String,
+    asset_id: String,
+    date: String,           // ISO date YYYY-MM-DD; same TRX-020 / FEE-021 bounds as buy/sell
+    percent_micros: i64,    // micro-percent of the holding (1% = 1_000_000); strictly positive, ≤ 100_000_000 (FEE-021)
+    note: Option<String>,
+}
+
+// Recurring per-(account, asset) fee schedule (FEE-030). `annual_rate_percent_micros` scaled to
+// `frequency` per period (FEE-041). `last_applied_period` is the boundary date of the most recent
+// generated deduction — the catch-up cursor (FEE-043); None until the first deduction is generated.
+struct FeeSchedule {
+    id: String,
+    account_id: String,
+    asset_id: String,
+    annual_rate_percent_micros: i64,     // micro-percent per year (0.20% = 200_000); strictly positive, < 100_000_000 (FEE-032)
+    frequency: FeeFrequency,
+    start_date: String,                  // ISO date YYYY-MM-DD; immutable after first generation (FEE-060)
+    end_date: Option<String>,            // ISO date; None = open-ended (FEE-045)
+    active: bool,                        // false while paused — no deductions generated (FEE-061)
+    last_applied_period: Option<String>, // ISO date of last generated period boundary; None initially (FEE-043)
+}
+
+// Create a fee schedule (FEE-030). At most one per (account, asset) — ScheduleAlreadyExists otherwise.
+struct CreateFeeScheduleDTO {
+    account_id: String,
+    asset_id: String,
+    annual_rate_percent_micros: i64,
+    frequency: FeeFrequency,
+    start_date: String,
+    end_date: Option<String>,
+}
+
+// Edit a fee schedule (FEE-060/061). `frequency` and `start_date` intentionally absent — structurally
+// immutable; cadence change = delete + recreate. Identified by (account_id, asset_id).
+struct UpdateFeeScheduleDTO {
+    account_id: String,
+    asset_id: String,
+    annual_rate_percent_micros: i64,
+    end_date: Option<String>,
+    active: bool,
+}
+```
+
 ---
 
 ## Events
 
 ### Published
 
-| Event                | Payload | Rule                      |
-| -------------------- | ------- | ------------------------- |
-| `AccountUpdated`     | —       | ACC-022                   |
-| `TransactionUpdated` | —       | TRX-037, DIV-026, FSD-026 |
+| Event                | Payload | Rule                               |
+| -------------------- | ------- | ---------------------------------- |
+| `AccountUpdated`     | —       | ACC-022                            |
+| `TransactionUpdated` | —       | TRX-037, DIV-026, FSD-026, FEE-026 |
+| `FeeScheduleUpdated` | —       | FEE-064                            |
 
 ### Subscribed (frontend re-fetch triggers)
 
-| Event                 | Payload | Rule                      |
-| --------------------- | ------- | ------------------------- |
-| `AccountUpdated`      | —       | ACC-021, PRF-060          |
-| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060 |
-| `AssetUpdated`        | —       | ACD-040                   |
-| `AssetPriceUpdated`   | —       | MKT-036, PRF-060          |
-| `CurrencyRateUpdated` | —       | FXR-037                   |
+| Event                 | Payload | Rule                               |
+| --------------------- | ------- | ---------------------------------- |
+| `AccountUpdated`      | —       | ACC-021, PRF-060                   |
+| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060, FEE-026 |
+| `AssetUpdated`        | —       | ACD-040                            |
+| `AssetPriceUpdated`   | —       | MKT-036, PRF-060                   |
+| `CurrencyRateUpdated` | —       | FXR-037                            |
+| `FeeScheduleUpdated`  | —       | FEE-064 (Account Details re-fetch) |
 
 ---
 
@@ -383,3 +468,4 @@ struct AccountPerformanceResponse {
 - 2026-06-02 — Added by `fx-rate` spec: `CurrencyRateUpdated` subscribed event (FXR-037) — the `account_details` and `account_performance` views re-fetch when an FX rate changes so foreign-currency holdings revalue. No command change.
 - 2026-06-16 — Amended by `account` spec (ACC-023/024, accounts-overview metrics): `AccountSummary` gains `total_unrealized_pnl: Option<i64>` (account-wide unrealized P&L, MKT-040 algorithm) and `ytd_performance_pct: Option<i64>` (year-to-date performance reusing PRF-034). No new command — `get_account_summaries` returns the enriched rows.
 - 2026-06-11 — Added by `free-share-distribution` spec: `record_free_shares` (+ `FreeSharesDTO`); `TransactionType::FreeShares` variant + its `Transaction` packing convention; FSD-040/041 cross-refs on `correct_transaction`/`cancel_transaction`'s `CascadingOversell`; edit/delete reuse those commands.
+- 2026-06-30 — Added by `management-fee-deduction` spec: `record_management_fee`, `create_fee_schedule`, `update_fee_schedule`, `delete_fee_schedule`, `get_fee_schedule`, `apply_due_fee_deductions` (+ `ManagementFeeDTO`, `FeeFrequency`, `FeeSchedule`, `CreateFeeScheduleDTO`, `UpdateFeeScheduleDTO`); `TransactionType::ManagementFee` variant; `HoldingDetail.management_fees` + `AccountDetailsResponse.total_management_fees`; `FeeScheduleUpdated` event (published + Account Details subscribes); FEE-063 cross-ref on `correct_transaction`'s `CascadingOversell`; edit/delete of a deduction reuse `correct_transaction`/`cancel_transaction`.
