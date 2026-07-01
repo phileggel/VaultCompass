@@ -103,11 +103,14 @@ describe("open_balance", () => {
       assert.ok(await field.isExisting(), `#${fieldId} must be present in ob-form`);
     }
 
-    // Fields that must NOT exist — opening balance omits fees, exchange-rate, unit-price
-    const feesField = await $('[id$="-fees"]');
+    // Fields that must NOT exist — opening balance omits fees, exchange-rate, unit-price.
+    // Scope the negative lookups to the form: a document-global `[id$="-fees"]` also
+    // matches unrelated page chrome (e.g. the account header's
+    // `#account-details-total-management-fees` total) sitting behind the modal.
+    const feesField = await form.$('[id$="-fees"]');
     assert.ok(!(await feesField.isExisting()), "fees input must NOT exist in ob-form (TRX-042)");
 
-    const exchangeRateField = await $('[id$="-exchange-rate"]');
+    const exchangeRateField = await form.$('[id$="-exchange-rate"]');
     assert.ok(
       !(await exchangeRateField.isExisting()),
       "exchange-rate input must NOT exist in ob-form (TRX-042)",
