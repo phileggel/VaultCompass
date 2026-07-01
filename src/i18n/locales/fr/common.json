@@ -452,7 +452,11 @@
     "form_percentage_label": "Pourcentage de la position",
     "form_percentage_placeholder": "0,00",
     "action_record": "Enregistrer les frais",
-    "recorded": "Frais de gestion enregistrés."
+    "recorded": "Frais de gestion enregistrés.",
+    "edit_title": "Modifier les frais de gestion",
+    "form_quantity_label": "Quantité retirée",
+    "form_quantity_placeholder": "0,000",
+    "updated": "Frais de gestion modifiés."
   },
   "fee_schedule": {
     "modal_title": "Planification des frais de gestion — {{asset}}",

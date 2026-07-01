@@ -55,6 +55,14 @@ describe("routeEditTransaction", () => {
     );
   });
 
+  it("routes ManagementFee to the management-fee edit modal (FEE-063)", () => {
+    routeEditTransaction(navigate, tx("ManagementFee"), vi.fn());
+    expect(patchModalSearch).toHaveBeenCalledWith(
+      navigate,
+      expect.objectContaining({ modal: "edit-management-fee" }),
+    );
+  });
+
   it("opens the generic modal for a Purchase (default branch)", () => {
     const openGeneric = vi.fn();
     const purchase = tx("Purchase");

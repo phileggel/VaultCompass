@@ -452,7 +452,11 @@
     "form_percentage_label": "Percentage of holding",
     "form_percentage_placeholder": "0.00",
     "action_record": "Record fee",
-    "recorded": "Management fee recorded."
+    "recorded": "Management fee recorded.",
+    "edit_title": "Edit management fee",
+    "form_quantity_label": "Quantity removed",
+    "form_quantity_placeholder": "0.000",
+    "updated": "Management fee updated."
   },
   "fee_schedule": {
     "modal_title": "Management fee schedule — {{asset}}",

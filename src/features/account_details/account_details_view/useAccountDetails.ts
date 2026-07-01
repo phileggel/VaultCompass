@@ -61,15 +61,16 @@ export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountD
     fetchDetails();
   }, [fetchDetails]);
 
-  // ACD-039/040/MKT-036/FXR-036 — re-fetch on TransactionUpdated, AssetUpdated,
-  // AssetPriceUpdated, or CurrencyRateUpdated
+  // ACD-039/040/MKT-036/FXR-036/FEE-064 — re-fetch on TransactionUpdated,
+  // AssetUpdated, AssetPriceUpdated, CurrencyRateUpdated, or FeeScheduleUpdated
   useEffect(() => {
     const unlistenPromise = accountDetailsGateway.subscribeToEvents((type) => {
       if (
         type === "TransactionUpdated" ||
         type === "AssetUpdated" ||
         type === "AssetPriceUpdated" ||
-        type === "CurrencyRateUpdated"
+        type === "CurrencyRateUpdated" ||
+        type === "FeeScheduleUpdated"
       ) {
         fetchDetails();
       }

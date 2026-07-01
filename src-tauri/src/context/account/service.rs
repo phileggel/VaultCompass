@@ -2585,6 +2585,94 @@ mod tests {
         );
     }
 
+    // FEE-050 — a fee deduction reduces quantity but leaves the recorded cost
+    // basis UNCHANGED, so the average cost per share rises (VWAP concentrates).
+    #[tokio::test]
+    async fn fee_050_management_fee_preserves_cost_basis_and_raises_average_price() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FEE-050".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+        // Buy 100 units @ 50 → cost basis = 100 × 50 = 5000 (account currency).
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(100),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings_before = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_before = holdings_before
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding must exist after buy")
+            .clone();
+        let cost_basis_before =
+            holding_before.quantity as i128 * holding_before.average_price as i128 / 1_000_000;
+
+        // Record a 1% management fee — removes floor(100 × 1%) = 1 unit.
+        svc.record_management_fee(
+            &account.id,
+            asset_id.clone(),
+            "2024-06-30".to_string(),
+            1_000_000,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings_after = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_after = holdings_after
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding must still exist after fee deduction")
+            .clone();
+        let cost_basis_after =
+            holding_after.quantity as i128 * holding_after.average_price as i128 / 1_000_000;
+
+        // FEE-050 — quantity dropped …
+        assert!(
+            holding_after.quantity < holding_before.quantity,
+            "quantity must decrease after a fee deduction (FEE-050)"
+        );
+        // … the recorded cost basis is left UNCHANGED — the average price absorbs the
+        // change by concentrating to floor(cost_basis / new_quantity) (FEE-023, TRX-026
+        // floor convention). The stored VWAP must equal that exact floored value.
+        let expected_concentrated_vwap =
+            (cost_basis_before * 1_000_000 / holding_after.quantity as i128) as i64;
+        assert_eq!(
+            holding_after.average_price, expected_concentrated_vwap,
+            "average price must equal floor(cost_basis / new_quantity) — cost basis unchanged (FEE-050/023)"
+        );
+        // … so the average cost per share rises (VWAP concentrates).
+        assert!(
+            holding_after.average_price > holding_before.average_price,
+            "average price must rise as the cost basis concentrates over fewer shares (FEE-050)"
+        );
+        // The cost basis is preserved up to the per-share floor error (< 1 micro-unit
+        // per remaining share); it can only round DOWN, never up.
+        let shares_after = holding_after.quantity / 1_000_000;
+        assert!(
+            cost_basis_after <= cost_basis_before
+                && cost_basis_after > cost_basis_before - (shares_after as i128 + 1),
+            "cost basis must be unchanged within the floor tolerance (FEE-050): before={cost_basis_before}, after={cost_basis_after}"
+        );
+    }
+
     // FEE-021 — PercentageNotPositive when percent_micros <= 0.
     #[tokio::test]
     async fn fee_021_record_management_fee_rejects_zero_percent() {
@@ -2723,6 +2811,66 @@ mod tests {
         );
     }
 
+    // FEE-027 — a one-off fee dated before a later Sell is rejected when the
+    // removal would starve that Sell in chronological replay (CascadingOversell).
+    #[tokio::test]
+    async fn fee_027_record_management_fee_rejects_one_off_downstream_oversell() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FEE-027".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+        // Buy 100 on 2024-01-01, then sell all 100 on 2024-03-01 (closes the position).
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(100),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.sell_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-03-01".to_string(),
+            micro(100),
+            micro(60),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // A 10% fee on 2024-02-01 would remove 10 units, leaving 90 — the later
+        // 2024-03-01 sell of 100 can then no longer source its quantity.
+        let err = svc
+            .record_management_fee(
+                &account.id,
+                asset_id.clone(),
+                "2024-02-01".to_string(),
+                10_000_000,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::CascadingOversell),
+            "a one-off fee that starves a later sell must be rejected with CascadingOversell, got: {err:?}"
+        );
+    }
+
     // -------------------------------------------------------------------------
     // FEE-030/031/032/033/034 — create_fee_schedule service method
     // -------------------------------------------------------------------------
@@ -2760,6 +2908,76 @@ mod tests {
         assert!(matches!(schedule.frequency, FeeFrequency::Monthly));
         assert!(schedule.active);
         assert!(schedule.last_applied_period.is_none());
+    }
+
+    // FEE-033 — creating a schedule persists it but removes NO shares; the holding
+    // quantity is unchanged after create_fee_schedule (deductions come only from
+    // generation, FEE-04x).
+    #[tokio::test]
+    async fn fee_033_create_fee_schedule_removes_no_shares() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "FEE-033".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+        // Establish a holding of 100 units.
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(100),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let quantity_before = svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap()
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding must exist after buy")
+            .quantity;
+
+        // Create a schedule with a start_date well in the past — if creation itself
+        // removed shares (or eagerly generated), the quantity would drop here.
+        svc.create_fee_schedule(
+            &account.id,
+            asset_id.clone(),
+            1_000_000, // 1%
+            FeeFrequency::Monthly,
+            "2024-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let quantity_after = svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap()
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .expect("holding must still exist after create_fee_schedule")
+            .quantity;
+
+        // FEE-033 — schedule creation removes no shares.
+        assert_eq!(
+            quantity_after, quantity_before,
+            "create_fee_schedule must not remove any shares (FEE-033)"
+        );
     }
 
     // FEE-031 — ScheduleAlreadyExists when a schedule exists for the (account, asset) pair.

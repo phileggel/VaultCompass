@@ -74,10 +74,10 @@ export function TransactionTable({
         </thead>
         <tbody>
           {rows.map((row) => {
-            // FSD-050 — a free-share distribution moves no money: the unit-price and
-            // total-amount columns render the neutral placeholder (the quantity column
-            // still shows the shares).
-            const isFreeShares = row.type === "FreeShares";
+            // FSD-050 / FEE-055 — a free-share distribution or a management-fee
+            // deduction moves no money: the unit-price and total-amount columns render
+            // the neutral placeholder (the quantity column still shows the shares).
+            const isQuantityOnly = row.type === "FreeShares" || row.type === "ManagementFee";
             const moneyDash = (
               <span className="text-m3-on-surface-variant">
                 {t("account_details.pnl_placeholder")}
@@ -98,7 +98,7 @@ export function TransactionTable({
                   {row.quantity}
                 </td>
                 <td id={`txl-unit-price-${row.id}`} className="m3-td text-right tabular-nums">
-                  {isFreeShares ? moneyDash : row.unitPrice}
+                  {isQuantityOnly ? moneyDash : row.unitPrice}
                 </td>
                 <td className="m3-td text-right tabular-nums">{row.exchangeRate}</td>
                 <td className="m3-td text-right tabular-nums">{row.fees}</td>
@@ -131,7 +131,7 @@ export function TransactionTable({
                     id={`txl-total-${row.id}`}
                     className="m3-td text-right tabular-nums font-medium"
                   >
-                    {isFreeShares ? moneyDash : row.totalAmount}
+                    {isQuantityOnly ? moneyDash : row.totalAmount}
                   </td>
                 )}
                 {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}

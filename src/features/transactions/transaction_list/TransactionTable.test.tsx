@@ -82,6 +82,18 @@ describe("TransactionTable", () => {
     expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
   });
 
+  it("renders the money placeholder for a ManagementFee row's unit price and total (FEE-055)", () => {
+    render(
+      <TransactionTable
+        rows={[row({ id: "mf", type: "ManagementFee", unitPrice: "0.000", totalAmount: "0.000" })]}
+        {...baseProps}
+      />,
+    );
+    // unit-price and total cells fall back to the placeholder; the placeholder
+    // key also renders in the (null) realized-P&L cell → 3 occurrences.
+    expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
+  });
+
   it("colours a positive realized P&L as success", () => {
     render(
       <TransactionTable

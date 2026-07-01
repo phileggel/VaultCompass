@@ -1523,4 +1523,79 @@ mod tests {
             "expected Validation(DateInFuture), got: {err:?}"
         );
     }
+
+    // FEE-012 — ManagementFeeOnCashAsset: the charged asset must not be a Cash Asset.
+    #[tokio::test]
+    async fn fee_012_record_management_fee_rejects_cash_asset() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let cash_asset = asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_management_fee(
+                &account.id,
+                cash_asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(1), // 1%
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{ManagementFeeError, ManagementFeeTask};
+        assert!(
+            matches!(
+                err,
+                ManagementFeeError::UseCase(ManagementFeeTask::ManagementFeeOnCashAsset)
+            ),
+            "expected UseCase(ManagementFeeOnCashAsset), got: {err:?}"
+        );
+    }
+
+    // FEE-012 — AssetNotHeld: the asset exists and is non-cash but is not currently held.
+    #[tokio::test]
+    async fn fee_012_record_management_fee_rejects_asset_not_held() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        // Asset was never bought → no active holding.
+        let err = uc
+            .record_management_fee(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                micro(1), // 1%
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{ManagementFeeError, ManagementFeeTask};
+        assert!(
+            matches!(
+                err,
+                ManagementFeeError::UseCase(ManagementFeeTask::AssetNotHeld)
+            ),
+            "expected UseCase(AssetNotHeld), got: {err:?}"
+        );
+    }
 }

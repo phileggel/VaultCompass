@@ -3516,4 +3516,296 @@ mod tests {
             row.management_fees
         );
     }
+
+    // FEE-073 — for a charged asset whose currency differs from the account currency, the
+    // Management Fees figure converts each deduction's fee value to the account currency via
+    // the FXR rate as-of the deduction date (FXR-042).
+    #[tokio::test]
+    async fn fee_073_management_fees_converts_foreign_currency_via_fxr() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        // EUR account.
+        let account = account_svc
+            .create(
+                "FEE FX Acct".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        // USD-denominated asset (currency differs from the account currency).
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Fee Stock".to_string(),
+                reference: "USFEE".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        // Buy 100 units, then a 1% management fee removing 1 unit.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 10_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                asset.id.clone(),
+                "2024-01-01".to_string(),
+                100_000_000, // 100 units
+                10_000_000,  // 10.00
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_management_fee(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-30".to_string(),
+                1_000_000, // 1% → removes 1 unit (1_000_000 micro-units)
+                None,
+            )
+            .await
+            .unwrap();
+        // FEE-051 — value the fee at the recorded carry-forward price (10.00 USD) on its date.
+        asset_svc
+            .record_asset_price(&asset.id, "2024-06-30", 10.0)
+            .await
+            .unwrap();
+
+        // USD→EUR = 1.08 as of the deduction date.
+        let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "USFEE")
+            .expect("foreign fee stock holding present");
+
+        // FEE-073 — value_asset_ccy = 1 unit × 10.00 USD = 10_000_000; converted = ×1.08 = 10_800_000 EUR.
+        assert_eq!(
+            row.management_fees, 10_800_000,
+            "management_fees must be converted to account currency via FXR (FEE-073), got: {}",
+            row.management_fees
+        );
+        assert_eq!(
+            resp.total_management_fees, 10_800_000,
+            "total_management_fees must equal the converted per-holding figure (FEE-073)"
+        );
+    }
+
+    // FEE-054 — if no market price is recorded on or before a deduction's date,
+    // that deduction contributes 0 to the Management Fees figure (valuation
+    // degrades to 0), while the quantity removal itself still happens.
+    #[tokio::test]
+    async fn fee_054_management_fees_is_zero_when_no_price_but_quantity_still_reduced() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "FEE-054".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "No Price Stock".to_string(),
+                reference: "NOPX".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        // Buy 100 units @ 10, then a 1% management fee removing 1 unit.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 10_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                asset.id.clone(),
+                "2024-01-01".to_string(),
+                100_000_000, // 100 units
+                10_000_000,  // 10.00
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_management_fee(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-30".to_string(),
+                1_000_000, // 1% → removes 1 unit (1_000_000 micro-units)
+                None,
+            )
+            .await
+            .unwrap();
+        // Deliberately record NO asset price → no qualifying price on/before the fee date.
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "NOPX")
+            .expect("holding present");
+
+        // FEE-054 — no price ⇒ the deduction contributes 0 to Management Fees.
+        assert_eq!(
+            row.management_fees, 0,
+            "management_fees must be 0 when no price is recorded on/before the fee date (FEE-054)"
+        );
+        assert_eq!(
+            resp.total_management_fees, 0,
+            "total_management_fees must be 0 when no qualifying price exists (FEE-054)"
+        );
+        // FEE-054 — the quantity removal itself is unaffected: 100 − 1 = 99 units.
+        assert_eq!(
+            row.quantity, 99_000_000,
+            "the share removal still happens even with no price (FEE-054)"
+        );
+    }
+
+    // FEE-072 — the as-of Management Fees figure only includes deductions dated on
+    // or before the as-of date; a later deduction is excluded.
+    #[tokio::test]
+    async fn fee_072_management_fees_excludes_deductions_after_as_of() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "FEE-072".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "As-Of Fee Stock".to_string(),
+                reference: "AOFEE".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+
+        // Buy 100 units @ 10.
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 10_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                asset.id.clone(),
+                "2024-01-01".to_string(),
+                100_000_000, // 100 units
+                10_000_000,  // 10.00
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // First fee on 2024-06-30 — removes floor(100 × 1%) = 1 unit.
+        account_svc
+            .record_management_fee(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-30".to_string(),
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        // Second fee on 2024-09-30 — removes floor(99 × 1%) = 0.99 unit = 990_000 micro-units.
+        account_svc
+            .record_management_fee(
+                &account.id,
+                asset.id.clone(),
+                "2024-09-30".to_string(),
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        // Value both deductions at the recorded carry-forward price (10.00) on their dates.
+        asset_svc
+            .record_asset_price(&asset.id, "2024-06-30", 10.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&asset.id, "2024-09-30", 10.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+
+        // As-of 2024-07-01: only the 2024-06-30 deduction counts.
+        // Its fee value = 1 unit × 10.00 = 10_000_000 micros.
+        let as_of_resp = uc
+            .get_account_details(&account.id, Some("2024-07-01"))
+            .await
+            .unwrap();
+        let as_of_row = as_of_resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "AOFEE")
+            .expect("holding present in as-of view");
+        assert_eq!(
+            as_of_row.management_fees, 10_000_000,
+            "as-of Management Fees must include only deductions dated ≤ the as-of date (FEE-072)"
+        );
+
+        // Live view (no cutoff): BOTH deductions count.
+        // 1 unit × 10.00 + 0.99 unit × 10.00 = 10_000_000 + 9_900_000 = 19_900_000.
+        let live_resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let live_row = live_resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "AOFEE")
+            .expect("holding present in live view");
+        assert_eq!(
+            live_row.management_fees, 19_900_000,
+            "without a cutoff both deductions count — confirming the as-of filter excluded the later one (FEE-072)"
+        );
+    }
 }

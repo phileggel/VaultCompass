@@ -494,4 +494,377 @@ mod tests {
             "second run must not create additional ManagementFee transactions (FEE-070)"
         );
     }
+
+    // FEE-044 — catch-up across long absences: a schedule whose start_date is several
+    // periods in the past backfills ALL elapsed completed periods at once on a single
+    // run, each dated at its own boundary, applied sequentially (FEE-041 compounding).
+    #[tokio::test]
+    async fn fee_044_backfills_all_elapsed_periods_sequentially() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-044".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // 12% annual, monthly cadence → 1% per period (FEE-041).
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                12_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let schedule = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must exist");
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        // Deterministic "today" mid-April 2024 → Jan, Feb, Mar are the only completed periods.
+        let today = chrono::NaiveDate::from_ymd_opt(2024, 4, 15).expect("valid date");
+        uc.apply_schedule(&schedule, today).await.unwrap();
+
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let mut fee_txs: Vec<_> = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .collect();
+        fee_txs.sort_by(|a, b| a.date.cmp(&b.date));
+
+        // FEE-044 — one deduction per completed elapsed period (Jan, Feb, Mar).
+        assert_eq!(
+            fee_txs.len(),
+            3,
+            "expected 3 backfilled deductions, got {}",
+            fee_txs.len()
+        );
+        // FEE-042 — each dated at its own period boundary.
+        assert_eq!(
+            fee_txs.iter().map(|t| t.date.as_str()).collect::<Vec<_>>(),
+            vec!["2024-01-31", "2024-02-29", "2024-03-31"],
+            "deductions must be dated at month-end boundaries (FEE-042)"
+        );
+        // FEE-041 — sequential per-period reduction compounds (each on the prior reduced base):
+        // floor(100 ×1%)=1_000_000; floor(99 ×1%)=990_000; floor(98.01 ×1%)=980_100.
+        assert_eq!(
+            fee_txs.iter().map(|t| t.quantity).collect::<Vec<_>>(),
+            vec![1_000_000, 990_000, 980_100],
+            "per-period removals must compound sequentially (FEE-041)"
+        );
+
+        // FEE-043 — cursor lands on the last completed period boundary.
+        let after = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must still exist");
+        assert_eq!(
+            after.last_applied_period.as_deref(),
+            Some("2024-03-31"),
+            "cursor must advance to the last completed period (FEE-043)"
+        );
+    }
+
+    // FEE-045 — no deductions are generated for periods whose boundary is after end_date.
+    #[tokio::test]
+    async fn fee_045_no_deductions_past_end_date() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-045-end".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        // end_date 2024-02-15 → only the Jan-31 boundary is on/before it; Feb-29 is after.
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                12_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                Some("2024-02-15".to_string()),
+            )
+            .await
+            .unwrap();
+
+        let schedule = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must exist");
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let today = chrono::NaiveDate::from_ymd_opt(2024, 6, 15).expect("valid date");
+        uc.apply_schedule(&schedule, today).await.unwrap();
+
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let fee_txs: Vec<_> = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .collect();
+
+        // FEE-045 — only the Jan period (boundary ≤ end_date) is generated.
+        assert_eq!(
+            fee_txs.len(),
+            1,
+            "only periods with boundary ≤ end_date generate (FEE-045), got {}",
+            fee_txs.len()
+        );
+        assert_eq!(
+            fee_txs[0].date.as_str(),
+            "2024-01-31",
+            "the single deduction must be the Jan-31 period"
+        );
+        let after = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must still exist");
+        assert_eq!(
+            after.last_applied_period.as_deref(),
+            Some("2024-01-31"),
+            "cursor stops at the last in-window period boundary (FEE-045)"
+        );
+    }
+
+    // FEE-045/061 — an inactive schedule generates nothing (not listed for generation).
+    #[tokio::test]
+    async fn fee_045_inactive_schedule_generates_nothing() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-045-inactive".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                12_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+        // FEE-061 — deactivate the schedule.
+        account_svc
+            .update_fee_schedule(&account.id, &stock_id, 12_000_000, None, false)
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let fee_txs: Vec<_> = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .collect();
+        // FEE-045 — nothing generated while inactive.
+        assert!(
+            fee_txs.is_empty(),
+            "inactive schedule must generate no deductions (FEE-045/061)"
+        );
+        // The cursor never advanced (the schedule was not processed at all).
+        let after = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must still exist");
+        assert!(!after.active, "schedule must remain inactive");
+        assert!(
+            after.last_applied_period.is_none(),
+            "cursor must not advance for an inactive schedule (FEE-045)"
+        );
+    }
+
+    // FEE-047 — oversell-skip subbranch: a backfilled period dated before an already-recorded
+    // Sell that the removal would starve is SKIPPED (no FeeDeduction), the cursor advances past
+    // it, and generation continues to later valid periods.
+    #[tokio::test]
+    async fn fee_047_oversell_period_is_skipped_and_generation_continues() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-047-oversell".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        seed_cash(&pool, &account_svc, &account.id).await;
+        // Buy 100, sell ALL 100 mid-March, then re-buy 100 in April.
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-03-15".to_string(),
+                micro(100),
+                micro(60),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-04-10".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                12_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let schedule = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must exist");
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let today = chrono::NaiveDate::from_ymd_opt(2024, 6, 15).expect("valid date");
+        // FEE-047 — must not block / error even though Jan & Feb would oversell the Mar-15 sell.
+        uc.apply_schedule(&schedule, today).await.unwrap();
+
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let mut fee_txs: Vec<_> = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .collect();
+        fee_txs.sort_by(|a, b| a.date.cmp(&b.date));
+
+        // Jan-31 and Feb-29 are skipped (removing 1 share would starve the 100-share Mar-15 sell);
+        // Mar-31 is skipped (holding is 0 after the sell); Apr-30 and May-31 generate normally.
+        assert_eq!(
+            fee_txs.iter().map(|t| t.date.as_str()).collect::<Vec<_>>(),
+            vec!["2024-04-30", "2024-05-31"],
+            "oversell periods must be skipped; only post-rebuy periods generate (FEE-047)"
+        );
+        // FEE-041 — Apr removes 1% of 100, May removes 1% of the reduced 99.
+        assert_eq!(
+            fee_txs.iter().map(|t| t.quantity).collect::<Vec<_>>(),
+            vec![1_000_000, 990_000],
+            "surviving deductions follow sequential per-period reduction (FEE-041)"
+        );
+        // FEE-043 — the cursor still advances past every period, skipped or not.
+        let after = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .expect("schedule must still exist");
+        assert_eq!(
+            after.last_applied_period.as_deref(),
+            Some("2024-05-31"),
+            "cursor advances past skipped oversell periods (FEE-043/047)"
+        );
+    }
 }
