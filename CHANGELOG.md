@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] - 2026-07-01
+
+### Added
+
+- add management fee UI (modals, fees column, catch-up)
+  One-off fee + recurring schedule modals consume the new fee surface;
+  a Management Fees column and header total make deductions visible.
+  The recurring catch-up fires once on app mount (FEE-040).
+- add management fee deduction via quantity reduction
+  Fees deducted as a periodic share-quantity reduction with no cash leg;
+  cost basis is preserved so the average price concentrates (FEE-023).
+  Recurring schedules apply lazily via catch-up generation on app open.
+
+### Fixed
+
+- close management-fee spec gaps (edit modal, TXL, reactivity)
+  spec-checker flagged FEE-055/063/064 unimplemented on the FE: TXL fee
+  rows showed 0.00 instead of —, editing a fee opened the generic money
+  editor, and the view ignored FeeScheduleUpdated. Adds the dedicated
+  edit-management-fee modal and backfills tests covering all 40 FEE rules.
+- emit typed UpdateError on update:error event
+  download/do*download now return Result<*, UpdateError> instead of anyhow (B31);
+  each cause is logged server-side and the event carries the typed variant, not the
+  raw error chain. The banner drops its raw-string field for the generic message.
+- drop hardcoded French createLabel default in ComboboxField
+  The createLabel default rendered an untranslated '+ Créer' to the DOM (F16). Drop
+  the default and render the create entry only when both onCreateNew and a caller-
+  supplied label are present. No visual impact — every live consumer passes both.
+
 ## [0.31.0] - 2026-06-29
 
 ### Added
