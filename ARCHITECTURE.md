@@ -96,6 +96,7 @@ Backend publishes events on every state change. Frontend listens via a single `e
 | `AccountUpdated`      | `context/account/` account writes                              | `accounts`, `account_performance` (per-page)                               |
 | `TransactionUpdated`  | `context/account/` holding / transaction writes                | `account_details`, `transactions`, `account_performance` (per-page)        |
 | `CurrencyRateUpdated` | `context/currency/` rate writes + provider fetch               | `account_details`, `account_performance` (per-page), `currency_rates_view` |
+| `FeeScheduleUpdated`  | `context/account/` fee-schedule CRUD                           | `account_details`                                                          |
 
 Adding a new event: declare the variant in `core/event_bus/event.rs`, publish from the service after persistence (`bus.publish(Event::Foo)`), subscribe in the relevant feature hook.
 

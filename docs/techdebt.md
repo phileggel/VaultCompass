@@ -10,13 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-06-29 — Carry-forward price lookup duplicated in the valuation engine
-
-- Found by: reviewer-backend (v0.30.0 T6 review)
-- Where: `src-tauri/src/use_cases/shared/valuation.rs` — `end_value_as_of` and `free_shares_value` each inline `prices.iter().rev().find(|p| parse_date(&p.date).is_some_and(|d| d <= period_end))`
-- Severity: 🔵
-- Observation: The "latest price on or before a date" carry-forward search is written twice. It briefly existed as `PricedAsset::price_as_of` (v0.29.0) but was removed as dead code when `account_holdings_as_of` was deleted (v0.30.0 T1); T6 then materialised both copies in the shared module. Reintroduce a `PricedAsset::price_as_of(date)` accessor and route both callers through it — that also lets `PricedAsset::prices` drop back from `pub(crate)` to private. Trivial, deferred to keep T6 a pure move.
-
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)
@@ -127,17 +120,3 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/journal-bank-statement` @ HEAD
 - Severity: 🔵
 - Observation: The M3 `error`/`success` semantic color tokens are reused to express financial debit/credit (and gain/loss) polarity — cash out = `text-m3-error` (red), cash in = `text-m3-success` (green). Visually conventional and consistent with the pre-existing P&L sign-coloring, but it overloads tokens whose semantics are failure/confirmation, which a high-contrast or screen-reader-driven theme may interpret differently from "money out / money in". A dedicated `text-m3-debit`/`text-m3-credit` (and `-gain`/`-loss`) alias mapping to the same palette entries — or an ADR ratifying the reuse — would carry the correct intent. Cross-cutting (affects the P&L column too), so larger than one PR.
-
-## 2026-06-28 — `download` emits the raw anyhow error string on the `update:error` event
-
-- Found by: reviewer-backend / reviewer-security / reviewer-arch (v0.29.0 T8 review)
-- Where: `src-tauri/src/use_cases/update_checker/service.rs` (`download` → `app_handle.emit("update:error", e.to_string())`)
-- Severity: 🔵
-- Observation: T8 closed the `Result<_, String>` leak on the three update commands, but the `download` flow reports failure via a one-way `update:error` event whose payload is `e.to_string()` — the full anyhow chain. The current `.context(...)` strings are developer-authored literals (no OS paths/URLs today), and events carry no Specta binding, so the exposure is low. But it is the same anti-pattern T8 removed from the command surface: a future `.context` omission or a system error whose `Display` includes a path would leak silently. Follow-up: migrate the event payload to a typed `UpdateError` shape. `download`/`do_download` also still return `anyhow::Result` (B31) — fold both together.
-
-## 2026-06-28 — ComboboxField `createLabel` default is a hardcoded French string
-
-- Found by: reviewer-frontend (v0.29.0 T3 combobox-open-on-focus review)
-- Where: `src/ui/components/field/ComboboxField.tsx` (`createLabel = "+ Créer"` default prop; JSDoc example `"+ Créer un patient"`)
-- Severity: 🔵
-- Observation: The `createLabel` prop defaults to a hardcoded French string rendered straight to the DOM (F16). A consumer that passes `onCreateNew` without an explicit `createLabel` ships untranslated text. No current consumer hits the default (`AddTransactionModal` passes `t("asset.create_new")`), so it is latent. Fixing it properly needs the leaf to either require `createLabel` (drop the default) or accept an i18n key — a small API decision on a shared primitive, hence deferred rather than folded into T3. Pre-dates v0.29.0.

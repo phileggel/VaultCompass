@@ -154,6 +154,18 @@ Read this when:
 
 ---
 
+## 13. Startup side-effect hooks live in `shell/`, not in their domain feature
+
+**Pattern**: F0/F28 scope the `shell/` bucket to layout chrome (AppShell, header, sidebar, overlay hosts); behaviour belongs to its feature module.
+
+**Practice**: `useFeeGeneration` — the app-mount hook that fires `applyDueFeeDeductions` (FEE-040 lazy catch-up) — lives in `src/features/shell/fee_generation/`, and `applyDueFeeDeductions` is wrapped by `shell/gateway.ts`, not by `account_details/gateway.ts`.
+
+**Trade**: A cross-account, app-startup operation is not owned by any single feature. Routing it through `account_details` would force the shell-mounted hook to import the `account_details` gateway — a sibling-feature behaviour import that F26 flags. Keeping the startup effect + its gateway in `shell/` keeps the dependency direction clean. (`useUpdateBanner` is the same app-mount-effect shape but lives in `@/lib/update`; the two precedents diverge until the `lib/` → `infra/` migration lands.)
+
+**When to revisit**: If more startup effects accumulate in `shell/`, factor a dedicated `shell/startup/` group; if the `lib/` → `infra/` migration lands first, reconcile with the `useUpdateBanner` placement.
+
+---
+
 ## What we follow strictly (not divergences)
 
 For reference, the patterns this codebase enforces tightly:
