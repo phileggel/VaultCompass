@@ -436,6 +436,23 @@ fn period_bridge(
                     period_end,
                 );
             }
+            // INT-024 — interest on a non-cash asset is an in-kind credit valued like
+            // free shares (FSD-070). INT-023 — interest on the cash line IS a cash
+            // credit of `quantity` (`free_shares_value` cannot value the Cash Asset —
+            // it returns 0 for the Cash class).
+            TransactionType::Interest => {
+                if crate::core::cash::is_cash_asset(&transaction.asset_id) {
+                    cash_flow += transaction.quantity as i128;
+                } else {
+                    asset_flow += free_shares_value(
+                        transaction,
+                        priced_assets,
+                        rate_map,
+                        account_currency,
+                        period_end,
+                    );
+                }
+            }
             // DIV-023 — a dividend credits cash income from a holding.
             TransactionType::Dividend => dividends += transaction.total_amount as i128,
             // Cash↔asset swaps; net zero to Global Value (a sell's realized gain → residual pnl).
@@ -458,10 +475,11 @@ fn period_bridge(
     }
 }
 
-/// PRF-071 — market value of a free-shares distribution at `period_end`, in
-/// account-currency micros, using the same carry-forward price + FX rules as
-/// `end_value_as_of`. Contributes 0 when the asset has no usable price or rate as of
-/// the period end (PRF-022 / FXR-034) — that value then surfaces via the residual pnl.
+/// PRF-071 — market value of a zero-cost in-kind credit (free shares, or interest
+/// on a non-cash asset per INT-024) at `period_end`, in account-currency micros,
+/// using the same carry-forward price + FX rules as `end_value_as_of`. Contributes
+/// 0 when the asset has no usable price or rate as of the period end (PRF-022 /
+/// FXR-034) — that value then surfaces via the residual pnl.
 fn free_shares_value(
     transaction: &Transaction,
     priced_assets: &HashMap<String, PricedAsset>,

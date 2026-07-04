@@ -646,6 +646,66 @@ impl AccountService {
     }
 
     // -------------------------------------------------------------------------
+    // INT-021/022/023/024/025 — interest recording
+    // -------------------------------------------------------------------------
+
+    /// Records an Interest credit on a held asset or the account's cash line
+    /// (INT-021/022/023/024).
+    ///
+    /// Exactly one of `percent_micros` / `quantity_micros` must be provided
+    /// (INT-021). Percent mode: the credited quantity is
+    /// `floor(holding_qty_as_of(date) × percent_micros / 100_000_000)` (INT-022);
+    /// a computed credit of 0 (empty holding or rate too small) is rejected as
+    /// `QuantityNotPositive` by the `Transaction::interest` factory. Cost basis
+    /// is unchanged (VWAP dilutes — INT-024); on the Cash Asset the credit goes
+    /// through the cash replay (INT-023). Not gated by the account's
+    /// `management_fees_enabled` parameter (INT-050).
+    pub async fn record_interest(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: Option<i64>,
+        quantity_micros: Option<i64>,
+        note: Option<String>,
+    ) -> Result<Transaction, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, percent_micros = percent_micros, quantity_micros = quantity_micros, "record_interest");
+        // INT-021 — exactly one of percent / quantity; bounds per mode.
+        match (percent_micros, quantity_micros) {
+            (Some(percent_micros), None) => {
+                if percent_micros <= 0 {
+                    return Err(AccountError::PercentageNotPositive);
+                }
+                if percent_micros > 100_000_000 {
+                    return Err(AccountError::PercentageAboveHundred);
+                }
+            }
+            (None, Some(quantity_micros)) => {
+                if quantity_micros <= 0 {
+                    return Err(AccountError::QuantityNotPositive);
+                }
+            }
+            _ => return Err(AccountError::InterestAmountInvalid),
+        }
+        let mut account = load_account(&*self.account_repo, account_id).await?;
+        let credited = match (percent_micros, quantity_micros) {
+            // INT-022 — credited qty = floor(holding_qty_as_of(date) × percent / 100%).
+            (Some(percent_micros), None) => {
+                let quantity_as_of = account.holding_quantity_as_of(&asset_id, &date);
+                (quantity_as_of as i128 * percent_micros as i128 / 100_000_000) as i64
+            }
+            (None, Some(quantity_micros)) => quantity_micros,
+            // Unreachable — both/neither already rejected above (INT-021).
+            _ => return Err(AccountError::InterestAmountInvalid),
+        };
+        let tx = Transaction::interest(account.id.clone(), asset_id, date, credited, note)?;
+        let tx = account.apply_interest(tx).map_err(to_holding_tx_error)?;
+        save_account(&*self.account_repo, &mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
+    // -------------------------------------------------------------------------
     // FEE-030/031/032/033/034/060/061/062 — fee schedule CRUD
     // -------------------------------------------------------------------------
 
@@ -3001,6 +3061,256 @@ mod tests {
         assert!(
             matches!(err, AccountError::CascadingOversell),
             "a one-off fee that starves a later sell must be rejected with CascadingOversell, got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // INT-021/022/023/024 — record_interest service method
+    // -------------------------------------------------------------------------
+
+    // INT-022 — percent mode: credited qty = floor(holding_qty_as_of(date) × percent / 100%);
+    // the holding gains the credit at zero cost (VWAP dilutes, INT-024).
+    #[tokio::test]
+    async fn int_022_record_interest_percent_mode_credits_and_dilutes() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "INT Account".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+
+        // Buy 100 units @ 50.
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(100),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings_before = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_before = holdings_before
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .unwrap()
+            .clone();
+        let cost_basis_before =
+            holding_before.quantity as i128 * holding_before.average_price as i128 / 1_000_000;
+
+        // Record a 10% interest (10_000_000 micro-percent).
+        // Expected credited qty = floor(100_000_000 × 10_000_000 / 100_000_000) = 10 units.
+        let tx = svc
+            .record_interest(
+                &account.id,
+                asset_id.clone(),
+                "2024-12-31".to_string(),
+                Some(10_000_000),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // INT-024 — returned Transaction must carry the Interest type and zero-cost packing.
+        assert_eq!(
+            tx.transaction_type,
+            crate::context::account::TransactionType::Interest
+        );
+        assert_eq!(tx.asset_id, asset_id);
+        assert_eq!(tx.quantity, micro(10), "credited qty must be 10% of 100");
+        assert_eq!(tx.unit_price, 0, "unit_price must be 0 (INT-024)");
+        assert_eq!(
+            tx.exchange_rate, 1_000_000,
+            "exchange_rate must be 1_000_000"
+        );
+        assert_eq!(tx.fees, 0, "fees must be 0");
+        assert_eq!(tx.total_amount, 0, "total_amount must be 0 (INT-024)");
+        assert!(tx.realized_pnl.is_none(), "realized_pnl must be None");
+
+        let holdings_after = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_after = holdings_after
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .unwrap();
+        assert_eq!(
+            holding_after.quantity,
+            micro(110),
+            "quantity must be 110 after 100 + 10 interest"
+        );
+        // INT-024 — cost basis unchanged → VWAP dilutes to floor(cost_basis / new_quantity).
+        let expected_diluted_vwap =
+            (cost_basis_before * 1_000_000 / holding_after.quantity as i128) as i64;
+        assert_eq!(
+            holding_after.average_price, expected_diluted_vwap,
+            "average price must equal floor(cost_basis / new_quantity) after the interest credit"
+        );
+    }
+
+    // INT-021 — quantity mode: the provided quantity is credited directly.
+    #[tokio::test]
+    async fn int_021_record_interest_quantity_mode_credits_units() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "INT Qty".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(100),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let tx = svc
+            .record_interest(
+                &account.id,
+                asset_id.clone(),
+                "2024-12-31".to_string(),
+                None,
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(tx.quantity, micro(5));
+
+        let holdings_after = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let holding_after = holdings_after
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .unwrap();
+        assert_eq!(
+            holding_after.quantity,
+            micro(105),
+            "quantity must be 105 after 100 + 5 interest"
+        );
+    }
+
+    // INT-021 — both or neither of percent / quantity → InterestAmountInvalid.
+    #[tokio::test]
+    async fn int_021_record_interest_rejects_both_and_neither() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "INT XOR".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .record_interest(
+                &account.id,
+                asset_id.clone(),
+                "2024-12-31".to_string(),
+                Some(1_000_000),
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::InterestAmountInvalid),
+            "both provided must be rejected, got: {err:?}"
+        );
+
+        let err = svc
+            .record_interest(
+                &account.id,
+                asset_id.clone(),
+                "2024-12-31".to_string(),
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::InterestAmountInvalid),
+            "neither provided must be rejected, got: {err:?}"
+        );
+    }
+
+    // INT-023 — quantity-mode interest on the Cash Asset credits the cash balance:
+    // deposit 1000, interest 50 → 1050.
+    #[tokio::test]
+    async fn int_023_record_interest_credits_cash_line() {
+        let pool = make_pool().await;
+        let (svc, _asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "INT Cash".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        // Seed the system Cash Asset row (FK target), then deposit 1000.
+        sqlx::query(
+            "INSERT OR IGNORE INTO categories (id, name, is_deleted) VALUES ('system-cash-category', 'cash', 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed cash category");
+        sqlx::query(
+            "INSERT OR IGNORE INTO assets (id, name, reference, asset_class, category_id, currency, risk_level) \
+             VALUES ('system-cash-eur', 'Cash EUR', 'EUR', 'Cash', 'system-cash-category', 'EUR', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed cash asset");
+        svc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+
+        svc.record_interest(
+            &account.id,
+            "system-cash-eur".to_string(),
+            "2024-06-15".to_string(),
+            None,
+            Some(micro(50)),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let holdings = svc.get_holdings_for_account(&account.id).await.unwrap();
+        let cash = holdings
+            .iter()
+            .find(|h| h.asset_id == "system-cash-eur")
+            .expect("cash holding must exist");
+        assert_eq!(
+            cash.quantity,
+            micro(1_050),
+            "cash balance must be 1000 + 50 after the interest credit (INT-023)"
         );
     }
 

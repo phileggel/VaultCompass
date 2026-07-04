@@ -16,7 +16,7 @@ mod shared;
 
 pub use api::*;
 pub use error::{
-    DividendError, DividendTask, FreeSharesError, FreeSharesTask, ManagementFeeError,
-    ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
+    DividendError, DividendTask, FreeSharesError, FreeSharesTask, InterestError, InterestTask,
+    ManagementFeeError, ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
 };
 pub use orchestrator::HoldingTransactionUseCase;

@@ -376,6 +376,13 @@ pub(crate) fn end_value_as_of(
             TransactionType::Withdrawal | TransactionType::Purchase => {
                 cash_balance -= transaction.total_amount as i128;
             }
+            // INT-023 — interest on the cash line credits the balance by `quantity`
+            // (its total_amount is 0); interest on a non-cash asset never touches cash.
+            TransactionType::Interest => {
+                if crate::core::cash::is_cash_asset(&transaction.asset_id) {
+                    cash_balance += transaction.quantity as i128;
+                }
+            }
             // FSD-022d / FEE-022d — free-share and management-fee events have no cash leg.
             TransactionType::OpeningBalance
             | TransactionType::FreeShares
@@ -384,9 +391,12 @@ pub(crate) fn end_value_as_of(
         match transaction.transaction_type {
             // FSD-070 — free shares enter the as-of-date unit reconstruction like a
             // purchase (quantity rises); they carry no cash or flow effect.
+            // INT-024 — interest credits quantity at zero cost exactly like free shares
+            // (the cash-line case is excluded from the priced loop by its Cash class).
             TransactionType::Purchase
             | TransactionType::OpeningBalance
-            | TransactionType::FreeShares => {
+            | TransactionType::FreeShares
+            | TransactionType::Interest => {
                 *quantity_by_asset
                     .entry(transaction.asset_id.as_str())
                     .or_insert(0) += transaction.quantity as i128;
@@ -457,11 +467,13 @@ fn net_external_flow_in_range(
             // DIV-023: Dividend credits cash (internal income), not an external flow — excluded
             // from Simple Dietz net external flow (PRF-031) like Purchase/Sell.
             // FSD-070 / FEE-071: free-share and management-fee events are not external flows.
+            // INT-024: interest is internal income, not an external flow.
             TransactionType::Purchase
             | TransactionType::Sell
             | TransactionType::Dividend
             | TransactionType::FreeShares
-            | TransactionType::ManagementFee => {}
+            | TransactionType::ManagementFee
+            | TransactionType::Interest => {}
         }
     }
     debug_assert!(
@@ -501,11 +513,13 @@ pub(crate) fn metric_for_span(
                 // DIV-023: Dividend is internal income (credit-only), not an external flow —
                 // excluded from Simple Dietz weighted flow (PRF-031) like Purchase/Sell.
                 // FSD-070 / FEE-071: free-share and management-fee events are excluded.
+                // INT-024: interest is internal income, excluded like a dividend.
                 TransactionType::Purchase
                 | TransactionType::Sell
                 | TransactionType::Dividend
                 | TransactionType::FreeShares
-                | TransactionType::ManagementFee => continue,
+                | TransactionType::ManagementFee
+                | TransactionType::Interest => continue,
             };
             let days_remaining = (period_end - date).num_days() as i128;
             weighted_flow += signed_flow * days_remaining / days_in_period as i128;

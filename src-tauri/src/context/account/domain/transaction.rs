@@ -39,6 +39,9 @@ pub enum TransactionType {
     FreeShares,
     /// Management fee deduction: shares removed at zero cost; cost basis unchanged, VWAP concentrates (FEE-012).
     ManagementFee,
+    /// Interest credited at zero cost: quantity rises, cost basis unchanged (INT-024);
+    /// on the account's cash line it credits the balance directly (INT-023).
+    Interest,
 }
 
 /// A single financial event affecting an asset's quantity and cost basis within an account.
@@ -386,6 +389,65 @@ impl Transaction {
         created_at: String,
     ) -> StdResult<Self, AccountError> {
         let mut tx = Self::management_fee(account_id, asset_id, date, quantity, note)?;
+        tx.id = id;
+        tx.created_at = created_at;
+        Ok(tx)
+    }
+
+    /// Factory: builds an Interest transaction (INT-021/024).
+    ///
+    /// Zero-cost convention: `unit_price = 0`, `exchange_rate = 1_000_000`,
+    /// `fees = 0`, `total_amount = 0` (no money moves), `realized_pnl = None`.
+    /// `asset_id` is the credited asset — a held asset or the account's Cash Asset
+    /// (INT-023); for the cash line `quantity` is the credited balance in
+    /// account-currency micros.
+    ///
+    /// INT-021 — validates the date bounds and `quantity > 0` directly; the generic
+    /// validator does not apply because it rejects `total_amount = 0` for the
+    /// `Interest` type (only `OpeningBalance` allows 0, TRX-045).
+    pub fn interest(
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> StdResult<Self, AccountError> {
+        Self::validate_date(&date)?;
+        if quantity <= 0 {
+            return Err(AccountError::QuantityNotPositive);
+        }
+        Ok(Self {
+            id: Uuid::new_v4().to_string(),
+            account_id,
+            asset_id,
+            transaction_type: TransactionType::Interest,
+            date,
+            quantity,
+            unit_price: 0,
+            exchange_rate: 1_000_000,
+            fees: 0,
+            total_amount: 0,
+            note,
+            realized_pnl: None,
+            created_at: chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+                .to_string(),
+        })
+    }
+
+    /// Factory: rebuilds an Interest transaction with a caller-supplied ID and
+    /// `created_at` (INT-040 correction). Same zero-cost packing and INT-021
+    /// validation as `interest`, but preserves the transaction's identity.
+    pub fn interest_with_id(
+        id: String,
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+        created_at: String,
+    ) -> StdResult<Self, AccountError> {
+        let mut tx = Self::interest(account_id, asset_id, date, quantity, note)?;
         tx.id = id;
         tx.created_at = created_at;
         Ok(tx)
@@ -1063,6 +1125,123 @@ mod tests {
         assert!(
             matches!(err, AccountError::InvalidDate),
             "expected InvalidDate, got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // INT-021/024 — Transaction::interest factory
+    // -------------------------------------------------------------------------
+
+    // INT-024 — interest packs the zero-cost convention exactly:
+    // transaction_type = Interest, unit_price = 0, exchange_rate = 1_000_000,
+    // fees = 0, total_amount = 0, realized_pnl = None; asset_id = credited asset.
+    #[test]
+    fn interest_factory_packs_contract_convention() {
+        let tx = Transaction::interest(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            5_000_000, // 5 units in micros
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            tx.transaction_type,
+            TransactionType::Interest,
+            "transaction_type must be Interest"
+        );
+        assert_eq!(tx.account_id, "acc-1");
+        assert_eq!(
+            tx.asset_id, "asset-xyz",
+            "asset_id must be the credited asset"
+        );
+        assert_eq!(tx.quantity, 5_000_000);
+        // INT-024 — zero-cost convention: no money moves
+        assert_eq!(
+            tx.unit_price, 0,
+            "unit_price must be 0 (no acquisition cost)"
+        );
+        assert_eq!(
+            tx.exchange_rate, 1_000_000,
+            "exchange_rate must be 1_000_000 (no FX leg)"
+        );
+        assert_eq!(tx.fees, 0, "fees must be 0");
+        assert_eq!(
+            tx.total_amount, 0,
+            "total_amount must be 0 (no money moved)"
+        );
+        assert!(
+            tx.realized_pnl.is_none(),
+            "realized_pnl must be None (not a capital gain)"
+        );
+    }
+
+    // INT-021 — quantity ≤ 0 must be rejected as QuantityNotPositive.
+    #[test]
+    fn interest_factory_rejects_zero_quantity() {
+        let err = Transaction::interest(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            0,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AccountError::QuantityNotPositive),
+            "expected QuantityNotPositive, got: {err:?}"
+        );
+    }
+
+    // INT-021 — future date is rejected as DateInFuture.
+    #[test]
+    fn interest_factory_rejects_future_date() {
+        let err = Transaction::interest(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2099-01-01".to_string(),
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AccountError::DateInFuture),
+            "expected DateInFuture, got: {err:?}"
+        );
+    }
+
+    // INT-040 — interest_with_id preserves the caller-supplied identity while
+    // applying the same zero-cost packing and INT-021 validation.
+    #[test]
+    fn interest_with_id_preserves_identity() {
+        let tx = Transaction::interest_with_id(
+            "tx-1".to_string(),
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            2_000_000,
+            Some("2024 rate".to_string()),
+            "2024-06-15T00:00:00.000001Z".to_string(),
+        )
+        .unwrap();
+        assert_eq!(tx.id, "tx-1");
+        assert_eq!(tx.created_at, "2024-06-15T00:00:00.000001Z");
+        assert_eq!(tx.transaction_type, TransactionType::Interest);
+        assert_eq!(tx.total_amount, 0, "total_amount must remain 0 (INT-024)");
+    }
+
+    // INT-024 — Interest round-trips through strum Display → from_str
+    // (the variant must be persisted as TEXT and deserialized back without error).
+    #[test]
+    fn interest_variant_round_trips_through_strum() {
+        use std::str::FromStr;
+        let original = TransactionType::Interest;
+        let as_str = original.to_string();
+        let parsed = TransactionType::from_str(&as_str).expect("strum parse must succeed");
+        assert_eq!(
+            parsed,
+            TransactionType::Interest,
+            "Interest must round-trip through strum"
         );
     }
 

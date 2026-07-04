@@ -389,6 +389,18 @@ impl Account {
                 note,
                 created_at,
             )?
+        } else if tx_type == TransactionType::Interest {
+            // INT-040 — like FreeShares, total_amount = 0 trips the generic validator;
+            // rebuild via the identity-preserving interest factory (INT-021).
+            Transaction::interest_with_id(
+                tx_id.to_string(),
+                self.id.clone(),
+                asset_id.clone(),
+                date,
+                quantity,
+                note,
+                created_at,
+            )?
         } else {
             let total_amount = match tx_type {
                 TransactionType::Purchase => {
@@ -411,6 +423,8 @@ impl Account {
                 TransactionType::FreeShares => 0,
                 // Never reached — ManagementFee takes the dedicated branch above.
                 TransactionType::ManagementFee => 0,
+                // Never reached — Interest takes the dedicated branch above.
+                TransactionType::Interest => 0,
             };
 
             Transaction::with_id(
@@ -776,6 +790,51 @@ impl Account {
         Ok(tx)
     }
 
+    /// Aggregate-root method: applies a pre-built Interest transaction to this
+    /// account (INT-023/024). The transaction must have been built via
+    /// `Transaction::interest`.
+    ///
+    /// For a non-cash asset the credited quantity is added at zero cost — the
+    /// FreeShares mechanics: the VWAP numerator is unchanged, so the average
+    /// price dilutes (INT-024). For the account's Cash Asset the credit goes
+    /// through the cash replay instead: push to history, queue the insert, and
+    /// re-run `replay_cash_holding` (INT-023 — the balance rises by
+    /// `tx.quantity`; no Deposit is recorded). Credit-only, so the replay's
+    /// `InsufficientCash` path is unreachable for the interest itself.
+    pub fn apply_interest(&mut self, tx: Transaction) -> Result<Transaction> {
+        if crate::core::cash::is_cash_asset(&tx.asset_id) {
+            // INT-023 — cash-line interest: `replay_cash_holding` is the Cash
+            // Holding's sole manager and picks up the Interest credit.
+            self.transactions.push(tx.clone());
+            self.pending_changes
+                .push(AccountChange::TransactionInserted(tx.clone()));
+            self.replay_cash_holding()?;
+            return Ok(tx);
+        }
+
+        // INT-024 — non-cash asset: zero-cost quantity add (FSD-023 mechanics).
+        self.transactions.push(tx.clone());
+        let pair_txs: Vec<&Transaction> = self
+            .transactions
+            .iter()
+            .filter(|t| t.asset_id == tx.asset_id)
+            .collect();
+        let (holding, _) = match self.recalculate_holding(&tx.asset_id, &pair_txs) {
+            Ok(result) => result,
+            Err(e) => {
+                self.transactions.pop();
+                return Err(e);
+            }
+        };
+
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+        Ok(tx)
+    }
+
     // Cash deposit / withdrawal recording is composed at the application layer
     // (see `AccountService::record_deposit` / `record_withdrawal`) by chaining
     // `Transaction::new_deposit` / `new_withdrawal` (TRX-020) and `apply_deposit`
@@ -812,6 +871,7 @@ impl Account {
                         | TransactionType::Purchase
                         | TransactionType::Sell
                         | TransactionType::Dividend
+                        | TransactionType::Interest
                 )
             })
             .collect();
@@ -835,6 +895,12 @@ impl Account {
                         });
                     }
                     running -= t.total_amount;
+                }
+                // INT-023 — interest on the cash line credits the balance by `quantity`
+                // (its total_amount is 0 per the zero-cost packing); interest on a
+                // non-cash asset never touches cash.
+                TransactionType::Interest if crate::core::cash::is_cash_asset(&t.asset_id) => {
+                    running = running.saturating_add(t.quantity);
                 }
                 _ => {}
             }
@@ -986,6 +1052,11 @@ impl Account {
                 // No cash effect (the type never enters `replay_cash_holding`).
                 TransactionType::ManagementFee => {
                     total_quantity -= t.quantity as i128;
+                }
+                // INT-024 — interest adds quantity at zero cost exactly like FreeShares:
+                // the VWAP numerator is unchanged, so the average price dilutes.
+                TransactionType::Interest => {
+                    total_quantity += t.quantity as i128;
                 }
                 // CSH-032: a Withdrawal debits cash quantity by total_amount; never realises P&L
                 // and never tracks last_sold_date. CSH-080's eligibility guard runs in
@@ -1139,6 +1210,11 @@ impl Account {
                 TransactionType::ManagementFee => {
                     total_quantity -= t.quantity as i128;
                 }
+                // INT-024 — interest adds quantity at zero cost exactly like FreeShares
+                // (dilutes VWAP).
+                TransactionType::Interest => {
+                    total_quantity += t.quantity as i128;
+                }
                 // DIV-024 — a Dividend never affects the paying asset's holding.
                 TransactionType::Dividend => {}
             }
@@ -1178,6 +1254,13 @@ impl Account {
                 }
                 TransactionType::Withdrawal | TransactionType::Purchase => {
                     balance -= transaction.total_amount as i128;
+                }
+                // INT-023 — interest on the cash line credits the balance by `quantity`;
+                // interest on a non-cash asset never touches cash.
+                TransactionType::Interest => {
+                    if crate::core::cash::is_cash_asset(&transaction.asset_id) {
+                        balance += transaction.quantity as i128;
+                    }
                 }
                 TransactionType::OpeningBalance
                 | TransactionType::FreeShares
@@ -1808,6 +1891,32 @@ mod tests {
         let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-01");
         assert_eq!(snap.quantity, micro(4));
         assert_eq!(snap.average_price, micro(50)); // FSD-023 — VWAP dilutes to 200/4
+    }
+
+    #[test]
+    fn holding_snapshot_as_of_dilutes_vwap_with_interest() {
+        // Buy 2 @ cost 200 (avg 100), then receive 2 interest units at zero cost.
+        let txs = vec![
+            snap_tx(
+                "buy-1",
+                "asset-1",
+                TransactionType::Purchase,
+                "2024-06-01",
+                2,
+                200,
+            ),
+            snap_tx(
+                "int-1",
+                "asset-1",
+                TransactionType::Interest,
+                "2024-06-15",
+                2,
+                0,
+            ),
+        ];
+        let snap = Account::holding_snapshot_as_of(&txs, "asset-1", "2024-07-01");
+        assert_eq!(snap.quantity, micro(4));
+        assert_eq!(snap.average_price, micro(50)); // INT-024 — VWAP dilutes to 200/4
     }
 
     #[test]
@@ -3642,6 +3751,156 @@ mod tests {
             holding.quantity,
             micro(7),
             "holding quantity must reflect the corrected fee deduction (FEE-023)"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // INT-023/024/040 — apply_interest aggregate-root method
+    // -------------------------------------------------------------------------
+
+    // INT-024 — apply_interest on a non-cash asset increases holding quantity by
+    // the credited amount; cost basis is unchanged so the average price dilutes
+    // (the FSD-023 mechanics).
+    #[test]
+    fn int_024_apply_interest_increases_quantity_and_dilutes_vwap() {
+        let mut acc = cash_seeded_account();
+        // Buy 10 units @ 100 → total = 1_000, VWAP = 100
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+        let holding_before = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap()
+            .clone();
+        let cost_basis_before =
+            holding_before.quantity as i128 * holding_before.average_price as i128 / 1_000_000;
+
+        let tx = Transaction::interest(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        acc.apply_interest(tx).unwrap();
+
+        let holding_after = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(
+            holding_after.quantity,
+            micro(15),
+            "quantity must increase from 10 to 15 after the interest credit"
+        );
+        let expected_diluted_vwap =
+            (cost_basis_before * 1_000_000 / holding_after.quantity as i128) as i64;
+        assert_eq!(
+            holding_after.average_price, expected_diluted_vwap,
+            "average price must equal floor(cost_basis / new_quantity) after the interest credit"
+        );
+    }
+
+    // INT-023 — apply_interest on the account's Cash Asset credits the cash
+    // balance by `quantity` on replay: deposit 1000, interest 50 dated later
+    // → cash balance = 1050.
+    #[test]
+    fn int_023_apply_interest_on_cash_line_credits_balance() {
+        let mut acc = base_account();
+        acc.record_deposit("2024-01-01".to_string(), micro(1_000), None)
+            .unwrap();
+
+        let tx = Transaction::interest(
+            acc.id.clone(),
+            acc.cash_asset_id(),
+            "2024-06-15".to_string(),
+            micro(50),
+            None,
+        )
+        .unwrap();
+        let tx_id = tx.id.clone();
+        acc.apply_interest(tx).unwrap();
+
+        assert_eq!(
+            acc.cash_holding_quantity(),
+            micro(1_050),
+            "cash replay must credit the interest quantity (INT-023)"
+        );
+        assert!(
+            acc.pending_changes.iter().any(|c| matches!(
+                c,
+                AccountChange::TransactionInserted(t) if t.id == tx_id
+            )),
+            "TransactionInserted must be queued for the cash-line interest"
+        );
+    }
+
+    // INT-040 — correct_transaction on an Interest row rebuilds through the
+    // identity-preserving interest factory: total_amount stays 0 and the
+    // corrected quantity drives the holding on replay.
+    #[test]
+    fn int_040_correct_interest_transaction_updates_holding() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .unwrap();
+
+        let int_tx = Transaction::interest(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-01".to_string(),
+            micro(5),
+            None,
+        )
+        .unwrap();
+        let int_id = int_tx.id.clone();
+        acc.apply_interest(int_tx).unwrap();
+        // Post: quantity = 15
+
+        // Correct the credit: change quantity from 5 to 3.
+        let corrected = acc
+            .correct_transaction(
+                &int_id,
+                "2024-06-01".to_string(),
+                micro(3),  // new credited quantity
+                0,         // unit_price = 0 (no acquisition cost)
+                1_000_000, // exchange_rate = 1.0 (no FX leg)
+                0,         // fees = 0
+                Some("Corrected interest".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            corrected.total_amount, 0,
+            "corrected Interest total_amount must remain 0"
+        );
+        let holding = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(
+            holding.quantity,
+            micro(13),
+            "holding quantity must reflect the corrected interest credit (INT-040)"
         );
     }
 

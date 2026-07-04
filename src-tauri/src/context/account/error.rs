@@ -101,6 +101,11 @@ pub enum AccountError {
     #[error("Percentage cannot exceed 100%")]
     PercentageAboveHundred,
 
+    // --- Interest validation (INT-021) ---
+    /// Exactly one of percent / quantity must be provided when recording interest (INT-021).
+    #[error("Provide exactly one of percentage or quantity")]
+    InterestAmountInvalid,
+
     // --- FeeSchedule validation (FEE-032) ---
     /// The annual rate is zero or negative (FEE-032).
     #[error("Annual rate must be strictly positive")]
@@ -260,6 +265,11 @@ mod tests {
         assert_eq!(
             to_value(AccountError::PercentageAboveHundred).unwrap(),
             json!({ "code": "PercentageAboveHundred" })
+        );
+        // INT variant
+        assert_eq!(
+            to_value(AccountError::InterestAmountInvalid).unwrap(),
+            json!({ "code": "InterestAmountInvalid" })
         );
         assert_eq!(
             to_value(AccountError::RateNotPositive).unwrap(),

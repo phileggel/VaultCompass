@@ -528,6 +528,17 @@ async recordManagementFee(dto: ManagementFeeDTO) : Promise<Result<Transaction, M
 }
 },
 /**
+ * Records a zero-cost interest credit on a held asset or the cash line (INT-023/024).
+ */
+async recordInterest(dto: RecordInterestDTO) : Promise<Result<Transaction, InterestError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_interest", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Applies all due management fee deductions across all active schedules (FEE-040).
  * 
  * Lazy catch-up: for each active schedule, generates one deduction per completed
@@ -904,6 +915,10 @@ export type AccountError =
  * The management fee percentage exceeds 100% in micro-percent (FEE-021).
  */
 { code: "PercentageAboveHundred" } | 
+/**
+ * Exactly one of percent / quantity must be provided when recording interest (INT-021).
+ */
+{ code: "InterestAmountInvalid" } | 
 /**
  * The annual rate is zero or negative (FEE-032).
  */
@@ -2204,6 +2219,41 @@ quantity: number;
  */
 average_price: number }
 /**
+ * Use-case composite for the **record interest** failure surface.
+ * 
+ * - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+ * the INT-021 amount / date validation).
+ * - `InterestTask` — use-case-owned (this file), the cross-BC
+ * asset/holding checks.
+ */
+export type InterestError = 
+/**
+ * Account-BC rejection (lookup, infra, transaction validation).
+ */
+AccountError | 
+/**
+ * Use-case-layer rejection (cross-BC asset checks).
+ */
+InterestTask
+/**
+ * Application-layer rejections specific to the `record_interest` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_interest`. The account's Cash Asset is
+ * always a valid target (INT-023), so there is no cash-asset rejection here.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type InterestTask = 
+/**
+ * No asset exists with the requested ID (INT-011).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The non-cash asset is not currently held (quantity = 0 or no holding) (INT-011).
+ */
+{ code: "AssetNotHeld" }
+/**
  * Explicit lookup path selector passed by the frontend (WEB-014).
  * 
  * `Isin` routes the query through `/v3/mapping` after ISO 6166 format
@@ -2425,6 +2475,38 @@ since_inception: PerformanceMetric | null;
  */
 annualized_yield: PerformanceMetric | null }
 /**
+ * Parameters for recording an interest credit on a held asset or the account's
+ * cash line (INT-020). The amount is either a rate or a direct quantity —
+ * exactly one of the two must be provided (INT-021). No money changes hands.
+ */
+export type RecordInterestDTO = { 
+/**
+ * Account whose holding (or cash line) receives the interest.
+ */
+account_id: string; 
+/**
+ * The credited asset — a currently held non-cash asset or the account's Cash Asset (INT-011/023).
+ */
+asset_id: string; 
+/**
+ * Business date the interest was credited (YYYY-MM-DD, INT-021).
+ */
+date: string; 
+/**
+ * Interest rate in micro-percent (1% = 1_000_000), strictly positive and at
+ * most 100_000_000; mutually exclusive with `quantity_micros` (INT-021/022).
+ */
+percent_micros: number | null; 
+/**
+ * Credited quantity (micro-units, strictly positive); mutually exclusive
+ * with `percent_micros` (INT-021).
+ */
+quantity_micros: number | null; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
  * Parameters for recording a sale of an asset from an account.
  */
 export type SellHoldingDTO = { 
@@ -2553,7 +2635,12 @@ export type TransactionType =
 /**
  * Management fee deduction: shares removed at zero cost; cost basis unchanged, VWAP concentrates (FEE-012).
  */
-"ManagementFee"
+"ManagementFee" | 
+/**
+ * Interest credited at zero cost: quantity rises, cost basis unchanged (INT-024);
+ * on the account's cash line it credits the balance directly (INT-023).
+ */
+"Interest"
 /**
  * One asset a price-fetch task could not price (MKT-170/171), carried in the
  * `AssetPriceFetchCompleted` payload so the frontend can list it for manual entry.

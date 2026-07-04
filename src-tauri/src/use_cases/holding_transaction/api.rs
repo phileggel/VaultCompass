@@ -362,3 +362,46 @@ pub async fn record_management_fee(
     )
     .await
 }
+
+// =============================================================================
+// Interest — DTO + command (INT-020/021)
+// =============================================================================
+
+/// Parameters for recording an interest credit on a held asset or the account's
+/// cash line (INT-020). The amount is either a rate or a direct quantity —
+/// exactly one of the two must be provided (INT-021). No money changes hands.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct RecordInterestDTO {
+    /// Account whose holding (or cash line) receives the interest.
+    pub account_id: String,
+    /// The credited asset — a currently held non-cash asset or the account's Cash Asset (INT-011/023).
+    pub asset_id: String,
+    /// Business date the interest was credited (YYYY-MM-DD, INT-021).
+    pub date: String,
+    /// Interest rate in micro-percent (1% = 1_000_000), strictly positive and at
+    /// most 100_000_000; mutually exclusive with `quantity_micros` (INT-021/022).
+    pub percent_micros: Option<i64>,
+    /// Credited quantity (micro-units, strictly positive); mutually exclusive
+    /// with `percent_micros` (INT-021).
+    pub quantity_micros: Option<i64>,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Records a zero-cost interest credit on a held asset or the cash line (INT-023/024).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_interest(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: RecordInterestDTO,
+) -> Result<Transaction, super::error::InterestError> {
+    uc.record_interest(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.percent_micros,
+        dto.quantity_micros,
+        dto.note,
+    )
+    .await
+}

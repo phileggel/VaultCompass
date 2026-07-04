@@ -1,6 +1,6 @@
 use super::error::{
-    DividendError, DividendTask, FreeSharesError, FreeSharesTask, ManagementFeeError,
-    ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
+    DividendError, DividendTask, FreeSharesError, FreeSharesTask, InterestError, InterestTask,
+    ManagementFeeError, ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
 };
 use super::shared::ensure_cash_asset;
 use crate::context::account::{AccountError, AccountService, Transaction};
@@ -399,6 +399,76 @@ impl HoldingTransactionUseCase {
             .record_management_fee(account_id, asset_id, date, percent_micros, note)
             .await
             .map_err(ManagementFeeError::Account)
+    }
+
+    /// Records an Interest credit on a held asset or the account's cash line
+    /// (INT-011/023).
+    ///
+    /// Cross-BC guards (INT-011): rejects if the account is unknown or the asset
+    /// is unknown. A Cash-class asset is always a valid target — the held check
+    /// is skipped for it (INT-023, the cash line is interest-bearing); a
+    /// non-cash asset must be currently held (quantity > 0).
+    /// The credit has no external cash leg (no `ensure_cash_asset` — the cash
+    /// line only exists once a deposit created it) and never touches an
+    /// `AssetPrice` row. Returns `InterestError`.
+    pub async fn record_interest(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: Option<i64>,
+        quantity_micros: Option<i64>,
+        note: Option<String>,
+    ) -> Result<Transaction, InterestError> {
+        // INT-011 — account must exist (checked before any asset work).
+        self.account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+
+        // INT-011 — asset must exist.
+        let asset = self
+            .asset_service
+            .get_asset_by_id(&asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_interest: get_asset_by_id failed");
+                AccountError::DatabaseError
+            })?;
+        let asset = match asset {
+            None => return Err(InterestTask::AssetNotFound.into()),
+            Some(a) => a,
+        };
+
+        // INT-011 — a non-cash asset must be currently held (quantity > 0);
+        // INT-023 — the account's Cash Asset is always a valid target, so the
+        // held check is skipped for a Cash-class asset.
+        if asset.class != AssetClass::Cash {
+            let held = self
+                .account_service
+                .get_holding_by_account_asset(account_id, &asset_id)
+                .await?;
+            match held {
+                Some(h) if h.quantity > 0 => {}
+                _ => return Err(InterestTask::AssetNotHeld.into()),
+            }
+        }
+
+        // Delegate to the account BC; its `AccountError` surfaces on the
+        // interest wire as `InterestError::Account`.
+        self.account_service
+            .record_interest(
+                account_id,
+                asset_id,
+                date,
+                percent_micros,
+                quantity_micros,
+                note,
+            )
+            .await
+            .map_err(InterestError::Account)
     }
 
     /// Loads the account, then ensures the system Cash Asset for its currency
@@ -1618,6 +1688,419 @@ mod tests {
                 ManagementFeeError::UseCase(ManagementFeeTask::AssetNotHeld)
             ),
             "expected UseCase(AssetNotHeld), got: {err:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // record_interest — orchestrator unit tests (INT-011, INT-021, INT-022,
+    // INT-023, INT-024)
+    // -------------------------------------------------------------------------
+
+    // INT-022/024 — happy path (percent mode): the credit is 10% of the held
+    // quantity, added at zero cost.
+    #[tokio::test]
+    async fn record_interest_happy_path_percent_mode() {
+        use crate::context::account::TransactionType;
+
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // 10% of 10 units → 1 unit credited.
+        let tx = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-12-31".to_string(),
+                Some(10_000_000),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(tx.transaction_type, TransactionType::Interest);
+        assert_eq!(tx.asset_id, asset.id);
+        assert_eq!(tx.quantity, micro(1), "credited qty must be 10% of 10");
+        // INT-024 — zero-cost packing
+        assert_eq!(tx.unit_price, 0);
+        assert_eq!(tx.exchange_rate, 1_000_000);
+        assert_eq!(tx.fees, 0);
+        assert_eq!(tx.total_amount, 0);
+        assert!(tx.realized_pnl.is_none());
+
+        let holdings = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let holding = holdings.iter().find(|h| h.asset_id == asset.id).unwrap();
+        assert_eq!(holding.quantity, micro(11), "quantity must be 10 + 1");
+    }
+
+    // INT-011 — AccountNotFound: unknown account is rejected before any asset check.
+    #[tokio::test]
+    async fn record_interest_rejects_unknown_account() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_interest(
+                "nonexistent-account",
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                None,
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(
+                err,
+                InterestError::Account(AccountError::AccountNotFound { .. })
+            ),
+            "expected Account(AccountNotFound), got: {err:?}"
+        );
+    }
+
+    // INT-011 — AssetNotFound: unknown asset_id is rejected.
+    #[tokio::test]
+    async fn record_interest_rejects_unknown_asset() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                "nonexistent-asset".to_string(),
+                "2024-06-15".to_string(),
+                None,
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, InterestError::UseCase(InterestTask::AssetNotFound)),
+            "expected UseCase(AssetNotFound), got: {err:?}"
+        );
+    }
+
+    // INT-011 — AssetNotHeld: a non-cash asset that is not currently held is rejected.
+    #[tokio::test]
+    async fn record_interest_rejects_non_held_non_cash_asset() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                None,
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, InterestError::UseCase(InterestTask::AssetNotHeld)),
+            "expected UseCase(AssetNotHeld), got: {err:?}"
+        );
+    }
+
+    // INT-023 — the account's Cash Asset IS a valid target: the held check is
+    // skipped and the credit lands on the cash balance (1000 + 50 = 1050).
+    #[tokio::test]
+    async fn record_interest_accepts_cash_asset_and_credits_balance() {
+        use crate::context::account::TransactionType;
+
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let cash_asset = asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+
+        let tx = uc
+            .record_interest(
+                &account.id,
+                cash_asset.id.clone(),
+                "2024-06-15".to_string(),
+                None,
+                Some(micro(50)),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(tx.transaction_type, TransactionType::Interest);
+        assert_eq!(tx.asset_id, cash_asset.id);
+
+        let holdings = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let cash = holdings
+            .iter()
+            .find(|h| h.asset_id == cash_asset.id)
+            .expect("cash holding must exist");
+        assert_eq!(
+            cash.quantity,
+            micro(1_050),
+            "cash balance must be 1000 + 50 after the interest credit (INT-023)"
+        );
+    }
+
+    // INT-021 — QuantityNotPositive: quantity mode with 0 is rejected.
+    #[tokio::test]
+    async fn record_interest_rejects_zero_quantity() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                None,
+                Some(0),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                InterestError::Account(AccountError::QuantityNotPositive)
+            ),
+            "expected Account(QuantityNotPositive), got: {err:?}"
+        );
+    }
+
+    // INT-021 — percent bounds: 0 → PercentageNotPositive; > 100% → PercentageAboveHundred;
+    // both provided → InterestAmountInvalid.
+    #[tokio::test]
+    async fn record_interest_rejects_invalid_amount_specs() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                Some(0),
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                InterestError::Account(AccountError::PercentageNotPositive)
+            ),
+            "expected Account(PercentageNotPositive), got: {err:?}"
+        );
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                Some(100_000_001),
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                InterestError::Account(AccountError::PercentageAboveHundred)
+            ),
+            "expected Account(PercentageAboveHundred), got: {err:?}"
+        );
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                Some(1_000_000),
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                InterestError::Account(AccountError::InterestAmountInvalid)
+            ),
+            "expected Account(InterestAmountInvalid), got: {err:?}"
+        );
+    }
+
+    // INT-021 — DateInFuture: future date is rejected.
+    #[tokio::test]
+    async fn record_interest_rejects_future_date() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2099-01-01".to_string(),
+                None,
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, InterestError::Account(AccountError::DateInFuture)),
+            "expected Account(DateInFuture), got: {err:?}"
         );
     }
 }

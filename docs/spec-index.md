@@ -20,6 +20,7 @@
 | KEY     | API Key Management          | BYOK provider API keys + Connections dialog — RETIRED by ADR-017 (price fetch moved to keyless Yahoo Finance)          | retired  |
 | FSD     | Free Share Distribution     | Bonus shares received at zero cost: quantity event, no cash, cost basis unchanged                                      | active   |
 | FEE     | Management Fee Deduction    | Quantity-reducing fee paid in shares (recurring % schedule + one-off); cost basis unchanged, fees surfaced per holding | planning |
+| INT     | Interest Credit             | Capitalized interest: zero-cost quantity credit on a fund line or the cash line, entered as a rate or a direct amount  | active   |
 
 ---
 

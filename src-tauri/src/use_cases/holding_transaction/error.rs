@@ -219,6 +219,73 @@ pub enum ManagementFeeError {
     UseCase(#[from] ManagementFeeTask),
 }
 
+/// Application-layer rejections specific to the `record_interest` use case —
+/// cross-BC asset and holding checks performed by the orchestrator before
+/// delegating to `AccountService::record_interest`. The account's Cash Asset is
+/// always a valid target (INT-023), so there is no cash-asset rejection here.
+///
+/// Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+/// Tauri boundary into a flat `{ code: "..." }` shape.
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
+#[serde(tag = "code")]
+pub enum InterestTask {
+    /// No asset exists with the requested ID (INT-011).
+    #[error("Asset not found")]
+    AssetNotFound,
+    /// The non-cash asset is not currently held (quantity = 0 or no holding) (INT-011).
+    #[error("Asset is not currently held in this account")]
+    AssetNotHeld,
+}
+
+/// Use-case composite for the **record interest** failure surface.
+///
+/// - `AccountError` — every account-BC rejection (lookup, infrastructure, and
+///   the INT-021 amount / date validation).
+/// - `InterestTask` — use-case-owned (this file), the cross-BC
+///   asset/holding checks.
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
+#[serde(untagged)]
+pub enum InterestError {
+    /// Account-BC rejection (lookup, infra, transaction validation).
+    #[error(transparent)]
+    Account(#[from] AccountError),
+    /// Use-case-layer rejection (cross-BC asset checks).
+    #[error(transparent)]
+    UseCase(#[from] InterestTask),
+}
+
+#[cfg(test)]
+mod interest_error_wire_tests {
+    use super::*;
+
+    /// error-model.md — every `InterestError` variant must serialize to a flat
+    /// object carrying a string `code` (guards the `#[serde(untagged)]`
+    /// null-collapse regression across all three leaves).
+    #[test]
+    fn each_variant_emits_a_code() {
+        let cases: Vec<InterestError> = vec![
+            AccountError::AccountNotFound {
+                account_id: "acc-1".to_string(),
+            }
+            .into(),
+            InterestTask::AssetNotFound.into(),
+            InterestTask::AssetNotHeld.into(),
+            AccountError::InterestAmountInvalid.into(),
+            AccountError::PercentageNotPositive.into(),
+            AccountError::PercentageAboveHundred.into(),
+            AccountError::QuantityNotPositive.into(),
+            AccountError::DateInFuture.into(),
+        ];
+        for err in cases {
+            let value = serde_json::to_value(&err).expect("serialize InterestError");
+            assert!(
+                value.get("code").and_then(|c| c.as_str()).is_some(),
+                "InterestError variant did not emit a string `code`: {value}"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod management_fee_error_wire_tests {
     use super::*;
