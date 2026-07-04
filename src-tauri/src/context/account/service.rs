@@ -690,8 +690,15 @@ impl AccountService {
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let credited = match (percent_micros, quantity_micros) {
             // INT-022 — credited qty = floor(holding_qty_as_of(date) × percent / 100%).
+            // The cash line's balance moves with Purchase/Sell/Dividend transactions
+            // whose asset_id is NOT the cash asset, so its percent base comes from the
+            // dedicated cash replay, not the per-asset holding replay (INT-023).
             (Some(percent_micros), None) => {
-                let quantity_as_of = account.holding_quantity_as_of(&asset_id, &date);
+                let quantity_as_of = if crate::core::cash::is_cash_asset(&asset_id) {
+                    Account::cash_balance_as_of(&account.transactions, &date)
+                } else {
+                    account.holding_quantity_as_of(&asset_id, &date)
+                };
                 (quantity_as_of as i128 * percent_micros as i128 / 100_000_000) as i64
             }
             (None, Some(quantity_micros)) => quantity_micros,

@@ -76,37 +76,52 @@ describe("useInterestTransaction (INT-020/021/025)", () => {
     expect(result.current.isFormValid).toBe(false);
   });
 
-  // INT-021 — form invalid when BOTH percent and quantity are filled
-  it("isFormValid false when both percent and quantity are filled", () => {
+  // INT-021 — both fields filled keeps the submit gate open so handleSubmit can
+  // surface the InterestAmountInvalid message (a disabled button would hide it).
+  it("keeps the gate open with both fields filled and surfaces InterestAmountInvalid on submit", async () => {
     const { result } = renderHook(() => useInterestTransaction(BASE_PROPS));
     act(() => {
       result.current.handleChange("assetId", "asset-fund-1");
       result.current.handleChange("percent", "2");
       result.current.handleChange("quantity", "10");
     });
-    expect(result.current.isFormValid).toBe(false);
+    expect(result.current.isFormValid).toBe(true);
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(result.current.error).toEqual({ key: "error.InterestAmountInvalid" });
+    expect(mockRecordInterest).not.toHaveBeenCalled();
   });
 
-  // INT-021 — percent bounds mirror the fee validation: (0, 100]
-  it("isFormValid false when percent is zero or above 100", () => {
+  // INT-021 — percent bounds surface as an inline error on submit; the gate
+  // stays open so the message is reachable.
+  it("surfaces a percent-bounds error on submit instead of disabling the gate", async () => {
     const { result } = renderHook(() => useInterestTransaction(BASE_PROPS));
     act(() => {
       result.current.handleChange("assetId", "asset-fund-1");
       result.current.handleChange("percent", "0");
     });
-    expect(result.current.isFormValid).toBe(false);
-    act(() => result.current.handleChange("percent", "101"));
-    expect(result.current.isFormValid).toBe(false);
+    expect(result.current.isFormValid).toBe(true);
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(result.current.error).not.toBeNull();
+    expect(mockRecordInterest).not.toHaveBeenCalled();
   });
 
-  // INT-021 — form invalid when quantity is zero
-  it("isFormValid false when quantity is zero", () => {
+  // INT-021 — zero quantity surfaces as an inline error on submit.
+  it("surfaces a zero-quantity error on submit instead of disabling the gate", async () => {
     const { result } = renderHook(() => useInterestTransaction(BASE_PROPS));
     act(() => {
       result.current.handleChange("assetId", "asset-fund-1");
       result.current.handleChange("quantity", "0");
     });
-    expect(result.current.isFormValid).toBe(false);
+    expect(result.current.isFormValid).toBe(true);
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+    expect(result.current.error).not.toBeNull();
+    expect(mockRecordInterest).not.toHaveBeenCalled();
   });
 
   // INT-021 — form valid with asset + percent only

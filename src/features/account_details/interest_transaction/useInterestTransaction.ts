@@ -73,11 +73,14 @@ export function useInterestTransaction({
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // INT-021 — asset selected, exactly one of percent/quantity valid, date valid.
+  // INT-021 — the submit gate requires an asset, a valid date, and at least one
+  // amount field; the exactly-one check is left to handleSubmit so a user who
+  // filled both fields gets the InterestAmountInvalid message instead of a
+  // silently inert button.
   const isFormValid = useMemo(
     () =>
       formData.assetId !== "" &&
-      validateInterestAmount(formData.percent, formData.quantity) === null &&
+      (formData.percent.trim() !== "" || formData.quantity.trim() !== "") &&
       validateDate(formData.date) === null,
     [formData.assetId, formData.percent, formData.quantity, formData.date],
   );

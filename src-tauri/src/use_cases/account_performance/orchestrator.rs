@@ -428,7 +428,7 @@ fn period_bridge(
             // FSD-070 — free shares carry no cost, so their standing market value at
             // period end is the in-kind contribution (valued like `end_value_as_of`).
             TransactionType::FreeShares => {
-                asset_flow += free_shares_value(
+                asset_flow += zero_cost_credit_value(
                     transaction,
                     priced_assets,
                     rate_map,
@@ -438,13 +438,13 @@ fn period_bridge(
             }
             // INT-024 — interest on a non-cash asset is an in-kind credit valued like
             // free shares (FSD-070). INT-023 — interest on the cash line IS a cash
-            // credit of `quantity` (`free_shares_value` cannot value the Cash Asset —
+            // credit of `quantity` (`zero_cost_credit_value` cannot value the Cash Asset —
             // it returns 0 for the Cash class).
             TransactionType::Interest => {
                 if crate::core::cash::is_cash_asset(&transaction.asset_id) {
                     cash_flow += transaction.quantity as i128;
                 } else {
-                    asset_flow += free_shares_value(
+                    asset_flow += zero_cost_credit_value(
                         transaction,
                         priced_assets,
                         rate_map,
@@ -480,7 +480,7 @@ fn period_bridge(
 /// using the same carry-forward price + FX rules as `end_value_as_of`. Contributes
 /// 0 when the asset has no usable price or rate as of the period end (PRF-022 /
 /// FXR-034) — that value then surfaces via the residual pnl.
-fn free_shares_value(
+fn zero_cost_credit_value(
     transaction: &Transaction,
     priced_assets: &HashMap<String, PricedAsset>,
     rate_map: &RateMap,

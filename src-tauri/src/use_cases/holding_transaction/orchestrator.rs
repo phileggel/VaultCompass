@@ -2103,4 +2103,68 @@ mod tests {
             "expected Account(DateInFuture), got: {err:?}"
         );
     }
+
+    // INT-022/023 — percent-mode on the cash line uses the cash-balance replay,
+    // not the per-asset holding replay: a Purchase (different asset_id) reduces
+    // the base. Deposit 1000, buy 500 → balance 500; 10% credits 50, not 100.
+    #[tokio::test]
+    async fn record_interest_percent_on_cash_uses_cash_balance_base() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let cash_asset = asset_svc.seed_cash_asset("USD").await.unwrap();
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        // Purchase moves cash (−500) under the traded asset's id, not the cash id.
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let tx = uc
+            .record_interest(
+                &account.id,
+                cash_asset.id.clone(),
+                "2024-06-15".to_string(),
+                Some(10_000_000),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            tx.quantity,
+            micro(50),
+            "10% of the true 500 cash balance, not of the 1000 deposit history"
+        );
+
+        let holdings = account_svc
+            .get_holdings_for_account(&account.id)
+            .await
+            .unwrap();
+        let cash = holdings
+            .iter()
+            .find(|h| h.asset_id == cash_asset.id)
+            .expect("cash holding must exist");
+        assert_eq!(cash.quantity, micro(550), "500 + 50 credited");
+    }
 }
