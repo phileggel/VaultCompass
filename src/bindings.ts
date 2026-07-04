@@ -731,7 +731,12 @@ currency: string;
 /**
  * How often this account is updated.
  */
-update_frequency: UpdateFrequency }
+update_frequency: UpdateFrequency; 
+/**
+ * Whether the % management-fee mechanism (one-off fees + schedules) is
+ * available on this account (FEE-075). New accounts start disabled.
+ */
+management_fees_enabled: boolean }
 /**
  * Pre-deletion counts for an account (ACC-020).
  */
@@ -919,6 +924,10 @@ export type AccountError =
  * No fee schedule found for the given (account, asset) pair (FEE-060).
  */
 { code: "ScheduleNotFound" } | 
+/**
+ * The % management-fee mechanism is disabled on this account (FEE-077).
+ */
+{ code: "ManagementFeesDisabled" } | 
 /**
  * No account exists with the requested ID.
  */
@@ -1458,7 +1467,12 @@ currency: string;
 /**
  * Update frequency.
  */
-update_frequency: UpdateFrequency }
+update_frequency: UpdateFrequency; 
+/**
+ * Whether the % management-fee mechanism is enabled (FEE-075). New accounts
+ * default to false; the creation form can opt in.
+ */
+management_fees_enabled: boolean }
 /**
  * Parameters for creating a new asset.
  */
@@ -2589,7 +2603,11 @@ currency: string;
 /**
  * New update frequency.
  */
-update_frequency: UpdateFrequency }
+update_frequency: UpdateFrequency; 
+/**
+ * Whether the % management-fee mechanism is enabled (FEE-075).
+ */
+management_fees_enabled: boolean }
 /**
  * Parameters for updating an existing asset.
  */

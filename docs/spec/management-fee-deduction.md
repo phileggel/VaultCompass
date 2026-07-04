@@ -139,6 +139,14 @@ A recurring rule that generates fee deductions for one (account, asset) holding 
 
 **FEE-073 — Foreign-currency holdings (backend)**: For a charged asset whose currency differs from the account currency, the fee value uses the account-currency conversion path (FXR) as of the deduction date, consistent with holding valuation (FXR-042). A deduction with no usable rate contributes `0` to the Management Fees figure (FEE-054, FXR-034).
 
+**FEE-075 — Account-level management-fees parameter**: the `Account` aggregate carries `management_fees_enabled: bool`. New accounts are created with `false`; the schema migration backfills `true` for every account existing before the parameter (behavior-preserving). The parameter is editable both ways at any time from the account forms (creation and edit).
+
+**FEE-076 — Disabled-state UI**: when an account's `management_fees_enabled` is `false`, the account-details view hides every % fee surface: the one-off management-fee header button (FEE-010), the per-row Manage-fee button (FEE-011), the Management Fees column (FEE-052) with its fee-rate indicator (FEE-074), and the header total (FEE-053).
+
+**FEE-077 — Backend enforcement**: `record_management_fee` and `create_fee_schedule` reject with `AccountError::ManagementFeesDisabled` when the target account's parameter is `false` (guard on the aggregate: `Account::ensure_management_fees_enabled`). Existing schedules remain readable, editable, and deletable regardless of the parameter — only the creation of new fee instruments is rejected, so disabling never traps data.
+
+**FEE-078 — Catch-up pause**: the startup catch-up (FEE-040) skips every schedule whose account has the parameter disabled, without advancing the `last_applied_period` cursor. Re-enabling the parameter resumes generation with a backfill of the paused periods on the next catch-up run (the schedule models fees the fund charges regardless of app configuration), subject to the FEE-044/047 oversell and zero-quantity guards.
+
 **FEE-074 — Fee-rate indicator on the holding line**: Each `HoldingDetail` exposes `fee_rate_percent_micros: Option<i64>` — the annual rate of the holding's **active** fee schedule (micro-percent, FEE-032); `None` when no active schedule exists (inactive schedules and one-off fees don't count). The live view resolves it from the active-schedules list in one query; the as-of view always carries `None` — the schedule is today's configuration, not part of the historical reconstruction. The frontend renders the rate inside the Management Fees cell, after the cumulative amount (e.g. "12,34 · 1,50%"); the cell shows the amount alone when no active schedule exists.
 
 ---

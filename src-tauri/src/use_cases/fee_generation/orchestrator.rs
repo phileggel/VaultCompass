@@ -51,7 +51,16 @@ impl FeeGenerationOrchestrator {
         let today = chrono::Local::now().date_naive();
         let schedules = self.account_service.list_active_fee_schedules().await?;
         for schedule in schedules {
-            self.apply_schedule(&schedule, today).await?;
+            // FEE-078 — schedules of accounts with management fees disabled are
+            // paused: skipped without advancing the cursor, so re-enabling
+            // backfills the paused periods on the next run.
+            let account = self.account_service.get_by_id(&schedule.account_id).await?;
+            match account {
+                Some(account) if account.management_fees_enabled => {
+                    self.apply_schedule(&schedule, today).await?;
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -138,7 +147,7 @@ impl FeeGenerationOrchestrator {
 mod tests {
     use super::*;
     use crate::context::account::{
-        AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository,
+        Account, AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository,
         SqliteHoldingRepository, SqliteTransactionRepository, TransactionType, UpdateFrequency,
     };
     use crate::context::asset::{
@@ -181,6 +190,18 @@ mod tests {
 
     fn micro(v: i64) -> i64 {
         v * 1_000_000
+    }
+
+    async fn enable_management_fees(svc: &AccountService, account: &Account) -> Account {
+        svc.update(
+            account.id.clone(),
+            account.name.clone(),
+            account.currency.clone(),
+            account.update_frequency,
+            true,
+        )
+        .await
+        .unwrap()
     }
 
     async fn seed_stock(asset_svc: &AssetService) -> String {
@@ -285,6 +306,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         seed_cash(&pool, &account_svc, &account.id).await;
         account_svc
             .buy_holding(
@@ -347,6 +369,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
 
         // Create a schedule for a stock that is NOT held (so all periods skip).
         account_svc
@@ -391,6 +414,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
 
         // Schedule exists but the asset is never purchased → qty_as_of = 0 for all periods.
         account_svc
@@ -439,6 +463,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         seed_cash(&pool, &account_svc, &account.id).await;
         account_svc
             .buy_holding(
@@ -512,6 +537,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         seed_cash(&pool, &account_svc, &account.id).await;
         account_svc
             .buy_holding(
@@ -608,6 +634,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         seed_cash(&pool, &account_svc, &account.id).await;
         account_svc
             .buy_holding(
@@ -692,6 +719,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         seed_cash(&pool, &account_svc, &account.id).await;
         account_svc
             .buy_holding(
@@ -769,6 +797,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         seed_cash(&pool, &account_svc, &account.id).await;
         // Buy 100, sell ALL 100 mid-March, then re-buy 100 in April.
         account_svc
@@ -865,6 +894,104 @@ mod tests {
             after.last_applied_period.as_deref(),
             Some("2024-05-31"),
             "cursor advances past skipped oversell periods (FEE-043/047)"
+        );
+    }
+
+    // FEE-078 — schedules of a disabled account are paused (skipped, cursor
+    // untouched); re-enabling backfills the paused periods on the next run.
+    #[tokio::test]
+    async fn fee_078_disabled_account_pauses_generation_and_reenabling_backfills() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "FEE-078".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                12_000_000,
+                FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Disable the mechanism, then run the catch-up: nothing generates.
+        account_svc
+            .update(
+                account.id.clone(),
+                account.name.clone(),
+                account.currency.clone(),
+                account.update_frequency,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        uc.apply_due_fee_deductions().await.unwrap();
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        assert!(
+            txs.iter()
+                .all(|t| t.transaction_type != TransactionType::ManagementFee),
+            "paused account must generate nothing"
+        );
+        let schedule = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            schedule.last_applied_period, None,
+            "cursor must not advance while paused"
+        );
+
+        // Re-enable and run again: the paused periods backfill.
+        enable_management_fees(&account_svc, &account).await;
+        uc.apply_due_fee_deductions().await.unwrap();
+        let txs = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap();
+        let fee_count = txs
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::ManagementFee)
+            .count();
+        assert!(fee_count > 0, "re-enabling must backfill paused periods");
+        let schedule = account_svc
+            .get_fee_schedule(&account.id, &stock_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            schedule.last_applied_period.is_some(),
+            "cursor advances after backfill"
         );
     }
 }

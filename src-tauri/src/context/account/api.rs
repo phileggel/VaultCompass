@@ -21,6 +21,8 @@ pub struct UpdateAccountDTO {
     pub currency: String,
     /// New update frequency.
     pub update_frequency: UpdateFrequency,
+    /// Whether the % management-fee mechanism is enabled (FEE-075).
+    pub management_fees_enabled: bool,
 }
 
 // --- Commands ---
@@ -41,7 +43,13 @@ pub async fn update_account(
 ) -> Result<Account, AccountError> {
     state
         .account_service
-        .update(dto.id, dto.name, dto.currency, dto.update_frequency)
+        .update(
+            dto.id,
+            dto.name,
+            dto.currency,
+            dto.update_frequency,
+            dto.management_fees_enabled,
+        )
         .await
 }
 

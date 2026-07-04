@@ -139,8 +139,15 @@ impl AccountService {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
     ) -> Result<Account, AccountError> {
-        let account = Account::with_id(id, name, currency, update_frequency)?;
+        let account = Account::with_id(
+            id,
+            name,
+            currency,
+            update_frequency,
+            management_fees_enabled,
+        )?;
         if let Some(existing) = find_account_by_name(&*self.account_repo, &account.name).await? {
             if existing.id != account.id {
                 return Err(AccountError::NameAlreadyExists);
@@ -623,6 +630,8 @@ impl AccountService {
             return Err(AccountError::PercentageAboveHundred);
         }
         let mut account = load_account(&*self.account_repo, account_id).await?;
+        // FEE-077 — the % fee mechanism must be enabled on the account.
+        account.ensure_management_fees_enabled()?;
         // FEE-022a — removed qty = floor(holding_qty_as_of(date) × percent / 100%).
         let quantity_as_of = account.holding_quantity_as_of(&asset_id, &date);
         let removed = (quantity_as_of as i128 * percent_micros as i128 / 100_000_000) as i64;
@@ -654,6 +663,13 @@ impl AccountService {
         end_date: Option<String>,
     ) -> Result<FeeSchedule, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "create_fee_schedule");
+        // FEE-077 — the % fee mechanism must be enabled on the account.
+        self.get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?
+            .ensure_management_fees_enabled()?;
         let repo = self.fee_schedule_repo()?;
         // FEE-031 — at most one schedule per (account, asset).
         let existing = repo
@@ -1041,6 +1057,78 @@ mod tests {
         )
     }
 
+    async fn enable_management_fees(svc: &AccountService, account: &Account) -> Account {
+        svc.update(
+            account.id.clone(),
+            account.name.clone(),
+            account.currency.clone(),
+            account.update_frequency,
+            true,
+        )
+        .await
+        .unwrap()
+    }
+
+    // FEE-077 — record_management_fee rejects when the account has the mechanism disabled
+    #[tokio::test]
+    async fn fee_077_record_management_fee_rejects_disabled_account() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Gated".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let err = svc
+            .record_management_fee(
+                &account.id,
+                asset_id,
+                "2026-01-15".to_string(),
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::ManagementFeesDisabled),
+            "got: {err:?}"
+        );
+    }
+
+    // FEE-077 — create_fee_schedule rejects when the account has the mechanism disabled
+    #[tokio::test]
+    async fn fee_077_create_fee_schedule_rejects_disabled_account() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Gated".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let err = svc
+            .create_fee_schedule(
+                &account.id,
+                asset_id,
+                1_000_000,
+                FeeFrequency::Monthly,
+                "2026-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::ManagementFeesDisabled),
+            "got: {err:?}"
+        );
+    }
+
     /// Seeds the system Cash Asset row + a large Deposit so existing buy/sell tests can
     /// satisfy CSH-041 (purchase eligibility). Bypasses `AssetService` because these tests
     /// only construct an `AccountService`.
@@ -1128,6 +1216,7 @@ mod tests {
                 "ALPHA".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap_err();
@@ -1155,6 +1244,7 @@ mod tests {
                 "Alpha".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualDay,
+                false,
             )
             .await;
         assert!(result.is_ok());
@@ -2173,6 +2263,7 @@ mod tests {
                     acc.name,
                     acc.currency,
                     acc.update_frequency,
+                    acc.management_fees_enabled,
                     vec![cash_holding],
                     vec![seed_deposit],
                 )))
@@ -2528,6 +2619,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
         seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
         // Buy 100 units @ 50 (total cost = 5000 in account currency).
@@ -2599,6 +2691,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
         seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
         // Buy 100 units @ 50 → cost basis = 100 × 50 = 5000 (account currency).
@@ -2769,6 +2862,7 @@ mod tests {
                     UpdateFrequency::ManualMonth,
                 )
                 .unwrap();
+                acc.management_fees_enabled = true;
                 acc.record_deposit("2024-01-01".to_string(), micro(1_000), None)
                     .expect("seed deposit");
                 acc.buy_holding(
@@ -2825,6 +2919,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
         seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
         // Buy 100 on 2024-01-01, then sell all 100 on 2024-03-01 (closes the position).
@@ -2889,6 +2984,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         let schedule = svc
             .create_fee_schedule(
@@ -2926,6 +3022,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
         seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
 
         // Establish a holding of 100 units.
@@ -2994,6 +3091,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         svc.create_fee_schedule(
             &account.id,
@@ -3037,6 +3135,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         let err = svc
             .create_fee_schedule(
@@ -3069,6 +3168,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         let err = svc
             .create_fee_schedule(
@@ -3101,6 +3201,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         let err = svc
             .create_fee_schedule(
@@ -3137,6 +3238,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         svc.create_fee_schedule(
             &account.id,
@@ -3210,6 +3312,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         svc.create_fee_schedule(
             &account.id,
@@ -3286,6 +3389,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&svc, &account).await;
 
         svc.create_fee_schedule(
             &account.id,

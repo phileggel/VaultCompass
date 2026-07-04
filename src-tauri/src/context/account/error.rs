@@ -117,6 +117,9 @@ pub enum AccountError {
     /// No fee schedule found for the given (account, asset) pair (FEE-060).
     #[error("Fee schedule not found")]
     ScheduleNotFound,
+    /// The % management-fee mechanism is disabled on this account (FEE-077).
+    #[error("Management fees are disabled on this account")]
+    ManagementFeesDisabled,
 
     // --- Service-layer lookup / uniqueness / infrastructure ---
     /// No account exists with the requested ID.

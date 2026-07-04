@@ -74,6 +74,9 @@ pub struct Account {
     pub currency: String,
     /// How often this account is updated.
     pub update_frequency: UpdateFrequency,
+    /// Whether the % management-fee mechanism (one-off fees + schedules) is
+    /// available on this account (FEE-075). New accounts start disabled.
+    pub management_fees_enabled: bool,
     /// Holdings owned by this account. Populated only in aggregate load — excluded from bindings.
     #[serde(skip)]
     #[specta(skip)]
@@ -105,6 +108,7 @@ impl Account {
             name,
             currency,
             update_frequency,
+            management_fees_enabled: false, // FEE-075 — new accounts start disabled
             holdings: Vec::new(),
             transactions: Vec::new(),
             pending_changes: Vec::new(),
@@ -117,6 +121,7 @@ impl Account {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
     ) -> StdResult<Self, AccountError> {
         let name = name.trim().to_string();
         if name.is_empty() {
@@ -128,6 +133,7 @@ impl Account {
             name,
             currency,
             update_frequency,
+            management_fees_enabled,
             holdings: Vec::new(),
             transactions: Vec::new(),
             pending_changes: Vec::new(),
@@ -140,12 +146,14 @@ impl Account {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
     ) -> Self {
         Self {
             id,
             name,
             currency,
             update_frequency,
+            management_fees_enabled,
             holdings: Vec::new(),
             transactions: Vec::new(),
             pending_changes: Vec::new(),
@@ -159,6 +167,7 @@ impl Account {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
         holdings: Vec<Holding>,
         transactions: Vec<Transaction>,
     ) -> Self {
@@ -167,9 +176,20 @@ impl Account {
             name,
             currency,
             update_frequency,
+            management_fees_enabled,
             holdings,
             transactions,
             pending_changes: Vec::new(),
+        }
+    }
+
+    /// FEE-077 — fail-fast guard: the % management-fee mechanism must be enabled
+    /// on this account before a fee instrument can be created.
+    pub fn ensure_management_fees_enabled(&self) -> StdResult<(), AccountError> {
+        if self.management_fees_enabled {
+            Ok(())
+        } else {
+            Err(AccountError::ManagementFeesDisabled)
         }
     }
 
@@ -1300,6 +1320,7 @@ mod tests {
             "Test".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            true,
             Vec::new(),
             Vec::new(),
         )
@@ -1358,9 +1379,49 @@ mod tests {
             "  Trimmed  ".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualDay,
+            false,
         )
         .unwrap();
         assert_eq!(account.name, "Trimmed");
+    }
+
+    // FEE-075 — new accounts start with the % management-fee mechanism disabled
+    #[test]
+    fn new_account_has_management_fees_disabled() {
+        let account = Account::new(
+            "Fresh".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+        )
+        .unwrap();
+        assert!(!account.management_fees_enabled);
+    }
+
+    // FEE-077 — the guard passes when enabled and rejects when disabled
+    #[test]
+    fn ensure_management_fees_enabled_guards_the_flag() {
+        let enabled = Account::with_id(
+            "id-1".to_string(),
+            "Enabled".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+            true,
+        )
+        .unwrap();
+        assert!(enabled.ensure_management_fees_enabled().is_ok());
+
+        let disabled = Account::with_id(
+            "id-2".to_string(),
+            "Disabled".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+            false,
+        )
+        .unwrap();
+        assert!(matches!(
+            disabled.ensure_management_fees_enabled().unwrap_err(),
+            AccountError::ManagementFeesDisabled
+        ));
     }
 
     // R1, R2 — with_id rejects empty name after trim
@@ -1371,6 +1432,7 @@ mod tests {
             "  ".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         );
         assert!(result.is_err());
     }

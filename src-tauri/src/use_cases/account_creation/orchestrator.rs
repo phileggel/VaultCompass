@@ -34,6 +34,7 @@ impl AccountCreationUseCase {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
     ) -> StdResult<Account, AccountError> {
         // CSH-010 — the Cash Asset must exist before the Cash Holding references it (FK).
         self.asset_service
@@ -44,10 +45,23 @@ impl AccountCreationUseCase {
                 AccountError::DatabaseError
             })?;
         // Account row — unchanged create path (enforces ACC-001 / ACC-002 / ACC-003).
-        let account = self
+        let mut account = self
             .account_service
             .create(name, currency, update_frequency)
             .await?;
+        // FEE-075 — creation defaults to disabled; opt-in from the form flips it on.
+        if management_fees_enabled {
+            account = self
+                .account_service
+                .update(
+                    account.id.clone(),
+                    account.name.clone(),
+                    account.currency.clone(),
+                    account.update_frequency,
+                    true,
+                )
+                .await?;
+        }
         // CSH-012 — eager 0-balance Cash Holding.
         self.account_service.seed_cash_holding(&account.id).await?;
         Ok(account)
@@ -103,6 +117,7 @@ mod tests {
                 "Brokerage".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .expect("create");
@@ -128,6 +143,33 @@ mod tests {
         assert_eq!(average_price, 1_000_000);
     }
 
+    // FEE-075 — creation opt-in flips the flag on; the default stays off.
+    #[tokio::test]
+    async fn create_with_management_fees_opt_in_enables_the_flag() {
+        let pool = setup_pool().await;
+        let uc = make_uc(&pool);
+        let disabled = uc
+            .create(
+                "Plain".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(!disabled.management_fees_enabled);
+        let enabled = uc
+            .create(
+                "Funds".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                true,
+            )
+            .await
+            .unwrap();
+        assert!(enabled.management_fees_enabled);
+    }
+
     // CSH-011 — a second account in the same currency reuses the single Cash Asset,
     // each account getting its own Cash Holding.
     #[tokio::test]
@@ -139,6 +181,7 @@ mod tests {
             "A".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -146,6 +189,7 @@ mod tests {
             "B".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();

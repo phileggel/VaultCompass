@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, currency, update_frequency FROM accounts WHERE id = ?",
+  "query": "SELECT id, name, currency, update_frequency, management_fees_enabled FROM accounts",
   "describe": {
     "columns": [
       {
@@ -22,17 +22,23 @@
         "name": "update_frequency",
         "ordinal": 3,
         "type_info": "Text"
+      },
+      {
+        "name": "management_fees_enabled",
+        "ordinal": 4,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
+      false,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "8dbfc96eb80dcb8845b681fb3bc59ab9ef843bde1546141b86ab95d4b3557f72"
+  "hash": "4e7896754874e879bdf8706df9ed47f352a292fd7c4029274b95dbc0ac413f19"
 }

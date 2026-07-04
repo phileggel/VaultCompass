@@ -16,6 +16,9 @@ pub struct CreateAccountDTO {
     pub currency: String,
     /// Update frequency.
     pub update_frequency: UpdateFrequency,
+    /// Whether the % management-fee mechanism is enabled (FEE-075). New accounts
+    /// default to false; the creation form can opt in.
+    pub management_fees_enabled: bool,
 }
 
 /// Adds a new account, eagerly seeding its Cash Asset + 0-balance Cash Holding
@@ -26,6 +29,11 @@ pub async fn add_account(
     uc: State<'_, AccountCreationUseCase>,
     dto: CreateAccountDTO,
 ) -> Result<Account, AccountError> {
-    uc.create(dto.name, dto.currency, dto.update_frequency)
-        .await
+    uc.create(
+        dto.name,
+        dto.currency,
+        dto.update_frequency,
+        dto.management_fees_enabled,
+    )
+    .await
 }

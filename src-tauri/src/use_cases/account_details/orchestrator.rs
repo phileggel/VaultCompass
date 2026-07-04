@@ -881,6 +881,18 @@ mod tests {
         (account_svc, asset_svc)
     }
 
+    async fn enable_management_fees(svc: &AccountService, account: &Account) -> Account {
+        svc.update(
+            account.id.clone(),
+            account.name.clone(),
+            account.currency.clone(),
+            account.update_frequency,
+            true,
+        )
+        .await
+        .unwrap()
+    }
+
     async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
@@ -2015,6 +2027,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         let holding_repo = SqliteHoldingRepository::new(pool.clone());
         let mut asset_ids = Vec::new();
         for (name, reference) in [("Scheduled Fund", "SFD"), ("Plain Stock", "PLS")] {
@@ -3412,6 +3425,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         asset_svc.seed_cash_asset("EUR").await.unwrap();
         account_svc
             .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
@@ -3925,6 +3939,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         let asset = asset_svc
             .create_asset(CreateAssetDTO {
                 name: "Fee Stock".to_string(),
@@ -4016,6 +4031,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         // USD-denominated asset (currency differs from the account currency).
         let asset = asset_svc
             .create_asset(CreateAssetDTO {
@@ -4103,6 +4119,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         let asset = asset_svc
             .create_asset(CreateAssetDTO {
                 name: "No Price Stock".to_string(),
@@ -4190,6 +4207,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
         let asset = asset_svc
             .create_asset(CreateAssetDTO {
                 name: "As-Of Fee Stock".to_string(),

@@ -14,6 +14,7 @@ struct AccountRow {
     name: String,
     currency: String,
     update_frequency: String,
+    management_fees_enabled: i64,
 }
 
 impl From<AccountRow> for Account {
@@ -22,7 +23,13 @@ impl From<AccountRow> for Account {
             tracing::warn!(target: BACKEND, value = %row.update_frequency, "unknown update_frequency value, falling back to default");
             UpdateFrequency::default()
         });
-        Account::restore(row.id, row.name, row.currency, update_frequency)
+        Account::restore(
+            row.id,
+            row.name,
+            row.currency,
+            update_frequency,
+            row.management_fees_enabled != 0,
+        )
     }
 }
 
@@ -111,7 +118,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_all(&self) -> Result<Vec<Account>> {
         let rows = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, currency, update_frequency FROM accounts"#
+            r#"SELECT id, name, currency, update_frequency, management_fees_enabled FROM accounts"#
         )
         .fetch_all(&self.pool)
         .await
@@ -123,7 +130,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_by_id(&self, id: &str) -> Result<Option<Account>> {
         let row = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, currency, update_frequency FROM accounts WHERE id = ?"#,
+            r#"SELECT id, name, currency, update_frequency, management_fees_enabled FROM accounts WHERE id = ?"#,
             id
         )
         .fetch_optional(&self.pool)
@@ -136,7 +143,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn find_by_name(&self, name: &str) -> Result<Option<Account>> {
         let row = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, currency, update_frequency FROM accounts WHERE LOWER(name) = LOWER(?)"#,
+            r#"SELECT id, name, currency, update_frequency, management_fees_enabled FROM accounts WHERE LOWER(name) = LOWER(?)"#,
             name
         )
         .fetch_optional(&self.pool)
@@ -148,12 +155,15 @@ impl AccountRepository for SqliteAccountRepository {
 
     async fn create(&self, account: Account) -> Result<Account> {
         let update_freq_str = account.update_frequency.to_string();
+        let management_fees_enabled = account.management_fees_enabled as i64;
         sqlx::query!(
-            r#"INSERT INTO accounts (id, name, currency, update_frequency) VALUES (?, ?, ?, ?)"#,
+            r#"INSERT INTO accounts (id, name, currency, update_frequency, management_fees_enabled)
+               VALUES (?, ?, ?, ?, ?)"#,
             account.id,
             account.name,
             account.currency,
-            update_freq_str
+            update_freq_str,
+            management_fees_enabled
         )
         .execute(&self.pool)
         .await
@@ -164,11 +174,15 @@ impl AccountRepository for SqliteAccountRepository {
 
     async fn update(&self, account: Account) -> Result<Account> {
         let update_freq_str = account.update_frequency.to_string();
+        let management_fees_enabled = account.management_fees_enabled as i64;
         sqlx::query!(
-            r#"UPDATE accounts SET name = ?, currency = ?, update_frequency = ? WHERE id = ?"#,
+            r#"UPDATE accounts
+               SET name = ?, currency = ?, update_frequency = ?, management_fees_enabled = ?
+               WHERE id = ?"#,
             account.name,
             account.currency,
             update_freq_str,
+            management_fees_enabled,
             account.id
         )
         .execute(&self.pool)
@@ -190,7 +204,7 @@ impl AccountRepository for SqliteAccountRepository {
     async fn get_with_holdings_and_transactions(&self, id: &str) -> Result<Option<Account>> {
         let account_row = sqlx::query_as!(
             AccountRow,
-            r#"SELECT id, name, currency, update_frequency FROM accounts WHERE id = ?"#,
+            r#"SELECT id, name, currency, update_frequency, management_fees_enabled FROM accounts WHERE id = ?"#,
             id
         )
         .fetch_optional(&self.pool)
@@ -237,6 +251,7 @@ impl AccountRepository for SqliteAccountRepository {
             base.name,
             base.currency,
             base.update_frequency,
+            base.management_fees_enabled,
             holdings,
             transactions,
         )))

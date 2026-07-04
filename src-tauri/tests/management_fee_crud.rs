@@ -7,8 +7,8 @@
 /// quantity-adding sibling of the quantity-reducing fee deduction.
 use std::sync::Arc;
 use vault_compass_lib::context::account::{
-    AccountService, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
-    UpdateFrequency,
+    Account, AccountService, SqliteAccountRepository, SqliteHoldingRepository,
+    SqliteTransactionRepository, UpdateFrequency,
 };
 use vault_compass_lib::context::asset::{
     AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
@@ -23,6 +23,18 @@ use vault_compass_lib::use_cases::holding_transaction::HoldingTransactionUseCase
 
 fn micro(v: i64) -> i64 {
     v * 1_000_000
+}
+
+async fn enable_management_fees(svc: &AccountService, account: &Account) -> Account {
+    svc.update(
+        account.id.clone(),
+        account.name.clone(),
+        account.currency.clone(),
+        account.update_frequency,
+        true,
+    )
+    .await
+    .unwrap()
 }
 
 async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
@@ -113,6 +125,7 @@ async fn record_management_fee_does_not_create_asset_price_row() {
         )
         .await
         .unwrap();
+    let account = enable_management_fees(&ctx.account_service, &account).await;
 
     ctx.use_case
         .record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
@@ -199,6 +212,7 @@ async fn record_management_fee_performance_neutrality() {
         )
         .await
         .unwrap();
+    let account = enable_management_fees(&account_service, &account).await;
 
     uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
         .await

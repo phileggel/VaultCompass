@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, currency, update_frequency FROM accounts WHERE LOWER(name) = LOWER(?)",
+  "query": "SELECT id, name, currency, update_frequency, management_fees_enabled FROM accounts WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "name": "update_frequency",
         "ordinal": 3,
         "type_info": "Text"
+      },
+      {
+        "name": "management_fees_enabled",
+        "ordinal": 4,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -31,8 +36,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "517f4a4867df4b452fee8ae2536e0c76f27a9bbf80409f5f07727e517a5d6de6"
+  "hash": "3bf7e30589d7dd8823ce71e772c85c9d31b97c02a0be743270cd77ba9f0b0e95"
 }
