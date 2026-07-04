@@ -155,3 +155,11 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Symptom** — A read-only HTTP API returned access-denied for every request; the natural reading was "authentication required, get a key." Acquiring/sending a key changed nothing, because the gate keyed on the _request origin_ (IP/ASN allow-list), not on any credential. The same endpoint served data fine from a different network and rejected a valid key from a datacenter IP.
 
 **Mitigation** — Before concluding an API needs auth, probe it from the _actual deployment network_ (a tool call's egress IP may differ from the user's — `[[feedback-bash-egress-uses-user-network]]`-style), and test the keyed and keyless requests from the _same_ origin to isolate the variable. When the gate turns out to be origin-based and no key fixes it, the credential machinery is wasted complexity: prefer a provider whose documented JSON endpoint is permissive over scraping/auth gymnastics. Drove the Stooq→Yahoo migration (ADR-017): a stable keyless JSON endpoint replaced a whole BYOK feature.
+
+## L-009 — Font metrics differ between local and CI, so borderline flex layouts fail only in CI
+
+**First observed**: 2026-07-04 (account-details header overflow → "element click intercepted" in 3 E2E specs)
+
+**Symptom** — Repeated local headless E2E runs green; the same suite red on CI with WebDriver "element click intercepted" on buttons in a dense flex row. Same app, same window size, same xvfb wrapper. The variable was the runner's installed fonts: wider fallback glyph metrics pushed a borderline `whitespace-nowrap` stats block into overlapping the sibling button group — locally the same row fit by a few pixels.
+
+**Mitigation** — (1) Treat "element click intercepted" appearing across several unrelated specs as a layout-overflow signal, not per-spec flakiness — look for what the failing clicks share spatially (here: all targets lived in one header row). (2) Make dense rows wrap-tolerant (`flex-wrap` on the row and its groups) instead of relying on the current viewport fitting; nowrap text inside a `min-w-0` flex child overflows _over_ siblings rather than clipping. (3) Gate a release tag on the CI E2E run of the merge commit, not only on local E2E — text-metric-sensitive layouts are exactly the class of breakage only CI reveals.
