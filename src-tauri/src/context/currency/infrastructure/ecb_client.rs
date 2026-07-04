@@ -71,7 +71,7 @@ pub(crate) fn parse_ecb_snapshot(body: &str) -> Result<EurSnapshot> {
                         b"time" => {
                             date = Some(
                                 attribute
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .context("ECB time attribute decode failed")?
                                     .into_owned(),
                             );
@@ -79,14 +79,14 @@ pub(crate) fn parse_ecb_snapshot(body: &str) -> Result<EurSnapshot> {
                         b"currency" => {
                             currency = Some(
                                 attribute
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .context("ECB currency attribute decode failed")?
                                     .into_owned(),
                             );
                         }
                         b"rate" => {
                             let raw = attribute
-                                .unescape_value()
+                                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                 .context("ECB rate attribute decode failed")?;
                             let value = raw.parse::<f64>().context("ECB rate parse failed")?;
                             // Reject non-finite/non-positive values (e.g. "inf"/"nan",
