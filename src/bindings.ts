@@ -1831,6 +1831,12 @@ export type Event =
  */
 { type: "AssetPriceUpdated" } | 
 /**
+ * Progress of an in-flight price-fetch task (MKT-180): emitted once at task
+ * start (`done = 0`) and after each attempted asset, successful or skipped.
+ * The frontend drives the shell progress bar from it.
+ */
+{ type: "AssetPriceFetchProgress"; done: number; total: number } | 
+/**
  * A price-fetch task finished: `ok` assets were updated, `skipped` were not
  * (no data or fetch failure). Carries counts so the frontend can summarize
  * the outcome (MKT-119), plus the per-asset unpriced list so it can offer

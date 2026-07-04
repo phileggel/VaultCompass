@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccountDetailsResponse, HoldingDetail } from "@/bindings";
 import { accountMutationErrorToI18n } from "@/features/accounts/shared/presenter";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway, useCachedAssets } from "../gateway";
 import {
@@ -65,10 +66,16 @@ export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountD
   // AssetUpdated, AssetPriceUpdated, CurrencyRateUpdated, or FeeScheduleUpdated
   useEffect(() => {
     const unlistenPromise = accountDetailsGateway.subscribeToEvents((type) => {
+      // MKT-181 — while a bulk price fetch runs, per-asset AssetPriceUpdated
+      // events are coalesced: the view reloads once on AssetPriceFetchCompleted.
+      if (type === "AssetPriceUpdated" && useAppStore.getState().priceFetch.active) {
+        return;
+      }
       if (
         type === "TransactionUpdated" ||
         type === "AssetUpdated" ||
         type === "AssetPriceUpdated" ||
+        type === "AssetPriceFetchCompleted" ||
         type === "CurrencyRateUpdated" ||
         type === "FeeScheduleUpdated"
       ) {

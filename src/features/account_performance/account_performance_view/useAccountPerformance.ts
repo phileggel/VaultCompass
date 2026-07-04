@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AccountPerformanceResponse } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { getPerfViewMode, setPerfViewMode } from "@/lib/perfViewModeStorage";
+import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountPerformanceGateway } from "../gateway";
 import {
@@ -87,9 +88,14 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
   // PRF-060 — re-fetch on TransactionUpdated, AssetPriceUpdated, or AccountUpdated.
   useEffect(() => {
     const unlistenPromise = accountPerformanceGateway.subscribeToEvents((type) => {
+      // MKT-181 — coalesce per-asset events while a bulk price fetch runs.
+      if (type === "AssetPriceUpdated" && useAppStore.getState().priceFetch.active) {
+        return;
+      }
       if (
         type === "TransactionUpdated" ||
         type === "AssetPriceUpdated" ||
+        type === "AssetPriceFetchCompleted" ||
         type === "AccountUpdated"
       ) {
         fetchPerformance();

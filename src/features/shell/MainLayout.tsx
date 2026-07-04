@@ -5,6 +5,7 @@ import { Snackbar } from "@/ui/components";
 import { Content } from "./Content";
 import { useFeeGeneration } from "./fee_generation/useFeeGeneration";
 import { Header } from "./Header";
+import { PriceFetchProgressBar } from "./PriceFetchProgressBar";
 import { Sidebar } from "./Sidebar";
 
 interface MainLayoutProps {
@@ -38,6 +39,9 @@ export function MainLayout({ children }: MainLayoutProps) {
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
+
+        {/* MKT-180 — market-price fetch progress, visible on every page */}
+        <PriceFetchProgressBar />
 
         {/* R3, R4 — update banner between header and content */}
         <UpdateBanner data={updateBannerData} />

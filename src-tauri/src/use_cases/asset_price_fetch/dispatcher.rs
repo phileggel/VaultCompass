@@ -63,6 +63,10 @@ impl Dispatcher {
             // MKT-119 — tally the task outcome so the frontend can summarize it.
             let mut ok: u32 = 0;
             let mut skipped: u32 = 0;
+            // MKT-180 — announce the task and report progress after every attempt.
+            let total = scope.len() as u32;
+            self.event_bus
+                .publish(Event::AssetPriceFetchProgress { done: 0, total });
             // MKT-170/171 — one entry per skipped asset, for the manual-fill modal.
             let mut unpriced: Vec<UnpricedAsset> = Vec::with_capacity(scope.len());
             for (index, (asset, symbol)) in scope.into_iter().enumerate() {
@@ -116,6 +120,11 @@ impl Dispatcher {
                         );
                     }
                 }
+                // MKT-180 — one progress tick per attempted asset (ok or skipped).
+                self.event_bus.publish(Event::AssetPriceFetchProgress {
+                    done: ok + skipped,
+                    total,
+                });
             }
 
             // MKT-119/170 — task-completion signal carrying the outcome counts and

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AccountSummary } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountGateway } from "./gateway";
 import { accountMutationErrorToI18n } from "./shared/presenter";
@@ -52,10 +53,15 @@ export function useAccountSummaries(): UseAccountSummariesResult {
   // AssetUpdated covers asset currency changes that flip the same-currency filter.
   useEffect(() => {
     const unlistenPromise = accountGateway.subscribeToEvents((type) => {
+      // MKT-181 — coalesce per-asset events while a bulk price fetch runs.
+      if (type === "AssetPriceUpdated" && useAppStore.getState().priceFetch.active) {
+        return;
+      }
       if (
         type === "AccountUpdated" ||
         type === "AssetUpdated" ||
         type === "AssetPriceUpdated" ||
+        type === "AssetPriceFetchCompleted" ||
         type === "TransactionUpdated"
       ) {
         fetchSummaries();

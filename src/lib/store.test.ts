@@ -48,6 +48,8 @@ type CapturedEvent = {
     ok?: number;
     skipped?: number;
     unpriced?: UnpricedAssetFixture[];
+    done?: number;
+    total?: number;
   };
 };
 let capturedEventListener: ((event: CapturedEvent) => void) | null = null;
@@ -330,6 +332,43 @@ describe("store — unpricedAssets dismiss / clear action (MKT-177)", () => {
 
     // Slice must now be empty.
     expect(useAppStore.getState().unpricedAssets).toHaveLength(0);
+
+    cleanup();
+  });
+});
+
+describe("store — price-fetch progress (MKT-180)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEventListener = null;
+    useAppStore.setState({
+      isInitialized: false,
+      priceFetch: { active: false, done: 0, total: 0 },
+    });
+  });
+
+  it("tracks AssetPriceFetchProgress into the priceFetch slice (MKT-180)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await new Promise((r) => setTimeout(r, 0));
+
+    capturedEventListener?.({ payload: { type: "AssetPriceFetchProgress", done: 0, total: 5 } });
+    expect(useAppStore.getState().priceFetch).toEqual({ active: true, done: 0, total: 5 });
+
+    capturedEventListener?.({ payload: { type: "AssetPriceFetchProgress", done: 3, total: 5 } });
+    expect(useAppStore.getState().priceFetch).toEqual({ active: true, done: 3, total: 5 });
+
+    cleanup();
+  });
+
+  it("clears the slice on AssetPriceFetchCompleted (MKT-180)", async () => {
+    const cleanup = useAppStore.getState().init();
+    await new Promise((r) => setTimeout(r, 0));
+
+    capturedEventListener?.({ payload: { type: "AssetPriceFetchProgress", done: 2, total: 2 } });
+    capturedEventListener?.({
+      payload: { type: "AssetPriceFetchCompleted", ok: 2, skipped: 0, unpriced: [] },
+    });
+    expect(useAppStore.getState().priceFetch).toEqual({ active: false, done: 0, total: 0 });
 
     cleanup();
   });

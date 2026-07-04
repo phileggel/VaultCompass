@@ -345,6 +345,10 @@ This section lets the user hand-enter prices for the assets a fetch task could n
 
 **MKT-179 — Reactivity after a manual fill (frontend + backend)**: Each successful per-row record (MKT-175) publishes `AssetPriceUpdated` (MKT-026), so the Account Details and dashboard views re-fetch and reflect the newly entered price and its derived values, consistent with MKT-036. No additional coordination is required from the modal.
 
+**MKT-180 — Fetch progress in the shell (backend + frontend)**: The fetch task publishes `AssetPriceFetchProgress { done, total }` — once at task start (`done = 0`, `total` = scope size) and once after each attempted asset, successful or skipped (`done` = attempts so far). The frontend tracks the in-flight state in the global store and renders a thin determinate progress bar in the shell, below the header and visible on every page, while a fetch is active. `AssetPriceFetchCompleted` (MKT-119) clears the state and hides the bar.
+
+**MKT-181 — Coalesced view refresh during a bulk fetch (frontend)**: While a fetch task is in flight (per the MKT-180 store state), the views that re-fetch on `AssetPriceUpdated` (MKT-036 — account details, account performance, account summaries) suppress those per-asset re-fetches and reload once on `AssetPriceFetchCompleted`. Outside an active fetch, single `AssetPriceUpdated` events (manual price entry, manual-fill modal per MKT-179) keep triggering an immediate re-fetch.
+
 ---
 
 ## Workflow

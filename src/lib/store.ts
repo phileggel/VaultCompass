@@ -41,6 +41,10 @@ interface AppState {
   // Assets a fetch task could not price (MKT-170); drives the manual-fill modal.
   unpricedAssets: UnpricedAsset[];
 
+  // MKT-180 — in-flight price-fetch progress; drives the shell progress bar and
+  // the MKT-181 re-fetch coalescing in the view hooks.
+  priceFetch: { active: boolean; done: number; total: number };
+
   // Loading states
   isLoadingAssets: boolean;
   isLoadingCategories: boolean;
@@ -73,6 +77,7 @@ export const useAppStore = create<AppState>((set, get) => {
     categories: [],
     accounts: [],
     unpricedAssets: [],
+    priceFetch: { active: false, done: 0, total: 0 },
     isLoadingAssets: false,
     isLoadingCategories: false,
     isLoadingAccounts: false,
@@ -163,7 +168,14 @@ export const useAppStore = create<AppState>((set, get) => {
         const payload = event.payload;
         // The global store is the app's single always-on event sink, so a
         // launch-time fetch-failure snackbar surfaces regardless of the open view.
+        // MKT-180 — track in-flight fetch progress for the shell progress bar.
+        if (payload.type === "AssetPriceFetchProgress") {
+          set({ priceFetch: { active: true, done: payload.done, total: payload.total } });
+          return;
+        }
         if (payload.type === "AssetPriceFetchCompleted") {
+          // MKT-180 — the task is over; hide the progress bar.
+          set({ priceFetch: { active: false, done: 0, total: 0 } });
           // MKT-172/173 — each completed fetch refreshes the unpriced list. A
           // non-empty list opens the manual-fill modal and supersedes the MKT-145
           // snackbar; an empty list clears any stale modal and lets the snackbar

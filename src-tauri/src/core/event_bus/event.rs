@@ -19,6 +19,15 @@ pub enum Event {
     TransactionUpdated,
     /// A market price was recorded or updated for an asset (MKT-026)
     AssetPriceUpdated,
+    /// Progress of an in-flight price-fetch task (MKT-180): emitted once at task
+    /// start (`done = 0`) and after each attempted asset, successful or skipped.
+    /// The frontend drives the shell progress bar from it.
+    AssetPriceFetchProgress {
+        /// Assets attempted so far (successful + skipped).
+        done: u32,
+        /// Total assets in the fetch scope.
+        total: u32,
+    },
     /// A price-fetch task finished: `ok` assets were updated, `skipped` were not
     /// (no data or fetch failure). Carries counts so the frontend can summarize
     /// the outcome (MKT-119), plus the per-asset unpriced list so it can offer

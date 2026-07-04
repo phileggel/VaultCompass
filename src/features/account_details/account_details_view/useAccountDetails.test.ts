@@ -242,6 +242,37 @@ describe("useAccountDetails — market price events (MKT)", () => {
 
     expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
   });
+
+  // MKT-181 — per-asset price events are coalesced while a bulk fetch is active;
+  // the view reloads once on AssetPriceFetchCompleted.
+  it("MKT-181 — skips AssetPriceUpdated during an active fetch, reloads on completion", async () => {
+    const { useAppStore } = await import("@/lib/store");
+    let capturedCallback: ((type: string) => void) | null = null;
+    const { accountDetailsGateway } = await import("../gateway");
+    (accountDetailsGateway.subscribeToEvents as ReturnType<typeof vi.fn>).mockImplementation(
+      vi.fn((cb: (type: string) => void) => {
+        capturedCallback = cb;
+        return Promise.resolve(() => {});
+      }),
+    );
+    mockGetAccountDetails.mockResolvedValue({ status: "ok", data: makeResponse() });
+
+    useAppStore.setState({ priceFetch: { active: true, done: 1, total: 3 } });
+    renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    const initialCalls = mockGetAccountDetails.mock.calls.length;
+
+    await act(async () => {
+      capturedCallback?.("AssetPriceUpdated");
+    });
+    expect(mockGetAccountDetails.mock.calls.length).toBe(initialCalls);
+
+    useAppStore.setState({ priceFetch: { active: false, done: 0, total: 0 } });
+    await act(async () => {
+      capturedCallback?.("AssetPriceFetchCompleted");
+    });
+    expect(mockGetAccountDetails.mock.calls.length).toBe(initialCalls + 1);
+  });
 });
 
 // ---------------------------------------------------------------------------

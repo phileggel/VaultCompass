@@ -391,6 +391,7 @@
     "fetch_no_holdings": "Aucune position à actualiser.",
     "fetch_completed_partial": "{{ok}} mis à jour · {{skipped}} en échec",
     "fetch_completed_failed": "Échec de la mise à jour des prix ({{skipped}})",
+    "fetch_progress_label": "Actualisation des cours… ({{done}}/{{total}})",
     "source_manual": "Manuel",
     "source_yahoo": "Yahoo Finance",
     "staleness_today": "Mis à jour aujourd'hui",

@@ -7,7 +7,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
 
 ## Task list
 
-### T1 — Market-price refresh: shell progress indicator (+ coalesced refreshes) 🔎
+### T1 — Market-price refresh: shell progress indicator (+ coalesced refreshes) ✅
 
 - **1a (required)**: progress indicator mounted in the shell, visible everywhere
   while market prices refresh.
