@@ -41,6 +41,7 @@ export function EditAccountModal({ isOpen, onClose, account }: EditAccountModalP
 
   return (
     <Dialog
+      id="edit-account-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("account.edit_modal_title")}

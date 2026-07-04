@@ -16,7 +16,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
   const currentVersion = useAppStore((state) => state.appVersion);
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={t("about.title")}>
+    <Dialog id="about-dialog" isOpen={isOpen} onClose={onClose} title={t("about.title")}>
       <div className="flex flex-col gap-6 py-2">
         <p className="text-sm text-m3-on-surface-variant leading-relaxed">
           {t("about.description")}

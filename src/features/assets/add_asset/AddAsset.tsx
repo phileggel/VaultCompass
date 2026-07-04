@@ -71,6 +71,7 @@ export function AddAssetModal({ isOpen, onClose, prefill, onBack, onSuccess }: A
 
   return (
     <Dialog
+      id="add-asset-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("asset.add_modal_title")}

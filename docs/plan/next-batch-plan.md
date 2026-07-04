@@ -99,7 +99,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
   checked after the change.
 - Open point → user question: which convention wins.
 
-### T8 — Techdebt: Dialog stable F25 ids ⬜
+### T8 — Techdebt: Dialog stable F25 ids ✅
 
 - `Dialog.tsx` surface (line 54) gets an `id` prop; the close buttons in
   `Dialog.tsx:72` **and** `FormModal.tsx:46` (both use

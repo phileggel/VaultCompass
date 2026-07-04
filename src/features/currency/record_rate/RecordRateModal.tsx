@@ -66,6 +66,7 @@ export function RecordRateModal({
 
   return (
     <Dialog
+      id="record-rate-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={
@@ -176,6 +177,7 @@ export function DeleteRateConfirmation({
 
   return (
     <Dialog
+      id="delete-rate-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("currency.delete_rate_title")}

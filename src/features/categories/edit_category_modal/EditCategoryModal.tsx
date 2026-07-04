@@ -37,6 +37,7 @@ export function EditCategoryModal({ isOpen, onClose, category }: EditCategoryMod
 
   return (
     <Dialog
+      id="edit-category-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("category.edit_modal_title")}

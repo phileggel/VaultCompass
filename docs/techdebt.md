@@ -91,14 +91,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-24 — Dialog dialog/close-button lack stable F25 ids
-
-- Found by: reviewer-frontend (during Dialog viewport-clip fix review)
-- Where: `src/ui/components/modal/Dialog.tsx:54` (role="dialog" surface), `src/ui/components/modal/Dialog.tsx:69` (close button uses `data-testid="modal-close-btn"`)
-- Context: branch `fix/e2e-navigate-click-intercept` @ `148aed1`
-- Severity: 🔵
-- Observation: F25 mandates stable `id` attributes on dialog containers and prefers `id` over `data-testid` for E2E selectors. Dialog's `role="dialog"` surface has no `id`, and the close button is selectable only via `data-testid="modal-close-btn"`. Migration would touch every Dialog consumer (8+ feature modals) plus the `dismissLeftoverModal` E2E helper which queries the testid — multi-file fanout outside any single fix's scope.
-
 ## 2026-05-30 — Row-level "edit asset" affordance is mouse-only
 
 - Found by: reviewer-frontend

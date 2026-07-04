@@ -45,6 +45,7 @@ export function DeclarePairModal({ isOpen, onClose, onSuccess }: DeclarePairModa
 
   return (
     <Dialog
+      id="declare-pair-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("currency.declare_pair_title")}

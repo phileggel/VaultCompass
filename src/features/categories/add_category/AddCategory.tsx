@@ -34,6 +34,7 @@ export function AddCategoryModal({ isOpen, onClose }: AddCategoryModalProps) {
 
   return (
     <Dialog
+      id="add-category-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("category.add_modal_title")}

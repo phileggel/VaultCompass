@@ -85,6 +85,7 @@ export function WebLookupModal({ isOpen, onClose, prefillName, onSuccess }: WebL
 
   return (
     <Dialog
+      id="web-lookup-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("asset.web_lookup.title")}

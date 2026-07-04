@@ -43,7 +43,7 @@ export function FormModal({
           type="button"
           onClick={onClose}
           aria-label={t("action.close")}
-          data-testid="modal-close-btn"
+          id="modal-close-btn"
           className="p-1 hover:bg-neutral-20 rounded-full transition-colors"
         >
           <X size={20} className="text-neutral-70" />

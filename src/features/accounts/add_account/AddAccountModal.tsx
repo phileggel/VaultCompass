@@ -40,6 +40,7 @@ export function AddAccountModal({ isOpen, onClose }: AddAccountModalProps) {
 
   return (
     <Dialog
+      id="add-account-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("account.add_modal_title")}

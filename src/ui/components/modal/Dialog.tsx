@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../button";
 
 interface DialogProps {
+  /** F25 — stable id for the dialog surface, targetable from E2E. */
+  id?: string;
   isOpen: boolean;
   onClose: () => void;
   title: React.ReactNode;
@@ -15,6 +17,7 @@ interface DialogProps {
 }
 
 export function Dialog({
+  id,
   isOpen,
   onClose,
   title,
@@ -52,6 +55,7 @@ export function Dialog({
 
       {/* Dialog Surface */}
       <div
+        id={id}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -69,7 +73,7 @@ export function Dialog({
               type="button"
               onClick={onClose}
               aria-label={t("action.close")}
-              data-testid="modal-close-btn"
+              id="modal-close-btn"
               className="p-2 hover:bg-m3-on-surface/5 rounded-full text-m3-on-surface-variant transition-colors"
             >
               <X size={20} />
@@ -130,7 +134,13 @@ export function ConfirmationDialog({
   );
 
   return (
-    <Dialog isOpen={isOpen} onClose={onCancel} title={title} actions={actions}>
+    <Dialog
+      id={confirmId ? `${confirmId}-dialog` : undefined}
+      isOpen={isOpen}
+      onClose={onCancel}
+      title={title}
+      actions={actions}
+    >
       <p className="text-m3-on-surface-variant leading-relaxed">{message}</p>
     </Dialog>
   );

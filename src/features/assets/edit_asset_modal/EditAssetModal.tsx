@@ -65,6 +65,7 @@ export function EditAssetModal({ isOpen, onClose, asset, focusField }: EditAsset
 
   return (
     <Dialog
+      id="edit-asset-dialog"
       isOpen={isOpen}
       onClose={onClose}
       title={t("asset.edit_modal_title")}

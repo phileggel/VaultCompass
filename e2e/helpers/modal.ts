@@ -10,7 +10,7 @@ import { $ } from "@wdio/globals";
  * than WSLg's passthrough display).
  */
 export async function dismissLeftoverModal(): Promise<void> {
-  const closeBtn = await $('[data-testid="modal-close-btn"]');
+  const closeBtn = await $("#modal-close-btn");
   if (!(await closeBtn.isExisting())) return;
   try {
     await closeBtn.click();

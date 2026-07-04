@@ -57,7 +57,7 @@ describe("open_balance", () => {
 
   // Navigate to Account Details and dismiss any leftover modal before each test.
   beforeEach(async () => {
-    const closeBtn = await $('[data-testid="modal-close-btn"]');
+    const closeBtn = await $("#modal-close-btn");
     if (await closeBtn.isExisting()) {
       // ModalContainer handles Escape and closes the modal — no click needed.
       await browser.keys(["Escape"]);
