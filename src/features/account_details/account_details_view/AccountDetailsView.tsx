@@ -71,8 +71,11 @@ export function AccountDetailsView() {
           {view.isLoading ? (
             <div className="h-4 w-32 bg-m3-surface-variant rounded animate-pulse" />
           ) : view.summary ? (
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4 min-w-0">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              {/* flex-wrap — the stats + action buttons can overflow the window width
+                  on narrow viewports/fonts; wrapping keeps every button clickable
+                  instead of letting nowrap stats overlap them. */}
+              <div className="flex items-center gap-4 min-w-0 flex-wrap">
                 {/* Read-only "holdings as of a past date" selector. Leads the
                     header, label-less (named via aria-label, F24). Picking a past
                     date switches the page into the read-only as-of view; clearing
@@ -120,7 +123,7 @@ export function AccountDetailsView() {
               </div>
               {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
               {/* ACD-036 — header actions: big square icon buttons, name shown as tooltip */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* PRF-010 — per-account "Performance" entry point (navigates via router path) */}
                 <IconButton
                   id="account-details-performance"
