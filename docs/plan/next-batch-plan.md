@@ -86,7 +86,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
   `useAppStore.setState`). Runs **after** T2/T3/T5 so one capture covers the
   new columns too. Closes the `docs/todo.md` entry.
 
-### T7 — Techdebt: unify date display style 🔎
+### T7 — Techdebt: unify date display style ✅
 
 - **Analysis**: three styles today — `formatIsoDateNumeric`
   (`src/ui/format/date.ts`, used by `TransactionTable.tsx:95`), short-month

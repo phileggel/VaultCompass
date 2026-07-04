@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CurrencyRate } from "@/bindings";
 import { Button } from "@/ui/components/button/Button";
+import { formatIsoDateNumeric } from "@/ui/format/date";
 import { DeclarePairModal } from "../declare_pair/DeclarePairModal";
 import { DeleteRateConfirmation, RecordRateModal } from "../record_rate/RecordRateModal";
 import { formatRateMicros, formatRateSource } from "../shared/presenter";
@@ -9,7 +10,7 @@ import { useCurrencyRatesView } from "./useCurrencyRatesView";
 
 /** FXR-050/051 — Currency Rates view: pair list with drill-in to rate history. */
 export function CurrencyRatesView() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     isLoading,
     error,
@@ -156,7 +157,9 @@ export function CurrencyRatesView() {
                     className="m3-tr"
                     data-testid={`rate-row-${rateKey}`}
                   >
-                    <td className="m3-td">{rate.date}</td>
+                    <td className="m3-td tabular-nums">
+                      {formatIsoDateNumeric(rate.date, i18n.language)}
+                    </td>
                     <td className="m3-td text-right tabular-nums">{formatRateMicros(rate.rate)}</td>
                     <td className="m3-td text-right text-xs text-m3-on-surface-variant">
                       {t(formatRateSource(rate.source) ?? "")}

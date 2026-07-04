@@ -115,14 +115,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Severity: 🟡
 - Observation: `compute_current_ytd_pct` (called once per account by `get_account_summaries`) pre-resolves FX rates for every monthly/yearly period-end from the account's earliest date to today, but the YTD computation only consumes two dates (today + prior 31 Dec). For a long-lived account with foreign holdings this is O(months × foreign currencies) unnecessary rate lookups per summary row, multiplied across all accounts on the list. Correctness is unaffected (the two needed dates are always in the set). A targeted `load_rate_map_for_dates(&[today, prior_dec_31])` would bound it. Accepted at current scale per the ACC-024 dependency note; revisit if account/transaction volume grows.
 
-## 2026-06-21 — Inconsistent date display style across the app (fr/us)
-
-- Found by: manual
-- Where: `src` — date-rendering surfaces; confirmed sites: `features/transactions/transaction_list/TransactionListPage.tsx:226` (locale-numeric), `features/account_details/price_history/PriceHistoryModal.tsx:144` + `features/account_details/account_details_view/ClosedHoldingRow.tsx:39` (short-month via `account_details/shared/formatDate.ts`), `features/currency/currency_rates_view/CurrencyRatesView.tsx:159` (raw ISO `{rate.date}`)
-- Context: branch `fix/datefield-input-typing` @ `6d1682b`
-- Severity: 🟡
-- Observation: Three different date-display styles coexist with no single audited convention — locale-numeric (14/06/2026) in the transaction journal, short-month (14 juin 2026) in price-history/closed-holdings, and raw ISO (2026-06-14, US-looking on a fr machine) in the currency rates table. The two helpers (`ui/format/date.ts` numeric vs `account_details/shared/formatDate.ts` short-month) also live in different buckets, and some surfaces bypass both.
-
 ## 2026-06-21 — Semantic M3 color tokens repurposed for financial polarity
 
 - Found by: reviewer-frontend (journal-bank-statement review)

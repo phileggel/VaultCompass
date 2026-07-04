@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "@/ui/components/button/IconButton";
-import { formatIsoDate } from "../shared/formatDate";
+import { formatIsoDateNumeric } from "@/ui/format/date";
 import { PnlCell } from "../shared/PnlCell";
 import type { ClosedHoldingRowViewModel } from "../shared/presenter";
 
@@ -42,7 +42,7 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
         <PnlCell value={row.totalRevenues} raw={row.totalRevenuesRaw} />
       </td>
       <td className="m3-td text-right text-m3-on-surface-variant">
-        {formatIsoDate(row.lastSoldDate, i18n.language)}
+        {formatIsoDateNumeric(row.lastSoldDate, i18n.language)}
       </td>
       {/* ACD-049 — inspect action only; Buy/Sell omitted for closed positions */}
       <td className="m3-td">

@@ -6,8 +6,8 @@ import { logger } from "@/lib/logger";
 import { patchModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
+import { formatIsoDateNumeric } from "@/ui/format/date";
 import { accountDetailsGateway } from "../gateway";
-import { formatIsoDate } from "../shared/formatDate";
 import { isCashAsset, priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
@@ -259,7 +259,7 @@ export function useAccountDetailsView(accountId: string) {
     // As-of (read-only past-date valuation)
     asOfDate,
     // As-of date formatted in the user's locale, for the read-only banner (F5).
-    asOfDateFormatted: formatIsoDate(asOfDate, i18n.language),
+    asOfDateFormatted: formatIsoDateNumeric(asOfDate, i18n.language),
     // Date shown in the selector: the chosen past date, or "" in the live view so
     // the field renders its "Today" placeholder instead of the literal current date.
     asOfDisplayDate: isAsOf ? asOfDate : "",

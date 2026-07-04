@@ -9,8 +9,8 @@ import { IconButton } from "@/ui/components/button/IconButton";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { ListModal } from "@/ui/components/modal/ListModal";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
+import { formatIsoDateNumeric } from "@/ui/format/date";
 import { PriceModal } from "../account_details_view/PriceModal";
-import { formatIsoDate } from "../shared/formatDate";
 import { formatSource } from "../shared/presenter";
 import type { PriceableAsset } from "../shared/types";
 import { EditPriceForm } from "./EditPriceForm";
@@ -152,7 +152,7 @@ export function PriceHistoryModal({
                 const sourceLabel = formatSource(row.source);
                 return (
                   <tr key={row.date} className="m3-tr">
-                    <td className="m3-td">{formatIsoDate(row.date, i18n.language)}</td>
+                    <td className="m3-td">{formatIsoDateNumeric(row.date, i18n.language)}</td>
                     <td className="m3-td text-right tabular-nums">
                       {microToFormattedPrice(row.price)}
                     </td>
@@ -220,7 +220,7 @@ export function PriceHistoryModal({
           onConfirm={handleDeleteConfirm}
           title={t("price_history.delete_confirm_title")}
           message={t("price_history.delete_confirm_message", {
-            date: formatIsoDate(deleteTarget.date, i18n.language),
+            date: formatIsoDateNumeric(deleteTarget.date, i18n.language),
           })}
           confirmLabel={t("action.delete")}
           cancelLabel={t("action.cancel")}
