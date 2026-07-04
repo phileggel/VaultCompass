@@ -2,10 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (frontend) — Visual-proof the Management Fees column + header total
-
-The FEE feature's visual-proof (PR for `feat/quantity-fee`) captured the two new modals (`ManagementFeeModal`, `FeeScheduleModal`) in light + dark, but not the in-view changes — the `Management Fees` column in `HoldingRow.tsx` and the `total_management_fees` header figure in `AccountDetailsView.tsx`. Those render only inside a TanStack-router + zustand-store container, so capturing them needs the container preview harness (mockIPC + `createMemoryHistory` + `useAppStore.setState`) described in the visual-proof container-component note. Both surfaces are covered by unit tests; this is a screenshot-coverage gap, not a correctness one. Capture them next time `account_details_view` is touched.
-
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.

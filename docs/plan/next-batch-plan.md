@@ -79,7 +79,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
   reuse `get_fee_schedule` per row (N+1 — rejected). Show only `active` schedules.
 - Open point → user question: display placement/format.
 
-### T6 — Visual-proof the Management Fees column + header total (todo closure) ⬜
+### T6 — Visual-proof the Management Fees column + header total (todo closure) ✅
 
 - Capture `HoldingRow` Management Fees column + `total_management_fees` header
   via the container preview harness (mockIPC + `createMemoryHistory` +
