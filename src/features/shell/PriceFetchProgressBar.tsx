@@ -15,27 +15,32 @@ export function PriceFetchProgressBar() {
 
   const percent = priceFetch.total > 0 ? Math.round((priceFetch.done / priceFetch.total) * 100) : 0;
 
+  // Overlaid on the content edge (absolute in a zero-height anchor) so showing or
+  // hiding the bar never shifts the page layout — a mid-fetch reflow made CI
+  // WebDriver clicks land on moved elements ("element click intercepted").
   return (
-    <div
-      id="price-fetch-progress"
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={percent}
-      aria-label={t("mkt.fetch_progress_label", {
-        done: priceFetch.done,
-        total: priceFetch.total,
-      })}
-      title={t("mkt.fetch_progress_label", {
-        done: priceFetch.done,
-        total: priceFetch.total,
-      })}
-      className="h-1 w-full bg-m3-surface-variant"
-    >
+    <div className="relative z-20 h-0">
       <div
-        className="h-full bg-m3-primary transition-[width] duration-300"
-        style={{ width: `${percent}%` }}
-      />
+        id="price-fetch-progress"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-label={t("mkt.fetch_progress_label", {
+          done: priceFetch.done,
+          total: priceFetch.total,
+        })}
+        title={t("mkt.fetch_progress_label", {
+          done: priceFetch.done,
+          total: priceFetch.total,
+        })}
+        className="absolute inset-x-0 top-0 h-1 bg-m3-surface-variant"
+      >
+        <div
+          className="h-full bg-m3-primary transition-[width] duration-300"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
     </div>
   );
 }
