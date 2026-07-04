@@ -82,6 +82,9 @@ crediting is available on every account.
 
 ## Out of scope (v1)
 
+- Per-asset interest-bearing eligibility (`interest_bearing` opt-in flag
+  filtering the asset selector — the cash line plus cash-like fund lines such as
+  a "fonds en euros"). Tracked in `docs/todo.md`; v1 lists every held asset.
 - Recurring interest schedules (the rate varies per year; a one-off entry per
   crediting is the workflow). Revisit if a fixed-rate use case appears.
 - A dedicated "interest received" reporting figure (column/total). The journal

@@ -109,6 +109,21 @@
 | -------------------- | --------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `record_free_shares` | `FreeSharesDTO` | `Transaction` | `AccountNotFound { account_id }` (FSD-011), `AssetNotFound` (FSD-011), `AssetNotHeld` (FSD-011 — no active holding, `quantity = 0` or never held), `FreeSharesOnCashAsset` (FSD-011 — asset is a Cash Asset), `QuantityNotPositive` (FSD-021), `InvalidDate` (FSD-021), `DateInFuture` (FSD-021), `DateTooOld` (FSD-021), `DatabaseError` |
 
+### Interest Credit
+
+> `record_interest` records a zero-cost quantity credit attributed to the **credited asset** —
+> the crediting mirror of the fee deduction, reusing the FreeShares mechanics (INT-024): the
+> holding's `quantity` rises, the cost basis is unchanged (average cost dilutes), and **no cash
+> moves** — except that the account's **Cash Asset is a valid target** (INT-023): crediting it
+> raises the cash balance by `quantity` with no Deposit recorded. The amount is entered as
+> exactly one of `percent_micros` (of the holding/balance as of the date, INT-022) or
+> `quantity_micros` (INT-021). Edit / delete reuse `correct_transaction` / `cancel_transaction`
+> (INT-040/041) — a correction that shrinks the credit can surface `CascadingOversell` on replay.
+
+| Command           | Args                | Return        | Errors                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | ------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record_interest` | `RecordInterestDTO` | `Transaction` | `AccountNotFound { account_id }` (INT-011), `AssetNotFound` (INT-011), `AssetNotHeld` (INT-011 — non-cash asset with no active holding; the Cash Asset is exempt), `InterestAmountInvalid` (INT-021 — both or neither of percent/quantity), `PercentageNotPositive` / `PercentageAboveHundred` (INT-021), `QuantityNotPositive` (INT-021/022), `InvalidDate` / `DateInFuture` / `DateTooOld` (INT-021), `DatabaseError` |
+
 ### Management Fee
 
 > `record_management_fee` records a one-off quantity-reducing fee attributed to the **charged
@@ -469,3 +484,4 @@ struct UpdateFeeScheduleDTO {
 - 2026-06-16 — Amended by `account` spec (ACC-023/024, accounts-overview metrics): `AccountSummary` gains `total_unrealized_pnl: Option<i64>` (account-wide unrealized P&L, MKT-040 algorithm) and `ytd_performance_pct: Option<i64>` (year-to-date performance reusing PRF-034). No new command — `get_account_summaries` returns the enriched rows.
 - 2026-06-11 — Added by `free-share-distribution` spec: `record_free_shares` (+ `FreeSharesDTO`); `TransactionType::FreeShares` variant + its `Transaction` packing convention; FSD-040/041 cross-refs on `correct_transaction`/`cancel_transaction`'s `CascadingOversell`; edit/delete reuse those commands.
 - 2026-06-30 — Added by `management-fee-deduction` spec: `record_management_fee`, `create_fee_schedule`, `update_fee_schedule`, `delete_fee_schedule`, `get_fee_schedule`, `apply_due_fee_deductions` (+ `ManagementFeeDTO`, `FeeFrequency`, `FeeSchedule`, `CreateFeeScheduleDTO`, `UpdateFeeScheduleDTO`); `TransactionType::ManagementFee` variant; `HoldingDetail.management_fees` + `AccountDetailsResponse.total_management_fees`; `FeeScheduleUpdated` event (published + Account Details subscribes); FEE-063 cross-ref on `correct_transaction`'s `CascadingOversell`; edit/delete of a deduction reuse `correct_transaction`/`cancel_transaction`.
+- 2026-07-04 — Added by `interest-credit` spec: `record_interest` (+ `RecordInterestDTO`, `InterestError`); `TransactionType::Interest` variant + its zero-cost `Transaction` packing (INT-024); the Cash Asset as a valid target (INT-023); `AccountError::InterestAmountInvalid`; INT-040/041 cross-refs — edit/delete reuse `correct_transaction`/`cancel_transaction`. Same session: `add_account`/`update_account` DTOs gain `management_fees_enabled` (FEE-075) and `get_account_details` gains `HoldingDetail.market_value` + `fee_rate_percent_micros` and `AccountDetailsResponse.total_net_cash_input` (ACD-052/053, FEE-074).

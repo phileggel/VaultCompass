@@ -2636,6 +2636,71 @@ mod tests {
         );
     }
 
+    // INT-025/050 — record_interest publishes TransactionUpdated on success; the
+    // account has management_fees_enabled = false, proving the interest path is
+    // independent of the fee parameter (INT-050).
+    #[tokio::test]
+    async fn int_025_record_interest_publishes_transaction_updated_event() {
+        use std::time::Duration;
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let svc = AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        let (_, asset_id) = setup(&pool).await;
+        // INT-050 — fees stay disabled; interest must work regardless.
+        let account = svc
+            .create(
+                "INT Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(&pool, &svc, &account.id, "EUR").await;
+        svc.buy_holding(
+            &account.id,
+            asset_id.clone(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Subscribe AFTER setup so only the interest event is observed.
+        let mut rx = bus.subscribe();
+        svc.record_interest(
+            &account.id,
+            asset_id.clone(),
+            "2024-06-15".to_string(),
+            None,
+            Some(micro(1)),
+            None,
+        )
+        .await
+        .unwrap();
+
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("TransactionUpdated event not received within 200ms")
+            .expect("watch sender dropped");
+        use crate::core::event_bus::Event;
+        assert_eq!(
+            *rx.borrow(),
+            Event::TransactionUpdated,
+            "record_interest must publish TransactionUpdated (INT-025)"
+        );
+    }
+
     // FSD-022 — record_free_shares propagates save failure as Application(DatabaseError).
     #[tokio::test]
     async fn fsd_022_record_free_shares_returns_database_error_when_save_fails() {

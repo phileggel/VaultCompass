@@ -422,4 +422,42 @@ describe("AccountPerformancePage", () => {
       vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mock.calls.length,
     ).toBeGreaterThan(callsBefore);
   });
+
+  // MKT-181 — per-asset price events are coalesced while a bulk fetch is active;
+  // the view reloads once on AssetPriceFetchCompleted.
+  it("skips AssetPriceUpdated during an active fetch, reloads on completion (MKT-181)", async () => {
+    const { useAppStore } = await import("@/lib/store");
+    let capturedCallback: ((type: string) => void) | null = null;
+    vi.mocked(gateway.accountPerformanceGateway.subscribeToEvents).mockImplementation(
+      (cb: (type: string) => void) => {
+        capturedCallback = cb;
+        return Promise.resolve(() => {});
+      },
+    );
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse(),
+    });
+
+    useAppStore.setState({ priceFetch: { active: true, done: 1, total: 3 } });
+    render(<AccountPerformancePage />);
+    await screen.findByTestId("account-performance-table");
+    const callsBefore = vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mock
+      .calls.length;
+
+    await act(async () => {
+      capturedCallback?.("AssetPriceUpdated");
+    });
+    expect(
+      vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mock.calls.length,
+    ).toBe(callsBefore);
+
+    useAppStore.setState({ priceFetch: { active: false, done: 0, total: 0 } });
+    await act(async () => {
+      capturedCallback?.("AssetPriceFetchCompleted");
+    });
+    expect(
+      vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mock.calls.length,
+    ).toBe(callsBefore + 1);
+  });
 });

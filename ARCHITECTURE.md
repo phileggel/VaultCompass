@@ -88,15 +88,16 @@ lib.rs                composition root — wires services, use cases, dispatcher
 
 Backend publishes events on every state change. Frontend listens via a single `events.event.listen()` subscription in `src/lib/store.ts:init()` and dispatches to the right fetcher.
 
-| Event                 | Published by                                                   | Frontend re-fetches                                                        |
-| --------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `AssetUpdated`        | `context/asset/` writes                                        | `assets`                                                                   |
-| `CategoryUpdated`     | `context/asset/` category writes                               | `categories`                                                               |
-| `AssetPriceUpdated`   | `context/asset/` price writes + `use_cases/asset_price_fetch/` | `account_details`, `account_performance` (per-page)                        |
-| `AccountUpdated`      | `context/account/` account writes                              | `accounts`, `account_performance` (per-page)                               |
-| `TransactionUpdated`  | `context/account/` holding / transaction writes                | `account_details`, `transactions`, `account_performance` (per-page)        |
-| `CurrencyRateUpdated` | `context/currency/` rate writes + provider fetch               | `account_details`, `account_performance` (per-page), `currency_rates_view` |
-| `FeeScheduleUpdated`  | `context/account/` fee-schedule CRUD                           | `account_details`                                                          |
+| Event                     | Published by                                                                | Frontend re-fetches                                                        |
+| ------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `AssetUpdated`            | `context/asset/` writes                                                     | `assets`                                                                   |
+| `CategoryUpdated`         | `context/asset/` category writes                                            | `categories`                                                               |
+| `AssetPriceUpdated`       | `context/asset/` price writes + `use_cases/asset_price_fetch/`              | `account_details`, `account_performance` (per-page)                        |
+| `AccountUpdated`          | `context/account/` account writes                                           | `accounts`, `account_performance` (per-page)                               |
+| `TransactionUpdated`      | `context/account/` holding / transaction writes                             | `account_details`, `transactions`, `account_performance` (per-page)        |
+| `CurrencyRateUpdated`     | `context/currency/` rate writes + provider fetch                            | `account_details`, `account_performance` (per-page), `currency_rates_view` |
+| `FeeScheduleUpdated`      | `context/account/` fee-schedule CRUD                                        | `account_details`                                                          |
+| `AssetPriceFetchProgress` | `use_cases/asset_price_fetch/` dispatcher (task start + per asset, MKT-180) | shell progress bar via the global store (`lib/store.ts`); no re-fetch      |
 
 Adding a new event: declare the variant in `core/event_bus/event.rs`, publish from the service after persistence (`bus.publish(Event::Foo)`), subscribe in the relevant feature hook.
 
@@ -161,7 +162,7 @@ Hard rules:
 
 ### Cross-feature modal opens — URL-driven shell mounts
 
-A feature must not import a sibling feature's modal. Instead the opener sets a `?modal=…` URL param (`openModalSearch` / `patchModalSearch` in `src/lib/modalSearch.ts`) and a mount component in `features/shell/` (e.g. `CashTransactionEditMount`, `AssetEditModalMount`) renders the dialog while the param is present. The shell is the only layer that imports across features.
+A feature must not import a sibling feature's modal. Instead the opener sets a `?modal=…` URL param (`openModalSearch` / `patchModalSearch` in `src/lib/modalSearch.ts`) and a mount component in `features/shell/` (e.g. `CashTransactionEditMount`, `AssetEditModalMount`, `FreeSharesEditModalMount`, `ManagementFeeEditModalMount`, `InterestEditModalMount`) renders the dialog while the param is present. The shell is the only layer that imports across features.
 
 ---
 

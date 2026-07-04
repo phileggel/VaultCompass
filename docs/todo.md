@@ -2,6 +2,10 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
+## (spec) — INT: per-asset interest-bearing eligibility flag
+
+Interest (INT, shipped 2026-07-04) currently accepts any held asset plus the cash line as a credit target. Real-world eligibility is narrower: the cash line and cash-like fund lines ("fonds en euros" — a dedicated asset line that behaves like cash). Asset class is not a reliable signal, so the precise design is a per-asset `interest_bearing` opt-in flag (migration + Asset field + checkbox on the asset form + filter on the interest modal's selector — the same shape as the account-level `management_fees_enabled` gate). Deliberately deferred: single-user app, the open selector's misuse cost is low. Pick up when the selector gets noisy or a second eligibility consumer appears.
+
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.

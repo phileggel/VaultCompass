@@ -119,3 +119,35 @@ describe("useAccountSummaries", () => {
     expect(mockGetAccountSummaries.mock.calls.length).toBe(beforeCount);
   });
 });
+
+describe("useAccountSummaries — bulk-fetch coalescing (MKT-181)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("skips AssetPriceUpdated during an active fetch, reloads on completion", async () => {
+    const { useAppStore } = await import("@/lib/store");
+    let capturedCallback: ((type: string) => void) | null = null;
+    mockSubscribeToEvents.mockImplementation((cb) => {
+      capturedCallback = cb;
+      return Promise.resolve(() => {});
+    });
+    mockGetAccountSummaries.mockResolvedValue({ status: "ok", data: [makeSummary()] });
+
+    useAppStore.setState({ priceFetch: { active: true, done: 1, total: 3 } });
+    renderHook(() => useAccountSummaries());
+    await act(async () => {});
+    const initialCalls = mockGetAccountSummaries.mock.calls.length;
+
+    await act(async () => {
+      capturedCallback?.("AssetPriceUpdated");
+    });
+    expect(mockGetAccountSummaries.mock.calls.length).toBe(initialCalls);
+
+    useAppStore.setState({ priceFetch: { active: false, done: 0, total: 0 } });
+    await act(async () => {
+      capturedCallback?.("AssetPriceFetchCompleted");
+    });
+    expect(mockGetAccountSummaries.mock.calls.length).toBe(initialCalls + 1);
+  });
+});
