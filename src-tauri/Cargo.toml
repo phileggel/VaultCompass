@@ -1,6 +1,6 @@
 [package]
 name = "vault-compass"
-version = "0.33.1"
+version = "0.33.2"
 description = "A Tauri App"
 authors = ["Phil Eggel"]
 license = "MIT"
