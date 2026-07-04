@@ -33,6 +33,7 @@ const makeAccount = (): Account => ({
   name: "My Account",
   currency: "EUR",
   update_frequency: "ManualMonth",
+  management_fees_enabled: false,
 });
 
 describe("accountGateway", () => {
@@ -62,6 +63,7 @@ describe("accountGateway", () => {
       name: "New Account",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const account = makeAccount();
     mockInvoke.mockResolvedValue(account);
@@ -75,6 +77,7 @@ describe("accountGateway", () => {
       name: "Duplicate",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const err: AccountError = { code: "NameAlreadyExists" };
     mockInvoke.mockRejectedValue(err);
@@ -87,6 +90,7 @@ describe("accountGateway", () => {
       name: "Test",
       currency: "XYZ",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const err: AccountError = { code: "InvalidCurrency", currency: "XYZ" };
     mockInvoke.mockRejectedValue(err);
@@ -99,6 +103,7 @@ describe("accountGateway", () => {
       name: "  ",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const err: AccountError = { code: "NameEmpty" };
     mockInvoke.mockRejectedValue(err);
@@ -111,6 +116,7 @@ describe("accountGateway", () => {
       name: "Test",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
@@ -126,6 +132,7 @@ describe("accountGateway", () => {
       name: "Renamed",
       currency: "USD",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const account = { ...makeAccount(), name: "Renamed" };
     mockInvoke.mockResolvedValue(account);
@@ -140,6 +147,7 @@ describe("accountGateway", () => {
       name: "X",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     const err: AccountError = { code: "NameAlreadyExists" };
     mockInvoke.mockRejectedValue(err);

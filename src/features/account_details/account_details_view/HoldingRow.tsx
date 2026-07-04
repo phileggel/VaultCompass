@@ -33,6 +33,8 @@ type HoldingRowProps = {
   onTogglePriceRefreshLock?: (assetId: string, currentlyBlocked: boolean) => void;
   /** FEE-011 — open the recurring fee-schedule modal for this holding. */
   onManageFee?: (assetId: string, assetName: string) => void;
+  /** FEE-076 — render the Management Fees column; false when the account has the mechanism disabled. */
+  showManagementFees?: boolean;
   /** As-of (read-only past-date view): hide every mutating action button. */
   readOnly?: boolean;
 };
@@ -47,6 +49,7 @@ export function HoldingRow({
   onWithdraw,
   onTogglePriceRefreshLock,
   onManageFee,
+  showManagementFees = true,
   readOnly = false,
 }: HoldingRowProps) {
   const { t } = useTranslation();
@@ -149,8 +152,8 @@ export function HoldingRow({
         {/* DIV-072 — dividends / total-return columns are blank for the cash row */}
         <td className="m3-td" />
         <td className="m3-td" />
-        {/* FEE-052 — management fees column is blank for the cash row */}
-        <td className="m3-td" />
+        {/* FEE-052 — management fees column is blank for the cash row (FEE-076: absent when disabled) */}
+        {showManagementFees && <td className="m3-td" />}
         <td className="m3-td">
           <div className="flex items-center gap-1">
             {/* As-of view is read-only: Deposit/Withdraw are hidden (CSH-091). */}
@@ -320,23 +323,26 @@ export function HoldingRow({
           <span className="text-m3-on-surface-variant">{row.totalReturnPct}</span>
         )}
       </td>
-      {/* FEE-052 — Management fees deducted (always shown); FEE-074 — the active
-          schedule's annual rate rides along when one exists */}
-      <td id={`holding-management-fees-${row.assetId}`} className="m3-td text-right tabular-nums">
-        {row.feeRatePct !== null ? (
-          <>
-            {row.managementFees}{" "}
-            <span
-              id={`holding-fee-rate-${row.assetId}`}
-              className="text-m3-on-surface-variant text-xs"
-            >
-              · {row.feeRatePct}
-            </span>
-          </>
-        ) : (
-          row.managementFees
-        )}
-      </td>
+      {/* FEE-052 — Management fees deducted; FEE-074 — the active schedule's annual
+          rate rides along when one exists; FEE-076 — column absent when the account
+          has the mechanism disabled */}
+      {showManagementFees && (
+        <td id={`holding-management-fees-${row.assetId}`} className="m3-td text-right tabular-nums">
+          {row.feeRatePct !== null ? (
+            <>
+              {row.managementFees}{" "}
+              <span
+                id={`holding-fee-rate-${row.assetId}`}
+                className="text-m3-on-surface-variant text-xs"
+              >
+                · {row.feeRatePct}
+              </span>
+            </>
+          ) : (
+            row.managementFees
+          )}
+        </td>
+      )}
       <td className="m3-td">
         <div className="flex items-center gap-1">
           {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}

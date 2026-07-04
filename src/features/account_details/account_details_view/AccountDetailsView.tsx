@@ -102,16 +102,19 @@ export function AccountDetailsView() {
                     {view.summary.totalNetCashInput}
                   </span>
                 </p>
-                {/* FEE-053 — total management fees deducted across all holdings */}
-                <p
-                  id="account-details-total-management-fees"
-                  className="text-sm text-m3-on-surface-variant whitespace-nowrap"
-                >
-                  {t("account_details.total_management_fees")}:{" "}
-                  <span className="font-semibold text-m3-on-surface">
-                    {view.summary.totalManagementFees}
-                  </span>
-                </p>
+                {/* FEE-053 — total management fees deducted across all holdings;
+                    hidden when the account has the mechanism disabled (FEE-076) */}
+                {view.managementFeesEnabled && (
+                  <p
+                    id="account-details-total-management-fees"
+                    className="text-sm text-m3-on-surface-variant whitespace-nowrap"
+                  >
+                    {t("account_details.total_management_fees")}:{" "}
+                    <span className="font-semibold text-m3-on-surface">
+                      {view.summary.totalManagementFees}
+                    </span>
+                  </p>
+                )}
               </div>
               {/* TRX-055 — open balance always accessible (migration tool for any account state) */}
               {/* ACD-036 — header actions: big square icon buttons, name shown as tooltip */}
@@ -202,17 +205,20 @@ export function AccountDetailsView() {
                       aria-label={t("account_details.action_record_free_shares")}
                       title={t("account_details.action_record_free_shares")}
                     />
-                    {/* FEE-010 — Record one-off management fee */}
-                    <IconButton
-                      id="add-menu-management-fee"
-                      shape="square"
-                      size="lg"
-                      variant="tonal"
-                      icon={<Percent size={20} />}
-                      onClick={view.handleManagementFeeOpen}
-                      aria-label={t("account_details.action_record_management_fee")}
-                      title={t("account_details.action_record_management_fee")}
-                    />
+                    {/* FEE-010 — Record one-off management fee; hidden when the
+                        account has the mechanism disabled (FEE-076) */}
+                    {view.managementFeesEnabled && (
+                      <IconButton
+                        id="add-menu-management-fee"
+                        shape="square"
+                        size="lg"
+                        variant="tonal"
+                        icon={<Percent size={20} />}
+                        onClick={view.handleManagementFeeOpen}
+                        aria-label={t("account_details.action_record_management_fee")}
+                        title={t("account_details.action_record_management_fee")}
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -297,10 +303,13 @@ export function AccountDetailsView() {
                       <th className="m3-th text-right">
                         {t("account_details.column_total_return_pct")}
                       </th>
-                      {/* FEE-052 — Management fees deducted column */}
-                      <th className="m3-th text-right">
-                        {t("account_details.column_management_fees")}
-                      </th>
+                      {/* FEE-052 — Management fees deducted column; hidden when the
+                          account has the mechanism disabled (FEE-076) */}
+                      {view.managementFeesEnabled && (
+                        <th className="m3-th text-right">
+                          {t("account_details.column_management_fees")}
+                        </th>
+                      )}
                       <th className="m3-th">{t("transaction.column_actions")}</th>
                     </tr>
                   </thead>
@@ -316,7 +325,10 @@ export function AccountDetailsView() {
                         onDeposit={view.handleDepositOpen}
                         onWithdraw={view.handleWithdrawalOpen}
                         onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
-                        onManageFee={view.handleFeeScheduleOpen}
+                        onManageFee={
+                          view.managementFeesEnabled ? view.handleFeeScheduleOpen : undefined
+                        }
+                        showManagementFees={view.managementFeesEnabled}
                         readOnly={view.isAsOf}
                       />
                     ))}

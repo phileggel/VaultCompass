@@ -96,3 +96,50 @@ describe("useAddAccount", () => {
     expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("useAddAccount — management fees opt-in (FEE-075)", () => {
+  beforeEach(() => {
+    mockAddAccount.mockReset();
+  });
+
+  it("passes the checkbox state through to the create DTO", async () => {
+    mockAddAccount.mockResolvedValue({ data: { id: "new-id" }, error: null });
+    const { result } = renderHook(() => useAddAccount());
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Assurance Vie" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    act(() => {
+      result.current.handleChange({
+        target: { name: "management_fees_enabled", type: "checkbox", checked: true, value: "on" },
+      } as unknown as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ management_fees_enabled: true }),
+    );
+  });
+
+  it("defaults the flag to false when untouched", async () => {
+    mockAddAccount.mockResolvedValue({ data: { id: "new-id" }, error: null });
+    const { result } = renderHook(() => useAddAccount());
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Plain" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ management_fees_enabled: false }),
+    );
+  });
+});

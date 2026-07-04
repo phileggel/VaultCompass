@@ -38,6 +38,7 @@ const makeAccount = (): Account => ({
   name: "My Account",
   currency: "EUR",
   update_frequency: "ManualMonth",
+  management_fees_enabled: false,
 });
 
 describe("useAccounts", () => {
@@ -69,6 +70,7 @@ describe("useAccounts", () => {
       name: "My Account",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     await act(async () => {
       ret = await result.current.addAccount(dto);
@@ -93,6 +95,7 @@ describe("useAccounts", () => {
         name: "Dup",
         currency: "EUR",
         update_frequency: "ManualMonth",
+        management_fees_enabled: false,
       });
     });
     expect(ret.error).toEqual({ key: "error.NameAlreadyExists" });
@@ -113,6 +116,7 @@ describe("useAccounts", () => {
       name: "Renamed",
       currency: "EUR",
       update_frequency: "ManualMonth",
+      management_fees_enabled: false,
     };
     await act(async () => {
       ret = await result.current.updateAccount(dto);
@@ -137,6 +141,7 @@ describe("useAccounts", () => {
         name: "Dup",
         currency: "EUR",
         update_frequency: "ManualMonth",
+        management_fees_enabled: false,
       });
     });
     expect(ret.error).toEqual({ key: "error.NameAlreadyExists" });

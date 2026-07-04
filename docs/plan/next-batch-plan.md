@@ -50,7 +50,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
   `AccountDetailsResponse`, surface in the header next to
   `total_global_value` / `total_management_fees`.
 
-### T4 — Account parameter gating the % management-fee mechanism 🔎
+### T4 — Account parameter gating the % management-fee mechanism ✅
 
 - New boolean on the account, **default false** for new accounts; migration
   backfills **true** for existing accounts. False → % fee UI disabled.

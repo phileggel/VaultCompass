@@ -18,6 +18,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     name: "",
     currency: "EUR",
     update_frequency: "ManualMonth",
+    management_fees_enabled: false,
   });
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,14 +30,19 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
         name: account.name,
         currency: account.currency,
         update_frequency: account.update_frequency,
+        management_fees_enabled: account.management_fees_enabled,
       });
       setError(null);
     }
   }, [account]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const target = e.target as HTMLInputElement;
+    const { name, value } = target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: target.type === "checkbox" ? target.checked : value,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +64,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
       name: formData.name,
       currency: formData.currency,
       update_frequency: formData.update_frequency,
+      management_fees_enabled: formData.management_fees_enabled,
     });
 
     setIsSubmitting(false);

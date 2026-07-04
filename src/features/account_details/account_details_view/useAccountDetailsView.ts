@@ -44,6 +44,9 @@ export function useAccountDetailsView(accountId: string) {
   const showSnackbar = useSnackbar();
   const { t, i18n } = useTranslation();
   const accountCurrency = accounts.find((a) => a.id === accountId)?.currency ?? "";
+  // FEE-076 — gate for every % management-fee surface on this view.
+  const managementFeesEnabled =
+    accounts.find((a) => a.id === accountId)?.management_fees_enabled ?? false;
 
   // ---------------------------------------------------------------------------
   // Modal targets / open flags
@@ -264,6 +267,7 @@ export function useAccountDetailsView(accountId: string) {
     isAsOf,
     // Derived
     accountCurrency,
+    managementFeesEnabled,
     hasNonCashActiveHoldings,
     hasClosedHoldings,
     activeNonCashHoldings,

@@ -10,6 +10,7 @@ const mockAccount: Account = {
   name: "Alpha",
   currency: "EUR",
   update_frequency: "ManualMonth",
+  management_fees_enabled: false,
 };
 
 vi.mock("../useAccounts", () => ({
@@ -82,6 +83,7 @@ describe("useEditAccountModal", () => {
       name: "Beta",
       currency: "EUR",
       update_frequency: "ManualDay",
+      management_fees_enabled: false,
     };
     rerender({ account: otherAccount });
 

@@ -9,6 +9,8 @@ export interface AccountFormData {
   name: string;
   currency: string;
   update_frequency: UpdateFrequency;
+  /** FEE-075 — whether the % management-fee mechanism is enabled on the account. */
+  management_fees_enabled: boolean;
 }
 
 interface AccountFormProps {
@@ -62,6 +64,21 @@ export function AccountForm({
         onChange={handleChange}
         options={frequencyOptions}
       />
+
+      {/* FEE-075 — opt-in gate for the % management-fee mechanism */}
+      <label className="flex items-center gap-3 cursor-pointer group">
+        <input
+          type="checkbox"
+          id={`${idPrefix}-management-fees-enabled`}
+          name="management_fees_enabled"
+          checked={formData.management_fees_enabled}
+          onChange={handleChange}
+          className="accent-m3-primary w-4 h-4"
+        />
+        <span className="text-sm text-m3-on-surface group-hover:text-m3-primary transition-colors">
+          {t("account.form_management_fees_label")}
+        </span>
+      </label>
     </div>
   );
 }

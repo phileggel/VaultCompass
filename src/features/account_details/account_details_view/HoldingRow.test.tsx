@@ -102,6 +102,25 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     expect(container.querySelector("#holding-fee-rate-asset-1")).toBeNull();
   });
 
+  // FEE-076 — the fees cell is absent when the account has the mechanism disabled
+  it("omits the management fees cell when showManagementFees is false", () => {
+    const { container } = render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={baseRow}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            showManagementFees={false}
+          />
+        </tbody>
+      </table>,
+    );
+    expect(container.querySelector("#holding-management-fees-asset-1")).toBeNull();
+  });
+
   it("does not render a standalone 'as of date' sub-line (compact cell)", () => {
     renderInTable(baseRow);
     // The price_as_of key was removed in the compact-cell pass — staleness

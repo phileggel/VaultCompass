@@ -77,6 +77,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   holdings: [],
   closedHoldings: [],
   accountCurrency: "EUR",
+  managementFeesEnabled: true,
   hasNonCashActiveHoldings: false,
   hasClosedHoldings: false,
   activeNonCashHoldings: [],
@@ -318,6 +319,21 @@ describe("AccountDetailsView — management fees (FEE-010/011/053)", () => {
     render(<AccountDetailsView />);
     fireEvent.click(document.querySelector("#add-menu-management-fee")!);
     expect(handlers.handleManagementFeeOpen).toHaveBeenCalledTimes(1);
+  });
+
+  // FEE-076 — a disabled account hides every % fee surface
+  it("hides the fee button, header total and column when the account has fees disabled (FEE-076)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ managementFeesEnabled: false }));
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#add-menu-management-fee")).toBeNull();
+    expect(document.querySelector("#account-details-total-management-fees")).toBeNull();
+    expect(screen.queryByText("account_details.column_management_fees")).toBeNull();
+  });
+
+  // FEE-076 — an enabled account keeps the fee column header
+  it("shows the Management Fees column header when the account has fees enabled (FEE-076)", () => {
+    render(<AccountDetailsView />);
+    expect(screen.getByText("account_details.column_management_fees")).toBeInTheDocument();
   });
 
   it("mounts the management-fee modal when managementFeeOpen is true (FEE-010)", () => {

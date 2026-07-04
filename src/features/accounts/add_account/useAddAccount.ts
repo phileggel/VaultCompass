@@ -16,13 +16,18 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
     name: "",
     currency: "EUR",
     update_frequency: "ManualMonth",
+    management_fees_enabled: false,
   });
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const target = e.target as HTMLInputElement;
+    const { name, value } = target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: target.type === "checkbox" ? target.checked : value,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,6 +48,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
       name: formData.name,
       currency: formData.currency,
       update_frequency: formData.update_frequency,
+      management_fees_enabled: formData.management_fees_enabled,
     });
 
     setIsSubmitting(false);
@@ -53,7 +59,12 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
       return;
     }
 
-    setFormData({ name: "", currency: "EUR", update_frequency: "ManualMonth" });
+    setFormData({
+      name: "",
+      currency: "EUR",
+      update_frequency: "ManualMonth",
+      management_fees_enabled: false,
+    });
 
     if (onSubmitSuccess) {
       onSubmitSuccess();

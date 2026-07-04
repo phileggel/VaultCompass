@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { Account, AccountDeletionSummary, AccountSummary } from "@/bindings";
+import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { FREQUENCY_ORDER } from "../shared/presenter";
 
@@ -105,13 +106,21 @@ export function useAccountTable(
     [onAccountClick],
   );
 
-  const handleEditClick = useCallback((e: MouseEvent, account: AccountSummary) => {
-    e.stopPropagation();
-    // EditAccountModal expects an Account; AccountSummary structurally satisfies
-    // it (same id/name/currency/update_frequency fields, plus the unused value).
-    const { id, name, currency, update_frequency } = account;
-    setEditData({ id, name, currency, update_frequency });
-  }, []);
+  const storeAccounts = useAppStore((state) => state.accounts);
+
+  const handleEditClick = useCallback(
+    (e: MouseEvent, account: AccountSummary) => {
+      e.stopPropagation();
+      // EditAccountModal expects a full Account; the summary row lacks
+      // management_fees_enabled (FEE-075), so the flag is read from the loaded
+      // account catalog to prefill the edit form correctly.
+      const { id, name, currency, update_frequency } = account;
+      const management_fees_enabled =
+        storeAccounts.find((a) => a.id === id)?.management_fees_enabled ?? false;
+      setEditData({ id, name, currency, update_frequency, management_fees_enabled });
+    },
+    [storeAccounts],
+  );
 
   const handleEditClose = useCallback(() => setEditData(null), []);
 
