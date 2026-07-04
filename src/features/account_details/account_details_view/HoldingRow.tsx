@@ -320,9 +320,22 @@ export function HoldingRow({
           <span className="text-m3-on-surface-variant">{row.totalReturnPct}</span>
         )}
       </td>
-      {/* FEE-052 — Management fees deducted (always shown) */}
+      {/* FEE-052 — Management fees deducted (always shown); FEE-074 — the active
+          schedule's annual rate rides along when one exists */}
       <td id={`holding-management-fees-${row.assetId}`} className="m3-td text-right tabular-nums">
-        {row.managementFees}
+        {row.feeRatePct !== null ? (
+          <>
+            {row.managementFees}{" "}
+            <span
+              id={`holding-fee-rate-${row.assetId}`}
+              className="text-m3-on-surface-variant text-xs"
+            >
+              · {row.feeRatePct}
+            </span>
+          </>
+        ) : (
+          row.managementFees
+        )}
       </td>
       <td className="m3-td">
         <div className="flex items-center gap-1">

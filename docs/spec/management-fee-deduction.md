@@ -139,6 +139,8 @@ A recurring rule that generates fee deductions for one (account, asset) holding 
 
 **FEE-073 — Foreign-currency holdings (backend)**: For a charged asset whose currency differs from the account currency, the fee value uses the account-currency conversion path (FXR) as of the deduction date, consistent with holding valuation (FXR-042). A deduction with no usable rate contributes `0` to the Management Fees figure (FEE-054, FXR-034).
 
+**FEE-074 — Fee-rate indicator on the holding line**: Each `HoldingDetail` exposes `fee_rate_percent_micros: Option<i64>` — the annual rate of the holding's **active** fee schedule (micro-percent, FEE-032); `None` when no active schedule exists (inactive schedules and one-off fees don't count). The live view resolves it from the active-schedules list in one query; the as-of view always carries `None` — the schedule is today's configuration, not part of the historical reconstruction. The frontend renders the rate inside the Management Fees cell, after the cumulative amount (e.g. "12,34 · 1,50%"); the cell shows the amount alone when no active schedule exists.
+
 ---
 
 ## Workflow

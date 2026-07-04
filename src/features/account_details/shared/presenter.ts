@@ -155,6 +155,8 @@ export interface HoldingRowViewModel {
   managementFees: string;
   /** Formatted weight of the holding in the account's Global Value (e.g. "12.34%"), or "—" when the holding has no market value or the Global Value is 0 (ACD-052). */
   weightPct: string;
+  /** Formatted annual rate of the active fee schedule (e.g. "1,50%"), or null when no active schedule exists (FEE-074). */
+  feeRatePct: string | null;
   /** Formatted total return % (price + dividends) or "—" when not computable (DIV-071/072). */
   totalReturnPct: string;
   /** Raw total return % in micro-units, or null when not computable — used for sign-based color styling (DIV-072). */
@@ -333,6 +335,7 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
       dividendsReceived: "",
       managementFees: "",
       weightPct: formatWeightPct(detail.market_value, totalGlobalValue),
+      feeRatePct: null,
       totalReturnPct: "",
       totalReturnPctRaw: null,
       isCash: true,
@@ -371,6 +374,11 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
     dividendsReceived: microToFormatted(detail.dividends_received, 2),
     managementFees: microToFormatted(detail.management_fees, 2),
     weightPct: formatWeightPct(detail.market_value, totalGlobalValue),
+    // FEE-074 — annual rate of the active fee schedule, shown next to the fees.
+    feeRatePct:
+      detail.fee_rate_percent_micros !== null
+        ? `${microToFormatted(detail.fee_rate_percent_micros, 2)}%`
+        : null,
     totalReturnPct:
       detail.total_return_pct !== null ? `${microToFormatted(detail.total_return_pct, 2)}%` : DASH,
     totalReturnPctRaw: detail.total_return_pct,

@@ -40,6 +40,7 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   fx_rate_date: null,
   management_fees: 0,
   market_value: null,
+  fee_rate_percent_micros: null,
   ...overrides,
 });
 
@@ -805,5 +806,17 @@ describe("toAccountSummary — net cash input (ACD-053)", () => {
     const summary = toAccountSummary(makeResponse({ total_net_cash_input: -30_000_000 }));
     expect(summary.totalNetCashInput).toContain("30,00");
     expect(summary.totalNetCashInput).toMatch(/^-/);
+  });
+});
+
+describe("toHoldingRow — fee schedule rate (FEE-074)", () => {
+  it("formats the active schedule's annual rate", () => {
+    const row = toHoldingRow(makeHolding({ fee_rate_percent_micros: 1_500_000 }));
+    expect(row.feeRatePct).toBe("1,50%");
+  });
+
+  it("is null when the holding has no active schedule", () => {
+    const row = toHoldingRow(makeHolding({ fee_rate_percent_micros: null }));
+    expect(row.feeRatePct).toBeNull();
   });
 });

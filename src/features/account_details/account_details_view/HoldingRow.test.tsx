@@ -37,6 +37,7 @@ const baseRow: HoldingRowViewModel = {
   dividendsReceived: "0.00",
   managementFees: "0.00",
   weightPct: "—",
+  feeRatePct: null,
   totalReturnPct: "50.00%",
   totalReturnPctRaw: 50_000_000,
   isCash: false,
@@ -81,6 +82,24 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     const cell = container.querySelector("#holding-weight-pct-asset-1");
     expect(cell).not.toBeNull();
     expect(cell?.textContent).toBe("22,00%");
+  });
+
+  // FEE-074 — the active schedule's rate rides along in the fees cell
+  it("renders the fee rate next to the management fees when a schedule exists", () => {
+    const { container } = renderInTable({
+      ...baseRow,
+      managementFees: "12,34",
+      feeRatePct: "1,50%",
+    });
+    const cell = container.querySelector("#holding-management-fees-asset-1");
+    expect(cell?.textContent).toContain("12,34");
+    expect(container.querySelector("#holding-fee-rate-asset-1")?.textContent).toBe("· 1,50%");
+  });
+
+  // FEE-074 — no schedule → the fees cell shows the amount alone
+  it("renders no fee rate marker without a schedule", () => {
+    const { container } = renderInTable({ ...baseRow, managementFees: "12,34" });
+    expect(container.querySelector("#holding-fee-rate-asset-1")).toBeNull();
   });
 
   it("does not render a standalone 'as of date' sub-line (compact cell)", () => {

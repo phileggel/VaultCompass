@@ -68,7 +68,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
 - Open points → user questions: BE enforcement scope, disabled-UI presentation,
   spec treatment.
 
-### T5 — Fee % indicator on the holding line 🔎
+### T5 — Fee % indicator on the holding line ✅
 
 - Show the configured fee rate on the asset line when a schedule exists.
 - **Analysis**: schedules are one-per-(account, asset)

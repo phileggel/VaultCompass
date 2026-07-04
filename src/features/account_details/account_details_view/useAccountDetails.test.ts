@@ -133,6 +133,7 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   fx_rate_date: null,
   management_fees: 0,
   market_value: null,
+  fee_rate_percent_micros: null,
   ...overrides,
 });
 

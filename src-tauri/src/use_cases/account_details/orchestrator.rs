@@ -65,6 +65,11 @@ pub struct HoldingDetail {
     /// Holding, price × quantity × FX for a priced non-cash holding. None when no
     /// price is recorded or a foreign holding has no usable rate (FXR-034).
     pub market_value: Option<i64>,
+    /// Annual rate of the active recurring fee schedule for this (account, asset),
+    /// in micro-percent (1% = 1_000_000, FEE-032). None when no active schedule
+    /// exists; always None in the as-of view — the schedule is today's configuration,
+    /// not part of the historical reconstruction (FEE-074).
+    pub fee_rate_percent_micros: Option<i64>,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -228,6 +233,16 @@ impl AccountDetailsUseCase {
             .compute_management_fees(&all_txs, &account.currency, None)
             .await?;
 
+        // FEE-074 — annual rate of the active fee schedule per asset for this account.
+        let fee_rate_by_asset: HashMap<String, i64> = self
+            .account_service
+            .list_active_fee_schedules()
+            .await?
+            .into_iter()
+            .filter(|schedule| schedule.account_id == account_id)
+            .map(|schedule| (schedule.asset_id, schedule.annual_rate_percent_micros))
+            .collect();
+
         // FXR-035 — valuation date for resolving FX rates is "today"; the
         // write-guard (FXR-022) forbids future-dated rates, so the latest rate
         // on or before today is simply the latest recorded rate.
@@ -382,6 +397,8 @@ impl AccountDetailsUseCase {
             let management_fees = *management_fees_by_asset
                 .get(&holding.asset_id)
                 .unwrap_or(&0);
+            // FEE-074 — active schedule rate; None for cash and unscheduled assets.
+            let fee_rate_percent_micros = fee_rate_by_asset.get(&holding.asset_id).copied();
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -399,8 +416,9 @@ impl AccountDetailsUseCase {
                 dividends_received,
                 total_return_pct,
                 fx_rate_date,
-                management_fees, // FEE-052
-                market_value,    // ACD-052
+                management_fees,         // FEE-052
+                market_value,            // ACD-052
+                fee_rate_percent_micros, // FEE-074
             });
         }
 
@@ -762,6 +780,7 @@ impl AccountDetailsUseCase {
                 fx_rate_date,
                 management_fees: *management_fees_by_asset.get(asset_id).unwrap_or(&0), // FEE-052
                 market_value,                                                           // ACD-052
+                fee_rate_percent_micros: None, // FEE-074 — as-of view carries no schedule info
             });
         }
 
@@ -803,6 +822,7 @@ impl AccountDetailsUseCase {
                 fx_rate_date: None,
                 management_fees: 0, // cash holdings never have management fees
                 market_value: Some(cash_balance), // ACD-052 — cash value is its balance
+                fee_rate_percent_micros: None, // FEE-074
             });
         }
 
@@ -841,7 +861,8 @@ mod tests {
     use super::*;
     use crate::context::account::{
         AccountService, Holding, HoldingRepository, SqliteAccountRepository,
-        SqliteHoldingRepository, SqliteTransactionRepository, UpdateFrequency,
+        SqliteFeeScheduleRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+        UpdateFrequency,
     };
     use crate::context::asset::AssetService;
     use crate::context::asset::{
@@ -851,11 +872,14 @@ mod tests {
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup(pool: &sqlx::Pool<sqlx::Sqlite>) -> (Arc<AccountService>, Arc<AssetService>) {
-        let account_svc = Arc::new(AccountService::new(
-            Box::new(SqliteAccountRepository::new(pool.clone())),
-            Box::new(SqliteHoldingRepository::new(pool.clone())),
-            Box::new(SqliteTransactionRepository::new(pool.clone())),
-        ));
+        let account_svc = Arc::new(
+            AccountService::new(
+                Box::new(SqliteAccountRepository::new(pool.clone())),
+                Box::new(SqliteHoldingRepository::new(pool.clone())),
+                Box::new(SqliteTransactionRepository::new(pool.clone())),
+            )
+            .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone()))),
+        );
         let asset_svc = Arc::new(AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
             Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
@@ -1984,6 +2008,84 @@ mod tests {
             .expect("cash holding present");
         assert_eq!(cash.market_value, Some(100_000_000));
         assert_eq!(resp.total_global_value, 100_000_000);
+    }
+
+    // FEE-074 — the active schedule's annual rate is exposed on the holding line;
+    // assets without a schedule carry None
+    #[tokio::test]
+    async fn fee_074_holding_detail_carries_active_schedule_rate() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let holding_repo = SqliteHoldingRepository::new(pool.clone());
+        let mut asset_ids = Vec::new();
+        for (name, reference) in [("Scheduled Fund", "SFD"), ("Plain Stock", "PLS")] {
+            let asset = asset_svc
+                .create_asset(CreateAssetDTO {
+                    name: name.to_string(),
+                    reference: reference.to_string(),
+                    isin: None,
+                    class: AssetClass::Stocks,
+                    currency: "EUR".to_string(),
+                    risk_level: 1,
+                    category_id: SYSTEM_CATEGORY_ID.to_string(),
+                    exchange: None,
+                })
+                .await
+                .unwrap();
+            holding_repo
+                .upsert(
+                    Holding::new(
+                        account.id.clone(),
+                        asset.id.clone(),
+                        1_000_000,
+                        100_000_000,
+                        0,
+                        None,
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            asset_ids.push(asset.id);
+        }
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                asset_ids[0].clone(),
+                1_500_000, // 1.5% annual
+                crate::context::account::FeeFrequency::Annually,
+                "2026-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let scheduled = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "SFD")
+            .unwrap();
+        let plain = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_reference == "PLS")
+            .unwrap();
+        assert_eq!(scheduled.fee_rate_percent_micros, Some(1_500_000));
+        assert_eq!(plain.fee_rate_percent_micros, None);
     }
 
     // ACD-053 — total_net_cash_input sums deposits minus withdrawals since inception

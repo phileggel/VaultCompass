@@ -2161,7 +2161,14 @@ management_fees: number;
  * Holding, price × quantity × FX for a priced non-cash holding. None when no
  * price is recorded or a foreign holding has no usable rate (FXR-034).
  */
-market_value: number | null }
+market_value: number | null; 
+/**
+ * Annual rate of the active recurring fee schedule for this (account, asset),
+ * in micro-percent (1% = 1_000_000, FEE-032). None when no active schedule
+ * exists; always None in the as-of view — the schedule is today's configuration,
+ * not part of the historical reconstruction (FEE-074).
+ */
+fee_rate_percent_micros: number | null }
 /**
  * Point-in-time reconstruction of a single holding's quantity and VWAP cost
  * basis as of a date — the read-only "as of" valuation behind the trade-dialog
