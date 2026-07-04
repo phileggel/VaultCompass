@@ -77,7 +77,8 @@ describe("management_fee", () => {
   // management-fee modal's asset selector (FEE-011/012: quantity > 0).
   before(async () => {
     const catId = await seedCategory("E2E Cat FEE022");
-    accId = await seedAccount(ACCOUNT_NAME);
+    // FEE-075 — new accounts default to fees-disabled; this suite needs the gate open.
+    accId = await seedAccount(ACCOUNT_NAME, "EUR", "ManualMonth", true);
     astId = await seedAsset(ASSET_NAME, catId);
     // seedBuy seeds a deposit on the prior day (CSH-041) then buys 10 units.
     await seedBuy(accId, astId, "2020-09-01", 10_000_000); // 10 units in micros
