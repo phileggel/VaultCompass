@@ -793,7 +793,13 @@ total_dividends_received: number;
  * Sum of `management_fees` across all active holdings, in account-currency micros (FEE-072/073).
  * 0 when no management fee transactions have been recorded.
  */
-total_management_fees: number }
+total_management_fees: number; 
+/**
+ * Net external cash input since inception: Σ Deposit − Σ Withdrawal amounts, in
+ * account-currency micros (ACD-053). Negative when withdrawals exceed deposits.
+ * The as-of view counts only transactions dated on or before the as-of date.
+ */
+total_net_cash_input: number }
 /**
  * Single flat error enum for the `account` bounded context (gold error model).
  * 

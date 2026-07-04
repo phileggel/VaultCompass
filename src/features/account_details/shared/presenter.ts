@@ -224,6 +224,8 @@ export interface AccountSummaryViewModel {
   totalManagementFees: string;
   /** Raw total management fees in micro-units (FEE-053). */
   totalManagementFeesRaw: number;
+  /** Formatted net cash input since inception: deposits − withdrawals, account currency (ACD-053). */
+  totalNetCashInput: string;
 }
 
 /**
@@ -416,5 +418,6 @@ export function toAccountSummary(response: AccountDetailsResponse): AccountSumma
     hasCashHolding,
     totalManagementFees: microToFormatted(response.total_management_fees, 2),
     totalManagementFeesRaw: response.total_management_fees,
+    totalNetCashInput: microToFormatted(response.total_net_cash_input, 2),
   };
 }

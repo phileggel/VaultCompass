@@ -92,6 +92,16 @@ export function AccountDetailsView() {
                     {view.summary.totalGlobalValue}
                   </span>
                 </p>
+                {/* ACD-053 — net cash input since inception (deposits − withdrawals) */}
+                <p
+                  id="account-details-total-net-cash-input"
+                  className="text-sm text-m3-on-surface-variant whitespace-nowrap"
+                >
+                  {t("account_details.total_net_cash_input")}:{" "}
+                  <span className="font-semibold text-m3-on-surface">
+                    {view.summary.totalNetCashInput}
+                  </span>
+                </p>
                 {/* FEE-053 — total management fees deducted across all holdings */}
                 <p
                   id="account-details-total-management-fees"

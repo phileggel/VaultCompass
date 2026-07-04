@@ -41,7 +41,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
 - **Assumption**: the cash line gets a weight too; denominator is
   `total_global_value` (cash included); closed holdings show none.
 
-### T3 — Net cash input since inception in the account-details header 🔎
+### T3 — Net cash input since inception in the account-details header ✅
 
 - Header displays net cash input from day one (deposits − withdrawals).
 - **Analysis**: not in `AccountDetailsResponse` today. The deposits/withdrawals

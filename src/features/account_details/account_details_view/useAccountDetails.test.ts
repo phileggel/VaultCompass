@@ -41,6 +41,7 @@ const makeResponse = (overrides: Partial<AccountDetailsResponse> = {}): AccountD
   total_global_value: 0,
   total_dividends_received: 0,
   total_management_fees: 0,
+  total_net_cash_input: 0,
   ...overrides,
 });
 

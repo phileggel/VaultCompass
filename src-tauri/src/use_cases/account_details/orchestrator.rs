@@ -113,6 +113,10 @@ pub struct AccountDetailsResponse {
     /// Sum of `management_fees` across all active holdings, in account-currency micros (FEE-072/073).
     /// 0 when no management fee transactions have been recorded.
     pub total_management_fees: i64,
+    /// Net external cash input since inception: Σ Deposit − Σ Withdrawal amounts, in
+    /// account-currency micros (ACD-053). Negative when withdrawals exceed deposits.
+    /// The as-of view counts only transactions dated on or before the as-of date.
+    pub total_net_cash_input: i64,
 }
 
 /// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
@@ -199,11 +203,23 @@ impl AccountDetailsUseCase {
             .await?;
         let mut dividends_by_asset: HashMap<String, i64> = HashMap::new();
         let mut total_dividends_received: i64 = 0;
+        // ACD-053 — net external cash input since inception: deposits − withdrawals.
+        let mut total_net_cash_input: i64 = 0;
         for t in &all_txs {
-            if t.transaction_type == crate::context::account::TransactionType::Dividend {
-                let entry = dividends_by_asset.entry(t.asset_id.clone()).or_insert(0);
-                *entry = entry.saturating_add(t.total_amount);
-                total_dividends_received = total_dividends_received.saturating_add(t.total_amount);
+            match t.transaction_type {
+                TransactionType::Dividend => {
+                    let entry = dividends_by_asset.entry(t.asset_id.clone()).or_insert(0);
+                    *entry = entry.saturating_add(t.total_amount);
+                    total_dividends_received =
+                        total_dividends_received.saturating_add(t.total_amount);
+                }
+                TransactionType::Deposit => {
+                    total_net_cash_input = total_net_cash_input.saturating_add(t.total_amount);
+                }
+                TransactionType::Withdrawal => {
+                    total_net_cash_input = total_net_cash_input.saturating_sub(t.total_amount);
+                }
+                _ => {}
             }
         }
 
@@ -449,6 +465,7 @@ impl AccountDetailsUseCase {
             total_global_value,
             total_dividends_received,
             total_management_fees, // FEE-053/072
+            total_net_cash_input,  // ACD-053
         })
     }
 
@@ -550,11 +567,26 @@ impl AccountDetailsUseCase {
         // and in total. Dividends are stored in account currency.
         let mut dividends_by_asset: HashMap<String, i64> = HashMap::new();
         let mut total_dividends_received: i64 = 0;
+        // ACD-053 — net cash input as of the date: deposits − withdrawals dated ≤ as_of.
+        let mut total_net_cash_input: i64 = 0;
         for t in &all_txs {
-            if t.transaction_type == TransactionType::Dividend && t.date.as_str() <= as_of_date {
-                let entry = dividends_by_asset.entry(t.asset_id.clone()).or_insert(0);
-                *entry = entry.saturating_add(t.total_amount);
-                total_dividends_received = total_dividends_received.saturating_add(t.total_amount);
+            if t.date.as_str() > as_of_date {
+                continue;
+            }
+            match t.transaction_type {
+                TransactionType::Dividend => {
+                    let entry = dividends_by_asset.entry(t.asset_id.clone()).or_insert(0);
+                    *entry = entry.saturating_add(t.total_amount);
+                    total_dividends_received =
+                        total_dividends_received.saturating_add(t.total_amount);
+                }
+                TransactionType::Deposit => {
+                    total_net_cash_input = total_net_cash_input.saturating_add(t.total_amount);
+                }
+                TransactionType::Withdrawal => {
+                    total_net_cash_input = total_net_cash_input.saturating_sub(t.total_amount);
+                }
+                _ => {}
             }
         }
 
@@ -799,6 +831,7 @@ impl AccountDetailsUseCase {
             total_global_value,
             total_dividends_received,
             total_management_fees, // FEE-053/072
+            total_net_cash_input,  // ACD-053
         })
     }
 }
@@ -1951,6 +1984,99 @@ mod tests {
             .expect("cash holding present");
         assert_eq!(cash.market_value, Some(100_000_000));
         assert_eq!(resp.total_global_value, 100_000_000);
+    }
+
+    // ACD-053 — total_net_cash_input sums deposits minus withdrawals since inception
+    #[tokio::test]
+    async fn net_cash_input_sums_deposits_minus_withdrawals() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2026-01-05".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2026-02-10".to_string(), 50_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .record_withdrawal(&account.id, "2026-03-01".to_string(), 30_000_000, None)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        assert_eq!(resp.total_net_cash_input, 120_000_000);
+    }
+
+    // ACD-053 — total_net_cash_input is 0 for an account with no cash transactions
+    #[tokio::test]
+    async fn net_cash_input_is_zero_without_cash_transactions() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        assert_eq!(resp.total_net_cash_input, 0);
+    }
+
+    // ACD-053 — the as-of view counts only cash transactions dated on or before the date
+    #[tokio::test]
+    async fn net_cash_input_as_of_excludes_later_transactions() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2026-01-05".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2026-03-01".to_string(), 50_000_000, None)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2026-02-01"))
+            .await
+            .unwrap();
+        assert_eq!(resp.total_net_cash_input, 100_000_000);
     }
 
     // MKT-035 — performance_pct is None when cost_basis is zero

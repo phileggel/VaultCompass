@@ -69,6 +69,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
     accountName: "Main",
     totalGlobalValue: "1.100,00",
     totalManagementFees: "0,00",
+    totalNetCashInput: "500,00",
     isEmpty: false,
     isAllClosed: false,
     hasClosedHoldings: false,
@@ -304,6 +305,13 @@ describe("AccountDetailsView — management fees (FEE-010/011/053)", () => {
     render(<AccountDetailsView />);
     const total = document.querySelector("#account-details-total-management-fees");
     expect(total).toHaveTextContent("0,00");
+  });
+
+  // ACD-053 — net cash input since inception in the header
+  it("shows the net cash input figure (ACD-053)", () => {
+    render(<AccountDetailsView />);
+    const total = document.querySelector("#account-details-total-net-cash-input");
+    expect(total).toHaveTextContent("500,00");
   });
 
   it("routes the Management fee button to its handler (FEE-010)", () => {
