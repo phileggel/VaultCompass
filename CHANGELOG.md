@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-07-04
+
+### Added
+
+- interest recording and editing UI
+  INT-010/020/030/040: header entry, percent-or-quantity modal (cash line
+  included), journal placeholders, URL-driven edit mount.
+- add Interest transaction type (backend)
+  INT spec: capitalized zero-cost quantity credit (FreeShares mechanics) on a
+  fund line or the cash line; percent-of-holding or direct amount entry.
+- shell price-fetch progress bar + coalesced view refresh
+  MKT-180/181: dispatcher emits done/total progress; views skip per-asset
+  re-fetches during a bulk fetch and reload once on completion (kills the
+  3N-round-trip flicker).
+- account forms toggle + hidden fee UI when fees disabled
+  FEE-075/076: opt-in checkbox on add/edit; disabled accounts hide the fee
+  button, Manage-fee action, Management Fees column and header total.
+- add account-level management-fees gate (backend)
+  FEE-075/077/078: new accounts default off, migration backfills existing on;
+  record/create reject when disabled; catch-up pauses without cursor advance.
+- show active fee-schedule rate on the holding line
+- show net cash input since inception in account header
+- add holding weight % column to account details
+
+### Fixed
+
+- upgrade quick-xml to 0.41 (RUSTSEC-2026-0194/0195)
+  Direct dep bumped (unescape_value -> normalized_value); plist 1.9->1.10
+  clears the last vulnerable transitive copy.
+- interest review round (cash percent base, XOR gate UX)
+  Addresses reviewer-backend/arch/frontend: cash-line percent interest now
+  bases on the cash replay (was 2x-overstating past Purchases); submit gate
+  keeps InterestAmountInvalid reachable; UL entry; visual proofs.
+
 ## [0.32.0] - 2026-07-01
 
 ### Added
