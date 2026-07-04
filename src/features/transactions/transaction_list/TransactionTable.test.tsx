@@ -94,7 +94,7 @@ describe("TransactionTable", () => {
     expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
   });
 
-  it("colours a positive realized P&L as success", () => {
+  it("colours a positive realized P&L as a gain", () => {
     render(
       <TransactionTable
         rows={[row({ id: "pos", realizedPnl: "120.000", realizedPnlRaw: 120 * 1_000_000 })]}
@@ -102,17 +102,17 @@ describe("TransactionTable", () => {
       />,
     );
     const pnl = screen.getByText("120.000");
-    expect(pnl).toHaveClass("text-m3-success");
+    expect(pnl).toHaveClass("text-m3-gain");
   });
 
-  it("colours a negative realized P&L as error", () => {
+  it("colours a negative realized P&L as a loss", () => {
     render(
       <TransactionTable
         rows={[row({ id: "neg", realizedPnl: "-50.000", realizedPnlRaw: -50 * 1_000_000 })]}
         {...baseProps}
       />,
     );
-    expect(screen.getByText("-50.000")).toHaveClass("text-m3-error");
+    expect(screen.getByText("-50.000")).toHaveClass("text-m3-loss");
   });
 
   it("replaces Total Amount with Cash out/in/Balance in cashStatement mode", () => {

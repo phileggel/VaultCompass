@@ -107,7 +107,7 @@ Status legend: ⬜ pending · 🔎 analyzed · ✅ shipped
   `e2e/helpers/modal.ts` `dismissLeftoverModal`. 11 direct Dialog consumers +
   ConfirmationDialog pass-through. Mechanical fanout, single commit.
 
-### T9 — Techdebt: M3 debit/credit color aliases ⬜
+### T9 — Techdebt: M3 debit/credit color aliases ✅
 
 - Tokens live in `src/ui/global.css`. Add `--color-m3-loss`/`--color-m3-gain`
   (or debit/credit) aliases to the same palette values; migrate the ~10

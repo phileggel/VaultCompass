@@ -109,13 +109,13 @@ export function TransactionTable({
                         because "0" is a meaningful value that must still render. */}
                     <td
                       id={`txl-cash-out-${row.id}`}
-                      className="m3-td text-right tabular-nums text-m3-error"
+                      className="m3-td text-right tabular-nums text-m3-debit"
                     >
                       {row.cashOut || moneyDash}
                     </td>
                     <td
                       id={`txl-cash-in-${row.id}`}
-                      className="m3-td text-right tabular-nums text-m3-success"
+                      className="m3-td text-right tabular-nums text-m3-credit"
                     >
                       {row.cashIn || moneyDash}
                     </td>
@@ -137,7 +137,7 @@ export function TransactionTable({
                 {/* SEL-041 — Realized P&L column (SEL-043: zero/null shown as placeholder) */}
                 <td className="m3-td text-right tabular-nums">
                   {row.realizedPnlRaw != null && row.realizedPnlRaw !== 0 ? (
-                    <span className={row.realizedPnlRaw > 0 ? "text-m3-success" : "text-m3-error"}>
+                    <span className={row.realizedPnlRaw > 0 ? "text-m3-gain" : "text-m3-loss"}>
                       {row.realizedPnl}
                     </span>
                   ) : (

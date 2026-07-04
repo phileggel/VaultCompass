@@ -290,8 +290,8 @@ export function HoldingRow({
           <span
             className={
               row.unrealizedPnlRaw !== null && row.unrealizedPnlRaw < 0
-                ? "text-m3-error"
-                : "text-m3-success"
+                ? "text-m3-loss"
+                : "text-m3-gain"
             }
           >
             {row.performancePct}
@@ -313,8 +313,8 @@ export function HoldingRow({
           <span
             className={
               row.totalReturnPctRaw !== null && row.totalReturnPctRaw < 0
-                ? "text-m3-error"
-                : "text-m3-success"
+                ? "text-m3-loss"
+                : "text-m3-gain"
             }
           >
             {row.totalReturnPct}

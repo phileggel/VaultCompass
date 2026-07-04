@@ -190,7 +190,7 @@ export function SellTransactionModal({
         {potentialPnl !== null && (
           <span
             id="sell-trx-potential-pnl"
-            className={`text-xs ${potentialPnl.raw < 0 ? "text-m3-error" : "text-m3-success"}`}
+            className={`text-xs ${potentialPnl.raw < 0 ? "text-m3-loss" : "text-m3-gain"}`}
           >
             {t("transaction.form_potential_pnl_hint", { value: potentialPnl.formatted })}
           </span>

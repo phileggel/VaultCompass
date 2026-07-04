@@ -57,6 +57,14 @@
   --color-m3-success-container: var(--color-m3-tertiary-container);
   --color-m3-on-success-container: var(--color-m3-on-tertiary-container);
 
+  /* Financial polarity — gain/loss (P&L, performance) and debit/credit (cash
+     out/in) carry their own intent instead of overloading error/success
+     semantics. Same palette values; the .dark error override cascades through. */
+  --color-m3-gain: var(--color-m3-success);
+  --color-m3-loss: var(--color-m3-error);
+  --color-m3-credit: var(--color-m3-success);
+  --color-m3-debit: var(--color-m3-error);
+
   /* Warning: Orange for caution states */
   --color-m3-warning: #f57c00;
   --color-m3-on-warning: #ffffff;

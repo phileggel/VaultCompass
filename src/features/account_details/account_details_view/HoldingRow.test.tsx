@@ -330,7 +330,7 @@ describe("HoldingRow — dividend columns (DIV-072)", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
-  it("colors a negative total return with the error style", () => {
+  it("colors a negative total return with the loss style", () => {
     renderInTable({
       ...baseRow,
       totalReturnPct: "-8.25%",
@@ -338,7 +338,7 @@ describe("HoldingRow — dividend columns (DIV-072)", () => {
     });
     const cell = screen.getByText("-8.25%");
     expect(cell).toBeInTheDocument();
-    expect(cell.className).toContain("text-m3-error");
+    expect(cell.className).toContain("text-m3-loss");
   });
 });
 

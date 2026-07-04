@@ -285,8 +285,8 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       account.total_unrealized_pnl == null || account.total_unrealized_pnl === 0
                         ? "text-m3-on-surface-variant"
                         : account.total_unrealized_pnl < 0
-                          ? "text-m3-error"
-                          : "text-m3-success"
+                          ? "text-m3-loss"
+                          : "text-m3-gain"
                     }
                   >
                     {formatAccountRowTotalUnrealizedPnl(account.total_unrealized_pnl)}
@@ -299,8 +299,8 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       account.ytd_performance_pct == null || account.ytd_performance_pct === 0
                         ? "text-m3-on-surface-variant"
                         : account.ytd_performance_pct < 0
-                          ? "text-m3-error"
-                          : "text-m3-success"
+                          ? "text-m3-loss"
+                          : "text-m3-gain"
                     }
                   >
                     {formatAccountRowYtdPerformancePct(account.ytd_performance_pct)}
