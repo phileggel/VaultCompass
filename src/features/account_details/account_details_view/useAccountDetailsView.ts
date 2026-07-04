@@ -60,6 +60,7 @@ export function useAccountDetailsView(accountId: string) {
   const [dividendOpen, setDividendOpen] = useState(false);
   const [freeSharesOpen, setFreeSharesOpen] = useState(false);
   const [managementFeeOpen, setManagementFeeOpen] = useState(false);
+  const [interestOpen, setInterestOpen] = useState(false);
   const [feeScheduleTarget, setFeeScheduleTarget] = useState<{
     assetId: string;
     assetName: string;
@@ -179,6 +180,17 @@ export function useAccountDetailsView(accountId: string) {
     data.retry();
   }, [data]);
 
+  // INT-010 — interest modal state (entered from the header "Record" menu).
+  const handleInterestOpen = useCallback(() => {
+    if (isAsOf) return;
+    setInterestOpen(true);
+  }, [isAsOf]);
+  const handleInterestClose = useCallback(() => setInterestOpen(false), []);
+  const handleInterestSuccess = useCallback(() => {
+    setInterestOpen(false);
+    data.retry();
+  }, [data]);
+
   // FEE-011 — recurring fee-schedule modal, opened per holding from its row action.
   const handleFeeScheduleOpen = useCallback(
     (assetId: string, assetName: string) => {
@@ -243,6 +255,20 @@ export function useAccountDetailsView(accountId: string) {
         })),
     [data.holdingDetails],
   );
+  // INT-020/023 — candidate assets for the interest modal: the active non-cash
+  // holdings plus the account's cash line (always a valid interest target, even
+  // at a zero balance). Memoized for the same stable-reference reason as above.
+  const interestEligibleHoldings = useMemo(
+    () =>
+      data.holdingDetails
+        .filter((h) => isCashAsset(h.asset_id) || h.quantity > 0)
+        .map((h) => ({
+          assetId: h.asset_id,
+          assetName: h.asset_name,
+          assetCurrency: h.asset_currency,
+        })),
+    [data.holdingDetails],
+  );
   // MKT-011 — priceable holdings for the price modal's asset combobox. Memoized
   // so the stable reference does not thrash the combobox on every parent render
   // (e.g. an AssetPriceUpdated event while the modal is open).
@@ -271,6 +297,7 @@ export function useAccountDetailsView(accountId: string) {
     hasNonCashActiveHoldings,
     hasClosedHoldings,
     activeNonCashHoldings,
+    interestEligibleHoldings,
     priceableAssets,
     // Modal targets / flags
     buyTarget,
@@ -282,6 +309,7 @@ export function useAccountDetailsView(accountId: string) {
     dividendOpen,
     freeSharesOpen,
     managementFeeOpen,
+    interestOpen,
     feeScheduleTarget,
     // Handlers
     handleAddTransaction,
@@ -312,6 +340,9 @@ export function useAccountDetailsView(accountId: string) {
     handleManagementFeeOpen,
     handleManagementFeeClose,
     handleManagementFeeSuccess,
+    handleInterestOpen,
+    handleInterestClose,
+    handleInterestSuccess,
     handleFeeScheduleOpen,
     handleFeeScheduleClose,
     handleFeeScheduleSuccess,

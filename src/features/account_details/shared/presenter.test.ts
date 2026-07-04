@@ -13,6 +13,7 @@ import {
   formatStaleness,
   freeSharesErrorToI18n,
   type HoldingRowViewModel,
+  interestErrorToI18n,
   managementFeeErrorToI18n,
   priceRefreshLockErrorToI18n,
   toAccountSummary,
@@ -664,6 +665,47 @@ describe("freeSharesErrorToI18n", () => {
     "NegativeAveragePrice",
   ] as const)("keyless holding-internal code %s falls back to error.Unknown", (code) => {
     expect(freeSharesErrorToI18n({ code } as never)).toEqual({ key: "error.Unknown" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// interestErrorToI18n — F27 presenter for the interest error surfaces (INT).
+// Create path (InterestError): AccountNotFound, AssetNotFound, AssetNotHeld,
+// InterestAmountInvalid, PercentageNotPositive, PercentageAboveHundred,
+// QuantityNotPositive, InvalidDate, DateInFuture, DateTooOld, DatabaseError.
+// Edit path (AccountError via correct_transaction): e.g. CascadingOversell,
+// TransactionNotFound. Every flat { code } maps to error.{code}.
+// ---------------------------------------------------------------------------
+
+describe("interestErrorToI18n (INT-021/011/040)", () => {
+  it.each([
+    "AccountNotFound",
+    "AssetNotFound",
+    "AssetNotHeld",
+    "InterestAmountInvalid",
+    "PercentageNotPositive",
+    "PercentageAboveHundred",
+    "QuantityNotPositive",
+    "InvalidDate",
+    "DateInFuture",
+    "DateTooOld",
+    "DatabaseError",
+  ] as const)("create-path %s maps to its flat error key", (code) => {
+    expect(interestErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
+  });
+
+  it.each([
+    "CascadingOversell",
+    "TransactionNotFound",
+  ] as const)("edit-path %s maps to its flat error key", (code) => {
+    expect(interestErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
+  });
+
+  it.each([
+    "NegativeQuantity",
+    "NegativeAveragePrice",
+  ] as const)("keyless holding-internal code %s falls back to error.Unknown", (code) => {
+    expect(interestErrorToI18n({ code } as never)).toEqual({ key: "error.Unknown" });
   });
 });
 

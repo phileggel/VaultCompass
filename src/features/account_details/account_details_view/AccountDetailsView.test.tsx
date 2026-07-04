@@ -45,6 +45,9 @@ vi.mock("../dividend_transaction/DividendTransactionModal", () => ({
 vi.mock("../management_fee_transaction/ManagementFeeModal", () => ({
   ManagementFeeModal: () => <div data-testid="management-fee-modal-mounted" />,
 }));
+vi.mock("../interest_transaction/InterestModal", () => ({
+  InterestModal: () => <div data-testid="interest-modal-mounted" />,
+}));
 vi.mock("../fee_schedule/FeeScheduleModal", () => ({
   FeeScheduleModal: () => <div data-testid="fee-schedule-modal-mounted" />,
 }));
@@ -58,6 +61,7 @@ const handlers = {
   handleDividendOpen: vi.fn(),
   handleFreeSharesOpen: vi.fn(),
   handleManagementFeeOpen: vi.fn(),
+  handleInterestOpen: vi.fn(),
   handleAddTransaction: vi.fn(),
 };
 
@@ -81,6 +85,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   hasNonCashActiveHoldings: false,
   hasClosedHoldings: false,
   activeNonCashHoldings: [],
+  interestEligibleHoldings: [],
   buyTarget: null,
   sellTarget: null,
   historyTarget: null,
@@ -89,6 +94,7 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   withdrawalOpen: false,
   dividendOpen: false,
   managementFeeOpen: false,
+  interestOpen: false,
   feeScheduleTarget: null,
   asOfDate: "",
   asOfDisplayDate: "2024-06-01",
@@ -113,6 +119,8 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   handleDividendSuccess: vi.fn(),
   handleManagementFeeClose: vi.fn(),
   handleManagementFeeSuccess: vi.fn(),
+  handleInterestClose: vi.fn(),
+  handleInterestSuccess: vi.fn(),
   handleFeeScheduleOpen: vi.fn(),
   handleFeeScheduleClose: vi.fn(),
   handleFeeScheduleSuccess: vi.fn(),
@@ -354,5 +362,38 @@ describe("AccountDetailsView — management fees (FEE-010/011/053)", () => {
     mockUseAccountDetailsView.mockReturnValue(makeView({ isAsOf: true, asOfDate: "2024-06-01" }));
     render(<AccountDetailsView />);
     expect(document.querySelector("#add-menu-management-fee")).toBeNull();
+  });
+});
+
+describe("AccountDetailsView — interest (INT-010/050)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+  });
+
+  it("routes the Interest button to its handler (INT-010)", () => {
+    render(<AccountDetailsView />);
+    fireEvent.click(document.querySelector("#add-menu-interest")!);
+    expect(handlers.handleInterestOpen).toHaveBeenCalledTimes(1);
+  });
+
+  // INT-050 — the interest surfaces are NOT gated by the fee parameter
+  it("keeps the Interest button when the account has management fees disabled (INT-050)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ managementFeesEnabled: false }));
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#add-menu-interest")).toBeInTheDocument();
+  });
+
+  it("mounts the interest modal when interestOpen is true (INT-010)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ interestOpen: true }));
+    render(<AccountDetailsView />);
+    expect(screen.getByTestId("interest-modal-mounted")).toBeInTheDocument();
+  });
+
+  it("hides the Interest button in the read-only as-of view (INT-010)", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ isAsOf: true, asOfDate: "2024-06-01" }));
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#add-menu-interest")).toBeNull();
   });
 });

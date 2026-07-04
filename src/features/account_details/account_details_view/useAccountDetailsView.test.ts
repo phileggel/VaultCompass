@@ -233,6 +233,33 @@ describe("useAccountDetailsView — management-fee modal state (FEE-010)", () =>
   });
 });
 
+describe("useAccountDetailsView — interest modal state (INT-010)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("interestOpen starts false and flips on open", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.interestOpen).toBe(false);
+    act(() => result.current.handleInterestOpen());
+    expect(result.current.interestOpen).toBe(true);
+  });
+
+  it("handleInterestClose and handleInterestSuccess close the modal", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.handleInterestOpen());
+    act(() => result.current.handleInterestClose());
+    expect(result.current.interestOpen).toBe(false);
+    act(() => result.current.handleInterestOpen());
+    act(() => result.current.handleInterestSuccess());
+    expect(result.current.interestOpen).toBe(false);
+  });
+});
+
 describe("useAccountDetailsView — fee-schedule modal target (FEE-011)", () => {
   beforeEach(() => {
     useAppStore.setState({
@@ -328,6 +355,46 @@ describe("useAccountDetailsView — activeNonCashHoldings filter (DIV-011/020)",
     await act(async () => {});
 
     expect(result.current.activeNonCashHoldings).toEqual([
+      { assetId: "asset-active", assetName: "Active Co", assetCurrency: "USD" },
+    ]);
+  });
+
+  // INT-020/023 — the interest candidates add the cash line to the active
+  // non-cash holdings (zero-quantity non-cash assets stay excluded).
+  it("interestEligibleHoldings includes the cash line alongside active non-cash holdings", async () => {
+    mockGetAccountDetails.mockResolvedValueOnce({
+      status: "ok",
+      data: {
+        account_name: "Main",
+        holdings: [
+          makeHoldingDetail({
+            asset_id: "system-cash-eur",
+            asset_name: "Cash EUR",
+            quantity: 0,
+          }),
+          makeHoldingDetail({ asset_id: "asset-zero", asset_name: "Zero Co", quantity: 0 }),
+          makeHoldingDetail({
+            asset_id: "asset-active",
+            asset_name: "Active Co",
+            asset_currency: "USD",
+            quantity: 2_000_000,
+          }),
+        ],
+        closed_holdings: [],
+        total_holding_count: 3,
+        total_cost_basis: 0,
+        total_realized_pnl: 0,
+        total_unrealized_pnl: null,
+        total_global_value: 0,
+        total_dividends_received: 0,
+      },
+    } as never);
+
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    expect(result.current.interestEligibleHoldings).toEqual([
+      { assetId: "system-cash-eur", assetName: "Cash EUR", assetCurrency: "EUR" },
       { assetId: "asset-active", assetName: "Active Co", assetCurrency: "USD" },
     ]);
   });

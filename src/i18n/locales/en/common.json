@@ -274,6 +274,7 @@
     "type_dividend": "Dividend",
     "type_freeshares": "Free shares",
     "type_managementfee": "Management fee",
+    "type_interest": "Interest",
     "action_sell": "Sell",
     "buy_modal_title": "Buy position",
     "sell_modal_title": "Sell position",
@@ -329,6 +330,7 @@
     "action_record_dividend": "Dividend",
     "action_record_free_shares": "Free shares",
     "action_record_management_fee": "Management fee",
+    "action_record_interest": "Record interest",
     "action_manage_fee": "Manage fee schedule",
     "total_management_fees": "Total Management Fees",
     "column_management_fees": "Mgmt Fees",
@@ -448,6 +450,19 @@
     "form_quantity_placeholder": "0",
     "action_record": "Record free shares",
     "recorded": "Free shares recorded."
+  },
+  "interest": {
+    "modal_title": "Record interest",
+    "form_asset_label": "Credited asset",
+    "form_select_asset": "Select an asset…",
+    "form_percent_label": "Interest rate (%)",
+    "form_percent_placeholder": "0.00",
+    "form_quantity_label": "Quantity credited",
+    "form_quantity_placeholder": "0",
+    "action_record": "Record interest",
+    "recorded": "Interest recorded.",
+    "edit_title": "Edit interest",
+    "updated": "Interest updated."
   },
   "management_fee": {
     "modal_title": "Record a management fee",
@@ -615,6 +630,7 @@
     "ManagementFeeOnCashAsset": "Management fees cannot be applied to a cash holding.",
     "PercentageNotPositive": "Percentage must be greater than 0.",
     "PercentageAboveHundred": "Percentage cannot exceed 100.",
+    "InterestAmountInvalid": "Provide exactly one of percentage or quantity.",
     "RateNotPositive": "Fee rate must be greater than 0.",
     "RateAboveHundred": "Fee rate cannot exceed 100%.",
     "EndBeforeStart": "End date must be after the start date.",

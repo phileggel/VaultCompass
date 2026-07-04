@@ -7,6 +7,7 @@ import type {
   DividendError,
   FreeSharesError,
   HoldingDetail,
+  InterestError,
   ManagementFeeError,
 } from "@/bindings";
 import {
@@ -96,6 +97,21 @@ export function dividendErrorToI18n(err: DividendError): I18nMessage {
  * back to `error.Unknown`.
  */
 export function freeSharesErrorToI18n(err: FreeSharesError | AccountError): I18nMessage {
+  if (err.code === "NegativeQuantity" || err.code === "NegativeAveragePrice") {
+    return { key: "error.Unknown" };
+  }
+  return { key: `error.${err.code}` };
+}
+
+/**
+ * F27 — Maps the interest error surfaces to an i18n key (INT-021/011/040).
+ * Covers both the create path (`InterestError`) and the edit path
+ * (`AccountError`, via `correct_transaction`). Every reachable code resolves to
+ * `error.{code}`; the two holding-internal codes that never reach the wire
+ * (`NegativeQuantity`, `NegativeAveragePrice`) have no i18n key, so they fall
+ * back to `error.Unknown`.
+ */
+export function interestErrorToI18n(err: InterestError | AccountError): I18nMessage {
   if (err.code === "NegativeQuantity" || err.code === "NegativeAveragePrice") {
     return { key: "error.Unknown" };
   }

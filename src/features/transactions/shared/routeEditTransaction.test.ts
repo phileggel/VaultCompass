@@ -63,6 +63,14 @@ describe("routeEditTransaction", () => {
     );
   });
 
+  it("routes Interest to the interest edit modal (INT-040)", () => {
+    routeEditTransaction(navigate, tx("Interest"), vi.fn());
+    expect(patchModalSearch).toHaveBeenCalledWith(
+      navigate,
+      expect.objectContaining({ modal: "edit-interest" }),
+    );
+  });
+
   it("opens the generic modal for a Purchase (default branch)", () => {
     const openGeneric = vi.fn();
     const purchase = tx("Purchase");

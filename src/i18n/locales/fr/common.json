@@ -274,6 +274,7 @@
     "type_dividend": "Dividende",
     "type_freeshares": "Actions gratuites",
     "type_managementfee": "Frais de gestion",
+    "type_interest": "Intérêts",
     "action_sell": "Vendre",
     "buy_modal_title": "Acheter la position",
     "sell_modal_title": "Vendre la position",
@@ -329,6 +330,7 @@
     "action_record_dividend": "Dividende",
     "action_record_free_shares": "Actions gratuites",
     "action_record_management_fee": "Frais de gestion",
+    "action_record_interest": "Enregistrer des intérêts",
     "action_manage_fee": "Gérer la planification des frais",
     "total_management_fees": "Total des frais de gestion",
     "column_management_fees": "Frais gestion",
@@ -448,6 +450,19 @@
     "form_quantity_placeholder": "0",
     "action_record": "Enregistrer les actions gratuites",
     "recorded": "Actions gratuites enregistrées."
+  },
+  "interest": {
+    "modal_title": "Enregistrer des intérêts",
+    "form_asset_label": "Actif crédité",
+    "form_select_asset": "Sélectionner un actif…",
+    "form_percent_label": "Taux d'intérêt (%)",
+    "form_percent_placeholder": "0,00",
+    "form_quantity_label": "Quantité créditée",
+    "form_quantity_placeholder": "0",
+    "action_record": "Enregistrer les intérêts",
+    "recorded": "Intérêts enregistrés.",
+    "edit_title": "Modifier les intérêts",
+    "updated": "Intérêts modifiés."
   },
   "management_fee": {
     "modal_title": "Enregistrer des frais de gestion",
@@ -615,6 +630,7 @@
     "ManagementFeeOnCashAsset": "Impossible d'appliquer des frais de gestion sur une position de liquidités.",
     "PercentageNotPositive": "Le pourcentage doit être supérieur à 0.",
     "PercentageAboveHundred": "Le pourcentage ne peut pas dépasser 100.",
+    "InterestAmountInvalid": "Renseignez soit le pourcentage, soit la quantité, pas les deux.",
     "RateNotPositive": "Le taux des frais doit être supérieur à 0.",
     "RateAboveHundred": "Le taux des frais ne peut pas dépasser 100 %.",
     "EndBeforeStart": "La date de fin doit être postérieure à la date de début.",

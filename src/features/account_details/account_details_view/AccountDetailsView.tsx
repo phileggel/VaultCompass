@@ -8,6 +8,7 @@ import {
   RefreshCw,
   RotateCcw,
   ScrollText,
+  Sprout,
   TrendingUp,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -26,6 +27,7 @@ import { DepositTransactionModal } from "../deposit_transaction/DepositTransacti
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
 import { FeeScheduleModal } from "../fee_schedule/FeeScheduleModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
+import { InterestModal } from "../interest_transaction/InterestModal";
 import { ManagementFeeModal } from "../management_fee_transaction/ManagementFeeModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
@@ -219,6 +221,18 @@ export function AccountDetailsView() {
                         title={t("account_details.action_record_management_fee")}
                       />
                     )}
+                    {/* INT-010 — Record interest; NOT gated by the management-fees
+                        account parameter (INT-050) */}
+                    <IconButton
+                      id="add-menu-interest"
+                      shape="square"
+                      size="lg"
+                      variant="tonal"
+                      icon={<Sprout size={20} />}
+                      onClick={view.handleInterestOpen}
+                      aria-label={t("account_details.action_record_interest")}
+                      title={t("account_details.action_record_interest")}
+                    />
                   </>
                 )}
               </div>
@@ -517,6 +531,17 @@ export function AccountDetailsView() {
           accountId={accountId}
           heldAssets={view.activeNonCashHoldings}
           onSubmitSuccess={view.handleManagementFeeSuccess}
+        />
+      )}
+
+      {/* INT-010/020 — interest modal (credited asset chosen inside, cash line included) */}
+      {view.interestOpen && (
+        <InterestModal
+          isOpen
+          onClose={view.handleInterestClose}
+          accountId={accountId}
+          heldAssets={view.interestEligibleHoldings}
+          onSubmitSuccess={view.handleInterestSuccess}
         />
       )}
 

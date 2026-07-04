@@ -12,10 +12,12 @@ import type {
   FreeSharesDTO,
   FreeSharesError,
   HoldingSnapshot,
+  InterestError,
   ManagementFeeDTO,
   ManagementFeeError,
   OpenHoldingDTO,
   OpenHoldingError,
+  RecordInterestDTO,
   Result,
   Transaction,
   UpdateFeeScheduleDTO,
@@ -79,6 +81,11 @@ export const accountDetailsGateway = {
   // FSD-022 — record a zero-cost free-share distribution attributed to a held asset.
   async recordFreeShares(dto: FreeSharesDTO): Promise<Result<Transaction, FreeSharesError>> {
     return commands.recordFreeShares(dto);
+  },
+
+  // INT-023/024 — record a zero-cost interest credit on a held asset or the cash line.
+  async recordInterest(dto: RecordInterestDTO): Promise<Result<Transaction, InterestError>> {
+    return commands.recordInterest(dto);
   },
 
   // FEE-022 — record a one-off management fee as a percentage of the held quantity.

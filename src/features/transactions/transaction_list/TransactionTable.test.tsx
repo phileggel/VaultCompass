@@ -94,6 +94,18 @@ describe("TransactionTable", () => {
     expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
   });
 
+  it("renders the money placeholder for an Interest row's unit price and total (INT-030)", () => {
+    render(
+      <TransactionTable
+        rows={[row({ id: "int", type: "Interest", unitPrice: "0.000", totalAmount: "0.000" })]}
+        {...baseProps}
+      />,
+    );
+    // unit-price and total cells fall back to the placeholder; the placeholder
+    // key also renders in the (null) realized-P&L cell → 3 occurrences.
+    expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
+  });
+
   it("colours a positive realized P&L as a gain", () => {
     render(
       <TransactionTable
