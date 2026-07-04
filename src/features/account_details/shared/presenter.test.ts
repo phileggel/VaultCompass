@@ -39,6 +39,7 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   total_return_pct: null,
   fx_rate_date: null,
   management_fees: 0,
+  market_value: null,
   ...overrides,
 });
 
@@ -758,5 +759,37 @@ describe("toPriceableAssets", () => {
       { assetId: "a1", assetName: "Apple", assetCurrency: "EUR" },
       { assetId: "a2", assetName: "Tesla", assetCurrency: "USD" },
     ]);
+  });
+});
+
+describe("toHoldingRow — weight % (ACD-052)", () => {
+  it("formats the weight of a priced holding against the Global Value", () => {
+    // 220.00 of a 1000.00 account → 22.00%
+    const row = toHoldingRow(makeHolding({ market_value: 220_000_000 }), 1_000_000_000);
+    expect(row.weightPct).toBe("22,00%");
+  });
+
+  it("renders the dash when the holding has no market value", () => {
+    const row = toHoldingRow(makeHolding({ market_value: null }), 1_000_000_000);
+    expect(row.weightPct).toBe("—");
+  });
+
+  it("renders the dash when the Global Value is zero", () => {
+    const row = toHoldingRow(makeHolding({ market_value: 220_000_000 }), 0);
+    expect(row.weightPct).toBe("—");
+  });
+
+  it("computes the cash row weight from its balance", () => {
+    // cash 250.00 of a 1000.00 account → 25.00%
+    const row = toHoldingRow(
+      makeHolding({
+        asset_id: "system-cash-eur",
+        quantity: 250_000_000,
+        market_value: 250_000_000,
+      }),
+      1_000_000_000,
+    );
+    expect(row.isCash).toBe(true);
+    expect(row.weightPct).toBe("25,00%");
   });
 });

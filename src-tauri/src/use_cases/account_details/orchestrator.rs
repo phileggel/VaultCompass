@@ -60,6 +60,11 @@ pub struct HoldingDetail {
     /// Computed on read as Σ(qty_removed × price_as_of(date)), FXR-converted.
     /// 0 when no management fee transactions have been recorded.
     pub management_fees: i64,
+    /// Market value of the holding in account-currency micros (ACD-052) — exactly
+    /// its contribution to `total_global_value` (CSH-094): the balance for the Cash
+    /// Holding, price × quantity × FX for a priced non-cash holding. None when no
+    /// price is recorded or a foreign holding has no usable rate (FXR-034).
+    pub market_value: Option<i64>,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -328,15 +333,22 @@ impl AccountDetailsUseCase {
                 (None, None, None, None, None)
             };
 
-            // CSH-094 / FXR-041 — a priced non-cash holding contributes its market
-            // value (converted to account currency) to the Global Value. A foreign
-            // holding with no usable rate contributes 0 (FXR-034).
+            // CSH-094 / FXR-041 / ACD-052 — the holding's market value in account
+            // currency: the balance for the Cash Holding, price × quantity × FX for a
+            // priced non-cash holding, None when no price or no usable rate (FXR-034).
+            // A priced non-cash holding contributes it to the Global Value (the cash
+            // quantity was already added above).
+            let market_value: Option<i64> = if is_cash {
+                Some(holding.quantity)
+            } else if let (Some(cp), Some(rate)) = (current_price, conversion_rate) {
+                let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
+                Some((holding.quantity as i128 * converted_price as i128 / 1_000_000) as i64)
+            } else {
+                None
+            };
             if !is_cash {
-                if let (Some(cp), Some(rate)) = (current_price, conversion_rate) {
-                    let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
-                    let market_value =
-                        (holding.quantity as i128 * converted_price as i128 / 1_000_000) as i64;
-                    total_global_value = total_global_value.saturating_add(market_value);
+                if let Some(value) = market_value {
+                    total_global_value = total_global_value.saturating_add(value);
                 }
             }
 
@@ -372,6 +384,7 @@ impl AccountDetailsUseCase {
                 total_return_pct,
                 fx_rate_date,
                 management_fees, // FEE-052
+                market_value,    // ACD-052
             });
         }
 
@@ -674,13 +687,19 @@ impl AccountDetailsUseCase {
                 (None, None, None, None, None)
             };
 
-            // CSH-094 / FXR-041 — a priced holding contributes its converted market
-            // value to the Global Value; foreign with no usable rate contributes 0.
-            if let (Some(cp), Some(rate)) = (current_price, conversion_rate) {
+            // CSH-094 / FXR-041 / ACD-052 — market value in account currency as of
+            // the date; a priced holding contributes it to the Global Value, a
+            // holding with no price or no usable rate carries None.
+            let market_value: Option<i64> = if let (Some(cp), Some(rate)) =
+                (current_price, conversion_rate)
+            {
                 let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
-                let market_value =
-                    (reconstruction.quantity as i128 * converted_price as i128 / 1_000_000) as i64;
-                total_global_value = total_global_value.saturating_add(market_value);
+                Some((reconstruction.quantity as i128 * converted_price as i128 / 1_000_000) as i64)
+            } else {
+                None
+            };
+            if let Some(value) = market_value {
+                total_global_value = total_global_value.saturating_add(value);
             }
 
             let dividends_received = *dividends_by_asset.get(asset_id).unwrap_or(&0);
@@ -710,6 +729,7 @@ impl AccountDetailsUseCase {
                 total_return_pct,
                 fx_rate_date,
                 management_fees: *management_fees_by_asset.get(asset_id).unwrap_or(&0), // FEE-052
+                market_value,                                                           // ACD-052
             });
         }
 
@@ -750,6 +770,7 @@ impl AccountDetailsUseCase {
                 total_return_pct: None,
                 fx_rate_date: None,
                 management_fees: 0, // cash holdings never have management fees
+                market_value: Some(cash_balance), // ACD-052 — cash value is its balance
             });
         }
 
@@ -1765,6 +1786,171 @@ mod tests {
         assert!(resp.holdings[0].current_price.is_some());
         assert!(resp.holdings[0].unrealized_pnl.is_none());
         assert!(resp.holdings[0].performance_pct.is_none());
+    }
+
+    // ACD-052 — market_value is the priced holding's value in account currency and
+    // matches its contribution to total_global_value
+    #[tokio::test]
+    async fn market_value_present_for_priced_same_currency_holding() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let asset = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "X".to_string(),
+                reference: "X".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        SqliteHoldingRepository::new(pool.clone())
+            .upsert(
+                Holding::new(
+                    account.id.clone(),
+                    asset.id.clone(),
+                    2_000_000,
+                    100_000_000,
+                    0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&asset.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        // 2 units × 110.00 = 220.00 in account currency
+        assert_eq!(resp.holdings[0].market_value, Some(220_000_000));
+        assert_eq!(resp.total_global_value, 220_000_000);
+    }
+
+    // ACD-052 — market_value is None for an unpriced holding and for a foreign
+    // holding with no usable FX rate (FXR-034)
+    #[tokio::test]
+    async fn market_value_none_when_unpriced_or_no_usable_rate() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        let unpriced = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "NoPrice".to_string(),
+                reference: "NOP".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        let foreign = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "NoRate".to_string(),
+                reference: "NOR".to_string(),
+                isin: None,
+                class: AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+            })
+            .await
+            .unwrap();
+        let holding_repo = SqliteHoldingRepository::new(pool.clone());
+        for asset_id in [unpriced.id.clone(), foreign.id.clone()] {
+            holding_repo
+                .upsert(
+                    Holding::new(
+                        account.id.clone(),
+                        asset_id,
+                        1_000_000,
+                        100_000_000,
+                        0,
+                        None,
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+        asset_svc
+            .record_asset_price(&foreign.id, "2026-01-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        for holding in &resp.holdings {
+            assert_eq!(holding.market_value, None, "asset {}", holding.asset_name);
+        }
+        assert_eq!(resp.total_global_value, 0);
+    }
+
+    // ACD-052 — the Cash Holding's market_value is its balance (already account currency)
+    #[tokio::test]
+    async fn market_value_of_cash_holding_is_its_balance() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "A".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2026-01-05".to_string(), 100_000_000, None)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let cash = resp
+            .holdings
+            .iter()
+            .find(|h| crate::core::cash::is_cash_asset(&h.asset_id))
+            .expect("cash holding present");
+        assert_eq!(cash.market_value, Some(100_000_000));
+        assert_eq!(resp.total_global_value, 100_000_000);
     }
 
     // MKT-035 — performance_pct is None when cost_basis is zero

@@ -2148,7 +2148,14 @@ fx_rate_date: string | null;
  * Computed on read as Σ(qty_removed × price_as_of(date)), FXR-converted.
  * 0 when no management fee transactions have been recorded.
  */
-management_fees: number }
+management_fees: number; 
+/**
+ * Market value of the holding in account-currency micros (ACD-052) — exactly
+ * its contribution to `total_global_value` (CSH-094): the balance for the Cash
+ * Holding, price × quantity × FX for a priced non-cash holding. None when no
+ * price is recorded or a foreign holding has no usable rate (FXR-034).
+ */
+market_value: number | null }
 /**
  * Point-in-time reconstruction of a single holding's quantity and VWAP cost
  * basis as of a date — the read-only "as of" valuation behind the trade-dialog

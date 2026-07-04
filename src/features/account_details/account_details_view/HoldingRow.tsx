@@ -140,6 +140,10 @@ export function HoldingRow({
         <td className="m3-td" />
         <td className="m3-td" />
         <td className="m3-td" />
+        {/* ACD-052 — cash weight % of the account's Global Value */}
+        <td id={`holding-weight-pct-${row.assetId}`} className="m3-td text-right tabular-nums">
+          {row.weightPct}
+        </td>
         <td className="m3-td" />
         <td className="m3-td" />
         {/* DIV-072 — dividends / total-return columns are blank for the cash row */}
@@ -245,6 +249,10 @@ export function HoldingRow({
       {/* MKT-143 — Current value = current price × quantity (asset currency) */}
       <td id={`holding-current-value-${row.assetId}`} className="m3-td text-right tabular-nums">
         {row.currentValue}
+      </td>
+      {/* ACD-052 — Weight % of the account's Global Value */}
+      <td id={`holding-weight-pct-${row.assetId}`} className="m3-td text-right tabular-nums">
+        {row.weightPct}
       </td>
       {/* MKT-032/034 — Unrealized P&L; FXR-012 — foreign-currency holdings with a
           price but no usable rate show a Record-FX-rate shortcut instead of "—" */}

@@ -36,6 +36,7 @@ const baseRow: HoldingRowViewModel = {
   performancePct: "50.00%",
   dividendsReceived: "0.00",
   managementFees: "0.00",
+  weightPct: "—",
   totalReturnPct: "50.00%",
   totalReturnPctRaw: 50_000_000,
   isCash: false,
@@ -72,6 +73,14 @@ describe("HoldingRow — price cell (MKT-030, MKT-140, MKT-142)", () => {
     expect(screen.getByText("150.00")).toBeInTheDocument();
     expect(screen.getByText("mkt.source_yahoo")).toBeInTheDocument();
     expect(screen.getByText("mkt.staleness_today")).toBeInTheDocument();
+  });
+
+  // ACD-052 — weight % cell renders after the current value
+  it("renders the weight % cell", () => {
+    const { container } = renderInTable({ ...baseRow, weightPct: "22,00%" });
+    const cell = container.querySelector("#holding-weight-pct-asset-1");
+    expect(cell).not.toBeNull();
+    expect(cell?.textContent).toBe("22,00%");
   });
 
   it("does not render a standalone 'as of date' sub-line (compact cell)", () => {
@@ -272,7 +281,13 @@ describe("HoldingRow — dividend columns (DIV-072)", () => {
   });
 
   it("renders an em dash for total return when not computable", () => {
-    renderInTable({ ...baseRow, totalReturnPct: "—", totalReturnPctRaw: null });
+    // weightPct is given a value so total-return is the only dash in the row.
+    renderInTable({
+      ...baseRow,
+      totalReturnPct: "—",
+      totalReturnPctRaw: null,
+      weightPct: "12,00%",
+    });
     // The dividends cell still shows its (zero) amount; total-return is the dash.
     expect(screen.getByText("—")).toBeInTheDocument();
   });

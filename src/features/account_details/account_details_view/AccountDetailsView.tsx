@@ -269,6 +269,8 @@ export function AccountDetailsView() {
                       <th className="m3-th text-right">
                         {t("account_details.column_current_value")}
                       </th>
+                      {/* ACD-052 — Weight % column */}
+                      <th className="m3-th text-right">{t("account_details.column_weight_pct")}</th>
                       {/* MKT-032/034 — Unrealized P&L column */}
                       <th className="m3-th text-right">
                         {t("account_details.column_unrealized_pnl")}

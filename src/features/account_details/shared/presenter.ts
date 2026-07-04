@@ -153,6 +153,8 @@ export interface HoldingRowViewModel {
   dividendsReceived: string;
   /** Formatted cumulative management fees deducted for this holding, account currency (FEE-052). Always shown ("0,00" when none). */
   managementFees: string;
+  /** Formatted weight of the holding in the account's Global Value (e.g. "12.34%"), or "—" when the holding has no market value or the Global Value is 0 (ACD-052). */
+  weightPct: string;
   /** Formatted total return % (price + dividends) or "—" when not computable (DIV-071/072). */
   totalReturnPct: string;
   /** Raw total return % in micro-units, or null when not computable — used for sign-based color styling (DIV-072). */
@@ -292,7 +294,18 @@ export function toPriceableAssets(holdings: HoldingRowViewModel[]): PriceableAss
     }));
 }
 
-export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
+/**
+ * ACD-052 — weight of a holding in the account's Global Value, formatted as a
+ * percentage with 2 decimals. "—" when the holding carries no market value
+ * (unpriced / no usable FX rate) or when the Global Value is not positive.
+ */
+function formatWeightPct(marketValue: number | null, totalGlobalValue: number): string {
+  if (marketValue === null || totalGlobalValue <= 0) return DASH;
+  const weightPctMicros = Math.round((marketValue / totalGlobalValue) * 100_000_000);
+  return `${microToFormatted(weightPctMicros, 2)}%`;
+}
+
+export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): HoldingRowViewModel {
   const isCash = isCashAsset(detail.asset_id);
   if (isCash) {
     // Cash row variant (CSH-090/091): no cost basis, average price, realized PnL or
@@ -317,6 +330,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       performancePct: "",
       dividendsReceived: "",
       managementFees: "",
+      weightPct: formatWeightPct(detail.market_value, totalGlobalValue),
       totalReturnPct: "",
       totalReturnPctRaw: null,
       isCash: true,
@@ -354,6 +368,7 @@ export function toHoldingRow(detail: HoldingDetail): HoldingRowViewModel {
       detail.performance_pct !== null ? `${microToFormatted(detail.performance_pct, 2)}%` : DASH,
     dividendsReceived: microToFormatted(detail.dividends_received, 2),
     managementFees: microToFormatted(detail.management_fees, 2),
+    weightPct: formatWeightPct(detail.market_value, totalGlobalValue),
     totalReturnPct:
       detail.total_return_pct !== null ? `${microToFormatted(detail.total_return_pct, 2)}%` : DASH,
     totalReturnPctRaw: detail.total_return_pct,

@@ -298,6 +298,7 @@
     "column_quantity": "Quantity",
     "column_avg_price": "Avg. Price",
     "column_current_value": "Current Value",
+    "column_weight_pct": "Weight %",
     "column_realized_pnl": "Realized P&L",
     "total_cost_basis": "Total Cost Basis",
     "total_realized_pnl": "Total Realized P&L",
