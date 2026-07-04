@@ -6,8 +6,8 @@
 /// SQLite. No mocks — per test_convention.md Tier 3 constraint.
 use std::sync::Arc;
 use vault_compass_lib::context::account::{
-    AccountService, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
-    TransactionType, UpdateFrequency,
+    AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository, SqliteHoldingRepository,
+    SqliteTransactionRepository, TransactionType, UpdateFrequency,
 };
 use vault_compass_lib::context::asset::{
     AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
@@ -54,6 +54,7 @@ async fn build_ctx() -> Ctx {
             Box::new(SqliteHoldingRepository::new(pool.clone())),
             Box::new(SqliteTransactionRepository::new(pool.clone())),
         )
+        .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())))
         .with_event_bus(Arc::clone(&bus)),
     );
     let asset_service = Arc::new(
@@ -414,6 +415,7 @@ async fn record_dividend_publishes_transaction_updated_event() {
             Box::new(SqliteHoldingRepository::new(pool.clone())),
             Box::new(SqliteTransactionRepository::new(pool.clone())),
         )
+        .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())))
         .with_event_bus(Arc::clone(&bus)),
     );
     let asset_service = Arc::new(

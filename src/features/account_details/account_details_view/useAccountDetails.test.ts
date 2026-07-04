@@ -173,6 +173,21 @@ describe("useAccountDetails — cash row (CSH-092 / CSH-095)", () => {
     expect(result.current.holdings.at(0)?.assetId).toBe("system-cash-eur");
   });
 
+  // ACD-052 — the hook wires the account total into every row's weight %
+  it("computes weightPct from market_value and total_global_value (ACD-052)", async () => {
+    mockGetAccountDetails.mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        holdings: [makeHolding({ market_value: 220_000_000 })],
+        total_holding_count: 1,
+        total_global_value: 1_000_000_000,
+      }),
+    });
+    const { result } = renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    expect(result.current.holdings.at(0)?.weightPct).toBe("22,00%");
+  });
+
   // CSH-090/095 — a 0-balance cash holding is surfaced in `holdings` (always-present cash row)
   it("surfaces a 0-balance cash holding in holdings (CSH-095)", async () => {
     mockGetAccountDetails.mockResolvedValue({

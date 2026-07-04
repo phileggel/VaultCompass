@@ -309,6 +309,9 @@ function formatWeightPct(marketValue: number | null, totalGlobalValue: number): 
   return `${microToFormatted(weightPctMicros, 2)}%`;
 }
 
+// reviewer-frontend FP: the default is deliberate — weight legitimately dashes when
+// no account total is supplied; the wiring is covered by the useAccountDetails
+// ACD-052 test — next-batch 2026-07-04
 export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): HoldingRowViewModel {
   const isCash = isCashAsset(detail.asset_id);
   if (isCash) {

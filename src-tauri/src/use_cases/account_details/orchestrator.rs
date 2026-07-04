@@ -270,15 +270,6 @@ impl AccountDetailsUseCase {
 
             let is_cash = asset.class == crate::context::asset::AssetClass::Cash;
 
-            // CSH-094 / FXR-041 — Cash Holding contributes its raw quantity (already in
-            // account currency). Non-cash holdings contribute their market value converted
-            // to account currency (FXR-030); unpriced holdings, or foreign holdings with no
-            // usable rate (FXR-034), contribute 0. The conversion happens further down once
-            // the rate and price are known.
-            if is_cash {
-                total_global_value = total_global_value.saturating_add(holding.quantity);
-            }
-
             // CSH-093 — cash holdings carry no cost basis. Non-cash uses the standard
             // (quantity × average_price) formula with i128 intermediates (ACD-023/024).
             let cost_basis = if is_cash {
@@ -321,6 +312,17 @@ impl AccountDetailsUseCase {
                 .ok()
                 .flatten();
 
+            // FXR-030 — current price converted to account currency, i128
+            // intermediates (ACD-024). Same-currency holdings resolve to rate 1.0 so
+            // the arithmetic is unchanged (MKT-033/034). None when no price is
+            // recorded or no usable rate exists for a foreign pair (FXR-034).
+            let converted_price: Option<i64> = match (&latest_price, conversion_rate) {
+                (Some(latest), Some(rate)) => {
+                    Some((latest.price as i128 * rate as i128 / 1_000_000) as i64)
+                }
+                _ => None,
+            };
+
             let (
                 current_price,
                 current_price_date,
@@ -328,20 +330,11 @@ impl AccountDetailsUseCase {
                 unrealized_pnl,
                 performance_pct,
             ) = if let Some(ref latest) = latest_price {
-                let current_price = latest.price;
-                let current_price_date = latest.date.clone();
-                let current_price_source = latest.source.clone();
-                // FXR-030/031/032 — value the holding in account currency using the
-                // resolved rate. Same-currency holdings resolve to rate 1.0 so the
-                // arithmetic is unchanged (MKT-033/034). When no usable rate exists
-                // for a foreign pair, P&L stays None (FXR-034).
-                let (unrealized_pnl, performance_pct) = match conversion_rate {
-                    Some(rate) => {
-                        // FXR-030 — current_price × rate, i128 intermediates (ACD-024)
-                        let converted_price =
-                            (current_price as i128 * rate as i128 / 1_000_000) as i64;
-                        let unrealized_pnl = ((converted_price as i128
-                            - holding.average_price as i128)
+                // FXR-030/031/032 — P&L from the converted price; stays None when no
+                // usable rate exists (FXR-034).
+                let (unrealized_pnl, performance_pct) = match converted_price {
+                    Some(converted) => {
+                        let unrealized_pnl = ((converted as i128 - holding.average_price as i128)
                             * holding.quantity as i128
                             / 1_000_000) as i64;
                         let performance_pct = if cost_basis != 0 {
@@ -354,9 +347,9 @@ impl AccountDetailsUseCase {
                     None => (None, None),
                 };
                 (
-                    Some(current_price),
-                    Some(current_price_date),
-                    Some(current_price_source),
+                    Some(latest.price),
+                    Some(latest.date.clone()),
+                    Some(latest.source.clone()),
                     unrealized_pnl,
                     performance_pct,
                 )
@@ -365,22 +358,19 @@ impl AccountDetailsUseCase {
             };
 
             // CSH-094 / FXR-041 / ACD-052 — the holding's market value in account
-            // currency: the balance for the Cash Holding, price × quantity × FX for a
-            // priced non-cash holding, None when no price or no usable rate (FXR-034).
-            // A priced non-cash holding contributes it to the Global Value (the cash
-            // quantity was already added above).
+            // currency: the balance for the Cash Holding (already account currency),
+            // converted price × quantity for a priced non-cash holding, None when no
+            // price or no usable rate (FXR-034). Every valued holding contributes it
+            // to the Global Value exactly once.
             let market_value: Option<i64> = if is_cash {
                 Some(holding.quantity)
-            } else if let (Some(cp), Some(rate)) = (current_price, conversion_rate) {
-                let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
-                Some((holding.quantity as i128 * converted_price as i128 / 1_000_000) as i64)
             } else {
-                None
+                converted_price.map(|converted| {
+                    (holding.quantity as i128 * converted as i128 / 1_000_000) as i64
+                })
             };
-            if !is_cash {
-                if let Some(value) = market_value {
-                    total_global_value = total_global_value.saturating_add(value);
-                }
+            if let Some(value) = market_value {
+                total_global_value = total_global_value.saturating_add(value);
             }
 
             // DIV-070 — dividends_received: sum of Dividend total_amount for this (account, asset).
@@ -699,6 +689,16 @@ impl AccountDetailsUseCase {
                 })?;
             let price_as_of = prices.iter().find(|p| p.date.as_str() <= as_of_date);
 
+            // FXR-030 — carry-forward price converted to account currency, i128
+            // intermediates (ACD-024); same-currency resolves to 1.0. None when no
+            // price exists on or before the date or no usable rate (FXR-034).
+            let converted_price: Option<i64> = match (price_as_of, conversion_rate) {
+                (Some(price), Some(rate)) => {
+                    Some((price.price as i128 * rate as i128 / 1_000_000) as i64)
+                }
+                _ => None,
+            };
+
             let (
                 current_price,
                 current_price_date,
@@ -706,14 +706,10 @@ impl AccountDetailsUseCase {
                 unrealized_pnl,
                 performance_pct,
             ) = if let Some(price) = price_as_of {
-                let current_price = price.price;
-                // FXR-030/031/032 — value in account currency using the resolved
-                // rate; same-currency resolves to 1.0. No usable rate → P&L None.
-                let (unrealized_pnl, performance_pct) = match conversion_rate {
-                    Some(rate) => {
-                        let converted_price =
-                            (current_price as i128 * rate as i128 / 1_000_000) as i64;
-                        let unrealized_pnl = ((converted_price as i128
+                // FXR-030/031/032 — P&L from the converted price; None without a rate.
+                let (unrealized_pnl, performance_pct) = match converted_price {
+                    Some(converted) => {
+                        let unrealized_pnl = ((converted as i128
                             - reconstruction.average_price as i128)
                             * reconstruction.quantity as i128
                             / 1_000_000) as i64;
@@ -727,7 +723,7 @@ impl AccountDetailsUseCase {
                     None => (None, None),
                 };
                 (
-                    Some(current_price),
+                    Some(price.price),
                     Some(price.date.clone()),
                     Some(price.source.clone()),
                     unrealized_pnl,
@@ -740,14 +736,9 @@ impl AccountDetailsUseCase {
             // CSH-094 / FXR-041 / ACD-052 — market value in account currency as of
             // the date; a priced holding contributes it to the Global Value, a
             // holding with no price or no usable rate carries None.
-            let market_value: Option<i64> = if let (Some(cp), Some(rate)) =
-                (current_price, conversion_rate)
-            {
-                let converted_price = (cp as i128 * rate as i128 / 1_000_000) as i64;
-                Some((reconstruction.quantity as i128 * converted_price as i128 / 1_000_000) as i64)
-            } else {
-                None
-            };
+            let market_value: Option<i64> = converted_price.map(|converted| {
+                (reconstruction.quantity as i128 * converted as i128 / 1_000_000) as i64
+            });
             if let Some(value) = market_value {
                 total_global_value = total_global_value.saturating_add(value);
             }
@@ -3405,6 +3396,84 @@ mod tests {
         assert_eq!(resp.total_cost_basis, 200_000_000);
         // Global value = 240 (Early) + 800 (cash) = 1040.
         assert_eq!(resp.total_global_value, 1_040_000_000);
+    }
+
+    // ACD-052 / FEE-074 — the as-of view carries market_value for priced holdings
+    // (and the cash row) but never a fee rate, even when an active schedule exists.
+    #[tokio::test]
+    async fn as_of_view_carries_market_value_but_no_fee_rate() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let stock = make_stock(&asset_svc, "Fund", "EUR").await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-02-01".to_string(),
+                2_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, "2024-03-01", 120.0)
+            .await
+            .unwrap();
+        // Active schedule on the same asset — must NOT surface in the as-of view.
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock.clone(),
+                1_500_000,
+                crate::context::account::FeeFrequency::Annually,
+                "2026-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+
+        let fund = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_name == "Fund")
+            .expect("Fund present");
+        // Same-currency: market value = 120 × 2 = 240.
+        assert_eq!(fund.market_value, Some(240_000_000));
+        assert_eq!(fund.fee_rate_percent_micros, None);
+        let cash = resp
+            .holdings
+            .iter()
+            .find(|h| is_cash_asset(&h.asset_id))
+            .expect("cash row present");
+        // Cash market value is its balance: 1000 deposit − 200 buy = 800.
+        assert_eq!(cash.market_value, Some(800_000_000));
+        assert_eq!(cash.fee_rate_percent_micros, None);
     }
 
     // A partial sell BEFORE the as-of date lowers quantity but preserves VWAP,
