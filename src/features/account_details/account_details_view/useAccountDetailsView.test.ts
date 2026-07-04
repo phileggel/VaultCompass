@@ -412,3 +412,35 @@ describe("useAccountDetailsView — as-of read-only mode", () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
+
+describe("useAccountDetailsView — management fees gate (FEE-076)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("derives managementFeesEnabled from the account catalog", () => {
+    useAppStore.setState({
+      accounts: [
+        { id: "acc-1", name: "Main", currency: "EUR", management_fees_enabled: true },
+      ] as never,
+    });
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.managementFeesEnabled).toBe(true);
+  });
+
+  it("is false for a disabled account and for an unknown account", () => {
+    useAppStore.setState({
+      accounts: [
+        { id: "acc-1", name: "Main", currency: "EUR", management_fees_enabled: false },
+      ] as never,
+    });
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.managementFeesEnabled).toBe(false);
+
+    const { result: unknown } = renderHook(() => useAccountDetailsView("acc-missing"));
+    expect(unknown.current.managementFeesEnabled).toBe(false);
+  });
+});

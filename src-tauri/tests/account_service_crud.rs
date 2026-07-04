@@ -102,6 +102,7 @@ async fn test_delete_account_removes_it_from_get_all() {
             "ToDelete".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -123,6 +124,7 @@ async fn test_get_all_returns_created_accounts() {
             "Alpha".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -131,6 +133,7 @@ async fn test_get_all_returns_created_accounts() {
             "Beta".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -152,6 +155,7 @@ async fn test_get_by_id_returns_some_or_none() {
             "Existing".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -175,6 +179,7 @@ async fn test_get_holdings_for_account_returns_empty_before_any_transaction() {
             "NoHoldings".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -195,6 +200,7 @@ async fn test_get_holding_by_account_asset_returns_none_then_some() {
             "HoldingTest".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -238,6 +244,7 @@ async fn test_get_transactions_returns_chronological_order() {
             "TxOrder".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -314,6 +321,7 @@ async fn test_get_all_transactions_for_account_spans_assets_chronologically() {
             "AllTx".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -390,6 +398,7 @@ async fn test_get_transaction_by_id_returns_some_or_none() {
             "TxLookup".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -439,6 +448,7 @@ async fn test_get_asset_ids_for_account_deduplicates() {
             "AssetIds".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -489,6 +499,7 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
             "Summary".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -555,6 +566,7 @@ async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
             "ReorderGuard".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();

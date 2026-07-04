@@ -941,6 +941,7 @@ mod tests {
                 "Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -991,6 +992,7 @@ mod tests {
                 "Portfolio".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1048,6 +1050,7 @@ mod tests {
                 "Archived Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1110,6 +1113,7 @@ mod tests {
                 "My Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1132,6 +1136,7 @@ mod tests {
                 "X".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1180,6 +1185,7 @@ mod tests {
                 "Acct".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1233,6 +1239,7 @@ mod tests {
                 "Acct".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1285,6 +1292,7 @@ mod tests {
                 "P".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1336,6 +1344,7 @@ mod tests {
                 "P".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1416,6 +1425,7 @@ mod tests {
                 "D".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1467,6 +1477,7 @@ mod tests {
                 "F".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1509,6 +1520,7 @@ mod tests {
                 "H".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1567,6 +1579,7 @@ mod tests {
                 "I".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1649,6 +1662,7 @@ mod tests {
                 "J".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1671,6 +1685,7 @@ mod tests {
                 "K".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1693,6 +1708,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1744,6 +1760,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1801,6 +1818,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1859,6 +1877,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1916,6 +1935,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1989,6 +2009,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2024,6 +2045,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2102,6 +2124,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2138,6 +2161,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2160,6 +2184,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2195,6 +2220,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2242,6 +2268,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2298,6 +2325,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2354,6 +2382,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2411,6 +2440,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2434,6 +2464,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2525,6 +2556,7 @@ mod tests {
                 "Alpha".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2585,6 +2617,7 @@ mod tests {
                 "Cash + Stocks".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2677,6 +2710,7 @@ mod tests {
                 "Cash drained".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2745,6 +2779,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2788,6 +2823,7 @@ mod tests {
                 "A".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2996,6 +3032,7 @@ mod tests {
                 "FX Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3104,6 +3141,7 @@ mod tests {
                 "No FX Rate".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3191,6 +3229,7 @@ mod tests {
                 "Same CCY".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3325,6 +3364,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3422,6 +3462,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3501,6 +3542,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3571,6 +3613,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3632,6 +3675,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3703,6 +3747,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3773,6 +3818,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -3845,6 +3891,7 @@ mod tests {
                 "FEE Zero Acct".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3906,6 +3953,7 @@ mod tests {
                 "FEE Total Zero".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3936,6 +3984,7 @@ mod tests {
                 "FEE Aggregate".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -4028,6 +4077,7 @@ mod tests {
                 "FEE FX Acct".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -4116,6 +4166,7 @@ mod tests {
                 "FEE-054".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -4204,6 +4255,7 @@ mod tests {
                 "FEE-072".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();

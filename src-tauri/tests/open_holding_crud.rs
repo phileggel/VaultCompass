@@ -61,6 +61,7 @@ async fn open_holding_end_to_end_persists_correct_fields() {
             "Acc".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();

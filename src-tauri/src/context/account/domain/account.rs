@@ -93,10 +93,14 @@ pub struct Account {
 
 impl Account {
     /// Creates a new Account. Trims the name before validation and storage (R1).
+    ///
+    /// FEE-075's "new accounts default to disabled" is enforced by the creation
+    /// DTO/form default, threaded through `management_fees_enabled`.
     pub fn new(
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
     ) -> StdResult<Self, AccountError> {
         let name = name.trim().to_string();
         if name.is_empty() {
@@ -108,7 +112,7 @@ impl Account {
             name,
             currency,
             update_frequency,
-            management_fees_enabled: false, // FEE-075 — new accounts start disabled
+            management_fees_enabled,
             holdings: Vec::new(),
             transactions: Vec::new(),
             pending_changes: Vec::new(),
@@ -1344,6 +1348,7 @@ mod tests {
             "  My Account  ".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .unwrap();
         assert_eq!(account.name, "My Account");
@@ -1356,6 +1361,7 @@ mod tests {
             "   ".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         );
         assert!(result.is_err());
     }
@@ -1367,6 +1373,7 @@ mod tests {
             "My Account".to_string(),
             "INVALID".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         );
         assert!(result.is_err());
     }
@@ -1385,16 +1392,27 @@ mod tests {
         assert_eq!(account.name, "Trimmed");
     }
 
-    // FEE-075 — new accounts start with the % management-fee mechanism disabled
+    // FEE-075 — the creation flag is carried as-is; the "new accounts default to
+    // disabled" rule is enforced by the creation DTO/form default upstream.
     #[test]
-    fn new_account_has_management_fees_disabled() {
-        let account = Account::new(
+    fn new_account_carries_management_fees_flag() {
+        let disabled = Account::new(
             "Fresh".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .unwrap();
-        assert!(!account.management_fees_enabled);
+        assert!(!disabled.management_fees_enabled);
+
+        let enabled = Account::new(
+            "Funds".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+            true,
+        )
+        .unwrap();
+        assert!(enabled.management_fees_enabled);
     }
 
     // FEE-077 — the guard passes when enabled and rejects when disabled

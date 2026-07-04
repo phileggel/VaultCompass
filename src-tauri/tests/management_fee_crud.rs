@@ -122,6 +122,7 @@ async fn record_management_fee_does_not_create_asset_price_row() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -209,6 +210,7 @@ async fn record_management_fee_performance_neutrality() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::Automatic,
+            false,
         )
         .await
         .unwrap();

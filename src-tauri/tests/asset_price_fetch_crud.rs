@@ -241,6 +241,7 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
             "Test".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -366,6 +367,7 @@ async fn fetch_for_account_skips_locked_asset() {
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -478,6 +480,7 @@ async fn fetch_for_account_includes_unblocked_asset() {
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -575,6 +578,7 @@ async fn fetch_publishes_completion_event_with_counts() {
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -717,6 +721,7 @@ async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_p
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -882,6 +887,7 @@ async fn fetch_completion_unpriced_entry_has_none_last_price_when_never_priced()
             "Test".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -1016,6 +1022,7 @@ async fn fetch_completion_unpriced_list_excludes_successfully_fetched_asset() {
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -1168,6 +1175,7 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");
@@ -1324,6 +1332,7 @@ async fn fetch_completion_locked_asset_absent_from_unpriced_list() {
             "Test".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .expect("seed account");

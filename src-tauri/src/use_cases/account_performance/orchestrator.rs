@@ -610,6 +610,7 @@ mod tests {
                 "Empty".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -633,6 +634,7 @@ mod tests {
                 "Auto".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -658,6 +660,7 @@ mod tests {
                 "Day".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualDay,
+                false,
             )
             .await
             .unwrap();
@@ -683,6 +686,7 @@ mod tests {
                 "Week".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualWeek,
+                false,
             )
             .await
             .unwrap();
@@ -708,6 +712,7 @@ mod tests {
                 "Month".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -733,6 +738,7 @@ mod tests {
                 "Year".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -758,6 +764,7 @@ mod tests {
                 "ManualMonth Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -788,6 +795,7 @@ mod tests {
                 "Deposit Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -825,6 +833,7 @@ mod tests {
                 "Span Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -867,6 +876,7 @@ mod tests {
                 "Order Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -904,6 +914,7 @@ mod tests {
                 "Monthly Order".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -951,6 +962,7 @@ mod tests {
                 "YTD Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -985,6 +997,7 @@ mod tests {
                 "Gain Zero".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1031,6 +1044,7 @@ mod tests {
                 "Dietz".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1126,6 +1140,7 @@ mod tests {
                 "DenomZero".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1169,6 +1184,7 @@ mod tests {
                 "First Period".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1201,6 +1217,7 @@ mod tests {
                 "Two Years".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1241,6 +1258,7 @@ mod tests {
                 "YTD January".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1279,6 +1297,7 @@ mod tests {
                 "Inception".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1317,6 +1336,7 @@ mod tests {
                 "Snapshot".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1421,6 +1441,7 @@ mod tests {
                 "Per Period Cash".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1465,6 +1486,7 @@ mod tests {
                 "Open".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1529,6 +1551,7 @@ mod tests {
                 "Free".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1617,6 +1640,7 @@ mod tests {
                 "Unpriced".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1681,6 +1705,7 @@ mod tests {
                 "FX Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1752,6 +1777,7 @@ mod tests {
                 "Flow Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1834,6 +1860,7 @@ mod tests {
                 "Dividend Flow".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -1918,6 +1945,7 @@ mod tests {
                 "Free Shares Flow".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -2007,6 +2035,7 @@ mod tests {
                 "Opening Balance Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -2070,6 +2099,7 @@ mod tests {
                 "Carry Forward".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -2143,6 +2173,7 @@ mod tests {
                 "Gap Period".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -2217,6 +2248,7 @@ mod tests {
                 "Replay Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -2258,6 +2290,7 @@ mod tests {
                 "Year Always".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -2288,6 +2321,7 @@ mod tests {
                 "Month Field".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
+                false,
             )
             .await
             .unwrap();
@@ -2325,6 +2359,7 @@ mod tests {
                 "My Portfolio".to_string(),
                 "CHF".to_string(),
                 UpdateFrequency::ManualWeek,
+                false,
             )
             .await
             .unwrap();
@@ -2412,6 +2447,7 @@ mod tests {
                 "FX Perf".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -2493,6 +2529,7 @@ mod tests {
                 "No FX Rate Perf".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -2575,6 +2612,7 @@ mod tests {
                 "CAGR".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -2761,6 +2799,7 @@ mod tests {
                 "Denom Zero Year".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();
@@ -2807,6 +2846,7 @@ mod tests {
                 "Total Loss".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualYear,
+                false,
             )
             .await
             .unwrap();

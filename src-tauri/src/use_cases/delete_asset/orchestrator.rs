@@ -99,6 +99,7 @@ mod tests {
                 "Test Account".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualDay,
+                false,
             )
             .await
             .unwrap();

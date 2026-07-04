@@ -16,7 +16,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Where: src-tauri/src/use_cases/account_details/orchestrator.rs (FEE-074 `fee_rate_by_asset` build)
 - Context: branch `next` @ `2a86ce4`
 - Severity: 🔵
-- Observation: The FEE-074 rate lookup calls `AccountService::list_active_fee_schedules()` — the system-wide FEE-040 catch-up query — then filters to the current account in memory, on every Account Details page load. Correct and cheap at current desktop-scale schedule counts, but the page's cost grows with the total number of schedules across all accounts. Add an account-scoped `list_active_fee_schedules_for_account(account_id)` (trait + `WHERE account_id = ?` repository query + service pass-through) if schedule volume ever grows. Mirrors the accepted YTD rate-map over-fetch precedent (2026-06-16).
+- Observation: The FEE-074 rate lookup calls `AccountService::list_active_fee_schedules()` — the system-wide FEE-040 catch-up query — then filters to the current account in memory, on every Account Details page load. Correct and cheap at current desktop-scale schedule counts, but the page's cost grows with the total number of schedules across all accounts. Add an account-scoped `list_active_fee_schedules_for_account(account_id)` (trait + `WHERE account_id = ?` repository query + service pass-through) if schedule volume ever grows. Mirrors the accepted YTD rate-map over-fetch precedent (2026-06-16). Same-shape sibling (T4 review, reviewer-backend + reviewer-arch): the FEE-078 pause check in `use_cases/fee_generation/orchestrator.rs` issues one `get_by_id` per schedule (N+1) just to read `management_fees_enabled` — fold both into the same fix when picked up.
 
 ---
 

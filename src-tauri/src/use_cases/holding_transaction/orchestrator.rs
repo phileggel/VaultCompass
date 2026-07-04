@@ -496,6 +496,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -533,6 +534,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -570,6 +572,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -608,6 +611,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -657,6 +661,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -730,6 +735,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -762,6 +768,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(), // match asset currency so rate=1
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -861,6 +868,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -896,6 +904,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -931,6 +940,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -969,6 +979,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1020,6 +1031,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1074,6 +1086,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1127,6 +1140,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1189,6 +1203,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1323,6 +1338,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1358,6 +1374,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1393,6 +1410,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1431,6 +1449,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1485,6 +1504,7 @@ mod tests {
                 "Acc".to_string(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1535,6 +1555,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1572,6 +1593,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();

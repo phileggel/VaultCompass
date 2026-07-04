@@ -83,8 +83,9 @@ impl AccountService {
         name: String,
         currency: String,
         update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
     ) -> Result<Account, AccountError> {
-        let account = Account::new(name, currency, update_frequency)?;
+        let account = Account::new(name, currency, update_frequency, management_fees_enabled)?;
         if find_account_by_name(&*self.account_repo, &account.name)
             .await?
             .is_some()
@@ -1079,6 +1080,7 @@ mod tests {
                 "Gated".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1109,6 +1111,7 @@ mod tests {
                 "Gated".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1174,6 +1177,7 @@ mod tests {
             "Alpha".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -1182,6 +1186,7 @@ mod tests {
                 "alpha".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap_err();
@@ -1199,6 +1204,7 @@ mod tests {
             "Alpha".to_string(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -1207,6 +1213,7 @@ mod tests {
                 "Beta".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1235,6 +1242,7 @@ mod tests {
                 "Alpha".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1264,6 +1272,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1302,6 +1311,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1347,6 +1357,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1387,6 +1398,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1434,6 +1446,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1494,6 +1507,7 @@ mod tests {
                     "Test".to_string(),
                     "EUR".to_string(),
                     UpdateFrequency::ManualMonth,
+                    false,
                 )
                 .unwrap();
                 // Seed enough cash so CSH-041 doesn't short-circuit before save() is called.
@@ -1610,6 +1624,7 @@ mod tests {
                     "Test".to_string(),
                     "EUR".to_string(),
                     UpdateFrequency::ManualMonth,
+                    false,
                 )
                 .unwrap();
                 Ok(Some(acc))
@@ -1713,6 +1728,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1751,6 +1767,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1785,6 +1802,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1828,6 +1846,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1882,6 +1901,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1922,6 +1942,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -1992,6 +2013,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2025,6 +2047,7 @@ mod tests {
                 "Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2071,6 +2094,7 @@ mod tests {
                         "Test".to_string(),
                         "EUR".to_string(),
                         UpdateFrequency::ManualMonth,
+                        false,
                     )
                     .unwrap(),
                 ))
@@ -2135,6 +2159,7 @@ mod tests {
                     "Test".to_string(),
                     "EUR".to_string(),
                     UpdateFrequency::ManualMonth,
+                    false,
                 )
                 .unwrap();
                 Ok(Some(acc))
@@ -2165,6 +2190,7 @@ mod tests {
                         "Test".to_string(),
                         "EUR".to_string(),
                         UpdateFrequency::ManualMonth,
+                        false,
                     )
                     .unwrap(),
                 ))
@@ -2236,6 +2262,7 @@ mod tests {
                     "Test".to_string(),
                     "EUR".to_string(),
                     UpdateFrequency::ManualMonth,
+                    false,
                 )
                 .unwrap();
                 // CSH-080 only fails when current cash < requested amount. Seed
@@ -2302,6 +2329,7 @@ mod tests {
                 "Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap_err();
@@ -2328,6 +2356,7 @@ mod tests {
                 "Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap_err();
@@ -2401,6 +2430,7 @@ mod tests {
                 "FSD Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2497,6 +2527,7 @@ mod tests {
                 "FSD Acc".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2552,6 +2583,7 @@ mod tests {
                     "Test".to_string(),
                     "EUR".to_string(),
                     UpdateFrequency::ManualMonth,
+                    false,
                 )
                 .unwrap();
                 // Seed cash first (CSH-041 — a buy needs sufficient cash), then a buy
@@ -2616,6 +2648,7 @@ mod tests {
                 "FEE Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2688,6 +2721,7 @@ mod tests {
                 "FEE-050".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2776,6 +2810,7 @@ mod tests {
                 "FEE Zero".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2806,6 +2841,7 @@ mod tests {
                 "FEE Above100".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2860,6 +2896,7 @@ mod tests {
                     "Test".to_string(),
                     "EUR".to_string(),
                     UpdateFrequency::ManualMonth,
+                    false,
                 )
                 .unwrap();
                 acc.management_fees_enabled = true;
@@ -2916,6 +2953,7 @@ mod tests {
                 "FEE-027".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -2981,6 +3019,7 @@ mod tests {
                 "Schedule Acct".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3019,6 +3058,7 @@ mod tests {
                 "FEE-033".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3088,6 +3128,7 @@ mod tests {
                 "Dup Sched".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3132,6 +3173,7 @@ mod tests {
                 "Rate Zero".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3165,6 +3207,7 @@ mod tests {
                 "Rate High".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3198,6 +3241,7 @@ mod tests {
                 "End Before".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3235,6 +3279,7 @@ mod tests {
                 "Update Sched".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3280,6 +3325,7 @@ mod tests {
                 "NoSched".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3309,6 +3355,7 @@ mod tests {
                 "Del Sched".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3343,6 +3390,7 @@ mod tests {
                 "Del None".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3367,6 +3415,7 @@ mod tests {
                 "Get None".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -3386,6 +3435,7 @@ mod tests {
                 "Get Present".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();

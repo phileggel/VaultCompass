@@ -78,6 +78,7 @@ async fn get_account_performance_deposit_end_to_end() {
             "E2E Account".to_string(),
             "EUR".to_string(),
             UpdateFrequency::Automatic,
+            false,
         )
         .await
         .unwrap();
@@ -149,6 +150,7 @@ async fn get_account_performance_priced_stock_included_in_end_value() {
             "Stock Account".to_string(),
             "EUR".to_string(),
             UpdateFrequency::Automatic,
+            false,
         )
         .await
         .unwrap();

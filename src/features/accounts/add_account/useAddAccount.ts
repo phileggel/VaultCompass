@@ -22,11 +22,10 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const target = e.target as HTMLInputElement;
-    const { name, value } = target;
+    const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: target.type === "checkbox" ? target.checked : value,
+      [name]: type === "checkbox" && "checked" in e.target ? e.target.checked : value,
     }));
   };
 

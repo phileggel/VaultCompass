@@ -108,6 +108,7 @@ mod tests {
                 "Empty Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -132,6 +133,7 @@ mod tests {
                 "Test Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -181,6 +183,7 @@ mod tests {
                 "Test Account".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();

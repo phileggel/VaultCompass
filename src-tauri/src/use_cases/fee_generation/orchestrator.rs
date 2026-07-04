@@ -265,6 +265,7 @@ mod tests {
                 "Test".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -303,6 +304,7 @@ mod tests {
                 "FEE-041".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -366,6 +368,7 @@ mod tests {
                 "FEE-043".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -411,6 +414,7 @@ mod tests {
                 "FEE-047".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -460,6 +464,7 @@ mod tests {
                 "FEE-070".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -534,6 +539,7 @@ mod tests {
                 "FEE-044".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -631,6 +637,7 @@ mod tests {
                 "FEE-045-end".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -716,6 +723,7 @@ mod tests {
                 "FEE-045-inactive".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -794,6 +802,7 @@ mod tests {
                 "FEE-047-oversell".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();
@@ -910,6 +919,7 @@ mod tests {
                 "FEE-078".to_string(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
+                false,
             )
             .await
             .unwrap();

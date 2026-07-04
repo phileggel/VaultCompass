@@ -281,5 +281,9 @@ mod tests {
             to_value(AccountError::ScheduleNotFound).unwrap(),
             json!({ "code": "ScheduleNotFound" })
         );
+        assert_eq!(
+            to_value(AccountError::ManagementFeesDisabled).unwrap(),
+            json!({ "code": "ManagementFeesDisabled" })
+        );
     }
 }

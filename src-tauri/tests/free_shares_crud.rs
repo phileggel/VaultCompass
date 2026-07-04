@@ -110,6 +110,7 @@ async fn record_free_shares_end_to_end_persists_correct_fields() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -222,6 +223,7 @@ async fn record_free_shares_does_not_create_asset_price_row() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -315,6 +317,7 @@ async fn record_free_shares_asset_not_held_propagates() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -381,6 +384,7 @@ async fn record_free_shares_publishes_transaction_updated_event() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -455,6 +459,7 @@ async fn record_free_shares_then_cancel_restores_holding_exactly() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
+            false,
         )
         .await
         .unwrap();
@@ -598,6 +603,7 @@ async fn record_free_shares_performance_neutrality() {
             "Portfolio".to_string(),
             "USD".to_string(),
             UpdateFrequency::Automatic,
+            false,
         )
         .await
         .unwrap();

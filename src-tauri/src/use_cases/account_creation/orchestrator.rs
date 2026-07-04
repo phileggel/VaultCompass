@@ -44,24 +44,12 @@ impl AccountCreationUseCase {
                 tracing::error!(target: BACKEND, currency = %currency, err = ?e, "create_account: seed_cash_asset failed");
                 AccountError::DatabaseError
             })?;
-        // Account row — unchanged create path (enforces ACC-001 / ACC-002 / ACC-003).
-        let mut account = self
+        // Account row — single-write create path (enforces ACC-001 / ACC-002 /
+        // ACC-003; FEE-075's disabled default comes from the creation form).
+        let account = self
             .account_service
-            .create(name, currency, update_frequency)
+            .create(name, currency, update_frequency, management_fees_enabled)
             .await?;
-        // FEE-075 — creation defaults to disabled; opt-in from the form flips it on.
-        if management_fees_enabled {
-            account = self
-                .account_service
-                .update(
-                    account.id.clone(),
-                    account.name.clone(),
-                    account.currency.clone(),
-                    account.update_frequency,
-                    true,
-                )
-                .await?;
-        }
         // CSH-012 — eager 0-balance Cash Holding.
         self.account_service.seed_cash_holding(&account.id).await?;
         Ok(account)
