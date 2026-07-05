@@ -1,7 +1,12 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountPerformanceResponse, PerformancePeriod } from "@/bindings";
+import type {
+  AccountDetailsResponse,
+  AccountPerformanceResponse,
+  HoldingDetail,
+  PerformancePeriod,
+} from "@/bindings";
 import * as gateway from "../gateway";
 import { AccountPerformancePage } from "./AccountPerformancePage";
 
@@ -77,12 +82,67 @@ const makeResponse = (
   ...overrides,
 });
 
+const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => ({
+  asset_id: "asset-1",
+  asset_name: "Apple Inc",
+  asset_reference: "AAPL",
+  quantity: 2_000_000,
+  average_price: 100_000_000,
+  cost_basis: 200_000_000,
+  realized_pnl: 0,
+  asset_currency: "EUR",
+  current_price: null,
+  current_price_date: null,
+  current_price_source: null,
+  unrealized_pnl: null,
+  performance_pct: null,
+  dividends_received: 0,
+  total_return_pct: null,
+  fx_rate_date: null,
+  management_fees: 0,
+  market_value: null,
+  fee_rate_percent_micros: null,
+  period_performance: {
+    ytd: null,
+    one_year: null,
+    two_years: null,
+    five_years: null,
+    ten_years: null,
+  },
+  ...overrides,
+});
+
+const makeDetailsResponse = (
+  overrides: Partial<AccountDetailsResponse> = {},
+): AccountDetailsResponse => ({
+  account_name: "My Portfolio",
+  holdings: [
+    makeHolding({ asset_id: "system-cash-EUR", asset_name: "Cash" }),
+    makeHolding(),
+    makeHolding({ asset_id: "asset-2", asset_name: "Microsoft Corp", asset_reference: "MSFT" }),
+  ],
+  closed_holdings: [],
+  total_holding_count: 3,
+  total_cost_basis: 400_000_000,
+  total_realized_pnl: 0,
+  total_unrealized_pnl: null,
+  total_global_value: 0,
+  total_dividends_received: 0,
+  total_management_fees: 0,
+  total_net_cash_input: 0,
+  ...overrides,
+});
+
 // ---- Tests ------------------------------------------------------------------
 
 describe("AccountPerformancePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    vi.mocked(gateway.accountPerformanceGateway.getAccountHoldings).mockResolvedValue({
+      status: "ok",
+      data: makeDetailsResponse(),
+    });
   });
 
   // PRF-050 — loading skeleton displayed while fetch is in-flight
@@ -392,6 +452,85 @@ describe("AccountPerformancePage", () => {
 
     expect(gateway.accountPerformanceGateway.getAccountPerformance).toHaveBeenCalledWith(
       "account-1",
+      null,
+    );
+  });
+
+  // PRF-080 / PRF-082 — asset selector offers All assets + one option per non-cash holding
+  it("renders the asset selector with All assets and the non-cash holdings (PRF-080, PRF-082)", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse(),
+    });
+
+    render(<AccountPerformancePage />);
+
+    const selector = await screen.findByTestId("account-performance-asset-selector");
+    const options = Array.from(selector.querySelectorAll("option"));
+    // All assets default + Apple + Microsoft; the cash line is never offered (PRF-082).
+    expect(options.map((option) => option.getAttribute("value"))).toEqual([
+      "",
+      "asset-1",
+      "asset-2",
+    ]);
+    expect(options[0]).toHaveTextContent("account_performance.asset_selector_all");
+    expect(selector).toHaveValue("");
+  });
+
+  // PRF-080 — selecting an asset dispatches a scoped fetch and titles the page with the asset
+  it("re-fetches scoped and shows the asset name in the title on selection (PRF-080)", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse(),
+    });
+
+    render(<AccountPerformancePage />);
+    const selector = await screen.findByTestId("account-performance-asset-selector");
+
+    await userEvent.selectOptions(selector, "asset-1");
+
+    expect(gateway.accountPerformanceGateway.getAccountPerformance).toHaveBeenCalledWith(
+      "account-1",
+      "asset-1",
+    );
+    expect(await screen.findByTestId("account-performance-scoped-asset-name")).toHaveTextContent(
+      "Apple Inc",
+    );
+
+    // Returning to All assets removes the asset name from the title. The scoped
+    // fetch remounted the content area, so the selector is re-queried.
+    await userEvent.selectOptions(
+      await screen.findByTestId("account-performance-asset-selector"),
+      "",
+    );
+    expect(gateway.accountPerformanceGateway.getAccountPerformance).toHaveBeenCalledWith(
+      "account-1",
+      null,
+    );
+    expect(screen.queryByTestId("account-performance-scoped-asset-name")).not.toBeInTheDocument();
+  });
+
+  // PRF-011 / PRF-015 — the view-mode toggle and year selector keep working while scoped
+  it("keeps the view-mode toggle and year selector working in scoped mode (PRF-011, PRF-015)", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({ month_view_available: true }),
+    });
+
+    render(<AccountPerformancePage />);
+    const selector = await screen.findByTestId("account-performance-asset-selector");
+
+    await userEvent.selectOptions(selector, "asset-2");
+    await screen.findByTestId("account-performance-scoped-asset-name");
+
+    // Month view is active → year selector present alongside the asset selector.
+    expect(screen.getByTestId("account-performance-year-selector")).toBeInTheDocument();
+
+    // The toggle still switches to year view; the scope stays applied.
+    await userEvent.click(screen.getByTestId("account-performance-view-toggle-year"));
+    expect(screen.queryByTestId("account-performance-year-selector")).not.toBeInTheDocument();
+    expect(screen.getByTestId("account-performance-scoped-asset-name")).toHaveTextContent(
+      "Microsoft Corp",
     );
   });
 

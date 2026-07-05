@@ -44,6 +44,16 @@ export function AccountPerformancePage() {
             </Link>
             <h2 className="text-base font-semibold text-m3-on-surface">
               {t("account_performance.title")}
+              {/* PRF-080 — the scoped asset's name appears in the title; absent for the whole account. */}
+              {view.selectedAssetName !== null && (
+                <span
+                  data-testid="account-performance-scoped-asset-name"
+                  className="font-normal text-m3-on-surface-variant"
+                >
+                  {" — "}
+                  {view.selectedAssetName}
+                </span>
+              )}
             </h2>
           </div>
 
@@ -131,28 +141,54 @@ export function AccountPerformancePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-3 p-2">
-              {/* PRF-015 — year selector, present only in month view */}
-              {view.viewMode === "month" && (
-                <div className="px-4 pt-2">
-                  <label htmlFor="account-performance-year-selector" className="sr-only">
-                    {t("account_performance.year_selector_label")}
+              <div className="flex items-center gap-3 px-4 pt-2">
+                {/* PRF-015 — year selector, present only in month view */}
+                {view.viewMode === "month" && (
+                  <div>
+                    <label htmlFor="account-performance-year-selector" className="sr-only">
+                      {t("account_performance.year_selector_label")}
+                    </label>
+                    <select
+                      id="account-performance-year-selector"
+                      data-testid="account-performance-year-selector"
+                      className="rounded-lg bg-m3-surface-container-high px-3 py-1.5 text-sm text-m3-on-surface"
+                      value={view.selectedYear ?? ""}
+                      aria-label={t("account_performance.year_selector_label")}
+                      onChange={(event) => view.setSelectedYear(Number(event.target.value))}
+                    >
+                      {view.availableYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* PRF-080 / PRF-082 — asset scope selector; "All assets" = whole account. */}
+                <div>
+                  <label htmlFor="account-performance-asset-selector" className="sr-only">
+                    {t("account_performance.asset_selector_label")}
                   </label>
                   <select
-                    id="account-performance-year-selector"
-                    data-testid="account-performance-year-selector"
+                    id="account-performance-asset-selector"
+                    data-testid="account-performance-asset-selector"
                     className="rounded-lg bg-m3-surface-container-high px-3 py-1.5 text-sm text-m3-on-surface"
-                    value={view.selectedYear ?? ""}
-                    aria-label={t("account_performance.year_selector_label")}
-                    onChange={(event) => view.setSelectedYear(Number(event.target.value))}
+                    value={view.selectedAssetId ?? ""}
+                    aria-label={t("account_performance.asset_selector_label")}
+                    onChange={(event) =>
+                      view.setSelectedAssetId(event.target.value === "" ? null : event.target.value)
+                    }
                   >
-                    {view.availableYears.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
+                    <option value="">{t("account_performance.asset_selector_all")}</option>
+                    {view.assetOptions.map((option) => (
+                      <option key={option.assetId} value={option.assetId}>
+                        {option.assetName}
                       </option>
                     ))}
                   </select>
                 </div>
-              )}
+              </div>
 
               {/* Account value over time — fed by the same active-view series as the table. */}
               <AccountValueChart points={view.chartPoints} />

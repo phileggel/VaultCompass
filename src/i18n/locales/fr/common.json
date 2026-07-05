@@ -369,6 +369,8 @@
     "view_month": "Mensuelle",
     "view_year": "Annuelle",
     "year_selector_label": "Sélectionner l'année",
+    "asset_selector_label": "Sélectionner l'actif",
+    "asset_selector_all": "Tous les actifs",
     "column_period": "Période",
     "column_prev_value": "Valeur préc.",
     "column_cash_flow": "Cash entrée/sortie",

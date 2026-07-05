@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountError, AccountPerformanceResponse, PerformancePeriod } from "@/bindings";
+import type {
+  AccountDetailsResponse,
+  AccountError,
+  AccountPerformanceResponse,
+  HoldingDetail,
+  PerformancePeriod,
+} from "@/bindings";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -63,7 +69,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     const response = makeResponse();
     mockInvoke.mockResolvedValue(response);
 
-    const result = await accountPerformanceGateway.getAccountPerformance("account-1");
+    const result = await accountPerformanceGateway.getAccountPerformance("account-1", null);
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -88,7 +94,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     };
     mockInvoke.mockRejectedValue(err);
 
-    const result = await accountPerformanceGateway.getAccountPerformance("no-such-account");
+    const result = await accountPerformanceGateway.getAccountPerformance("no-such-account", null);
 
     expect(result.status).toBe("error");
     if (result.status === "error") {
@@ -105,7 +111,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     const err: AccountError = { code: "DatabaseError" };
     mockInvoke.mockRejectedValue(err);
 
-    const result = await accountPerformanceGateway.getAccountPerformance("account-1");
+    const result = await accountPerformanceGateway.getAccountPerformance("account-1", null);
 
     expect(result.status).toBe("error");
     if (result.status === "error") {
@@ -118,7 +124,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     const response = makeResponse({ yearly: [], monthly: [] });
     mockInvoke.mockResolvedValue(response);
 
-    const result = await accountPerformanceGateway.getAccountPerformance("account-1");
+    const result = await accountPerformanceGateway.getAccountPerformance("account-1", null);
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -132,12 +138,115 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     const response = makeResponse({ month_view_available: false, monthly: [] });
     mockInvoke.mockResolvedValue(response);
 
-    const result = await accountPerformanceGateway.getAccountPerformance("account-1");
+    const result = await accountPerformanceGateway.getAccountPerformance("account-1", null);
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.data.month_view_available).toBe(false);
       expect(result.data.monthly).toHaveLength(0);
+    }
+  });
+
+  // PRF-080 — the asset scope is forwarded to the command unchanged
+  it("passes the asset scope through to the command (PRF-080)", async () => {
+    mockInvoke.mockResolvedValue(makeResponse());
+
+    const result = await accountPerformanceGateway.getAccountPerformance("account-1", "asset-1");
+
+    expect(result.status).toBe("ok");
+    expect(mockInvoke).toHaveBeenCalledWith("get_account_performance", {
+      accountId: "account-1",
+      assetId: "asset-1",
+    });
+  });
+});
+
+// ---- getAccountHoldings -----------------------------------------------------
+
+const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => ({
+  asset_id: "asset-1",
+  asset_name: "Apple Inc",
+  asset_reference: "AAPL",
+  quantity: 2_000_000,
+  average_price: 100_000_000,
+  cost_basis: 200_000_000,
+  realized_pnl: 0,
+  asset_currency: "EUR",
+  current_price: null,
+  current_price_date: null,
+  current_price_source: null,
+  unrealized_pnl: null,
+  performance_pct: null,
+  dividends_received: 0,
+  total_return_pct: null,
+  fx_rate_date: null,
+  management_fees: 0,
+  market_value: null,
+  fee_rate_percent_micros: null,
+  period_performance: {
+    ytd: null,
+    one_year: null,
+    two_years: null,
+    five_years: null,
+    ten_years: null,
+  },
+  ...overrides,
+});
+
+const makeDetailsResponse = (
+  overrides: Partial<AccountDetailsResponse> = {},
+): AccountDetailsResponse => ({
+  account_name: "My Portfolio",
+  holdings: [makeHolding()],
+  closed_holdings: [],
+  total_holding_count: 1,
+  total_cost_basis: 200_000_000,
+  total_realized_pnl: 0,
+  total_unrealized_pnl: null,
+  total_global_value: 0,
+  total_dividends_received: 0,
+  total_management_fees: 0,
+  total_net_cash_input: 0,
+  ...overrides,
+});
+
+describe("accountPerformanceGateway — getAccountHoldings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // PRF-082 — the holdings read backing the asset selector passes through unchanged (F27),
+  // always for today (asOfDate null)
+  it("passes through ok result with the account holdings (PRF-082)", async () => {
+    const response = makeDetailsResponse();
+    mockInvoke.mockResolvedValue(response);
+
+    const result = await accountPerformanceGateway.getAccountHoldings("account-1");
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.data.holdings).toHaveLength(1);
+      expect(result.data.holdings[0]?.asset_id).toBe("asset-1");
+    }
+    expect(mockInvoke).toHaveBeenCalledWith("get_account_details", {
+      accountId: "account-1",
+      asOfDate: null,
+    });
+  });
+
+  // F27 — gateway does NOT throw; it returns the error result unchanged
+  it("passes through AccountNotFound error result", async () => {
+    const err: AccountError = {
+      code: "AccountNotFound",
+      account_id: "no-such-account",
+    };
+    mockInvoke.mockRejectedValue(err);
+
+    const result = await accountPerformanceGateway.getAccountHoldings("no-such-account");
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.code).toBe("AccountNotFound");
     }
   });
 });

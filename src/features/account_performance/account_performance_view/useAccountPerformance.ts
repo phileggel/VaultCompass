@@ -6,8 +6,10 @@ import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountPerformanceGateway } from "../gateway";
 import {
+  type AssetScopeOption,
   type PeriodRowViewModel,
   presentAccountPerformanceError,
+  presentAssetScopeOptions,
   presentPeriodRow,
   presentValueChartSeries,
   type ValueChartPoint,
@@ -46,6 +48,19 @@ interface UseAccountPerformanceResult {
   rows: PeriodRowViewModel[];
   /** Account-value-over-time series for the line chart, chronological (oldest→newest). */
   chartPoints: ValueChartPoint[];
+  /** Active non-cash holdings selectable as an asset scope (PRF-080, PRF-082). */
+  assetOptions: AssetScopeOption[];
+  /** The scoped asset, or null for the whole account (PRF-080). Session-scoped, per account. */
+  selectedAssetId: string | null;
+  setSelectedAssetId: (assetId: string | null) => void;
+  /** Display name of the scoped asset; null when the whole account is shown. */
+  selectedAssetName: string | null;
+}
+
+/** The asset scope keyed by account, so a navigation to another account reads as unscoped. */
+interface AssetScope {
+  accountId: string;
+  assetId: string | null;
 }
 
 export function useAccountPerformance(accountId: string): UseAccountPerformanceResult {
@@ -54,12 +69,28 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
   const [error, setError] = useState<I18nMessage | null>(null);
   const [viewMode, setViewMode] = useState<PerformanceViewMode>("year");
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [assetScope, setAssetScope] = useState<AssetScope>({ accountId, assetId: null });
+  const [assetOptions, setAssetOptions] = useState<AssetScopeOption[]>([]);
+
+  // PRF-080 — the scope only applies to the account it was chosen for; a stale
+  // scope from a previously viewed account reads as "All assets".
+  const selectedAssetId = assetScope.accountId === accountId ? assetScope.assetId : null;
+
+  const setSelectedAssetId = useCallback(
+    (assetId: string | null) => {
+      setAssetScope({ accountId, assetId });
+    },
+    [accountId],
+  );
 
   const fetchPerformance = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await accountPerformanceGateway.getAccountPerformance(accountId);
+      const result = await accountPerformanceGateway.getAccountPerformance(
+        accountId,
+        selectedAssetId,
+      );
       if (result.status === "ok") {
         setData(result.data);
         // PRF-014 — restore the account's remembered view mode (clamped to availability),
@@ -78,12 +109,35 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     } finally {
       setIsLoading(false);
     }
-  }, [accountId]);
+  }, [accountId, selectedAssetId]);
 
-  // PRF-014 — fetch on mount and on accountId change.
+  // PRF-014 / PRF-080 — fetch on mount, on accountId change, and on asset-scope change.
   useEffect(() => {
     fetchPerformance();
   }, [fetchPerformance]);
+
+  // PRF-080 / PRF-082 — load the account's holdings to populate the asset selector.
+  useEffect(() => {
+    let isMounted = true;
+    setAssetOptions([]);
+    (async () => {
+      try {
+        const result = await accountPerformanceGateway.getAccountHoldings(accountId);
+        if (!isMounted) return;
+        if (result.status === "ok") {
+          setAssetOptions(presentAssetScopeOptions(result.data));
+        } else {
+          logger.error("[useAccountPerformance] holdings fetch failed", result.error);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        logger.error("[useAccountPerformance] holdings fetch threw", { error: err });
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [accountId]);
 
   // PRF-060 — re-fetch on TransactionUpdated, AssetPriceUpdated, or AccountUpdated.
   useEffect(() => {
@@ -152,6 +206,11 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     [activePeriods],
   );
 
+  const selectedAssetName = useMemo(() => {
+    if (selectedAssetId === null) return null;
+    return assetOptions.find((option) => option.assetId === selectedAssetId)?.assetName ?? null;
+  }, [assetOptions, selectedAssetId]);
+
   return {
     isLoading,
     error,
@@ -165,5 +224,9 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
     setSelectedYear,
     rows,
     chartPoints,
+    assetOptions,
+    selectedAssetId,
+    setSelectedAssetId,
+    selectedAssetName,
   };
 }

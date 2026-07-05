@@ -369,6 +369,8 @@
     "view_month": "Monthly",
     "view_year": "Yearly",
     "year_selector_label": "Select year",
+    "asset_selector_label": "Select asset",
+    "asset_selector_all": "All assets",
     "column_period": "Period",
     "column_prev_value": "Prev Value",
     "column_cash_flow": "Cash in/out",

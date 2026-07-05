@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { PerformanceMetric, PerformancePeriod } from "@/bindings";
+import type {
+  AccountDetailsResponse,
+  HoldingDetail,
+  PerformanceMetric,
+  PerformancePeriod,
+} from "@/bindings";
 import {
   formatEndValue,
   formatMetricGain,
@@ -8,6 +13,7 @@ import {
   monthLabel,
   pnlColorClass,
   presentAccountPerformanceError,
+  presentAssetScopeOptions,
   presentPeriodRow,
   presentValueChartSeries,
 } from "./presenter";
@@ -307,5 +313,75 @@ describe("presentValueChartSeries", () => {
 
   it("returns an empty series for no periods", () => {
     expect(presentValueChartSeries([])).toEqual([]);
+  });
+});
+
+describe("presentAssetScopeOptions", () => {
+  const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => ({
+    asset_id: "asset-1",
+    asset_name: "Apple Inc",
+    asset_reference: "AAPL",
+    quantity: 2_000_000,
+    average_price: 100_000_000,
+    cost_basis: 200_000_000,
+    realized_pnl: 0,
+    asset_currency: "EUR",
+    current_price: null,
+    current_price_date: null,
+    current_price_source: null,
+    unrealized_pnl: null,
+    performance_pct: null,
+    dividends_received: 0,
+    total_return_pct: null,
+    fx_rate_date: null,
+    management_fees: 0,
+    market_value: null,
+    fee_rate_percent_micros: null,
+    period_performance: {
+      ytd: null,
+      one_year: null,
+      two_years: null,
+      five_years: null,
+      ten_years: null,
+    },
+    ...overrides,
+  });
+
+  const makeDetailsResponse = (holdings: HoldingDetail[]): AccountDetailsResponse => ({
+    account_name: "My Portfolio",
+    holdings,
+    closed_holdings: [],
+    total_holding_count: holdings.length,
+    total_cost_basis: 0,
+    total_realized_pnl: 0,
+    total_unrealized_pnl: null,
+    total_global_value: 0,
+    total_dividends_received: 0,
+    total_management_fees: 0,
+    total_net_cash_input: 0,
+  });
+
+  // PRF-082 — the cash line is never offered as a scope
+  it("excludes the cash line and maps id + name in backend order (PRF-082)", () => {
+    const options = presentAssetScopeOptions(
+      makeDetailsResponse([
+        makeHolding({ asset_id: "system-cash-EUR", asset_name: "Cash" }),
+        makeHolding(),
+        makeHolding({ asset_id: "asset-2", asset_name: "Microsoft Corp" }),
+      ]),
+    );
+
+    expect(options).toEqual([
+      { assetId: "asset-1", assetName: "Apple Inc" },
+      { assetId: "asset-2", assetName: "Microsoft Corp" },
+    ]);
+  });
+
+  it("returns no options for an account with only the cash line", () => {
+    const options = presentAssetScopeOptions(
+      makeDetailsResponse([makeHolding({ asset_id: "system-cash-EUR", asset_name: "Cash" })]),
+    );
+
+    expect(options).toEqual([]);
   });
 });

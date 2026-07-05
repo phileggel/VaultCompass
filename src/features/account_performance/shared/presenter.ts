@@ -1,4 +1,10 @@
-import type { AccountError, PerformanceMetric, PerformancePeriod } from "@/bindings";
+import type {
+  AccountDetailsResponse,
+  AccountError,
+  PerformanceMetric,
+  PerformancePeriod,
+} from "@/bindings";
+import { isCashAsset } from "@/features/account_details/shared/presenter";
 import { microToFormatted } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 
@@ -34,6 +40,23 @@ export function presentAccountPerformanceError(error: AccountError): I18nMessage
     default:
       return { key: "account_performance.error.database_error" };
   }
+}
+
+/** One selectable asset scope in the performance asset selector (PRF-080). */
+export interface AssetScopeOption {
+  assetId: string;
+  assetName: string;
+}
+
+/**
+ * PRF-080 / PRF-082 — The asset scopes offerable on the performance page: the
+ * account's active non-cash holdings, in the backend order (asset_name asc).
+ * The cash line is never a priced position, so it is not offered (PRF-082).
+ */
+export function presentAssetScopeOptions(response: AccountDetailsResponse): AssetScopeOption[] {
+  return response.holdings
+    .filter((holding) => !isCashAsset(holding.asset_id))
+    .map((holding) => ({ assetId: holding.asset_id, assetName: holding.asset_name }));
 }
 
 /** PRF-020 — Formats a period-end Global Value (account-currency micros) for display. */
