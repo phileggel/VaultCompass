@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, account_id, asset_id, annual_rate_micros, frequency, start_date, end_date, active, last_applied_period\n               FROM fee_schedules WHERE active = 1 AND account_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "asset_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "annual_rate_micros",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "frequency",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "start_date",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "end_date",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "active",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_applied_period",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "900c994cd79c6538ec5fe59423eeacb7c005baf263330de43a408cae1a4204ed"
+}

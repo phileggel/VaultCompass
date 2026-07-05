@@ -1,6 +1,7 @@
 use super::error::FeeGenerationError;
 use crate::context::account::{AccountError, AccountService, FeeFrequency, FeeSchedule};
 use chrono::{Datelike, NaiveDate};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Last calendar day of `year`/`month` (the period boundary, FEE-042). `None` only at
@@ -50,16 +51,25 @@ impl FeeGenerationOrchestrator {
     pub async fn apply_due_fee_deductions(&self) -> Result<(), FeeGenerationError> {
         let today = chrono::Local::now().date_naive();
         let schedules = self.account_service.list_active_fee_schedules().await?;
+        // FEE-078 — schedules of accounts with management fees disabled are
+        // paused: skipped without advancing the cursor, so re-enabling
+        // backfills the paused periods on the next run. Each account is loaded
+        // once, not once per schedule.
+        let mut management_fees_enabled_by_account: HashMap<String, bool> = HashMap::new();
+        for schedule in &schedules {
+            if !management_fees_enabled_by_account.contains_key(&schedule.account_id) {
+                let account = self.account_service.get_by_id(&schedule.account_id).await?;
+                let enabled = account.is_some_and(|account| account.management_fees_enabled);
+                management_fees_enabled_by_account.insert(schedule.account_id.clone(), enabled);
+            }
+        }
         for schedule in schedules {
-            // FEE-078 — schedules of accounts with management fees disabled are
-            // paused: skipped without advancing the cursor, so re-enabling
-            // backfills the paused periods on the next run.
-            let account = self.account_service.get_by_id(&schedule.account_id).await?;
-            match account {
-                Some(account) if account.management_fees_enabled => {
-                    self.apply_schedule(&schedule, today).await?;
-                }
-                _ => {}
+            let enabled = management_fees_enabled_by_account
+                .get(&schedule.account_id)
+                .copied()
+                .unwrap_or(false);
+            if enabled {
+                self.apply_schedule(&schedule, today).await?;
             }
         }
         Ok(())

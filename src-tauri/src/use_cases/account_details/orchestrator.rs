@@ -236,10 +236,9 @@ impl AccountDetailsUseCase {
         // FEE-074 — annual rate of the active fee schedule per asset for this account.
         let fee_rate_by_asset: HashMap<String, i64> = self
             .account_service
-            .list_active_fee_schedules()
+            .list_active_fee_schedules_for_account(account_id)
             .await?
             .into_iter()
-            .filter(|schedule| schedule.account_id == account_id)
             .map(|schedule| (schedule.asset_id, schedule.annual_rate_percent_micros))
             .collect();
 

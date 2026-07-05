@@ -82,6 +82,19 @@ impl FeeScheduleRepository for SqliteFeeScheduleRepository {
         rows.into_iter().map(FeeSchedule::try_from).collect()
     }
 
+    async fn get_active_by_account(&self, account_id: &str) -> Result<Vec<FeeSchedule>> {
+        let rows = sqlx::query_as!(
+            FeeScheduleRow,
+            r#"SELECT id, account_id, asset_id, annual_rate_micros, frequency, start_date, end_date, active, last_applied_period
+               FROM fee_schedules WHERE active = 1 AND account_id = ?"#,
+            account_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("get_active_by_account fee schedules")?;
+        rows.into_iter().map(FeeSchedule::try_from).collect()
+    }
+
     async fn insert(&self, schedule: &FeeSchedule) -> Result<()> {
         let frequency = schedule.frequency.to_string();
         let active = schedule.active as i64;

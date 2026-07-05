@@ -852,6 +852,18 @@ impl AccountService {
         })
     }
 
+    /// Returns the active fee schedules of one account (FEE-074).
+    pub async fn list_active_fee_schedules_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<FeeSchedule>, AccountError> {
+        let repo = self.fee_schedule_repo()?;
+        repo.get_active_by_account(account_id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, err = ?e, "list_active_fee_schedules_for_account: query failed");
+            AccountError::DatabaseError
+        })
+    }
+
     /// Advances a schedule's catch-up cursor to `last_applied_period` (FEE-043).
     /// Silent no-op if the schedule no longer exists.
     pub async fn advance_fee_schedule_cursor(
@@ -1209,6 +1221,101 @@ mod tests {
             matches!(err, AccountError::ManagementFeesDisabled),
             "got: {err:?}"
         );
+    }
+
+    // FEE-074 — the scoped query returns only the given account's active
+    // schedules: another account's active schedule and the account's own
+    // inactive schedule are both excluded.
+    #[tokio::test]
+    async fn list_active_fee_schedules_for_account_excludes_other_accounts_and_inactive() {
+        use crate::context::account::FeeFrequency;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let second_asset_id = "test-asset-id-2".to_string();
+        sqlx::query(
+            "INSERT INTO assets (id, name, reference, asset_class, category_id, currency, risk_level)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&second_asset_id)
+        .bind("TestAsset2")
+        .bind("TST2")
+        .bind("Stocks")
+        .bind("default-uncategorized")
+        .bind("USD")
+        .bind(1_i64)
+        .execute(&pool)
+        .await
+        .expect("seed second asset row");
+
+        let target = svc
+            .create(
+                "Target".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let target = enable_management_fees(&svc, &target).await;
+        let other = svc
+            .create(
+                "Other".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let other = enable_management_fees(&svc, &other).await;
+
+        svc.create_fee_schedule(
+            &target.id,
+            asset_id.clone(),
+            1_000_000,
+            FeeFrequency::Monthly,
+            "2026-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+        svc.create_fee_schedule(
+            &target.id,
+            second_asset_id.clone(),
+            2_000_000,
+            FeeFrequency::Monthly,
+            "2026-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+        svc.update_fee_schedule(&target.id, &second_asset_id, 2_000_000, None, false)
+            .await
+            .unwrap();
+        svc.create_fee_schedule(
+            &other.id,
+            asset_id.clone(),
+            3_000_000,
+            FeeFrequency::Monthly,
+            "2026-01-01".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let schedules = svc
+            .list_active_fee_schedules_for_account(&target.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            schedules.len(),
+            1,
+            "only the target account's active schedule must return, got: {schedules:?}"
+        );
+        assert_eq!(schedules[0].account_id, target.id);
+        assert_eq!(schedules[0].asset_id, asset_id);
+        assert!(schedules[0].active);
     }
 
     /// Seeds the system Cash Asset row + a large Deposit so existing buy/sell tests can

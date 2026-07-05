@@ -187,6 +187,8 @@ pub trait FeeScheduleRepository: Send + Sync {
     ) -> Result<Option<FeeSchedule>>;
     /// Fetches all active fee schedules.
     async fn get_all_active(&self) -> Result<Vec<FeeSchedule>>;
+    /// Fetches the active fee schedules of one account.
+    async fn get_active_by_account(&self, account_id: &str) -> Result<Vec<FeeSchedule>>;
     /// Inserts a new fee schedule.
     async fn insert(&self, schedule: &FeeSchedule) -> Result<()>;
     /// Updates an existing fee schedule in place.
