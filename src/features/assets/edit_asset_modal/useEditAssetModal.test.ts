@@ -192,6 +192,39 @@ describe("useEditAssetModal", () => {
     expect(mockUpdateAsset).toHaveBeenCalledWith(expect.objectContaining({ isin: null }));
   });
 
+  // AST-024 — editing an asset pre-fills the interest_bearing checkbox from the asset
+  it("pre-fills interest_bearing from the asset", () => {
+    const interestBearingAsset: Asset = { ...mockAsset, interest_bearing: true };
+    const onClose = vi.fn();
+    const { result } = renderHook(() =>
+      useEditAssetModal({ asset: interestBearingAsset, onClose }),
+    );
+    expect(result.current.formData.interest_bearing).toBe(true);
+  });
+
+  // AST-024 — toggling the checkbox submits the new interest_bearing value
+  it("submits the toggled interest_bearing value on submit", async () => {
+    mockUpdateAsset.mockResolvedValue({ data: mockAsset, error: null });
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAssetModal({ asset: mockAsset, onClose }));
+
+    expect(result.current.formData.interest_bearing).toBe(false);
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "interest_bearing", value: "on", type: "checkbox", checked: true },
+      } as unknown as React.ChangeEvent<HTMLInputElement>);
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockUpdateAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ interest_bearing: true }),
+    );
+  });
+
   // AST-022 — changing the picker submits the new exchange
   it("submits the new exchange when picker value changes (AST-022 — change)", async () => {
     const oldExchange: Exchange = { code: "XPAR", label: "Euronext Paris" };

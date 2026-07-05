@@ -14,6 +14,8 @@ interface AssetFormData {
   risk_level: number;
   category_id: string;
   exchange: Exchange | null;
+  /** AST-024 — whether the asset is an eligible Interest-credit target. */
+  interest_bearing: boolean;
 }
 
 interface AssetFormProps {
@@ -129,6 +131,21 @@ export function AssetForm({
       />
 
       <ExchangePicker value={formData.exchange} onChange={onExchangeChange} idPrefix={idPrefix} />
+
+      {/* AST-024 — Interest-credit eligibility flag */}
+      <label className="flex items-center gap-3 cursor-pointer group">
+        <input
+          type="checkbox"
+          id={`${idPrefix}-interest-bearing`}
+          name="interest_bearing"
+          checked={formData.interest_bearing}
+          onChange={handleChange}
+          className="accent-m3-primary w-4 h-4"
+        />
+        <span className="text-sm text-m3-on-surface group-hover:text-m3-primary transition-colors">
+          {t("asset.form_interest_bearing_label")}
+        </span>
+      </label>
 
       <fieldset className="flex flex-col gap-1.5 border-none p-0 m-0">
         <legend className="m3-input-label">{t("asset.form_risk_label")}</legend>

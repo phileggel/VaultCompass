@@ -671,8 +671,9 @@ describe("freeSharesErrorToI18n", () => {
 // ---------------------------------------------------------------------------
 // interestErrorToI18n — F27 presenter for the interest error surfaces (INT).
 // Create path (InterestError): AccountNotFound, AssetNotFound, AssetNotHeld,
-// InterestAmountInvalid, PercentageNotPositive, PercentageAboveHundred,
-// QuantityNotPositive, InvalidDate, DateInFuture, DateTooOld, DatabaseError.
+// InterestNotEligible, InterestAmountInvalid, PercentageNotPositive,
+// PercentageAboveHundred, QuantityNotPositive, InvalidDate, DateInFuture,
+// DateTooOld, DatabaseError.
 // Edit path (AccountError via correct_transaction): e.g. CascadingOversell,
 // TransactionNotFound. Every flat { code } maps to error.{code}.
 // ---------------------------------------------------------------------------
@@ -682,6 +683,7 @@ describe("interestErrorToI18n (INT-021/011/040)", () => {
     "AccountNotFound",
     "AssetNotFound",
     "AssetNotHeld",
+    "InterestNotEligible",
     "InterestAmountInvalid",
     "PercentageNotPositive",
     "PercentageAboveHundred",

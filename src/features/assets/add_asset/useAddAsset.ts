@@ -26,6 +26,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
     risk_level: number;
     category_id: string;
     exchange: Exchange | null;
+    interest_bearing: boolean;
   }>({
     name: prefill?.name ?? "",
     reference: prefill?.reference ?? "",
@@ -37,6 +38,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
       : DEFAULT_RISK_BY_CLASS.Stocks,
     category_id: SYSTEM_CATEGORY_ID,
     exchange: prefill?.exchange ?? null,
+    interest_bearing: false,
   });
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,10 +50,15 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
   );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "risk_level" ? parseInt(value, 10) : value,
+      [name]:
+        type === "checkbox" && "checked" in e.target
+          ? e.target.checked
+          : name === "risk_level"
+            ? parseInt(value, 10)
+            : value,
     }));
   };
 
@@ -83,7 +90,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
       risk_level: formData.risk_level,
       category_id: formData.category_id || SYSTEM_CATEGORY_ID,
       exchange: formData.exchange,
-      interest_bearing: false,
+      interest_bearing: formData.interest_bearing,
     });
 
     setIsSubmitting(false);
@@ -106,6 +113,7 @@ export function useAddAsset({ onSubmitSuccess, prefill }: UseAddAssetProps = {})
       risk_level: DEFAULT_RISK_BY_CLASS.Stocks,
       category_id: SYSTEM_CATEGORY_ID,
       exchange: null,
+      interest_bearing: false,
     });
   };
 

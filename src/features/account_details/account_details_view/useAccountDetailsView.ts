@@ -7,7 +7,7 @@ import { patchModalSearch } from "@/lib/modalSearch";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
-import { accountDetailsGateway } from "../gateway";
+import { accountDetailsGateway, useCachedAssets } from "../gateway";
 import { isCashAsset, priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
@@ -40,6 +40,7 @@ export function useAccountDetailsView(accountId: string) {
   const isAsOf = asOfDate !== "" && asOfDate !== todayIso();
   const data = useAccountDetails(accountId, isAsOf ? asOfDate : "");
   const accounts = useAppStore((state) => state.accounts);
+  const cachedAssets = useCachedAssets();
   const fetchAssets = useAppStore((state) => state.fetchAssets);
   const showSnackbar = useSnackbar();
   const { t, i18n } = useTranslation();
@@ -255,20 +256,28 @@ export function useAccountDetailsView(accountId: string) {
         })),
     [data.holdingDetails],
   );
-  // INT-020/023 — candidate assets for the interest modal: the active non-cash
-  // holdings plus the account's cash line (always a valid interest target, even
-  // at a zero balance). Memoized for the same stable-reference reason as above.
-  const interestEligibleHoldings = useMemo(
-    () =>
-      data.holdingDetails
-        .filter((h) => isCashAsset(h.asset_id) || h.quantity > 0)
-        .map((h) => ({
-          assetId: h.asset_id,
-          assetName: h.asset_name,
-          assetCurrency: h.asset_currency,
-        })),
-    [data.holdingDetails],
-  );
+  // INT-020/023 — candidate assets for the interest modal: the account's cash
+  // line (always a valid interest target, even at a zero balance) plus the
+  // active non-cash holdings whose asset carries the `interest_bearing` flag
+  // (AST-024). The holding detail does not carry the flag, so it is resolved
+  // from the cached asset catalog. Memoized for the same stable-reference
+  // reason as above.
+  const interestEligibleHoldings = useMemo(() => {
+    const interestBearingByAssetId = new Map(
+      cachedAssets.map((asset) => [asset.id, asset.interest_bearing]),
+    );
+    return data.holdingDetails
+      .filter(
+        (h) =>
+          isCashAsset(h.asset_id) ||
+          (h.quantity > 0 && interestBearingByAssetId.get(h.asset_id) === true),
+      )
+      .map((h) => ({
+        assetId: h.asset_id,
+        assetName: h.asset_name,
+        assetCurrency: h.asset_currency,
+      }));
+  }, [data.holdingDetails, cachedAssets]);
   // MKT-011 — priceable holdings for the price modal's asset combobox. Memoized
   // so the stable reference does not thrash the combobox on every parent render
   // (e.g. an AssetPriceUpdated event while the modal is open).

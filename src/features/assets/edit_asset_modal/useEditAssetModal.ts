@@ -24,6 +24,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
     risk_level: number;
     category_id: string;
     exchange: Exchange | null;
+    interest_bearing: boolean;
   }>({
     name: "",
     reference: "",
@@ -33,6 +34,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
     risk_level: 3,
     category_id: "",
     exchange: null,
+    interest_bearing: false,
   });
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,6 +51,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
         risk_level: asset.risk_level,
         category_id: asset.category.id,
         exchange: asset.exchange,
+        interest_bearing: asset.interest_bearing,
       });
       setError(null);
     }
@@ -61,10 +64,15 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
   );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "risk_level" ? parseInt(value, 10) : value,
+      [name]:
+        type === "checkbox" && "checked" in e.target
+          ? e.target.checked
+          : name === "risk_level"
+            ? parseInt(value, 10)
+            : value,
     }));
   };
 
@@ -94,7 +102,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
       risk_level: formData.risk_level,
       category_id: formData.category_id,
       exchange: formData.exchange,
-      interest_bearing: asset.interest_bearing,
+      interest_bearing: formData.interest_bearing,
     });
 
     setIsSubmitting(false);

@@ -259,6 +259,62 @@ describe("useAddAsset", () => {
     expect(result.current.formData.exchange).toBeNull();
   });
 
+  // AST-024 — interest_bearing defaults to false
+  it("initialises interest_bearing as false", () => {
+    const { result } = renderHook(() => useAddAsset());
+    expect(result.current.formData.interest_bearing).toBe(false);
+  });
+
+  // AST-024 — the checkbox value threads through to the gateway on submit
+  it("forwards a checked interest_bearing checkbox to the gateway on submit", async () => {
+    mockAddAsset.mockResolvedValue({ data: { id: "new-5" }, error: null });
+    const { result } = renderHook(() => useAddAsset());
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Bond Fund" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "reference", value: "BOND" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "interest_bearing", value: "on", type: "checkbox", checked: true },
+      } as unknown as React.ChangeEvent<HTMLInputElement>);
+    });
+
+    expect(result.current.formData.interest_bearing).toBe(true);
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddAsset).toHaveBeenCalledWith(expect.objectContaining({ interest_bearing: true }));
+  });
+
+  // AST-024 — interest_bearing resets to false after successful submit
+  it("resets interest_bearing to false after successful submit", async () => {
+    mockAddAsset.mockResolvedValue({ data: { id: "new-6" }, error: null });
+    const { result } = renderHook(() => useAddAsset());
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Bond Fund" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "reference", value: "BOND" },
+      } as React.ChangeEvent<HTMLInputElement>);
+      result.current.handleChange({
+        target: { name: "interest_bearing", value: "on", type: "checkbox", checked: true },
+      } as unknown as React.ChangeEvent<HTMLInputElement>);
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(result.current.formData.interest_bearing).toBe(false);
+  });
+
   // WEB-041 — prefill.exchange seeds the exchange picker (AST-021)
   it("seeds exchange from prefill when prefill carries an exchange", () => {
     const exchange: Exchange = { code: "XPAR", label: "Euronext Paris" };

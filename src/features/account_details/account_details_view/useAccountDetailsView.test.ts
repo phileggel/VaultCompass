@@ -359,9 +359,16 @@ describe("useAccountDetailsView — activeNonCashHoldings filter (DIV-011/020)",
     ]);
   });
 
-  // INT-020/023 — the interest candidates add the cash line to the active
-  // non-cash holdings (zero-quantity non-cash assets stay excluded).
-  it("interestEligibleHoldings includes the cash line alongside active non-cash holdings", async () => {
+  // INT-020/023 — the interest candidates are the cash line plus the active
+  // non-cash holdings whose asset is flagged interest_bearing (AST-024);
+  // zero-quantity non-cash assets stay excluded even when flagged.
+  it("interestEligibleHoldings includes the cash line and only flagged active non-cash holdings", async () => {
+    useAppStore.setState({
+      assets: [
+        { id: "asset-zero", interest_bearing: true },
+        { id: "asset-active", interest_bearing: true },
+      ] as never,
+    });
     mockGetAccountDetails.mockResolvedValueOnce({
       status: "ok",
       data: {
@@ -396,6 +403,55 @@ describe("useAccountDetailsView — activeNonCashHoldings filter (DIV-011/020)",
     expect(result.current.interestEligibleHoldings).toEqual([
       { assetId: "system-cash-eur", assetName: "Cash EUR", assetCurrency: "EUR" },
       { assetId: "asset-active", assetName: "Active Co", assetCurrency: "USD" },
+    ]);
+  });
+
+  // INT-020 / AST-024 — a non-flagged non-cash holding is excluded from the
+  // interest candidates even with quantity > 0; the cash line stays eligible.
+  it("interestEligibleHoldings excludes unflagged non-cash holdings with quantity > 0", async () => {
+    useAppStore.setState({
+      assets: [
+        { id: "asset-flagged", interest_bearing: true },
+        { id: "asset-unflagged", interest_bearing: false },
+      ] as never,
+    });
+    mockGetAccountDetails.mockResolvedValueOnce({
+      status: "ok",
+      data: {
+        account_name: "Main",
+        holdings: [
+          makeHoldingDetail({
+            asset_id: "system-cash-eur",
+            asset_name: "Cash EUR",
+            quantity: 500_000_000,
+          }),
+          makeHoldingDetail({
+            asset_id: "asset-flagged",
+            asset_name: "Flagged Co",
+            quantity: 2_000_000,
+          }),
+          makeHoldingDetail({
+            asset_id: "asset-unflagged",
+            asset_name: "Unflagged Co",
+            quantity: 3_000_000,
+          }),
+        ],
+        closed_holdings: [],
+        total_holding_count: 3,
+        total_cost_basis: 0,
+        total_realized_pnl: 0,
+        total_unrealized_pnl: null,
+        total_global_value: 0,
+        total_dividends_received: 0,
+      },
+    } as never);
+
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    expect(result.current.interestEligibleHoldings).toEqual([
+      { assetId: "system-cash-eur", assetName: "Cash EUR", assetCurrency: "EUR" },
+      { assetId: "asset-flagged", assetName: "Flagged Co", assetCurrency: "EUR" },
     ]);
   });
 });
