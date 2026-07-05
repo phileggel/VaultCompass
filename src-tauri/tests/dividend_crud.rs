@@ -142,6 +142,7 @@ async fn record_dividend_end_to_end_persists_correct_fields() {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -206,6 +207,7 @@ async fn record_dividend_leaves_paying_asset_holding_unchanged() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -294,6 +296,7 @@ async fn record_dividend_does_not_create_asset_price_row() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -473,6 +476,7 @@ async fn record_dividend_publishes_transaction_updated_event() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -541,6 +545,7 @@ async fn dividends_received_is_zero_when_no_dividend() {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -596,6 +601,7 @@ async fn dividends_received_sums_all_dividends_for_the_holding() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -683,6 +689,7 @@ async fn dividends_received_scoped_to_account_asset_pair() {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -695,6 +702,7 @@ async fn dividends_received_scoped_to_account_asset_pair() {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -768,6 +776,7 @@ async fn total_return_pct_is_none_when_no_price_recorded() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -843,6 +852,7 @@ async fn total_return_pct_combines_unrealized_pnl_and_dividends() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -967,6 +977,7 @@ async fn total_dividends_received_sums_all_account_dividends() {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -979,6 +990,7 @@ async fn total_dividends_received_sums_all_account_dividends() {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .await

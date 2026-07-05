@@ -92,6 +92,10 @@ pub enum AccountError {
     /// Total amount is zero or negative.
     #[error("Total amount must be strictly positive")]
     TotalAmountNotPositive,
+    /// A user-entered all-in purchase total is lower than the fees it includes,
+    /// which would make the securities part negative (TRX-060).
+    #[error("Total amount must cover the fees")]
+    TotalAmountBelowFees,
 
     // --- ManagementFee factory validation (FEE-021) ---
     /// The management fee percentage is zero or negative (FEE-021).
@@ -241,6 +245,10 @@ mod tests {
         assert_eq!(
             to_value(AccountError::TotalAmountNotPositive).unwrap(),
             json!({ "code": "TotalAmountNotPositive" })
+        );
+        assert_eq!(
+            to_value(AccountError::TotalAmountBelowFees).unwrap(),
+            json!({ "code": "TotalAmountBelowFees" })
         );
         assert_eq!(
             to_value(AccountError::AccountNotFound {

@@ -125,6 +125,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();

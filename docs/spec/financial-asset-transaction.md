@@ -68,7 +68,7 @@ Represents the current state of a position (asset held within an account). Compu
 
 **TRX-025 — Holding cost basis update (backend)**: Creating a purchase transaction updates the `Holding.average_price` using the VWAP method (TRX-030).
 
-**TRX-026 — Total amount computation for purchases (backend)**: For `Purchase` transactions, `total_amount` is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) + fees` (fees increase cost). All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend — the DTO (`CreateTransactionDTO`) intentionally omits it. The frontend computes the same formula locally for real-time display preview only (see TRX-024). For `Sell` transactions, the formula differs in fee sign — see SEL-023.
+**TRX-026 — Total amount computation for purchases (backend)**: For `Purchase` transactions, `total_amount` is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) + fees` (fees increase cost). All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend — the DTO (`CreateTransactionDTO`) intentionally omits it. The frontend computes the same formula locally for real-time display preview only (see TRX-024). For `Sell` transactions, the formula differs in fee sign — see SEL-023. In total-entry mode the user-typed total is stored instead and this formula does not apply — see TRX-060.
 
 **TRX-027 — Atomicity of transaction and holding updates (backend)**: The transaction record insert and all associated `Holding` mutations (quantity and average_price) must be performed within a single database transaction. A failure in any step rolls back the entire operation.
 
@@ -139,6 +139,10 @@ Represents the current state of a position (asset held within an account). Compu
 **TRX-057 — Opening balance loading state (frontend)**: While the submission is in progress, the submit button is disabled and shows a loading indicator.
 
 **TRX-058 — Opening balance success feedback (frontend)**: On success, the modal closes and a success snackbar is shown. The Account Details holdings view refreshes via the existing `TransactionUpdated` event (TRX-038).
+
+### Total-Entry Mode (060–069)
+
+**TRX-060 — Total-entry purchase (backend)**: `buy_holding` accepts an optional user-entered `total_amount` — the all-in amount debited by the broker, in account-currency micro-units, fees included. When provided, the typed total is ground truth: it is stored verbatim as `total_amount` (the TRX-026 formula does not apply) and the unit price is derived as `unit_price = round(((total_amount − fees) × MICRO × MICRO) / (quantity × exchange_rate))`, rounding half away from zero, with `i128` intermediates. Validation: `total_amount` must be strictly positive (`TotalAmountNotPositive`) and at least `fees` (`TotalAmountBelowFees`) — the securities part `total_amount − fees` must not be negative. When absent, TRX-026 applies unchanged. Downstream consumers — VWAP (TRX-030) and realized P&L (SEL-024) — read the stored `total_amount` unchanged. The entry mode is not persisted: a correction (TRX-031) operates on the stored decomposition (`quantity`, `unit_price`, `exchange_rate`, `fees`) and recomputes `total_amount` per TRX-026. For sells, see SEL-050.
 
 ---
 

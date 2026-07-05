@@ -82,6 +82,7 @@ impl HoldingTransactionUseCase {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "buy_holding").await?;
@@ -94,6 +95,7 @@ impl HoldingTransactionUseCase {
                 unit_price,
                 exchange_rate,
                 fees,
+                total_amount,
                 note,
             )
             .await
@@ -112,6 +114,7 @@ impl HoldingTransactionUseCase {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "sell_holding").await?;
@@ -124,6 +127,7 @@ impl HoldingTransactionUseCase {
                 unit_price,
                 exchange_rate,
                 fees,
+                total_amount,
                 note,
             )
             .await
@@ -770,6 +774,7 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -797,6 +802,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .await
@@ -875,6 +881,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1090,6 +1097,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1142,6 +1150,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1199,6 +1208,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1253,6 +1263,7 @@ mod tests {
             micro(50),
             900_000, // 0.9 EUR/USD
             0,
+            None,
             None,
         )
         .await
@@ -1318,6 +1329,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1568,6 +1580,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1623,6 +1636,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1765,6 +1779,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1936,6 +1951,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2048,6 +2064,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2104,6 +2121,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -2199,6 +2217,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2252,6 +2271,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await

@@ -186,6 +186,7 @@ async fn get_account_performance_priced_stock_included_in_end_value() {
             1_000_000,
             0,
             None,
+            None,
         )
         .await
         .unwrap();

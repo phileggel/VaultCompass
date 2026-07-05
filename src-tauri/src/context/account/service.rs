@@ -303,7 +303,7 @@ impl AccountService {
     // Aggregate operations (B21 — thin orchestrators)
     // -------------------------------------------------------------------------
 
-    /// Records a purchase of an asset into the account (TRX-020, TRX-026).
+    /// Records a purchase of an asset into the account (TRX-020, TRX-026, TRX-060).
     ///
     /// Loads the Account aggregate, delegates to `Account::buy_holding`, saves
     /// atomically. Returns a typed `AccountError` — same composite as
@@ -319,6 +319,7 @@ impl AccountService {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "buy_holding");
@@ -331,6 +332,7 @@ impl AccountService {
                 unit_price,
                 exchange_rate,
                 fees,
+                total_amount,
                 note,
             )
             .map_err(to_holding_tx_error)?
@@ -340,7 +342,7 @@ impl AccountService {
         Ok(tx)
     }
 
-    /// Records a sale of an asset from the account (SEL-012, SEL-021, SEL-023, SEL-024).
+    /// Records a sale of an asset from the account (SEL-012, SEL-021, SEL-023, SEL-024, SEL-050).
     ///
     /// Loads the Account aggregate, delegates to `Account::sell_holding`, saves atomically.
     #[allow(clippy::too_many_arguments)]
@@ -353,6 +355,7 @@ impl AccountService {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "sell_holding");
@@ -365,6 +368,7 @@ impl AccountService {
                 unit_price,
                 exchange_rate,
                 fees,
+                total_amount,
                 note,
             )
             .map_err(to_holding_tx_error)?
@@ -1481,6 +1485,7 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -1520,6 +1525,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1532,6 +1538,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .await
@@ -1567,6 +1574,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .await
@@ -1609,6 +1617,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1620,6 +1629,7 @@ mod tests {
             micro(120),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1659,6 +1669,7 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -1670,6 +1681,7 @@ mod tests {
             micro(120),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -1735,6 +1747,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .await;
@@ -2077,6 +2090,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2162,6 +2176,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .await
@@ -2662,6 +2677,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2758,6 +2774,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2823,6 +2840,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -2881,6 +2899,7 @@ mod tests {
                     micro(100),
                     micro(1),
                     0,
+                    None,
                     None,
                 )
                 .expect("seed buy");
@@ -2949,6 +2968,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -3023,6 +3043,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -3199,6 +3220,7 @@ mod tests {
                     micro(1),
                     0,
                     None,
+                    None,
                 )
                 .expect("seed buy");
                 acc.pending_changes.clear();
@@ -3260,6 +3282,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -3271,6 +3294,7 @@ mod tests {
             micro(60),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -3325,6 +3349,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -3412,6 +3437,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -3620,6 +3646,7 @@ mod tests {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await

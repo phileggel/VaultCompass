@@ -48,6 +48,10 @@ pub struct BuyHoldingDTO {
     pub exchange_rate: i64,
     /// Fees in account currency (micro-units).
     pub fees: i64,
+    /// All-in total debited by the broker in account currency (micro-units),
+    /// fees included (TRX-060). When provided it is stored verbatim and
+    /// `unit_price` is derived from it.
+    pub total_amount: Option<i64>,
     /// Optional user note.
     pub note: Option<String>,
 }
@@ -69,6 +73,10 @@ pub struct SellHoldingDTO {
     pub exchange_rate: i64,
     /// Fees in account currency (micro-units).
     pub fees: i64,
+    /// All-in net proceeds credited by the broker in account currency
+    /// (micro-units), after fees (SEL-050). When provided it is stored verbatim
+    /// and `unit_price` is derived from it.
+    pub total_amount: Option<i64>,
     /// Optional user note.
     pub note: Option<String>,
 }
@@ -140,6 +148,7 @@ pub async fn buy_holding(
         dto.unit_price,
         dto.exchange_rate,
         dto.fees,
+        dto.total_amount,
         dto.note,
     )
     .await
@@ -160,6 +169,7 @@ pub async fn sell_holding(
         dto.unit_price,
         dto.exchange_rate,
         dto.fees,
+        dto.total_amount,
         dto.note,
     )
     .await

@@ -912,6 +912,11 @@ export type AccountError =
  */
 { code: "TotalAmountNotPositive" } | 
 /**
+ * A user-entered all-in purchase total is lower than the fees it includes,
+ * which would make the securities part negative (TRX-060).
+ */
+{ code: "TotalAmountBelowFees" } | 
+/**
  * The management fee percentage is zero or negative (FEE-021).
  */
 { code: "PercentageNotPositive" } | 
@@ -1396,6 +1401,12 @@ exchange_rate: number;
  * Fees in account currency (micro-units).
  */
 fees: number; 
+/**
+ * All-in total debited by the broker in account currency (micro-units),
+ * fees included (TRX-060). When provided it is stored verbatim and
+ * `unit_price` is derived from it.
+ */
+total_amount: number | null; 
 /**
  * Optional user note.
  */
@@ -2560,6 +2571,12 @@ exchange_rate: number;
  * Fees in account currency (micro-units).
  */
 fees: number; 
+/**
+ * All-in net proceeds credited by the broker in account currency
+ * (micro-units), after fees (SEL-050). When provided it is stored verbatim
+ * and `unit_price` is derived from it.
+ */
+total_amount: number | null; 
 /**
  * Optional user note.
  */

@@ -101,6 +101,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
         unit_price: microValues.priceMicro,
         exchange_rate: microValues.rateMicro,
         fees: microValues.feesMicro,
+        total_amount: null,
         note: formData.note || null,
       });
 

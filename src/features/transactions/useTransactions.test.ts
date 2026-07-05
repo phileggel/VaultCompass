@@ -66,6 +66,7 @@ const buyDto: BuyHoldingDTO = {
   unit_price: 100_000_000,
   exchange_rate: 1_000_000,
   fees: 0,
+  total_amount: null,
   note: null,
 };
 
@@ -150,6 +151,7 @@ describe("useTransactions", () => {
       unit_price: 110_000_000,
       exchange_rate: 1_000_000,
       fees: 0,
+      total_amount: null,
       note: null,
     };
     let ret: { data: Transaction | null; error: I18nMessage | null } = {
@@ -182,6 +184,7 @@ describe("useTransactions", () => {
         unit_price: 100_000_000,
         exchange_rate: 1_000_000,
         fees: 0,
+        total_amount: null,
         note: null,
       });
     });

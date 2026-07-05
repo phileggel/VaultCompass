@@ -44,7 +44,7 @@ All other fields (`id`, `account_id`, `asset_id`, `transaction_type`, `date`, `q
 
 **SEL-022 — Maximum quantity hint (frontend)**: The sell form displays the current `Holding.quantity` as the maximum sellable quantity. When the entered quantity exceeds this value, the form shows an inline validation error and the Save button is disabled until corrected.
 
-**SEL-023 — Sell total amount formula (backend)**: `total_amount` for a sell is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) − fees`. Fees reduce the net proceeds. All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend.
+**SEL-023 — Sell total amount formula (backend)**: `total_amount` for a sell is computed by the backend as `floor(floor(quantity × unit_price / MICRO) × exchange_rate / MICRO) − fees`. Fees reduce the net proceeds. All values are `i64` micro-units (TRX-024); arithmetic uses `i128` intermediates to prevent overflow. `total_amount` is never received from the frontend. In total-entry mode the user-typed total is stored instead and this formula does not apply — see SEL-050.
 
 **SEL-024 — Realized P&L computation (backend)**: When a sell transaction is persisted, the backend computes `realized_pnl = total_sell_amount − floor(Holding.average_price × sold_quantity / MICRO)`, where `Holding.average_price` is the VWAP state immediately before this sell in the full chronological recalculation sequence for the `(account_id, asset_id)` pair. Chronological order is defined as `date ASC, created_at ASC` — when two transactions share the same date, the one with the earlier `created_at` timestamp is processed first. The `transactions` table must include a `created_at TEXT NOT NULL` column storing ISO 8601 timestamps, defaulting to `datetime('now')` on insert. Both terms use `i128` intermediates and integer floor division before scaling back to `i64`. The result is recorded with the transaction. `realized_pnl` is never received from the frontend.
 
@@ -91,6 +91,10 @@ All other fields (`id`, `account_id`, `asset_id`, `transaction_type`, `date`, `q
 **SEL-044 — Loading and error states (frontend)**: The sell form and all display components that show realized P&L follow the same loading skeleton and error-with-retry patterns as the rest of the application.
 
 **SEL-045 — Success feedback (frontend)**: On successful sell creation, edit, or deletion, the form modal closes and a success snackbar is displayed. The Account Details holdings table (including the Realized P&L column) refreshes to reflect the updated state via the `TransactionUpdated` event (TRX-037, TRX-038).
+
+### Total-Entry Mode (050–059)
+
+**SEL-050 — Total-entry sell (backend)**: `sell_holding` accepts an optional user-entered `total_amount` — the all-in net proceeds credited by the broker, in account-currency micro-units, after fees. When provided, the typed total is ground truth: it is stored verbatim as `total_amount` (the SEL-023 formula does not apply) and the unit price is derived as `unit_price = round(((total_amount + fees) × MICRO × MICRO) / (quantity × exchange_rate))`, rounding half away from zero, with `i128` intermediates. Validation: `total_amount` must be strictly positive (`TotalAmountNotPositive`). When absent, SEL-023 applies unchanged. Realized P&L (SEL-024) consumes the stored `total_amount` unchanged. The entry mode is not persisted: a correction (TRX-031, SEL-030) operates on the stored decomposition (`quantity`, `unit_price`, `exchange_rate`, `fees`) and recomputes `total_amount` per SEL-023. For purchases, see TRX-060.
 
 ---
 

@@ -145,6 +145,7 @@ async fn record_management_fee_does_not_create_asset_price_row() {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -231,6 +232,7 @@ async fn record_management_fee_performance_neutrality() {
         micro(50),
         micro(1),
         0,
+        None,
         None,
     )
     .await

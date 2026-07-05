@@ -1110,7 +1110,9 @@ mod tests {
                 10_000_000,    // 10 units
                 1_000_000_000, // 1000 EUR unit price
                 1_000_000,     // exchange_rate 1:1
-                0,             // no fees
+                0,
+                None,
+                // no fees
                 None,
             )
             .await
@@ -1408,6 +1410,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -1435,6 +1438,7 @@ mod tests {
                 1_400_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
@@ -1629,6 +1633,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -1720,6 +1725,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -1785,6 +1791,7 @@ mod tests {
                 1_000_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
@@ -1860,6 +1867,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -1872,6 +1880,7 @@ mod tests {
                 1_200_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
@@ -1944,6 +1953,7 @@ mod tests {
                 1_000_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
@@ -2032,6 +2042,7 @@ mod tests {
                 1_000_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
@@ -2190,6 +2201,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -2267,6 +2279,7 @@ mod tests {
                 1_000_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
@@ -2552,6 +2565,7 @@ mod tests {
                 1_000_000,   // exchange_rate 1:1
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -2634,6 +2648,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -2714,7 +2729,9 @@ mod tests {
                 1_000_000, // 1 unit
                 (unit_price_eur * 1_000_000.0) as i64,
                 1_000_000, // exchange_rate 1:1
-                0,         // no fees
+                0,
+                None,
+                // no fees
                 None,
             )
             .await
@@ -2953,6 +2970,7 @@ mod tests {
                 100_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await

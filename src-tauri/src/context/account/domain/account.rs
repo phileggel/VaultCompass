@@ -219,10 +219,14 @@ impl Account {
     // Aggregate Root methods (B28 — domain/business vocabulary)
     // -------------------------------------------------------------------------
 
-    /// Records a purchase of an asset into this account (TRX-020, TRX-026).
+    /// Records a purchase of an asset into this account (TRX-020, TRX-026, TRX-060).
     ///
     /// Creates a Transaction internally, then upserts the Holding with the updated
     /// VWAP and quantity. Enqueues the changes for atomic persistence.
+    ///
+    /// When `total_amount` is provided (TRX-060), the typed all-in total (fees
+    /// included, account currency) is stored verbatim and `unit_price` is derived
+    /// from it; the caller-supplied `unit_price` is ignored.
     #[allow(clippy::too_many_arguments)]
     pub fn buy_holding(
         &mut self,
@@ -232,9 +236,30 @@ impl Account {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<&Transaction> {
-        let total_amount = Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees);
+        let (unit_price, total_amount) = match total_amount {
+            Some(total) => {
+                // TRX-060 — the typed total must be strictly positive and cover the fees.
+                if total <= 0 {
+                    return Err(AccountError::TotalAmountNotPositive.into());
+                }
+                if total < fees {
+                    return Err(AccountError::TotalAmountBelowFees.into());
+                }
+                let derived_unit_price = Self::derive_unit_price_from_total(
+                    total as i128 - fees as i128,
+                    quantity,
+                    exchange_rate,
+                )?;
+                (derived_unit_price, total)
+            }
+            None => (
+                unit_price,
+                Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees),
+            ),
+        };
         let tx = Transaction::new(
             self.id.clone(),
             asset_id.clone(),
@@ -275,10 +300,14 @@ impl Account {
             .ok_or_else(|| anyhow!("BUG: tx list empty after push in account {}", self.id))
     }
 
-    /// Records a sale of an asset from this account (SEL-012, SEL-021, SEL-023, SEL-024).
+    /// Records a sale of an asset from this account (SEL-012, SEL-021, SEL-023, SEL-024, SEL-050).
     ///
     /// Validates the position is open and the quantity is available, creates a Transaction,
     /// updates the Holding with the recalculated VWAP and realized P&L.
+    ///
+    /// When `total_amount` is provided (SEL-050), the typed all-in net proceeds
+    /// (after fees, account currency) are stored verbatim and `unit_price` is
+    /// derived from them; the caller-supplied `unit_price` is ignored.
     #[allow(clippy::too_many_arguments)]
     pub fn sell_holding(
         &mut self,
@@ -288,6 +317,7 @@ impl Account {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<&Transaction> {
         // SEL-012 — closed position guard
@@ -304,7 +334,24 @@ impl Account {
             .into());
         }
 
-        let total_amount = Self::compute_sell_total(quantity, unit_price, exchange_rate, fees);
+        let (unit_price, total_amount) = match total_amount {
+            Some(total) => {
+                // SEL-050 — the typed total must be strictly positive.
+                if total <= 0 {
+                    return Err(AccountError::TotalAmountNotPositive.into());
+                }
+                let derived_unit_price = Self::derive_unit_price_from_total(
+                    total as i128 + fees as i128,
+                    quantity,
+                    exchange_rate,
+                )?;
+                (derived_unit_price, total)
+            }
+            None => (
+                unit_price,
+                Self::compute_sell_total(quantity, unit_price, exchange_rate, fees),
+            ),
+        };
         let tx = Transaction::new(
             self.id.clone(),
             asset_id.clone(),
@@ -1313,6 +1360,34 @@ impl Account {
         ((qty * price / MICRO) * rate / MICRO) as i64 - fees
     }
 
+    /// Derives the unit price implied by a user-entered all-in total (TRX-060, SEL-050).
+    /// Formula: round((securities_amount × MICRO × MICRO) / (quantity × exchange_rate)),
+    /// rounding half away from zero. `securities_amount` is the account-currency
+    /// micro-amount attributable to the securities themselves: `total − fees` for a
+    /// purchase, `total + fees` for a sell.
+    fn derive_unit_price_from_total(
+        securities_amount: i128,
+        quantity: i64,
+        exchange_rate: i64,
+    ) -> StdResult<i64, AccountError> {
+        if quantity <= 0 {
+            return Err(AccountError::QuantityNotPositive);
+        }
+        if exchange_rate <= 0 {
+            return Err(AccountError::ExchangeRateNotPositive);
+        }
+        const MICRO: i128 = 1_000_000;
+        let numerator = securities_amount * MICRO * MICRO;
+        let denominator = quantity as i128 * exchange_rate as i128;
+        let half = denominator / 2;
+        let rounded = if numerator >= 0 {
+            (numerator + half) / denominator
+        } else {
+            (numerator - half) / denominator
+        };
+        Ok(rounded as i64)
+    }
+
     /// Computes total_amount for an OpeningBalance correction (TRX-051).
     /// Formula: floor(qty × unit_price / MICRO) — no exchange_rate factor.
     fn compute_opening_balance_total(quantity: i64, unit_price: i64) -> i64 {
@@ -1599,6 +1674,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         // Buy 2 units @ 200.00 → total = 400.00; VWAP = 600/4 = 150.00
@@ -1609,6 +1685,7 @@ mod tests {
             micro(200),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -1635,6 +1712,7 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .unwrap_err();
         assert!(
@@ -1657,6 +1735,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         let err = acc
@@ -1667,6 +1746,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap_err();
@@ -1690,6 +1770,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         let tx = acc
@@ -1701,9 +1782,215 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .unwrap();
         assert_eq!(tx.realized_pnl, Some(micro(50)));
+    }
+
+    // TRX-060 — the typed total is stored verbatim even when quantity × derived
+    // unit price would not round-trip to it under the TRX-026 formula
+    #[test]
+    fn buy_holding_with_total_stores_typed_total_exactly() {
+        let mut acc = cash_seeded_account();
+        let typed_total = 1_000_000_001; // 1000.000001 in account currency
+        let tx = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(3),
+                0,
+                micro(1),
+                0,
+                Some(typed_total),
+                None,
+            )
+            .unwrap();
+        assert_eq!(tx.total_amount, typed_total);
+        assert_eq!(tx.unit_price, 333_333_334);
+        // The TRX-026 formula applied to the stored decomposition yields
+        // 1_000_000_002 — proof the stored total is the typed one, not recomputed.
+    }
+
+    // TRX-060 — fees are deducted before derivation; the stored total keeps them
+    #[test]
+    fn buy_holding_with_total_deducts_fees_before_deriving_unit_price() {
+        let mut acc = cash_seeded_account();
+        let tx = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                0,
+                micro(1),
+                micro(10),
+                Some(micro(210)),
+                None,
+            )
+            .unwrap();
+        assert_eq!(tx.unit_price, micro(100));
+        assert_eq!(tx.total_amount, micro(210));
+        let holding = acc
+            .holdings
+            .iter()
+            .find(|holding| holding.asset_id == "asset-1")
+            .unwrap();
+        assert_eq!(holding.average_price, micro(105));
+    }
+
+    // SEL-050 — fees are added back before derivation; the stored total is net of them
+    #[test]
+    fn sell_holding_with_total_adds_fees_before_deriving_unit_price() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let tx = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-06-01".to_string(),
+                micro(1),
+                0,
+                micro(1),
+                micro(10),
+                Some(micro(140)),
+                None,
+            )
+            .unwrap();
+        assert_eq!(tx.unit_price, micro(150));
+        assert_eq!(tx.total_amount, micro(140));
+        // SEL-024 consumes the stored total: 140 − VWAP cost basis 100 = +40
+        assert_eq!(tx.realized_pnl, Some(micro(40)));
+    }
+
+    // TRX-060 / SEL-050 — an exact .5 fraction rounds half away from zero
+    #[test]
+    fn derive_unit_price_from_total_rounds_half_away_from_zero() {
+        let derived = Account::derive_unit_price_from_total(3, micro(2), micro(1)).unwrap();
+        assert_eq!(derived, 2);
+    }
+
+    // TRX-060 — a zero typed total is rejected
+    #[test]
+    fn buy_holding_with_total_rejects_non_positive_total() {
+        let mut acc = cash_seeded_account();
+        let err = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                0,
+                micro(1),
+                0,
+                Some(0),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::TotalAmountNotPositive))
+                .unwrap_or(false),
+            "expected TotalAmountNotPositive, got: {err}"
+        );
+    }
+
+    // TRX-060 — a typed total below the fees would make the securities part negative
+    #[test]
+    fn buy_holding_with_total_rejects_total_below_fees() {
+        let mut acc = cash_seeded_account();
+        let err = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(1),
+                0,
+                micro(1),
+                micro(10),
+                Some(micro(5)),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::TotalAmountBelowFees))
+                .unwrap_or(false),
+            "expected TotalAmountBelowFees, got: {err}"
+        );
+    }
+
+    // SEL-050 — a negative typed total is rejected
+    #[test]
+    fn sell_holding_with_total_rejects_non_positive_total() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(1),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let err = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-06-01".to_string(),
+                micro(1),
+                0,
+                micro(1),
+                0,
+                Some(-1),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::TotalAmountNotPositive))
+                .unwrap_or(false),
+            "expected TotalAmountNotPositive, got: {err}"
+        );
+    }
+
+    // TRX-060 + SEL-024 — a sell from a total-entered purchase uses the stored
+    // total through VWAP and realized P&L unchanged
+    #[test]
+    fn sell_from_total_entered_purchase_computes_realized_pnl_from_stored_total() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(2),
+            0,
+            micro(1),
+            micro(10),
+            Some(micro(210)),
+            None,
+        )
+        .unwrap();
+        let tx = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-06-01".to_string(),
+                micro(1),
+                micro(150),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap();
+        // VWAP from the typed total: 210 / 2 = 105; P&L = 150 − 105 = +45
+        assert_eq!(tx.realized_pnl, Some(micro(45)));
     }
 
     // TRX-031 — correct_transaction recalculates holding
@@ -1718,6 +2005,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -2008,6 +2296,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         let sell = acc
@@ -2018,6 +2307,7 @@ mod tests {
                 micro(150),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -2055,6 +2345,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -2300,6 +2591,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
 
@@ -2423,6 +2715,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         let sell_tx = acc
@@ -2433,6 +2726,7 @@ mod tests {
                 micro(150),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -2719,6 +3013,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -2741,6 +3036,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap_err();
@@ -2769,6 +3065,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -2808,6 +3105,7 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .unwrap()
             .clone();
@@ -2843,6 +3141,7 @@ mod tests {
             micro(150),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -2899,6 +3198,7 @@ mod tests {
                 micro(150),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -3289,6 +3589,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         let holding_before = acc
@@ -3353,6 +3654,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         let cash_before = acc.cash_holding_quantity();
@@ -3388,6 +3690,7 @@ mod tests {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -3445,6 +3748,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
 
@@ -3480,6 +3784,7 @@ mod tests {
                 micro(1),
                 0,
                 None,
+                None,
             )
             .unwrap();
 
@@ -3509,6 +3814,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
         // Sell 2 @ 120 before the distribution; P&L = 2 × (120 - 100) = 40
@@ -3520,6 +3826,7 @@ mod tests {
                 micro(120),
                 micro(1),
                 0,
+                None,
                 None,
             )
             .unwrap()
@@ -3565,6 +3872,7 @@ mod tests {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -3646,6 +3954,7 @@ mod tests {
             micro(1),
             0,
             None,
+            None,
         )
         .unwrap();
 
@@ -3668,6 +3977,7 @@ mod tests {
             micro(80),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -3697,6 +4007,7 @@ mod tests {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -3757,6 +4068,7 @@ mod tests {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -3820,6 +4132,7 @@ mod tests {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();
@@ -3907,6 +4220,7 @@ mod tests {
             micro(100),
             micro(1),
             0,
+            None,
             None,
         )
         .unwrap();

@@ -260,6 +260,7 @@ async fn test_get_holding_by_account_asset_returns_none_then_some() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -299,6 +300,7 @@ async fn test_get_transactions_returns_chronological_order() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -311,6 +313,7 @@ async fn test_get_transactions_returns_chronological_order() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -322,6 +325,7 @@ async fn test_get_transactions_returns_chronological_order() {
         micro(90),
         micro(1),
         0,
+        None,
         None,
     )
     .await
@@ -378,6 +382,7 @@ async fn test_get_all_transactions_for_account_spans_assets_chronologically() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -390,6 +395,7 @@ async fn test_get_all_transactions_for_account_spans_assets_chronologically() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -401,6 +407,7 @@ async fn test_get_all_transactions_for_account_spans_assets_chronologically() {
         micro(90),
         micro(1),
         0,
+        None,
         None,
     )
     .await
@@ -455,6 +462,7 @@ async fn test_get_transaction_by_id_returns_some_or_none() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -507,6 +515,7 @@ async fn test_get_asset_ids_for_account_deduplicates() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -518,6 +527,7 @@ async fn test_get_asset_ids_for_account_deduplicates() {
         micro(110),
         micro(1),
         0,
+        None,
         None,
     )
     .await
@@ -558,6 +568,7 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -569,6 +580,7 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
         micro(110),
         micro(1),
         0,
+        None,
         None,
     )
     .await
@@ -626,6 +638,7 @@ async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -638,6 +651,7 @@ async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
             micro(150),
             micro(1),
             0,
+            None,
             None,
         )
         .await

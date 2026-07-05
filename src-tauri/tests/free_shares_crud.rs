@@ -132,6 +132,7 @@ async fn record_free_shares_end_to_end_persists_correct_fields() {
             micro(1),
             0,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -244,6 +245,7 @@ async fn record_free_shares_does_not_create_asset_price_row() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -411,6 +413,7 @@ async fn record_free_shares_publishes_transaction_updated_event() {
         micro(1),
         0,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -483,6 +486,7 @@ async fn record_free_shares_then_cancel_restores_holding_exactly() {
             micro(50),
             micro(1),
             0,
+            None,
             None,
         )
         .await
@@ -626,6 +630,7 @@ async fn record_free_shares_performance_neutrality() {
         micro(50),
         micro(1),
         0,
+        None,
         None,
     )
     .await

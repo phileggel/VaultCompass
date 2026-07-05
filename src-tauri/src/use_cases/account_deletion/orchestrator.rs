@@ -161,6 +161,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -212,6 +213,7 @@ mod tests {
                 1_000_000,
                 0,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -224,6 +226,7 @@ mod tests {
                 12_000_000,
                 1_000_000,
                 0,
+                None,
                 None,
             )
             .await
