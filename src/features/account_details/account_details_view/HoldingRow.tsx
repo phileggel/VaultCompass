@@ -13,10 +13,11 @@ import {
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { patchModalSearch } from "@/lib/modalSearch";
+import type { StoredPerfPeriod } from "@/lib/perfPeriodStorage";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { useCachedAccounts, useCachedAssets } from "../gateway";
 import { PnlCell } from "../shared/PnlCell";
-import type { HoldingRowViewModel } from "../shared/presenter";
+import { type HoldingRowViewModel, selectPerformanceCell } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 
 type HoldingRowProps = {
@@ -35,6 +36,8 @@ type HoldingRowProps = {
   onManageFee?: (assetId: string, assetName: string) => void;
   /** FEE-076 — render the Management Fees column; false when the account has the mechanism disabled. */
   showManagementFees?: boolean;
+  /** ACD-054 — selected period for the Performance % column. */
+  perfPeriod?: StoredPerfPeriod;
   /** As-of (read-only past-date view): hide every mutating action button. */
   readOnly?: boolean;
 };
@@ -50,6 +53,7 @@ export function HoldingRow({
   onTogglePriceRefreshLock,
   onManageFee,
   showManagementFees = true,
+  perfPeriod = "since_start",
   readOnly = false,
 }: HoldingRowProps) {
   const { t } = useTranslation();
@@ -192,6 +196,10 @@ export function HoldingRow({
     );
   }
 
+  // ACD-054 — the Performance % cell for the selected period; since-start keeps
+  // the existing figure, the windowed periods read their Simple Dietz return.
+  const performanceCell = selectPerformanceCell(row, perfPeriod);
+
   return (
     <tr className="m3-tr" onDoubleClick={readOnly ? undefined : handleOpenAssetDetail}>
       <td className="m3-td">
@@ -284,20 +292,20 @@ export function HoldingRow({
           <span className="text-m3-on-surface-variant">{row.unrealizedPnl}</span>
         )}
       </td>
-      {/* MKT-035 — Performance % */}
+      {/* MKT-035 / ACD-054 — Performance % over the selected period */}
       <td className="m3-td text-right tabular-nums">
-        {row.performancePct !== "—" ? (
+        {performanceCell.formatted !== "—" ? (
           <span
             className={
-              row.unrealizedPnlRaw !== null && row.unrealizedPnlRaw < 0
+              performanceCell.raw !== null && performanceCell.raw < 0
                 ? "text-m3-loss"
                 : "text-m3-gain"
             }
           >
-            {row.performancePct}
+            {performanceCell.formatted}
           </span>
         ) : (
-          <span className="text-m3-on-surface-variant">{row.performancePct}</span>
+          <span className="text-m3-on-surface-variant">{performanceCell.formatted}</span>
         )}
       </td>
       {/* DIV-072 — Dividends received (always shown) */}

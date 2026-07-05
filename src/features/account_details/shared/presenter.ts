@@ -7,6 +7,7 @@ import type {
   DividendError,
   FreeSharesError,
   HoldingDetail,
+  HoldingPeriodPerformance,
   InterestError,
   ManagementFeeError,
 } from "@/bindings";
@@ -15,6 +16,7 @@ import {
   microToFormattedPrice,
   microToFormattedQuantity,
 } from "@/lib/microUnits";
+import type { StoredPerfPeriod } from "@/lib/perfPeriodStorage";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { formatStalenessLabel, type StalenessLabel } from "@/ui/format/staleness";
 import type { PriceableAsset } from "./types";
@@ -165,6 +167,8 @@ export interface HoldingRowViewModel {
   unrealizedPnlRaw: number | null;
   /** Formatted performance % (e.g. "5.25%") or "—" when not computable (MKT-032/035). */
   performancePct: string;
+  /** Windowed performance % per window (ACD-054), formatted like performancePct; "—" when the window is not computable (ACD-057), "" for the cash row. */
+  periodPerformance: Record<PerformanceWindow, PerformancePctCell>;
   /** Formatted cumulative dividends received for this holding, account currency (DIV-072). Always shown ("0,00" when none). */
   dividendsReceived: string;
   /** Formatted cumulative management fees deducted for this holding, account currency (FEE-052). Always shown ("0,00" when none). */
@@ -185,6 +189,17 @@ export interface HoldingRowViewModel {
   sourceLabel: string | null;
   /** FX-rate staleness label (FXR-090); null/absent unless a converted value is shown. */
   fxStaleness?: StalenessLabel | null;
+}
+
+/** The five windowed returns of the period selector — every period except the since-start default (ACD-054). */
+export type PerformanceWindow = Exclude<StoredPerfPeriod, "since_start">;
+
+/** One Performance-% cell: the display string plus the raw sign source for gain/loss coloring. */
+export interface PerformancePctCell {
+  /** Formatted percentage (e.g. "5,25%"), "—" when not computable, "" for the cash row. */
+  formatted: string;
+  /** Raw micro-value driving the gain/loss color; null when not computable. */
+  raw: number | null;
 }
 
 /**
@@ -325,6 +340,59 @@ function formatWeightPct(marketValue: number | null, totalGlobalValue: number): 
   return `${microToFormatted(weightPctMicros, 2)}%`;
 }
 
+function formatPerformancePctCell(valueMicroPercent: number | null): PerformancePctCell {
+  return {
+    formatted: valueMicroPercent !== null ? `${microToFormatted(valueMicroPercent, 2)}%` : DASH,
+    raw: valueMicroPercent,
+  };
+}
+
+/** ACD-054 — the windowed returns, each formatted through the performance-% pipeline. */
+function toPeriodPerformance(
+  periodPerformance: HoldingPeriodPerformance,
+): Record<PerformanceWindow, PerformancePctCell> {
+  return {
+    ytd: formatPerformancePctCell(periodPerformance.ytd),
+    one_year: formatPerformancePctCell(periodPerformance.one_year),
+    two_years: formatPerformancePctCell(periodPerformance.two_years),
+    five_years: formatPerformancePctCell(periodPerformance.five_years),
+    ten_years: formatPerformancePctCell(periodPerformance.ten_years),
+  };
+}
+
+// Cash-row variant: the Performance % cell renders blank regardless of the
+// selected window, mirroring performancePct's empty string (CSH-090, ACD-054).
+const CASH_PERFORMANCE_CELL: PerformancePctCell = { formatted: "", raw: null };
+const CASH_PERIOD_PERFORMANCE: Record<PerformanceWindow, PerformancePctCell> = {
+  ytd: CASH_PERFORMANCE_CELL,
+  one_year: CASH_PERFORMANCE_CELL,
+  two_years: CASH_PERFORMANCE_CELL,
+  five_years: CASH_PERFORMANCE_CELL,
+  ten_years: CASH_PERFORMANCE_CELL,
+};
+
+/**
+ * ACD-054 — the Performance-% cell for the selected period: "since_start" keeps
+ * the existing since-inception figure (colored by the unrealized-P&L sign,
+ * MKT-035); the windowed periods read the matching Simple Dietz return.
+ */
+export function selectPerformanceCell(
+  row: HoldingRowViewModel,
+  period: StoredPerfPeriod,
+): PerformancePctCell {
+  if (period === "since_start") {
+    return { formatted: row.performancePct, raw: row.unrealizedPnlRaw };
+  }
+  return row.periodPerformance[period];
+}
+
+/** ACD-054 — i18n key for the Performance-% column header, reflecting the selected period. */
+export function performanceColumnKey(period: StoredPerfPeriod): string {
+  return period === "since_start"
+    ? "account_details.column_performance_pct"
+    : `account_details.column_performance_pct_${period}`;
+}
+
 // reviewer-frontend FP: the default is deliberate — weight legitimately dashes when
 // no account total is supplied; the wiring is covered by the useAccountDetails
 // ACD-052 test — next-batch 2026-07-04
@@ -351,6 +419,7 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
       unrealizedPnl: "",
       unrealizedPnlRaw: null,
       performancePct: "",
+      periodPerformance: CASH_PERIOD_PERFORMANCE,
       dividendsReceived: "",
       managementFees: "",
       weightPct: formatWeightPct(detail.market_value, totalGlobalValue),
@@ -390,6 +459,7 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
     unrealizedPnlRaw: detail.unrealized_pnl,
     performancePct:
       detail.performance_pct !== null ? `${microToFormatted(detail.performance_pct, 2)}%` : DASH,
+    periodPerformance: toPeriodPerformance(detail.period_performance),
     dividendsReceived: microToFormatted(detail.dividends_received, 2),
     managementFees: microToFormatted(detail.management_fees, 2),
     weightPct: formatWeightPct(detail.market_value, totalGlobalValue),

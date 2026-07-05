@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset } from "@/bindings";
+import type { StoredPerfPeriod } from "@/lib/perfPeriodStorage";
 import { useAppStore } from "@/lib/store";
 import type { HoldingRowViewModel } from "../shared/presenter";
 import { HoldingRow } from "./HoldingRow";
@@ -34,6 +35,13 @@ const baseRow: HoldingRowViewModel = {
   unrealizedPnl: "100.00",
   unrealizedPnlRaw: 100_000_000,
   performancePct: "50.00%",
+  periodPerformance: {
+    ytd: { formatted: "5,25%", raw: 5_250_000 },
+    one_year: { formatted: "-1,00%", raw: -1_000_000 },
+    two_years: { formatted: "—", raw: null },
+    five_years: { formatted: "—", raw: null },
+    ten_years: { formatted: "—", raw: null },
+  },
   dividendsReceived: "0.00",
   managementFees: "0.00",
   weightPct: "—",
@@ -45,7 +53,11 @@ const baseRow: HoldingRowViewModel = {
   sourceLabel: "mkt.source_yahoo",
 };
 
-const renderInTable = (row: HoldingRowViewModel, readOnly = false) =>
+const renderInTable = (
+  row: HoldingRowViewModel,
+  readOnly = false,
+  perfPeriod: StoredPerfPeriod = "since_start",
+) =>
   render(
     <table>
       <tbody>
@@ -57,6 +69,7 @@ const renderInTable = (row: HoldingRowViewModel, readOnly = false) =>
           onPriceHistory={vi.fn()}
           onDeposit={vi.fn()}
           onWithdraw={vi.fn()}
+          perfPeriod={perfPeriod}
           readOnly={readOnly}
         />
       </tbody>
@@ -582,5 +595,47 @@ describe("HoldingRow — management fees column + action (FEE-052/011)", () => {
   it("hides the manage-fee action in the read-only as-of view", () => {
     renderWithManageFee(baseRow, vi.fn(), true);
     expect(document.querySelector("#action-manage-fee-asset-1")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ACD-054 — the Performance % cell follows the selected period: since-start
+// keeps the existing figure, each window reads its own value; the color
+// pipeline (gain/loss by raw sign, variant for "—") is unchanged.
+// ---------------------------------------------------------------------------
+
+describe("HoldingRow — windowed performance cell (ACD-054)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  // Total Return also reads "50.00%" in baseRow; give the performance figure a
+  // distinct value so the assertions target the Performance cell alone.
+  const rowWithDistinctPerformance: HoldingRowViewModel = {
+    ...baseRow,
+    performancePct: "42.00%",
+  };
+
+  it("renders the since-start figure by default", () => {
+    renderInTable(rowWithDistinctPerformance);
+    expect(screen.getByText("42.00%")).toHaveClass("text-m3-gain");
+  });
+
+  it("renders the selected window's value with the gain color for a positive return", () => {
+    renderInTable(rowWithDistinctPerformance, false, "ytd");
+    expect(screen.queryByText("42.00%")).toBeNull();
+    expect(screen.getByText("5,25%")).toHaveClass("text-m3-gain");
+  });
+
+  it("renders the selected window's value with the loss color for a negative return", () => {
+    renderInTable(baseRow, false, "one_year");
+    expect(screen.getByText("-1,00%")).toHaveClass("text-m3-loss");
+  });
+
+  it("renders a muted dash when the selected window is not computable (ACD-057)", () => {
+    renderInTable({ ...baseRow, weightPct: "1,00%" }, false, "ten_years");
+    const dash = screen.getByText("—");
+    expect(dash).toHaveClass("text-m3-on-surface-variant");
   });
 });

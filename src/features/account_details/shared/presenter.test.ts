@@ -15,7 +15,9 @@ import {
   type HoldingRowViewModel,
   interestErrorToI18n,
   managementFeeErrorToI18n,
+  performanceColumnKey,
   priceRefreshLockErrorToI18n,
+  selectPerformanceCell,
   toAccountSummary,
   toClosedHoldingRow,
   toHoldingRow,
@@ -869,5 +871,103 @@ describe("toHoldingRow — fee schedule rate (FEE-074)", () => {
   it("is null when the holding has no active schedule", () => {
     const row = toHoldingRow(makeHolding({ fee_rate_percent_micros: null }));
     expect(row.feeRatePct).toBeNull();
+  });
+});
+
+describe("toHoldingRow — windowed performance (ACD-054/057)", () => {
+  it("formats each computable window through the performance-% pipeline", () => {
+    const row = toHoldingRow(
+      makeHolding({
+        period_performance: {
+          ytd: 5_250_000,
+          one_year: -1_000_000,
+          two_years: 12_345_678,
+          five_years: 0,
+          ten_years: 100_000_000,
+        },
+      }),
+    );
+    expect(row.periodPerformance.ytd).toEqual({ formatted: "5,25%", raw: 5_250_000 });
+    expect(row.periodPerformance.one_year).toEqual({ formatted: "-1,00%", raw: -1_000_000 });
+    expect(row.periodPerformance.two_years).toEqual({ formatted: "12,35%", raw: 12_345_678 });
+    expect(row.periodPerformance.five_years).toEqual({ formatted: "0,00%", raw: 0 });
+    expect(row.periodPerformance.ten_years).toEqual({ formatted: "100,00%", raw: 100_000_000 });
+  });
+
+  it("renders a dash for a window that is not computable (ACD-057)", () => {
+    const row = toHoldingRow(makeHolding());
+    for (const window of ["ytd", "one_year", "two_years", "five_years", "ten_years"] as const) {
+      expect(row.periodPerformance[window]).toEqual({ formatted: "—", raw: null });
+    }
+  });
+
+  it("keeps every window blank for the cash row (ACD-054)", () => {
+    const row = toHoldingRow(makeHolding({ asset_id: "system-cash-eur" }));
+    for (const window of ["ytd", "one_year", "two_years", "five_years", "ten_years"] as const) {
+      expect(row.periodPerformance[window]).toEqual({ formatted: "", raw: null });
+    }
+  });
+});
+
+describe("selectPerformanceCell (ACD-054)", () => {
+  const row = toHoldingRow(
+    makeHolding({
+      current_price: 150_000_000,
+      unrealized_pnl: -20_000_000,
+      performance_pct: -10_000_000,
+      period_performance: {
+        ytd: 5_250_000,
+        one_year: -1_000_000,
+        two_years: 2_000_000,
+        five_years: 5_000_000,
+        ten_years: null,
+      },
+    }),
+  );
+
+  it("since_start returns the existing figure colored by the unrealized-P&L sign", () => {
+    expect(selectPerformanceCell(row, "since_start")).toEqual({
+      formatted: "-10,00%",
+      raw: -20_000_000,
+    });
+  });
+
+  it("each window maps to its own period_performance field", () => {
+    expect(selectPerformanceCell(row, "ytd")).toEqual({ formatted: "5,25%", raw: 5_250_000 });
+    expect(selectPerformanceCell(row, "one_year")).toEqual({
+      formatted: "-1,00%",
+      raw: -1_000_000,
+    });
+    expect(selectPerformanceCell(row, "two_years")).toEqual({
+      formatted: "2,00%",
+      raw: 2_000_000,
+    });
+    expect(selectPerformanceCell(row, "five_years")).toEqual({
+      formatted: "5,00%",
+      raw: 5_000_000,
+    });
+    expect(selectPerformanceCell(row, "ten_years")).toEqual({ formatted: "—", raw: null });
+  });
+});
+
+describe("performanceColumnKey (ACD-054)", () => {
+  it("keeps the plain performance header for since_start", () => {
+    expect(performanceColumnKey("since_start")).toBe("account_details.column_performance_pct");
+  });
+
+  it("suffixes the header key with the selected window", () => {
+    expect(performanceColumnKey("ytd")).toBe("account_details.column_performance_pct_ytd");
+    expect(performanceColumnKey("one_year")).toBe(
+      "account_details.column_performance_pct_one_year",
+    );
+    expect(performanceColumnKey("two_years")).toBe(
+      "account_details.column_performance_pct_two_years",
+    );
+    expect(performanceColumnKey("five_years")).toBe(
+      "account_details.column_performance_pct_five_years",
+    );
+    expect(performanceColumnKey("ten_years")).toBe(
+      "account_details.column_performance_pct_ten_years",
+    );
   });
 });

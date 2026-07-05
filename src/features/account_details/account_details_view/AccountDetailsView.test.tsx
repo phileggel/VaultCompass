@@ -100,6 +100,8 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   asOfDisplayDate: "2024-06-01",
   isAsOf: false,
   setAsOfDate: vi.fn(),
+  perfPeriod: "since_start",
+  setPerfPeriod: vi.fn(),
   ...handlers,
   handleBuyOpen: vi.fn(),
   handleBuyClose: vi.fn(),
@@ -300,6 +302,57 @@ describe("AccountDetailsView — read-only as-of view", () => {
     expect(document.querySelector("#add-menu-dividend")).toBeInTheDocument();
     expect(document.querySelector("#add-menu-free-shares")).toBeInTheDocument();
     expect(document.querySelector("#account-details-add-transaction-fab")).toBeInTheDocument();
+  });
+});
+
+describe("AccountDetailsView — performance period selector (ACD-054)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRefreshAccountPrices.mockReturnValue({ isPending: false, refresh: vi.fn() });
+  });
+
+  it("renders the period selector in the live view with the six options", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+    render(<AccountDetailsView />);
+    const select = document.querySelector<HTMLSelectElement>("#account-details-perf-period");
+    expect(select).toBeInTheDocument();
+    expect(Array.from(select?.options ?? []).map((option) => option.value)).toEqual([
+      "since_start",
+      "ytd",
+      "one_year",
+      "two_years",
+      "five_years",
+      "ten_years",
+    ]);
+  });
+
+  it("hides the period selector in the read-only as-of view", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ isAsOf: true, asOfDate: "2024-06-01" }));
+    render(<AccountDetailsView />);
+    expect(document.querySelector("#account-details-perf-period")).toBeNull();
+  });
+
+  it("routes a selection change to setPerfPeriod", () => {
+    const setPerfPeriod = vi.fn();
+    mockUseAccountDetailsView.mockReturnValue(makeView({ setPerfPeriod }));
+    render(<AccountDetailsView />);
+    fireEvent.change(document.querySelector("#account-details-perf-period")!, {
+      target: { value: "ytd" },
+    });
+    expect(setPerfPeriod).toHaveBeenCalledWith("ytd");
+  });
+
+  it("keeps the plain Performance column header for since_start", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView());
+    render(<AccountDetailsView />);
+    expect(screen.getByText("account_details.column_performance_pct")).toBeInTheDocument();
+  });
+
+  it("switches the Performance column header to the selected period", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ perfPeriod: "ytd" }));
+    render(<AccountDetailsView />);
+    expect(screen.getByText("account_details.column_performance_pct_ytd")).toBeInTheDocument();
+    expect(screen.queryByText("account_details.column_performance_pct")).toBeNull();
   });
 });
 

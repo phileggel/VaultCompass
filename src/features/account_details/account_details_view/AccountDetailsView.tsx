@@ -18,6 +18,7 @@ import {
   setClosedSectionOpen as persistClosedSectionOpen,
 } from "@/lib/closedSectionStorage";
 import { logger } from "@/lib/logger";
+import { PERF_PERIODS, type StoredPerfPeriod } from "@/lib/perfPeriodStorage";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { FAB } from "@/ui/components/fab/FAB";
@@ -33,6 +34,7 @@ import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
+import { performanceColumnKey } from "../shared/presenter";
 import { WithdrawalTransactionModal } from "../withdrawal_transaction/WithdrawalTransactionModal";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
@@ -90,6 +92,32 @@ export function AccountDetailsView() {
                     onChange={(e) => view.setAsOfDate(e.target.value)}
                   />
                 </div>
+                {/* ACD-054 — performance-column period selector. The windowed
+                    returns are a live-view metric, so the selector is hidden in
+                    the read-only as-of view (the column pins to since-start). */}
+                {!view.isAsOf && (
+                  <div className="w-40 shrink-0">
+                    <label htmlFor="account-details-perf-period" className="sr-only">
+                      {t("account_details.perf_period_label")}
+                    </label>
+                    <select
+                      id="account-details-perf-period"
+                      className="w-full rounded-lg bg-m3-surface-container-high px-3 py-1.5 text-sm text-m3-on-surface"
+                      value={view.perfPeriod}
+                      aria-label={t("account_details.perf_period_label")}
+                      title={t("account_details.perf_period_label")}
+                      onChange={(event) =>
+                        view.setPerfPeriod(event.target.value as StoredPerfPeriod)
+                      }
+                    >
+                      {PERF_PERIODS.map((period) => (
+                        <option key={period} value={period}>
+                          {t(`account_details.perf_period_${period}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {/* CSH-094 — Global Value (cash + priced holdings, account currency) */}
                 <p className="text-sm text-m3-on-surface-variant whitespace-nowrap">
                   {t("account_details.total_global_value")}:{" "}
@@ -308,9 +336,10 @@ export function AccountDetailsView() {
                       <th className="m3-th text-right">
                         {t("account_details.column_unrealized_pnl")}
                       </th>
-                      {/* MKT-035 — Performance % column */}
+                      {/* MKT-035 / ACD-054 — Performance % column; the header
+                          reflects the selected period */}
                       <th className="m3-th text-right">
-                        {t("account_details.column_performance_pct")}
+                        {t(performanceColumnKey(view.perfPeriod))}
                       </th>
                       {/* DIV-072 — Dividends received column */}
                       <th className="m3-th text-right">
@@ -346,6 +375,7 @@ export function AccountDetailsView() {
                           view.managementFeesEnabled ? view.handleFeeScheduleOpen : undefined
                         }
                         showManagementFees={view.managementFeesEnabled}
+                        perfPeriod={view.perfPeriod}
                         readOnly={view.isAsOf}
                       />
                     ))}

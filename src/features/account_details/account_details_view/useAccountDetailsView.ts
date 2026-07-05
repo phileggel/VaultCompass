@@ -1,9 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { patchModalSearch } from "@/lib/modalSearch";
+import {
+  getPerfPeriod,
+  setPerfPeriod as persistPerfPeriod,
+  type StoredPerfPeriod,
+} from "@/lib/perfPeriodStorage";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
@@ -48,6 +53,27 @@ export function useAccountDetailsView(accountId: string) {
   // FEE-076 — gate for every % management-fee surface on this view.
   const managementFeesEnabled =
     accounts.find((a) => a.id === accountId)?.management_fees_enabled ?? false;
+
+  // ACD-054 — performance-column period, remembered per account. The windowed
+  // returns are a live-view metric, so the as-of view pins the column to the
+  // since-start figure and the setter is inert while a past date is selected.
+  const [perfPeriodState, setPerfPeriodState] = useState<StoredPerfPeriod>(
+    () => getPerfPeriod(accountId) ?? "since_start",
+  );
+
+  // Restore the remembered period when switching to another account without a remount.
+  useEffect(() => {
+    setPerfPeriodState(getPerfPeriod(accountId) ?? "since_start");
+  }, [accountId]);
+
+  const setPerfPeriod = useCallback(
+    (period: StoredPerfPeriod) => {
+      if (isAsOf) return;
+      setPerfPeriodState(period);
+      persistPerfPeriod(accountId, period);
+    },
+    [accountId, isAsOf],
+  );
 
   // ---------------------------------------------------------------------------
   // Modal targets / open flags
@@ -300,6 +326,9 @@ export function useAccountDetailsView(accountId: string) {
     asOfDisplayDate: isAsOf ? asOfDate : "",
     setAsOfDate,
     isAsOf,
+    // ACD-054 — selected performance-column period; since-start in the as-of view.
+    perfPeriod: isAsOf ? ("since_start" as const) : perfPeriodState,
+    setPerfPeriod,
     // Derived
     accountCurrency,
     managementFeesEnabled,

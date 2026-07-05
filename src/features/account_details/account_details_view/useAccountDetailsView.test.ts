@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getPerfPeriod, setPerfPeriod } from "@/lib/perfPeriodStorage";
 import { useAppStore } from "@/lib/store";
 import { useAccountDetailsView } from "./useAccountDetailsView";
 
@@ -310,6 +311,13 @@ const makeHoldingDetail = (overrides: Record<string, unknown> = {}) => ({
   performance_pct: null,
   dividends_received: 0,
   total_return_pct: null,
+  period_performance: {
+    ytd: null,
+    one_year: null,
+    two_years: null,
+    five_years: null,
+    ten_years: null,
+  },
   ...overrides,
 });
 
@@ -533,6 +541,63 @@ describe("useAccountDetailsView — as-of read-only mode", () => {
     act(() => result.current.handleAddTransaction());
 
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ACD-054 — performance-column period: since-start default, per-account
+// persistence, and the as-of pin to since-start (windowed returns are a
+// live-view metric).
+// ---------------------------------------------------------------------------
+
+describe("useAccountDetailsView — performance period (ACD-054)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("defaults to since_start when no preference is stored", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.perfPeriod).toBe("since_start");
+  });
+
+  it("initializes from the stored per-account preference", () => {
+    setPerfPeriod("acc-1", "ytd");
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.perfPeriod).toBe("ytd");
+  });
+
+  it("setPerfPeriod updates the state and persists the choice", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.setPerfPeriod("five_years"));
+    expect(result.current.perfPeriod).toBe("five_years");
+    expect(getPerfPeriod("acc-1")).toBe("five_years");
+  });
+
+  it("pins the period to since_start in the as-of view without losing the stored choice", () => {
+    setPerfPeriod("acc-1", "one_year");
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    expect(result.current.perfPeriod).toBe("one_year");
+
+    act(() => result.current.setAsOfDate("2020-01-01"));
+    expect(result.current.perfPeriod).toBe("since_start");
+
+    act(() => result.current.setAsOfDate(""));
+    expect(result.current.perfPeriod).toBe("one_year");
+  });
+
+  it("setPerfPeriod is inert in the as-of view (no state change, no persistence)", () => {
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    act(() => result.current.setAsOfDate("2020-01-01"));
+
+    act(() => result.current.setPerfPeriod("ten_years"));
+
+    expect(result.current.perfPeriod).toBe("since_start");
+    expect(getPerfPeriod("acc-1")).toBeNull();
   });
 });
 
