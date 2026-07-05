@@ -859,7 +859,7 @@ impl AccountService {
     ) -> Result<Vec<FeeSchedule>, AccountError> {
         let repo = self.fee_schedule_repo()?;
         repo.get_active_by_account(account_id).await.map_err(|e| {
-            tracing::error!(target: BACKEND, err = ?e, "list_active_fee_schedules_for_account: query failed");
+            tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "list_active_fee_schedules_for_account: query failed");
             AccountError::DatabaseError
         })
     }

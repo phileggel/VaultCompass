@@ -56,6 +56,8 @@ impl FeeGenerationOrchestrator {
         // backfills the paused periods on the next run. Each account is loaded
         // once, not once per schedule.
         let mut management_fees_enabled_by_account: HashMap<String, bool> = HashMap::new();
+        // reviewer-backend FP: the Entry API would hold the map borrow across
+        // the get_by_id await; contains_key + insert is clearer here (2026-07-05).
         for schedule in &schedules {
             if !management_fees_enabled_by_account.contains_key(&schedule.account_id) {
                 let account = self.account_service.get_by_id(&schedule.account_id).await?;

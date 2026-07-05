@@ -161,7 +161,7 @@ pub(crate) async fn load_rate_map_for_dates(
                 .resolve_rate_micros(currency, account_currency, &as_of)
                 .await
                 .map_err(|e| {
-                    tracing::error!(target: BACKEND, currency = %currency, err = ?e, "load_rate_map_for_dates: resolve_rate_micros failed");
+                    tracing::error!(target: BACKEND, currency = %currency, as_of = %as_of, err = ?e, "load_rate_map_for_dates: resolve_rate_micros failed");
                     AccountError::DatabaseError
                 })?
             {
