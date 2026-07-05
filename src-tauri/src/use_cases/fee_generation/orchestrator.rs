@@ -196,6 +196,7 @@ mod tests {
         svc.update(
             account.id.clone(),
             account.name.clone(),
+            String::new(),
             account.currency.clone(),
             account.update_frequency,
             true,
@@ -263,6 +264,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Test".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -302,6 +304,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-041".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -366,6 +369,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-043".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -412,6 +416,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-047".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -462,6 +467,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-070".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -537,6 +543,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-044".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -635,6 +642,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-045-end".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -721,6 +729,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-045-inactive".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -800,6 +809,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-047-oversell".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -917,6 +927,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FEE-078".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -955,6 +966,7 @@ mod tests {
             .update(
                 account.id.clone(),
                 account.name.clone(),
+                String::new(),
                 account.currency.clone(),
                 account.update_frequency,
                 false,

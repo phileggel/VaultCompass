@@ -106,6 +106,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Empty Account".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -131,6 +132,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Test Account".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -181,6 +183,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Test Account".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,

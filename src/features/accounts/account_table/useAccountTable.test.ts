@@ -208,10 +208,12 @@ describe("useAccountTable", () => {
     expect(e.stopPropagation).toHaveBeenCalled();
     // editData carries only the bare Account-shape (no total_global_value), so we
     // assert structural equality on those fields rather than reference identity.
-    // FEE-075 — the flag falls back to false when the account catalog has no entry.
+    // ACC-026 / FEE-075 — bank_name falls back to "" and the flag to false when
+    // the account catalog has no entry.
     expect(result.current.editData).toEqual({
       id: account.id,
       name: account.name,
+      bank_name: "",
       currency: account.currency,
       update_frequency: account.update_frequency,
       management_fees_enabled: false,

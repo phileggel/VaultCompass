@@ -118,6 +118,7 @@ async fn record_dividend_end_to_end_persists_correct_fields() {
         .account_service
         .create(
             "My Account".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -183,6 +184,7 @@ async fn record_dividend_leaves_paying_asset_holding_unchanged() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -270,6 +272,7 @@ async fn record_dividend_does_not_create_asset_price_row() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -365,6 +368,7 @@ async fn record_dividend_asset_not_held_propagates() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -443,6 +447,7 @@ async fn record_dividend_publishes_transaction_updated_event() {
     let account = account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -513,6 +518,7 @@ async fn dividends_received_is_zero_when_no_dividend() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -568,6 +574,7 @@ async fn dividends_received_sums_all_dividends_for_the_holding() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -653,6 +660,7 @@ async fn dividends_received_scoped_to_account_asset_pair() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -738,6 +746,7 @@ async fn total_return_pct_is_none_when_no_price_recorded() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -812,6 +821,7 @@ async fn total_return_pct_combines_unrealized_pnl_and_dividends() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -896,6 +906,7 @@ async fn total_dividends_received_is_zero_when_none() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -933,6 +944,7 @@ async fn total_dividends_received_sums_all_account_dividends() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,

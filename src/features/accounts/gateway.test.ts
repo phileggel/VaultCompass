@@ -31,6 +31,7 @@ const { accountGateway } = await import("./gateway");
 const makeAccount = (): Account => ({
   id: "acc-1",
   name: "My Account",
+  bank_name: "",
   currency: "EUR",
   update_frequency: "ManualMonth",
   management_fees_enabled: false,
@@ -61,6 +62,7 @@ describe("accountGateway", () => {
   it("addAccount returns Account on success", async () => {
     const dto: CreateAccountDTO = {
       name: "New Account",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -75,6 +77,7 @@ describe("accountGateway", () => {
   it("addAccount returns NameAlreadyExists error", async () => {
     const dto: CreateAccountDTO = {
       name: "Duplicate",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -88,6 +91,7 @@ describe("accountGateway", () => {
   it("addAccount surfaces InvalidCurrency with currency payload", async () => {
     const dto: CreateAccountDTO = {
       name: "Test",
+      bank_name: "",
       currency: "XYZ",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -101,6 +105,7 @@ describe("accountGateway", () => {
   it("addAccount surfaces NameEmpty domain error", async () => {
     const dto: CreateAccountDTO = {
       name: "  ",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -114,6 +119,7 @@ describe("accountGateway", () => {
   it("addAccount surfaces DatabaseError on repo failure", async () => {
     const dto: CreateAccountDTO = {
       name: "Test",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -130,6 +136,7 @@ describe("accountGateway", () => {
     const dto: UpdateAccountDTO = {
       id: "acc-1",
       name: "Renamed",
+      bank_name: "",
       currency: "USD",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -145,6 +152,7 @@ describe("accountGateway", () => {
     const dto: UpdateAccountDTO = {
       id: "acc-1",
       name: "X",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,

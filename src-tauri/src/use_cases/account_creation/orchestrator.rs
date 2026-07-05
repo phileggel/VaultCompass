@@ -32,6 +32,7 @@ impl AccountCreationUseCase {
     pub async fn create(
         &self,
         name: String,
+        bank_name: String,
         currency: String,
         update_frequency: UpdateFrequency,
         management_fees_enabled: bool,
@@ -48,7 +49,13 @@ impl AccountCreationUseCase {
         // ACC-003; FEE-075's disabled default comes from the creation form).
         let account = self
             .account_service
-            .create(name, currency, update_frequency, management_fees_enabled)
+            .create(
+                name,
+                bank_name,
+                currency,
+                update_frequency,
+                management_fees_enabled,
+            )
             .await?;
         // CSH-012 — eager 0-balance Cash Holding.
         self.account_service.seed_cash_holding(&account.id).await?;
@@ -103,6 +110,7 @@ mod tests {
         let account = uc
             .create(
                 "Brokerage".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -139,6 +147,7 @@ mod tests {
         let disabled = uc
             .create(
                 "Plain".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -149,6 +158,7 @@ mod tests {
         let enabled = uc
             .create(
                 "Funds".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 true,
@@ -167,6 +177,7 @@ mod tests {
 
         uc.create(
             "A".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -175,6 +186,7 @@ mod tests {
         .unwrap();
         uc.create(
             "B".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,

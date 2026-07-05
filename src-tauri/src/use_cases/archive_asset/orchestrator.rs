@@ -96,6 +96,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Test Account".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualDay,
                 false,

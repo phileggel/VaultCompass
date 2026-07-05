@@ -100,6 +100,7 @@ async fn test_delete_account_removes_it_from_get_all() {
     let account = svc
         .create(
             "ToDelete".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -122,6 +123,7 @@ async fn test_get_all_returns_created_accounts() {
     let a = svc
         .create(
             "Alpha".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -131,6 +133,7 @@ async fn test_get_all_returns_created_accounts() {
     let b = svc
         .create(
             "Beta".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -153,6 +156,7 @@ async fn test_get_by_id_returns_some_or_none() {
     let account = svc
         .create(
             "Existing".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -168,6 +172,39 @@ async fn test_get_by_id_returns_some_or_none() {
     assert!(missing.is_none());
 }
 
+/// ACC-026 — bank_name round-trips through create, update, and get_by_id.
+#[tokio::test]
+async fn bank_name_round_trips_through_create_update_and_read() {
+    let pool = make_pool().await;
+    let svc = make_service(&pool).await;
+
+    let account = svc
+        .create(
+            "Branded".to_string(),
+            "Maple Bank".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+            false,
+        )
+        .await
+        .unwrap();
+    let loaded = svc.get_by_id(&account.id).await.unwrap().unwrap();
+    assert_eq!(loaded.bank_name, "Maple Bank");
+
+    svc.update(
+        account.id.clone(),
+        "Branded".to_string(),
+        String::new(),
+        "EUR".to_string(),
+        UpdateFrequency::ManualMonth,
+        false,
+    )
+    .await
+    .unwrap();
+    let cleared = svc.get_by_id(&account.id).await.unwrap().unwrap();
+    assert_eq!(cleared.bank_name, "");
+}
+
 /// get_holdings_for_account() returns an empty vec when no transactions exist.
 #[tokio::test]
 async fn test_get_holdings_for_account_returns_empty_before_any_transaction() {
@@ -177,6 +214,7 @@ async fn test_get_holdings_for_account_returns_empty_before_any_transaction() {
     let account = svc
         .create(
             "NoHoldings".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -198,6 +236,7 @@ async fn test_get_holding_by_account_asset_returns_none_then_some() {
     let account = svc
         .create(
             "HoldingTest".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -242,6 +281,7 @@ async fn test_get_transactions_returns_chronological_order() {
     let account = svc
         .create(
             "TxOrder".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -319,6 +359,7 @@ async fn test_get_all_transactions_for_account_spans_assets_chronologically() {
     let account = svc
         .create(
             "AllTx".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -396,6 +437,7 @@ async fn test_get_transaction_by_id_returns_some_or_none() {
     let account = svc
         .create(
             "TxLookup".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -446,6 +488,7 @@ async fn test_get_asset_ids_for_account_deduplicates() {
     let account = svc
         .create(
             "AssetIds".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -497,6 +540,7 @@ async fn test_get_deletion_summary_counts_holdings_and_transactions() {
     let account = svc
         .create(
             "Summary".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -564,6 +608,7 @@ async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
     let account = svc
         .create(
             "ReorderGuard".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,

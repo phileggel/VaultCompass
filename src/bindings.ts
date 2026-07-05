@@ -736,6 +736,10 @@ id: string;
  */
 name: string; 
 /**
+ * Bank brand name (free text, ACC-026); empty string means unset.
+ */
+bank_name: string; 
+/**
  * ISO 4217 currency code for this account (TRX-021).
  */
 currency: string; 
@@ -1475,6 +1479,10 @@ export type CreateAccountDTO = {
  * Display name.
  */
 name: string; 
+/**
+ * Bank brand name (free text, ACC-026); empty string means unset.
+ */
+bank_name: string; 
 /**
  * ISO 4217 currency code.
  */
@@ -2689,6 +2697,10 @@ id: string;
  * New display name.
  */
 name: string; 
+/**
+ * Bank brand name (free text, ACC-026); empty string means unset.
+ */
+bank_name: string; 
 /**
  * ISO 4217 currency code.
  */

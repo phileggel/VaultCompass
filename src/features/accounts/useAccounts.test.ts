@@ -36,6 +36,7 @@ const { useAccounts } = await import("./useAccounts");
 const makeAccount = (): Account => ({
   id: "acc-1",
   name: "My Account",
+  bank_name: "",
   currency: "EUR",
   update_frequency: "ManualMonth",
   management_fees_enabled: false,
@@ -68,6 +69,7 @@ describe("useAccounts", () => {
     };
     const dto: CreateAccountDTO = {
       name: "My Account",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -93,6 +95,7 @@ describe("useAccounts", () => {
     await act(async () => {
       ret = await result.current.addAccount({
         name: "Dup",
+        bank_name: "",
         currency: "EUR",
         update_frequency: "ManualMonth",
         management_fees_enabled: false,
@@ -114,6 +117,7 @@ describe("useAccounts", () => {
     const dto: UpdateAccountDTO = {
       id: "acc-1",
       name: "Renamed",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,
@@ -139,6 +143,7 @@ describe("useAccounts", () => {
       ret = await result.current.updateAccount({
         id: "acc-1",
         name: "Dup",
+        bank_name: "",
         currency: "EUR",
         update_frequency: "ManualMonth",
         management_fees_enabled: false,

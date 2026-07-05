@@ -108,6 +108,7 @@ async fn record_free_shares_end_to_end_persists_correct_fields() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -221,6 +222,7 @@ async fn record_free_shares_does_not_create_asset_price_row() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -315,6 +317,7 @@ async fn record_free_shares_asset_not_held_propagates() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -382,6 +385,7 @@ async fn record_free_shares_publishes_transaction_updated_event() {
     let account = account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -457,6 +461,7 @@ async fn record_free_shares_then_cancel_restores_holding_exactly() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -601,6 +606,7 @@ async fn record_free_shares_performance_neutrality() {
     let account = account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::Automatic,
             false,

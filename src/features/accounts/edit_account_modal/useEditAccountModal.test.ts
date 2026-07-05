@@ -8,6 +8,7 @@ const mockUpdateAccount = vi.fn();
 const mockAccount: Account = {
   id: "account-1",
   name: "Alpha",
+  bank_name: "",
   currency: "EUR",
   update_frequency: "ManualMonth",
   management_fees_enabled: false,
@@ -81,6 +82,7 @@ describe("useEditAccountModal", () => {
     const otherAccount: Account = {
       id: "account-2",
       name: "Beta",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualDay",
       management_fees_enabled: false,

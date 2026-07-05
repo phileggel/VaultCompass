@@ -45,6 +45,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
 
     const result = await addAccount({
       name: formData.name,
+      bank_name: "",
       currency: formData.currency,
       update_frequency: formData.update_frequency,
       management_fees_enabled: formData.management_fees_enabled,

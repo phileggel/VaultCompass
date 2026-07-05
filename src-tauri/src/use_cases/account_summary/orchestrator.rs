@@ -290,6 +290,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Empty".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -317,6 +318,7 @@ mod tests {
         let acc_a = account_svc
             .create(
                 "A".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -364,6 +366,7 @@ mod tests {
         let acc_b = account_svc
             .create(
                 "B".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -395,6 +398,7 @@ mod tests {
         let account = account_svc
             .create(
                 "EUR Account".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -451,6 +455,7 @@ mod tests {
         let account = account_svc
             .create(
                 "X".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -557,6 +562,7 @@ mod tests {
         let account = account_svc
             .create(
                 "FX Summary".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -621,6 +627,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Same CCY".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -690,6 +697,7 @@ mod tests {
         let account = account_svc
             .create(
                 "No Rate".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -750,6 +758,7 @@ mod tests {
         let account = account_svc
             .create(
                 "X".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -818,6 +827,7 @@ mod tests {
         let account = account_svc
             .create(
                 "PnL Account".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -882,6 +892,7 @@ mod tests {
         account_svc
             .create(
                 "Empty PnL".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -912,6 +923,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Unpriced PnL".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -983,6 +995,7 @@ mod tests {
         let account = account_svc
             .create(
                 "YTD First Year".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1045,6 +1058,7 @@ mod tests {
         let account = account_svc
             .create(
                 "YTD With Baseline".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1100,6 +1114,7 @@ mod tests {
         let account = account_svc
             .create(
                 "YTD Cross-check".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::Automatic,
                 false,
@@ -1176,6 +1191,7 @@ mod tests {
         account_svc
             .create(
                 "YTD None".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,

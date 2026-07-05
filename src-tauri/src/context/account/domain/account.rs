@@ -70,6 +70,8 @@ pub struct Account {
     pub id: String,
     /// User defined name.
     pub name: String,
+    /// Bank brand name (free text, ACC-026); empty string means unset.
+    pub bank_name: String,
     /// ISO 4217 currency code for this account (TRX-021).
     pub currency: String,
     /// How often this account is updated.
@@ -98,6 +100,7 @@ impl Account {
     /// DTO/form default, threaded through `management_fees_enabled`.
     pub fn new(
         name: String,
+        bank_name: String,
         currency: String,
         update_frequency: UpdateFrequency,
         management_fees_enabled: bool,
@@ -106,10 +109,12 @@ impl Account {
         if name.is_empty() {
             return Err(AccountError::NameEmpty);
         }
+        let bank_name = bank_name.trim().to_string();
         Self::validate_currency(&currency)?;
         Ok(Self {
             id: Uuid::new_v4().to_string(),
             name,
+            bank_name,
             currency,
             update_frequency,
             management_fees_enabled,
@@ -123,6 +128,7 @@ impl Account {
     pub fn with_id(
         id: String,
         name: String,
+        bank_name: String,
         currency: String,
         update_frequency: UpdateFrequency,
         management_fees_enabled: bool,
@@ -131,10 +137,12 @@ impl Account {
         if name.is_empty() {
             return Err(AccountError::NameEmpty);
         }
+        let bank_name = bank_name.trim().to_string();
         Self::validate_currency(&currency)?;
         Ok(Self {
             id,
             name,
+            bank_name,
             currency,
             update_frequency,
             management_fees_enabled,
@@ -148,6 +156,7 @@ impl Account {
     pub fn restore(
         id: String,
         name: String,
+        bank_name: String,
         currency: String,
         update_frequency: UpdateFrequency,
         management_fees_enabled: bool,
@@ -155,6 +164,7 @@ impl Account {
         Self {
             id,
             name,
+            bank_name,
             currency,
             update_frequency,
             management_fees_enabled,
@@ -166,9 +176,11 @@ impl Account {
 
     /// Reconstructs an Account with its full aggregate state from storage.
     /// Used exclusively by `AccountRepository::get_with_holdings_and_transactions`.
+    #[allow(clippy::too_many_arguments)]
     pub fn restore_with_positions(
         id: String,
         name: String,
+        bank_name: String,
         currency: String,
         update_frequency: UpdateFrequency,
         management_fees_enabled: bool,
@@ -178,6 +190,7 @@ impl Account {
         Self {
             id,
             name,
+            bank_name,
             currency,
             update_frequency,
             management_fees_enabled,
@@ -1405,6 +1418,7 @@ mod tests {
         Account::restore_with_positions(
             "acc-1".to_string(),
             "Test".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             true,
@@ -1429,6 +1443,7 @@ mod tests {
     fn new_trims_leading_trailing_spaces() {
         let account = Account::new(
             "  My Account  ".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -1442,6 +1457,7 @@ mod tests {
     fn new_rejects_whitespace_only_name() {
         let result = Account::new(
             "   ".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -1454,6 +1470,7 @@ mod tests {
     fn new_rejects_invalid_currency() {
         let result = Account::new(
             "My Account".to_string(),
+            String::new(),
             "INVALID".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -1467,6 +1484,7 @@ mod tests {
         let account = Account::with_id(
             "some-id".to_string(),
             "  Trimmed  ".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualDay,
             false,
@@ -1475,12 +1493,38 @@ mod tests {
         assert_eq!(account.name, "Trimmed");
     }
 
+    // ACC-026 — bank name is trimmed by both validating factories; empty stays empty
+    #[test]
+    fn new_and_with_id_trim_bank_name() {
+        let created = Account::new(
+            "My Account".to_string(),
+            "  Maple Bank  ".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+            false,
+        )
+        .unwrap();
+        assert_eq!(created.bank_name, "Maple Bank");
+
+        let updated = Account::with_id(
+            "some-id".to_string(),
+            "My Account".to_string(),
+            "   ".to_string(),
+            "EUR".to_string(),
+            UpdateFrequency::ManualMonth,
+            false,
+        )
+        .unwrap();
+        assert_eq!(updated.bank_name, "");
+    }
+
     // FEE-075 — the creation flag is carried as-is; the "new accounts default to
     // disabled" rule is enforced by the creation DTO/form default upstream.
     #[test]
     fn new_account_carries_management_fees_flag() {
         let disabled = Account::new(
             "Fresh".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -1490,6 +1534,7 @@ mod tests {
 
         let enabled = Account::new(
             "Funds".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             true,
@@ -1504,6 +1549,7 @@ mod tests {
         let enabled = Account::with_id(
             "id-1".to_string(),
             "Enabled".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             true,
@@ -1514,6 +1560,7 @@ mod tests {
         let disabled = Account::with_id(
             "id-2".to_string(),
             "Disabled".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -1531,6 +1578,7 @@ mod tests {
         let result = Account::with_id(
             "some-id".to_string(),
             "  ".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,

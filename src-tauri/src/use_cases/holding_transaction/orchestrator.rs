@@ -564,6 +564,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -602,6 +603,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -640,6 +642,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -679,6 +682,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -729,6 +733,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -803,6 +808,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -836,6 +842,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(), // match asset currency so rate=1
                 UpdateFrequency::ManualMonth,
                 false,
@@ -936,6 +943,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -972,6 +980,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1008,6 +1017,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1047,6 +1057,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1099,6 +1110,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1154,6 +1166,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1208,6 +1221,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1271,6 +1285,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1406,6 +1421,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1442,6 +1458,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1478,6 +1495,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1517,6 +1535,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1572,6 +1591,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1623,6 +1643,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1661,6 +1682,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1708,6 +1730,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1799,6 +1822,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1834,6 +1858,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1872,6 +1897,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "EUR".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1921,6 +1947,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -1974,6 +2001,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -2064,6 +2092,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,
@@ -2116,6 +2145,7 @@ mod tests {
         let account = account_svc
             .create(
                 "Acc".to_string(),
+                String::new(),
                 "USD".to_string(),
                 UpdateFrequency::ManualMonth,
                 false,

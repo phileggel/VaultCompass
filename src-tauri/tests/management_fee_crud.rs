@@ -29,6 +29,7 @@ async fn enable_management_fees(svc: &AccountService, account: &Account) -> Acco
     svc.update(
         account.id.clone(),
         account.name.clone(),
+        String::new(),
         account.currency.clone(),
         account.update_frequency,
         true,
@@ -120,6 +121,7 @@ async fn record_management_fee_does_not_create_asset_price_row() {
         .account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::ManualMonth,
             false,
@@ -208,6 +210,7 @@ async fn record_management_fee_performance_neutrality() {
     let account = account_service
         .create(
             "Portfolio".to_string(),
+            String::new(),
             "USD".to_string(),
             UpdateFrequency::Automatic,
             false,

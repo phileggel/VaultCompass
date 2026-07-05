@@ -59,6 +59,7 @@ async fn open_holding_end_to_end_persists_correct_fields() {
     let account = svc
         .create(
             "Acc".to_string(),
+            String::new(),
             "EUR".to_string(),
             UpdateFrequency::ManualMonth,
             false,

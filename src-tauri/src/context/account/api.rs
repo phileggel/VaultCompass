@@ -17,6 +17,8 @@ pub struct UpdateAccountDTO {
     pub id: String,
     /// New display name.
     pub name: String,
+    /// Bank brand name (free text, ACC-026); empty string means unset.
+    pub bank_name: String,
     /// ISO 4217 currency code.
     pub currency: String,
     /// New update frequency.
@@ -46,6 +48,7 @@ pub async fn update_account(
         .update(
             dto.id,
             dto.name,
+            dto.bank_name,
             dto.currency,
             dto.update_frequency,
             dto.management_fees_enabled,

@@ -12,6 +12,8 @@ use tauri::State;
 pub struct CreateAccountDTO {
     /// Display name.
     pub name: String,
+    /// Bank brand name (free text, ACC-026); empty string means unset.
+    pub bank_name: String,
     /// ISO 4217 currency code.
     pub currency: String,
     /// Update frequency.
@@ -31,6 +33,7 @@ pub async fn add_account(
 ) -> Result<Account, AccountError> {
     uc.create(
         dto.name,
+        dto.bank_name,
         dto.currency,
         dto.update_frequency,
         dto.management_fees_enabled,
