@@ -438,6 +438,10 @@
       "success_unblocked": "Mises à jour automatiques réactivées pour cet actif."
     }
   },
+  "whats_new": {
+    "title": "Nouveautés ({{version}})",
+    "dismiss": "Compris"
+  },
   "unpriced_prices": {
     "title": "Prix non mis à jour",
     "description": "Le cours de ces actifs n'a pas pu être récupéré automatiquement. Saisissez un prix pour ceux que vous connaissez, ou ignorez-les.",

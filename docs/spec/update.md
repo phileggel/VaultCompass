@@ -157,7 +157,7 @@ Fixed banner integrated into the application shell (header or footer), visible a
 ## Future features
 
 - **Critical updates**: some versions could be marked as critical (security flaw, data corruption), forcing a mandatory update before the application can be used. Not included in this version.
-- **Release notes**: at the first launch after an update, display the release notes (changelog) of the newly installed version. Not included in this version.
+- **Release notes**: at the first launch after an update, display the release notes (changelog) of the newly installed version. Covered by the What's New dialog — see [whats-new.md](whats-new.md) (WNW).
 
 ---
 

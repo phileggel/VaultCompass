@@ -438,6 +438,10 @@
       "success_unblocked": "Automatic price updates re-enabled for this asset."
     }
   },
+  "whats_new": {
+    "title": "What's new ({{version}})",
+    "dismiss": "Got it"
+  },
   "unpriced_prices": {
     "title": "Prices that couldn't be updated",
     "description": "These assets couldn't be priced automatically. Enter a price for the ones you know, or skip them.",

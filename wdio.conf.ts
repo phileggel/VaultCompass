@@ -68,6 +68,23 @@ export const config: Options.Testrunner = {
   reporters: ["spec"],
   mochaOpts: { timeout: 60000 },
 
+  // The webview's localStorage lives in the default WebKit profile and survives
+  // across E2E runs — VAULT_COMPASS_E2E_DATA_DIR redirects only the SQLite data
+  // dir. If the app version bumped since the last run, the stored What's-new
+  // last-seen version would open the WNW dialog over the UI and intercept every
+  // click. Removing the key and reloading routes the launch through the
+  // fresh-install path (WNW-030), which seeds silently and shows nothing.
+  before: async () => {
+    // @ts-expect-error browser is injected by @wdio/globals into the runner scope
+    await browser.execute(() => {
+      localStorage.removeItem("whats_new_last_seen_version");
+      window.location.reload();
+    });
+    // Wait for the shell to come back after the reload before any spec runs.
+    // @ts-expect-error browser is injected by @wdio/globals into the runner scope
+    await browser.$("#nav-accounts").waitForExist({ timeout: 15000 });
+  },
+
   // Capture a screenshot on every failed test for post-mortem diagnosis.
   // File: screenshots/e2e-failures/{suite}-{test}-{timestamp}.png
   afterTest: async (test, _context, result) => {
