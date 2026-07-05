@@ -99,7 +99,7 @@ describe("FreeSharesEditModalMount (FSD-040)", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("surfaces an error snackbar when the fetch fails (F27)", async () => {
+  it("surfaces the mapped error snackbar when the fetch fails (F27)", async () => {
     mockUseSearch.mockReturnValue({
       modal: "edit-free-shares",
       editTxId: "tx-fsd-1",
@@ -110,7 +110,9 @@ describe("FreeSharesEditModalMount (FSD-040)", () => {
 
     render(<FreeSharesEditModalMount />);
 
-    await waitFor(() => expect(mockShowSnackbar).toHaveBeenCalledWith("error.Unknown", "error"));
+    await waitFor(() =>
+      expect(mockShowSnackbar).toHaveBeenCalledWith("error.DatabaseError", "error"),
+    );
     expect(screen.queryByTestId("free-shares-modal")).toBeNull();
   });
 });

@@ -75,6 +75,7 @@ export function FreeSharesModal({
 
   return (
     <FormModal
+      id="free-shares-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("free_shares.modal_title")}

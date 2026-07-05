@@ -70,6 +70,7 @@ export function ManagementFeeEditModal({
 
   return (
     <FormModal
+      id="management-fee-edit-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("management_fee.edit_title")}

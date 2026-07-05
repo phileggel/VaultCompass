@@ -62,6 +62,7 @@ export function WithdrawalTransactionModal({
 
   return (
     <FormModal
+      id="withdrawal-transaction-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t(isEdit ? "cash.withdrawal_edit_modal_title" : "cash.withdrawal_modal_title")}

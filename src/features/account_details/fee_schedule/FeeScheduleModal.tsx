@@ -112,6 +112,7 @@ export function FeeScheduleModal({
   return (
     <>
       <FormModal
+        id="fee-schedule-modal"
         isOpen={isOpen}
         onClose={onClose}
         title={t("fee_schedule.modal_title", { asset: assetName })}

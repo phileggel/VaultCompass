@@ -72,6 +72,7 @@ export function ManagementFeeModal({
 
   return (
     <FormModal
+      id="management-fee-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("management_fee.modal_title")}

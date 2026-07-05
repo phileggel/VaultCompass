@@ -23,7 +23,13 @@ export function UnpricedPricesModal({ assets, onClose }: UnpricedPricesModalProp
   const { rows, record, skip } = useUnpricedPrices(assets, onClose);
 
   return (
-    <FormModal isOpen onClose={onClose} title={t("unpriced_prices.title")} maxWidth="max-w-3xl">
+    <FormModal
+      id="unpriced-prices-modal"
+      isOpen
+      onClose={onClose}
+      title={t("unpriced_prices.title")}
+      maxWidth="max-w-3xl"
+    >
       <p className="text-sm text-m3-on-surface-variant">{t("unpriced_prices.description")}</p>
       <ul className="flex flex-col divide-y divide-neutral-30">
         {rows.map((row) => (

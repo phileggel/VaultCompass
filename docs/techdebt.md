@@ -10,16 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-07-04 — FormModal container lacks an id prop; edit mounts hardcode error.Unknown
-
-- Found by: reviewer-frontend (Interest feature review)
-- Where: `src/ui/components/modal/FormModal.tsx` (no `id` prop for the modal container — F25 gap inherited by FreeSharesModal / ManagementFeeModal / InterestModal); `src/features/shell/{FreeShares,ManagementFee,Interest}EditModalMount.tsx` (getTransactions failure shows `error.Unknown` regardless of the actual error code — logged per F27 but not routed through a presenter mapping)
-- Context: branch `next` @ `d0f7ccb`
-- Severity: 🔵
-- Observation: Two pre-existing patterns the Interest feature faithfully inherited. FormModal should take an `id` like Dialog now does (see 7178270) and the three shell edit mounts should map the fetch-failure code through a presenter. Fix all three mounts + FormModal consumers together rather than piecemeal.
-
----
-
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)

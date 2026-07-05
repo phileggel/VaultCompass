@@ -38,6 +38,7 @@ export function OpenBalanceModal({
 
   return (
     <FormModal
+      id="open-balance-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("open_balance.modal_title")}

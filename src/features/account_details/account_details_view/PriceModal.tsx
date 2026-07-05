@@ -89,6 +89,7 @@ export function PriceModal({
 
   return (
     <FormModal
+      id="price-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("price_modal.title")}

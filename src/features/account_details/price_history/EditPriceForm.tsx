@@ -40,6 +40,7 @@ export function EditPriceForm({
 
   return (
     <FormModal
+      id="edit-price-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("price_history.edit_title")}

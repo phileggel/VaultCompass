@@ -62,6 +62,7 @@ export function DepositTransactionModal({
 
   return (
     <FormModal
+      id="deposit-transaction-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t(isEdit ? "cash.deposit_edit_modal_title" : "cash.deposit_modal_title")}

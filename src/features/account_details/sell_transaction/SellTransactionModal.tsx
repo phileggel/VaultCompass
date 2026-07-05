@@ -86,6 +86,7 @@ export function SellTransactionModal({
 
   return (
     <FormModal
+      id="sell-transaction-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("transaction.sell_modal_title")}

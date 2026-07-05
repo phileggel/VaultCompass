@@ -85,6 +85,7 @@ export function BuyTransactionModal({
   return (
     <>
       <FormModal
+        id="buy-transaction-modal"
         isOpen={isOpen}
         onClose={onClose}
         title={t("transaction.buy_modal_title")}

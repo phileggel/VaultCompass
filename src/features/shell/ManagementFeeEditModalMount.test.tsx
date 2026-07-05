@@ -99,7 +99,7 @@ describe("ManagementFeeEditModalMount (FEE-063)", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("surfaces an error snackbar when the fetch fails (F27)", async () => {
+  it("surfaces the mapped error snackbar when the fetch fails (F27)", async () => {
     mockUseSearch.mockReturnValue({
       modal: "edit-management-fee",
       editTxId: "tx-fee-1",
@@ -110,7 +110,9 @@ describe("ManagementFeeEditModalMount (FEE-063)", () => {
 
     render(<ManagementFeeEditModalMount />);
 
-    await waitFor(() => expect(mockShowSnackbar).toHaveBeenCalledWith("error.Unknown", "error"));
+    await waitFor(() =>
+      expect(mockShowSnackbar).toHaveBeenCalledWith("error.DatabaseError", "error"),
+    );
     expect(screen.queryByTestId("management-fee-edit-modal")).toBeNull();
   });
 });

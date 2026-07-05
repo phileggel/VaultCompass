@@ -55,6 +55,22 @@ export function transactionMutationErrorToI18n(err: AccountError | OpenHoldingEr
   }
 }
 
+/**
+ * F27 — Maps a transaction-load failure (`getTransactions` /
+ * `getAllTransactionsForAccount`) to an i18n key. Pure function: no React, no
+ * useTranslation. `AccountError` is a BC-wide union; only the read-path codes
+ * are mapped and any unreachable variant falls through to `error.Unknown`.
+ */
+export function transactionLoadErrorToI18n(err: AccountError): I18nMessage {
+  switch (err.code) {
+    case "DatabaseError":
+    case "AccountNotFound":
+      return { key: `error.${err.code}` };
+    default:
+      return { key: "error.Unknown" };
+  }
+}
+
 /** Display-ready shape for a transaction row. */
 export interface TransactionRowViewModel {
   id: string;

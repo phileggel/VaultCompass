@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Transaction } from "@/bindings";
 import { InterestModal } from "@/features/account_details/interest_transaction/InterestModal";
 import { transactionGateway } from "@/features/transactions/gateway";
+import { transactionLoadErrorToI18n } from "@/features/transactions/shared/presenter";
 import { logger } from "@/lib/logger";
 import { microToDecimal } from "@/lib/microUnits";
 import { patchModalSearch } from "@/lib/modalSearch";
@@ -73,7 +74,8 @@ export function InterestEditModalMount() {
         logger.error("[InterestEditModalMount] failed to load transaction", {
           error: result.error,
         });
-        showSnackbar(t("error.Unknown"), "error");
+        const message = transactionLoadErrorToI18n(result.error);
+        showSnackbar(t(message.key, message.vars), "error");
         setTransaction(null);
         handleClose();
       }

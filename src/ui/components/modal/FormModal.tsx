@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ModalContainer } from "./ModalContainer";
 
 interface FormModalProps {
+  /** F25 — stable id for the modal panel, targetable from E2E. */
+  id?: string;
   isOpen: boolean;
   onClose: () => void;
   title: string;
@@ -25,6 +27,7 @@ interface FormModalProps {
  * - Complex forms (7+ fields with sections) like ProcedureFormModal
  */
 export function FormModal({
+  id,
   isOpen,
   onClose,
   title,
@@ -35,7 +38,13 @@ export function FormModal({
 }: FormModalProps) {
   const { t } = useTranslation("common");
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} maxWidth={maxWidth} maxHeight={maxHeight}>
+    <ModalContainer
+      id={id}
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth={maxWidth}
+      maxHeight={maxHeight}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-6 border-b border-neutral-30">
         <h2 className="text-lg font-semibold text-neutral-90">{title}</h2>

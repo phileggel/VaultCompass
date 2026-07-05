@@ -99,7 +99,7 @@ describe("InterestEditModalMount (INT-040)", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("surfaces an error snackbar when the fetch fails (F27)", async () => {
+  it("surfaces the mapped error snackbar when the fetch fails (F27)", async () => {
     mockUseSearch.mockReturnValue({
       modal: "edit-interest",
       editTxId: "tx-int-1",
@@ -110,7 +110,9 @@ describe("InterestEditModalMount (INT-040)", () => {
 
     render(<InterestEditModalMount />);
 
-    await waitFor(() => expect(mockShowSnackbar).toHaveBeenCalledWith("error.Unknown", "error"));
+    await waitFor(() =>
+      expect(mockShowSnackbar).toHaveBeenCalledWith("error.DatabaseError", "error"),
+    );
     expect(screen.queryByTestId("interest-modal")).toBeNull();
   });
 });

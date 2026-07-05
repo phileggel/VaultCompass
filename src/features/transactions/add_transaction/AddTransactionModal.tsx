@@ -87,6 +87,7 @@ export function AddTransactionModal({
   return (
     <>
       <FormModal
+        id="add-transaction-modal"
         isOpen={isOpen}
         onClose={onClose}
         title={t("transaction.add_modal_title")}

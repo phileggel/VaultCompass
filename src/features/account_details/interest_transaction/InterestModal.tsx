@@ -70,6 +70,7 @@ export function InterestModal({
 
   return (
     <FormModal
+      id="interest-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t(editMode ? "interest.edit_title" : "interest.modal_title")}

@@ -90,6 +90,7 @@ export function DividendTransactionModal({
 
   return (
     <FormModal
+      id="dividend-transaction-modal"
       isOpen={isOpen}
       onClose={onClose}
       title={t("dividend.modal_title")}

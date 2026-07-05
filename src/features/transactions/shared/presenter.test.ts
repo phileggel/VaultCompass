@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { toTransactionRow, transactionMutationErrorToI18n } from "./presenter";
+import {
+  toTransactionRow,
+  transactionLoadErrorToI18n,
+  transactionMutationErrorToI18n,
+} from "./presenter";
 
 const MICRO = 1_000_000;
 
@@ -191,5 +195,24 @@ describe("transactionMutationErrorToI18n", () => {
   ] as const)("unreachable account-only code %s falls back to error.Unknown", (code) => {
     const err = { code } as Parameters<typeof transactionMutationErrorToI18n>[0];
     expect(transactionMutationErrorToI18n(err)).toEqual({ key: "error.Unknown" });
+  });
+});
+
+describe("transactionLoadErrorToI18n", () => {
+  it("DatabaseError maps to its flat error key", () => {
+    expect(transactionLoadErrorToI18n({ code: "DatabaseError" })).toEqual({
+      key: "error.DatabaseError",
+    });
+  });
+
+  it("AccountNotFound maps to its flat error key", () => {
+    expect(transactionLoadErrorToI18n({ code: "AccountNotFound", account_id: "acc-1" })).toEqual({
+      key: "error.AccountNotFound",
+    });
+  });
+
+  it("unreachable code falls back to error.Unknown", () => {
+    const err = { code: "NameEmpty" } as Parameters<typeof transactionLoadErrorToI18n>[0];
+    expect(transactionLoadErrorToI18n(err)).toEqual({ key: "error.Unknown" });
   });
 });

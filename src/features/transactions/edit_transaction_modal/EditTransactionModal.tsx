@@ -88,6 +88,7 @@ export function EditTransactionModal({
   return (
     <>
       <FormModal
+        id="edit-transaction-modal"
         isOpen={isOpen}
         onClose={onClose}
         title={t("transaction.edit_modal_title")}

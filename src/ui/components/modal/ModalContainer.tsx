@@ -2,6 +2,8 @@ import { type ReactNode, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 interface ModalContainerProps {
+  /** F25 — stable id for the dialog panel, targetable from E2E. */
+  id?: string;
   isOpen: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -22,6 +24,7 @@ interface ModalContainerProps {
  * Use this for simple modals or as a wrapper for more complex patterns.
  */
 export function ModalContainer({
+  id,
   isOpen,
   onClose,
   children,
@@ -64,6 +67,7 @@ export function ModalContainer({
       />
       {/* Dialog panel — sibling, renders above backdrop via DOM order */}
       <div
+        id={id}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
