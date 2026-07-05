@@ -1,6 +1,7 @@
 import { configure, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountSummary } from "@/bindings";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Account, AccountSummary } from "@/bindings";
+import { useAppStore } from "@/lib/store";
 import { AccountTable } from "./AccountTable";
 
 // New metric cells use stable `id` attributes (F25, consistent with the existing
@@ -137,6 +138,67 @@ describe("AccountTable — Global Value column (ACC-021)", () => {
     const row = screen.getAllByRole("row")[1] as HTMLElement;
     expect(within(row).getByText("0.00")).toBeInTheDocument();
     expect(within(row).getByText("JPY")).toBeInTheDocument();
+  });
+});
+
+// ACC-026 — Bank column (after Name), value resolved from the account catalog
+describe("AccountTable — Bank column (ACC-026)", () => {
+  const makeCatalogAccount = (id: string, bank_name: string): Account => ({
+    id,
+    name: "Main EUR",
+    bank_name,
+    currency: "EUR",
+    update_frequency: "ManualMonth",
+    management_fees_enabled: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsLoading.mockReturnValue(false);
+    mockError.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    useAppStore.setState({ accounts: [] });
+  });
+
+  it("renders the Bank column header with its stable id", () => {
+    mockSummaries.mockReturnValue([makeSummary()]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    const header = screen.getByText("account.column_bank_name").closest("th") as HTMLElement;
+    expect(header).toBeInTheDocument();
+    expect(header.getAttribute("id")).toBe("account-column-bank");
+  });
+
+  it("renders the bank name resolved from the account catalog", () => {
+    useAppStore.setState({ accounts: [makeCatalogAccount("a", "Fortuneo")] });
+    mockSummaries.mockReturnValue([makeSummary({ id: "a" })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    expect(screen.getByTestId("account-bank-name-a")).toHaveTextContent("Fortuneo");
+  });
+
+  it("renders '—' (dash) when the bank name is unset", () => {
+    useAppStore.setState({ accounts: [makeCatalogAccount("b", "")] });
+    mockSummaries.mockReturnValue([makeSummary({ id: "b" })]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    expect(screen.getByTestId("account-bank-name-b")).toHaveTextContent("—");
+  });
+
+  it("Bank column header is sortable (aria-sort changes on click)", () => {
+    mockSummaries.mockReturnValue([makeSummary()]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    const header = screen.getByText("account.column_bank_name").closest("th") as HTMLElement;
+    expect(header.getAttribute("aria-sort")).toBe("none");
+
+    fireEvent.click(screen.getByText("account.column_bank_name"));
+    expect(header.getAttribute("aria-sort")).toBe("ascending");
+
+    fireEvent.click(screen.getByText("account.column_bank_name"));
+    expect(header.getAttribute("aria-sort")).toBe("descending");
   });
 });
 

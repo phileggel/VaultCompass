@@ -97,6 +97,52 @@ describe("useAddAccount", () => {
   });
 });
 
+describe("useAddAccount — bank name (ACC-026)", () => {
+  beforeEach(() => {
+    mockAddAccount.mockReset();
+  });
+
+  it("passes the bank name field through to the create DTO", async () => {
+    mockAddAccount.mockResolvedValue({ data: { id: "new-id" }, error: null });
+    const { result } = renderHook(() => useAddAccount());
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "PEA" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    act(() => {
+      result.current.handleChange({
+        target: { name: "bank_name", value: "Boursorama" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ bank_name: "Boursorama" }),
+    );
+  });
+
+  it("defaults the bank name to empty string when untouched and resets it after success", async () => {
+    mockAddAccount.mockResolvedValue({ data: { id: "new-id" }, error: null });
+    const { result } = renderHook(() => useAddAccount());
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "name", value: "Plain" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockAddAccount).toHaveBeenCalledWith(expect.objectContaining({ bank_name: "" }));
+    expect(result.current.formData.bank_name).toBe("");
+  });
+});
+
 describe("useAddAccount — management fees opt-in (FEE-075)", () => {
   beforeEach(() => {
     mockAddAccount.mockReset();

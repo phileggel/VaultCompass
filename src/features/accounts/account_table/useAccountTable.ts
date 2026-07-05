@@ -10,6 +10,7 @@ const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 export type SortConfig = {
   key:
     | "name"
+    | "bank_name"
     | "update_frequency"
     | "total_global_value"
     | "total_unrealized_pnl"
@@ -51,6 +52,16 @@ export function useAccountTable(
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         handleSort("name");
+      }
+    },
+    [handleSort],
+  );
+
+  const handleBankNameKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSort("bank_name");
       }
     },
     [handleSort],
@@ -108,6 +119,16 @@ export function useAccountTable(
 
   const storeAccounts = useAppStore((state) => state.accounts);
 
+  // ACC-026 — the summaries DTO does not carry bank_name; it is resolved from
+  // the loaded account catalog by account id.
+  const bankNameByAccountId = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const catalogAccount of storeAccounts) {
+      lookup.set(catalogAccount.id, catalogAccount.bank_name);
+    }
+    return lookup;
+  }, [storeAccounts]);
+
   const handleEditClick = useCallback(
     (e: MouseEvent, account: AccountSummary) => {
       e.stopPropagation();
@@ -164,14 +185,27 @@ export function useAccountTable(
   }, [deleteData, deleteAccount]);
 
   const sortedAndFilteredAccounts = useMemo(() => {
-    const filtered = accounts.filter((a) =>
-      a.name.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+    const filtered = accounts
+      .filter((a) => a.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      .map((a) => ({ ...a, bank_name: bankNameByAccountId.get(a.id) ?? "" }));
 
     const byName = (a: AccountSummary, b: AccountSummary) =>
       a.name.toLowerCase().localeCompare(b.name.toLowerCase());
 
     return [...filtered].sort((a, b) => {
+      // ACC-026 + ACC-008 — bank name with empty-string-as-null semantics:
+      // empty values always sort last, independent of direction.
+      if (sortConfig.key === "bank_name") {
+        const av = a.bank_name;
+        const bv = b.bank_name;
+        if (av === "" && bv === "") return byName(a, b);
+        if (av === "") return 1;
+        if (bv === "") return -1;
+        const cmp = av.toLowerCase().localeCompare(bv.toLowerCase());
+        if (cmp === 0) return byName(a, b);
+        return sortConfig.direction === "asc" ? cmp : -cmp;
+      }
+
       // ACC-008 — nullable metric columns: null values always sort last,
       // independent of direction (so they stay at the bottom in both asc & desc).
       if (sortConfig.key === "total_unrealized_pnl" || sortConfig.key === "ytd_performance_pct") {
@@ -198,7 +232,7 @@ export function useAccountTable(
       }
       return sortConfig.direction === "asc" ? cmp : -cmp;
     });
-  }, [accounts, searchTerm, sortConfig]);
+  }, [accounts, searchTerm, sortConfig, bankNameByAccountId]);
 
   // R11 — no accounts exist and no search is active
   const isEmpty = accounts.length === 0 && searchTerm.trim().length === 0;
@@ -211,6 +245,7 @@ export function useAccountTable(
     sortConfig,
     handleSort,
     handleNameKeyDown,
+    handleBankNameKeyDown,
     handleFrequencyKeyDown,
     handleGlobalValueKeyDown,
     handleUnrealizedPnlKeyDown,

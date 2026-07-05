@@ -40,6 +40,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     sortConfig,
     handleSort,
     handleNameKeyDown,
+    handleBankNameKeyDown,
     handleFrequencyKeyDown,
     handleGlobalValueKeyDown,
     handleUnrealizedPnlKeyDown,
@@ -105,6 +106,29 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                 <SortIcon
                   active={sortConfig.key === "name"}
                   direction={sortConfig.key === "name" ? sortConfig.direction : null}
+                />
+              </div>
+            </th>
+            <th
+              id="account-column-bank"
+              className="m3-th cursor-pointer"
+              tabIndex={0}
+              scope="col"
+              aria-sort={
+                sortConfig.key === "bank_name"
+                  ? sortConfig.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              onClick={() => handleSort("bank_name")}
+              onKeyDown={handleBankNameKeyDown}
+            >
+              <div className="flex items-center">
+                {t("account.column_bank_name")}
+                <SortIcon
+                  active={sortConfig.key === "bank_name"}
+                  direction={sortConfig.key === "bank_name" ? sortConfig.direction : null}
                 />
               </div>
             </th>
@@ -207,7 +231,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={6} className="m3-td text-center py-12">
+              <td colSpan={7} className="m3-td text-center py-12">
                 <span className="text-m3-on-surface-variant animate-pulse">
                   {t("account.loading")}
                 </span>
@@ -216,14 +240,14 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           ) : isEmpty ? (
             // R11 — empty state distinct from no-search-results
             <tr>
-              <td colSpan={6} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+              <td colSpan={7} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
                 {t("account.empty")}
               </td>
             </tr>
           ) : fetchError ? (
             // R12 — error state with retry (only shown when accounts exist but failed to reload)
             <tr>
-              <td colSpan={6} className="m3-td text-center py-12">
+              <td colSpan={7} className="m3-td text-center py-12">
                 <div className="flex flex-col items-center gap-3">
                   <span className="text-m3-error text-sm">{t("account.error_load")}</span>
                   <Button variant="outline" size="sm" onClick={refetch}>
@@ -235,7 +259,7 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
           ) : hasNoSearchResults ? (
             // R10 — no search results (filter active, no match)
             <tr>
-              <td colSpan={6} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
+              <td colSpan={7} className="m3-td text-center py-12 text-m3-on-surface-variant italic">
                 {t("account.no_search_results")}
               </td>
             </tr>
@@ -258,6 +282,16 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                       className="text-m3-primary opacity-0 group-hover:opacity-100 transition-opacity"
                     />
                   </div>
+                </td>
+                {/* ACC-026 — bank name from the account catalog; "—" when unset */}
+                <td id={`account-bank-name-${account.id}`} className="m3-td">
+                  <span
+                    className={
+                      account.bank_name === "" ? "text-m3-on-surface-variant" : "text-m3-on-surface"
+                    }
+                  >
+                    {account.bank_name === "" ? "—" : account.bank_name}
+                  </span>
                 </td>
                 <td className="m3-td">
                   <div className="flex items-center gap-2 text-m3-on-surface-variant">

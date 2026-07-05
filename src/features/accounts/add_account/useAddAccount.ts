@@ -14,6 +14,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
 
   const [formData, setFormData] = useState<AccountFormData>({
     name: "",
+    bank_name: "",
     currency: "EUR",
     update_frequency: "ManualMonth",
     management_fees_enabled: false,
@@ -45,7 +46,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
 
     const result = await addAccount({
       name: formData.name,
-      bank_name: "",
+      bank_name: formData.bank_name,
       currency: formData.currency,
       update_frequency: formData.update_frequency,
       management_fees_enabled: formData.management_fees_enabled,
@@ -61,6 +62,7 @@ export function useAddAccount({ onSubmitSuccess }: UseAddAccountProps = {}) {
 
     setFormData({
       name: "",
+      bank_name: "",
       currency: "EUR",
       update_frequency: "ManualMonth",
       management_fees_enabled: false,

@@ -7,6 +7,8 @@ import { FREQUENCY_I18N_KEYS } from "./presenter";
 
 export interface AccountFormData {
   name: string;
+  /** ACC-026 — bank or broker brand name; empty string means unset. */
+  bank_name: string;
   currency: string;
   update_frequency: UpdateFrequency;
   /** FEE-075 — whether the % management-fee mechanism is enabled on the account. */
@@ -42,6 +44,15 @@ export function AccountForm({
         required
         placeholder={t("account.form_name_placeholder")}
         value={formData.name}
+        onChange={handleChange}
+      />
+
+      {/* ACC-026 — optional bank name, free text */}
+      <TextField
+        label={t("account.form_bank_name_label")}
+        id={`${idPrefix}-bank-name`}
+        name="bank_name"
+        value={formData.bank_name}
         onChange={handleChange}
       />
 

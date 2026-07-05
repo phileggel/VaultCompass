@@ -16,6 +16,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
 
   const [formData, setFormData] = useState<AccountFormData>({
     name: "",
+    bank_name: "",
     currency: "EUR",
     update_frequency: "ManualMonth",
     management_fees_enabled: false,
@@ -28,6 +29,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     if (account) {
       setFormData({
         name: account.name,
+        bank_name: account.bank_name,
         currency: account.currency,
         update_frequency: account.update_frequency,
         management_fees_enabled: account.management_fees_enabled,
@@ -61,7 +63,7 @@ export function useEditAccountModal({ account, onClose }: UseEditAccountModalPro
     const result = await updateAccount({
       id: account.id,
       name: formData.name,
-      bank_name: account.bank_name,
+      bank_name: formData.bank_name,
       currency: formData.currency,
       update_frequency: formData.update_frequency,
       management_fees_enabled: formData.management_fees_enabled,

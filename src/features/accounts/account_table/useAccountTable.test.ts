@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { AccountDeletionSummary, AccountSummary } from "@/bindings";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Account, AccountDeletionSummary, AccountSummary } from "@/bindings";
+import { useAppStore } from "@/lib/store";
 import { useAccountTable } from "./useAccountTable";
 
 function makeAccount(
@@ -379,6 +380,126 @@ describe("useAccountTable — sort by total_unrealized_pnl (ACC-023, ACC-008)", 
     // Tab is ignored — direction stays asc (a second sort on the same key would flip it).
     act(() => result.current.handleUnrealizedPnlKeyDown(makeKeyEvent("Tab")));
     expect(result.current.sortConfig.direction).toBe("asc");
+  });
+});
+
+// ACC-026 — bank name resolved from the account catalog; empty string means
+// unset and sorts last in both directions (empty-string-as-null semantics).
+describe("useAccountTable — bank name column (ACC-026, ACC-008)", () => {
+  function makeCatalogAccount(id: string, name: string, bank_name: string): Account {
+    return {
+      id,
+      name,
+      bank_name,
+      currency: "EUR",
+      update_frequency: "ManualMonth",
+      management_fees_enabled: false,
+    };
+  }
+
+  const bankAccounts: [AccountSummary, AccountSummary, AccountSummary] = [
+    makeAccount("a", "Alpha", "ManualMonth"),
+    makeAccount("b", "Beta", "ManualMonth"),
+    makeAccount("c", "Gamma", "ManualMonth"),
+  ];
+
+  beforeEach(() => {
+    useAppStore.setState({
+      accounts: [
+        makeCatalogAccount("a", "Alpha", "Fortuneo"),
+        makeCatalogAccount("b", "Beta", "Boursorama"),
+        makeCatalogAccount("c", "Gamma", ""),
+      ],
+    });
+  });
+
+  afterEach(() => {
+    useAppStore.setState({ accounts: [] });
+  });
+
+  it("exposes each row's bank name resolved from the account catalog", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    const bankNamesByAccountId = Object.fromEntries(
+      result.current.sortedAndFilteredAccounts.map((a) => [a.id, a.bank_name]),
+    );
+    expect(bankNamesByAccountId).toEqual({ a: "Fortuneo", b: "Boursorama", c: "" });
+  });
+
+  it("falls back to empty string when the catalog has no entry for the account", () => {
+    useAppStore.setState({ accounts: [] });
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    expect(result.current.sortedAndFilteredAccounts.every((a) => a.bank_name === "")).toBe(true);
+  });
+
+  it("sorts bank_name ascending with empty bank names last", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("bank_name"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("sorts bank_name descending with empty bank names still last", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("bank_name"));
+    act(() => result.current.handleSort("bank_name"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("orders rows with empty bank names among themselves by account name", () => {
+    useAppStore.setState({
+      accounts: [
+        makeCatalogAccount("a", "Alpha", ""),
+        makeCatalogAccount("b", "Beta", "Boursorama"),
+        makeCatalogAccount("c", "Gamma", ""),
+      ],
+    });
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleSort("bank_name"));
+
+    expect(result.current.sortedAndFilteredAccounts.map((a) => a.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("handleBankNameKeyDown triggers sort on Enter and Space and ignores other keys", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+    expect(result.current.sortConfig.key).toBe("name");
+
+    act(() => result.current.handleBankNameKeyDown(makeKeyEvent("Enter")));
+    expect(result.current.sortConfig.key).toBe("bank_name");
+    expect(result.current.sortConfig.direction).toBe("asc");
+
+    act(() => result.current.handleBankNameKeyDown(makeKeyEvent(" ")));
+    expect(result.current.sortConfig.direction).toBe("desc");
+
+    act(() => result.current.handleBankNameKeyDown(makeKeyEvent("Tab")));
+    expect(result.current.sortConfig.direction).toBe("desc");
+  });
+
+  it("handleEditClick prefills editData.bank_name from the account catalog", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(bankAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    act(() => result.current.handleEditClick(makeMouseEvent(), bankAccounts[0]));
+
+    expect(result.current.editData?.bank_name).toBe("Fortuneo");
   });
 });
 

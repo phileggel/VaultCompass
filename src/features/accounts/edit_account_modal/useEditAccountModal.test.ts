@@ -93,3 +93,42 @@ describe("useEditAccountModal", () => {
     expect(result.current.formData.name).toBe("Beta");
   });
 });
+
+describe("useEditAccountModal — bank name (ACC-026)", () => {
+  const bankAccount: Account = {
+    ...mockAccount,
+    id: "account-3",
+    name: "PEA",
+    bank_name: "Boursorama",
+  };
+
+  beforeEach(() => {
+    mockUpdateAccount.mockReset();
+  });
+
+  it("prefills the form with the account's bank name", () => {
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAccountModal({ account: bankAccount, onClose }));
+
+    expect(result.current.formData.bank_name).toBe("Boursorama");
+  });
+
+  it("sends the edited bank name through to the update DTO", async () => {
+    mockUpdateAccount.mockResolvedValue({ data: bankAccount, error: null });
+    const onClose = vi.fn();
+    const { result } = renderHook(() => useEditAccountModal({ account: bankAccount, onClose }));
+
+    act(() => {
+      result.current.handleChange({
+        target: { name: "bank_name", value: "Fortuneo" },
+      } as React.ChangeEvent<HTMLInputElement>);
+    });
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockUpdateAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "account-3", bank_name: "Fortuneo" }),
+    );
+  });
+});
