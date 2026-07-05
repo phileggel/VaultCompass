@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0] - 2026-07-05
+
+### Added
+
+- what's-new dialog on first start after upgrade (WNW)
+  E2E note: WebKit localStorage persists across runs (only the SQLite dir
+  is redirected), so wdio clears the last-seen key before the suite.
+- global performance view at /performance (GPF, frontend)
+- global performance aggregation in EUR (GPF-010..041, backend)
+  Series engine extracted to use_cases/shared/performance.rs (B18 forbids
+  use-case imports), so scoped delegation equals get_account_performance
+  by construction.
+- asset selector on the performance view (PRF-080, frontend)
+- asset scope on account performance (PRF-080..084, backend)
+- per-line performance period selector (ACD-054, frontend)
+- windowed per-holding position returns (ACD-054..057, backend)
+  Simple Dietz per line over YTD/1y/2y/5y/10y windows; buys/sells are the
+  flows, dividends add to the gain, baseline valued at window start.
+- total-entry mode on buy/sell modals (TRX-060, SEL-050)
+- accept a typed all-in total on buy/sell (TRX-060, SEL-050)
+  The typed total is ground truth: stored verbatim, unit price derived,
+  so the ledger matches the broker debit exactly (no floor round-trip loss).
+- gate interest targets on the interest_bearing flag (frontend)
+- add interest_bearing asset flag with INT-012 gate (backend)
+- show bank name in account form and table (ACC-026, frontend)
+- add bank name metadata to accounts (ACC-026, backend)
+
+### Fixed
+
+- thread new DTO fields through E2E seed helpers
+  e2e/ is outside the main tsc pass, so the bank_name/interest_bearing/
+  total_amount additions surfaced only at suite runtime.
+- apply final-batch review fixups (F27 errors, stale guards, ids)
+  Addresses reviewer-{backend,frontend,arch,e2e} 2026-07-05-04/-01: snackbar
+  on holdings-fetch failure, request-token stale guards, idPrefix on reused
+  table/chart, shell-mounted what's-new, wdio refresh split, bounds guard.
+- apply total-entry review fixups (overflow guard, mode UX)
+  Addresses reviewer-backend/frontend/arch 2026-07-05-03: UnitPriceOutOfRange
+  replaces a silent i64 wrap; mode switches carry values; below-fees error
+  now renders inline; Total-Entry Mode UL entry.
+- apply cluster-B review fixups (log fields, FP note)
+  Addresses reviewer-backend 2026-07-05-02: account_id/as_of tracing
+  fields; Entry-API suggestion rejected inline (borrow across await).
+
 ## [0.33.2] - 2026-07-04
 
 ### Fixed
