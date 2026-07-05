@@ -11,12 +11,19 @@ export function validateTransactionForm(
   data: TransactionFormData,
   qtyMicro: number,
   totalMicro: number,
+  totalEntryFeesMicro: number | null = null,
 ): I18nMessage | null {
   if (!data.accountId) return { key: "transaction.error_validation_account" };
   if (!data.assetId) return { key: "transaction.error_validation_asset" };
   if (!data.date) return { key: "transaction.error_validation_date" };
   if (qtyMicro <= 0) return { key: "transaction.error_validation_quantity" };
   if (totalMicro <= 0) return { key: "transaction.error_validation_total" };
+  // TRX-060 — total-entry buy: the all-in total includes the fees, so the
+  // securities part (total − fees) must not be negative. Pass the fees only
+  // in total-entry purchase mode; null skips the check.
+  if (totalEntryFeesMicro !== null && totalMicro < totalEntryFeesMicro) {
+    return { key: "transaction.error_validation_total_below_fees" };
+  }
   return null;
 }
 

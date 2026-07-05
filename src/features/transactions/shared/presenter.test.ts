@@ -173,6 +173,7 @@ describe("transactionMutationErrorToI18n", () => {
     "FeesNegative",
     "ExchangeRateNotPositive",
     "TotalAmountNotPositive",
+    "TotalAmountBelowFees",
     "AssetNotFound",
     "ArchivedAsset",
     "OpeningBalanceOnCashAsset",

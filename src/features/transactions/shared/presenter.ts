@@ -45,6 +45,7 @@ export function transactionMutationErrorToI18n(err: AccountError | OpenHoldingEr
     case "FeesNegative":
     case "ExchangeRateNotPositive":
     case "TotalAmountNotPositive":
+    case "TotalAmountBelowFees":
     case "AssetNotFound":
     case "ArchivedAsset":
     case "OpeningBalanceOnCashAsset":

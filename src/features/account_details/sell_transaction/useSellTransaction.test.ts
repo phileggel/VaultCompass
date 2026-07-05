@@ -184,6 +184,83 @@ describe("useSellTransaction", () => {
     );
   });
 
+  // SEL-050 — the mode defaults to unit-price entry and sends total_amount: null
+  it("sends total_amount: null in the default price mode", async () => {
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-p" }, error: null });
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+    expect(result.current.entryMode).toBe("price");
+
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("unitPrice", "100");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockSellHolding).toHaveBeenCalledWith(
+      expect.objectContaining({ total_amount: null, unit_price: 100_000_000 }),
+    );
+  });
+
+  // SEL-050 — total mode sends the typed net proceeds and the derived unit price
+  // (fees added back: (140 + 10) / 1 = 150 in asset currency)
+  it("sends the typed total_amount and the derived unit_price in total mode", async () => {
+    mockSellHolding.mockResolvedValue({ data: { id: "tx-t" }, error: null });
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("fees", "10");
+      result.current.handleTotalAmountChange("140");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockSellHolding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        total_amount: 140_000_000,
+        unit_price: 150_000_000,
+        quantity: 1_000_000,
+        fees: 10_000_000,
+      }),
+    );
+  });
+
+  // SEL-050 — the derived price display falls back to "—" while quantity is 0
+  it("shows an em dash for the derived unit price while quantity is 0", async () => {
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+      result.current.handleTotalAmountChange("140");
+    });
+
+    expect(result.current.unitPriceDisplay).toBe("—");
+  });
+
+  // SEL-022 — the oversell guard still applies in total mode
+  it("keeps the oversell guard in total mode", async () => {
+    const { result } = renderHook(() =>
+      useSellTransaction({ ...BASE_PROPS, holdingQuantityMicro: 1_000_000 }),
+    );
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "2"); // 2 > 1 unit held
+      result.current.handleTotalAmountChange("140");
+    });
+
+    expect(result.current.isFormValid).toBe(false);
+  });
+
   // Backend error keeps modal open, sets error, does not call onSubmitSuccess
   it("sets error on backend failure and does not call onSubmitSuccess", async () => {
     mockSellHolding.mockResolvedValue({ data: null, error: { key: "error.DatabaseError" } });

@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TransactionFormData } from "@/features/transactions/shared/types";
+import type {
+  TransactionEntryMode,
+  TransactionFormData,
+} from "@/features/transactions/shared/types";
 import { validateTransactionForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
 import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
@@ -9,6 +12,7 @@ import { logger } from "@/lib/logger";
 import {
   computeTotalMicro,
   decimalToMicro,
+  deriveUnitPriceMicro,
   microToDecimal,
   microToFormatted,
 } from "@/lib/microUnits";
@@ -45,19 +49,43 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
   const [showArchivedConfirm, setShowArchivedConfirm] = useState(false);
   // MKT-052/053 — snapshot of the global auto-record toggle at hook mount
   const [recordPrice, setRecordPrice] = useState<boolean>(() => getAutoRecordPrice());
+  // TRX-060 — entry mode: unit price typed (default) or all-in total typed
+  const [entryMode, setEntryMode] = useState<TransactionEntryMode>("price");
+  const [totalAmountInput, setTotalAmountInput] = useState("");
 
   const microValues = useMemo(() => {
     const qtyMicro = decimalToMicro(formData.quantity);
-    const priceMicro = decimalToMicro(formData.unitPrice);
     const rateMicro = decimalToMicro(formData.exchangeRate);
     const feesMicro = decimalToMicro(formData.fees);
+    if (entryMode === "total") {
+      // TRX-060 — the typed total is ground truth; the unit price is derived
+      const totalMicro = decimalToMicro(totalAmountInput);
+      const priceMicro = deriveUnitPriceMicro(totalMicro, feesMicro, qtyMicro, rateMicro, false);
+      return { qtyMicro, priceMicro, rateMicro, feesMicro, totalMicro };
+    }
+    const priceMicro = decimalToMicro(formData.unitPrice);
     const totalMicro = computeTotalMicro(qtyMicro, priceMicro, rateMicro, feesMicro);
     return { qtyMicro, priceMicro, rateMicro, feesMicro, totalMicro };
-  }, [formData.quantity, formData.unitPrice, formData.exchangeRate, formData.fees]);
+  }, [
+    formData.quantity,
+    formData.unitPrice,
+    formData.exchangeRate,
+    formData.fees,
+    entryMode,
+    totalAmountInput,
+  ]);
+
+  const totalEntryFeesMicro = entryMode === "total" ? microValues.feesMicro : null;
 
   const isFormValid = useMemo(
-    () => validateTransactionForm(formData, microValues.qtyMicro, microValues.totalMicro) === null,
-    [formData, microValues.qtyMicro, microValues.totalMicro],
+    () =>
+      validateTransactionForm(
+        formData,
+        microValues.qtyMicro,
+        microValues.totalMicro,
+        totalEntryFeesMicro,
+      ) === null,
+    [formData, microValues.qtyMicro, microValues.totalMicro, totalEntryFeesMicro],
   );
 
   // TDI-020 — average cost as of the entered trade date (or today). Hidden when
@@ -83,6 +111,7 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
       formData,
       microValues.qtyMicro,
       microValues.totalMicro,
+      totalEntryFeesMicro,
     );
     if (validationError) {
       setError(validationError);
@@ -101,7 +130,9 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
         unit_price: microValues.priceMicro,
         exchange_rate: microValues.rateMicro,
         fees: microValues.feesMicro,
-        total_amount: null,
+        // TRX-060 — total mode ships the typed total; the backend re-derives
+        // the authoritative unit price from it (priceMicro mirrors that formula)
+        total_amount: entryMode === "total" ? microValues.totalMicro : null,
         note: formData.note || null,
       });
 
@@ -127,7 +158,17 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, microValues, recordPrice, buyHolding, t, showSnackbar, onSubmitSuccess]);
+  }, [
+    formData,
+    microValues,
+    entryMode,
+    totalEntryFeesMicro,
+    recordPrice,
+    buyHolding,
+    t,
+    showSnackbar,
+    onSubmitSuccess,
+  ]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -153,6 +194,14 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
   return {
     formData,
     totalAmountDisplay: microToFormatted(microValues.totalMicro),
+    /** TRX-060 — how the money side is entered; resets with the modal (not persisted). */
+    entryMode,
+    setEntryMode,
+    /** TRX-060 — the typed all-in total (decimal string), only meaningful in total mode. */
+    totalAmountInput,
+    handleTotalAmountChange: setTotalAmountInput,
+    /** TRX-060 — formatted derived unit price shown in total mode; "—" when quantity is 0. */
+    unitPriceDisplay: microValues.qtyMicro > 0 ? microToFormatted(microValues.priceMicro) : "—",
     /** TDI-020 — formatted account-currency average cost as of the date, or null when not held. */
     averageCostAsOfDate,
     error,

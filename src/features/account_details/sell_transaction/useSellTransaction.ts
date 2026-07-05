@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TransactionFormData } from "@/features/transactions/shared/types";
+import type {
+  TransactionEntryMode,
+  TransactionFormData,
+} from "@/features/transactions/shared/types";
 import { validateSellForm } from "@/features/transactions/shared/validateTransaction";
 import { useTransactions } from "@/features/transactions/useTransactions";
 import { getAutoRecordPrice } from "@/lib/autoRecordPriceStorage";
@@ -10,6 +13,7 @@ import {
   computeCostBasisMicro,
   computeSellTotalMicro,
   decimalToMicro,
+  deriveUnitPriceMicro,
   microToDecimal,
   microToFormatted,
 } from "@/lib/microUnits";
@@ -50,15 +54,31 @@ export function useSellTransaction({
   const [isSubmitting, setIsSubmitting] = useState(false);
   // MKT-052/053 — snapshot of the global auto-record toggle at hook mount
   const [recordPrice, setRecordPrice] = useState<boolean>(() => getAutoRecordPrice());
+  // SEL-050 — entry mode: unit price typed (default) or all-in net proceeds typed
+  const [entryMode, setEntryMode] = useState<TransactionEntryMode>("price");
+  const [totalAmountInput, setTotalAmountInput] = useState("");
 
   const microValues = useMemo(() => {
     const qtyMicro = decimalToMicro(formData.quantity);
-    const priceMicro = decimalToMicro(formData.unitPrice);
     const rateMicro = decimalToMicro(formData.exchangeRate);
     const feesMicro = decimalToMicro(formData.fees);
+    if (entryMode === "total") {
+      // SEL-050 — the typed net proceeds are ground truth; the unit price is derived
+      const totalMicro = decimalToMicro(totalAmountInput);
+      const priceMicro = deriveUnitPriceMicro(totalMicro, feesMicro, qtyMicro, rateMicro, true);
+      return { qtyMicro, priceMicro, rateMicro, feesMicro, totalMicro };
+    }
+    const priceMicro = decimalToMicro(formData.unitPrice);
     const totalMicro = computeSellTotalMicro(qtyMicro, priceMicro, rateMicro, feesMicro);
     return { qtyMicro, priceMicro, rateMicro, feesMicro, totalMicro };
-  }, [formData.quantity, formData.unitPrice, formData.exchangeRate, formData.fees]);
+  }, [
+    formData.quantity,
+    formData.unitPrice,
+    formData.exchangeRate,
+    formData.fees,
+    entryMode,
+    totalAmountInput,
+  ]);
 
   const isFormValid = useMemo(
     () =>
@@ -121,7 +141,9 @@ export function useSellTransaction({
           unit_price: microValues.priceMicro,
           exchange_rate: microValues.rateMicro,
           fees: microValues.feesMicro,
-          total_amount: null,
+          // SEL-050 — total mode ships the typed net proceeds; the backend
+          // re-derives the authoritative unit price from them
+          total_amount: entryMode === "total" ? microValues.totalMicro : null,
           note: formData.note || null,
         });
 
@@ -155,6 +177,7 @@ export function useSellTransaction({
     [
       formData,
       microValues,
+      entryMode,
       holdingQuantityMicro,
       recordPrice,
       sellHolding,
@@ -170,6 +193,14 @@ export function useSellTransaction({
     totalAmountDisplay: microToFormatted(microValues.totalMicro),
     /** Maximum sellable quantity formatted for display (SEL-022). */
     maxQuantityDisplay: microToFormatted(holdingQuantityMicro, 6),
+    /** SEL-050 — how the money side is entered; resets with the modal (not persisted). */
+    entryMode,
+    setEntryMode,
+    /** SEL-050 — the typed all-in net proceeds (decimal string), only meaningful in total mode. */
+    totalAmountInput,
+    handleTotalAmountChange: setTotalAmountInput,
+    /** SEL-050 — formatted derived unit price shown in total mode; "—" when quantity is 0. */
+    unitPriceDisplay: microValues.qtyMicro > 0 ? microToFormatted(microValues.priceMicro) : "—",
     /** TDI-020 — formatted account-currency average cost as of the date, or null when not held. */
     averageCostAsOfDate,
     /** TDI-030 — potential realized P&L of the typed sell (`{ formatted, raw }`), or null. */

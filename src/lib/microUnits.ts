@@ -112,6 +112,35 @@ export function computeSellTotalMicro(
 }
 
 /**
+ * Derives the unit price implied by a user-entered all-in total (TRX-060, SEL-050).
+ * Formula: round((securities × MICRO × MICRO) / (qty × rate)), rounding half away
+ * from zero, where `securities` is the account-currency micro-amount attributable
+ * to the securities themselves: `total − fees` for a buy, `total + fees` for a sell.
+ *
+ * Mirrors the backend i128 arithmetic exactly via BigInt — no float loss.
+ * Returns 0 when `qtyMicro` or `rateMicro` is not strictly positive (no derivable price).
+ */
+export function deriveUnitPriceMicro(
+  totalMicro: number,
+  feesMicro: number,
+  qtyMicro: number,
+  rateMicro: number,
+  isSell: boolean,
+): number {
+  if (qtyMicro <= 0 || rateMicro <= 0) return 0;
+  const MICRO_BIG = 1_000_000n;
+  const securities = isSell
+    ? BigInt(totalMicro) + BigInt(feesMicro)
+    : BigInt(totalMicro) - BigInt(feesMicro);
+  const numerator = securities * MICRO_BIG * MICRO_BIG;
+  const denominator = BigInt(qtyMicro) * BigInt(rateMicro);
+  const half = denominator / 2n;
+  const rounded =
+    numerator >= 0n ? (numerator + half) / denominator : (numerator - half) / denominator;
+  return Number(rounded);
+}
+
+/**
  * Computes the VWAP cost basis of a quantity (the account-currency cost of
  * `qtyMicro` units at `avgPriceMicro` per unit): floor(avgPrice × qty / MICRO).
  * Mirrors the backend realized-P&L cost term (SEL-024 / TDI-030).

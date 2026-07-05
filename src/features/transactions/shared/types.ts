@@ -8,6 +8,13 @@ import type { CorrectTransactionDTO } from "@/bindings";
 export type CorrectTransactionFields = Omit<CorrectTransactionDTO, "account_id" | "transaction_id">;
 
 /**
+ * How the user enters the money side of a buy / sell (TRX-060, SEL-050):
+ * `price` — unit price is typed, total is computed; `total` — the all-in
+ * total is typed, unit price is derived. Not persisted — resets per modal.
+ */
+export type TransactionEntryMode = "price" | "total";
+
+/**
  * Form state for a transaction (add or edit).
  * All numeric fields are decimal strings — converted to i64 micro-units at submit (TRX-024).
  */

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { EntryModeToggle } from "@/features/transactions/shared/EntryModeToggle";
 import { RecordPriceCheckbox } from "@/features/transactions/shared/RecordPriceCheckbox";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
@@ -45,6 +46,11 @@ export function BuyTransactionModal({
   const {
     formData,
     totalAmountDisplay,
+    entryMode,
+    setEntryMode,
+    totalAmountInput,
+    handleTotalAmountChange,
+    unitPriceDisplay,
     averageCostAsOfDate,
     error,
     isSubmitting,
@@ -132,16 +138,31 @@ export function BuyTransactionModal({
             required
           />
 
+          {/* TRX-060 — entry mode: type the unit price or the broker's all-in total */}
+          <EntryModeToggle idPrefix="buy-trx" value={entryMode} onChange={setEntryMode} />
+
           {/* Unit Price + average-cost insight (TDI-020) */}
           <div className="flex flex-col gap-1">
-            <CalcField
-              id="buy-trx-unit-price"
-              label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
-              value={formData.unitPrice}
-              onValueChange={(v) => handleChange("unitPrice", v)}
-              placeholder={t("transaction.form_unit_price_placeholder")}
-              required
-            />
+            {entryMode === "price" ? (
+              <CalcField
+                id="buy-trx-unit-price"
+                label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
+                value={formData.unitPrice}
+                onValueChange={(v) => handleChange("unitPrice", v)}
+                placeholder={t("transaction.form_unit_price_placeholder")}
+                required
+              />
+            ) : (
+              // TRX-060 — derived from the typed total; the backend recomputes it authoritatively
+              <TextField
+                id="buy-trx-unit-price"
+                label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
+                type="text"
+                value={unitPriceDisplay}
+                readOnly
+                aria-readonly="true"
+              />
+            )}
             {averageCostAsOfDate !== null && (
               <span id="buy-trx-avg-cost" className="text-xs text-m3-on-surface-variant">
                 {t("transaction.form_avg_cost_hint", { value: averageCostAsOfDate })}
@@ -169,14 +190,25 @@ export function BuyTransactionModal({
               onValueChange={(v) => handleChange("fees", v)}
               placeholder={t("transaction.form_fees_placeholder")}
             />
-            <TextField
-              id="buy-trx-total"
-              label={t("transaction.form_total_amount_label")}
-              type="text"
-              value={totalAmountDisplay}
-              readOnly
-              aria-readonly="true"
-            />
+            {entryMode === "price" ? (
+              <TextField
+                id="buy-trx-total"
+                label={t("transaction.form_total_amount_label")}
+                type="text"
+                value={totalAmountDisplay}
+                readOnly
+                aria-readonly="true"
+              />
+            ) : (
+              <CalcField
+                id="buy-trx-total"
+                label={t("transaction.form_total_amount_label")}
+                value={totalAmountInput}
+                onValueChange={handleTotalAmountChange}
+                placeholder={t("transaction.form_total_amount_placeholder")}
+                required
+              />
+            )}
           </div>
 
           {/* Note */}

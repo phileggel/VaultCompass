@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { EntryModeToggle } from "@/features/transactions/shared/EntryModeToggle";
 import { RecordPriceCheckbox } from "@/features/transactions/shared/RecordPriceCheckbox";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
@@ -48,6 +49,11 @@ export function SellTransactionModal({
     formData,
     totalAmountDisplay,
     maxQuantityDisplay,
+    entryMode,
+    setEntryMode,
+    totalAmountInput,
+    handleTotalAmountChange,
+    unitPriceDisplay,
     averageCostAsOfDate,
     potentialPnl,
     error,
@@ -140,16 +146,31 @@ export function SellTransactionModal({
           </span>
         </div>
 
+        {/* SEL-050 — entry mode: type the unit price or the broker's all-in net proceeds */}
+        <EntryModeToggle idPrefix="sell-trx" value={entryMode} onChange={setEntryMode} />
+
         {/* Unit Price + average-cost insight (TDI-020) */}
         <div className="flex flex-col gap-1">
-          <CalcField
-            id="sell-trx-unit-price"
-            label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
-            value={formData.unitPrice}
-            onValueChange={(v) => handleChange("unitPrice", v)}
-            placeholder={t("transaction.form_unit_price_placeholder")}
-            required
-          />
+          {entryMode === "price" ? (
+            <CalcField
+              id="sell-trx-unit-price"
+              label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
+              value={formData.unitPrice}
+              onValueChange={(v) => handleChange("unitPrice", v)}
+              placeholder={t("transaction.form_unit_price_placeholder")}
+              required
+            />
+          ) : (
+            // SEL-050 — derived from the typed proceeds; the backend recomputes it authoritatively
+            <TextField
+              id="sell-trx-unit-price"
+              label={`${t("transaction.form_unit_price_label")} (${assetCurrency})`}
+              type="text"
+              value={unitPriceDisplay}
+              readOnly
+              aria-readonly="true"
+            />
+          )}
           {averageCostAsOfDate !== null && (
             <span id="sell-trx-avg-cost" className="text-xs text-m3-on-surface-variant">
               {t("transaction.form_avg_cost_hint", { value: averageCostAsOfDate })}
@@ -177,14 +198,25 @@ export function SellTransactionModal({
             onValueChange={(v) => handleChange("fees", v)}
             placeholder={t("transaction.form_fees_placeholder")}
           />
-          <TextField
-            id="sell-trx-total"
-            label={t("transaction.form_total_amount_label")}
-            type="text"
-            value={totalAmountDisplay}
-            readOnly
-            aria-readonly="true"
-          />
+          {entryMode === "price" ? (
+            <TextField
+              id="sell-trx-total"
+              label={t("transaction.form_total_amount_label")}
+              type="text"
+              value={totalAmountDisplay}
+              readOnly
+              aria-readonly="true"
+            />
+          ) : (
+            <CalcField
+              id="sell-trx-total"
+              label={t("transaction.form_total_amount_label")}
+              value={totalAmountInput}
+              onValueChange={handleTotalAmountChange}
+              placeholder={t("transaction.form_total_amount_placeholder")}
+              required
+            />
+          )}
         </div>
 
         {/* Potential realized P&L of the typed sell (TDI-030/032) */}
