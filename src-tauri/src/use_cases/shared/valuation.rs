@@ -1,5 +1,6 @@
-//! Stateless cross-context valuation primitives shared by the account performance
-//! and account summary use cases (PRF / FXR / ADR-013). Owned by neither use case.
+//! Stateless cross-context valuation primitives shared by the account
+//! performance, account summary and global performance use cases
+//! (PRF / GPF / FXR / ADR-013). Owned by no use case.
 
 use crate::context::account::{Account, AccountError, Transaction, TransactionType};
 use crate::context::asset::{AssetClass, AssetPrice, AssetService};
@@ -452,44 +453,39 @@ pub(crate) fn end_value_as_of(
     total as i64
 }
 
-/// PRF-030 — net external cash flow for transactions dated within `[start, end]`:
-/// `Σ Deposit − Σ Withdrawal + Σ OpeningBalance cost`, in account currency.
-fn net_external_flow_in_range(
-    transactions: &[Transaction],
-    start: NaiveDate,
-    end: NaiveDate,
-) -> i64 {
-    let mut total: i128 = 0;
+/// One signed dated flow feeding a Simple Dietz computation, in the metric's
+/// reporting-currency micros. Inflows are positive, outflows negative.
+#[derive(Clone, Copy)]
+pub(crate) struct DatedFlow {
+    pub(crate) date: NaiveDate,
+    pub(crate) amount: i64,
+}
+
+/// PRF-030 — the account-level external flows of a transaction set as signed
+/// dated amounts: `Deposit` (+), `Withdrawal` (−), `OpeningBalance` cost (+).
+/// Dividends, interest, free shares and management fees are internal events;
+/// purchases and sells are cash↔asset conversions — none is an external flow
+/// (DIV-023, FSD-070, FEE-071, INT-024). Transactions with malformed dates are
+/// skipped.
+pub(crate) fn external_cash_flows(transactions: &[Transaction]) -> Vec<DatedFlow> {
+    let mut flows = Vec::new();
     for transaction in transactions {
-        let within =
-            matches!(parse_date(&transaction.date), Some(date) if date >= start && date <= end);
-        if !within {
+        let Some(date) = parse_date(&transaction.date) else {
             continue;
-        }
-        match transaction.transaction_type {
-            TransactionType::Deposit | TransactionType::OpeningBalance => {
-                total += transaction.total_amount as i128;
-            }
-            TransactionType::Withdrawal => {
-                total -= transaction.total_amount as i128;
-            }
-            // DIV-023: Dividend credits cash (internal income), not an external flow — excluded
-            // from Simple Dietz net external flow (PRF-031) like Purchase/Sell.
-            // FSD-070 / FEE-071: free-share and management-fee events are not external flows.
-            // INT-024: interest is internal income, not an external flow.
+        };
+        let amount = match transaction.transaction_type {
+            TransactionType::Deposit | TransactionType::OpeningBalance => transaction.total_amount,
+            TransactionType::Withdrawal => -transaction.total_amount,
             TransactionType::Purchase
             | TransactionType::Sell
             | TransactionType::Dividend
             | TransactionType::FreeShares
             | TransactionType::ManagementFee
-            | TransactionType::Interest => {}
-        }
+            | TransactionType::Interest => continue,
+        };
+        flows.push(DatedFlow { date, amount });
     }
-    debug_assert!(
-        total <= i64::MAX as i128 && total >= i64::MIN as i128,
-        "net_external_flow_in_range i64 overflow: {total}"
-    );
-    total as i64
+    flows
 }
 
 /// PRF-031/032 — gain and Simple Dietz percentage for a span ending at `period_end`,
@@ -503,47 +499,58 @@ pub(crate) fn metric_for_span(
     period_start: NaiveDate,
     period_end: NaiveDate,
 ) -> PerformanceMetric {
-    let net_flow = net_external_flow_in_range(transactions, period_start, period_end);
-    let gain = end_value - start_value - net_flow;
+    metric_for_span_over_flows(
+        &external_cash_flows(transactions),
+        start_value,
+        end_value,
+        period_start,
+        period_end,
+    )
+}
 
+/// PRF-031/032 over pre-extracted flows: gain and Simple Dietz percentage for a
+/// span whose external flows are already signed dated amounts in the reporting
+/// currency (`external_cash_flows`, or currency-converted flows in a
+/// cross-account aggregation, GPF-030). Flows dated outside
+/// `[period_start, period_end]` are ignored.
+pub(crate) fn metric_for_span_over_flows(
+    flows: &[DatedFlow],
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> PerformanceMetric {
     let days_in_period = (period_end - period_start).num_days();
+    let mut net_flow: i128 = 0;
     let mut weighted_flow: i128 = 0;
-    if days_in_period > 0 {
-        for transaction in transactions {
-            let date = match parse_date(&transaction.date) {
-                Some(date) if date >= period_start && date <= period_end => date,
-                _ => continue,
-            };
-            let signed_flow: i128 = match transaction.transaction_type {
-                TransactionType::Deposit | TransactionType::OpeningBalance => {
-                    transaction.total_amount as i128
-                }
-                TransactionType::Withdrawal => -(transaction.total_amount as i128),
-                // DIV-023: Dividend is internal income (credit-only), not an external flow —
-                // excluded from Simple Dietz weighted flow (PRF-031) like Purchase/Sell.
-                // FSD-070 / FEE-071: free-share and management-fee events are excluded.
-                // INT-024: interest is internal income, excluded like a dividend.
-                TransactionType::Purchase
-                | TransactionType::Sell
-                | TransactionType::Dividend
-                | TransactionType::FreeShares
-                | TransactionType::ManagementFee
-                | TransactionType::Interest => continue,
-            };
-            let days_remaining = (period_end - date).num_days() as i128;
-            weighted_flow += signed_flow * days_remaining / days_in_period as i128;
+    for flow in flows {
+        if flow.date < period_start || flow.date > period_end {
+            continue;
+        }
+        net_flow += flow.amount as i128;
+        if days_in_period > 0 {
+            let days_remaining = (period_end - flow.date).num_days() as i128;
+            weighted_flow += flow.amount as i128 * days_remaining / days_in_period as i128;
         }
     }
 
+    let gain = end_value as i128 - start_value as i128 - net_flow;
+    debug_assert!(
+        gain <= i64::MAX as i128 && gain >= i64::MIN as i128,
+        "metric_for_span_over_flows gain i64 overflow: {gain}"
+    );
     let denominator = start_value as i128 + weighted_flow;
     let pct = if denominator == 0 {
         None
     } else {
         // PRF-032 — scale the numerator by 100_000_000 before dividing; truncate toward zero.
-        Some((gain as i128 * PERCENT_SCALE / denominator) as i64)
+        Some((gain * PERCENT_SCALE / denominator) as i64)
     };
 
-    PerformanceMetric { gain, pct }
+    PerformanceMetric {
+        gain: gain as i64,
+        pct,
+    }
 }
 
 /// ACD-056/057 / PRF-083 — Simple Dietz position performance for ONE asset over
@@ -566,44 +573,99 @@ pub(crate) fn holding_performance_for_span(
     period_start: NaiveDate,
     period_end: NaiveDate,
 ) -> PerformanceMetric {
-    let days_in_period = (period_end - period_start).num_days();
-    let mut net_flow: i128 = 0;
-    let mut weighted_flow: i128 = 0;
-    let mut dividends: i128 = 0;
+    let flows = position_flows(asset_transactions);
+    holding_performance_for_span_over_flows(
+        &flows.trades,
+        &flows.dividends,
+        start_value,
+        end_value,
+        period_start,
+        period_end,
+    )
+}
+
+/// The dated flows of ONE asset's position (PRF-083): its trade flows —
+/// `Purchase` (+), `OpeningBalance` (+), `Sell` (−) at `total_amount` — and its
+/// dividend income, kept separate because a dividend is added to the position
+/// gain rather than netted as a flow.
+pub(crate) struct PositionFlows {
+    pub(crate) trades: Vec<DatedFlow>,
+    pub(crate) dividends: Vec<DatedFlow>,
+}
+
+/// PRF-083 — extracts the position flows of a transaction set pre-filtered to
+/// one asset. Deposit/Withdrawal touch the cash line, never a position;
+/// FreeShares, ManagementFee and Interest are zero-cash position events
+/// (FSD-070 / FEE-071 / INT-024) whose effect surfaces through the endpoint
+/// values. Transactions with malformed dates are skipped.
+pub(crate) fn position_flows(asset_transactions: &[&Transaction]) -> PositionFlows {
+    let mut trades = Vec::new();
+    let mut dividends = Vec::new();
     for transaction in asset_transactions {
-        let date = match parse_date(&transaction.date) {
-            Some(date) if date >= period_start && date <= period_end => date,
-            _ => continue,
+        let Some(date) = parse_date(&transaction.date) else {
+            continue;
         };
-        let signed_flow: i128 = match transaction.transaction_type {
-            TransactionType::Purchase | TransactionType::OpeningBalance => {
-                transaction.total_amount as i128
-            }
-            TransactionType::Sell => -(transaction.total_amount as i128),
-            TransactionType::Dividend => {
-                dividends += transaction.total_amount as i128;
-                continue;
-            }
-            // Deposit/Withdrawal touch the cash line, never a position; FreeShares,
-            // ManagementFee and Interest are zero-cash position events (FSD-070 /
-            // FEE-071 / INT-024) — their effect surfaces through the endpoint values.
+        match transaction.transaction_type {
+            TransactionType::Purchase | TransactionType::OpeningBalance => trades.push(DatedFlow {
+                date,
+                amount: transaction.total_amount,
+            }),
+            TransactionType::Sell => trades.push(DatedFlow {
+                date,
+                amount: -transaction.total_amount,
+            }),
+            TransactionType::Dividend => dividends.push(DatedFlow {
+                date,
+                amount: transaction.total_amount,
+            }),
             TransactionType::Deposit
             | TransactionType::Withdrawal
             | TransactionType::FreeShares
             | TransactionType::ManagementFee
-            | TransactionType::Interest => continue,
-        };
-        net_flow += signed_flow;
-        if days_in_period > 0 {
-            let days_remaining = (period_end - date).num_days() as i128;
-            weighted_flow += signed_flow * days_remaining / days_in_period as i128;
+            | TransactionType::Interest => {}
         }
     }
+    PositionFlows { trades, dividends }
+}
 
-    let gain = end_value as i128 - start_value as i128 - net_flow + dividends;
+/// PRF-083 over pre-extracted position flows: the position Simple Dietz for a
+/// span whose trade flows and dividends are already signed dated amounts in the
+/// reporting currency (`position_flows`, or currency-converted flows in a
+/// cross-account aggregation, GPF-030). Flows dated outside
+/// `[period_start, period_end]` are ignored; dividends within the window are
+/// added to the gain: `gain = end_value − start_value − net_flow + dividends`.
+/// `pct` is `None` when the Dietz denominator is not positive.
+pub(crate) fn holding_performance_for_span_over_flows(
+    trades: &[DatedFlow],
+    dividends: &[DatedFlow],
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> PerformanceMetric {
+    let days_in_period = (period_end - period_start).num_days();
+    let mut net_flow: i128 = 0;
+    let mut weighted_flow: i128 = 0;
+    for flow in trades {
+        if flow.date < period_start || flow.date > period_end {
+            continue;
+        }
+        net_flow += flow.amount as i128;
+        if days_in_period > 0 {
+            let days_remaining = (period_end - flow.date).num_days() as i128;
+            weighted_flow += flow.amount as i128 * days_remaining / days_in_period as i128;
+        }
+    }
+    let dividends_in_window: i128 = dividends
+        .iter()
+        .filter(|flow| flow.date >= period_start && flow.date <= period_end)
+        .map(|flow| flow.amount as i128)
+        .sum();
+
+    let gain = end_value as i128 - start_value as i128 - net_flow + dividends_in_window;
     debug_assert!(
         gain <= i64::MAX as i128 && gain >= i64::MIN as i128,
-        "holding_performance_for_span gain i64 overflow: {gain}"
+        "holding_performance_for_span_over_flows gain i64 overflow: {gain}"
     );
     let denominator = start_value as i128 + weighted_flow;
     let pct = if denominator <= 0 {

@@ -36,6 +36,7 @@ use crate::use_cases::asset_price_fetch::{AssetPriceFetchUseCase, FetchGuard};
 use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::use_cases::fee_generation::FeeGenerationOrchestrator;
+use crate::use_cases::global_performance::GlobalPerformanceUseCase;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
@@ -214,6 +215,12 @@ pub fn run() {
                     Arc::clone(&currency_service),
                 );
 
+                let global_performance_uc = GlobalPerformanceUseCase::new(
+                    Arc::clone(&account_service),
+                    Arc::clone(&asset_service),
+                    Arc::clone(&currency_service),
+                );
+
                 let archive_asset_uc = ArchiveAssetUseCase::new(
                     Arc::clone(&account_service),
                     Arc::clone(&asset_service),
@@ -245,6 +252,7 @@ pub fn run() {
                 app_handle.manage(account_details_uc);
                 app_handle.manage(account_summary_uc);
                 app_handle.manage(account_performance_uc);
+                app_handle.manage(global_performance_uc);
                 app_handle.manage(archive_asset_uc);
                 app_handle.manage(delete_asset_uc);
                 app_handle.manage(account_deletion_uc);

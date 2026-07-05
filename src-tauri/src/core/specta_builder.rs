@@ -4,7 +4,7 @@ use crate::{
     use_cases::{
         account_creation, account_deletion, account_details, account_performance, account_summary,
         archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, fee_generation,
-        holding_transaction, update_checker,
+        global_performance, holding_transaction, update_checker,
     },
 };
 
@@ -128,6 +128,7 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account_details::get_account_details,
             account_summary::get_account_summaries,
             account_performance::get_account_performance,
+            global_performance::get_global_performance,
             account_deletion::get_account_deletion_summary,
             asset_web_lookup::lookup_asset,
             asset_price_fetch::fetch_all_asset_prices,

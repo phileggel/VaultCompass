@@ -593,6 +593,20 @@ async getAccountPerformance(accountId: string, assetId: string | null) : Promise
 }
 },
 /**
+ * Returns per-period performance figures for the requested scope (GPF-010):
+ * all accounts aggregated in the reference currency, one asset across all
+ * accounts, or — with an `account_id` — the single-account read of
+ * `get_account_performance`, optionally scoped to one asset (PRF-080).
+ */
+async getGlobalPerformance(accountId: string | null, assetId: string | null) : Promise<Result<AccountPerformanceResponse, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_global_performance", { accountId, assetId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Returns the number of active holdings and transactions for an account (ACC-020).
  * 
  * Used by the frontend to decide whether to show the standard or reinforced
@@ -974,15 +988,18 @@ export type AccountError =
  */
 { code: "DatabaseError" }
 /**
- * Top-level response for `get_account_performance` — recomputed on read (ADR-013).
+ * Top-level response for `get_account_performance` — recomputed on read
+ * (ADR-013). Also returned by `get_global_performance`, whose cross-account
+ * aggregation reports in the reference currency with an empty `account_name`
+ * the frontend resolves to a display label (GPF-011).
  */
 export type AccountPerformanceResponse = { 
 /**
- * Display name of the account.
+ * Display name of the account; empty for a cross-account aggregation (GPF-011).
  */
 account_name: string; 
 /**
- * ISO 4217 currency code of the account.
+ * ISO 4217 currency code every figure is reported in.
  */
 currency: string; 
 /**

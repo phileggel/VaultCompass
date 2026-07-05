@@ -24,6 +24,8 @@ pub mod asset_web_lookup;
 pub mod delete_asset;
 /// Fee generation: lazy catch-up management fee deduction across all active schedules (FEE-040+).
 pub mod fee_generation;
+/// Global Performance: portfolio-wide performance aggregated in the reference currency (GPF spec).
+pub mod global_performance;
 /// Holding transaction: unified cross-BC orchestrators for buy/sell/correct/cancel/open (TRX, SEL, CSH).
 pub mod holding_transaction;
 /// Shared stateless valuation helpers reused across performance/summary use cases — owned by neither.

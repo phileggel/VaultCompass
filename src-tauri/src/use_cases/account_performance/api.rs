@@ -1,8 +1,9 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::orchestrator::{AccountPerformanceResponse, AccountPerformanceUseCase};
+use super::orchestrator::AccountPerformanceUseCase;
 use crate::context::account::AccountError;
+use crate::use_cases::shared::performance::AccountPerformanceResponse;
 use tauri::State;
 
 /// Returns per-period performance figures for a single account (PRF spec),

@@ -21,6 +21,7 @@
 | FSD     | Free Share Distribution     | Bonus shares received at zero cost: quantity event, no cash, cost basis unchanged                                      | active   |
 | FEE     | Management Fee Deduction    | Quantity-reducing fee paid in shares (recurring % schedule + one-off); cost basis unchanged, fees surfaced per holding | active   |
 | INT     | Interest Credit             | Capitalized interest: zero-cost quantity credit on a fund line or the cash line, entered as a rate or a direct amount  | active   |
+| GPF     | Global Performance          | Portfolio-wide performance: all accounts (or one asset across accounts) aggregated in EUR; single-account scope = PRF  | planning |
 
 ---
 
