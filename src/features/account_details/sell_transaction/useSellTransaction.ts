@@ -114,6 +114,25 @@ export function useSellTransaction({
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  // SEL-050 — switching modes carries over what the user currently sees: price →
+  // total seeds the total input from the computed net proceeds (when qty + price
+  // are valid); total → price seeds the unit-price field from the derived price
+  // (when derivable). Otherwise the target field keeps its previous content.
+  const handleEntryModeChange = useCallback(
+    (mode: TransactionEntryMode) => {
+      if (mode === entryMode) return;
+      if (mode === "total") {
+        if (microValues.qtyMicro > 0 && microValues.priceMicro > 0) {
+          setTotalAmountInput(microToDecimal(microValues.totalMicro));
+        }
+      } else if (microValues.priceMicro > 0) {
+        setFormData((prev) => ({ ...prev, unitPrice: microToDecimal(microValues.priceMicro) }));
+      }
+      setEntryMode(mode);
+    },
+    [entryMode, microValues],
+  );
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -195,7 +214,7 @@ export function useSellTransaction({
     maxQuantityDisplay: microToFormatted(holdingQuantityMicro, 6),
     /** SEL-050 — how the money side is entered; resets with the modal (not persisted). */
     entryMode,
-    setEntryMode,
+    setEntryMode: handleEntryModeChange,
     /** SEL-050 — the typed all-in net proceeds (decimal string), only meaningful in total mode. */
     totalAmountInput,
     handleTotalAmountChange: setTotalAmountInput,

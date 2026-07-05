@@ -1385,7 +1385,7 @@ impl Account {
         } else {
             (numerator - half) / denominator
         };
-        Ok(rounded as i64)
+        i64::try_from(rounded).map_err(|_| AccountError::UnitPriceOutOfRange)
     }
 
     /// Computes total_amount for an OpeningBalance correction (TRX-051).
@@ -1958,6 +1958,91 @@ mod tests {
                 .map(|e| matches!(e, AccountError::TotalAmountNotPositive))
                 .unwrap_or(false),
             "expected TotalAmountNotPositive, got: {err}"
+        );
+    }
+
+    // TRX-060 — a derived unit price beyond i64 range is rejected, nothing persisted
+    #[test]
+    fn buy_holding_with_total_rejects_out_of_range_derived_unit_price() {
+        let mut acc = cash_seeded_account();
+        let err = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                1, // 0.000001 units
+                0,
+                1, // exchange rate 0.000001
+                0,
+                Some(i64::MAX - 1),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::UnitPriceOutOfRange))
+                .unwrap_or(false),
+            "expected UnitPriceOutOfRange, got: {err}"
+        );
+        assert!(acc.pending_changes().is_empty());
+        assert!(acc.transactions.iter().all(|t| t.asset_id != "asset-1"));
+    }
+
+    // TRX-060 — the derivation guard rejects a non-positive quantity before division
+    #[test]
+    fn buy_holding_with_total_rejects_non_positive_quantity() {
+        let mut acc = cash_seeded_account();
+        let err = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                0,
+                0,
+                micro(1),
+                0,
+                Some(micro(100)),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::QuantityNotPositive))
+                .unwrap_or(false),
+            "expected QuantityNotPositive, got: {err}"
+        );
+    }
+
+    // SEL-050 — the derivation guard rejects a non-positive exchange rate before division
+    #[test]
+    fn sell_holding_with_total_rejects_non_positive_exchange_rate() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(1),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let err = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-06-01".to_string(),
+                micro(1),
+                0,
+                0,
+                0,
+                Some(micro(100)),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::ExchangeRateNotPositive))
+                .unwrap_or(false),
+            "expected ExchangeRateNotPositive, got: {err}"
         );
     }
 

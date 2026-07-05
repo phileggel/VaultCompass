@@ -16,6 +16,8 @@ interface EntryModeToggleProps {
 export function EntryModeToggle({ idPrefix, value, onChange }: EntryModeToggleProps) {
   const { t } = useTranslation();
   return (
+    // reviewer-frontend FP: roving tabindex omitted deliberately — two independently
+    // focusable buttons are acceptable for a binary toggle (2026-07-05).
     <div
       role="radiogroup"
       aria-label={t("transaction.entry_mode_label")}

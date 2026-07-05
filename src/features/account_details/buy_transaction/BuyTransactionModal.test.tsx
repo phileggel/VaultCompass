@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BuyTransactionModal } from "./BuyTransactionModal";
 
@@ -32,6 +32,7 @@ const makeHookReturn = (overrides: Record<string, unknown> = {}) => ({
   setEntryMode: vi.fn(),
   totalAmountInput: "",
   handleTotalAmountChange: vi.fn(),
+  totalBelowFeesError: null,
   unitPriceDisplay: "—",
   averageCostAsOfDate: null,
   error: null,
@@ -100,6 +101,20 @@ describe("BuyTransactionModal", () => {
       "aria-checked",
       "true",
     );
+  });
+
+  // TRX-060 — the below-fees rejection renders inline on the Total field in total mode
+  it("renders the below-fees error on the total field in total mode", () => {
+    mockUseBuyTransaction.mockReturnValue(
+      makeHookReturn({
+        entryMode: "total",
+        totalAmountInput: "5",
+        totalBelowFeesError: { key: "transaction.error_validation_total_below_fees" },
+      }),
+    );
+    render(<BuyTransactionModal {...BASE_PROPS} />);
+
+    expect(screen.getByText("transaction.error_validation_total_below_fees")).toBeInTheDocument();
   });
 
   // TRX-060 — clicking a toggle segment switches the mode

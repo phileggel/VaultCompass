@@ -220,6 +220,88 @@ describe("useBuyTransaction", () => {
     });
   });
 
+  // TRX-060 — switching price → total seeds the total input from the computed total
+  it("seeds the total input from the computed total when switching to total mode", async () => {
+    const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.handleChange("quantity", "2");
+      result.current.handleChange("unitPrice", "100");
+      result.current.handleChange("fees", "10");
+    });
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+    });
+
+    // 2 × 100 + 10 fees = 210
+    expect(result.current.entryMode).toBe("total");
+    expect(result.current.totalAmountInput).toBe("210.000");
+  });
+
+  // TRX-060 — switching total → price seeds the unit-price field from the derived price
+  it("seeds the unit-price field from the derived price when switching back to price mode", async () => {
+    const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+    });
+    await act(async () => {
+      result.current.handleChange("quantity", "2");
+      result.current.handleChange("fees", "10");
+      result.current.handleTotalAmountChange("210");
+    });
+
+    await act(async () => {
+      result.current.setEntryMode("price");
+    });
+
+    // (210 − 10) / 2 = 100
+    expect(result.current.entryMode).toBe("price");
+    expect(result.current.formData.unitPrice).toBe("100.000");
+  });
+
+  // TRX-060 — no carry-over when the current values give nothing to carry
+  it("keeps the target field untouched when switching modes without derivable values", async () => {
+    const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+    });
+    expect(result.current.totalAmountInput).toBe("");
+
+    await act(async () => {
+      result.current.setEntryMode("price");
+    });
+    expect(result.current.formData.unitPrice).toBe("");
+  });
+
+  // TRX-060 — the below-fees rejection surfaces as an inline error on the Total field
+  it("exposes totalBelowFeesError when the typed total is below the fees in total mode", async () => {
+    const { result } = renderHook(() => useBuyTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+    });
+    await act(async () => {
+      result.current.handleChange("date", "2024-06-01");
+      result.current.handleChange("quantity", "1");
+      result.current.handleChange("fees", "10");
+      result.current.handleTotalAmountChange("5");
+    });
+
+    expect(result.current.totalBelowFeesError).toEqual({
+      key: "transaction.error_validation_total_below_fees",
+    });
+    expect(result.current.isFormValid).toBe(false);
+
+    // Raising the total above the fees clears the inline error
+    await act(async () => {
+      result.current.handleTotalAmountChange("15");
+    });
+    expect(result.current.totalBelowFeesError).toBeNull();
+  });
+
   // MKT-054 — does not call recordAssetPrice when recordPrice is false
   it("does not call recordAssetPrice when recordPrice is false", async () => {
     localStorage.removeItem(AUTO_RECORD_PRICE_KEY);

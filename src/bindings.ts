@@ -917,6 +917,11 @@ export type AccountError =
  */
 { code: "TotalAmountBelowFees" } | 
 /**
+ * The unit price derived from a user-entered all-in total exceeds the
+ * representable range (TRX-060, SEL-050).
+ */
+{ code: "UnitPriceOutOfRange" } | 
+/**
  * The management fee percentage is zero or negative (FEE-021).
  */
 { code: "PercentageNotPositive" } | 

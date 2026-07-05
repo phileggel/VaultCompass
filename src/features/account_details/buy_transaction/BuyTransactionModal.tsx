@@ -50,6 +50,7 @@ export function BuyTransactionModal({
     setEntryMode,
     totalAmountInput,
     handleTotalAmountChange,
+    totalBelowFeesError,
     unitPriceDisplay,
     averageCostAsOfDate,
     error,
@@ -206,6 +207,11 @@ export function BuyTransactionModal({
                 value={totalAmountInput}
                 onValueChange={handleTotalAmountChange}
                 placeholder={t("transaction.form_total_amount_placeholder")}
+                error={
+                  totalBelowFeesError
+                    ? t(totalBelowFeesError.key, totalBelowFeesError.vars)
+                    : undefined
+                }
                 required
               />
             )}

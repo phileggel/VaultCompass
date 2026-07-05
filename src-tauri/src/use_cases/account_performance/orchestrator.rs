@@ -1110,9 +1110,8 @@ mod tests {
                 10_000_000,    // 10 units
                 1_000_000_000, // 1000 EUR unit price
                 1_000_000,     // exchange_rate 1:1
-                0,
+                0,             // no fees
                 None,
-                // no fees
                 None,
             )
             .await
@@ -2729,9 +2728,8 @@ mod tests {
                 1_000_000, // 1 unit
                 (unit_price_eur * 1_000_000.0) as i64,
                 1_000_000, // exchange_rate 1:1
-                0,
+                0,         // no fees
                 None,
-                // no fees
                 None,
             )
             .await

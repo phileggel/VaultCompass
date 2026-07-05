@@ -245,6 +245,47 @@ describe("useSellTransaction", () => {
     expect(result.current.unitPriceDisplay).toBe("—");
   });
 
+  // SEL-050 — switching price → total seeds the total input from the computed proceeds
+  it("seeds the total input from the computed proceeds when switching to total mode", async () => {
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.handleChange("quantity", "2");
+      result.current.handleChange("unitPrice", "50");
+      result.current.handleChange("fees", "5");
+    });
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+    });
+
+    // 2 × 50 − 5 fees = 95
+    expect(result.current.entryMode).toBe("total");
+    expect(result.current.totalAmountInput).toBe("95.000");
+  });
+
+  // SEL-050 — switching total → price seeds the unit-price field from the derived price
+  it("seeds the unit-price field from the derived price when switching back to price mode", async () => {
+    const { result } = renderHook(() => useSellTransaction(BASE_PROPS));
+
+    await act(async () => {
+      result.current.setEntryMode("total");
+    });
+    await act(async () => {
+      result.current.handleChange("quantity", "2");
+      result.current.handleChange("fees", "10");
+      result.current.handleTotalAmountChange("140");
+    });
+
+    await act(async () => {
+      result.current.setEntryMode("price");
+    });
+
+    // (140 + 10) / 2 = 75
+    expect(result.current.entryMode).toBe("price");
+    expect(result.current.formData.unitPrice).toBe("75.000");
+  });
+
   // SEL-022 — the oversell guard still applies in total mode
   it("keeps the oversell guard in total mode", async () => {
     const { result } = renderHook(() =>

@@ -109,6 +109,12 @@ A canonical reference to a trading venue, independent of any market-data provide
 | `ManagementFee`  | A fee paid by removing shares of a held asset; quantity falls, cost basis unchanged, no cash (FEE-022)                   | confirmed |
 | `Interest`       | Capitalized interest credited at no cost to a fund line or the cash line; quantity rises, cost basis unchanged (INT-024) | confirmed |
 
+### Total-Entry Mode
+
+> Status: confirmed
+
+A way of recording a Purchase or Sell from the all-in broker total (fees included, account currency) instead of the unit price. The typed total is stored verbatim as the transaction's `total_amount` and the unit price is derived from it (TRX-060, SEL-050).
+
 ## Cash Domain Concepts (introduced by CSH spec)
 
 ### Cash Asset

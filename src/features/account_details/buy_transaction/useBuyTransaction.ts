@@ -88,6 +88,19 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
     [formData, microValues.qtyMicro, microValues.totalMicro, totalEntryFeesMicro],
   );
 
+  // TRX-060 — inline rejection on the total field: a typed all-in total cannot
+  // be lower than the fees it includes. Submit stays disabled via isFormValid.
+  const totalBelowFeesError = useMemo<I18nMessage | null>(
+    () =>
+      entryMode === "total" &&
+      microValues.totalMicro > 0 &&
+      microValues.feesMicro > 0 &&
+      microValues.totalMicro < microValues.feesMicro
+        ? { key: "transaction.error_validation_total_below_fees" }
+        : null,
+    [entryMode, microValues.totalMicro, microValues.feesMicro],
+  );
+
   // TDI-020 — average cost as of the entered trade date (or today). Hidden when
   // nothing is held as of that date (TDI-021).
   const { snapshot } = useHoldingSnapshotAsOf(accountId, assetId, formData.date);
@@ -105,6 +118,25 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
   const handleChange = useCallback((field: keyof TransactionFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
+
+  // TRX-060 — switching modes carries over what the user currently sees: price →
+  // total seeds the total input from the computed total (when qty + price are
+  // valid); total → price seeds the unit-price field from the derived price
+  // (when derivable). Otherwise the target field keeps its previous content.
+  const handleEntryModeChange = useCallback(
+    (mode: TransactionEntryMode) => {
+      if (mode === entryMode) return;
+      if (mode === "total") {
+        if (microValues.qtyMicro > 0 && microValues.priceMicro > 0) {
+          setTotalAmountInput(microToDecimal(microValues.totalMicro));
+        }
+      } else if (microValues.priceMicro > 0) {
+        setFormData((prev) => ({ ...prev, unitPrice: microToDecimal(microValues.priceMicro) }));
+      }
+      setEntryMode(mode);
+    },
+    [entryMode, microValues],
+  );
 
   const doSubmit = useCallback(async () => {
     const validationError = validateTransactionForm(
@@ -196,10 +228,12 @@ export function useBuyTransaction({ accountId, assetId, onSubmitSuccess }: UseBu
     totalAmountDisplay: microToFormatted(microValues.totalMicro),
     /** TRX-060 — how the money side is entered; resets with the modal (not persisted). */
     entryMode,
-    setEntryMode,
+    setEntryMode: handleEntryModeChange,
     /** TRX-060 — the typed all-in total (decimal string), only meaningful in total mode. */
     totalAmountInput,
     handleTotalAmountChange: setTotalAmountInput,
+    /** TRX-060 — inline error for the Total field when the typed total is below the fees. */
+    totalBelowFeesError,
     /** TRX-060 — formatted derived unit price shown in total mode; "—" when quantity is 0. */
     unitPriceDisplay: microValues.qtyMicro > 0 ? microToFormatted(microValues.priceMicro) : "—",
     /** TDI-020 — formatted account-currency average cost as of the date, or null when not held. */

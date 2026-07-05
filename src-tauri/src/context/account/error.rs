@@ -96,6 +96,10 @@ pub enum AccountError {
     /// which would make the securities part negative (TRX-060).
     #[error("Total amount must cover the fees")]
     TotalAmountBelowFees,
+    /// The unit price derived from a user-entered all-in total exceeds the
+    /// representable range (TRX-060, SEL-050).
+    #[error("Derived unit price is out of range")]
+    UnitPriceOutOfRange,
 
     // --- ManagementFee factory validation (FEE-021) ---
     /// The management fee percentage is zero or negative (FEE-021).
@@ -249,6 +253,10 @@ mod tests {
         assert_eq!(
             to_value(AccountError::TotalAmountBelowFees).unwrap(),
             json!({ "code": "TotalAmountBelowFees" })
+        );
+        assert_eq!(
+            to_value(AccountError::UnitPriceOutOfRange).unwrap(),
+            json!({ "code": "UnitPriceOutOfRange" })
         );
         assert_eq!(
             to_value(AccountError::AccountNotFound {
