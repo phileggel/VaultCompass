@@ -1,8 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
+import { TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { IconButton } from "@/ui/components/button/IconButton";
 import { FAB } from "@/ui/components/fab/FAB";
 import { ManagerLayout } from "@/ui/components/layout/ManagerLayout";
 import { AccountTable } from "./account_table/AccountTable";
@@ -32,16 +34,29 @@ export function AccountManager() {
         onSearchChange={setQuery}
         searchPlaceholder={t("account.search_placeholder")}
         searchExtra={
-          <Button
-            id="account-manager-refresh-prices"
-            variant="tonal"
-            size="sm"
-            loading={isRefreshPending}
-            onClick={() => void refreshPrices()}
-            aria-label={t("account.refresh_prices")}
-          >
-            {t("account.refresh_prices")}
-          </Button>
+          <>
+            {/* GPF — entry point to the portfolio-wide performance page */}
+            <IconButton
+              id="accounts-performance"
+              shape="square"
+              size="sm"
+              variant="tonal"
+              icon={<TrendingUp size={16} />}
+              onClick={() => void navigate({ to: "/performance" })}
+              aria-label={t("account.action_global_performance")}
+              title={t("account.action_global_performance")}
+            />
+            <Button
+              id="account-manager-refresh-prices"
+              variant="tonal"
+              size="sm"
+              loading={isRefreshPending}
+              onClick={() => void refreshPrices()}
+              aria-label={t("account.refresh_prices")}
+            >
+              {t("account.refresh_prices")}
+            </Button>
+          </>
         }
         table={<AccountTable searchTerm={query} onAccountClick={handleAccountClick} />}
       />

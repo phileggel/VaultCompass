@@ -12,6 +12,7 @@ import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
 import { CurrencyRatesView } from "@/features/currency";
 import { DesignSystemPage } from "@/features/design-system";
+import { GlobalPerformancePage } from "@/features/global_performance";
 import { SettingsPage } from "@/features/settings";
 import {
   AccountJournalPage,
@@ -64,6 +65,12 @@ const accountPerformanceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts/$accountId/performance",
   component: AccountPerformancePage,
+});
+
+const globalPerformanceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/performance",
+  component: GlobalPerformancePage,
 });
 
 const accountJournalRoute = createRoute({
@@ -125,6 +132,7 @@ const routeTree = rootRoute.addChildren([
   accountsRoute,
   accountDetailsRoute,
   accountPerformanceRoute,
+  globalPerformanceRoute,
   accountJournalRoute,
   transactionListRoute,
   addTransactionRoute,

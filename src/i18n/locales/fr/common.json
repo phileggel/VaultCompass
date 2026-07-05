@@ -104,6 +104,7 @@
     "title": "Comptes",
     "fab_label": "Ajouter un compte",
     "refresh_prices": "Actualiser les prix",
+    "action_global_performance": "Performance globale",
     "search_placeholder": "Rechercher un compte...",
     "column_name": "Nom",
     "column_bank_name": "Banque",
@@ -408,6 +409,12 @@
       "november": "Novembre",
       "december": "Décembre"
     }
+  },
+  "global_performance": {
+    "title": "Performance globale",
+    "back": "Retour aux comptes",
+    "account_selector_label": "Sélectionner le compte",
+    "account_selector_all": "Tous les comptes"
   },
   "mkt": {
     "fetch_dispatched": "Récupération des prix…",
