@@ -57,6 +57,16 @@ export function GlobalPerformancePage() {
                   {view.scopeLabel}
                 </span>
               )}
+              {/* GPF-011 — every figure is reported in the response currency (EUR for cross-account scopes). */}
+              {view.currency !== null && (
+                <span
+                  data-testid="global-performance-currency"
+                  className="font-normal text-m3-on-surface-variant"
+                >
+                  {" · "}
+                  {view.currency}
+                </span>
+              )}
             </h2>
           </div>
 
@@ -221,12 +231,13 @@ export function GlobalPerformancePage() {
               </div>
 
               {/* Portfolio value over time — fed by the same active-view series as the table. */}
-              <AccountValueChart points={view.chartPoints} />
+              <AccountValueChart points={view.chartPoints} idPrefix="global-performance" />
 
               <AccountPerformanceTable
                 rows={view.rows}
                 showYtd={showYtdColumn}
                 showAnnualized={showAnnualizedColumn}
+                idPrefix="global-performance"
               />
             </div>
           )}

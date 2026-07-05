@@ -20,13 +20,16 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// Identity i18n — t(key) === key so tests assert on stable keys (F24)
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en-US" },
-  }),
-}));
+// Identity i18n — t(key) === key so tests assert on stable keys (F24).
+// t must be referentially stable across renders (like the real memoized t):
+// it sits in the hook's effect dependency lists, and a fresh function per
+// render would re-run those effects forever.
+vi.mock("react-i18next", () => {
+  const t = (key: string) => key;
+  return {
+    useTranslation: () => ({ t, i18n: { language: "en-US" } }),
+  };
+});
 
 // ---- Fixtures ---------------------------------------------------------------
 

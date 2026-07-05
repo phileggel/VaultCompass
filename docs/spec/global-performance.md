@@ -74,6 +74,8 @@ get_global_performance(account_id?, asset_id?)
 
 ---
 
-## Open Questions
+## Frontend Surface
 
-- The frontend surface (entry point, route, and the resolved "All accounts" / asset-scope labels per GPF-011) is specified when the frontend half of the feature lands; this revision covers the backend command only.
+- Route `/performance`, entered from the accounts overview header (`accounts-performance` icon button).
+- Two scope selectors drive the GPF-010 matrix: an account selector defaulting to "All accounts" and an asset selector defaulting to "All assets" (catalog assets when unscoped; the scoped account's non-cash holdings otherwise). Changing the account scope resets the asset scope.
+- The GPF-011 labels resolve in the frontend: the title carries the scoped account/asset names joined as "Account — Asset" (absent when unscoped) and the response currency (EUR for cross-account scopes).

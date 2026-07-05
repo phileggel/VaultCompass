@@ -76,13 +76,20 @@ export const config: Options.Testrunner = {
   // fresh-install path (WNW-030), which seeds silently and shows nothing.
   before: async () => {
     // @ts-expect-error browser is injected by @wdio/globals into the runner scope
-    await browser.execute(() => {
-      localStorage.removeItem("whats_new_last_seen_version");
-      window.location.reload();
-    });
-    // Wait for the shell to come back after the reload before any spec runs.
+    await browser.execute(() => localStorage.removeItem("whats_new_last_seen_version"));
+    // Driver-native reload — never navigate from inside execute(): the page can
+    // start unloading before the driver captures the script result.
     // @ts-expect-error browser is injected by @wdio/globals into the runner scope
-    await browser.$("#nav-accounts").waitForExist({ timeout: 15000 });
+    await browser.refresh();
+    // Wait for the shell to come back after the reload before any spec runs.
+    // This hook is the sole gate in front of the whole suite, so the budget is
+    // wider than the per-spec first-boot 15s.
+    // @ts-expect-error browser is injected by @wdio/globals into the runner scope
+    await browser.$("#nav-accounts").waitForExist({
+      timeout: 25000,
+      timeoutMsg:
+        "what's-new pre-suite hook: #nav-accounts did not reappear after clearing whats_new_last_seen_version and reloading",
+    });
   },
 
   // Capture a screenshot on every failed test for post-mortem diagnosis.

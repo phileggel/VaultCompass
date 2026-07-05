@@ -5,20 +5,23 @@ interface AccountPerformanceTableProps {
   rows: PeriodRowViewModel[];
   showYtd: boolean;
   showAnnualized: boolean;
+  /** Base of every id/data-testid, so two pages rendering this table never emit colliding ids. */
+  idPrefix?: string;
 }
 
 export function AccountPerformanceTable({
   rows,
   showYtd,
   showAnnualized,
+  idPrefix = "account-performance",
 }: AccountPerformanceTableProps) {
   const { t } = useTranslation();
 
   return (
     <div className="m3-table-container">
       <table
-        id="account-performance-table"
-        data-testid="account-performance-table"
+        id={`${idPrefix}-table`}
+        data-testid={`${idPrefix}-table`}
         className="w-full border-collapse"
       >
         <thead className="sticky top-0 bg-m3-surface-container z-10">
@@ -53,8 +56,8 @@ export function AccountPerformanceTable({
             {/* PRF-037 — YTD column present only in month view */}
             {showYtd && (
               <th
-                id="account-performance-col-ytd"
-                data-testid="account-performance-col-ytd"
+                id={`${idPrefix}-col-ytd`}
+                data-testid={`${idPrefix}-col-ytd`}
                 scope="colgroup"
                 colSpan={2}
                 className="m3-th text-center"
@@ -68,8 +71,8 @@ export function AccountPerformanceTable({
             {/* Year-view only: annualized cumulative since-inception return (CAGR). */}
             {showAnnualized && (
               <th
-                id="account-performance-col-annualized"
-                data-testid="account-performance-col-annualized"
+                id={`${idPrefix}-col-annualized`}
+                data-testid={`${idPrefix}-col-annualized`}
                 scope="col"
                 rowSpan={2}
                 className="m3-th text-right align-bottom"
@@ -80,38 +83,26 @@ export function AccountPerformanceTable({
             )}
           </tr>
           <tr>
-            <th scope="col" id="account-performance-subcol-pop-value" className="m3-th text-right">
+            <th scope="col" id={`${idPrefix}-subcol-pop-value`} className="m3-th text-right">
               {t("account_performance.subcol_value")}
             </th>
-            <th scope="col" id="account-performance-subcol-pop-pct" className="m3-th text-right">
+            <th scope="col" id={`${idPrefix}-subcol-pop-pct`} className="m3-th text-right">
               {t("account_performance.subcol_pct")}
             </th>
             {showYtd && (
               <>
-                <th
-                  scope="col"
-                  id="account-performance-subcol-ytd-value"
-                  className="m3-th text-right"
-                >
+                <th scope="col" id={`${idPrefix}-subcol-ytd-value`} className="m3-th text-right">
                   {t("account_performance.subcol_value")}
                 </th>
-                <th
-                  scope="col"
-                  id="account-performance-subcol-ytd-pct"
-                  className="m3-th text-right"
-                >
+                <th scope="col" id={`${idPrefix}-subcol-ytd-pct`} className="m3-th text-right">
                   {t("account_performance.subcol_pct")}
                 </th>
               </>
             )}
-            <th
-              scope="col"
-              id="account-performance-subcol-since-value"
-              className="m3-th text-right"
-            >
+            <th scope="col" id={`${idPrefix}-subcol-since-value`} className="m3-th text-right">
               {t("account_performance.subcol_value")}
             </th>
-            <th scope="col" id="account-performance-subcol-since-pct" className="m3-th text-right">
+            <th scope="col" id={`${idPrefix}-subcol-since-pct`} className="m3-th text-right">
               {t("account_performance.subcol_pct")}
             </th>
           </tr>
@@ -121,49 +112,43 @@ export function AccountPerformanceTable({
           {rows.map((row) => (
             <tr
               key={row.rowKey}
-              id={`account-performance-row-${row.rowKey}`}
-              data-testid={`account-performance-row-${row.rowKey}`}
+              id={`${idPrefix}-row-${row.rowKey}`}
+              data-testid={`${idPrefix}-row-${row.rowKey}`}
             >
               <td className="m3-td">{row.month !== null ? t(row.periodLabel) : row.periodLabel}</td>
-              <td
-                data-testid={`account-performance-prev-value-${row.rowKey}`}
-                className="m3-td text-right"
-              >
+              <td data-testid={`${idPrefix}-prev-value-${row.rowKey}`} className="m3-td text-right">
                 {row.previousValueFormatted}
               </td>
               <td
-                data-testid={`account-performance-cash-flow-${row.rowKey}`}
+                data-testid={`${idPrefix}-cash-flow-${row.rowKey}`}
                 className={`m3-td text-right ${row.cashFlow.colorClass}`}
               >
                 {row.cashFlow.formatted}
               </td>
               <td
-                data-testid={`account-performance-asset-flow-${row.rowKey}`}
+                data-testid={`${idPrefix}-asset-flow-${row.rowKey}`}
                 className={`m3-td text-right ${row.assetFlow.colorClass}`}
               >
                 {row.assetFlow.formatted}
               </td>
-              <td
-                data-testid={`account-performance-dividends-${row.rowKey}`}
-                className="m3-td text-right"
-              >
+              <td data-testid={`${idPrefix}-dividends-${row.rowKey}`} className="m3-td text-right">
                 {row.dividendsFormatted}
               </td>
               <td
-                data-testid={`account-performance-pnl-${row.rowKey}`}
+                data-testid={`${idPrefix}-pnl-${row.rowKey}`}
                 className={`m3-td text-right ${row.pnl.colorClass}`}
               >
                 {row.pnl.formatted}
               </td>
               <td className="m3-td text-right font-medium">{row.endValueFormatted}</td>
               <td
-                data-testid={`account-performance-pop-value-${row.rowKey}`}
+                data-testid={`${idPrefix}-pop-value-${row.rowKey}`}
                 className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}
               >
                 {row.periodOverPeriod.gainFormatted}
               </td>
               <td
-                data-testid={`account-performance-pop-pct-${row.rowKey}`}
+                data-testid={`${idPrefix}-pop-pct-${row.rowKey}`}
                 className={`m3-td text-right ${row.periodOverPeriod.colorClass}`}
               >
                 {row.periodOverPeriod.pctFormatted}
@@ -171,13 +156,13 @@ export function AccountPerformanceTable({
               {showYtd && (
                 <>
                   <td
-                    data-testid={`account-performance-ytd-value-${row.rowKey}`}
+                    data-testid={`${idPrefix}-ytd-value-${row.rowKey}`}
                     className={`m3-td text-right ${row.yearToDate?.colorClass ?? ""}`}
                   >
                     {row.yearToDate?.gainFormatted ?? "—"}
                   </td>
                   <td
-                    data-testid={`account-performance-ytd-pct-${row.rowKey}`}
+                    data-testid={`${idPrefix}-ytd-pct-${row.rowKey}`}
                     className={`m3-td text-right ${row.yearToDate?.colorClass ?? ""}`}
                   >
                     {row.yearToDate?.pctFormatted ?? "—"}
@@ -185,20 +170,20 @@ export function AccountPerformanceTable({
                 </>
               )}
               <td
-                data-testid={`account-performance-since-value-${row.rowKey}`}
+                data-testid={`${idPrefix}-since-value-${row.rowKey}`}
                 className={`m3-td text-right ${row.sinceInception.colorClass}`}
               >
                 {row.sinceInception.gainFormatted}
               </td>
               <td
-                data-testid={`account-performance-since-pct-${row.rowKey}`}
+                data-testid={`${idPrefix}-since-pct-${row.rowKey}`}
                 className={`m3-td text-right ${row.sinceInception.colorClass}`}
               >
                 {row.sinceInception.pctFormatted}
               </td>
               {showAnnualized && (
                 <td
-                  data-testid={`account-performance-annualized-${row.rowKey}`}
+                  data-testid={`${idPrefix}-annualized-${row.rowKey}`}
                   className={`m3-td text-right ${row.annualizedYield?.colorClass ?? ""}`}
                 >
                   {row.annualizedYield?.pctFormatted ?? "—"}

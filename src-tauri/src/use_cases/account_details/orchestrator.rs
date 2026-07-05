@@ -1042,7 +1042,12 @@ fn window_position_pct(
                 .get(&(priced.currency.clone(), window_start))? as i128;
             price * rate / MICRO
         };
-        (quantity_at_start as i128 * converted_price / MICRO) as i64
+        let value = quantity_at_start as i128 * converted_price / MICRO;
+        debug_assert!(
+            value <= i64::MAX as i128 && value >= i64::MIN as i128,
+            "window_position_pct start_value i64 overflow: {value}"
+        );
+        value as i64
     };
     let flow_window_start = window_start.succ_opt()?;
     holding_metric_for_span(

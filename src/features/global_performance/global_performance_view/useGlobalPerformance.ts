@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { AccountPerformanceResponse } from "@/bindings";
-import type { PerformanceViewMode } from "@/features/account_performance/account_performance_view/useAccountPerformance";
 import {
   type AssetScopeOption,
+  type PerformanceViewMode,
   type PeriodRowViewModel,
   presentAccountPerformanceError,
   presentAssetScopeOptions,
@@ -12,6 +13,7 @@ import {
 } from "@/features/account_performance/shared/presenter";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { globalPerformanceGateway } from "../gateway";
 import {
@@ -68,6 +70,11 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [scope, setScope] = useState<PerformanceScope>({ accountId: null, assetId: null });
   const [holdingOptions, setHoldingOptions] = useState<AssetScopeOption[]>([]);
+  const showSnackbar = useSnackbar();
+  const { t } = useTranslation();
+  // Monotonic request token: only the latest fetchPerformance invocation may
+  // commit its response, so an older in-flight read never clobbers a newer one.
+  const requestSeqRef = useRef(0);
 
   // Changing the account scope resets the asset scope — the previous asset may
   // not exist in the new scope's selectable set.
@@ -80,6 +87,7 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
   }, []);
 
   const fetchPerformance = useCallback(async () => {
+    const requestSeq = ++requestSeqRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -87,6 +95,8 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
         scope.accountId,
         scope.assetId,
       );
+      // A newer fetch superseded this one while it was in flight — drop the response.
+      if (requestSeq !== requestSeqRef.current) return;
       if (result.status === "ok") {
         setData(result.data);
         setViewMode(result.data.month_view_available ? "month" : "year");
@@ -97,10 +107,13 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
         setError(presentAccountPerformanceError(result.error));
       }
     } catch (err) {
+      if (requestSeq !== requestSeqRef.current) return;
       logger.error("[useGlobalPerformance] fetch threw", { error: err });
       setError({ key: "account_performance.error.database_error" });
     } finally {
-      setIsLoading(false);
+      if (requestSeq === requestSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [scope.accountId, scope.assetId]);
 
@@ -123,16 +136,20 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
           setHoldingOptions(presentAssetScopeOptions(result.data));
         } else {
           logger.error("[useGlobalPerformance] holdings fetch failed", result.error);
+          // F27 — surface the asset-selector load failure instead of a silently empty selector.
+          const message = presentAccountPerformanceError(result.error);
+          showSnackbar(t(message.key, message.vars), "error");
         }
       } catch (err) {
         if (!isMounted) return;
         logger.error("[useGlobalPerformance] holdings fetch threw", { error: err });
+        showSnackbar(t("account_performance.error.database_error"), "error");
       }
     })();
     return () => {
       isMounted = false;
     };
-  }, [scope.accountId]);
+  }, [scope.accountId, showSnackbar, t]);
 
   // Re-fetch on data mutations, mirroring the per-account page (PRF-060 / MKT-181).
   useEffect(() => {

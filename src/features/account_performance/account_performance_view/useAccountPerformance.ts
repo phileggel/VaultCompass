@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { AccountPerformanceResponse } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { getPerfViewMode, setPerfViewMode } from "@/lib/perfViewModeStorage";
 import { useAppStore } from "@/lib/store";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountPerformanceGateway } from "../gateway";
 import {
   type AssetScopeOption,
+  type PerformanceViewMode,
   type PeriodRowViewModel,
   presentAccountPerformanceError,
   presentAssetScopeOptions,
@@ -14,8 +17,6 @@ import {
   presentValueChartSeries,
   type ValueChartPoint,
 } from "../shared/presenter";
-
-export type PerformanceViewMode = "month" | "year";
 
 /**
  * PRF-014 — resolves the view mode to open with: the account's remembered choice when
@@ -71,6 +72,11 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [assetScope, setAssetScope] = useState<AssetScope>({ accountId, assetId: null });
   const [assetOptions, setAssetOptions] = useState<AssetScopeOption[]>([]);
+  const showSnackbar = useSnackbar();
+  const { t } = useTranslation();
+  // Monotonic request token: only the latest fetchPerformance invocation may
+  // commit its response, so an older in-flight read never clobbers a newer one.
+  const requestSeqRef = useRef(0);
 
   // PRF-080 — the scope only applies to the account it was chosen for; a stale
   // scope from a previously viewed account reads as "All assets".
@@ -84,6 +90,7 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
   );
 
   const fetchPerformance = useCallback(async () => {
+    const requestSeq = ++requestSeqRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -91,6 +98,8 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
         accountId,
         selectedAssetId,
       );
+      // A newer fetch superseded this one while it was in flight — drop the response.
+      if (requestSeq !== requestSeqRef.current) return;
       if (result.status === "ok") {
         setData(result.data);
         // PRF-014 — restore the account's remembered view mode (clamped to availability),
@@ -104,10 +113,13 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
         setError(presentAccountPerformanceError(result.error));
       }
     } catch (err) {
+      if (requestSeq !== requestSeqRef.current) return;
       logger.error("[useAccountPerformance] fetch threw", { error: err });
       setError({ key: "account_performance.error.database_error" });
     } finally {
-      setIsLoading(false);
+      if (requestSeq === requestSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [accountId, selectedAssetId]);
 
@@ -128,16 +140,20 @@ export function useAccountPerformance(accountId: string): UseAccountPerformanceR
           setAssetOptions(presentAssetScopeOptions(result.data));
         } else {
           logger.error("[useAccountPerformance] holdings fetch failed", result.error);
+          // F27 — surface the asset-selector load failure instead of a silently empty selector.
+          const message = presentAccountPerformanceError(result.error);
+          showSnackbar(t(message.key, message.vars), "error");
         }
       } catch (err) {
         if (!isMounted) return;
         logger.error("[useAccountPerformance] holdings fetch threw", { error: err });
+        showSnackbar(t("account_performance.error.database_error"), "error");
       }
     })();
     return () => {
       isMounted = false;
     };
-  }, [accountId]);
+  }, [accountId, showSnackbar, t]);
 
   // PRF-060 — re-fetch on TransactionUpdated, AssetPriceUpdated, or AccountUpdated.
   useEffect(() => {

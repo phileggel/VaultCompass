@@ -14,6 +14,8 @@ import { type ChartDatum, useAccountValueChart } from "./useAccountValueChart";
 interface AccountValueChartProps {
   /** Chronological value-over-time series (oldest→newest), already transformed (F5/F10). */
   points: ValueChartPoint[];
+  /** Base of every id/data-testid, so two pages rendering this chart never emit colliding ids. */
+  idPrefix?: string;
 }
 
 /**
@@ -21,15 +23,15 @@ interface AccountValueChartProps {
  * view-model points (formatting lives in the presenter/hook per F5/F10). Themed with M3
  * tokens via CSS variables, so it tracks the `.dark` class automatically.
  */
-export function AccountValueChart({ points }: AccountValueChartProps) {
+export function AccountValueChart({ points, idPrefix = "account" }: AccountValueChartProps) {
   const { t } = useTranslation();
   const { data, compactFormatter } = useAccountValueChart(points);
 
   if (points.length === 0) {
     return (
       <div
-        id="account-value-chart-empty"
-        data-testid="account-value-chart-empty"
+        id={`${idPrefix}-value-chart-empty`}
+        data-testid={`${idPrefix}-value-chart-empty`}
         className="flex items-center justify-center h-40 text-m3-on-surface-variant italic text-sm"
       >
         {t("account_performance.chart.empty")}
@@ -39,8 +41,8 @@ export function AccountValueChart({ points }: AccountValueChartProps) {
 
   return (
     <section
-      id="account-value-chart"
-      data-testid="account-value-chart"
+      id={`${idPrefix}-value-chart`}
+      data-testid={`${idPrefix}-value-chart`}
       className="px-4 pt-2"
       aria-label={t("account_performance.chart.title")}
     >
@@ -64,7 +66,10 @@ export function AccountValueChart({ points }: AccountValueChartProps) {
             />
             <Tooltip
               content={
-                <ValueChartTooltip valueLabel={t("account_performance.chart.value_label")} />
+                <ValueChartTooltip
+                  valueLabel={t("account_performance.chart.value_label")}
+                  testId={`${idPrefix}-value-chart-tooltip`}
+                />
               }
             />
             <Line
@@ -87,16 +92,17 @@ interface ValueChartTooltipProps {
   active?: boolean;
   payload?: { payload: ChartDatum }[];
   valueLabel: string;
+  testId: string;
 }
 
 /** Custom tooltip rendering the formatted period-end value and its date label. */
-function ValueChartTooltip({ active, payload, valueLabel }: ValueChartTooltipProps) {
+function ValueChartTooltip({ active, payload, valueLabel, testId }: ValueChartTooltipProps) {
   const first = active ? payload?.[0] : undefined;
   if (!first) return null;
   const datum = first.payload;
   return (
     <div
-      data-testid="account-value-chart-tooltip"
+      data-testid={testId}
       className="rounded-lg bg-m3-surface-container-high px-3 py-2 shadow-elevation-2 text-sm"
     >
       <div className="text-m3-on-surface-variant">{datum.axisLabel}</div>

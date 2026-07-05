@@ -10,6 +10,9 @@ import type { I18nMessage } from "@/ui/format/i18n";
 
 const DASH = "—";
 
+/** The two granularities of the performance table: monthly rows or yearly rows (PRF-013/014). */
+export type PerformanceViewMode = "month" | "year";
+
 const MONTH_LABEL_KEYS = [
   "account_performance.month.january",
   "account_performance.month.february",

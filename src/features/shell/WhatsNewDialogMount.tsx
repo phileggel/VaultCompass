@@ -1,8 +1,8 @@
 import { useEffect } from "react";
+import { useWhatsNewDialog } from "@/features/whats_new/useWhatsNewDialog";
+import { WhatsNewDialog } from "@/features/whats_new/WhatsNewDialog";
 import { logger } from "@/lib/logger";
 import changelogText from "../../../CHANGELOG.md?raw";
-import { useWhatsNewDialog } from "./useWhatsNewDialog";
-import { WhatsNewDialog } from "./WhatsNewDialog";
 
 /**
  * Shell-level mount for the What's-new dialog (WNW-020). Once the app version

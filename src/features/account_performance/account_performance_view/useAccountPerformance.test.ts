@@ -10,6 +10,23 @@ import type {
 // Mock the gateway so no real Tauri calls fire (docs/test_convention.md § Mocking gateway modules)
 vi.mock("../gateway");
 
+const { mockShowSnackbar } = vi.hoisted(() => ({ mockShowSnackbar: vi.fn() }));
+
+vi.mock("@/ui/components/snackbar/snackbarStore", () => ({
+  useSnackbar: () => mockShowSnackbar,
+}));
+
+// Identity i18n — t(key) === key so tests assert on stable keys (F24).
+// t must be referentially stable across renders (like the real memoized t):
+// it sits in effect dependency lists, and a fresh function per render would
+// re-run those effects forever.
+vi.mock("react-i18next", () => {
+  const t = (key: string) => key;
+  return {
+    useTranslation: () => ({ t, i18n: { language: "en" } }),
+  };
+});
+
 import * as gateway from "../gateway";
 import { useAccountPerformance } from "./useAccountPerformance";
 
@@ -196,5 +213,57 @@ describe("useAccountPerformance — asset scope", () => {
       "account-2",
       "asset-1",
     );
+  });
+
+  // F27 — a holdings-fetch failure surfaces via the snackbar, not just the log
+  it("surfaces a holdings fetch failure via the snackbar (F27)", async () => {
+    vi.mocked(gateway.accountPerformanceGateway.getAccountHoldings).mockResolvedValue({
+      status: "error",
+      error: { code: "DatabaseError" },
+    });
+
+    renderHook(() => useAccountPerformance("account-1"));
+
+    await waitFor(() =>
+      expect(mockShowSnackbar).toHaveBeenCalledWith(
+        "account_performance.error.database_error",
+        "error",
+      ),
+    );
+  });
+
+  // Stale-response guard — an older in-flight read never overwrites a newer one
+  it("ignores a stale response that resolves after a newer fetch", async () => {
+    let resolveStale: (value: { status: "ok"; data: AccountPerformanceResponse }) => void =
+      () => {};
+    vi.mocked(gateway.accountPerformanceGateway.getAccountPerformance)
+      // Mount fetch (whole account) — held open, resolved last with old data.
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveStale = resolve;
+        }),
+      )
+      // Scoped fetch — resolves first with the fresh data.
+      .mockResolvedValueOnce({
+        status: "ok",
+        data: makeResponse({ yearly: [makeYearRow({ year: 2025 })] }),
+      });
+
+    const { result } = renderHook(() => useAccountPerformance("account-1"));
+
+    act(() => result.current.setSelectedAssetId("asset-2"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.rows[0]?.year).toBe(2025);
+
+    await act(async () => {
+      resolveStale({
+        status: "ok",
+        data: makeResponse({ yearly: [makeYearRow({ year: 2020 })] }),
+      });
+    });
+
+    // The newest response wins: the late unscoped data is dropped.
+    expect(result.current.rows[0]?.year).toBe(2025);
+    expect(result.current.isLoading).toBe(false);
   });
 });

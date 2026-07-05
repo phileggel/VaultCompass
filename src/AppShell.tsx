@@ -9,7 +9,7 @@ import { InterestEditModalMount } from "@/features/shell/InterestEditModalMount"
 import { MainLayout } from "@/features/shell/MainLayout";
 import { ManagementFeeEditModalMount } from "@/features/shell/ManagementFeeEditModalMount";
 import { UnpricedPricesModalMount } from "@/features/shell/UnpricedPricesModalMount";
-import { WhatsNewDialogMount } from "@/features/whats_new/WhatsNewDialogMount";
+import { WhatsNewDialogMount } from "@/features/shell/WhatsNewDialogMount";
 import { saveLastPath } from "@/lib/lastPath";
 
 export function AppShell() {

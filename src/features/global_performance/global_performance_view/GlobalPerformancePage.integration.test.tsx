@@ -23,12 +23,15 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 // Identity i18n — t(key) === key so tests assert on stable keys (F24)
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en-US" },
-  }),
-}));
+// t must be referentially stable across renders (like the real memoized t):
+// it sits in the hook's effect dependency lists, and a fresh function per
+// render would re-run those effects forever.
+vi.mock("react-i18next", () => {
+  const t = (key: string) => key;
+  return {
+    useTranslation: () => ({ t, i18n: { language: "en-US" } }),
+  };
+});
 
 // ---- Fixtures ---------------------------------------------------------------
 
@@ -225,6 +228,13 @@ describe("GlobalPerformancePage", () => {
     expect(await screen.findByTestId("global-performance-back")).toBeInTheDocument();
   });
 
+  // GPF-011 — the reporting currency of the figures is visible in the header
+  it("shows the response currency in the title (GPF-011)", async () => {
+    render(<GlobalPerformancePage />);
+
+    expect(await screen.findByTestId("global-performance-currency")).toHaveTextContent("EUR");
+  });
+
   // GPF-010 — the account selector offers All accounts plus every catalog account
   it("renders the account selector with All accounts and the catalog accounts (GPF-010)", async () => {
     render(<GlobalPerformancePage />);
@@ -314,9 +324,9 @@ describe("GlobalPerformancePage", () => {
   it("renders the performance table and value chart", async () => {
     render(<GlobalPerformancePage />);
 
-    expect(await screen.findByTestId("account-performance-table")).toBeInTheDocument();
-    expect(screen.getByTestId("account-value-chart")).toBeInTheDocument();
-    expect(screen.getByTestId("account-performance-row-2025-5")).toBeInTheDocument();
+    expect(await screen.findByTestId("global-performance-table")).toBeInTheDocument();
+    expect(screen.getByTestId("global-performance-value-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("global-performance-row-2025-5")).toBeInTheDocument();
   });
 
   // GPF-014 — view-mode toggle switches between month and year views
@@ -325,13 +335,13 @@ describe("GlobalPerformancePage", () => {
 
     // Month view is the default when available → year selector + YTD column present.
     expect(await screen.findByTestId("global-performance-year-selector")).toBeInTheDocument();
-    expect(screen.getByTestId("account-performance-col-ytd")).toBeInTheDocument();
+    expect(screen.getByTestId("global-performance-col-ytd")).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("global-performance-view-toggle-year"));
 
     expect(screen.queryByTestId("global-performance-year-selector")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("account-performance-col-ytd")).not.toBeInTheDocument();
-    expect(screen.getByTestId("account-performance-col-annualized")).toBeInTheDocument();
+    expect(screen.queryByTestId("global-performance-col-ytd")).not.toBeInTheDocument();
+    expect(screen.getByTestId("global-performance-col-annualized")).toBeInTheDocument();
   });
 
   // The year selector filters the month rows to the selected year
@@ -347,12 +357,12 @@ describe("GlobalPerformancePage", () => {
     const yearSelector = await screen.findByTestId("global-performance-year-selector");
 
     // Most recent year (2025) is preselected → only its month row shows.
-    expect(screen.getByTestId("account-performance-row-2025-2")).toBeInTheDocument();
-    expect(screen.queryByTestId("account-performance-row-2024-12")).not.toBeInTheDocument();
+    expect(screen.getByTestId("global-performance-row-2025-2")).toBeInTheDocument();
+    expect(screen.queryByTestId("global-performance-row-2024-12")).not.toBeInTheDocument();
 
     await userEvent.selectOptions(yearSelector, "2024");
 
-    expect(screen.getByTestId("account-performance-row-2024-12")).toBeInTheDocument();
-    expect(screen.queryByTestId("account-performance-row-2025-2")).not.toBeInTheDocument();
+    expect(screen.getByTestId("global-performance-row-2024-12")).toBeInTheDocument();
+    expect(screen.queryByTestId("global-performance-row-2025-2")).not.toBeInTheDocument();
   });
 });
