@@ -5,12 +5,34 @@ use crate::context::asset::{AssetPriceSource, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::core::cash::{is_cash_asset, system_cash_asset_id};
 use crate::core::logger::BACKEND;
-use chrono::{Local, NaiveDate};
+use crate::use_cases::shared::valuation::{
+    holding_metric_for_span, load_priced_assets, load_rate_map_for_dates, PricedAsset, RateMap,
+    MICRO,
+};
+use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
 use specta::Type;
 use std::collections::{HashMap, HashSet};
 use std::result::Result as StdResult;
 use std::sync::Arc;
+
+/// Windowed Simple Dietz position returns for one holding, in micro-percent
+/// (5.25% = 5_250_000), each over a standard window ending today (ACD-054/055/056).
+/// A field is `None` when the window cannot be valued (ACD-057). All fields are
+/// `None` for the cash row and in the as-of view (ACD-054).
+#[derive(Debug, Default, Serialize, Clone, Type)]
+pub struct HoldingPeriodPerformance {
+    /// Window starting the prior 31 December (ACD-055).
+    pub ytd: Option<i64>,
+    /// Window starting one year before today (ACD-055).
+    pub one_year: Option<i64>,
+    /// Window starting two years before today (ACD-055).
+    pub two_years: Option<i64>,
+    /// Window starting five years before today (ACD-055).
+    pub five_years: Option<i64>,
+    /// Window starting ten years before today (ACD-055).
+    pub ten_years: Option<i64>,
+}
 
 /// Enriched view of a single active holding (quantity > 0) with asset metadata (ACD-020).
 #[derive(Debug, Serialize, Clone, Type)]
@@ -70,6 +92,9 @@ pub struct HoldingDetail {
     /// exists; always None in the as-of view — the schedule is today's configuration,
     /// not part of the historical reconstruction (FEE-074).
     pub fee_rate_percent_micros: Option<i64>,
+    /// Windowed position returns (YTD / 1y / 2y / 5y / 10y) ending today
+    /// (ACD-054–057). All fields None for the cash row and in the as-of view.
+    pub period_performance: HoldingPeriodPerformance,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -245,10 +270,29 @@ impl AccountDetailsUseCase {
         // FXR-035 — valuation date for resolving FX rates is "today"; the
         // write-guard (FXR-022) forbids future-dated rates, so the latest rate
         // on or before today is simply the latest recorded rate.
-        let today = chrono::Local::now()
-            .date_naive()
-            .format("%Y-%m-%d")
-            .to_string();
+        let today_date = Local::now().date_naive();
+        let today = today_date.format("%Y-%m-%d").to_string();
+
+        // ACD-054/055 — the windowed position returns value each holding at the
+        // five window-start dates, so historical prices and FX rates for those
+        // dates are preloaded once for all holdings.
+        let window_starts = PeriodWindowStarts::ending_at(today_date);
+        let priced_assets = load_priced_assets(&self.asset_service, &all_txs).await?;
+        let window_rate_map = load_rate_map_for_dates(
+            &self.currency_service,
+            &priced_assets,
+            &account.currency,
+            &window_starts.valuation_dates(),
+        )
+        .await?;
+        let period_performance_inputs = PeriodPerformanceInputs {
+            all_transactions: &all_txs,
+            priced_assets: &priced_assets,
+            rate_map: &window_rate_map,
+            account_currency: &account.currency,
+            window_starts,
+            today: today_date,
+        };
 
         let mut details: Vec<HoldingDetail> = Vec::with_capacity(active_holdings.len());
         let mut total_global_value: i64 = 0;
@@ -388,6 +432,16 @@ impl AccountDetailsUseCase {
                 .unwrap_or(&0);
             // FEE-074 — active schedule rate; None for cash and unscheduled assets.
             let fee_rate_percent_micros = fee_rate_by_asset.get(&holding.asset_id).copied();
+            // ACD-054 — windowed position returns; the cash row carries all-None.
+            let period_performance = if is_cash {
+                HoldingPeriodPerformance::default()
+            } else {
+                compute_period_performance(
+                    &period_performance_inputs,
+                    &holding.asset_id,
+                    market_value,
+                )
+            };
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -408,6 +462,7 @@ impl AccountDetailsUseCase {
                 management_fees,         // FEE-052
                 market_value,            // ACD-052
                 fee_rate_percent_micros, // FEE-074
+                period_performance,      // ACD-054
             });
         }
 
@@ -771,6 +826,8 @@ impl AccountDetailsUseCase {
                 management_fees: *management_fees_by_asset.get(asset_id).unwrap_or(&0), // FEE-052
                 market_value,                                                           // ACD-052
                 fee_rate_percent_micros: None, // FEE-074 — as-of view carries no schedule info
+                // ACD-054 — windowed returns are live-view only; the as-of view carries all-None.
+                period_performance: HoldingPeriodPerformance::default(),
             });
         }
 
@@ -813,6 +870,7 @@ impl AccountDetailsUseCase {
                 management_fees: 0, // cash holdings never have management fees
                 market_value: Some(cash_balance), // ACD-052 — cash value is its balance
                 fee_rate_percent_micros: None, // FEE-074
+                period_performance: HoldingPeriodPerformance::default(), // ACD-054
             });
         }
 
@@ -844,6 +902,156 @@ impl AccountDetailsUseCase {
             total_net_cash_input,  // ACD-053
         })
     }
+}
+
+/// The five standard window-start valuation dates for the windowed position
+/// returns (ACD-055), all ending today.
+struct PeriodWindowStarts {
+    ytd: NaiveDate,
+    one_year: NaiveDate,
+    two_years: NaiveDate,
+    five_years: NaiveDate,
+    ten_years: NaiveDate,
+}
+
+impl PeriodWindowStarts {
+    /// ACD-055 — YTD starts at the prior 31 December; the year windows start
+    /// `today − N years`.
+    fn ending_at(today: NaiveDate) -> Self {
+        Self {
+            ytd: prior_december_31(today),
+            one_year: years_before(today, 1),
+            two_years: years_before(today, 2),
+            five_years: years_before(today, 5),
+            ten_years: years_before(today, 10),
+        }
+    }
+
+    /// Every window-start date, for FX-rate pre-resolution (FXR-035/042).
+    fn valuation_dates(&self) -> [NaiveDate; 5] {
+        [
+            self.ytd,
+            self.one_year,
+            self.two_years,
+            self.five_years,
+            self.ten_years,
+        ]
+    }
+}
+
+/// ACD-055 — 31 December of the year before `date`.
+fn prior_december_31(date: NaiveDate) -> NaiveDate {
+    NaiveDate::from_ymd_opt(date.year() - 1, 12, 31).unwrap_or_else(|| {
+        tracing::error!(target: BACKEND, year = date.year() - 1, "prior_december_31: unreachable invalid date");
+        NaiveDate::MIN
+    })
+}
+
+/// ACD-055 — `date` moved back `years` calendar years; 29 February clamps to
+/// 28 February when the target year is not a leap year.
+fn years_before(date: NaiveDate, years: i32) -> NaiveDate {
+    let target_year = date.year() - years;
+    date.with_year(target_year).unwrap_or_else(|| {
+        NaiveDate::from_ymd_opt(target_year, 2, 28).unwrap_or_else(|| {
+            tracing::error!(target: BACKEND, target_year, "years_before: unreachable invalid date");
+            NaiveDate::MIN
+        })
+    })
+}
+
+/// Preloaded inputs shared by every holding's windowed-return computation (ACD-054):
+/// the account's full transaction history, the per-asset price histories, the FX
+/// rates pre-resolved at the five window-start dates, and the window definitions.
+struct PeriodPerformanceInputs<'a> {
+    all_transactions: &'a [Transaction],
+    priced_assets: &'a HashMap<String, PricedAsset>,
+    rate_map: &'a RateMap,
+    account_currency: &'a str,
+    window_starts: PeriodWindowStarts,
+    today: NaiveDate,
+}
+
+/// ACD-054/056/057 — the five windowed Simple Dietz position returns for one
+/// non-cash holding. `end_value` is the holding's `market_value` today (ACD-052);
+/// `None` means the position cannot be valued today, so every window is `None`.
+fn compute_period_performance(
+    inputs: &PeriodPerformanceInputs<'_>,
+    asset_id: &str,
+    end_value: Option<i64>,
+) -> HoldingPeriodPerformance {
+    let Some(end_value) = end_value else {
+        return HoldingPeriodPerformance::default();
+    };
+    let asset_transactions: Vec<&Transaction> = inputs
+        .all_transactions
+        .iter()
+        .filter(|transaction| transaction.asset_id == asset_id)
+        .collect();
+    let window_pct = |window_start: NaiveDate| {
+        window_position_pct(
+            inputs,
+            &asset_transactions,
+            asset_id,
+            end_value,
+            window_start,
+        )
+    };
+    HoldingPeriodPerformance {
+        ytd: window_pct(inputs.window_starts.ytd),
+        one_year: window_pct(inputs.window_starts.one_year),
+        two_years: window_pct(inputs.window_starts.two_years),
+        five_years: window_pct(inputs.window_starts.five_years),
+        ten_years: window_pct(inputs.window_starts.ten_years),
+    }
+}
+
+/// ACD-056 — one window's Simple Dietz position return, in micro-percent. The
+/// window start is the baseline valuation date: the position standing at the end
+/// of that day, valued at the carry-forward price and FX rate as of it (i128
+/// intermediates), is the start value. Flows dated exactly on the window start
+/// are already inside that baseline position, so the flow window opens the day
+/// after and runs through today. Returns `None` per ACD-057.
+fn window_position_pct(
+    inputs: &PeriodPerformanceInputs<'_>,
+    asset_transactions: &[&Transaction],
+    asset_id: &str,
+    end_value: i64,
+    window_start: NaiveDate,
+) -> Option<i64> {
+    let quantity_at_start = Account::reconstruct_holding_as_of(
+        inputs.all_transactions,
+        asset_id,
+        &window_start.format("%Y-%m-%d").to_string(),
+    )
+    .quantity;
+    let start_value: i64 = if quantity_at_start <= 0 {
+        // ACD-055 — a window opening before the position existed starts from 0.
+        0
+    } else {
+        let priced = inputs.priced_assets.get(asset_id)?;
+        // ACD-057 — a held position with no recorded price on or before the
+        // window start cannot be valued (PRF-022 carry-forward finds nothing).
+        let price = priced.price_as_of(window_start)? as i128;
+        let converted_price = if priced.currency == inputs.account_currency {
+            price
+        } else {
+            // ACD-057 / FXR-034 — a foreign position with no usable rate at the
+            // window start cannot be valued.
+            let rate = *inputs
+                .rate_map
+                .get(&(priced.currency.clone(), window_start))? as i128;
+            price * rate / MICRO
+        };
+        (quantity_at_start as i128 * converted_price / MICRO) as i64
+    };
+    let flow_window_start = window_start.succ_opt()?;
+    holding_metric_for_span(
+        asset_transactions,
+        start_value,
+        end_value,
+        flow_window_start,
+        inputs.today,
+    )
 }
 
 #[cfg(test)]
@@ -4466,5 +4674,503 @@ mod tests {
             live_row.management_fees, 19_900_000,
             "without a cutoff both deductions count — confirming the as-of filter excluded the later one (FEE-072)"
         );
+    }
+
+    // ── ACD-054–057 — windowed position performance ──────────────────────────
+
+    fn iso(date: NaiveDate) -> String {
+        date.format("%Y-%m-%d").to_string()
+    }
+
+    async fn make_eur_account(account_svc: &AccountService) -> Account {
+        account_svc
+            .create(
+                "Windowed".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap()
+    }
+
+    /// Deposits the exact purchase amount and buys `quantity` units at
+    /// `unit_price` (1:1 FX, no fees) on `date`, so the cash leg is fully funded.
+    async fn deposit_and_buy(
+        account_svc: &AccountService,
+        account_id: &str,
+        asset_id: &str,
+        date: &str,
+        quantity: i64,
+        unit_price: i64,
+    ) {
+        let total_amount = (quantity as i128 * unit_price as i128 / 1_000_000) as i64;
+        account_svc
+            .record_deposit(account_id, date.to_string(), total_amount, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                account_id,
+                asset_id.to_string(),
+                date.to_string(),
+                quantity,
+                unit_price,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+    }
+
+    /// A currency service whose USD→EUR rate resolves only when queried for the
+    /// exact `date` — every other as-of date has no usable rate (FXR-034).
+    fn make_currency_service_with_rate_only_on(
+        date: String,
+        rate_micros: i64,
+    ) -> Arc<CurrencyService> {
+        let pair_repo = MockCurrencyPairRepository::new();
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(move |_, _, as_of| {
+                if as_of == date {
+                    Ok(Some(
+                        crate::context::currency::domain::CurrencyRate::from_storage(
+                            "USD".to_string(),
+                            "EUR".to_string(),
+                            date.clone(),
+                            rate_micros,
+                            crate::context::currency::domain::CurrencyRateSource::Manual,
+                        ),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            });
+        Arc::new(CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(rate_repo),
+        ))
+    }
+
+    // ACD-055/056 — a position held unchanged through the whole 1y window is a
+    // pure price return: no flows, pct = (end − start) / start.
+    #[tokio::test]
+    async fn period_performance_purchase_before_window_is_pure_price_return() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(today - chrono::Duration::days(500)),
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        // 100.00 carries forward into the 1y window start; 110.00 is today's value.
+        asset_svc
+            .record_asset_price(&stock, &iso(today - chrono::Duration::days(400)), 100.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, &iso(today), 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        // start 100.00 → end 110.00 with no window flows: 10.00%.
+        assert_eq!(holding.period_performance.one_year, Some(10_000_000));
+    }
+
+    // ACD-055/056 — a position opened inside the window starts from 0; the
+    // purchase is the external flow. Dated on the first flow day it carries full
+    // Dietz weight, so the denominator is exactly the purchase amount.
+    #[tokio::test]
+    async fn period_performance_purchase_inside_window_uses_dietz_flow() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        let first_flow_day = years_before(today, 1) + chrono::Duration::days(1);
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(first_flow_day),
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        asset_svc
+            .record_asset_price(&stock, &iso(today), 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        // start 0, flow +100.00 at full weight, end 110.00 → gain 10.00 / 100.00.
+        assert_eq!(holding.period_performance.one_year, Some(10_000_000));
+    }
+
+    // ACD-056 — a sell inside the window is a negative external flow: the
+    // proceeds leave the position and shrink the Dietz denominator.
+    #[tokio::test]
+    async fn period_performance_sell_inside_window_reduces_denominator() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(today - chrono::Duration::days(500)),
+            2_000_000,
+            100_000_000,
+        )
+        .await;
+        asset_svc
+            .record_asset_price(&stock, &iso(today - chrono::Duration::days(400)), 100.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, &iso(today), 110.0)
+            .await
+            .unwrap();
+        // Sell 1 unit @ 110.00 on the first flow day → full-weight −110.00 flow.
+        let first_flow_day = years_before(today, 1) + chrono::Duration::days(1);
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.clone(),
+                iso(first_flow_day),
+                1_000_000,
+                110_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        // start 200.00, flow −110.00 → denominator 90.00; end 110.00 →
+        // gain = 110 − 200 + 110 = 20.00 → 22.222222% truncated.
+        assert_eq!(holding.period_performance.one_year, Some(22_222_222));
+    }
+
+    // ACD-056 — dividends received inside the window add to the gain but are not
+    // external flows: the denominator stays the start value (DIV-071 semantics).
+    #[tokio::test]
+    async fn period_performance_dividend_adds_to_gain() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(today - chrono::Duration::days(500)),
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        // Flat price across the window → the dividend is the only gain.
+        asset_svc
+            .record_asset_price(&stock, &iso(today - chrono::Duration::days(400)), 100.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, &iso(today), 100.0)
+            .await
+            .unwrap();
+        account_svc
+            .record_dividend(
+                &account.id,
+                stock.clone(),
+                iso(today - chrono::Duration::days(30)),
+                5_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        // gain = 0 price move + 5.00 dividend over a 100.00 start → 5.00%.
+        assert_eq!(holding.period_performance.one_year, Some(5_000_000));
+    }
+
+    // ACD-057 — a position held at the window start with no recorded price on or
+    // before it cannot value its baseline: the window is None even though today's
+    // market value exists.
+    #[tokio::test]
+    async fn period_performance_none_when_no_price_at_window_start() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(today - chrono::Duration::days(500)),
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        // The only recorded price is today's — nothing carries into the window start.
+        asset_svc
+            .record_asset_price(&stock, &iso(today), 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        assert_eq!(holding.market_value, Some(110_000_000));
+        assert_eq!(holding.period_performance.one_year, None);
+    }
+
+    // ACD-057 / FXR-034 — a foreign position with a usable rate today but none at
+    // the window start cannot value its baseline: the window is None while
+    // today's market value converts fine.
+    #[tokio::test]
+    async fn period_performance_none_when_no_fx_rate_at_window_start() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed US Stock", "USD").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(today - chrono::Duration::days(500)),
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        asset_svc
+            .record_asset_price(&stock, &iso(today - chrono::Duration::days(400)), 100.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, &iso(today), 110.0)
+            .await
+            .unwrap();
+
+        // USD→EUR resolves 1:1 for today only — the window starts have no rate.
+        let currency_svc = make_currency_service_with_rate_only_on(iso(today), 1_000_000);
+        let uc = AccountDetailsUseCase::new(account_svc, asset_svc, currency_svc);
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        assert_eq!(holding.market_value, Some(110_000_000));
+        assert_eq!(holding.period_performance.one_year, None);
+    }
+
+    // ACD-054 — the cash row never carries windowed returns.
+    #[tokio::test]
+    async fn period_performance_cash_row_is_all_none() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        account_svc
+            .record_deposit(
+                &account.id,
+                iso(today - chrono::Duration::days(500)),
+                100_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let cash_row = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == system_cash_asset_id("EUR"))
+            .expect("cash row present");
+        assert_eq!(cash_row.period_performance.ytd, None);
+        assert_eq!(cash_row.period_performance.one_year, None);
+        assert_eq!(cash_row.period_performance.two_years, None);
+        assert_eq!(cash_row.period_performance.five_years, None);
+        assert_eq!(cash_row.period_performance.ten_years, None);
+    }
+
+    // ACD-055 — the YTD baseline is the prior 31 December, not 1 January: a price
+    // recorded on 1 January must not shift the start value.
+    #[tokio::test]
+    async fn period_performance_ytd_baseline_is_prior_december_31() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let today = Local::now().date_naive();
+        let prior_year = today.year() - 1;
+        let prior_october_first = NaiveDate::from_ymd_opt(prior_year, 10, 1).expect("valid date");
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            &iso(prior_october_first),
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        // Baseline price on the prior 31 December; a 1 January observation is the
+        // latest price and would be a wrong baseline pick.
+        asset_svc
+            .record_asset_price(
+                &stock,
+                &iso(NaiveDate::from_ymd_opt(prior_year, 12, 31).expect("valid date")),
+                100.0,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(
+                &stock,
+                &iso(NaiveDate::from_ymd_opt(today.year(), 1, 1).expect("valid date")),
+                105.0,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present");
+        // start 100.00 (31 Dec) → end 105.00: 5.00%. A 1 January baseline reads 0%.
+        assert_eq!(holding.period_performance.ytd, Some(5_000_000));
+    }
+
+    // ACD-054 — the as-of view never carries windowed returns.
+    #[tokio::test]
+    async fn period_performance_as_of_view_is_all_none() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        let stock = make_stock(&asset_svc, "Windowed EUR Stock", "EUR").await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &stock,
+            "2024-01-10",
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        asset_svc
+            .record_asset_price(&stock, "2024-05-01", 110.0)
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2024-06-01"))
+            .await
+            .unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == stock)
+            .expect("stock holding present in as-of view");
+        assert_eq!(holding.period_performance.ytd, None);
+        assert_eq!(holding.period_performance.one_year, None);
+        assert_eq!(holding.period_performance.two_years, None);
+        assert_eq!(holding.period_performance.five_years, None);
+        assert_eq!(holding.period_performance.ten_years, None);
     }
 }

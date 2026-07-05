@@ -546,6 +546,67 @@ pub(crate) fn metric_for_span(
     PerformanceMetric { gain, pct }
 }
 
+/// ACD-056/057 — Simple Dietz position return for ONE asset over the window
+/// `[period_start, period_end]`, in micro-percent. Unlike the account-level
+/// `metric_for_span`, the external flows of a position are its own Purchase
+/// (`+total_amount`), Sell (`−total_amount`) and OpeningBalance (`+total_amount`)
+/// transactions — Deposit/Withdrawal move the account's cash, not the position —
+/// and dividends received inside the window are added to the gain (DIV-071
+/// semantics): `gain = end_value − start_value − net_flow + dividends`.
+///
+/// `asset_transactions` must be pre-filtered to the asset being measured.
+/// Returns `None` when the Dietz denominator
+/// (`start_value + Σ flow × days_remaining / days_in_period`) is not positive —
+/// which covers the not-held-and-no-flows case.
+pub(crate) fn holding_metric_for_span(
+    asset_transactions: &[&Transaction],
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> Option<i64> {
+    let days_in_period = (period_end - period_start).num_days();
+    let mut net_flow: i128 = 0;
+    let mut weighted_flow: i128 = 0;
+    let mut dividends: i128 = 0;
+    for transaction in asset_transactions {
+        let date = match parse_date(&transaction.date) {
+            Some(date) if date >= period_start && date <= period_end => date,
+            _ => continue,
+        };
+        let signed_flow: i128 = match transaction.transaction_type {
+            TransactionType::Purchase | TransactionType::OpeningBalance => {
+                transaction.total_amount as i128
+            }
+            TransactionType::Sell => -(transaction.total_amount as i128),
+            TransactionType::Dividend => {
+                dividends += transaction.total_amount as i128;
+                continue;
+            }
+            // Deposit/Withdrawal touch the cash line, never a position; FreeShares,
+            // ManagementFee and Interest are zero-cash position events (FSD-070 /
+            // FEE-071 / INT-024) — their effect surfaces through the endpoint values.
+            TransactionType::Deposit
+            | TransactionType::Withdrawal
+            | TransactionType::FreeShares
+            | TransactionType::ManagementFee
+            | TransactionType::Interest => continue,
+        };
+        net_flow += signed_flow;
+        if days_in_period > 0 {
+            let days_remaining = (period_end - date).num_days() as i128;
+            weighted_flow += signed_flow * days_remaining / days_in_period as i128;
+        }
+    }
+
+    let gain = end_value as i128 - start_value as i128 - net_flow + dividends;
+    let denominator = start_value as i128 + weighted_flow;
+    if denominator <= 0 {
+        return None;
+    }
+    Some((gain * PERCENT_SCALE / denominator) as i64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

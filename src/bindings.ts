@@ -2232,7 +2232,39 @@ market_value: number | null;
  * exists; always None in the as-of view — the schedule is today's configuration,
  * not part of the historical reconstruction (FEE-074).
  */
-fee_rate_percent_micros: number | null }
+fee_rate_percent_micros: number | null; 
+/**
+ * Windowed position returns (YTD / 1y / 2y / 5y / 10y) ending today
+ * (ACD-054–057). All fields None for the cash row and in the as-of view.
+ */
+period_performance: HoldingPeriodPerformance }
+/**
+ * Windowed Simple Dietz position returns for one holding, in micro-percent
+ * (5.25% = 5_250_000), each over a standard window ending today (ACD-054/055/056).
+ * A field is `None` when the window cannot be valued (ACD-057). All fields are
+ * `None` for the cash row and in the as-of view (ACD-054).
+ */
+export type HoldingPeriodPerformance = { 
+/**
+ * Window starting the prior 31 December (ACD-055).
+ */
+ytd: number | null; 
+/**
+ * Window starting one year before today (ACD-055).
+ */
+one_year: number | null; 
+/**
+ * Window starting two years before today (ACD-055).
+ */
+two_years: number | null; 
+/**
+ * Window starting five years before today (ACD-055).
+ */
+five_years: number | null; 
+/**
+ * Window starting ten years before today (ACD-055).
+ */
+ten_years: number | null }
 /**
  * Point-in-time reconstruction of a single holding's quantity and VWAP cost
  * basis as of a date — the read-only "as of" valuation behind the trade-dialog
