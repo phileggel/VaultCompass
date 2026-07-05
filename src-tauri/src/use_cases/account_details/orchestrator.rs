@@ -5178,4 +5178,25 @@ mod tests {
         assert_eq!(holding.period_performance.five_years, None);
         assert_eq!(holding.period_performance.ten_years, None);
     }
+
+    // ACD-055 — 29 February clamps to 28 February when the target year is not a
+    // leap year.
+    #[test]
+    fn years_before_clamps_feb_29_to_feb_28_on_non_leap_target() {
+        let leap_day = NaiveDate::from_ymd_opt(2024, 2, 29).expect("valid date");
+        assert_eq!(
+            years_before(leap_day, 1),
+            NaiveDate::from_ymd_opt(2023, 2, 28).expect("valid date")
+        );
+    }
+
+    // ACD-055 — a leap-year target keeps 29 February intact (no clamp).
+    #[test]
+    fn years_before_keeps_feb_29_on_leap_target() {
+        let leap_day = NaiveDate::from_ymd_opt(2024, 2, 29).expect("valid date");
+        assert_eq!(
+            years_before(leap_day, 4),
+            NaiveDate::from_ymd_opt(2020, 2, 29).expect("valid date")
+        );
+    }
 }

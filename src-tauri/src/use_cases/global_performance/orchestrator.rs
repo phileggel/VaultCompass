@@ -1306,4 +1306,137 @@ mod tests {
         assert!(response.monthly.is_empty());
         assert_eq!(response.currency, "EUR");
     }
+
+    // GPF-013 — the aggregation spans from the earliest transaction across all
+    // included accounts; an account contributes 0 to every period before its
+    // own first transaction.
+    #[tokio::test]
+    async fn later_starting_account_contributes_zero_before_its_first_transaction() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let older = create_account(&account_svc, "Older", "EUR", UpdateFrequency::Automatic).await;
+        let newer = create_account(&account_svc, "Newer", "EUR", UpdateFrequency::Automatic).await;
+        account_svc
+            .record_deposit(&older.id, "2023-03-01".to_string(), 500_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&newer.id, "2025-02-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+
+        let uc = GlobalPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let response = uc.get_global_performance(None, None).await.unwrap();
+
+        let row_2023 = year_row(&response, 2023);
+        assert_eq!(
+            row_2023.end_value, 500_000_000,
+            "before the newer account's start, the older account's value stands alone"
+        );
+        assert_eq!(row_2023.cash_flow, 500_000_000);
+        let row_2024 = year_row(&response, 2024);
+        assert_eq!(
+            row_2024.end_value, 500_000_000,
+            "the newer account still contributes 0 in 2024"
+        );
+        assert_eq!(row_2024.cash_flow, 0, "no flows dated 2024");
+        let row_2025 = year_row(&response, 2025);
+        assert_eq!(
+            row_2025.end_value, 1_500_000_000,
+            "both accounts contribute from the newer account's first transaction on"
+        );
+        assert_eq!(row_2025.cash_flow, 1_000_000_000);
+    }
+
+    // GPF-040 — a foreign account's zero-cost in-kind credit (FreeShares) lands
+    // in asset_flow valued at the period end and converted at the PERIOD-END
+    // rate (0.90), not the transaction-date rate (0.80).
+    #[tokio::test]
+    async fn foreign_in_kind_credit_converts_at_period_end_rate() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        asset_svc.seed_cash_asset("USD").await.unwrap();
+        let account =
+            create_account(&account_svc, "Foreign", "USD", UpdateFrequency::Automatic).await;
+        // A USD-currency stock inside the USD account: no asset→account
+        // conversion, so the only FX leg is USD→EUR (GPF-020/030/040).
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "US Stock".to_string(),
+                reference: "UST".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "USD".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .expect("stock created")
+            .id;
+        account_svc
+            .record_deposit(&account.id, "2024-03-15".to_string(), 2_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.clone(),
+                "2024-03-15".to_string(),
+                10_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_free_shares(
+                &account.id,
+                stock.clone(),
+                "2024-03-20".to_string(),
+                5_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock, "2024-03-31", 100.0)
+            .await
+            .unwrap();
+
+        let uc = GlobalPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_usd_rate_by_date(),
+        );
+        let response = uc.get_global_performance(None, None).await.unwrap();
+
+        let row = year_row(&response, 2024);
+        // 5 free shares × $100 (carry-forward price as of 2024-12-31) × 0.90
+        // (USD→EUR rate as of 2024-12-31) = 450 EUR. A transaction-date (0.80)
+        // conversion would read 400 EUR.
+        assert_eq!(
+            row.asset_flow, 450_000_000,
+            "in-kind credit valued and converted at the period end"
+        );
+        // 2000 USD deposit × 0.80 (rate as of 2024-03-15).
+        assert_eq!(row.cash_flow, 1_600_000_000);
+        // Cash 1000 USD + 15 shares × $100 = 2500 USD × 0.90 (period-end rate).
+        assert_eq!(row.end_value, 2_250_000_000);
+        assert_eq!(row.dividends, 0);
+        assert_eq!(
+            row.end_value,
+            row.previous_value + row.cash_flow + row.asset_flow + row.dividends + row.pnl,
+            "GPF-041 bridge identity balances"
+        );
+    }
 }

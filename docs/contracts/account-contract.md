@@ -26,9 +26,9 @@
 > `get_account_details` is implemented in `use_cases/account_details/` — it reads from both the
 > account and asset BCs but mutates neither; owned here as the account aggregate is the primary subject.
 
-| Command               | Args                 | Return                   | Errors                                                                                                                            |
-| --------------------- | -------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `get_account_details` | `account_id: String` | `AccountDetailsResponse` | `AccountNotFound { account_id }` (ACD-012), `DatabaseError` (ACD-038); price lookup failures silently degrade to `None` (MKT-031) |
+| Command               | Args                                                                                                                                | Return                   | Errors                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `get_account_details` | `account_id: String, as_of_date: Option<String>` — `None` = live view (today); `Some("YYYY-MM-DD")` = read-only past reconstruction | `AccountDetailsResponse` | `AccountNotFound { account_id }` (ACD-012), `DatabaseError` (ACD-038); price lookup failures silently degrade to `None` (MKT-031) |
 
 ### Account Summaries
 
@@ -46,9 +46,9 @@
 > history) but mutates neither; owned here as the account aggregate is the primary subject. Period
 > values and metrics are recomputed on read per ADR-013; nothing is persisted.
 
-| Command                   | Args                 | Return                       | Errors                                                                                                                       |
-| ------------------------- | -------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `get_account_performance` | `account_id: String` | `AccountPerformanceResponse` | `AccountNotFound { account_id }` (PRF-016), `DatabaseError` (PRF-027); price-lookup failures silently contribute 0 (PRF-022) |
+| Command                   | Args                                                                                                        | Return                       | Errors                                                                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `get_account_performance` | `account_id: String, asset_id: Option<String>` — `Some` scopes the series to one asset's position (PRF-080) | `AccountPerformanceResponse` | `AccountNotFound { account_id }` (PRF-016), `DatabaseError` (PRF-027); price-lookup failures silently contribute 0 (PRF-022) |
 
 ### Holdings & Transactions
 
@@ -485,3 +485,4 @@ struct UpdateFeeScheduleDTO {
 - 2026-06-11 — Added by `free-share-distribution` spec: `record_free_shares` (+ `FreeSharesDTO`); `TransactionType::FreeShares` variant + its `Transaction` packing convention; FSD-040/041 cross-refs on `correct_transaction`/`cancel_transaction`'s `CascadingOversell`; edit/delete reuse those commands.
 - 2026-06-30 — Added by `management-fee-deduction` spec: `record_management_fee`, `create_fee_schedule`, `update_fee_schedule`, `delete_fee_schedule`, `get_fee_schedule`, `apply_due_fee_deductions` (+ `ManagementFeeDTO`, `FeeFrequency`, `FeeSchedule`, `CreateFeeScheduleDTO`, `UpdateFeeScheduleDTO`); `TransactionType::ManagementFee` variant; `HoldingDetail.management_fees` + `AccountDetailsResponse.total_management_fees`; `FeeScheduleUpdated` event (published + Account Details subscribes); FEE-063 cross-ref on `correct_transaction`'s `CascadingOversell`; edit/delete of a deduction reuse `correct_transaction`/`cancel_transaction`.
 - 2026-07-04 — Added by `interest-credit` spec: `record_interest` (+ `RecordInterestDTO`, `InterestError`); `TransactionType::Interest` variant + its zero-cost `Transaction` packing (INT-024); the Cash Asset as a valid target (INT-023); `AccountError::InterestAmountInvalid`; INT-040/041 cross-refs — edit/delete reuse `correct_transaction`/`cancel_transaction`. Same session: `add_account`/`update_account` DTOs gain `management_fees_enabled` (FEE-075) and `get_account_details` gains `HoldingDetail.market_value` + `fee_rate_percent_micros` and `AccountDetailsResponse.total_net_cash_input` (ACD-052/053, FEE-074).
+- 2026-07-05 — Input-column refresh: `get_account_details` gains `as_of_date: Option<String>` (as-of read-only view) and `get_account_performance` gains `asset_id: Option<String>` (position-scoped series, PRF-080) — both shipped earlier, now reflected in the tables above. No new command.
