@@ -42,6 +42,7 @@ async fn create_asset(svc: &AssetService) -> String {
         risk_level: 3,
         category_id: SYSTEM_CATEGORY_ID.to_string(),
         exchange: None,
+        interest_bearing: false,
     })
     .await
     .expect("create asset")
@@ -63,6 +64,7 @@ async fn get_asset_prices_returns_all_sorted_descending_and_scoped() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("create asset b")

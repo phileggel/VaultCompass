@@ -2,9 +2,9 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (spec) — INT: per-asset interest-bearing eligibility flag
+## (frontend) — INT: interest-bearing flag UI (checkbox + selector filter)
 
-Interest (INT, shipped 2026-07-04) currently accepts any held asset plus the cash line as a credit target. Real-world eligibility is narrower: the cash line and cash-like fund lines ("fonds en euros" — a dedicated asset line that behaves like cash). Asset class is not a reliable signal, so the precise design is a per-asset `interest_bearing` opt-in flag (migration + Asset field + checkbox on the asset form + filter on the interest modal's selector — the same shape as the account-level `management_fees_enabled` gate). Deliberately deferred: single-user app, the open selector's misuse cost is low. Pick up when the selector gets noisy or a second eligibility consumer appears.
+The backend half of the per-asset `interest_bearing` opt-in flag shipped (AST-024 / INT-012: migration, Asset field, DTO threading, `InterestNotEligible` rejection in `record_interest`). Remaining frontend half: checkbox on the asset create/edit forms and the `interest_bearing`-filter on the interest modal's asset selector (INT-020) — the cash line stays always listed.
 
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 

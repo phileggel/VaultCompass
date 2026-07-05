@@ -30,6 +30,7 @@ const makeAsset = (): Asset => ({
   risk_level: 3,
   is_archived: false,
   price_refresh_blocked: false,
+  interest_bearing: false,
   exchange: null,
 });
 
@@ -42,6 +43,7 @@ const baseCreateDto: CreateAssetDTO = {
   risk_level: 3,
   category_id: "cat-1",
   exchange: null,
+  interest_bearing: false,
 };
 
 const baseUpdateDto: UpdateAssetDTO = {
@@ -54,6 +56,7 @@ const baseUpdateDto: UpdateAssetDTO = {
   risk_level: 3,
   category_id: "cat-1",
   exchange: null,
+  interest_bearing: false,
 };
 
 describe("asset gateway — CRUD", () => {

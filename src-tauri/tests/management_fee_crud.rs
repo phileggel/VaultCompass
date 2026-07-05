@@ -98,6 +98,7 @@ fn stocks_asset_dto(name: &str, reference: &str, currency: &str) -> CreateAssetD
         risk_level: 2,
         category_id: SYSTEM_CATEGORY_ID.to_string(),
         exchange: None,
+        interest_bearing: false,
     }
 }
 

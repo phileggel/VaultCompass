@@ -1136,7 +1136,13 @@ exchange: Exchange | null;
  * price. Independent of `is_archived`; toggled only by the dedicated
  * `block_price_refresh` / `unblock_price_refresh` actions.
  */
-price_refresh_blocked: boolean }
+price_refresh_blocked: boolean; 
+/**
+ * When true, the asset is an eligible target for Interest credits
+ * (AST-024 / INT-012). The account's Cash Asset is always eligible
+ * regardless of this flag (INT-023).
+ */
+interest_bearing: boolean }
 /**
  * A user-defined grouping for assets.
  */
@@ -1532,7 +1538,11 @@ category_id: string;
 /**
  * Optional canonical trading venue (AST-021).
  */
-exchange: Exchange | null }
+exchange: Exchange | null; 
+/**
+ * Whether the asset is an eligible Interest-credit target (AST-024).
+ */
+interest_bearing: boolean }
 /**
  * Parameters for creating a recurring fee schedule (FEE-030).
  */
@@ -2258,6 +2268,10 @@ export type InterestTask =
  */
 { code: "AssetNotFound" } | 
 /**
+ * The non-cash asset is not `interest_bearing` (INT-012).
+ */
+{ code: "InterestNotEligible" } | 
+/**
  * The non-cash asset is not currently held (quantity = 0 or no holding) (INT-011).
  */
 { code: "AssetNotHeld" }
@@ -2752,7 +2766,11 @@ category_id: string;
 /**
  * New optional canonical trading venue (AST-021 / AST-022).
  */
-exchange: Exchange | null }
+exchange: Exchange | null; 
+/**
+ * New Interest-credit eligibility (AST-024).
+ */
+interest_bearing: boolean }
 /**
  * Failures the update-checker commands can surface to the renderer.
  * 

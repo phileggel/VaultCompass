@@ -47,6 +47,7 @@ fn base_create_dto(name: &str) -> CreateAssetDTO {
         risk_level: 1,
         category_id: SYSTEM_CATEGORY_ID.to_string(),
         exchange: None,
+        interest_bearing: false,
     }
 }
 
@@ -129,6 +130,7 @@ async fn test_update_asset_rejected_when_archived() {
             risk_level: 1,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .unwrap_err();
@@ -158,6 +160,7 @@ async fn test_update_asset_rejected_when_category_not_found() {
             risk_level: 1,
             category_id: "nonexistent-category-id".to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .unwrap_err();
@@ -278,6 +281,7 @@ async fn test_create_asset_with_canonical_exchange_persists_and_round_trips() {
             risk_level: 4,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: Some(xpar()),
+            interest_bearing: false,
         })
         .await
         .expect("create_asset with canonical exchange should succeed");
@@ -320,6 +324,7 @@ async fn test_create_asset_with_non_curated_exchange_returns_invalid_exchange() 
                 code: "BOGUS".to_string(),
                 label: "Bogus Exchange".to_string(),
             }),
+            interest_bearing: false,
         })
         .await
         .unwrap_err();
@@ -345,6 +350,7 @@ async fn test_create_asset_with_no_exchange_persists_and_round_trips() {
             risk_level: 4,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("create_asset with no exchange should succeed");
@@ -390,6 +396,7 @@ async fn test_update_asset_sets_exchange_from_none() {
             risk_level: 1,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: Some(xpar()),
+            interest_bearing: false,
         })
         .await
         .expect("update_asset to set exchange should succeed");
@@ -418,6 +425,7 @@ async fn test_update_asset_changes_exchange_to_different_canonical_value() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: Some(xnas),
+            interest_bearing: false,
         })
         .await
         .expect("seed asset with XNAS");
@@ -433,6 +441,7 @@ async fn test_update_asset_changes_exchange_to_different_canonical_value() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: Some(xpar()),
+            interest_bearing: false,
         })
         .await
         .expect("update_asset to change exchange should succeed");
@@ -458,6 +467,7 @@ async fn test_update_asset_clears_exchange() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: Some(xpar()),
+            interest_bearing: false,
         })
         .await
         .expect("seed asset with XPAR");
@@ -473,6 +483,7 @@ async fn test_update_asset_clears_exchange() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("update_asset to clear exchange should succeed");
@@ -507,6 +518,7 @@ async fn test_update_asset_with_non_curated_exchange_returns_invalid_exchange() 
                 code: "BOGUS".to_string(),
                 label: "Bogus Exchange".to_string(),
             }),
+            interest_bearing: false,
         })
         .await
         .unwrap_err();
@@ -515,4 +527,50 @@ async fn test_update_asset_with_non_curated_exchange_returns_invalid_exchange() 
         matches!(&err, AssetError::InvalidExchange { exchange_code } if exchange_code == "BOGUS"),
         "expected InvalidExchange {{ exchange_code: \"BOGUS\" }}, got: {err:?}"
     );
+}
+
+/// interest_bearing round-trips through create → read → update → read (AST-024).
+#[tokio::test]
+async fn test_interest_bearing_round_trips_through_create_and_update() {
+    let (svc, _bus) = setup().await;
+
+    let asset = svc
+        .create_asset(CreateAssetDTO {
+            interest_bearing: true,
+            ..base_create_dto("EuroFund")
+        })
+        .await
+        .expect("create interest-bearing asset");
+    assert!(asset.interest_bearing);
+
+    let loaded = svc
+        .get_asset_by_id(&asset.id)
+        .await
+        .expect("read asset")
+        .expect("asset must exist");
+    assert!(loaded.interest_bearing);
+
+    let updated = svc
+        .update_asset(UpdateAssetDTO {
+            asset_id: asset.id.clone(),
+            name: "EuroFund".to_string(),
+            reference: "REF".to_string(),
+            isin: None,
+            class: AssetClass::Stocks,
+            currency: "USD".to_string(),
+            risk_level: 1,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+            interest_bearing: false,
+        })
+        .await
+        .expect("update_asset to clear interest_bearing should succeed");
+    assert!(!updated.interest_bearing);
+
+    let reloaded = svc
+        .get_asset_by_id(&asset.id)
+        .await
+        .expect("re-read asset")
+        .expect("asset must exist");
+    assert!(!reloaded.interest_bearing);
 }

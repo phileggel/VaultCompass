@@ -39,6 +39,7 @@ const makeAsset = (overrides: Partial<Asset> = {}): Asset => ({
   category: { id: "cat-1", name: "US Stocks" },
   is_archived: false,
   price_refresh_blocked: false,
+  interest_bearing: false,
   exchange: null,
   ...overrides,
 });

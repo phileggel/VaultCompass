@@ -167,6 +167,7 @@ async fn get_account_performance_priced_stock_included_in_end_value() {
             risk_level: 2,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .unwrap();

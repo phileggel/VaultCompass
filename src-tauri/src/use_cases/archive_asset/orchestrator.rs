@@ -83,6 +83,7 @@ mod tests {
             risk_level: 1,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         }
     }
 

@@ -113,6 +113,7 @@ impl AssetService {
             false,
             None,
             false,
+            false,
         )?;
         let asset = self.asset_repo.create(asset).await?;
         tracing::info!(target: BACKEND, asset_id = %asset.id, currency = %currency, "Seeded Cash Asset");
@@ -137,6 +138,7 @@ impl AssetService {
             dto.reference,
             dto.isin,
             dto.exchange,
+            dto.interest_bearing,
         )?;
 
         let asset = self.asset_repo.create(asset).await.map_err(|e| {
@@ -168,6 +170,7 @@ impl AssetService {
             dto.reference,
             dto.isin,
             dto.exchange,
+            dto.interest_bearing,
         )?;
 
         let asset = self.asset_repo.update(asset).await.map_err(|e| {
@@ -681,6 +684,7 @@ mod tests {
             archived,
             None,
             false,
+            false,
         )
     }
 
@@ -696,6 +700,7 @@ mod tests {
             None,
             false,
             None,
+            false,
             false,
         )
     }
@@ -736,6 +741,7 @@ mod tests {
             risk_level: 1,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         }
     }
 
@@ -882,6 +888,30 @@ mod tests {
         assert_eq!(asset.reference, "AAPL");
     }
 
+    // AST-024 — create_asset passes the interest_bearing opt-in through to the
+    // persisted aggregate.
+    #[tokio::test]
+    async fn test_create_asset_passes_interest_bearing_flag() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_create()
+            .withf(|a| a.interest_bearing)
+            .times(1)
+            .return_once(Ok);
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id()
+            .times(1)
+            .return_once(|_| Ok(Some(make_category())));
+        let svc = make_svc(ar, cr, MockAssetPriceRepository::new());
+        let asset = svc
+            .create_asset(CreateAssetDTO {
+                interest_bearing: true,
+                ..base_dto("Euro Fund")
+            })
+            .await
+            .unwrap();
+        assert!(asset.interest_bearing);
+    }
+
     // R5/R6 — updating an archived asset is rejected
     #[tokio::test]
     async fn test_update_archived_asset_is_rejected() {
@@ -904,6 +934,7 @@ mod tests {
                 risk_level: 4,
                 category_id: SYSTEM_CATEGORY_ID.to_string(),
                 exchange: None,
+                interest_bearing: false,
             })
             .await
             .unwrap_err();
@@ -1860,6 +1891,7 @@ mod tests {
                 risk_level: 1,
                 category_id: SYSTEM_CATEGORY_ID.to_string(),
                 exchange: None,
+                interest_bearing: false,
             })
             .await
             .unwrap_err();
@@ -1891,6 +1923,7 @@ mod tests {
                 risk_level: 1,
                 category_id: "missing-cat".to_string(),
                 exchange: None,
+                interest_bearing: false,
             })
             .await
             .unwrap_err();
@@ -1992,6 +2025,7 @@ mod tests {
                 risk_level: 1,
                 category_id: SYSTEM_CATEGORY_ID.to_string(),
                 exchange: None,
+                interest_bearing: false,
             })
             .await
             .unwrap_err();

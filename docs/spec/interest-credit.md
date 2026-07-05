@@ -26,8 +26,15 @@ management-fees account parameter (INT-050).
 currently held (`quantity > 0`) or the account's own Cash Asset (INT-023). A
 non-held, non-cash asset is rejected with `AssetNotHeld`.
 
-**INT-020 — Form (frontend)**: asset selector listing the active non-cash
-holdings **plus the cash line**, a date, an interest **percentage** field and a
+**INT-012 — Interest-bearing eligibility (backend)**: a non-cash target must
+carry the asset's `interest_bearing` opt-in flag (AST-024); a non-flagged
+non-cash asset is rejected with `InterestNotEligible`, checked before the
+INT-011 held check. The account's Cash Asset is always eligible regardless of
+the flag (INT-023) — the eligibility check is skipped for a Cash-class asset.
+
+**INT-020 — Form (frontend)**: asset selector listing the active
+`interest_bearing`-flagged non-cash holdings (AST-024 / INT-012) **plus the
+always-eligible cash line**, a date, an interest **percentage** field and a
 direct **quantity** field (exactly one of the two must be filled, INT-021), and
 an optional note.
 
@@ -82,9 +89,6 @@ crediting is available on every account.
 
 ## Out of scope (v1)
 
-- Per-asset interest-bearing eligibility (`interest_bearing` opt-in flag
-  filtering the asset selector — the cash line plus cash-like fund lines such as
-  a "fonds en euros"). Tracked in `docs/todo.md`; v1 lists every held asset.
 - Recurring interest schedules (the rate varies per year; a one-off entry per
   crediting is the workflow). Revisit if a fixed-rate use case appears.
 - A dedicated "interest received" reporting figure (column/total). The journal

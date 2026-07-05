@@ -232,6 +232,9 @@ pub enum InterestTask {
     /// No asset exists with the requested ID (INT-011).
     #[error("Asset not found")]
     AssetNotFound,
+    /// The non-cash asset is not `interest_bearing` (INT-012).
+    #[error("Asset is not an eligible interest target")]
+    InterestNotEligible,
     /// The non-cash asset is not currently held (quantity = 0 or no holding) (INT-011).
     #[error("Asset is not currently held in this account")]
     AssetNotHeld,
@@ -269,6 +272,7 @@ mod interest_error_wire_tests {
             }
             .into(),
             InterestTask::AssetNotFound.into(),
+            InterestTask::InterestNotEligible.into(),
             InterestTask::AssetNotHeld.into(),
             AccountError::InterestAmountInvalid.into(),
             AccountError::PercentageNotPositive.into(),

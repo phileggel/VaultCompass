@@ -13,6 +13,7 @@ const makeAsset = (id: string, reference: string, is_archived = false): Asset =>
   category: { id: "cat-1", name: "Cat" },
   is_archived,
   price_refresh_blocked: false,
+  interest_bearing: false,
   exchange: null,
 });
 

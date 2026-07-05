@@ -18,6 +18,7 @@ struct AssetRow {
     is_archived: bool,
     exchange_code: Option<String>,
     price_refresh_blocked: bool,
+    interest_bearing: bool,
 }
 
 impl From<AssetRow> for Asset {
@@ -36,6 +37,7 @@ impl From<AssetRow> for Asset {
             row.is_archived,
             exchange,
             row.price_refresh_blocked,
+            row.interest_bearing,
         )
     }
 }
@@ -65,7 +67,8 @@ impl AssetRepository for SqliteAssetRepository {
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
                 a.exchange_code,
-                a.price_refresh_blocked as "price_refresh_blocked: bool"
+                a.price_refresh_blocked as "price_refresh_blocked: bool",
+                a.interest_bearing as "interest_bearing: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
             WHERE a.is_deleted = 0 AND a.is_archived = 0 AND c.is_deleted = 0
@@ -88,7 +91,8 @@ impl AssetRepository for SqliteAssetRepository {
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
                 a.exchange_code,
-                a.price_refresh_blocked as "price_refresh_blocked: bool"
+                a.price_refresh_blocked as "price_refresh_blocked: bool",
+                a.interest_bearing as "interest_bearing: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
             WHERE a.is_deleted = 0 AND c.is_deleted = 0
@@ -111,7 +115,8 @@ impl AssetRepository for SqliteAssetRepository {
                 c.name as category_name,
                 a.is_archived as "is_archived: bool",
                 a.exchange_code,
-                a.price_refresh_blocked as "price_refresh_blocked: bool"
+                a.price_refresh_blocked as "price_refresh_blocked: bool",
+                a.interest_bearing as "interest_bearing: bool"
             FROM assets a
             JOIN categories c ON a.category_id = c.id
             WHERE a.id = ?
@@ -131,7 +136,7 @@ impl AssetRepository for SqliteAssetRepository {
         let asset_class_str = asset.class.to_string();
         let exchange_code = asset.exchange.as_ref().map(|e| e.code.clone());
         sqlx::query!(
-            r#"INSERT INTO assets (id, name, reference, isin, asset_class, currency, risk_level, is_deleted, is_archived, category_id, exchange_code) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)"#,
+            r#"INSERT INTO assets (id, name, reference, isin, asset_class, currency, risk_level, is_deleted, is_archived, category_id, exchange_code, interest_bearing) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)"#,
             asset.id,
             asset.name,
             asset.reference,
@@ -140,7 +145,8 @@ impl AssetRepository for SqliteAssetRepository {
             asset.currency,
             asset.risk_level,
             asset.category.id,
-            exchange_code
+            exchange_code,
+            asset.interest_bearing
         )
         .execute(&self.pool)
         .await
@@ -152,7 +158,7 @@ impl AssetRepository for SqliteAssetRepository {
         let asset_class_str = asset.class.to_string();
         let exchange_code = asset.exchange.as_ref().map(|e| e.code.clone());
         sqlx::query!(
-            r#"UPDATE assets SET name = ?, reference = ?, isin = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ?, exchange_code = ? WHERE id = ? AND is_archived = 0"#,
+            r#"UPDATE assets SET name = ?, reference = ?, isin = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ?, exchange_code = ?, interest_bearing = ? WHERE id = ? AND is_archived = 0"#,
             asset.name,
             asset.reference,
             asset.isin,
@@ -161,6 +167,7 @@ impl AssetRepository for SqliteAssetRepository {
             asset.risk_level,
             asset.category.id,
             exchange_code,
+            asset.interest_bearing,
             asset.id
         )
         .execute(&self.pool)
@@ -270,6 +277,59 @@ mod tests {
 
         let after = repo.get_by_id("a1").await.unwrap().unwrap();
         assert!(after.price_refresh_blocked);
+    }
+
+    /// Builds an active asset for the round-trip tests, FK-satisfied by the
+    /// migration-seeded `default-uncategorized` category.
+    fn asset_with_interest_bearing(id: &str, interest_bearing: bool) -> Asset {
+        Asset::restore(
+            id.to_string(),
+            "Euro Fund".to_string(),
+            AssetClass::MutualFunds,
+            AssetCategory::from_storage(
+                "default-uncategorized".to_string(),
+                "Uncategorized".to_string(),
+            ),
+            "EUR".to_string(),
+            2,
+            "EUROFUND".to_string(),
+            None,
+            false,
+            None,
+            false,
+            interest_bearing,
+        )
+    }
+
+    // AST-024 — interest_bearing round-trips through create → get_by_id → update.
+    #[tokio::test]
+    async fn interest_bearing_round_trips_through_create_and_update() {
+        let pool = setup_pool().await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        repo.create(asset_with_interest_bearing("a1", true))
+            .await
+            .unwrap();
+        let created = repo.get_by_id("a1").await.unwrap().unwrap();
+        assert!(created.interest_bearing);
+
+        repo.update(asset_with_interest_bearing("a1", false))
+            .await
+            .unwrap();
+        let updated = repo.get_by_id("a1").await.unwrap().unwrap();
+        assert!(!updated.interest_bearing);
+    }
+
+    // AST-024 — a raw seeded row (no interest_bearing column value) loads with
+    // the migration default of false.
+    #[tokio::test]
+    async fn seeded_asset_defaults_to_not_interest_bearing() {
+        let pool = setup_pool().await;
+        seed_asset(&pool, "a1").await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        let loaded = repo.get_by_id("a1").await.unwrap().unwrap();
+        assert!(!loaded.interest_bearing);
     }
 
     // MKT-156 — unblock_price_refresh clears the flag set by block.

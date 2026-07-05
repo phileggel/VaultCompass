@@ -94,6 +94,7 @@ export function useEditAssetModal({ asset, onClose }: UseEditAssetModalProps) {
       risk_level: formData.risk_level,
       category_id: formData.category_id,
       exchange: formData.exchange,
+      interest_bearing: asset.interest_bearing,
     });
 
     setIsSubmitting(false);

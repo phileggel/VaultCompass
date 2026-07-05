@@ -404,10 +404,11 @@ impl HoldingTransactionUseCase {
     /// Records an Interest credit on a held asset or the account's cash line
     /// (INT-011/023).
     ///
-    /// Cross-BC guards (INT-011): rejects if the account is unknown or the asset
-    /// is unknown. A Cash-class asset is always a valid target — the held check
-    /// is skipped for it (INT-023, the cash line is interest-bearing); a
-    /// non-cash asset must be currently held (quantity > 0).
+    /// Cross-BC guards (INT-011/012): rejects if the account is unknown or the
+    /// asset is unknown. A Cash-class asset is always a valid target — the
+    /// eligibility and held checks are skipped for it (INT-023, the cash line
+    /// is interest-bearing); a non-cash asset must be `interest_bearing`
+    /// (INT-012) and currently held (quantity > 0).
     /// The credit has no external cash leg (no `ensure_cash_asset` — the cash
     /// line only exists once a deposit created it) and never touches an
     /// `AssetPrice` row. Returns `InterestError`.
@@ -442,10 +443,14 @@ impl HoldingTransactionUseCase {
             Some(a) => a,
         };
 
+        // INT-012 — a non-cash asset must be interest-bearing;
         // INT-011 — a non-cash asset must be currently held (quantity > 0);
-        // INT-023 — the account's Cash Asset is always a valid target, so the
-        // held check is skipped for a Cash-class asset.
+        // INT-023 — the account's Cash Asset is always a valid target, so both
+        // checks are skipped for a Cash-class asset.
         if asset.class != AssetClass::Cash {
+            if !asset.interest_bearing {
+                return Err(InterestTask::InterestNotEligible.into());
+            }
             let held = self
                 .account_service
                 .get_holding_by_account_asset(account_id, &asset_id)
@@ -549,6 +554,14 @@ mod tests {
             risk_level: 1,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
+        }
+    }
+
+    fn interest_bearing_asset_dto() -> CreateAssetDTO {
+        CreateAssetDTO {
+            interest_bearing: true,
+            ..base_asset_dto()
         }
     }
 
@@ -1726,7 +1739,10 @@ mod tests {
 
         let pool = setup_pool().await;
         let (account_svc, asset_svc) = make_services(&pool);
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let asset = asset_svc
+            .create_asset(interest_bearing_asset_dto())
+            .await
+            .unwrap();
         let account = account_svc
             .create(
                 "Acc".to_string(),
@@ -1849,12 +1865,17 @@ mod tests {
         );
     }
 
-    // INT-011 — AssetNotHeld: a non-cash asset that is not currently held is rejected.
+    // INT-011 — AssetNotHeld: a non-cash asset that is not currently held is
+    // rejected (interest-bearing, so the INT-012 eligibility check passes and
+    // the held check is the one that fires).
     #[tokio::test]
     async fn record_interest_rejects_non_held_non_cash_asset() {
         let pool = setup_pool().await;
         let (account_svc, asset_svc) = make_services(&pool);
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let asset = asset_svc
+            .create_asset(interest_bearing_asset_dto())
+            .await
+            .unwrap();
         let account = account_svc
             .create(
                 "Acc".to_string(),
@@ -1885,8 +1906,65 @@ mod tests {
         );
     }
 
-    // INT-023 — the account's Cash Asset IS a valid target: the held check is
-    // skipped and the credit lands on the cash balance (1000 + 50 = 1050).
+    // INT-012 — InterestNotEligible: a held non-cash asset without the
+    // interest_bearing flag is rejected before the held check.
+    #[tokio::test]
+    async fn record_interest_rejects_non_interest_bearing_asset() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                String::new(),
+                "USD".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
+            .await
+            .unwrap();
+        uc.buy_holding(
+            &account.id,
+            asset.id.clone(),
+            "2024-01-15".to_string(),
+            micro(10),
+            micro(50),
+            micro(1),
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = uc
+            .record_interest(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                None,
+                Some(micro(5)),
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(
+                err,
+                InterestError::UseCase(InterestTask::InterestNotEligible)
+            ),
+            "expected UseCase(InterestNotEligible), got: {err:?}"
+        );
+    }
+
+    // INT-023 / INT-012 — the account's Cash Asset IS a valid target even
+    // though it is not interest_bearing-flagged: both the eligibility and held
+    // checks are skipped and the credit lands on the cash balance
+    // (1000 + 50 = 1050).
     #[tokio::test]
     async fn record_interest_accepts_cash_asset_and_credits_balance() {
         use crate::context::account::TransactionType;
@@ -1943,7 +2021,10 @@ mod tests {
     async fn record_interest_rejects_zero_quantity() {
         let pool = setup_pool().await;
         let (account_svc, asset_svc) = make_services(&pool);
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let asset = asset_svc
+            .create_asset(interest_bearing_asset_dto())
+            .await
+            .unwrap();
         let account = account_svc
             .create(
                 "Acc".to_string(),
@@ -1997,7 +2078,10 @@ mod tests {
     async fn record_interest_rejects_invalid_amount_specs() {
         let pool = setup_pool().await;
         let (account_svc, asset_svc) = make_services(&pool);
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let asset = asset_svc
+            .create_asset(interest_bearing_asset_dto())
+            .await
+            .unwrap();
         let account = account_svc
             .create(
                 "Acc".to_string(),
@@ -2088,7 +2172,10 @@ mod tests {
     async fn record_interest_rejects_future_date() {
         let pool = setup_pool().await;
         let (account_svc, asset_svc) = make_services(&pool);
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let asset = asset_svc
+            .create_asset(interest_bearing_asset_dto())
+            .await
+            .unwrap();
         let account = account_svc
             .create(
                 "Acc".to_string(),

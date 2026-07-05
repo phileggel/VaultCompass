@@ -32,6 +32,8 @@ pub struct CreateAssetDTO {
     pub category_id: String,
     /// Optional canonical trading venue (AST-021).
     pub exchange: Option<Exchange>,
+    /// Whether the asset is an eligible Interest-credit target (AST-024).
+    pub interest_bearing: bool,
 }
 
 /// Parameters for updating an existing asset.
@@ -55,6 +57,8 @@ pub struct UpdateAssetDTO {
     pub category_id: String,
     /// New optional canonical trading venue (AST-021 / AST-022).
     pub exchange: Option<Exchange>,
+    /// New Interest-credit eligibility (AST-024).
+    pub interest_bearing: bool,
 }
 
 // --- Assets ---

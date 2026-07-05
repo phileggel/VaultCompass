@@ -98,6 +98,10 @@ pub struct Asset {
     /// price. Independent of `is_archived`; toggled only by the dedicated
     /// `block_price_refresh` / `unblock_price_refresh` actions.
     pub price_refresh_blocked: bool,
+    /// When true, the asset is an eligible target for Interest credits
+    /// (AST-024 / INT-012). The account's Cash Asset is always eligible
+    /// regardless of this flag (INT-023).
+    pub interest_bearing: bool,
 }
 
 impl Asset {
@@ -112,6 +116,7 @@ impl Asset {
         reference: String,
         isin: Option<String>,
         exchange: Option<Exchange>,
+        interest_bearing: bool,
     ) -> StdResult<Self, AssetError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
@@ -130,6 +135,7 @@ impl Asset {
             is_archived: false,
             exchange,
             price_refresh_blocked: false,
+            interest_bearing,
         })
     }
 
@@ -147,6 +153,7 @@ impl Asset {
         is_archived: bool,
         exchange: Option<Exchange>,
         price_refresh_blocked: bool,
+        interest_bearing: bool,
     ) -> StdResult<Self, AssetError> {
         Self::validate(&name, risk_level, &currency, &reference, exchange.as_ref())?;
 
@@ -165,6 +172,7 @@ impl Asset {
             is_archived,
             exchange,
             price_refresh_blocked,
+            interest_bearing,
         })
     }
 
@@ -215,6 +223,7 @@ impl Asset {
         is_archived: bool,
         exchange: Option<Exchange>,
         price_refresh_blocked: bool,
+        interest_bearing: bool,
     ) -> Self {
         Self {
             id: asset_id,
@@ -228,6 +237,7 @@ impl Asset {
             is_archived,
             exchange,
             price_refresh_blocked,
+            interest_bearing,
         }
     }
 
@@ -272,6 +282,7 @@ impl Asset {
         reference: String,
         isin: Option<String>,
         exchange: Option<Exchange>,
+        interest_bearing: bool,
     ) -> Result<Self, AssetError> {
         self.ensure_user_managed()?;
         self.ensure_not_archived()?;
@@ -290,6 +301,7 @@ impl Asset {
             is_archived: self.is_archived,
             exchange,
             price_refresh_blocked: self.price_refresh_blocked,
+            interest_bearing,
         })
     }
 
@@ -373,6 +385,7 @@ mod aggregate_tests {
             archived,
             None,
             false,
+            false,
         )
     }
 
@@ -388,6 +401,7 @@ mod aggregate_tests {
             None,
             false,
             None,
+            false,
             false,
         )
     }
@@ -405,6 +419,7 @@ mod aggregate_tests {
                 "AAPL".into(),
                 None,
                 None,
+                false,
             )
             .unwrap_err();
         assert!(matches!(err, AssetError::CashAssetNotEditable));
@@ -423,6 +438,7 @@ mod aggregate_tests {
                 "AAPL".into(),
                 None,
                 None,
+                false,
             )
             .unwrap_err();
         assert!(matches!(err, AssetError::Archived));
@@ -441,6 +457,7 @@ mod aggregate_tests {
                 "AAPL".into(),
                 None,
                 None,
+                false,
             )
             .unwrap_err();
         assert!(matches!(err, AssetError::NameEmpty));
@@ -536,6 +553,7 @@ mod aggregate_tests {
                 "AAPL".into(),
                 None,
                 None,
+                false,
             )
             .unwrap();
         assert!(updated.price_refresh_blocked);
@@ -563,6 +581,7 @@ mod aggregate_tests {
                 "MSFT".into(),
                 None,
                 None,
+                false,
             )
             .unwrap();
         assert_eq!(updated.id, "a1");
@@ -588,6 +607,7 @@ mod aggregate_tests {
                 "  msft  ".into(),
                 None,
                 None,
+                false,
             )
             .unwrap();
         assert_eq!(updated.reference, "MSFT");
@@ -609,6 +629,7 @@ mod aggregate_tests {
             true,
             None,
             false,
+            false,
         );
         let err = archived_cash
             .update_from(
@@ -620,6 +641,7 @@ mod aggregate_tests {
                 "AAPL".into(),
                 None,
                 None,
+                false,
             )
             .unwrap_err();
         assert!(matches!(err, AssetError::CashAssetNotEditable));
@@ -652,6 +674,59 @@ mod aggregate_tests {
         assert_eq!(after.risk_level, before.risk_level);
         assert_eq!(after.reference, before.reference);
     }
+
+    // AST-024 — new() carries the interest_bearing opt-in through construction.
+    #[test]
+    fn new_carries_interest_bearing_flag() {
+        let asset = Asset::new(
+            "Euro Fund".into(),
+            AssetClass::MutualFunds,
+            AssetCategory::default(),
+            "EUR".into(),
+            2,
+            "EUROFUND".into(),
+            None,
+            None,
+            true,
+        )
+        .unwrap();
+        assert!(asset.interest_bearing);
+    }
+
+    // AST-024 — update_from can set and clear interest_bearing like any other
+    // editable field.
+    #[test]
+    fn update_from_sets_and_clears_interest_bearing() {
+        let flagged = equity("a1", false)
+            .update_from(
+                "Apple".into(),
+                AssetClass::Stocks,
+                AssetCategory::default(),
+                "USD".into(),
+                3,
+                "AAPL".into(),
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        assert!(flagged.interest_bearing);
+
+        let cleared = flagged
+            .update_from(
+                "Apple".into(),
+                AssetClass::Stocks,
+                AssetCategory::default(),
+                "USD".into(),
+                3,
+                "AAPL".into(),
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+        assert!(!cleared.interest_bearing);
+    }
 }
 
 #[cfg(test)]
@@ -670,6 +745,7 @@ mod isin_tests {
             "AAPL".into(),
             None,
             None,
+            false,
         )
         .unwrap();
         assert!(asset.isin.is_none());
@@ -688,6 +764,7 @@ mod isin_tests {
             "CSPX".into(),
             Some("  ie00b53l3w79  ".into()),
             None,
+            false,
         )
         .unwrap();
         assert_eq!(asset.isin.as_deref(), Some("IE00B53L3W79"));
@@ -707,6 +784,7 @@ mod isin_tests {
             "AAPL".into(),
             Some("IE00B53L3W7".into()),
             None,
+            false,
         )
         .unwrap_err();
         assert!(matches!(err, AssetError::InvalidIsinFormat));
@@ -725,6 +803,7 @@ mod isin_tests {
             "AAPL".into(),
             Some("IE00B53L3W70".into()),
             None,
+            false,
         )
         .unwrap_err();
         assert!(matches!(err, AssetError::InvalidIsinFormat));
@@ -743,6 +822,7 @@ mod isin_tests {
             "AAPL".into(),
             None,
             None,
+            false,
         )
         .unwrap();
         // Set
@@ -757,6 +837,7 @@ mod isin_tests {
                 "AAPL".into(),
                 Some("US0378331005".into()),
                 None,
+                false,
             )
             .unwrap();
         assert_eq!(with_isin.isin.as_deref(), Some("US0378331005"));
@@ -771,6 +852,7 @@ mod isin_tests {
                 "AAPL".into(),
                 None,
                 None,
+                false,
             )
             .unwrap();
         assert!(cleared.isin.is_none());
@@ -808,6 +890,7 @@ mod exchange_tests {
             false,
             exchange,
             false,
+            false,
         )
     }
 
@@ -838,6 +921,7 @@ mod exchange_tests {
             "AAPL".to_string(),
             None,
             None,
+            false,
         );
         assert!(result.is_ok());
         assert!(result.unwrap().exchange.is_none());
@@ -855,6 +939,7 @@ mod exchange_tests {
             "AI".to_string(),
             None,
             Some(xpar()),
+            false,
         );
         assert!(result.is_ok());
         let asset = result.unwrap();
@@ -874,6 +959,7 @@ mod exchange_tests {
             "REF".to_string(),
             None,
             Some(bogus_exchange()),
+            false,
         )
         .unwrap_err();
         assert!(
@@ -896,6 +982,7 @@ mod exchange_tests {
                 "AAPL".to_string(),
                 None,
                 None,
+                false,
             )
             .unwrap();
         assert!(updated.exchange.is_none());
@@ -915,6 +1002,7 @@ mod exchange_tests {
                 "AI".to_string(),
                 None,
                 Some(xpar()),
+                false,
             )
             .unwrap();
         let exchange = updated
@@ -939,6 +1027,7 @@ mod exchange_tests {
                 "AI".to_string(),
                 None,
                 Some(xpar()),
+                false,
             )
             .unwrap();
         let exchange = updated
@@ -961,6 +1050,7 @@ mod exchange_tests {
                 "REF".to_string(),
                 None,
                 Some(bogus_exchange()),
+                false,
             )
             .unwrap_err();
         assert!(

@@ -58,6 +58,7 @@ const makeAsset = (overrides: Partial<Asset> = {}): Asset => ({
   category: { id: "cat-1", name: "US Stocks" },
   is_archived: false,
   price_refresh_blocked: false,
+  interest_bearing: false,
   ...overrides,
   exchange: null,
 });
@@ -110,6 +111,7 @@ describe("useAssets", () => {
       reference: "AAPL",
       isin: null,
       exchange: null,
+      interest_bearing: false,
     };
     await act(async () => {
       ret = await result.current.addAsset(dto);
@@ -140,6 +142,7 @@ describe("useAssets", () => {
       reference: "AAPL",
       isin: null,
       exchange: null,
+      interest_bearing: false,
     };
     await act(async () => {
       ret = await result.current.addAsset(dto);
@@ -164,6 +167,7 @@ describe("useAssets", () => {
       reference: "AAPL",
       isin: null,
       exchange: null,
+      interest_bearing: false,
     };
     let ret: { data: Asset | null; error: I18nMessage | null } = {
       data: null,
@@ -194,6 +198,7 @@ describe("useAssets", () => {
       reference: "AAPL",
       isin: null,
       exchange: null,
+      interest_bearing: false,
     };
     let ret: { data: Asset | null; error: I18nMessage | null } = {
       data: null,

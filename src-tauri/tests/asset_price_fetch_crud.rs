@@ -232,6 +232,7 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
                 code: "XPAR".to_string(),
                 label: "Euronext Paris".to_string(),
             }),
+            interest_bearing: false,
         })
         .await
         .expect("seed asset with XPAR exchange");
@@ -353,6 +354,7 @@ async fn fetch_for_account_skips_locked_asset() {
             risk_level: 4,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset");
@@ -463,6 +465,7 @@ async fn fetch_for_account_includes_unblocked_asset() {
             risk_level: 4,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset");
@@ -573,6 +576,7 @@ async fn fetch_publishes_completion_event_with_counts() {
             risk_level: 4,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset");
@@ -708,6 +712,7 @@ async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_p
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset");
@@ -883,6 +888,7 @@ async fn fetch_completion_unpriced_entry_has_none_last_price_when_never_priced()
             risk_level: 2,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset");
@@ -1019,6 +1025,7 @@ async fn fetch_completion_unpriced_list_excludes_successfully_fetched_asset() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset");
@@ -1160,6 +1167,7 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset ok");
@@ -1173,6 +1181,7 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed asset err");
@@ -1325,6 +1334,7 @@ async fn fetch_completion_locked_asset_absent_from_unpriced_list() {
             risk_level: 3,
             category_id: SYSTEM_CATEGORY_ID.to_string(),
             exchange: None,
+            interest_bearing: false,
         })
         .await
         .expect("seed locked asset");

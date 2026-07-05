@@ -57,6 +57,7 @@ const baseAsset: Asset = {
   category: { id: "cat-1", name: "Stocks" },
   is_archived: false,
   price_refresh_blocked: false,
+  interest_bearing: false,
   exchange: null,
 };
 

@@ -55,6 +55,7 @@ const seedAsset: Asset = {
   isin: null,
   is_archived: false,
   price_refresh_blocked: false,
+  interest_bearing: false,
   exchange: null,
 };
 

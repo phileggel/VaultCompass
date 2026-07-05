@@ -48,6 +48,10 @@ Optional canonical market identifier where the instrument is listed. Stored as a
 
 Indicates whether the asset is archived (removed from active lists). An archived asset retains all its historical data but cannot be modified or receive new prices.
 
+### `interest_bearing`
+
+Opt-in flag marking the asset as an eligible target for Interest credits (see AST-024 and `docs/spec/interest-credit.md` INT-012). Off by default; typically enabled for cash-like fund lines such as a "fonds en euros". The account's Cash Asset is always interest-eligible regardless of this flag (INT-023).
+
 ---
 
 ## Entity Definition
@@ -142,6 +146,8 @@ The table displays only active assets (`is_archived = false`) by default. A page
 **AST-022 — Exchange persistence (backend)**: The backend accepts the submitted `Exchange` value as-is and persists it without transformation. Editing an asset MAY freely set, change, or clear `exchange` (subject to AST-005 and AST-001).
 
 **AST-023 — Optional ISIN field (backend)**: An asset MAY carry an optional `isin: Option<String>`. When present, `isin` MUST satisfy the ISIN format validation defined in WEB-016 (12 characters, ASCII alphanumeric with letter prefix and digit suffix, Luhn-mod-10 check digit); the trimmed + uppercased form is the value persisted. When absent, the asset has no canonical ISO 6166 identity (typical for non-quoted assets or assets discovered via the keyword path of web lookup). The `isin` field is independent of `reference`: both may be populated for quoted assets discovered via the ISIN path. Editing an asset MAY freely set, change, or clear `isin` (subject to AST-005 and AST-001).
+
+**AST-024 — Interest-bearing opt-in flag (backend)**: An asset carries an `interest_bearing: bool` flag, `false` by default. The flag is set at creation and freely editable afterwards (subject to AST-005), persisted as-is with no validation of its own. It marks the asset as an eligible target for Interest credits: the interest record path rejects a non-cash, non-`interest_bearing` target (INT-012), and the interest modal's asset selector only lists flagged non-cash holdings (INT-020). The account's Cash Asset is always interest-eligible regardless of this flag (INT-023); the flag has no effect on a Cash-class asset.
 
 ---
 
