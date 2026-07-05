@@ -24,7 +24,13 @@ export async function seedAccount(
       // @ts-expect-error __TAURI_INTERNALS__ injected by Tauri WebView
       window.__TAURI_INTERNALS__
         .invoke("add_account", {
-          dto: { name: n, currency: c, update_frequency: freq, management_fees_enabled: fees },
+          dto: {
+            name: n,
+            currency: c,
+            update_frequency: freq,
+            management_fees_enabled: fees,
+            bank_name: "",
+          },
         })
         .then(done)
         .catch((err: unknown) => done({ __error: String(err) }));
@@ -57,6 +63,7 @@ export async function seedAsset(
             category_id: catId,
             currency: "EUR",
             risk_level: 3,
+            interest_bearing: false,
           },
         })
         .then(done)
@@ -130,6 +137,7 @@ export async function seedBuy(
             unit_price: 100_000_000,
             exchange_rate: 1_000_000,
             fees: 0,
+            total_amount: null,
             note: "",
           },
         })

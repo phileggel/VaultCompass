@@ -141,6 +141,7 @@ describe("asset_exchange", () => {
               currency: "EUR",
               risk_level: 3,
               category_id: catId,
+              interest_bearing: false,
               exchange: { code: "XPAR", label: "Euronext Paris" },
             },
           })
@@ -227,6 +228,7 @@ describe("asset_exchange", () => {
               currency: "EUR",
               risk_level: 3,
               category_id: catId,
+              interest_bearing: false,
               exchange: { code: "XPAR", label: "Euronext Paris" },
             },
           })
