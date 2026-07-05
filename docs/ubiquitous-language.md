@@ -50,6 +50,15 @@ The aggregate root of the asset context. Represents a financial instrument
 
 > Status: confirmed
 
+### Interest-Bearing
+
+An asset attribute marking a line as a valid interest target — a cash-like
+fund line ("fonds en euros") that capitalizes interest. Only interest-bearing
+assets can receive an `Interest` credit; the Cash Asset is always
+interest-eligible regardless of this attribute.
+
+> Status: confirmed
+
 ### AssetPrice
 
 An internal entity of `Asset`. A price observation for an asset on a given date, with a `source` field (see `AssetPriceSource`) qualifying its provenance.
