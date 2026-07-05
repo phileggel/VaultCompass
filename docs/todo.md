@@ -2,10 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (frontend) — INT: interest-bearing flag UI (checkbox + selector filter)
-
-The backend half of the per-asset `interest_bearing` opt-in flag shipped (AST-024 / INT-012: migration, Asset field, DTO threading, `InterestNotEligible` rejection in `record_interest`). Remaining frontend half: checkbox on the asset create/edit forms and the `interest_bearing`-filter on the interest modal's asset selector (INT-020) — the cash line stays always listed.
-
 ## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
 
 `docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.
