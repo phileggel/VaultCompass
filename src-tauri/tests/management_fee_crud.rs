@@ -248,7 +248,7 @@ async fn record_management_fee_performance_neutrality() {
     .unwrap();
 
     let resp = perf_use_case
-        .get_account_performance(&account.id)
+        .get_account_performance(&account.id, None)
         .await
         .unwrap();
 

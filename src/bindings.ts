@@ -581,11 +581,12 @@ async getAccountSummaries() : Promise<Result<AccountSummary[], AccountError>> {
 }
 },
 /**
- * Returns per-period performance figures for a single account (PRF spec).
+ * Returns per-period performance figures for a single account (PRF spec),
+ * optionally scoped to one asset's position (PRF-080).
  */
-async getAccountPerformance(accountId: string) : Promise<Result<AccountPerformanceResponse, AccountError>> {
+async getAccountPerformance(accountId: string, assetId: string | null) : Promise<Result<AccountPerformanceResponse, AccountError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("get_account_performance", { accountId }) };
+    return { status: "ok", data: await TAURI_INVOKE("get_account_performance", { accountId, assetId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -2487,7 +2488,10 @@ gain: number;
  */
 pct: number | null }
 /**
- * One calendar period row (PRF-020, PRF-040).
+ * One calendar period row (PRF-020, PRF-040). In an asset-scoped read
+ * (PRF-080) every value describes the scoped position instead of the whole
+ * account: `end_value` per PRF-082, the metrics per PRF-083, the bridge terms
+ * per PRF-084 (where `dividends` sits outside the bridge identity).
  */
 export type PerformancePeriod = { 
 /**

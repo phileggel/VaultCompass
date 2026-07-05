@@ -1174,7 +1174,10 @@ mod tests {
             asset_svc.clone(),
             make_no_rate_svc(),
         );
-        let perf_resp = perf_uc.get_account_performance(&account.id).await.unwrap();
+        let perf_resp = perf_uc
+            .get_account_performance(&account.id, None)
+            .await
+            .unwrap();
         let current_month = chrono::Local::now().date_naive().month() as u8;
         let latest_month_row = perf_resp
             .monthly

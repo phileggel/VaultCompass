@@ -1,7 +1,7 @@
 //! Stateless cross-context valuation primitives shared by the account performance
 //! and account summary use cases (PRF / FXR / ADR-013). Owned by neither use case.
 
-use crate::context::account::{AccountError, Transaction, TransactionType};
+use crate::context::account::{Account, AccountError, Transaction, TransactionType};
 use crate::context::asset::{AssetClass, AssetPrice, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
@@ -546,25 +546,26 @@ pub(crate) fn metric_for_span(
     PerformanceMetric { gain, pct }
 }
 
-/// ACD-056/057 — Simple Dietz position return for ONE asset over the window
-/// `[period_start, period_end]`, in micro-percent. Unlike the account-level
-/// `metric_for_span`, the external flows of a position are its own Purchase
-/// (`+total_amount`), Sell (`−total_amount`) and OpeningBalance (`+total_amount`)
-/// transactions — Deposit/Withdrawal move the account's cash, not the position —
-/// and dividends received inside the window are added to the gain (DIV-071
-/// semantics): `gain = end_value − start_value − net_flow + dividends`.
+/// ACD-056/057 / PRF-083 — Simple Dietz position performance for ONE asset over
+/// the window `[period_start, period_end]`: net-of-flows gain plus micro-percent.
+/// Unlike the account-level `metric_for_span`, the external flows of a position
+/// are its own Purchase (`+total_amount`), Sell (`−total_amount`) and
+/// OpeningBalance (`+total_amount`) transactions — Deposit/Withdrawal move the
+/// account's cash, not the position — and dividends received inside the window
+/// are added to the gain (DIV-071 semantics):
+/// `gain = end_value − start_value − net_flow + dividends`.
 ///
 /// `asset_transactions` must be pre-filtered to the asset being measured.
-/// Returns `None` when the Dietz denominator
+/// `pct` is `None` when the Dietz denominator
 /// (`start_value + Σ flow × days_remaining / days_in_period`) is not positive —
 /// which covers the not-held-and-no-flows case.
-pub(crate) fn holding_metric_for_span(
+pub(crate) fn holding_performance_for_span(
     asset_transactions: &[&Transaction],
     start_value: i64,
     end_value: i64,
     period_start: NaiveDate,
     period_end: NaiveDate,
-) -> Option<i64> {
+) -> PerformanceMetric {
     let days_in_period = (period_end - period_start).num_days();
     let mut net_flow: i128 = 0;
     let mut weighted_flow: i128 = 0;
@@ -600,11 +601,89 @@ pub(crate) fn holding_metric_for_span(
     }
 
     let gain = end_value as i128 - start_value as i128 - net_flow + dividends;
+    debug_assert!(
+        gain <= i64::MAX as i128 && gain >= i64::MIN as i128,
+        "holding_performance_for_span gain i64 overflow: {gain}"
+    );
     let denominator = start_value as i128 + weighted_flow;
-    if denominator <= 0 {
-        return None;
+    let pct = if denominator <= 0 {
+        None
+    } else {
+        Some((gain * PERCENT_SCALE / denominator) as i64)
+    };
+    PerformanceMetric {
+        gain: gain as i64,
+        pct,
     }
-    Some((gain * PERCENT_SCALE / denominator) as i64)
+}
+
+/// ACD-056/057 — the percentage of `holding_performance_for_span`, for callers
+/// that only consume the micro-percent.
+pub(crate) fn holding_metric_for_span(
+    asset_transactions: &[&Transaction],
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> Option<i64> {
+    holding_performance_for_span(
+        asset_transactions,
+        start_value,
+        end_value,
+        period_start,
+        period_end,
+    )
+    .pct
+}
+
+/// PRF-082 — market value of ONE asset's position as of `period_end`, in
+/// account-currency micros: the quantity reconstructed from the asset's
+/// transaction replay (PRF-021) valued at the carry-forward price (PRF-022) and
+/// the FX rate at `period_end` (FXR-042). Contributes 0 when the position is not
+/// held, when the asset has no usable price or rate as of the date (PRF-022 /
+/// FXR-034), or when the scoped asset is the Cash class — mirroring the
+/// priced-holding path of `end_value_as_of`, which never values the cash line as
+/// a holding.
+pub(crate) fn holding_end_value_as_of(
+    asset_transactions: &[Transaction],
+    asset_id: &str,
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    period_end: NaiveDate,
+) -> i64 {
+    let quantity = Account::reconstruct_holding_as_of(
+        asset_transactions,
+        asset_id,
+        &period_end.format("%Y-%m-%d").to_string(),
+    )
+    .quantity;
+    if quantity <= 0 {
+        return 0;
+    }
+    let Some(priced) = priced_assets.get(asset_id) else {
+        return 0;
+    };
+    if priced.class == AssetClass::Cash {
+        return 0;
+    }
+    let Some(price) = priced.price_as_of(period_end).map(|p| p as i128) else {
+        return 0;
+    };
+    let quantity = quantity as i128;
+    let value = if priced.currency == account_currency {
+        quantity * price / MICRO
+    } else if let Some(rate) = rate_map.get(&(priced.currency.clone(), period_end)) {
+        let converted_price = price * (*rate as i128) / MICRO;
+        quantity * converted_price / MICRO
+    } else {
+        0
+    };
+    debug_assert!(
+        value <= i64::MAX as i128 && value >= i64::MIN as i128,
+        "holding_end_value_as_of i64 overflow: {value}"
+    );
+    value as i64
 }
 
 #[cfg(test)]

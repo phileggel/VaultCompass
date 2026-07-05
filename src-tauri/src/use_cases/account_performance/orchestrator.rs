@@ -4,9 +4,9 @@ use crate::context::account::{
 use crate::context::asset::{AssetClass, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::use_cases::shared::valuation::{
-    end_value_as_of, load_priced_assets, load_rate_map, metric_for_span, month_periods, parse_date,
-    year_periods, MonthPeriod, PerformanceMetric, PricedAsset, RateMap, YearPeriod, MICRO,
-    PERCENT_SCALE,
+    end_value_as_of, holding_end_value_as_of, holding_performance_for_span, load_priced_assets,
+    load_rate_map, metric_for_span, month_periods, parse_date, year_periods, MonthPeriod,
+    PerformanceMetric, PricedAsset, RateMap, YearPeriod, MICRO, PERCENT_SCALE,
 };
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
@@ -19,7 +19,10 @@ use std::sync::Arc;
 /// span into fractional years for the annualized-yield calculation.
 const DAYS_PER_YEAR: f64 = 365.25;
 
-/// One calendar period row (PRF-020, PRF-040).
+/// One calendar period row (PRF-020, PRF-040). In an asset-scoped read
+/// (PRF-080) every value describes the scoped position instead of the whole
+/// account: `end_value` per PRF-082, the metrics per PRF-083, the bridge terms
+/// per PRF-084 (where `dividends` sits outside the bridge identity).
 #[derive(Debug, Serialize, Clone, Type)]
 pub struct PerformancePeriod {
     /// Calendar year of this row.
@@ -93,10 +96,12 @@ impl AccountPerformanceUseCase {
         }
     }
 
-    /// Computes per-period performance for a single account (PRF-016, PRF-020–035, PRF-040–043).
+    /// Computes per-period performance for a single account (PRF-016, PRF-020–035,
+    /// PRF-040–043), optionally scoped to one asset's position (PRF-080–084).
     pub async fn get_account_performance(
         &self,
         account_id: &str,
+        asset_id: Option<&str>,
     ) -> StdResult<AccountPerformanceResponse, AccountError> {
         let account = self
             .account_service
@@ -115,8 +120,18 @@ impl AccountPerformanceUseCase {
             .account_service
             .get_all_transactions_for_account(account_id)
             .await?;
+        // PRF-080/081 — an asset scope narrows the whole computation to that one
+        // asset's transactions; every downstream figure derives from this set.
+        let transactions: Vec<Transaction> = match asset_id {
+            None => transactions,
+            Some(asset_id) => transactions
+                .into_iter()
+                .filter(|transaction| transaction.asset_id == asset_id)
+                .collect(),
+        };
 
-        // PRF-043 — no transactions means no data span and an empty result.
+        // PRF-043 / PRF-081 — no transactions in scope means no data span and an
+        // empty result.
         let earliest_date = match transactions
             .iter()
             .filter_map(|t| parse_date(&t.date))
@@ -155,6 +170,7 @@ impl AccountPerformanceUseCase {
             &account.currency,
             earliest_date,
             today,
+            asset_id,
         );
         let monthly = if month_view_available {
             self.build_monthly(
@@ -164,6 +180,7 @@ impl AccountPerformanceUseCase {
                 &account.currency,
                 earliest_date,
                 today,
+                asset_id,
             )
         } else {
             Vec::new()
@@ -179,6 +196,7 @@ impl AccountPerformanceUseCase {
     }
 
     /// Builds the yearly series, most-recent first (PRF-012, PRF-040, PRF-041).
+    #[allow(clippy::too_many_arguments)]
     fn build_yearly(
         &self,
         transactions: &[Transaction],
@@ -187,6 +205,7 @@ impl AccountPerformanceUseCase {
         account_currency: &str,
         earliest_date: NaiveDate,
         today: NaiveDate,
+        asset_scope: Option<&str>,
     ) -> Vec<PerformancePeriod> {
         // PRF-040 — the span opens on the period containing the first transaction.
         // PRF-042 — that earliest row has no preceding period, so its
@@ -201,23 +220,25 @@ impl AccountPerformanceUseCase {
             period_end,
         } in periods
         {
-            let end_value = end_value_as_of(
+            let end_value = end_value_for_scope(
                 transactions,
                 priced_assets,
                 rate_map,
                 account_currency,
                 period_end,
+                asset_scope,
             );
 
             let period_over_period = if year == first_year {
                 None
             } else {
-                Some(metric_for_span(
+                Some(metric_for_scope(
                     transactions,
                     previous_end_value,
                     end_value,
                     period_start,
                     period_end,
+                    asset_scope,
                 ))
             };
             let since_inception = Some(since_inception_metric(
@@ -225,31 +246,22 @@ impl AccountPerformanceUseCase {
                 end_value,
                 earliest_date,
                 period_end,
+                asset_scope,
             ));
             // Annualize the cumulative since-inception return over the elapsed years.
             let annualized_yield = since_inception
                 .as_ref()
                 .and_then(|metric| annualized_yield_metric(metric, earliest_date, period_end));
-            let bridge = period_bridge(
+            let bridge = bridge_for_scope(
                 transactions,
                 priced_assets,
                 rate_map,
                 account_currency,
                 period_start,
                 period_end,
+                asset_scope,
             );
-            // PRF-073 — pnl as the residual: makes the bridge balance exactly and equals
-            // realized gains + price movement by the value decomposition (PRF-074).
-            let pnl: i128 = end_value as i128
-                - previous_end_value as i128
-                - bridge.cash_flow as i128
-                - bridge.asset_flow as i128
-                - bridge.dividends as i128;
-            debug_assert!(
-                pnl <= i64::MAX as i128 && pnl >= i64::MIN as i128,
-                "pnl residual i64 overflow"
-            );
-            let pnl = pnl as i64;
+            let pnl = residual_pnl(end_value, previous_end_value, &bridge, asset_scope);
 
             rows.push(PerformancePeriod {
                 year,
@@ -273,6 +285,7 @@ impl AccountPerformanceUseCase {
     }
 
     /// Builds the monthly series over the full span, most-recent first (PRF-040, PRF-041).
+    #[allow(clippy::too_many_arguments)]
     fn build_monthly(
         &self,
         transactions: &[Transaction],
@@ -281,6 +294,7 @@ impl AccountPerformanceUseCase {
         account_currency: &str,
         earliest_date: NaiveDate,
         today: NaiveDate,
+        asset_scope: Option<&str>,
     ) -> Vec<PerformancePeriod> {
         // PRF-040 — the span opens on the month containing the first transaction.
         // PRF-042 — that earliest row has no preceding period, so its
@@ -298,41 +312,45 @@ impl AccountPerformanceUseCase {
             year_start_baseline,
         } in periods
         {
-            let end_value = end_value_as_of(
+            let end_value = end_value_for_scope(
                 transactions,
                 priced_assets,
                 rate_map,
                 account_currency,
                 period_end,
+                asset_scope,
             );
 
             let is_first_period = year == first_year && month == first_month;
             let period_over_period = if is_first_period {
                 None
             } else {
-                Some(metric_for_span(
+                Some(metric_for_scope(
                     transactions,
                     previous_end_value,
                     end_value,
                     period_start,
                     period_end,
+                    asset_scope,
                 ))
             };
 
             // PRF-034 — year-to-date baseline is the prior 31 December end value.
-            let year_start_baseline_value = end_value_as_of(
+            let year_start_baseline_value = end_value_for_scope(
                 transactions,
                 priced_assets,
                 rate_map,
                 account_currency,
                 year_start_baseline,
+                asset_scope,
             );
-            let year_to_date = Some(metric_for_span(
+            let year_to_date = Some(metric_for_scope(
                 transactions,
                 year_start_baseline_value,
                 end_value,
                 year_start,
                 period_end,
+                asset_scope,
             ));
 
             let since_inception = Some(since_inception_metric(
@@ -340,26 +358,18 @@ impl AccountPerformanceUseCase {
                 end_value,
                 earliest_date,
                 period_end,
+                asset_scope,
             ));
-            let bridge = period_bridge(
+            let bridge = bridge_for_scope(
                 transactions,
                 priced_assets,
                 rate_map,
                 account_currency,
                 period_start,
                 period_end,
+                asset_scope,
             );
-            // PRF-073 — pnl as the residual (see build_yearly).
-            let pnl: i128 = end_value as i128
-                - previous_end_value as i128
-                - bridge.cash_flow as i128
-                - bridge.asset_flow as i128
-                - bridge.dividends as i128;
-            debug_assert!(
-                pnl <= i64::MAX as i128 && pnl >= i64::MIN as i128,
-                "pnl residual i64 overflow"
-            );
-            let pnl = pnl as i64;
+            let pnl = residual_pnl(end_value, previous_end_value, &bridge, asset_scope);
 
             rows.push(PerformancePeriod {
                 year,
@@ -507,6 +517,199 @@ fn zero_cost_credit_value(
     }
 }
 
+/// PRF-020 (account scope) / PRF-082 (asset scope) — the value a period row
+/// reports as of `period_end`: the account's Global Value, or the scoped asset's
+/// position market value.
+fn end_value_for_scope(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    period_end: NaiveDate,
+    asset_scope: Option<&str>,
+) -> i64 {
+    match asset_scope {
+        None => end_value_as_of(
+            transactions,
+            priced_assets,
+            rate_map,
+            account_currency,
+            period_end,
+        ),
+        Some(asset_id) => holding_end_value_as_of(
+            transactions,
+            asset_id,
+            priced_assets,
+            rate_map,
+            account_currency,
+            period_end,
+        ),
+    }
+}
+
+/// PRF-031/032 (account scope) / PRF-083 (asset scope) — the span metric with
+/// the flow set matching the scope: Deposit/Withdrawal/OpeningBalance for the
+/// account, the asset's own Purchase/Sell/OpeningBalance (dividends added to
+/// gain) for a scoped position.
+fn metric_for_scope(
+    transactions: &[Transaction],
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+    asset_scope: Option<&str>,
+) -> PerformanceMetric {
+    match asset_scope {
+        None => metric_for_span(
+            transactions,
+            start_value,
+            end_value,
+            period_start,
+            period_end,
+        ),
+        Some(_) => {
+            let asset_transactions: Vec<&Transaction> = transactions.iter().collect();
+            holding_performance_for_span(
+                &asset_transactions,
+                start_value,
+                end_value,
+                period_start,
+                period_end,
+            )
+        }
+    }
+}
+
+/// PRF-070–072 (account scope) / PRF-084 (asset scope) — the bridge flow terms
+/// for the scope the series describes.
+#[allow(clippy::too_many_arguments)]
+fn bridge_for_scope(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+    asset_scope: Option<&str>,
+) -> PeriodBridge {
+    match asset_scope {
+        None => period_bridge(
+            transactions,
+            priced_assets,
+            rate_map,
+            account_currency,
+            period_start,
+            period_end,
+        ),
+        Some(_) => holding_period_bridge(
+            transactions,
+            priced_assets,
+            rate_map,
+            account_currency,
+            period_start,
+            period_end,
+        ),
+    }
+}
+
+/// PRF-084 — the bridge flow terms for one asset's position within
+/// `[period_start, period_end]`. `cash_flow` is the net money the position
+/// absorbed or released through trades: Purchase (`+total_amount`),
+/// OpeningBalance (`+total_amount`), Sell (`−total_amount`). `asset_flow` is the
+/// zero-cost in-kind credits (free shares, non-cash interest) at their
+/// period-end market value (PRF-071 valuation). `dividends` is the asset's
+/// dividend income within the period — income that accrues to the account's
+/// cash, not to the scoped position value, so `residual_pnl` leaves it outside
+/// the scoped bridge identity.
+///
+/// `transactions` must be pre-filtered to the scoped asset.
+fn holding_period_bridge(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> PeriodBridge {
+    let mut cash_flow: i128 = 0;
+    let mut asset_flow: i128 = 0;
+    let mut dividends: i128 = 0;
+
+    for transaction in transactions {
+        let within = matches!(
+            parse_date(&transaction.date),
+            Some(date) if date >= period_start && date <= period_end
+        );
+        if !within {
+            continue;
+        }
+        match transaction.transaction_type {
+            TransactionType::Purchase | TransactionType::OpeningBalance => {
+                cash_flow += transaction.total_amount as i128;
+            }
+            TransactionType::Sell => cash_flow -= transaction.total_amount as i128,
+            TransactionType::Dividend => dividends += transaction.total_amount as i128,
+            // FSD-070 / INT-024 — zero-cost in-kind credits valued at the
+            // period-end carry-forward market price (0 for the Cash class).
+            TransactionType::FreeShares | TransactionType::Interest => {
+                asset_flow += zero_cost_credit_value(
+                    transaction,
+                    priced_assets,
+                    rate_map,
+                    account_currency,
+                    period_end,
+                );
+            }
+            // Deposit/Withdrawal move the account's cash, never a position;
+            // FEE-071 — a management fee's drag surfaces via the reduced
+            // position value at period end, not as a flow.
+            TransactionType::Deposit
+            | TransactionType::Withdrawal
+            | TransactionType::ManagementFee => {}
+        }
+    }
+
+    debug_assert!(
+        [cash_flow, asset_flow, dividends]
+            .iter()
+            .all(|v| *v <= i64::MAX as i128 && *v >= i64::MIN as i128),
+        "holding_period_bridge i64 overflow: cash_flow={cash_flow} asset_flow={asset_flow} dividends={dividends}"
+    );
+    PeriodBridge {
+        cash_flow: cash_flow as i64,
+        asset_flow: asset_flow as i64,
+        dividends: dividends as i64,
+    }
+}
+
+/// PRF-073 — pnl as the bridge residual: makes the bridge balance exactly and
+/// equals realized gains + price movement by the value decomposition (PRF-074).
+/// In asset scope (PRF-084) the dividend income accrues to the account's cash,
+/// outside the scoped position value, so it stays out of the residual and the
+/// scoped identity is `end_value = previous_value + cash_flow + asset_flow + pnl`.
+fn residual_pnl(
+    end_value: i64,
+    previous_value: i64,
+    bridge: &PeriodBridge,
+    asset_scope: Option<&str>,
+) -> i64 {
+    let dividends: i128 = if asset_scope.is_some() {
+        0
+    } else {
+        bridge.dividends as i128
+    };
+    let pnl: i128 = end_value as i128
+        - previous_value as i128
+        - bridge.cash_flow as i128
+        - bridge.asset_flow as i128
+        - dividends;
+    debug_assert!(
+        pnl <= i64::MAX as i128 && pnl >= i64::MIN as i128,
+        "pnl residual i64 overflow"
+    );
+    pnl as i64
+}
+
 /// PRF-035 — since-inception metric: start value is 0 and the flow is the total
 /// net invested over the lifetime span `[inception_start, period_end]`.
 fn since_inception_metric(
@@ -514,8 +717,16 @@ fn since_inception_metric(
     end_value: i64,
     earliest_date: NaiveDate,
     period_end: NaiveDate,
+    asset_scope: Option<&str>,
 ) -> PerformanceMetric {
-    metric_for_span(transactions, 0, end_value, earliest_date, period_end)
+    metric_for_scope(
+        transactions,
+        0,
+        end_value,
+        earliest_date,
+        period_end,
+        asset_scope,
+    )
 }
 
 /// Annualized cumulative since-inception return (CAGR) for a year row. Annualizes
@@ -605,7 +816,7 @@ mod tests {
             make_currency_service_with_no_rate(),
         );
         let err = uc
-            .get_account_performance("nonexistent-id")
+            .get_account_performance("nonexistent-id", None)
             .await
             .unwrap_err();
         assert!(
@@ -638,7 +849,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(resp.yearly.is_empty(), "no transactions → empty yearly");
         assert!(resp.monthly.is_empty(), "no transactions → empty monthly");
     }
@@ -663,7 +874,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             resp.month_view_available,
             "Automatic → month_view_available must be true"
@@ -690,7 +901,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             resp.month_view_available,
             "ManualDay → month_view_available must be true"
@@ -717,7 +928,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             resp.month_view_available,
             "ManualWeek → month_view_available must be true"
@@ -744,7 +955,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             !resp.month_view_available,
             "ManualMonth → month_view_available must be false"
@@ -771,7 +982,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             !resp.month_view_available,
             "ManualYear → month_view_available must be false"
@@ -803,7 +1014,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             resp.monthly.is_empty(),
             "ManualMonth → monthly must be empty even with transactions"
@@ -836,7 +1047,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         // Year row for 2024 must have end_value >= 1_000_000_000 (deposit is included)
         let year_2024 = resp
             .yearly
@@ -880,7 +1091,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let years: Vec<i32> = resp.yearly.iter().map(|p| p.year).collect();
         assert!(
             years.contains(&2022),
@@ -922,7 +1133,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let years: Vec<i32> = resp.yearly.iter().map(|p| p.year).collect();
         // Verify descending order
         let is_descending = years.windows(2).all(|w| w[0] >= w[1]);
@@ -961,7 +1172,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let pairs: Vec<(i32, u8)> = resp
             .monthly
             .iter()
@@ -1006,7 +1217,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         for row in &resp.yearly {
             assert!(
                 row.year_to_date.is_none(),
@@ -1042,7 +1253,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2024 = resp
             .yearly
             .iter()
@@ -1132,7 +1343,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let march_row = resp
             .monthly
             .iter()
@@ -1193,7 +1404,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let january = resp
             .monthly
             .iter()
@@ -1234,7 +1445,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         // The earliest year row has no preceding period
         let earliest_year = resp.yearly.iter().min_by_key(|p| p.year).unwrap();
         assert!(
@@ -1272,7 +1483,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2024 = resp
             .yearly
             .iter()
@@ -1310,7 +1521,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let jan = resp
             .monthly
             .iter()
@@ -1350,7 +1561,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         for row in &resp.yearly {
             assert!(
                 row.since_inception.is_some(),
@@ -1448,7 +1659,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let row = resp
             .yearly
             .iter()
@@ -1503,7 +1714,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2023 = resp.yearly.iter().find(|p| p.year == 2023).expect("2023");
         let year_2024 = resp.yearly.iter().find(|p| p.year == 2024).expect("2024");
         assert_eq!(year_2023.cash_flow, 1_000_000_000, "2023 deposit only");
@@ -1570,7 +1781,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let row = resp
             .yearly
             .iter()
@@ -1655,7 +1866,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let row = resp
             .yearly
             .iter()
@@ -1735,7 +1946,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2024 = resp
             .yearly
             .iter()
@@ -1806,7 +2017,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2024 = resp
             .yearly
             .iter()
@@ -1891,7 +2102,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let jan_2024 = resp
             .monthly
             .iter()
@@ -1979,7 +2190,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let jan_2024 = resp
             .monthly
             .iter()
@@ -2070,7 +2281,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let mar_2024 = resp
             .monthly
             .iter()
@@ -2138,7 +2349,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let feb_2024 = resp
             .monthly
             .iter()
@@ -2218,7 +2429,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let apr = resp
             .monthly
             .iter()
@@ -2299,7 +2510,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         // Feb 2023 should be in the span (between Jan first-tx and current).
         let feb_2023 = resp
             .monthly
@@ -2342,7 +2553,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let jan = resp
             .monthly
             .iter()
@@ -2379,7 +2590,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert!(
             !resp.yearly.is_empty(),
             "ManualYear account with transactions must still produce yearly rows"
@@ -2411,7 +2622,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         for row in &resp.yearly {
             assert!(
                 row.month.is_none(),
@@ -2445,7 +2656,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         assert_eq!(resp.account_name, "My Portfolio");
         assert_eq!(resp.currency, "CHF");
     }
@@ -2577,7 +2788,7 @@ mod tests {
 
         let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
         let uc = AccountPerformanceUseCase::new(account_svc, asset_svc, currency_svc);
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
 
         let year_2024 = resp
             .yearly
@@ -2659,7 +2870,7 @@ mod tests {
 
         let currency_svc = make_currency_service_with_no_rate();
         let uc = AccountPerformanceUseCase::new(account_svc, asset_svc, currency_svc);
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
 
         let year_2024 = resp
             .yearly
@@ -2767,7 +2978,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account_id).await.unwrap();
+        let resp = uc.get_account_performance(&account_id, None).await.unwrap();
 
         let year_2023 = resp
             .yearly
@@ -2815,7 +3026,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account_id).await.unwrap();
+        let resp = uc.get_account_performance(&account_id, None).await.unwrap();
 
         let year_2024 = resp
             .yearly
@@ -2852,7 +3063,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account_id).await.unwrap();
+        let resp = uc.get_account_performance(&account_id, None).await.unwrap();
 
         let current = resp
             .yearly
@@ -2902,7 +3113,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2024 = resp
             .yearly
             .iter()
@@ -2978,7 +3189,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let resp = uc.get_account_performance(&account.id).await.unwrap();
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
         let year_2024 = resp
             .yearly
             .iter()
@@ -2996,6 +3207,510 @@ mod tests {
         assert!(
             year_2024.annualized_yield.is_none(),
             "annualized must be None on total loss (root undefined)"
+        );
+    }
+
+    // ----- T2 — optional single-asset scope (PRF-080–085) ---------------------
+
+    /// Two-asset fixture for the asset-scope tests: EUR account, deposit 10 000 on
+    /// 2023-01-10, buy 10 units of stock A at 100 EUR on 2023-02-01 (cost 1 000),
+    /// buy 5 units of stock B at 200 EUR on 2024-03-01 (cost 1 000), prices at
+    /// 2024-12-31: A 120 EUR, B 250 EUR.
+    async fn setup_two_stock_account() -> (
+        Arc<AccountService>,
+        Arc<AssetService>,
+        String,
+        String,
+        String,
+    ) {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Two Assets".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let mut stock_ids = Vec::new();
+        for (name, reference) in [("Stock A", "STA"), ("Stock B", "STB")] {
+            let stock = asset_svc
+                .create_asset(CreateAssetDTO {
+                    name: name.to_string(),
+                    reference: reference.to_string(),
+                    isin: None,
+                    class: crate::context::asset::AssetClass::Stocks,
+                    currency: "EUR".to_string(),
+                    risk_level: 1,
+                    category_id: SYSTEM_CATEGORY_ID.to_string(),
+                    exchange: None,
+                    interest_bearing: false,
+                })
+                .await
+                .unwrap();
+            stock_ids.push(stock.id);
+        }
+        let (stock_a, stock_b) = (stock_ids[0].clone(), stock_ids[1].clone());
+        account_svc
+            .record_deposit(&account.id, "2023-01-10".to_string(), 10_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_a.clone(),
+                "2023-02-01".to_string(),
+                10_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_b.clone(),
+                "2024-03-01".to_string(),
+                5_000_000,
+                200_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock_a, "2024-12-31", 120.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock_b, "2024-12-31", 250.0)
+            .await
+            .unwrap();
+        (account_svc, asset_svc, account.id, stock_a, stock_b)
+    }
+
+    // PRF-080/081/082 — the scoped series describes one position only: the span
+    // opens at the asset's first transaction (2024, not the account's 2023) and
+    // the end value is the position's market value, diverging from the unscoped
+    // whole-account Global Value.
+    #[tokio::test]
+    async fn scoped_series_isolates_one_asset_and_opens_span_at_its_first_transaction() {
+        let (account_svc, asset_svc, account_id, _stock_a, stock_b) =
+            setup_two_stock_account().await;
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let unscoped = uc.get_account_performance(&account_id, None).await.unwrap();
+        let scoped = uc
+            .get_account_performance(&account_id, Some(&stock_b))
+            .await
+            .unwrap();
+
+        let unscoped_first_year = unscoped.yearly.iter().map(|p| p.year).min().unwrap();
+        let scoped_first_year = scoped.yearly.iter().map(|p| p.year).min().unwrap();
+        assert_eq!(unscoped_first_year, 2023, "account span opens in 2023");
+        assert_eq!(
+            scoped_first_year, 2024,
+            "scoped span opens at stock B's first transaction (PRF-081)"
+        );
+
+        let unscoped_2024 = unscoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("unscoped 2024 row");
+        let scoped_2024 = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("scoped 2024 row");
+        // Unscoped: cash 8 000 + A 10×120 + B 5×250 = 10 450 EUR.
+        assert_eq!(unscoped_2024.end_value, 10_450_000_000);
+        // Scoped: 5 units × 250 EUR = 1 250 EUR — the position only (PRF-082).
+        assert_eq!(scoped_2024.end_value, 1_250_000_000);
+    }
+
+    // PRF-083/084 — scoped year row hand-computed: cash_flow is the purchase cost,
+    // the bridge identity closes without a dividends term, since-inception is the
+    // position Simple Dietz, and the sub-year CAGR passes the cumulative through.
+    #[tokio::test]
+    async fn scoped_year_row_bridge_and_since_inception_hand_computed() {
+        let (account_svc, asset_svc, account_id, _stock_a, stock_b) =
+            setup_two_stock_account().await;
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account_id, Some(&stock_b))
+            .await
+            .unwrap();
+        let row = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("scoped 2024 row");
+
+        assert_eq!(row.previous_value, 0, "first scoped period");
+        assert_eq!(
+            row.cash_flow, 1_000_000_000,
+            "purchase cost is the position's money-in (PRF-084)"
+        );
+        assert_eq!(row.asset_flow, 0, "no in-kind credit");
+        assert_eq!(row.dividends, 0, "no dividend");
+        assert_eq!(
+            row.pnl, 250_000_000,
+            "price movement: 5 × (250 − 200) EUR (PRF-084 residual)"
+        );
+        assert_eq!(
+            row.end_value,
+            row.previous_value + row.cash_flow + row.asset_flow + row.pnl,
+            "scoped bridge identity closes without the dividends term (PRF-084)"
+        );
+
+        // since-inception: gain = 1 250 − 1 000 = 250 EUR; the purchase lands on
+        // the span start so the Dietz denominator is the full 1 000 EUR → 25 %.
+        let since_inception = row.since_inception.as_ref().expect("since_inception");
+        assert_eq!(since_inception.gain, 250_000_000);
+        assert_eq!(since_inception.pct, Some(25_000_000));
+        // 2024-03-01 → 2024-12-31 is under a year → the CAGR passes through.
+        let annualized = row.annualized_yield.as_ref().expect("annualized_yield");
+        assert_eq!(annualized.pct, Some(25_000_000));
+    }
+
+    // PRF-083/084 — scoped month rows: dividends of the scoped asset add to the
+    // metric gains and land in the dividends column (another asset's dividend is
+    // excluded), while the pnl residual reports the pure price movement.
+    #[tokio::test]
+    async fn scoped_month_rows_attribute_dividends_to_the_scoped_asset_only() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Scoped Dividends".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let mut stock_ids = Vec::new();
+        for (name, reference) in [("Div A", "DVA"), ("Div B", "DVB")] {
+            let stock = asset_svc
+                .create_asset(CreateAssetDTO {
+                    name: name.to_string(),
+                    reference: reference.to_string(),
+                    isin: None,
+                    class: crate::context::asset::AssetClass::Stocks,
+                    currency: "EUR".to_string(),
+                    risk_level: 1,
+                    category_id: SYSTEM_CATEGORY_ID.to_string(),
+                    exchange: None,
+                    interest_bearing: false,
+                })
+                .await
+                .unwrap();
+            stock_ids.push(stock.id);
+        }
+        let (stock_a, stock_b) = (stock_ids[0].clone(), stock_ids[1].clone());
+        account_svc
+            .record_deposit(&account.id, "2024-01-05".to_string(), 5_000_000_000, None)
+            .await
+            .unwrap();
+        // Buy 10 units of A at 100 EUR and 1 unit of B at 500 EUR on 2024-01-10.
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_a.clone(),
+                "2024-01-10".to_string(),
+                10_000_000,
+                100_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_b.clone(),
+                "2024-01-10".to_string(),
+                1_000_000,
+                500_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock_a, "2024-01-31", 100.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock_a, "2024-05-31", 110.0)
+            .await
+            .unwrap();
+        // Dividend of 100 EUR on A and 999 EUR on B, both in May 2024.
+        account_svc
+            .record_dividend(
+                &account.id,
+                stock_a.clone(),
+                "2024-05-10".to_string(),
+                100_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_dividend(
+                &account.id,
+                stock_b.clone(),
+                "2024-05-15".to_string(),
+                999_000_000,
+                1_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock_a))
+            .await
+            .unwrap();
+        let may = scoped
+            .monthly
+            .iter()
+            .find(|p| p.year == 2024 && p.month == Some(5))
+            .expect("May 2024 row");
+
+        // Position value: April carries the January price (10 × 100 = 1 000 EUR),
+        // May is repriced (10 × 110 = 1 100 EUR).
+        assert_eq!(may.previous_value, 1_000_000_000);
+        assert_eq!(may.end_value, 1_100_000_000);
+        assert_eq!(
+            may.dividends, 100_000_000,
+            "only the scoped asset's dividend counts — B's 999 EUR is excluded"
+        );
+        assert_eq!(
+            may.pnl, 100_000_000,
+            "pnl is the price movement; the dividend stays outside the residual (PRF-084)"
+        );
+        // period-over-period: gain = 1 100 − 1 000 + 100 dividend = 200 EUR; no
+        // flows in May, so the denominator is the 1 000 EUR start value → 20 %.
+        let period_over_period = may.period_over_period.as_ref().expect("period_over_period");
+        assert_eq!(period_over_period.gain, 200_000_000);
+        assert_eq!(period_over_period.pct, Some(20_000_000));
+        // year-to-date: prior 31 December baseline 0, purchase 1 000 within the
+        // span → gain = 1 100 − 0 − 1 000 + 100 = 200 EUR.
+        let year_to_date = may.year_to_date.as_ref().expect("year_to_date");
+        assert_eq!(year_to_date.gain, 200_000_000);
+        assert!(year_to_date.pct.is_some());
+        // since-inception: the span opens at the purchase date, so its flow gets
+        // full Dietz weight → 200 / 1 000 = 20 %.
+        let since_inception = may.since_inception.as_ref().expect("since_inception");
+        assert_eq!(since_inception.gain, 200_000_000);
+        assert_eq!(since_inception.pct, Some(20_000_000));
+    }
+
+    // PRF-084 — free shares of the scoped asset enter asset_flow at their
+    // period-end market value; the residual pnl isolates the bought units' move.
+    #[tokio::test]
+    async fn scoped_free_shares_enter_asset_flow_at_market_value() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Scoped Free Shares".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Scoped FSD".to_string(),
+                reference: "SFS".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-05".to_string(), 5_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-02-01".to_string(),
+                5_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_free_shares(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                2_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-31", 1200.0)
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock.id))
+            .await
+            .unwrap();
+        let row = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+
+        assert_eq!(row.end_value, 8_400_000_000, "7 units × 1 200 EUR");
+        assert_eq!(row.cash_flow, 5_000_000_000, "purchase cost");
+        assert_eq!(
+            row.asset_flow, 2_400_000_000,
+            "2 free shares at the 1 200 EUR period-end market price"
+        );
+        assert_eq!(
+            row.pnl, 1_000_000_000,
+            "appreciation on the 5 bought units: 5 × (1 200 − 1 000) EUR"
+        );
+        assert_eq!(
+            row.end_value,
+            row.previous_value + row.cash_flow + row.asset_flow + row.pnl,
+            "scoped bridge identity (PRF-084)"
+        );
+    }
+
+    // PRF-081 — an asset with no transactions in this account behaves like an
+    // account with no transactions (PRF-043): empty series, header fields intact.
+    #[tokio::test]
+    async fn scoped_asset_with_no_transactions_returns_empty_response() {
+        let (account_svc, asset_svc, account_id, _stock_a, _stock_b) =
+            setup_two_stock_account().await;
+        let untraded = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Never Traded".to_string(),
+                reference: "NVT".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account_id, Some(&untraded.id))
+            .await
+            .unwrap();
+        assert!(
+            scoped.yearly.is_empty(),
+            "no scoped data span → empty yearly"
+        );
+        assert!(
+            scoped.monthly.is_empty(),
+            "no scoped data span → empty monthly"
+        );
+        assert_eq!(scoped.account_name, "Two Assets");
+        assert_eq!(scoped.currency, "EUR");
+    }
+
+    // PRF-082 — the cash line is never valued as a position (the FE selector does
+    // not offer it): a cash-scoped series reports 0 end values.
+    #[tokio::test]
+    async fn scoped_cash_line_produces_zero_end_values() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Cash Scope".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-06-01".to_string(), 1_000_000_000, None)
+            .await
+            .unwrap();
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let cash_asset_id = crate::core::cash::system_cash_asset_id("EUR");
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&cash_asset_id))
+            .await
+            .unwrap();
+        assert!(
+            !scoped.yearly.is_empty(),
+            "the deposit opens a scoped data span"
+        );
+        assert!(
+            scoped.yearly.iter().all(|p| p.end_value == 0),
+            "a Cash-class scope is never valued as a position (PRF-082)"
         );
     }
 }

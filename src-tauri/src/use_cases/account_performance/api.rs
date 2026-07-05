@@ -5,12 +5,16 @@ use super::orchestrator::{AccountPerformanceResponse, AccountPerformanceUseCase}
 use crate::context::account::AccountError;
 use tauri::State;
 
-/// Returns per-period performance figures for a single account (PRF spec).
+/// Returns per-period performance figures for a single account (PRF spec),
+/// optionally scoped to one asset's position (PRF-080).
 #[tauri::command]
 #[specta::specta]
 pub async fn get_account_performance(
     account_id: String,
+    asset_id: Option<String>,
     state: State<'_, AccountPerformanceUseCase>,
 ) -> Result<AccountPerformanceResponse, AccountError> {
-    state.get_account_performance(&account_id).await
+    state
+        .get_account_performance(&account_id, asset_id.as_deref())
+        .await
 }

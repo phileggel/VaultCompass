@@ -5,7 +5,7 @@ export const accountPerformanceGateway = {
   async getAccountPerformance(
     accountId: string,
   ): Promise<Result<AccountPerformanceResponse, AccountError>> {
-    return commands.getAccountPerformance(accountId);
+    return commands.getAccountPerformance(accountId, null);
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

@@ -89,7 +89,7 @@ async fn get_account_performance_deposit_end_to_end() {
         .unwrap();
     let resp: AccountPerformanceResponse = ctx
         .use_case
-        .get_account_performance(&account.id)
+        .get_account_performance(&account.id, None)
         .await
         .unwrap();
     assert_eq!(resp.account_name, "E2E Account");
@@ -126,7 +126,7 @@ async fn get_account_performance_not_found_propagates() {
     let ctx = build_ctx(&pool).await;
     let err = ctx
         .use_case
-        .get_account_performance("does-not-exist")
+        .get_account_performance("does-not-exist", None)
         .await
         .unwrap_err();
     assert!(
@@ -197,7 +197,7 @@ async fn get_account_performance_priced_stock_included_in_end_value() {
         .unwrap();
     let resp = ctx
         .use_case
-        .get_account_performance(&account.id)
+        .get_account_performance(&account.id, None)
         .await
         .unwrap();
     let year_2024 = resp

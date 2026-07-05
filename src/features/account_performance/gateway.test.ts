@@ -75,6 +75,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     }
     expect(mockInvoke).toHaveBeenCalledWith("get_account_performance", {
       accountId: "account-1",
+      assetId: null,
     });
   });
 
@@ -95,6 +96,7 @@ describe("accountPerformanceGateway — getAccountPerformance", () => {
     }
     expect(mockInvoke).toHaveBeenCalledWith("get_account_performance", {
       accountId: "no-such-account",
+      assetId: null,
     });
   });
 

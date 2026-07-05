@@ -647,7 +647,7 @@ async fn record_free_shares_performance_neutrality() {
 
     // FSD-070 — performance use case must succeed (no error) after a distribution
     let resp = perf_use_case
-        .get_account_performance(&account.id)
+        .get_account_performance(&account.id, None)
         .await
         .unwrap();
 
