@@ -117,8 +117,7 @@ pub(crate) async fn load_priced_assets(
 
 /// Pre-resolves FX rates for each foreign holding currency at every period-end
 /// the synchronous valuation loop will visit (FXR-035/042). Identity pairs are
-/// excluded — same-currency holdings need no conversion. Shared with
-/// `account_summary` (ADR-004 service-level reuse).
+/// excluded — same-currency holdings need no conversion.
 pub(crate) async fn load_rate_map(
     currency_service: &CurrencyService,
     priced_assets: &HashMap<String, PricedAsset>,
@@ -126,6 +125,21 @@ pub(crate) async fn load_rate_map(
     month_view_available: bool,
     earliest_date: NaiveDate,
     today: NaiveDate,
+) -> StdResult<RateMap, AccountError> {
+    let dates: Vec<NaiveDate> = period_end_dates(month_view_available, earliest_date, today)
+        .into_iter()
+        .collect();
+    load_rate_map_for_dates(currency_service, priced_assets, account_currency, &dates).await
+}
+
+/// Pre-resolves FX rates for each foreign holding currency at the caller-supplied
+/// dates only (FXR-035/042). Identity pairs are excluded — same-currency holdings
+/// need no conversion. Shared with `account_summary` (ADR-004 service-level reuse).
+pub(crate) async fn load_rate_map_for_dates(
+    currency_service: &CurrencyService,
+    priced_assets: &HashMap<String, PricedAsset>,
+    account_currency: &str,
+    dates: &[NaiveDate],
 ) -> StdResult<RateMap, AccountError> {
     let mut foreign_currencies: Vec<String> = priced_assets
         .values()
@@ -140,18 +154,18 @@ pub(crate) async fn load_rate_map(
         return Ok(rate_map);
     }
 
-    for period_end in period_end_dates(month_view_available, earliest_date, today) {
-        let as_of = period_end.format("%Y-%m-%d").to_string();
+    for date in dates {
+        let as_of = date.format("%Y-%m-%d").to_string();
         for currency in &foreign_currencies {
             if let Some(rate) = currency_service
                 .resolve_rate_micros(currency, account_currency, &as_of)
                 .await
                 .map_err(|e| {
-                    tracing::error!(target: BACKEND, currency = %currency, err = ?e, "load_rate_map: resolve_rate_micros failed");
+                    tracing::error!(target: BACKEND, currency = %currency, err = ?e, "load_rate_map_for_dates: resolve_rate_micros failed");
                     AccountError::DatabaseError
                 })?
             {
-                rate_map.insert((currency.clone(), period_end), rate);
+                rate_map.insert((currency.clone(), *date), rate);
             }
         }
     }
@@ -175,24 +189,19 @@ pub(crate) async fn compute_current_ytd_pct(
     today: NaiveDate,
 ) -> StdResult<Option<i64>, AccountError> {
     // PRF-043 — no transactions means no data span and no YTD period.
-    let Some(earliest_date) = transactions
-        .iter()
-        .filter_map(|t| parse_date(&t.date))
-        .min()
-    else {
+    if !transactions.iter().any(|t| parse_date(&t.date).is_some()) {
         return Ok(None);
-    };
+    }
 
     let priced_assets = load_priced_assets(asset_service, transactions).await?;
-    // The current-year YTD valuation visits today (period end) and the prior
-    // 31 December (year-start baseline); both fall in the monthly period set.
-    let rate_map = load_rate_map(
+    // The current-year YTD valuation only values two dates: the prior
+    // 31 December (year-start baseline) and today (period end).
+    let year_start_baseline_date = last_day_of_year(today.year() - 1);
+    let rate_map = load_rate_map_for_dates(
         currency_service,
         &priced_assets,
         account_currency,
-        true,
-        earliest_date,
-        today,
+        &[year_start_baseline_date, today],
     )
     .await?;
 
@@ -210,7 +219,7 @@ pub(crate) async fn compute_current_ytd_pct(
         &priced_assets,
         &rate_map,
         account_currency,
-        last_day_of_year(today.year() - 1),
+        year_start_baseline_date,
     );
     let metric = metric_for_span(
         transactions,
@@ -631,5 +640,204 @@ mod tests {
         let priced = priced_with(Vec::new());
         let date = NaiveDate::from_ymd_opt(2024, 1, 1).expect("valid date");
         assert_eq!(priced.price_as_of(date), None);
+    }
+
+    use crate::context::asset::{
+        Asset, AssetCategory, MockAssetCategoryRepository, MockAssetPriceRepository,
+        MockAssetRepository, SYSTEM_CATEGORY_ID,
+    };
+    use crate::context::currency::domain::{
+        CurrencyRate, CurrencyRateSource, MockCurrencyPairRepository, MockCurrencyRateRepository,
+    };
+
+    fn priced_asset(currency: &str, class: AssetClass) -> PricedAsset {
+        PricedAsset {
+            currency: currency.to_string(),
+            class,
+            prices: Vec::new(),
+        }
+    }
+
+    fn currency_service_with_fixed_rate(
+        rate_micros: i64,
+        expected_resolutions: usize,
+    ) -> CurrencyService {
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .times(expected_resolutions)
+            .returning(move |from_currency, to_currency, as_of| {
+                Ok(Some(CurrencyRate::from_storage(
+                    from_currency.to_string(),
+                    to_currency.to_string(),
+                    as_of.to_string(),
+                    rate_micros,
+                    CurrencyRateSource::Manual,
+                )))
+            });
+        CurrencyService::new(
+            Box::new(MockCurrencyPairRepository::new()),
+            Box::new(rate_repo),
+        )
+    }
+
+    // FXR-035/042 — the caller-supplied date list bounds the FX pre-resolution:
+    // exactly one repository lookup per (foreign currency × requested date) pair,
+    // with cash and account-currency holdings excluded. The `.times(2)` mock
+    // expectation fails the test if any other date is resolved.
+    #[tokio::test]
+    async fn load_rate_map_for_dates_resolves_only_the_requested_pairs() {
+        let currency_service = currency_service_with_fixed_rate(900_000, 2);
+        let mut priced_assets = HashMap::new();
+        priced_assets.insert(
+            "usd-stock".to_string(),
+            priced_asset("USD", AssetClass::Stocks),
+        );
+        priced_assets.insert(
+            "eur-stock".to_string(),
+            priced_asset("EUR", AssetClass::Stocks),
+        );
+        priced_assets.insert(
+            "system-cash-eur".to_string(),
+            priced_asset("EUR", AssetClass::Cash),
+        );
+
+        let baseline = NaiveDate::from_ymd_opt(2025, 12, 31).expect("valid date");
+        let today = NaiveDate::from_ymd_opt(2026, 6, 15).expect("valid date");
+        let rate_map =
+            load_rate_map_for_dates(&currency_service, &priced_assets, "EUR", &[baseline, today])
+                .await
+                .expect("rate map");
+
+        assert_eq!(rate_map.len(), 2);
+        assert_eq!(rate_map.get(&("USD".to_string(), baseline)), Some(&900_000));
+        assert_eq!(rate_map.get(&("USD".to_string(), today)), Some(&900_000));
+    }
+
+    // FXR-035 — without foreign holding currencies the map is empty and the
+    // currency repository is never queried (`.times(0)` on the mock).
+    #[tokio::test]
+    async fn load_rate_map_for_dates_returns_empty_map_without_foreign_currencies() {
+        let currency_service = currency_service_with_fixed_rate(900_000, 0);
+        let mut priced_assets = HashMap::new();
+        priced_assets.insert(
+            "eur-stock".to_string(),
+            priced_asset("EUR", AssetClass::Stocks),
+        );
+        priced_assets.insert(
+            "system-cash-eur".to_string(),
+            priced_asset("EUR", AssetClass::Cash),
+        );
+
+        let today = NaiveDate::from_ymd_opt(2026, 6, 15).expect("valid date");
+        let rate_map = load_rate_map_for_dates(&currency_service, &priced_assets, "EUR", &[today])
+            .await
+            .expect("rate map");
+
+        assert!(rate_map.is_empty());
+    }
+
+    fn asset_category() -> AssetCategory {
+        AssetCategory::from_storage(
+            SYSTEM_CATEGORY_ID.to_string(),
+            "generic.uncategorized".to_string(),
+        )
+    }
+
+    fn asset_service_with_usd_stock_and_eur_cash() -> AssetService {
+        let mut asset_repo = MockAssetRepository::new();
+        asset_repo.expect_get_by_id().returning(|asset_id| {
+            Ok(Some(match asset_id {
+                "system-cash-eur" => Asset::restore(
+                    "system-cash-eur".to_string(),
+                    "Cash".to_string(),
+                    AssetClass::Cash,
+                    asset_category(),
+                    "EUR".to_string(),
+                    1,
+                    "EUR".to_string(),
+                    None,
+                    false,
+                    None,
+                    false,
+                    false,
+                ),
+                _ => Asset::restore(
+                    "usd-stock".to_string(),
+                    "US Stock".to_string(),
+                    AssetClass::Stocks,
+                    asset_category(),
+                    "USD".to_string(),
+                    1,
+                    "USTK".to_string(),
+                    None,
+                    false,
+                    None,
+                    false,
+                    false,
+                ),
+            }))
+        });
+        let mut price_repo = MockAssetPriceRepository::new();
+        price_repo.expect_get_all_for_asset().returning(|_| {
+            Ok(vec![
+                price_at("2025-12-15", 100_000_000),
+                price_at("2026-06-01", 120_000_000),
+            ])
+        });
+        AssetService::new(
+            Box::new(asset_repo),
+            Box::new(MockAssetCategoryRepository::new()),
+            Box::new(price_repo),
+        )
+    }
+
+    // PRF-034/FXR-042 — foreign-holding YTD fixture: EUR account, 1000 EUR
+    // deposited and 10 units of a 100-USD stock bought in the prior year at
+    // rate 0.9 USD→EUR. Baseline (prior 31 Dec) = 100 cash + 10 × 90 = 1000 EUR;
+    // today = 100 cash + 10 × 108 = 1180 EUR; no current-year flows, so YTD
+    // pct = 180 / 1000 = 18% (18_000_000 micro-percent). The `.times(2)` mock
+    // expectation locks the FX pre-resolution to the two consumed dates.
+    #[tokio::test]
+    async fn compute_current_ytd_pct_values_foreign_holding_at_baseline_and_today_only() {
+        let asset_service = asset_service_with_usd_stock_and_eur_cash();
+        let currency_service = currency_service_with_fixed_rate(900_000, 2);
+        let transactions = vec![
+            Transaction::new_deposit(
+                "account-1".to_string(),
+                "system-cash-eur".to_string(),
+                "2025-01-10".to_string(),
+                1_000_000_000,
+                None,
+            )
+            .expect("valid deposit"),
+            Transaction::new(
+                "account-1".to_string(),
+                "usd-stock".to_string(),
+                TransactionType::Purchase,
+                "2025-02-01".to_string(),
+                10_000_000,
+                100_000_000,
+                900_000,
+                0,
+                900_000_000,
+                None,
+                None,
+            )
+            .expect("valid purchase"),
+        ];
+        let today = NaiveDate::from_ymd_opt(2026, 6, 15).expect("valid date");
+
+        let ytd_pct = compute_current_ytd_pct(
+            "EUR",
+            &asset_service,
+            &currency_service,
+            &transactions,
+            today,
+        )
+        .await
+        .expect("ytd computation");
+
+        assert_eq!(ytd_pct, Some(18_000_000));
     }
 }
