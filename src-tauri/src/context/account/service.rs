@@ -378,7 +378,8 @@ impl AccountService {
         Ok(tx)
     }
 
-    /// Corrects an existing transaction and recalculates the affected holding (TRX-031, SEL-031).
+    /// Corrects an existing transaction and recalculates the affected holding
+    /// (TRX-031, SEL-031, TRX-061, SEL-051).
     ///
     /// Loads the Account aggregate, delegates to `Account::correct_transaction`, saves atomically.
     #[allow(clippy::too_many_arguments)]
@@ -391,12 +392,22 @@ impl AccountService {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, tx_id = %tx_id, "correct_transaction");
         let mut account = load_account(&*self.account_repo, account_id).await?;
         let tx = account
-            .correct_transaction(tx_id, date, quantity, unit_price, exchange_rate, fees, note)
+            .correct_transaction(
+                tx_id,
+                date,
+                quantity,
+                unit_price,
+                exchange_rate,
+                fees,
+                total_amount,
+                note,
+            )
             .map_err(to_holding_tx_error)?
             .clone();
         save_account(&*self.account_repo, &mut account).await?;
@@ -1695,6 +1706,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None, // total_amount (typed-total mode unused here)
                 None,
             )
             .await
@@ -2189,6 +2201,7 @@ mod tests {
             micro(200),
             micro(1),
             0,
+            None, // total_amount (typed-total mode unused here)
             None,
         )
         .await

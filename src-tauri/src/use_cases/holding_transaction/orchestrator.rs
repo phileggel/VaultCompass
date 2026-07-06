@@ -146,6 +146,7 @@ impl HoldingTransactionUseCase {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         self.ensure_cash_for(account_id, "correct_transaction")
@@ -159,6 +160,7 @@ impl HoldingTransactionUseCase {
                 unit_price,
                 exchange_rate,
                 fees,
+                total_amount,
                 note,
             )
             .await

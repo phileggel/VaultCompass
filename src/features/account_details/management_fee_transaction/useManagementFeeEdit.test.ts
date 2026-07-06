@@ -82,6 +82,7 @@ describe("useManagementFeeEdit (FEE-063)", () => {
       unit_price: 0,
       exchange_rate: 1_000_000,
       fees: 0,
+      total_amount: null,
       note: "Q2 fee",
     });
     expect(mockShowSnackbar).toHaveBeenCalledWith("management_fee.updated", "success");

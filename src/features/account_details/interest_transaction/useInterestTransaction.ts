@@ -121,6 +121,7 @@ export function useInterestTransaction({
               unit_price: 0,
               exchange_rate: 1_000_000,
               fees: 0,
+              total_amount: null,
               note,
             })
           : // INT-021 — 1% = 1_000_000 micro-percent, the same micro scaling as decimals.

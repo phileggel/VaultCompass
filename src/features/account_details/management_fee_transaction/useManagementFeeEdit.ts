@@ -83,6 +83,7 @@ export function useManagementFeeEdit({
             unit_price: 0,
             exchange_rate: 1_000_000,
             fees: 0,
+            total_amount: null,
             note: formData.note || null,
           },
         );

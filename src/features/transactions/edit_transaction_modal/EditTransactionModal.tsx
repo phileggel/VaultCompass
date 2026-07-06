@@ -12,6 +12,7 @@ import { TextareaField } from "@/ui/components/field/TextareaField";
 import { TextField } from "@/ui/components/field/TextField";
 import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { FormModal } from "@/ui/components/modal/FormModal";
+import { EntryModeToggle } from "../shared/EntryModeToggle";
 import { RecordPriceCheckbox } from "../shared/RecordPriceCheckbox";
 import { useEditTransactionModal } from "./useEditTransactionModal";
 
@@ -50,6 +51,13 @@ export function EditTransactionModal({
     showArchivedConfirm,
     recordPrice,
     setRecordPrice,
+    isTotalEntryEligible,
+    entryMode,
+    handleEntryModeChange,
+    totalAmountInput,
+    handleTotalAmountChange,
+    totalBelowFeesError,
+    unitPriceDisplay,
     handleChange,
     handleSubmit,
     handleConfirmArchived,
@@ -58,6 +66,8 @@ export function EditTransactionModal({
     transaction,
     onSubmitSuccess: onSuccess ?? onClose,
   });
+
+  const isTotalMode = isTotalEntryEligible && entryMode === "total";
 
   const isOpeningBalance = transaction.transaction_type === "OpeningBalance";
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
@@ -141,19 +151,40 @@ export function EditTransactionModal({
               placeholder={t("transaction.form_quantity_placeholder")}
               required
             />
-            <CalcField
-              id={isOpeningBalance ? "edit-trx-total-cost" : "edit-trx-unit-price"}
-              label={
-                isOpeningBalance
-                  ? t("open_balance.form_total_cost_label")
-                  : `${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`
-              }
-              value={formData.unitPrice}
-              onValueChange={(v) => handleChange("unitPrice", v)}
-              placeholder={t("transaction.form_unit_price_placeholder")}
-              required
-            />
+            {isTotalMode ? (
+              // TRX-061 / SEL-051 — derived from the typed total; the backend recomputes it
+              <TextField
+                id="edit-trx-unit-price"
+                label={`${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`}
+                type="text"
+                value={unitPriceDisplay}
+                readOnly
+                aria-readonly="true"
+              />
+            ) : (
+              <CalcField
+                id={isOpeningBalance ? "edit-trx-total-cost" : "edit-trx-unit-price"}
+                label={
+                  isOpeningBalance
+                    ? t("open_balance.form_total_cost_label")
+                    : `${t("transaction.form_unit_price_label")}${selectedAsset ? ` (${selectedAsset.currency})` : ""}`
+                }
+                value={formData.unitPrice}
+                onValueChange={(v) => handleChange("unitPrice", v)}
+                placeholder={t("transaction.form_unit_price_placeholder")}
+                required
+              />
+            )}
           </div>
+
+          {/* TRX-061 / SEL-051 — entry mode: type the unit price or the broker's all-in total */}
+          {isTotalEntryEligible && (
+            <EntryModeToggle
+              idPrefix="edit-trx"
+              value={entryMode}
+              onChange={handleEntryModeChange}
+            />
+          )}
 
           {/* Exchange Rate — hidden for OpeningBalance (TRX-051) */}
           {showExchangeRate && (
@@ -176,14 +207,31 @@ export function EditTransactionModal({
                 onValueChange={(v) => handleChange("fees", v)}
                 placeholder={t("transaction.form_fees_placeholder")}
               />
-              <TextField
-                id="edit-trx-total"
-                label={t("transaction.form_total_amount_label")}
-                type="text"
-                value={totalAmountDisplay}
-                readOnly
-                aria-readonly="true"
-              />
+              {isTotalMode ? (
+                // TRX-061 / SEL-051 — the typed all-in total is ground truth
+                <CalcField
+                  id="edit-trx-total"
+                  label={t("transaction.form_total_amount_label")}
+                  value={totalAmountInput}
+                  onValueChange={handleTotalAmountChange}
+                  placeholder={t("transaction.form_total_amount_placeholder")}
+                  error={
+                    totalBelowFeesError
+                      ? t(totalBelowFeesError.key, totalBelowFeesError.vars)
+                      : undefined
+                  }
+                  required
+                />
+              ) : (
+                <TextField
+                  id="edit-trx-total"
+                  label={t("transaction.form_total_amount_label")}
+                  type="text"
+                  value={totalAmountDisplay}
+                  readOnly
+                  aria-readonly="true"
+                />
+              )}
             </div>
           )}
 

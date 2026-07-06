@@ -403,6 +403,12 @@ impl Account {
     ///
     /// The transaction type is immutable — `correct_transaction` preserves it.
     /// Performs a cascading oversell check after recalculation.
+    ///
+    /// When `total_amount` is provided on a `Purchase` or `Sell` correction
+    /// (TRX-061, SEL-051), the typed all-in total is stored verbatim and
+    /// `unit_price` is derived from it; the caller-supplied `unit_price` is
+    /// ignored. On every other transaction type the field is ignored and the
+    /// type-specific recompute applies.
     #[allow(clippy::too_many_arguments)]
     pub fn correct_transaction(
         &mut self,
@@ -412,6 +418,7 @@ impl Account {
         unit_price: i64,
         exchange_rate: i64,
         fees: i64,
+        total_amount: Option<i64>,
         note: Option<String>,
     ) -> Result<&Transaction> {
         let existing = self
@@ -462,29 +469,68 @@ impl Account {
                 created_at,
             )?
         } else {
-            let total_amount = match tx_type {
-                TransactionType::Purchase => {
-                    Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees)
+            let (unit_price, total_amount) = match (tx_type, total_amount) {
+                // TRX-061 — the typed total is ground truth: stored verbatim,
+                // unit price derived from it (same validation as TRX-060).
+                (TransactionType::Purchase, Some(total)) => {
+                    if total <= 0 {
+                        return Err(AccountError::TotalAmountNotPositive.into());
+                    }
+                    if total < fees {
+                        return Err(AccountError::TotalAmountBelowFees.into());
+                    }
+                    let derived_unit_price = Self::derive_unit_price_from_total(
+                        total as i128 - fees as i128,
+                        quantity,
+                        exchange_rate,
+                    )?;
+                    (derived_unit_price, total)
                 }
-                TransactionType::Sell => {
-                    Self::compute_sell_total(quantity, unit_price, exchange_rate, fees)
+                // SEL-051 — the typed net proceeds are ground truth: stored
+                // verbatim, unit price derived from them (same validation as SEL-050).
+                (TransactionType::Sell, Some(total)) => {
+                    if total <= 0 {
+                        return Err(AccountError::TotalAmountNotPositive.into());
+                    }
+                    let derived_unit_price = Self::derive_unit_price_from_total(
+                        total as i128 + fees as i128,
+                        quantity,
+                        exchange_rate,
+                    )?;
+                    (derived_unit_price, total)
                 }
-                TransactionType::OpeningBalance => {
-                    Self::compute_opening_balance_total(quantity, unit_price)
-                }
+                (TransactionType::Purchase, None) => (
+                    unit_price,
+                    Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees),
+                ),
+                (TransactionType::Sell, None) => (
+                    unit_price,
+                    Self::compute_sell_total(quantity, unit_price, exchange_rate, fees),
+                ),
+                // TRX-061 — a typed total is ignored on every other transaction
+                // type: the type-specific recompute applies as if it were absent.
+                (TransactionType::OpeningBalance, _) => (
+                    unit_price,
+                    Self::compute_opening_balance_total(quantity, unit_price),
+                ),
                 // CSH-022 / CSH-032: cash transactions carry total_amount == quantity (no fees, no FX).
-                TransactionType::Deposit | TransactionType::Withdrawal => quantity,
+                (TransactionType::Deposit | TransactionType::Withdrawal, _) => {
+                    (unit_price, quantity)
+                }
                 // DIV-040: dividend total_amount = floor(quantity × exchange_rate / MICRO).
                 // quantity holds amount_micros in asset currency on a Dividend correction.
-                TransactionType::Dividend => {
-                    ((quantity as i128 * exchange_rate as i128) / 1_000_000) as i64
-                }
-                // Never reached — FreeShares takes the dedicated branch above.
-                TransactionType::FreeShares => 0,
-                // Never reached — ManagementFee takes the dedicated branch above.
-                TransactionType::ManagementFee => 0,
-                // Never reached — Interest takes the dedicated branch above.
-                TransactionType::Interest => 0,
+                (TransactionType::Dividend, _) => (
+                    unit_price,
+                    ((quantity as i128 * exchange_rate as i128) / 1_000_000) as i64,
+                ),
+                // Never reached — FreeShares / ManagementFee / Interest take the
+                // dedicated branches above.
+                (
+                    TransactionType::FreeShares
+                    | TransactionType::ManagementFee
+                    | TransactionType::Interest,
+                    _,
+                ) => (unit_price, 0),
             };
 
             Transaction::with_id(
@@ -2101,6 +2147,7 @@ mod tests {
             micro(200),
             micro(1),
             0,
+            None, // total_amount (typed-total mode unused here)
             None,
         )
         .unwrap();
@@ -2111,6 +2158,93 @@ mod tests {
             .find(|h| h.asset_id == "asset-1")
             .unwrap();
         assert_eq!(h.average_price, micro(200));
+    }
+
+    // TRX-061 — a typed purchase total is stored verbatim; the unit price is
+    // derived from it and the caller-supplied unit price is ignored.
+    #[test]
+    fn trx_061_correct_purchase_with_typed_total_derives_unit_price() {
+        let mut acc = cash_seeded_account();
+        let tx = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        // 110 all-in over 2 units, no fees → 55/unit; caller unit_price (999) ignored.
+        let corrected = acc
+            .correct_transaction(
+                &tx.id,
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(999),
+                micro(1),
+                0,
+                Some(micro(110)),
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        assert_eq!(corrected.total_amount, micro(110));
+        assert_eq!(corrected.unit_price, micro(55));
+    }
+
+    // SEL-051 — a typed sell total is net proceeds: stored verbatim, the unit
+    // price is derived from the total with fees added back.
+    #[test]
+    fn sel_051_correct_sell_with_typed_total_derives_unit_price_from_net_plus_fees() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(5),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let sell = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-02-01".to_string(),
+                micro(2),
+                micro(150),
+                micro(1),
+                micro(10),
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        // (290 net + 10 fees) over 2 units → 150/unit; total stored verbatim.
+        let corrected = acc
+            .correct_transaction(
+                &sell.id,
+                "2024-02-01".to_string(),
+                micro(2),
+                micro(999),
+                micro(1),
+                micro(10),
+                Some(micro(290)),
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        assert_eq!(corrected.total_amount, micro(290));
+        assert_eq!(corrected.unit_price, micro(150));
     }
 
     // SEL-024 / SEL-030 — recalculation replays in chronological order regardless of the
@@ -2403,6 +2537,7 @@ mod tests {
                 micro(150),
                 micro(1),
                 0,
+                None, // total_amount (typed-total mode unused here)
                 None,
             )
             .unwrap_err();
@@ -2753,6 +2888,7 @@ mod tests {
                 tx.unit_price, // keep same unit_price
                 1_000_000,     // exchange_rate (must be 1 for OpeningBalance)
                 0,             // fees (must be 0 for OpeningBalance)
+                None,          // total_amount (typed-total mode unused here)
                 None,
             )
             .unwrap();
@@ -2981,6 +3117,7 @@ mod tests {
             1_000_000,
             1_000_000,
             0,
+            None, // total_amount (typed-total mode unused here)
             None,
         )
         .unwrap();
@@ -3060,6 +3197,7 @@ mod tests {
             1_000_000,
             1_000_000,
             0,
+            None, // total_amount (typed-total mode unused here)
             None,
         )
         .unwrap();
@@ -3161,6 +3299,7 @@ mod tests {
                 micro(100),
                 micro(1),
                 0,
+                None, // total_amount (typed-total mode unused here)
                 None,
             )
             .unwrap_err();
@@ -3632,6 +3771,7 @@ mod tests {
             0,
             2_000_000,
             0,
+            None, // total_amount (typed-total mode unused here)
             None,
         )
         .unwrap();
@@ -4115,6 +4255,7 @@ mod tests {
                 0,         // unit_price = 0 (free shares, no acquisition cost)
                 1_000_000, // exchange_rate = 1.0 (no FX leg)
                 0,         // fees = 0
+                None,      // total_amount (typed-total mode unused here)
                 Some("Corrected note".to_string()),
             )
             .unwrap();
@@ -4176,6 +4317,7 @@ mod tests {
                 0,         // unit_price = 0 (no acquisition cost)
                 1_000_000, // exchange_rate = 1.0 (no FX leg)
                 0,         // fees = 0
+                None,      // total_amount (typed-total mode unused here)
                 Some("Corrected fee".to_string()),
             )
             .unwrap();
@@ -4328,6 +4470,7 @@ mod tests {
                 0,         // unit_price = 0 (no acquisition cost)
                 1_000_000, // exchange_rate = 1.0 (no FX leg)
                 0,         // fees = 0
+                None,      // total_amount (typed-total mode unused here)
                 Some("Corrected interest".to_string()),
             )
             .unwrap();

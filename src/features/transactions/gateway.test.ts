@@ -116,6 +116,7 @@ describe("transactionGateway", () => {
       unit_price: 90_000_000,
       exchange_rate: 1_000_000,
       fees: 0,
+      total_amount: null,
       note: null,
     };
     const tx = makeTx();
@@ -136,6 +137,7 @@ describe("transactionGateway", () => {
       unit_price: 90_000_000,
       exchange_rate: 1_000_000,
       fees: 0,
+      total_amount: null,
       note: null,
     };
     const result = await transactionGateway.correctTransaction("tx-1", "acc-1", dto);

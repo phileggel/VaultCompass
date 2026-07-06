@@ -78,6 +78,7 @@ export function useDepositTransaction({
               unit_price: editTransaction.unit_price,
               exchange_rate: editTransaction.exchange_rate,
               fees: editTransaction.fees,
+              total_amount: null,
               note: formData.note || null,
             })
           : await accountDetailsGateway.recordDeposit({

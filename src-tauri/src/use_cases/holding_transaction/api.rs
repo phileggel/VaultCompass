@@ -99,6 +99,11 @@ pub struct CorrectTransactionDTO {
     pub exchange_rate: i64,
     /// Corrected fees in account currency (micro-units).
     pub fees: i64,
+    /// All-in total typed by the user in account currency (micro-units) —
+    /// TRX-061 / SEL-051. When provided on a Purchase or Sell correction it is
+    /// stored verbatim and `unit_price` is derived from it; ignored on every
+    /// other transaction type.
+    pub total_amount: Option<i64>,
     /// Optional user note.
     pub note: Option<String>,
 }
@@ -175,7 +180,8 @@ pub async fn sell_holding(
     .await
 }
 
-/// Corrects an existing transaction and recalculates the affected holding (TRX-031).
+/// Corrects an existing transaction and recalculates the affected holding
+/// (TRX-031, TRX-061, SEL-051).
 #[tauri::command]
 #[specta::specta]
 pub async fn correct_transaction(
@@ -190,6 +196,7 @@ pub async fn correct_transaction(
         dto.unit_price,
         dto.exchange_rate,
         dto.fees,
+        dto.total_amount,
         dto.note,
     )
     .await

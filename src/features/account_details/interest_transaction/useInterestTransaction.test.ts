@@ -373,6 +373,7 @@ describe("useInterestTransaction (INT-020/021/025)", () => {
       unit_price: 0,
       exchange_rate: 1_000_000,
       fees: 0,
+      total_amount: null,
       note: null,
     });
     // The create path must NOT be used in edit mode.

@@ -283,4 +283,111 @@ describe("useEditTransactionModal", () => {
     expect(result.current.error).toBeNull();
     expect(onSubmitSuccess).toHaveBeenCalledTimes(1);
   });
+
+  // TRX-061 / SEL-051 — total-entry correction.
+  describe("total-entry mode", () => {
+    const sellTransaction: Transaction = {
+      ...baseTransaction,
+      id: "tx-sell",
+      transaction_type: "Sell",
+    };
+
+    const fakeSubmit = { preventDefault: vi.fn() } as unknown as React.FormEvent;
+
+    it("offers total-entry for Purchase and Sell but not OpeningBalance", () => {
+      const purchase = renderHook(() => useEditTransactionModal({ transaction: baseTransaction }));
+      const sell = renderHook(() => useEditTransactionModal({ transaction: sellTransaction }));
+      const ob = renderHook(() =>
+        useEditTransactionModal({ transaction: openingBalanceTransaction }),
+      );
+      expect(purchase.result.current.isTotalEntryEligible).toBe(true);
+      expect(sell.result.current.isTotalEntryEligible).toBe(true);
+      expect(ob.result.current.isTotalEntryEligible).toBe(false);
+    });
+
+    it("price mode (default) submits total_amount: null", async () => {
+      mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+      const { result } = renderHook(() =>
+        useEditTransactionModal({ transaction: baseTransaction }),
+      );
+      await act(async () => {
+        await result.current.handleSubmit(fakeSubmit);
+      });
+      expect(mockCorrectTransaction).toHaveBeenCalledWith(
+        "tx-existing",
+        "account-1",
+        expect.objectContaining({ total_amount: null }),
+      );
+    });
+
+    // TRX-061 — the typed purchase total is stored verbatim; unit price is derived.
+    it("purchase total mode ships the typed total and a derived unit price", async () => {
+      mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-existing" }, error: null });
+      const { result } = renderHook(() =>
+        useEditTransactionModal({ transaction: baseTransaction }),
+      );
+      // Switch to total mode (seeds from computed 100), then type an all-in 110.
+      await act(async () => {
+        result.current.handleEntryModeChange("total");
+      });
+      await act(async () => {
+        result.current.handleTotalAmountChange("110");
+      });
+      await act(async () => {
+        await result.current.handleSubmit(fakeSubmit);
+      });
+      // 110 total over 2 units, no fees → 55/unit.
+      expect(mockCorrectTransaction).toHaveBeenCalledWith(
+        "tx-existing",
+        "account-1",
+        expect.objectContaining({ total_amount: 110 * MICRO, unit_price: 55 * MICRO }),
+      );
+    });
+
+    // SEL-051 — the sell total is net proceeds; fees are added back to derive the unit price.
+    it("sell total mode derives unit price from net proceeds plus fees", async () => {
+      mockCorrectTransaction.mockResolvedValue({ data: { id: "tx-sell" }, error: null });
+      const { result } = renderHook(() =>
+        useEditTransactionModal({ transaction: sellTransaction }),
+      );
+      await act(async () => {
+        result.current.handleChange("fees", "10");
+      });
+      await act(async () => {
+        result.current.handleEntryModeChange("total");
+      });
+      await act(async () => {
+        result.current.handleTotalAmountChange("90");
+      });
+      await act(async () => {
+        await result.current.handleSubmit(fakeSubmit);
+      });
+      // (90 net + 10 fees) / 2 units = 50/unit.
+      expect(mockCorrectTransaction).toHaveBeenCalledWith(
+        "tx-sell",
+        "account-1",
+        expect.objectContaining({ total_amount: 90 * MICRO, unit_price: 50 * MICRO }),
+      );
+    });
+
+    // TRX-060 — a purchase total below its included fees is rejected inline.
+    it("flags a purchase total below fees and blocks submit", async () => {
+      const { result } = renderHook(() =>
+        useEditTransactionModal({ transaction: baseTransaction }),
+      );
+      await act(async () => {
+        result.current.handleChange("fees", "20");
+      });
+      await act(async () => {
+        result.current.handleEntryModeChange("total");
+      });
+      await act(async () => {
+        result.current.handleTotalAmountChange("10");
+      });
+      expect(result.current.totalBelowFeesError).toEqual({
+        key: "transaction.error_validation_total_below_fees",
+      });
+      expect(result.current.isFormValid).toBe(false);
+    });
+  });
 });

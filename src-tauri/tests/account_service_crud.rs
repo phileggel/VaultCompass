@@ -666,6 +666,7 @@ async fn correct_transaction_rejects_moving_sell_before_buy_end_to_end() {
             micro(150),
             micro(1),
             0,
+            None, // total_amount (typed-total mode unused here)
             None,
         )
         .await

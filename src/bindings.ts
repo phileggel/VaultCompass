@@ -451,7 +451,8 @@ async sellHolding(dto: SellHoldingDTO) : Promise<Result<Transaction, AccountErro
 }
 },
 /**
- * Corrects an existing transaction and recalculates the affected holding (TRX-031).
+ * Corrects an existing transaction and recalculates the affected holding
+ * (TRX-031, TRX-061, SEL-051).
  */
 async correctTransaction(dto: CorrectTransactionDTO) : Promise<Result<Transaction, AccountError>> {
     try {
@@ -1055,9 +1056,9 @@ total_unrealized_pnl: number | null;
 /**
  * Year-to-date performance for the current calendar year as micro-percent
  * (ACC-024, ADR-001): the Simple-Dietz return over `[Jan 1, today]` (PRF-034).
- * `None` when the account has no transactions or the Dietz denominator is 0
- * (PRF-032). A first-calendar-year account uses a year-start baseline of 0
- * and is present.
+ * `None` when the account has no transactions or the Dietz denominator is
+ * not positive (PRF-032). A first-calendar-year account uses a year-start
+ * baseline of 0 and is present.
  */
 ytd_performance_pct: number | null }
 /**
@@ -1507,6 +1508,13 @@ exchange_rate: number;
  * Corrected fees in account currency (micro-units).
  */
 fees: number; 
+/**
+ * All-in total typed by the user in account currency (micro-units) —
+ * TRX-061 / SEL-051. When provided on a Purchase or Sell correction it is
+ * stored verbatim and `unit_price` is derived from it; ignored on every
+ * other transaction type.
+ */
+total_amount: number | null; 
 /**
  * Optional user note.
  */
@@ -2501,7 +2509,7 @@ export type PerformanceMetric = {
 gain: number; 
 /**
  * Simple Dietz percentage as micro-percent (8.00% = 8_000_000).
- * None when the Dietz denominator is 0 (PRF-032).
+ * None when the Dietz denominator is not positive (PRF-032).
  */
 pct: number | null }
 /**
@@ -2533,7 +2541,7 @@ previous_value: number;
  */
 cash_flow: number; 
 /**
- * In-kind asset contributions within the period: opening-balance cost + free shares at market value (PRF-071).
+ * In-kind asset contributions within the period: opening-balance cost + zero-cost credits at grant-date market value (PRF-071).
  */
 asset_flow: number; 
 /**
