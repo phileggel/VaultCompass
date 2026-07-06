@@ -54,7 +54,7 @@ pub struct PerformanceMetric {
     /// Net-of-flows gain in account-currency micros (PRF-031).
     pub gain: i64,
     /// Simple Dietz percentage as micro-percent (8.00% = 8_000_000).
-    /// None when the Dietz denominator is 0 (PRF-032).
+    /// None when the Dietz denominator is not positive (PRF-032).
     pub pct: Option<i64>,
 }
 
@@ -180,7 +180,7 @@ pub(crate) async fn load_rate_map_for_dates(
 /// latest-month `year_to_date.pct`.
 ///
 /// Returns `None` when there is no data span (no transactions) or when the Dietz
-/// denominator is 0 (PRF-032). A first-calendar-year account uses a year-start
+/// denominator is not positive (PRF-032). A first-calendar-year account uses a year-start
 /// baseline of 0 and is present (denominator is the weighted current-year flow).
 pub(crate) async fn compute_current_ytd_pct(
     account_currency: &str,
@@ -540,7 +540,9 @@ pub(crate) fn metric_for_span_over_flows(
         "metric_for_span_over_flows gain i64 overflow: {gain}"
     );
     let denominator = start_value as i128 + weighted_flow;
-    let pct = if denominator == 0 {
+    // PRF-032 — a non-positive average capital base (drained early in the window)
+    // would sign-flip the ratio, so the percentage is absent, not negative.
+    let pct = if denominator <= 0 {
         None
     } else {
         // PRF-032 — scale the numerator by 100_000_000 before dividing; truncate toward zero.
@@ -792,6 +794,55 @@ mod tests {
                 period.period_end
             );
         }
+    }
+
+    // PRF-032 — a negative Dietz denominator (weighted outflows exceeding the
+    // start value plus weighted inflows) must yield an absent percentage, never a
+    // sign-flipped one: an account holding 10_000 that liquidates for 12_000 and
+    // withdraws it early in the period gained 2_000 but has a negative average
+    // capital base for the rest of the window.
+    #[test]
+    fn negative_dietz_denominator_yields_absent_pct_not_sign_flip() {
+        let period_start = NaiveDate::from_ymd_opt(2026, 1, 1).expect("valid date");
+        let period_end = NaiveDate::from_ymd_opt(2026, 12, 31).expect("valid date");
+        let withdrawal = DatedFlow {
+            date: NaiveDate::from_ymd_opt(2026, 1, 5).expect("valid date"),
+            amount: -12_000_000_000,
+        };
+
+        let metric =
+            metric_for_span_over_flows(&[withdrawal], 10_000_000_000, 0, period_start, period_end);
+
+        assert_eq!(metric.gain, 2_000_000_000, "realized gain must be reported");
+        assert_eq!(
+            metric.pct, None,
+            "negative denominator must suppress pct, not flip its sign"
+        );
+    }
+
+    // PRF-032 — the lifetime variant of the same breakdown: weighted withdrawals
+    // exceed weighted deposits over a since-inception span (start value 0).
+    #[test]
+    fn lifetime_weighted_withdrawals_above_deposits_yield_absent_pct() {
+        let inception = NaiveDate::from_ymd_opt(2020, 1, 1).expect("valid date");
+        let period_end = NaiveDate::from_ymd_opt(2026, 12, 31).expect("valid date");
+        // Deposit on day one (weight 1), withdraw more shortly after (weight ≈ 1):
+        // net weighted flow is negative while the account still gained overall.
+        let flows = [
+            DatedFlow {
+                date: inception,
+                amount: 10_000_000_000,
+            },
+            DatedFlow {
+                date: NaiveDate::from_ymd_opt(2020, 1, 10).expect("valid date"),
+                amount: -12_000_000_000,
+            },
+        ];
+
+        let metric = metric_for_span_over_flows(&flows, 0, 500_000_000, inception, period_end);
+
+        assert_eq!(metric.gain, 2_500_000_000);
+        assert_eq!(metric.pct, None);
     }
 
     fn price_at(date: &str, price: i64) -> AssetPrice {

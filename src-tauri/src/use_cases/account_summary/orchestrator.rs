@@ -34,9 +34,9 @@ pub struct AccountSummary {
     pub total_unrealized_pnl: Option<i64>,
     /// Year-to-date performance for the current calendar year as micro-percent
     /// (ACC-024, ADR-001): the Simple-Dietz return over `[Jan 1, today]` (PRF-034).
-    /// `None` when the account has no transactions or the Dietz denominator is 0
-    /// (PRF-032). A first-calendar-year account uses a year-start baseline of 0
-    /// and is present.
+    /// `None` when the account has no transactions or the Dietz denominator is
+    /// not positive (PRF-032). A first-calendar-year account uses a year-start
+    /// baseline of 0 and is present.
     pub ytd_performance_pct: Option<i64>,
 }
 
