@@ -392,10 +392,11 @@ impl ConvertedAccount {
 
     /// GPF-040 — this account's bridge terms within `[period_start, period_end]`
     /// in reference-currency micros, mirroring the PRF-070–072 account bridge or
-    /// the PRF-084 position bridge: cash and dividend flows convert at their own
-    /// transaction date, opening-balance cost at its transaction date, and
-    /// zero-cost in-kind credits at the period-end rate (they are valued at the
-    /// period end). A term with no usable rate contributes 0.
+    /// the PRF-084 position bridge: every flow term converts at the rate of its
+    /// own date — cash and dividend flows at their transaction date, an opening
+    /// balance at its entry-date market value (PRF-086), and zero-cost in-kind
+    /// credits at their grant date (PRF-071). A term with no usable rate
+    /// contributes 0.
     fn bridge_reference(
         &self,
         asset_scope: Option<&str>,

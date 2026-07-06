@@ -1094,6 +1094,68 @@ mod tests {
         assert_eq!(metric.pct, None);
     }
 
+    // PRF-085 — the close-date probe's reopen/re-close state machine, pinned
+    // DB-free: only the LAST transition to zero counts, and any state with
+    // quantity > 0 as of the probe date reports the position open (None).
+    #[test]
+    fn holding_close_date_tracks_the_last_transition_to_zero() {
+        let tx = |transaction_type: TransactionType, date: &str, quantity: i64| {
+            Transaction::new(
+                "acc".to_string(),
+                "asset".to_string(),
+                transaction_type,
+                date.to_string(),
+                quantity,
+                1_000_000,
+                1_000_000,
+                0,
+                quantity,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        let date = |raw: &str| parse_date(raw).unwrap();
+        let transactions = vec![
+            tx(TransactionType::Purchase, "2024-01-10", 10_000_000),
+            tx(TransactionType::Sell, "2024-03-01", 10_000_000),
+            tx(TransactionType::Purchase, "2024-06-01", 5_000_000),
+            tx(TransactionType::Sell, "2024-08-01", 2_000_000),
+            tx(TransactionType::Sell, "2024-10-01", 3_000_000),
+        ];
+
+        assert_eq!(
+            holding_close_date_as_of(&transactions, date("2024-02-01")),
+            None,
+            "open position before any sell"
+        );
+        assert_eq!(
+            holding_close_date_as_of(&transactions, date("2024-04-01")),
+            Some(date("2024-03-01")),
+            "closed by the sell-to-zero"
+        );
+        assert_eq!(
+            holding_close_date_as_of(&transactions, date("2024-07-01")),
+            None,
+            "the re-buy reopens the position"
+        );
+        assert_eq!(
+            holding_close_date_as_of(&transactions, date("2024-09-01")),
+            None,
+            "a partial sell leaves the position open"
+        );
+        assert_eq!(
+            holding_close_date_as_of(&transactions, date("2024-12-31")),
+            Some(date("2024-10-01")),
+            "re-closed: only the LAST transition to zero counts"
+        );
+        assert_eq!(
+            holding_close_date_as_of(&[], date("2024-12-31")),
+            None,
+            "never held"
+        );
+    }
+
     fn price_at(date: &str, price: i64) -> AssetPrice {
         AssetPrice {
             asset_id: "asset-1".to_string(),
