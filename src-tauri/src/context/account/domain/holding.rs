@@ -3,6 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::result::Result as StdResult;
 use uuid::Uuid;
 
 /// Current state of a financial position: an asset held within an account (ADR-002).
@@ -61,7 +62,7 @@ impl Holding {
         average_price: i64,
         total_realized_pnl: i64,
         last_sold_date: Option<String>,
-    ) -> Result<Self> {
+    ) -> StdResult<Self, AccountError> {
         Self::validate(quantity, average_price)?;
         Ok(Self {
             id: Uuid::new_v4().to_string(),
@@ -83,7 +84,7 @@ impl Holding {
         average_price: i64,
         total_realized_pnl: i64,
         last_sold_date: Option<String>,
-    ) -> Result<Self> {
+    ) -> StdResult<Self, AccountError> {
         Self::validate(quantity, average_price)?;
         Ok(Self {
             id,
@@ -117,12 +118,12 @@ impl Holding {
         }
     }
 
-    fn validate(quantity: i64, average_price: i64) -> Result<()> {
+    fn validate(quantity: i64, average_price: i64) -> StdResult<(), AccountError> {
         if quantity < 0 {
-            return Err(AccountError::NegativeQuantity.into());
+            return Err(AccountError::NegativeQuantity);
         }
         if average_price < 0 {
-            return Err(AccountError::NegativeAveragePrice.into());
+            return Err(AccountError::NegativeAveragePrice);
         }
         Ok(())
     }

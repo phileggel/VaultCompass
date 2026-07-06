@@ -974,21 +974,18 @@ impl Account {
 
         // Upsert the Cash Holding with average_price = 1.0, total_realized_pnl = 0,
         // last_sold_date = None — invariants from the spec entity definition.
-        // `Holding::restore` skips validation: `running` is guaranteed >= 0 by the
-        // replay invariant above, and the constant 1_000_000 average_price is positive,
-        // so the typical `Holding::new` validation would always succeed.
-        let holding_id = existing_cash_holding
-            .map(|h| h.id.clone())
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-        let holding = Holding::restore(
-            holding_id,
-            self.id.clone(),
-            cash_asset_id,
-            running,
-            1_000_000,
-            0,
-            None,
-        );
+        let holding = match existing_cash_holding {
+            Some(existing) => Holding::with_id(
+                existing.id.clone(),
+                self.id.clone(),
+                cash_asset_id,
+                running,
+                1_000_000,
+                0,
+                None,
+            )?,
+            None => Holding::new(self.id.clone(), cash_asset_id, running, 1_000_000, 0, None)?,
+        };
         self.pending_changes
             .push(AccountChange::HoldingUpserted(holding.clone()));
         self.upsert_holding_in_memory(holding);
