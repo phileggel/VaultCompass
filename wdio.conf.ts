@@ -72,11 +72,13 @@ export const config: Options.Testrunner = {
   // across E2E runs — VAULT_COMPASS_E2E_DATA_DIR redirects only the SQLite data
   // dir. If the app version bumped since the last run, the stored What's-new
   // last-seen version would open the WNW dialog over the UI and intercept every
-  // click. Removing the key and reloading routes the launch through the
-  // fresh-install path (WNW-030), which seeds silently and shows nothing.
+  // click — and so would a missing key, since the fresh-start path now shows the
+  // current version's section (WNW-030). Seeding a sentinel above any real
+  // version leaves no changelog section in the (stored, current] interval, so
+  // the launch silently re-seeds the current version (WNW-070) and shows nothing.
   before: async () => {
     // @ts-expect-error browser is injected by @wdio/globals into the runner scope
-    await browser.execute(() => localStorage.removeItem("whats_new_last_seen_version"));
+    await browser.execute(() => localStorage.setItem("whats_new_last_seen_version", "999.999.999"));
     // Driver-native reload — never navigate from inside execute(): the page can
     // start unloading before the driver captures the script result.
     // @ts-expect-error browser is injected by @wdio/globals into the runner scope
@@ -88,7 +90,7 @@ export const config: Options.Testrunner = {
     await browser.$("#nav-accounts").waitForExist({
       timeout: 25000,
       timeoutMsg:
-        "what's-new pre-suite hook: #nav-accounts did not reappear after clearing whats_new_last_seen_version and reloading",
+        "what's-new pre-suite hook: #nav-accounts did not reappear after seeding the whats_new_last_seen_version sentinel and reloading",
     });
   },
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractSectionsBetween } from "./parseChangelog";
+import { extractSectionFor, extractSectionsBetween } from "./parseChangelog";
 
 const CHANGELOG_FIXTURE = `# Changelog
 
@@ -86,5 +86,25 @@ describe("extractSectionsBetween", () => {
       "### Changed",
       "- a behavior change",
     ]);
+  });
+});
+
+describe("extractSectionFor", () => {
+  it("returns exactly the requested version's section (WNW-030)", () => {
+    const sections = extractSectionFor(CHANGELOG_FIXTURE, "0.33.0");
+    expect(sections.map((section) => section.version)).toEqual(["0.33.0"]);
+    expect(sections[0]?.date).toBe("2026-07-04");
+  });
+
+  it("returns [] when the version has no changelog section", () => {
+    expect(extractSectionFor(CHANGELOG_FIXTURE, "0.99.0")).toEqual([]);
+  });
+
+  it("returns [] when the version is not parseable", () => {
+    expect(extractSectionFor(CHANGELOG_FIXTURE, "...")).toEqual([]);
+  });
+
+  it("treats a missing patch segment as zero", () => {
+    expect(extractSectionFor(CHANGELOG_FIXTURE, "0.34").map((s) => s.version)).toEqual(["0.34.0"]);
   });
 });

@@ -57,24 +57,18 @@ function buildBodyLines(rawLines: string[]): string[] {
   return body;
 }
 
-/**
- * The changelog sections strictly newer than `afterVersion` and up to `throughVersion`
- * (inclusive), newest first (WNW-040). `[Unreleased]` and unparseable section headers are
- * skipped; a malformed changelog or unparseable version bound yields `[]` (WNW-070).
- */
-export function extractSectionsBetween(
-  changelogText: string,
-  afterVersion: string,
-  throughVersion: string,
-): ChangelogSection[] {
-  const after = parseVersion(afterVersion);
-  const through = parseVersion(throughVersion);
-  if (after === null || through === null) return [];
+interface RawSection {
+  parsed: ParsedVersion;
+  version: string;
+  date: string;
+  rawBody: string[];
+}
 
+/** Every parseable `## [x.y.z]` section of the changelog, in file order. */
+function parseSections(changelogText: string): RawSection[] {
   const lines = changelogText.split(/\r?\n/);
-  const sections: { parsed: ParsedVersion; version: string; date: string; rawBody: string[] }[] =
-    [];
-  let current: (typeof sections)[number] | null = null;
+  const sections: RawSection[] = [];
+  let current: RawSection | null = null;
 
   for (const line of lines) {
     const header = SECTION_HEADER_PATTERN.exec(line);
@@ -94,16 +88,51 @@ export function extractSectionsBetween(
     }
     current?.rawBody.push(line);
   }
+  return sections;
+}
 
-  return sections
+function toChangelogSection(section: RawSection): ChangelogSection {
+  return {
+    version: section.version,
+    date: section.date,
+    body: buildBodyLines(section.rawBody),
+  };
+}
+
+/**
+ * The changelog sections strictly newer than `afterVersion` and up to `throughVersion`
+ * (inclusive), newest first (WNW-040). `[Unreleased]` and unparseable section headers are
+ * skipped; a malformed changelog or unparseable version bound yields `[]` (WNW-070).
+ */
+export function extractSectionsBetween(
+  changelogText: string,
+  afterVersion: string,
+  throughVersion: string,
+): ChangelogSection[] {
+  const after = parseVersion(afterVersion);
+  const through = parseVersion(throughVersion);
+  if (after === null || through === null) return [];
+
+  return parseSections(changelogText)
     .filter(
       (section) =>
         compareVersions(section.parsed, after) > 0 && compareVersions(section.parsed, through) <= 0,
     )
     .sort((a, b) => compareVersions(b.parsed, a.parsed))
-    .map((section) => ({
-      version: section.version,
-      date: section.date,
-      body: buildBodyLines(section.rawBody),
-    }));
+    .map(toChangelogSection);
+}
+
+/**
+ * The single changelog section matching `version`, or `[]` when the version is
+ * unparseable or has no section — the fresh-start content (WNW-030), degrading
+ * to silent seeding per WNW-070.
+ */
+export function extractSectionFor(changelogText: string, version: string): ChangelogSection[] {
+  const wanted = parseVersion(version);
+  if (wanted === null) return [];
+
+  return parseSections(changelogText)
+    .filter((section) => compareVersions(section.parsed, wanted) === 0)
+    .slice(0, 1)
+    .map(toChangelogSection);
 }

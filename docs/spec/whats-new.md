@@ -16,7 +16,7 @@ After the in-app updater (see [update.md](update.md)) installs a new version, th
 
 **WNW-020 — Show condition (frontend)**: On launch, once the app version has resolved, the dialog is shown if and only if a stored last-seen version exists, it differs from the current version, and at least one changelog section falls in the interval (stored, current]. Until dismissed, the dialog reappears on every subsequent launch.
 
-**WNW-030 — Fresh-install silent seeding (frontend)**: When no last-seen version is stored (fresh install), the current version is seeded silently and nothing is shown.
+**WNW-030 — Fresh-start current-version dialog (frontend)**: When no last-seen version is stored (fresh install, or first launch after the version that introduced this feature), the dialog shows the **current version's** changelog section only, in the WNW-040 content shape; dismissing acknowledges per WNW-050. When the changelog has no section for the current version or cannot be parsed, the current version is seeded silently instead (WNW-070).
 
 ### Content
 
@@ -36,7 +36,7 @@ After the in-app updater (see [update.md](update.md)) installs a new version, th
 
 ## E2E note
 
-The webview's `localStorage` persists across E2E runs (only the SQLite data dir is redirected to an ephemeral location). A version bump between runs would therefore satisfy WNW-020 and open the dialog over the UI. The suite neutralizes this in the `wdio.conf.ts` `before` hook: it removes `whats_new_last_seen_version` and reloads, routing the launch through the WNW-030 fresh-install path.
+The webview's `localStorage` persists across E2E runs (only the SQLite data dir is redirected to an ephemeral location). A version bump between runs would satisfy WNW-020 — and a missing key now opens the fresh-start dialog (WNW-030) — either way covering the UI. The suite neutralizes this in the `wdio.conf.ts` `before` hook: it sets `whats_new_last_seen_version` to a sentinel above any real version (`999.999.999`) and reloads; no changelog section falls in the interval, so the launch silently re-seeds the current version (WNW-070).
 
 ---
 

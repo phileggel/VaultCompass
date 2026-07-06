@@ -47,11 +47,19 @@ describe("useWhatsNewDialog", () => {
     expect(getWhatsNewLastSeenVersion()).toBeNull();
   });
 
-  it("seeds the current version silently on a fresh install", () => {
+  it("shows the current version's section on a fresh start (WNW-030)", () => {
     useAppStore.setState({ appVersion: "0.34.0" });
     const { result } = renderHook(() => useWhatsNewDialog(CHANGELOG_FIXTURE));
+    expect(result.current.sections?.map((section) => section.version)).toEqual(["0.34.0"]);
+    // The dialog is pending — the stored version only advances on dismiss.
+    expect(getWhatsNewLastSeenVersion()).toBeNull();
+  });
+
+  it("seeds silently on a fresh start when the current version has no section", () => {
+    useAppStore.setState({ appVersion: "0.35.0" });
+    const { result } = renderHook(() => useWhatsNewDialog(CHANGELOG_FIXTURE));
     expect(result.current.sections).toBeNull();
-    expect(getWhatsNewLastSeenVersion()).toBe("0.34.0");
+    expect(getWhatsNewLastSeenVersion()).toBe("0.35.0");
   });
 
   it("shows nothing when the stored version matches the current version", () => {
