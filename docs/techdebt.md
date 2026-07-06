@@ -10,6 +10,26 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-07-06 — Total-entry derive block duplicated across buy/sell/correct
+
+- Found by: reviewer-backend (during TRX-061/SEL-051 total-entry correction review)
+- Where: src-tauri/src/context/account/domain/account.rs (`buy_holding`, `sell_holding`, `correct_transaction`)
+- Context: branch `next` @ TRX-061/SEL-051 (edit buy/sell by total amount)
+- Severity: 🔵
+- Observation: The typed-total validation + `derive_unit_price_from_total(...)` block (`total <= 0` → TotalAmountNotPositive, purchase-only `total < fees` → TotalAmountBelowFees, then derive) is now inlined four times — the Purchase and Sell arms of both `buy_holding`/`sell_holding` (TRX-060/SEL-050) and `correct_transaction` (TRX-061/SEL-051). Past the Rule of Three. The four copies are currently consistent (verified during review, no drift), so not urgent. Extraction into `derive_purchase_from_total(...)` / `derive_sell_from_total(...)` helpers shared by the entry and correction paths would remove the duplication, but it touches the pre-existing TRX-060/SEL-050 arms (beyond the TRX-061 file set) and needs a design call on the helper signature — deferred out of the total-entry-correction task rather than expanding its scope.
+
+---
+
+## 2026-07-06 — `isCashAsset` crosses from `performance` into `account_details`
+
+- Found by: manual (during T9 performance-feature merge)
+- Where: src/features/performance/shared/presenter.ts, src/features/performance/shared/globalPresenter.ts
+- Context: branch `next` @ merge of account_performance + global_performance
+- Severity: 🟡
+- Observation: Both performance presenters import `isCashAsset` from `@/features/account_details/shared/presenter`, a cross-feature domain import that the project's stricter § Standards rule (CLAUDE.md, rides on F26) forbids — only generic primitives may cross, and those belong in `ui/`. This predates T9 (the merge only relocated the importing files); T9's mandate was a zero-logic mechanical move, so relocating `isCashAsset` was deferred. Resolution needs a design call on where the cash-asset predicate belongs: a shared asset helper (e.g. `ui/` or a dedicated `features/assets` export) that both `account_details` and `performance` import, rather than one feature reaching into another. Mechanical once the home is chosen, but it touches `account_details/shared/presenter.ts` and every current consumer of `isCashAsset`, so it is its own scoped change.
+
+---
+
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)

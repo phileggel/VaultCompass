@@ -2247,6 +2247,129 @@ mod tests {
         assert_eq!(corrected.unit_price, micro(150));
     }
 
+    // TRX-061 — the correction path enforces the same total validation as TRX-060
+    // (independent inline copy, so it needs its own coverage).
+    #[test]
+    fn trx_061_correct_purchase_rejects_non_positive_total() {
+        let mut acc = cash_seeded_account();
+        let tx = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+        let err = acc
+            .correct_transaction(
+                &tx.id,
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                Some(0),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::TotalAmountNotPositive))
+                .unwrap_or(false),
+            "expected TotalAmountNotPositive, got: {err}"
+        );
+    }
+
+    // TRX-061 — a typed total below the fees it includes is rejected on correction.
+    #[test]
+    fn trx_061_correct_purchase_rejects_total_below_fees() {
+        let mut acc = cash_seeded_account();
+        let tx = acc
+            .buy_holding(
+                "asset-1".to_string(),
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+        let err = acc
+            .correct_transaction(
+                &tx.id,
+                "2024-01-01".to_string(),
+                micro(2),
+                micro(100),
+                micro(1),
+                micro(50),
+                Some(micro(10)),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::TotalAmountBelowFees))
+                .unwrap_or(false),
+            "expected TotalAmountBelowFees, got: {err}"
+        );
+    }
+
+    // SEL-051 — the sell correction path rejects a non-positive typed total.
+    #[test]
+    fn sel_051_correct_sell_rejects_non_positive_total() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-01-01".to_string(),
+            micro(5),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let sell = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-02-01".to_string(),
+                micro(2),
+                micro(150),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+        let err = acc
+            .correct_transaction(
+                &sell.id,
+                "2024-02-01".to_string(),
+                micro(2),
+                micro(150),
+                micro(1),
+                0,
+                Some(0),
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::TotalAmountNotPositive))
+                .unwrap_or(false),
+            "expected TotalAmountNotPositive, got: {err}"
+        );
+    }
+
     // SEL-024 / SEL-030 — recalculation replays in chronological order regardless of the
     // physical order of the input slice. A sell stored physically before its buy (as happens
     // after a DB reload, which orders by date) must still validate against the holding as it

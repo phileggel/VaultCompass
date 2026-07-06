@@ -284,6 +284,7 @@ export function useEditTransactionModal({
     setRecordPrice,
     // TRX-061 / SEL-051 — total-entry correction (Purchase / Sell only).
     isTotalEntryEligible,
+    isTotalMode,
     entryMode,
     handleEntryModeChange,
     totalAmountInput,

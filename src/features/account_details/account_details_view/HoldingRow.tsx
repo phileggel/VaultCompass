@@ -217,7 +217,9 @@ export function HoldingRow({
     <tr
       className="m3-tr"
       id={`holding-row-${row.assetId}`}
-      tabIndex={readOnly ? undefined : 0}
+      // Archived rows can't be edited (handleOpenAssetDetail no-ops), so they stay
+      // out of the tab order rather than becoming an unlabeled keyboard dead-end.
+      tabIndex={readOnly || isArchived ? undefined : 0}
       aria-label={
         readOnly || isArchived
           ? undefined

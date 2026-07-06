@@ -256,6 +256,19 @@ describe("HoldingRow — double-click opens Edit Asset modal", () => {
     fireEvent.keyDown(buyButton, { key: "Enter" });
     expect(navigateMock).not.toHaveBeenCalled();
   });
+
+  it("keeps an archived row out of the tab order and inert to Enter", () => {
+    useAppStore.setState({
+      assets: [{ id: "asset-1", is_archived: true, currency: "USD" }] as unknown as Asset[],
+      accounts: [],
+    });
+    renderInTable(baseRow);
+    const row = screen.getByText("Apple Inc").closest("tr");
+    if (!row) throw new Error("expected a holding row");
+    expect(row).not.toHaveAttribute("tabindex");
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
 });
 
 // MKT-153/156 — price-refresh lock IconButton on the holding row.

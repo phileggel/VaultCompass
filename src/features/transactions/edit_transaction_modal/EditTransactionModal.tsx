@@ -52,6 +52,7 @@ export function EditTransactionModal({
     recordPrice,
     setRecordPrice,
     isTotalEntryEligible,
+    isTotalMode,
     entryMode,
     handleEntryModeChange,
     totalAmountInput,
@@ -66,8 +67,6 @@ export function EditTransactionModal({
     transaction,
     onSubmitSuccess: onSuccess ?? onClose,
   });
-
-  const isTotalMode = isTotalEntryEligible && entryMode === "total";
 
   const isOpeningBalance = transaction.transaction_type === "OpeningBalance";
   const selectedAsset = assets.find((a) => a.id === formData.assetId);
