@@ -129,27 +129,61 @@ pub(crate) async fn load_rate_map(
     today: NaiveDate,
 ) -> StdResult<RateMap, AccountError> {
     let mut dates = period_end_dates(month_view_available, earliest_date, today);
-    // PRF-071 — zero-cost credits are valued at their grant date, so those dates
-    // need a pre-resolved rate too.
-    dates.extend(in_kind_credit_dates(transactions));
+    // PRF-071/PRF-086 — zero-cost credits and opening balances are valued at
+    // their own transaction date, so those dates need a pre-resolved rate too.
+    dates.extend(market_valued_flow_dates(transactions));
     let dates: Vec<NaiveDate> = dates.into_iter().collect();
     load_rate_map_for_dates(currency_service, priced_assets, account_currency, &dates).await
 }
 
-/// PRF-071 — the grant dates of the zero-cost in-kind credits in a transaction
-/// set (free shares, non-cash interest): the dates `zero_cost_credit_value`
-/// resolves a price and FX rate for. Cash-line interest is a plain cash credit
-/// and needs no valuation date.
-pub(crate) fn in_kind_credit_dates(transactions: &[Transaction]) -> BTreeSet<NaiveDate> {
+/// PRF-071/PRF-086 — the transaction dates of the flows valued at their own-date
+/// market price: zero-cost in-kind credits (free shares, non-cash interest, the
+/// dates `zero_cost_credit_value` resolves) and opening balances (the dates
+/// `opening_balance_flow_value` resolves). Cash-line interest is a plain cash
+/// credit and needs no valuation date.
+pub(crate) fn market_valued_flow_dates(transactions: &[Transaction]) -> BTreeSet<NaiveDate> {
     transactions
         .iter()
         .filter(|t| match t.transaction_type {
-            TransactionType::FreeShares => true,
+            TransactionType::FreeShares | TransactionType::OpeningBalance => true,
             TransactionType::Interest => !crate::core::cash::is_cash_asset(&t.asset_id),
             _ => false,
         })
         .filter_map(|t| parse_date(&t.date))
         .collect()
+}
+
+/// PRF-086 — the flow value of an opening balance in a **windowed** metric or
+/// bridge: the position's market value as of its entry date (carry-forward price
+/// PRF-022, FX rate FXR-042), falling back to the typed book cost when no usable
+/// price or rate exists as of that date. Valuing the transfer at market keeps the
+/// entry pnl-neutral in the window containing it — gains earned before the
+/// position joined the account belong to no tracked period. Lifetime metrics
+/// (PRF-035) keep the typed cost so the pre-account gain stays in since-inception
+/// performance.
+pub(crate) fn opening_balance_flow_value(
+    transaction: &Transaction,
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+) -> i64 {
+    let market_value = || -> Option<i64> {
+        let entry_date = parse_date(&transaction.date)?;
+        let priced = priced_assets.get(transaction.asset_id.as_str())?;
+        if priced.class == AssetClass::Cash {
+            return None;
+        }
+        let price = priced.price_as_of(entry_date)? as i128;
+        let converted_price = if priced.currency == account_currency {
+            price
+        } else {
+            let rate = *rate_map.get(&(priced.currency.clone(), entry_date))? as i128;
+            price * rate / MICRO
+        };
+        let value = transaction.quantity as i128 * converted_price / MICRO;
+        i64::try_from(value).ok()
+    };
+    market_value().unwrap_or(transaction.total_amount)
 }
 
 /// Pre-resolves FX rates for each foreign holding currency at the caller-supplied
@@ -214,16 +248,14 @@ pub(crate) async fn compute_current_ytd_pct(
     }
 
     let priced_assets = load_priced_assets(asset_service, transactions).await?;
-    // The current-year YTD valuation only values two dates: the prior
-    // 31 December (year-start baseline) and today (period end).
+    // The current-year YTD valuation values the prior 31 December (year-start
+    // baseline), today (period end), and the market-valued flow dates (PRF-086).
     let year_start_baseline_date = last_day_of_year(today.year() - 1);
-    let rate_map = load_rate_map_for_dates(
-        currency_service,
-        &priced_assets,
-        account_currency,
-        &[year_start_baseline_date, today],
-    )
-    .await?;
+    let mut dates: BTreeSet<NaiveDate> = [year_start_baseline_date, today].into_iter().collect();
+    dates.extend(market_valued_flow_dates(transactions));
+    let dates: Vec<NaiveDate> = dates.into_iter().collect();
+    let rate_map =
+        load_rate_map_for_dates(currency_service, &priced_assets, account_currency, &dates).await?;
 
     let end_value = end_value_as_of(
         transactions,
@@ -241,8 +273,11 @@ pub(crate) async fn compute_current_ytd_pct(
         account_currency,
         year_start_baseline_date,
     );
-    let metric = metric_for_span(
+    let metric = metric_for_span_windowed(
         transactions,
+        &priced_assets,
+        &rate_map,
+        account_currency,
         year_start_baseline,
         end_value,
         first_day_of_year(today.year()),
@@ -485,7 +520,8 @@ pub(crate) struct DatedFlow {
 /// Dividends, interest, free shares and management fees are internal events;
 /// purchases and sells are cash↔asset conversions — none is an external flow
 /// (DIV-023, FSD-070, FEE-071, INT-024). Transactions with malformed dates are
-/// skipped.
+/// skipped. This is the **lifetime** flow set (PRF-035): opening balances carry
+/// their typed cost; windowed metrics use `external_cash_flows_windowed`.
 pub(crate) fn external_cash_flows(transactions: &[Transaction]) -> Vec<DatedFlow> {
     let mut flows = Vec::new();
     for transaction in transactions {
@@ -494,6 +530,39 @@ pub(crate) fn external_cash_flows(transactions: &[Transaction]) -> Vec<DatedFlow
         };
         let amount = match transaction.transaction_type {
             TransactionType::Deposit | TransactionType::OpeningBalance => transaction.total_amount,
+            TransactionType::Withdrawal => -transaction.total_amount,
+            TransactionType::Purchase
+            | TransactionType::Sell
+            | TransactionType::Dividend
+            | TransactionType::FreeShares
+            | TransactionType::ManagementFee
+            | TransactionType::Interest => continue,
+        };
+        flows.push(DatedFlow { date, amount });
+    }
+    flows
+}
+
+/// PRF-086 — the **windowed** variant of `external_cash_flows`: identical except
+/// that an `OpeningBalance` flow carries its entry-date market value
+/// (`opening_balance_flow_value`, fallback typed cost) so the transfer is
+/// pnl-neutral inside the window containing it.
+pub(crate) fn external_cash_flows_windowed(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+) -> Vec<DatedFlow> {
+    let mut flows = Vec::new();
+    for transaction in transactions {
+        let Some(date) = parse_date(&transaction.date) else {
+            continue;
+        };
+        let amount = match transaction.transaction_type {
+            TransactionType::Deposit => transaction.total_amount,
+            TransactionType::OpeningBalance => {
+                opening_balance_flow_value(transaction, priced_assets, rate_map, account_currency)
+            }
             TransactionType::Withdrawal => -transaction.total_amount,
             TransactionType::Purchase
             | TransactionType::Sell
@@ -520,6 +589,29 @@ pub(crate) fn metric_for_span(
 ) -> PerformanceMetric {
     metric_for_span_over_flows(
         &external_cash_flows(transactions),
+        start_value,
+        end_value,
+        period_start,
+        period_end,
+    )
+}
+
+/// PRF-086 — `metric_for_span` over the windowed flow set (opening balances at
+/// their entry-date market value). Used by every calendar-window metric
+/// (period-over-period, year-to-date); lifetime metrics keep `metric_for_span`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn metric_for_span_windowed(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> PerformanceMetric {
+    metric_for_span_over_flows(
+        &external_cash_flows_windowed(transactions, priced_assets, rate_map, account_currency),
         start_value,
         end_value,
         period_start,
@@ -618,7 +710,9 @@ pub(crate) struct PositionFlows {
 /// one asset. Deposit/Withdrawal touch the cash line, never a position;
 /// FreeShares, ManagementFee and Interest are zero-cash position events
 /// (FSD-070 / FEE-071 / INT-024) whose effect surfaces through the endpoint
-/// values. Transactions with malformed dates are skipped.
+/// values. Transactions with malformed dates are skipped. This is the
+/// **lifetime** flow set (PRF-035): opening balances carry their typed cost;
+/// windowed metrics use `position_flows_windowed`.
 pub(crate) fn position_flows(asset_transactions: &[&Transaction]) -> PositionFlows {
     let mut trades = Vec::new();
     let mut dividends = Vec::new();
@@ -630,6 +724,53 @@ pub(crate) fn position_flows(asset_transactions: &[&Transaction]) -> PositionFlo
             TransactionType::Purchase | TransactionType::OpeningBalance => trades.push(DatedFlow {
                 date,
                 amount: transaction.total_amount,
+            }),
+            TransactionType::Sell => trades.push(DatedFlow {
+                date,
+                amount: -transaction.total_amount,
+            }),
+            TransactionType::Dividend => dividends.push(DatedFlow {
+                date,
+                amount: transaction.total_amount,
+            }),
+            TransactionType::Deposit
+            | TransactionType::Withdrawal
+            | TransactionType::FreeShares
+            | TransactionType::ManagementFee
+            | TransactionType::Interest => {}
+        }
+    }
+    PositionFlows { trades, dividends }
+}
+
+/// PRF-086 — the **windowed** variant of `position_flows`: identical except that
+/// an `OpeningBalance` trade flow carries its entry-date market value
+/// (`opening_balance_flow_value`, fallback typed cost).
+pub(crate) fn position_flows_windowed(
+    asset_transactions: &[&Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+) -> PositionFlows {
+    let mut trades = Vec::new();
+    let mut dividends = Vec::new();
+    for transaction in asset_transactions {
+        let Some(date) = parse_date(&transaction.date) else {
+            continue;
+        };
+        match transaction.transaction_type {
+            TransactionType::Purchase => trades.push(DatedFlow {
+                date,
+                amount: transaction.total_amount,
+            }),
+            TransactionType::OpeningBalance => trades.push(DatedFlow {
+                date,
+                amount: opening_balance_flow_value(
+                    transaction,
+                    priced_assets,
+                    rate_map,
+                    account_currency,
+                ),
             }),
             TransactionType::Sell => trades.push(DatedFlow {
                 date,
@@ -700,17 +841,56 @@ pub(crate) fn holding_performance_for_span_over_flows(
     }
 }
 
-/// ACD-056/057 — the percentage of `holding_performance_for_span`, for callers
-/// that only consume the micro-percent.
+/// PRF-086 — the **windowed** variant of `holding_performance_for_span`:
+/// identical except that `OpeningBalance` flows carry their entry-date market
+/// value. Used by every calendar-window position metric; lifetime metrics keep
+/// `holding_performance_for_span`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn holding_performance_for_span_windowed(
+    asset_transactions: &[&Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+) -> PerformanceMetric {
+    let flows = position_flows_windowed(
+        asset_transactions,
+        priced_assets,
+        rate_map,
+        account_currency,
+    );
+    holding_performance_for_span_over_flows(
+        &flows.trades,
+        &flows.dividends,
+        start_value,
+        end_value,
+        period_start,
+        period_end,
+    )
+}
+
+/// ACD-056/057 — the percentage of `holding_performance_for_span_windowed`
+/// (per-line window returns are calendar-window metrics per PRF-086), for
+/// callers that only consume the micro-percent.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn holding_metric_for_span(
     asset_transactions: &[&Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
     start_value: i64,
     end_value: i64,
     period_start: NaiveDate,
     period_end: NaiveDate,
 ) -> Option<i64> {
-    holding_performance_for_span(
+    holding_performance_for_span_windowed(
         asset_transactions,
+        priced_assets,
+        rate_map,
+        account_currency,
         start_value,
         end_value,
         period_start,

@@ -10,9 +10,10 @@ use crate::context::asset::{AssetClass, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::use_cases::shared::valuation::{
     end_value_as_of, holding_close_date_as_of, holding_end_value_as_of,
-    holding_performance_for_span, load_priced_assets, load_rate_map, metric_for_span,
-    month_periods, parse_date, year_periods, MonthPeriod, PerformanceMetric, PricedAsset, RateMap,
-    YearPeriod, MICRO, PERCENT_SCALE,
+    holding_performance_for_span, holding_performance_for_span_windowed, load_priced_assets,
+    load_rate_map, metric_for_span, metric_for_span_windowed, month_periods,
+    opening_balance_flow_value, parse_date, year_periods, MonthPeriod, PerformanceMetric,
+    PricedAsset, RateMap, YearPeriod, MICRO, PERCENT_SCALE,
 };
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
@@ -219,8 +220,11 @@ fn build_yearly(
         let period_over_period = if year == first_year {
             None
         } else {
-            Some(metric_for_scope(
+            Some(windowed_metric_for_scope(
                 transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
                 previous_end_value,
                 end_value,
                 period_start,
@@ -314,8 +318,11 @@ fn build_monthly(
         let period_over_period = if is_first_period {
             None
         } else {
-            Some(metric_for_scope(
+            Some(windowed_metric_for_scope(
                 transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
                 previous_end_value,
                 end_value,
                 period_start,
@@ -337,8 +344,11 @@ fn build_monthly(
             year_start_baseline,
             asset_scope,
         );
-        let year_to_date = Some(metric_for_scope(
+        let year_to_date = Some(windowed_metric_for_scope(
             transactions,
+            priced_assets,
+            rate_map,
+            account_currency,
             year_start_baseline_value,
             end_value,
             year_start,
@@ -425,8 +435,16 @@ fn period_bridge(
         match transaction.transaction_type {
             TransactionType::Deposit => cash_flow += transaction.total_amount as i128,
             TransactionType::Withdrawal => cash_flow -= transaction.total_amount as i128,
-            // Opening balance contributes its book cost (no cash leg).
-            TransactionType::OpeningBalance => asset_flow += transaction.total_amount as i128,
+            // PRF-086 — an opening balance contributes its entry-date market
+            // value (fallback typed cost), keeping the transfer pnl-neutral.
+            TransactionType::OpeningBalance => {
+                asset_flow += opening_balance_flow_value(
+                    transaction,
+                    priced_assets,
+                    rate_map,
+                    account_currency,
+                ) as i128;
+            }
             // FSD-070/PRF-071 — free shares carry no cost, so their grant-date
             // market value is the in-kind contribution (valued like `end_value_as_of`).
             TransactionType::FreeShares => {
@@ -537,11 +555,54 @@ fn end_value_for_scope(
     }
 }
 
-/// PRF-031/032 (account scope) / PRF-083 (asset scope) — the span metric with
-/// the flow set matching the scope: Deposit/Withdrawal/OpeningBalance for the
-/// account, the asset's own Purchase/Sell/OpeningBalance (dividends added to
-/// gain) for a scoped position.
-fn metric_for_scope(
+/// PRF-031/032 (account scope) / PRF-083 (asset scope) — the calendar-window
+/// span metric with the flow set matching the scope: Deposit/Withdrawal/
+/// OpeningBalance for the account, the asset's own Purchase/Sell/OpeningBalance
+/// (dividends added to gain) for a scoped position. Windowed metrics value an
+/// opening balance at its entry-date market value (PRF-086).
+#[allow(clippy::too_many_arguments)]
+fn windowed_metric_for_scope(
+    transactions: &[Transaction],
+    priced_assets: &HashMap<String, PricedAsset>,
+    rate_map: &RateMap,
+    account_currency: &str,
+    start_value: i64,
+    end_value: i64,
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+    asset_scope: Option<&str>,
+) -> PerformanceMetric {
+    match asset_scope {
+        None => metric_for_span_windowed(
+            transactions,
+            priced_assets,
+            rate_map,
+            account_currency,
+            start_value,
+            end_value,
+            period_start,
+            period_end,
+        ),
+        Some(_) => {
+            let asset_transactions: Vec<&Transaction> = transactions.iter().collect();
+            holding_performance_for_span_windowed(
+                &asset_transactions,
+                priced_assets,
+                rate_map,
+                account_currency,
+                start_value,
+                end_value,
+                period_start,
+                period_end,
+            )
+        }
+    }
+}
+
+/// PRF-035 — the lifetime span metric with the flow set matching the scope.
+/// Unlike the windowed variant (PRF-086), an opening balance keeps its typed
+/// cost here, so the pre-account gain stays in since-inception performance.
+fn lifetime_metric_for_scope(
     transactions: &[Transaction],
     start_value: i64,
     end_value: i64,
@@ -634,8 +695,18 @@ fn holding_period_bridge(
             continue;
         }
         match transaction.transaction_type {
-            TransactionType::Purchase | TransactionType::OpeningBalance => {
+            TransactionType::Purchase => {
                 cash_flow += transaction.total_amount as i128;
+            }
+            // PRF-086 — an opening balance has no cash leg: it is an in-kind
+            // contribution at its entry-date market value (fallback typed cost).
+            TransactionType::OpeningBalance => {
+                asset_flow += opening_balance_flow_value(
+                    transaction,
+                    priced_assets,
+                    rate_map,
+                    account_currency,
+                ) as i128;
             }
             TransactionType::Sell => cash_flow -= transaction.total_amount as i128,
             TransactionType::Dividend => dividends += transaction.total_amount as i128,
@@ -719,7 +790,7 @@ fn since_inception_metric(
     period_end: NaiveDate,
     asset_scope: Option<&str>,
 ) -> PerformanceMetric {
-    metric_for_scope(
+    lifetime_metric_for_scope(
         transactions,
         0,
         end_value,

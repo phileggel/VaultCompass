@@ -1081,6 +1081,162 @@ mod tests {
         );
     }
 
+    // PRF-086 — an opening balance whose typed cost differs from its entry-date
+    // market value is pnl-neutral in the windowed metrics (valued at market) but
+    // keeps the pre-account gain in since-inception (valued at cost).
+    #[tokio::test]
+    async fn opening_balance_is_windowed_neutral_but_keeps_lifetime_gain() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Transferred".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Transferred Stock".to_string(),
+                reference: "TRF".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        // 5 units bought years ago for 1 000 EUR total, worth 1 000 EUR/unit on
+        // the 2024-03-01 entry date (market value 5 000), price flat afterwards.
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-01", 1000.0)
+            .await
+            .unwrap();
+        account_svc
+            .open_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                5_000_000,
+                1_000_000_000,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+
+        let unscoped = uc.get_account_performance(&account.id, None).await.unwrap();
+        let row = unscoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        assert_eq!(row.end_value, 5_000_000_000);
+        assert_eq!(
+            row.asset_flow, 5_000_000_000,
+            "entry-date market value, not the 1 000 typed cost"
+        );
+        assert_eq!(row.pnl, 0, "the transfer itself is pnl-neutral (PRF-086)");
+        let since = row.since_inception.as_ref().expect("since_inception");
+        assert_eq!(
+            since.gain, 4_000_000_000,
+            "lifetime keeps the pre-account gain (cost basis)"
+        );
+        assert_eq!(since.pct, Some(400_000_000), "4 000 gain on 1 000 invested");
+
+        // Scoped read: the opening balance is an in-kind contribution — no cash
+        // leg — so it lands in asset_flow, not cash_flow (PRF-084).
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock.id))
+            .await
+            .unwrap();
+        let scoped_row = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("scoped 2024 row");
+        assert_eq!(scoped_row.cash_flow, 0, "no cash leg");
+        assert_eq!(scoped_row.asset_flow, 5_000_000_000);
+        assert_eq!(scoped_row.pnl, 0);
+    }
+
+    // PRF-086 — with no usable price as of the entry date, the opening-balance
+    // flow falls back to its typed cost (today's pre-fix behaviour).
+    #[tokio::test]
+    async fn opening_balance_without_entry_price_falls_back_to_cost() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Unpriced Transfer".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Unpriced Stock".to_string(),
+                reference: "UNP".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        // First recorded price postdates the entry, so the entry-date market
+        // value is unavailable and the typed 2 000 cost is used.
+        account_svc
+            .open_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                5_000_000,
+                2_000_000_000,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-06-30", 1000.0)
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_performance(&account.id, None).await.unwrap();
+        let row = resp
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        assert_eq!(row.asset_flow, 2_000_000_000, "typed cost fallback");
+        assert_eq!(
+            row.pnl, 3_000_000_000,
+            "unattributable value surfaces via pnl, as before PRF-086"
+        );
+    }
+
     // PRF-071 / PRF-074 — free shares contribute their grant-date market value to
     // asset_flow (the price + FX carry-forward path); post-grant movement lands in
     // pnl, and the bridge balances.

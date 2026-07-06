@@ -6,13 +6,13 @@ use crate::context::currency::CurrencyService;
 use crate::core::cash::{is_cash_asset, system_cash_asset_id};
 use crate::core::logger::BACKEND;
 use crate::use_cases::shared::valuation::{
-    holding_metric_for_span, load_priced_assets, load_rate_map_for_dates, PricedAsset, RateMap,
-    MICRO,
+    holding_metric_for_span, load_priced_assets, load_rate_map_for_dates, market_valued_flow_dates,
+    PricedAsset, RateMap, MICRO,
 };
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
 use specta::Type;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -278,11 +278,17 @@ impl AccountDetailsUseCase {
         // dates are preloaded once for all holdings.
         let window_starts = PeriodWindowStarts::ending_at(today_date);
         let priced_assets = load_priced_assets(&self.asset_service, &all_txs).await?;
+        // PRF-086 — opening balances are valued at their entry date inside the
+        // window flows, so those dates join the pre-resolved set.
+        let mut window_rate_dates: BTreeSet<NaiveDate> =
+            window_starts.valuation_dates().into_iter().collect();
+        window_rate_dates.extend(market_valued_flow_dates(&all_txs));
+        let window_rate_dates: Vec<NaiveDate> = window_rate_dates.into_iter().collect();
         let window_rate_map = load_rate_map_for_dates(
             &self.currency_service,
             &priced_assets,
             &account.currency,
-            &window_starts.valuation_dates(),
+            &window_rate_dates,
         )
         .await?;
         let period_performance_inputs = PeriodPerformanceInputs {
@@ -1052,6 +1058,9 @@ fn window_position_pct(
     let flow_window_start = window_start.succ_opt()?;
     holding_metric_for_span(
         asset_transactions,
+        inputs.priced_assets,
+        inputs.rate_map,
+        inputs.account_currency,
         start_value,
         end_value,
         flow_window_start,

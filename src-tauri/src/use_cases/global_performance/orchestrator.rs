@@ -9,11 +9,11 @@ use crate::use_cases::shared::performance::{
     AccountPerformanceResponse, PerformancePeriod, PeriodBridge,
 };
 use crate::use_cases::shared::valuation::{
-    end_value_as_of, external_cash_flows, holding_end_value_as_of,
-    holding_performance_for_span_over_flows, in_kind_credit_dates, load_priced_assets,
-    load_rate_map_for_dates, metric_for_span_over_flows, month_periods, parse_date, position_flows,
-    year_periods, DatedFlow, MonthPeriod, PerformanceMetric, PricedAsset, RateMap, YearPeriod,
-    MICRO,
+    end_value_as_of, external_cash_flows, external_cash_flows_windowed, holding_close_date_as_of,
+    holding_end_value_as_of, holding_performance_for_span_over_flows, load_priced_assets,
+    load_rate_map_for_dates, market_valued_flow_dates, metric_for_span_over_flows, month_periods,
+    opening_balance_flow_value, parse_date, position_flows, position_flows_windowed, year_periods,
+    DatedFlow, MonthPeriod, PerformanceMetric, PricedAsset, RateMap, YearPeriod, MICRO,
 };
 use chrono::{Datelike, Local, NaiveDate};
 use std::collections::{BTreeSet, HashMap};
@@ -159,9 +159,20 @@ impl GlobalPerformanceUseCase {
 
         let flows = aggregated_flows(&converted_accounts);
 
+        // PRF-085 — the union of the scoped transactions across accounts feeds
+        // the aggregation-wide close-date probe (empty when unscoped).
+        let scoped_transactions: Vec<Transaction> = match asset_scope {
+            None => Vec::new(),
+            Some(_) => converted_accounts
+                .iter()
+                .flat_map(|account| account.transactions.iter().cloned())
+                .collect(),
+        };
+
         let yearly = build_yearly_aggregated(
             &converted_accounts,
             &flows,
+            &scoped_transactions,
             asset_scope,
             earliest_date,
             today,
@@ -170,6 +181,7 @@ impl GlobalPerformanceUseCase {
             build_monthly_aggregated(
                 &converted_accounts,
                 &flows,
+                &scoped_transactions,
                 asset_scope,
                 earliest_date,
                 today,
@@ -203,7 +215,7 @@ impl GlobalPerformanceUseCase {
         // PRF-071 — zero-cost credits are valued at their grant date, so this
         // account's grant dates join the valued-date set for its own rate map.
         let mut asset_rate_dates: BTreeSet<NaiveDate> = valued_dates.iter().copied().collect();
-        asset_rate_dates.extend(in_kind_credit_dates(&transactions));
+        asset_rate_dates.extend(market_valued_flow_dates(&transactions));
         let asset_rate_dates: Vec<NaiveDate> = asset_rate_dates.into_iter().collect();
         let rate_map = load_rate_map_for_dates(
             &self.currency_service,
@@ -244,24 +256,41 @@ impl GlobalPerformanceUseCase {
             rate_map,
             reference_rate_by_date,
             trade_flows: Vec::new(),
+            windowed_trade_flows: Vec::new(),
             dividend_flows: Vec::new(),
         };
 
         // GPF-030 — each flow converts at the rate of its own transaction date;
-        // a flow with no usable rate contributes 0 (dropped).
-        let (raw_trades, raw_dividends) = match asset_scope {
+        // a flow with no usable rate contributes 0 (dropped). The lifetime set
+        // keeps opening balances at typed cost (PRF-035); the windowed set
+        // values them at their entry-date market price (PRF-086).
+        let (raw_trades, raw_windowed_trades, raw_dividends) = match asset_scope {
             None => (
                 external_cash_flows(&converted_account.transactions),
+                external_cash_flows_windowed(
+                    &converted_account.transactions,
+                    &converted_account.priced_assets,
+                    &converted_account.rate_map,
+                    &converted_account.currency,
+                ),
                 Vec::new(),
             ),
             Some(_) => {
                 let asset_transactions: Vec<&Transaction> =
                     converted_account.transactions.iter().collect();
                 let flows = position_flows(&asset_transactions);
-                (flows.trades, flows.dividends)
+                let windowed = position_flows_windowed(
+                    &asset_transactions,
+                    &converted_account.priced_assets,
+                    &converted_account.rate_map,
+                    &converted_account.currency,
+                );
+                (flows.trades, windowed.trades, flows.dividends)
             }
         };
         converted_account.trade_flows = converted_account.convert_flows(raw_trades);
+        converted_account.windowed_trade_flows =
+            converted_account.convert_flows(raw_windowed_trades);
         converted_account.dividend_flows = converted_account.convert_flows(raw_dividends);
         Ok(converted_account)
     }
@@ -286,10 +315,14 @@ struct ConvertedAccount {
     priced_assets: HashMap<String, PricedAsset>,
     rate_map: RateMap,
     reference_rate_by_date: HashMap<NaiveDate, i64>,
-    /// Simple Dietz flows in reference-currency micros: the account-level
-    /// external flows (PRF-030), or the position trade flows in asset scope
-    /// (PRF-083), converted per GPF-030.
+    /// Lifetime Simple Dietz flows in reference-currency micros: the
+    /// account-level external flows (PRF-030), or the position trade flows in
+    /// asset scope (PRF-083), converted per GPF-030. Opening balances carry
+    /// their typed cost (PRF-035).
     trade_flows: Vec<DatedFlow>,
+    /// The windowed variant of `trade_flows` (PRF-086): opening balances at
+    /// their entry-date market value.
+    windowed_trade_flows: Vec<DatedFlow>,
     /// The scoped asset's dividend income in reference-currency micros (asset
     /// scope only; empty otherwise).
     dividend_flows: Vec<DatedFlow>,
@@ -368,9 +401,18 @@ impl ConvertedAccount {
                         cash_flow -=
                             convert_or_zero(transaction.total_amount, transaction_date_rate);
                     }
+                    // PRF-086 — entry-date market value (fallback typed cost),
+                    // converted at the entry-date rate.
                     TransactionType::OpeningBalance => {
-                        asset_flow +=
-                            convert_or_zero(transaction.total_amount, transaction_date_rate);
+                        asset_flow += convert_or_zero(
+                            opening_balance_flow_value(
+                                transaction,
+                                &self.priced_assets,
+                                &self.rate_map,
+                                &self.currency,
+                            ),
+                            transaction_date_rate,
+                        );
                     }
                     TransactionType::FreeShares => {
                         asset_flow += self.in_kind_credit_reference(transaction);
@@ -394,9 +436,22 @@ impl ConvertedAccount {
                     | TransactionType::ManagementFee => {}
                 },
                 Some(_) => match transaction.transaction_type {
-                    TransactionType::Purchase | TransactionType::OpeningBalance => {
+                    TransactionType::Purchase => {
                         cash_flow +=
                             convert_or_zero(transaction.total_amount, transaction_date_rate);
+                    }
+                    // PRF-086 — no cash leg: an in-kind contribution at its
+                    // entry-date market value, converted at the entry-date rate.
+                    TransactionType::OpeningBalance => {
+                        asset_flow += convert_or_zero(
+                            opening_balance_flow_value(
+                                transaction,
+                                &self.priced_assets,
+                                &self.rate_map,
+                                &self.currency,
+                            ),
+                            transaction_date_rate,
+                        );
                     }
                     TransactionType::Sell => {
                         cash_flow -=
@@ -483,28 +538,40 @@ fn convert_or_zero(amount: i64, rate_micros: Option<i64>) -> i128 {
 }
 
 /// The converted Simple Dietz flow set of the whole aggregation (GPF-030):
-/// every included account's trade flows — and, in asset scope, dividend
-/// flows — concatenated.
+/// every included account's trade flows — lifetime and windowed variants — and,
+/// in asset scope, dividend flows, concatenated.
 struct AggregatedFlows {
+    /// Lifetime trades: opening balances at typed cost (PRF-035).
     trades: Vec<DatedFlow>,
+    /// Windowed trades: opening balances at entry-date market value (PRF-086).
+    windowed_trades: Vec<DatedFlow>,
     dividends: Vec<DatedFlow>,
 }
 
 fn aggregated_flows(accounts: &[ConvertedAccount]) -> AggregatedFlows {
     let mut trades = Vec::new();
+    let mut windowed_trades = Vec::new();
     let mut dividends = Vec::new();
     for account in accounts {
         trades.extend(account.trade_flows.iter().copied());
+        windowed_trades.extend(account.windowed_trade_flows.iter().copied());
         dividends.extend(account.dividend_flows.iter().copied());
     }
-    AggregatedFlows { trades, dividends }
+    AggregatedFlows {
+        trades,
+        windowed_trades,
+        dividends,
+    }
 }
 
-/// GPF-031 — the span metric of the aggregation, over the converted flow set:
-/// the PRF-031/032 account Dietz, or the PRF-083 position Dietz (dividends
-/// added to gain) in asset scope.
+/// GPF-031 — the span metric of the aggregation, over the given converted trade
+/// set (`flows.windowed_trades` for calendar windows per PRF-086,
+/// `flows.trades` for lifetime metrics per PRF-035): the PRF-031/032 account
+/// Dietz, or the PRF-083 position Dietz (dividends added to gain) in asset
+/// scope.
 fn aggregated_metric(
-    flows: &AggregatedFlows,
+    trades: &[DatedFlow],
+    dividends: &[DatedFlow],
     asset_scope: Option<&str>,
     start_value: i64,
     end_value: i64,
@@ -512,16 +579,12 @@ fn aggregated_metric(
     period_end: NaiveDate,
 ) -> PerformanceMetric {
     match asset_scope {
-        None => metric_for_span_over_flows(
-            &flows.trades,
-            start_value,
-            end_value,
-            period_start,
-            period_end,
-        ),
+        None => {
+            metric_for_span_over_flows(trades, start_value, end_value, period_start, period_end)
+        }
         Some(_) => holding_performance_for_span_over_flows(
-            &flows.trades,
-            &flows.dividends,
+            trades,
+            dividends,
             start_value,
             end_value,
             period_start,
@@ -581,6 +644,7 @@ fn summed_bridge(
 fn build_yearly_aggregated(
     accounts: &[ConvertedAccount],
     flows: &AggregatedFlows,
+    scoped_transactions: &[Transaction],
     asset_scope: Option<&str>,
     earliest_date: NaiveDate,
     today: NaiveDate,
@@ -601,7 +665,8 @@ fn build_yearly_aggregated(
             None
         } else {
             Some(aggregated_metric(
-                flows,
+                &flows.windowed_trades,
+                &flows.dividends,
                 asset_scope,
                 previous_end_value,
                 end_value,
@@ -609,17 +674,26 @@ fn build_yearly_aggregated(
                 period_end,
             ))
         };
+        // PRF-085 — a scoped position closed across every included account
+        // freezes its cumulative metrics at the aggregation-wide close date.
+        let cumulative_end = match asset_scope {
+            None => period_end,
+            Some(_) => {
+                holding_close_date_as_of(scoped_transactions, period_end).unwrap_or(period_end)
+            }
+        };
         let since_inception = Some(aggregated_metric(
-            flows,
+            &flows.trades,
+            &flows.dividends,
             asset_scope,
             0,
             end_value,
             earliest_date,
-            period_end,
+            cumulative_end,
         ));
         let annualized_yield = since_inception
             .as_ref()
-            .and_then(|metric| annualized_yield_metric(metric, earliest_date, period_end));
+            .and_then(|metric| annualized_yield_metric(metric, earliest_date, cumulative_end));
         let bridge = summed_bridge(accounts, asset_scope, period_start, period_end);
         let pnl = residual_pnl(end_value, previous_end_value, &bridge, asset_scope);
 
@@ -649,6 +723,7 @@ fn build_yearly_aggregated(
 fn build_monthly_aggregated(
     accounts: &[ConvertedAccount],
     flows: &AggregatedFlows,
+    scoped_transactions: &[Transaction],
     asset_scope: Option<&str>,
     earliest_date: NaiveDate,
     today: NaiveDate,
@@ -673,7 +748,8 @@ fn build_monthly_aggregated(
             None
         } else {
             Some(aggregated_metric(
-                flows,
+                &flows.windowed_trades,
+                &flows.dividends,
                 asset_scope,
                 previous_end_value,
                 end_value,
@@ -682,25 +758,35 @@ fn build_monthly_aggregated(
             ))
         };
 
+        // PRF-085 — a scoped position closed across every included account
+        // freezes its cumulative metrics at the aggregation-wide close date.
+        let cumulative_end = match asset_scope {
+            None => period_end,
+            Some(_) => {
+                holding_close_date_as_of(scoped_transactions, period_end).unwrap_or(period_end)
+            }
+        };
         // PRF-034 — year-to-date baseline is the prior 31 December end value.
         let year_start_baseline_value =
             summed_end_value(accounts, asset_scope, year_start_baseline);
         let year_to_date = Some(aggregated_metric(
-            flows,
+            &flows.windowed_trades,
+            &flows.dividends,
             asset_scope,
             year_start_baseline_value,
             end_value,
             year_start,
-            period_end,
+            cumulative_end,
         ));
 
         let since_inception = Some(aggregated_metric(
-            flows,
+            &flows.trades,
+            &flows.dividends,
             asset_scope,
             0,
             end_value,
             earliest_date,
-            period_end,
+            cumulative_end,
         ));
         let bridge = summed_bridge(accounts, asset_scope, period_start, period_end);
         let pnl = residual_pnl(end_value, previous_end_value, &bridge, asset_scope);
