@@ -44,7 +44,7 @@ F26 evaluates crossings only by behaviour (hooks/stores forbidden, presentationa
 >
 > Net effect: no import path in `src/features/` may reference a sibling feature's folder.
 
-`docs/frontend-rules.md` is kit-managed (read-only for project content) — route this upstream to the kit; until then the project-side rule lives in CLAUDE.md § Standards (added 2026-07-06).
+`docs/frontend-rules.md` is kit-managed (read-only for project content) — filed upstream as [phileggel/claude-kit#85](https://github.com/phileggel/claude-kit/issues/85) (2026-07-06); until the kit ships it, the project-side rule lives in CLAUDE.md § Standards. This entry closes when a kit sync delivers the rewritten F26.
 
 ## (frontend) — Changelog button in the About modal to re-read what's new
 
