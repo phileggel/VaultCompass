@@ -203,7 +203,8 @@ impl GlobalPerformanceUseCase {
     /// flows to the reference currency (GPF-020/030): the asset price
     /// histories, the asset-currency → account-currency rate map for the valued
     /// dates, the account-currency → reference-currency rates for the valued
-    /// dates and every transaction date, and the converted Simple Dietz flows.
+    /// dates and the flow-relevant transaction dates, and the converted Simple
+    /// Dietz flows.
     async fn prepare_account(
         &self,
         account: Account,
@@ -228,11 +229,7 @@ impl GlobalPerformanceUseCase {
         let mut reference_rate_by_date: HashMap<NaiveDate, i64> = HashMap::new();
         if account.currency != REFERENCE_CURRENCY {
             let mut dates: BTreeSet<NaiveDate> = valued_dates.iter().copied().collect();
-            dates.extend(
-                transactions
-                    .iter()
-                    .filter_map(|transaction| parse_date(&transaction.date)),
-            );
+            dates.extend(reference_rate_dates(&transactions, asset_scope));
             for date in dates {
                 let as_of = date.format("%Y-%m-%d").to_string();
                 if let Some(rate) = self
@@ -294,6 +291,32 @@ impl GlobalPerformanceUseCase {
         converted_account.dividend_flows = converted_account.convert_flows(raw_dividends);
         Ok(converted_account)
     }
+}
+
+/// GPF-030/040 — the transaction dates whose reference-currency rate the
+/// conversion actually reads, per scope. Unscoped: Deposit/Withdrawal (flows +
+/// bridge cash) — Purchase/Sell convert nothing. Scoped: Purchase/Sell trade
+/// flows — Deposit/Withdrawal never touch a position. OpeningBalance, Dividend,
+/// FreeShares and Interest convert at their own date in both scopes;
+/// ManagementFee is never a flow (FEE-071). Resolving only these avoids the
+/// wasted `resolve_rate_micros` round-trips of a resolve-every-date sweep.
+fn reference_rate_dates(
+    transactions: &[Transaction],
+    asset_scope: Option<&str>,
+) -> BTreeSet<NaiveDate> {
+    transactions
+        .iter()
+        .filter(|transaction| match transaction.transaction_type {
+            TransactionType::Deposit | TransactionType::Withdrawal => asset_scope.is_none(),
+            TransactionType::Purchase | TransactionType::Sell => asset_scope.is_some(),
+            TransactionType::OpeningBalance
+            | TransactionType::Dividend
+            | TransactionType::FreeShares
+            | TransactionType::Interest => true,
+            TransactionType::ManagementFee => false,
+        })
+        .filter_map(|transaction| parse_date(&transaction.date))
+        .collect()
 }
 
 /// GPF-015 — the PRF-043-shaped empty result of an aggregation with no data span.
@@ -1446,6 +1469,64 @@ mod tests {
             "both accounts contribute from the newer account's first transaction on"
         );
         assert_eq!(row_2025.cash_flow, 1_000_000_000);
+    }
+
+    // GPF-030/040 — the reference-rate date set only contains flow-relevant
+    // dates per scope: Deposit/Withdrawal convert only unscoped, Purchase/Sell
+    // only scoped, ManagementFee never.
+    #[test]
+    fn reference_rate_dates_narrow_to_flow_relevant_types_per_scope() {
+        let tx = |transaction_type: TransactionType, date: &str| {
+            Transaction::new(
+                "acc".to_string(),
+                "asset".to_string(),
+                transaction_type,
+                date.to_string(),
+                1_000_000,
+                1_000_000,
+                1_000_000,
+                0,
+                1_000_000,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        let transactions = vec![
+            tx(TransactionType::Deposit, "2024-01-01"),
+            tx(TransactionType::Purchase, "2024-02-01"),
+            tx(TransactionType::Sell, "2024-03-01"),
+            tx(TransactionType::Dividend, "2024-04-01"),
+            tx(TransactionType::ManagementFee, "2024-05-01"),
+            tx(TransactionType::OpeningBalance, "2024-06-01"),
+        ];
+        let date = |raw: &str| parse_date(raw).unwrap();
+
+        let unscoped = reference_rate_dates(&transactions, None);
+        assert!(unscoped.contains(&date("2024-01-01")), "deposit converts");
+        assert!(
+            !unscoped.contains(&date("2024-02-01")) && !unscoped.contains(&date("2024-03-01")),
+            "unscoped trades convert nothing"
+        );
+        assert!(unscoped.contains(&date("2024-04-01")), "dividend converts");
+        assert!(
+            !unscoped.contains(&date("2024-05-01")),
+            "a management fee is never a flow"
+        );
+        assert!(
+            unscoped.contains(&date("2024-06-01")),
+            "opening balance converts at its own date"
+        );
+
+        let scoped = reference_rate_dates(&transactions, Some("asset"));
+        assert!(
+            !scoped.contains(&date("2024-01-01")),
+            "deposits never touch a position"
+        );
+        assert!(
+            scoped.contains(&date("2024-02-01")) && scoped.contains(&date("2024-03-01")),
+            "scoped trade flows convert at their own date"
+        );
     }
 
     // GPF-040/PRF-071 — a foreign account's zero-cost in-kind credit (FreeShares)

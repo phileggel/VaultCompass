@@ -10,16 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-07-05 — Global-performance rate preloading resolves dates for non-flow transaction types
-
-- Found by: reviewer-backend (perf-cluster review)
-- Where: `src-tauri/src/use_cases/global_performance/orchestrator.rs` (`prepare_account`)
-- Context: branch `next` @ `b59e9b3`
-- Severity: 🔵
-- Observation: `prepare_account` pre-resolves reference-currency FX rates for every transaction date in each included account, including types (`Purchase`/`Sell`/`ManagementFee`) that never become a Dietz flow or a bridge conversion in the aggregation. Extra `resolve_rate_micros` calls with no correctness impact. Narrow the date set to the flow/bridge-relevant types if portfolio-wide loads ever show up in a profile — mirrors the resolved YTD rate-map over-fetch precedent (fixed 2026-07-05).
-
----
-
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)
