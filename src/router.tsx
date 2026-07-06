@@ -6,13 +6,12 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { AccountDetailsView } from "@/features/account_details";
-import { AccountPerformancePage } from "@/features/account_performance";
 import { AccountManager } from "@/features/accounts";
 import { AssetManager } from "@/features/assets";
 import { CategoryManager } from "@/features/categories";
 import { CurrencyRatesView } from "@/features/currency";
 import { DesignSystemPage } from "@/features/design-system";
-import { GlobalPerformancePage } from "@/features/global_performance";
+import { AccountPerformancePage, GlobalPerformancePage } from "@/features/performance";
 import { SettingsPage } from "@/features/settings";
 import {
   AccountJournalPage,

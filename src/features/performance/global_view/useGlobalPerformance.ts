@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AccountPerformanceResponse } from "@/bindings";
-import {
-  type AssetScopeOption,
-  type PerformanceViewMode,
-  type PeriodRowViewModel,
-  presentAccountPerformanceError,
-  presentAssetScopeOptions,
-  presentPeriodRow,
-  presentValueChartSeries,
-  type ValueChartPoint,
-} from "@/features/account_performance/shared/presenter";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
@@ -20,6 +10,16 @@ import {
   type AccountScopeOption,
   presentAccountScopeOptions,
   presentAssetCatalogOptions,
+} from "../shared/globalPresenter";
+import {
+  type AssetScopeOption,
+  type PerformanceViewMode,
+  type PeriodRowViewModel,
+  presentAccountPerformanceError,
+  presentAssetScopeOptions,
+  presentPeriodRow,
+  presentValueChartSeries,
+  type ValueChartPoint,
 } from "../shared/presenter";
 
 /** The read scope: both null = all accounts, per the GPF-010 matrix. */

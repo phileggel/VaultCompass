@@ -2,16 +2,16 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Plus } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { AccountPerformanceTable } from "@/features/account_performance/account_performance_view/AccountPerformanceTable";
-import { AccountValueChart } from "@/features/account_performance/value_chart/AccountValueChart";
 import { logger } from "@/lib/logger";
 import { Button } from "@/ui/components/button/Button";
+import { AccountPerformanceTable } from "../account_view/AccountPerformanceTable";
+import { AccountValueChart } from "../value_chart/AccountValueChart";
 import { useGlobalPerformance } from "./useGlobalPerformance";
 
 /**
  * GPF — portfolio-wide performance page. Mirrors AccountPerformancePage with two
  * scope selectors (account + asset, GPF-010); the chart and period table are the
- * sibling feature's presentational components fed by this feature's hook (F26).
+ * account view's presentational components, fed by this view's hook.
  */
 export function GlobalPerformancePage() {
   const { t } = useTranslation();
