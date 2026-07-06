@@ -9,9 +9,10 @@ use crate::context::account::{
 use crate::context::asset::{AssetClass, AssetService};
 use crate::context::currency::CurrencyService;
 use crate::use_cases::shared::valuation::{
-    end_value_as_of, holding_end_value_as_of, holding_performance_for_span, load_priced_assets,
-    load_rate_map, metric_for_span, month_periods, parse_date, year_periods, MonthPeriod,
-    PerformanceMetric, PricedAsset, RateMap, YearPeriod, MICRO, PERCENT_SCALE,
+    end_value_as_of, holding_close_date_as_of, holding_end_value_as_of,
+    holding_performance_for_span, load_priced_assets, load_rate_map, metric_for_span,
+    month_periods, parse_date, year_periods, MonthPeriod, PerformanceMetric, PricedAsset, RateMap,
+    YearPeriod, MICRO, PERCENT_SCALE,
 };
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
@@ -226,17 +227,20 @@ fn build_yearly(
                 asset_scope,
             ))
         };
+        // PRF-085 — a closed scoped position freezes its cumulative metrics at
+        // the close date, so the Dietz weights stop shifting after the close.
+        let cumulative_end = cumulative_metric_end(transactions, period_end, asset_scope);
         let since_inception = Some(since_inception_metric(
             transactions,
             end_value,
             earliest_date,
-            period_end,
+            cumulative_end,
             asset_scope,
         ));
         // Annualize the cumulative since-inception return over the elapsed years.
         let annualized_yield = since_inception
             .as_ref()
-            .and_then(|metric| annualized_yield_metric(metric, earliest_date, period_end));
+            .and_then(|metric| annualized_yield_metric(metric, earliest_date, cumulative_end));
         let bridge = bridge_for_scope(
             transactions,
             priced_assets,
@@ -319,6 +323,10 @@ fn build_monthly(
             ))
         };
 
+        // PRF-085 — a closed scoped position freezes its cumulative metrics at
+        // the close date, so the Dietz weights stop shifting after the close.
+        let cumulative_end = cumulative_metric_end(transactions, period_end, asset_scope);
+
         // PRF-034 — year-to-date baseline is the prior 31 December end value.
         let year_start_baseline_value = end_value_for_scope(
             transactions,
@@ -333,7 +341,7 @@ fn build_monthly(
             year_start_baseline_value,
             end_value,
             year_start,
-            period_end,
+            cumulative_end,
             asset_scope,
         ));
 
@@ -341,7 +349,7 @@ fn build_monthly(
             transactions,
             end_value,
             earliest_date,
-            period_end,
+            cumulative_end,
             asset_scope,
         ));
         let bridge = bridge_for_scope(
@@ -691,6 +699,21 @@ pub(crate) fn residual_pnl(
         "pnl residual i64 overflow"
     );
     pnl as i64
+}
+
+/// PRF-085 — the span end for a row's cumulative metrics (since-inception,
+/// year-to-date, annualized yield): the close date when the scoped position is
+/// closed as of `period_end`, otherwise `period_end` itself. Account scope never
+/// freezes (its since-inception flows are deposits/withdrawals, not trades).
+fn cumulative_metric_end(
+    transactions: &[Transaction],
+    period_end: NaiveDate,
+    asset_scope: Option<&str>,
+) -> NaiveDate {
+    match asset_scope {
+        None => period_end,
+        Some(_) => holding_close_date_as_of(transactions, period_end).unwrap_or(period_end),
+    }
 }
 
 /// PRF-035 — since-inception metric: start value is 0 and the flow is the total

@@ -2582,6 +2582,243 @@ mod tests {
         (account_svc, asset_svc, account.id, stock_a, stock_b)
     }
 
+    // PRF-085 — a fully-sold position freezes its cumulative metrics at the close
+    // date. Without the freeze the since-inception % of a closed position drifts
+    // on every subsequent row (the sell flow's Dietz weight creeps toward 1:
+    // 35% → 1307% → absent in the audited scenario) even though nothing happens.
+    #[tokio::test]
+    async fn closed_position_cumulative_metrics_freeze_at_the_close_date() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Closed Position".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::Automatic,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Closed Stock".to_string(),
+                reference: "CLS".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2023-01-10".to_string(), 20_000_000_000, None)
+            .await
+            .unwrap();
+        // Buy 10 × 1 000 EUR on 2023-06-01; sell all 10 × 1 200 EUR on 2024-06-01.
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2023-06-01".to_string(),
+                10_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2023-12-31", 1_000.0)
+            .await
+            .unwrap();
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-06-01".to_string(),
+                10_000_000,
+                1_200_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock.id))
+            .await
+            .unwrap();
+
+        // Frozen window [2023-06-01, 2024-06-01]: buy at span start (weight 1),
+        // sell at span end (weight 0) → denominator 10 000, gain 2 000 → 20 %.
+        let post_close: Vec<_> = scoped.yearly.iter().filter(|p| p.year >= 2024).collect();
+        assert!(
+            post_close.len() >= 3,
+            "series must extend past the close year"
+        );
+        for row in &post_close {
+            let since = row.since_inception.as_ref().expect("since_inception");
+            assert_eq!(since.gain, 2_000_000_000, "gain frozen (year {})", row.year);
+            assert_eq!(
+                since.pct,
+                Some(20_000_000),
+                "since-inception % must stay frozen at its close-date value (year {})",
+                row.year
+            );
+        }
+        let annualized: Vec<Option<i64>> = post_close
+            .iter()
+            .map(|p| p.annualized_yield.as_ref().and_then(|m| m.pct))
+            .collect();
+        assert!(
+            annualized[0].is_some() && annualized.iter().all(|p| *p == annualized[0]),
+            "annualized yield must freeze with the since-inception span: {annualized:?}"
+        );
+
+        // Close-year month rows: YTD frozen from the close month (June) onward.
+        let close_year_ytd: Vec<Option<i64>> = scoped
+            .monthly
+            .iter()
+            .filter(|p| p.year == 2024 && p.month.expect("month row") >= 6)
+            .map(|p| p.year_to_date.as_ref().and_then(|m| m.pct))
+            .collect();
+        assert_eq!(close_year_ytd.len(), 7, "June..December rows");
+        assert!(
+            close_year_ytd.iter().all(|p| *p == Some(20_000_000)),
+            "YTD must freeze from the close month on: {close_year_ytd:?}"
+        );
+    }
+
+    // PRF-085 — a later purchase reopens the position: rows from the re-buy on
+    // resume the period-end span (the metrics are live again, not frozen).
+    #[tokio::test]
+    async fn rebuy_after_close_resumes_period_end_metrics() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Reopened Position".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Reopened Stock".to_string(),
+                reference: "ROP".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2023-01-10".to_string(), 20_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2023-06-01".to_string(),
+                10_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-06-01".to_string(),
+                10_000_000,
+                1_200_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        // Re-buy 5 × 1 100 EUR on 2025-03-01 — the position is open again.
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2025-03-01".to_string(),
+                5_000_000,
+                1_100_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2025-03-01", 1_100.0)
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock.id))
+            .await
+            .unwrap();
+
+        let row_2025 = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2025)
+            .expect("2025 row");
+        let row_2026 = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2026)
+            .expect("2026 row");
+        assert_eq!(
+            row_2025.end_value, 5_500_000_000,
+            "reopened position is valued again"
+        );
+        let pct_2025 = row_2025.since_inception.as_ref().and_then(|m| m.pct);
+        let pct_2026 = row_2026.since_inception.as_ref().and_then(|m| m.pct);
+        assert!(pct_2025.is_some() && pct_2026.is_some());
+        assert_ne!(
+            pct_2025, pct_2026,
+            "an open position's since-inception span keeps extending (no freeze)"
+        );
+    }
+
     // PRF-080/081/082 — the scoped series describes one position only: the span
     // opens at the asset's first transaction (2024, not the account's 2023) and
     // the end value is the position's market value, diverging from the unscoped

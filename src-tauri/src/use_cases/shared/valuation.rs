@@ -750,6 +750,56 @@ pub(crate) fn holding_end_value_as_of(
     value as i64
 }
 
+/// PRF-085 — the close date of ONE asset's position as of `period_end`: the date
+/// of the last transaction that brought the replayed quantity to zero, when the
+/// position is closed (quantity ≤ 0) as of `period_end`. `None` while the
+/// position is open or was never held. A later purchase reopens the position and
+/// clears any earlier close. Quantity semantics mirror
+/// `Account::reconstruct_holding_as_of` (same type arms, same ordering).
+///
+/// `asset_transactions` must be pre-filtered to the asset being measured.
+pub(crate) fn holding_close_date_as_of(
+    asset_transactions: &[Transaction],
+    period_end: NaiveDate,
+) -> Option<NaiveDate> {
+    let mut dated: Vec<&Transaction> = asset_transactions
+        .iter()
+        .filter(|t| parse_date(&t.date).is_some_and(|d| d <= period_end))
+        .collect();
+    dated.sort_by(|a, b| {
+        a.date
+            .cmp(&b.date)
+            .then_with(|| a.created_at.cmp(&b.created_at))
+    });
+
+    let mut quantity: i128 = 0;
+    let mut close_date: Option<NaiveDate> = None;
+    for transaction in dated {
+        let before = quantity;
+        match transaction.transaction_type {
+            TransactionType::Purchase
+            | TransactionType::OpeningBalance
+            | TransactionType::Deposit
+            | TransactionType::FreeShares
+            | TransactionType::Interest => quantity += transaction.quantity as i128,
+            TransactionType::Sell
+            | TransactionType::Withdrawal
+            | TransactionType::ManagementFee => quantity -= transaction.quantity as i128,
+            TransactionType::Dividend => {}
+        }
+        if before > 0 && quantity <= 0 {
+            close_date = parse_date(&transaction.date);
+        } else if quantity > 0 {
+            close_date = None;
+        }
+    }
+    if quantity <= 0 {
+        close_date
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
