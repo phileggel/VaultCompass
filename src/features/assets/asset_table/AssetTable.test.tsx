@@ -78,4 +78,18 @@ describe("AssetTable — router-driven edit", () => {
     fireEvent.doubleClick(row);
     expect(navigateMock).not.toHaveBeenCalled();
   });
+
+  it("pressing Enter on a row opens the edit-asset modal via URL params", () => {
+    render(<AssetTable searchTerm="" showArchived={false} />);
+    const row = screen.getByText("Apple").closest("tr");
+    if (!row) throw new Error("expected an asset row");
+    fireEvent.keyDown(row, { key: "Enter" });
+    expectEditNavigation("a1");
+  });
+
+  it("Enter bubbling from the row's edit button does not double-open the modal", () => {
+    render(<AssetTable searchTerm="" showArchived={false} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "asset.action_edit" }), { key: "Enter" });
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
 });

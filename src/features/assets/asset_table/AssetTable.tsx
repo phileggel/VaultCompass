@@ -170,13 +170,26 @@ export function AssetTable({ searchTerm, showArchived }: AssetTableProps) {
             sortedAndFilteredAssets.map((asset) => (
               <tr
                 key={asset.id}
+                id={`asset-row-${asset.id}`}
                 tabIndex={0}
+                aria-label={
+                  asset.is_archived ? undefined : t("asset.open_edit", { name: asset.name })
+                }
                 onClick={() => setSelectedAssetId(asset.id)}
                 onDoubleClick={() => {
                   if (!asset.is_archived) openEditAsset(asset.id);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  // Enter/Space on an inner interactive element (action buttons)
+                  // bubbles up to the row — never treat it as a row action.
+                  if (e.defaultPrevented) return;
+                  if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) {
+                    return;
+                  }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (!asset.is_archived) openEditAsset(asset.id);
+                  } else if (e.key === " ") {
                     e.preventDefault();
                     setSelectedAssetId(asset.id);
                   }

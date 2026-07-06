@@ -239,6 +239,23 @@ describe("HoldingRow — double-click opens Edit Asset modal", () => {
     fireEvent.doubleClick(row);
     expect(navigateMock).not.toHaveBeenCalled();
   });
+
+  it("pressing Enter on a holding row opens the edit-asset modal", () => {
+    renderInTable(baseRow);
+    const row = screen.getByText("Apple Inc").closest("tr");
+    if (!row) throw new Error("expected a holding row");
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const arg = navigateMock.mock.calls[0]?.[0] as { search: (prev: object) => object };
+    expect(arg.search({})).toEqual({ modal: "edit-asset", editAssetId: "asset-1" });
+  });
+
+  it("Enter bubbling from an inner action button does not open the modal", () => {
+    renderInTable(baseRow);
+    const buyButton = screen.getByRole("button", { name: "transaction.action_buy" });
+    fireEvent.keyDown(buyButton, { key: "Enter" });
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
 });
 
 // MKT-153/156 — price-refresh lock IconButton on the holding row.

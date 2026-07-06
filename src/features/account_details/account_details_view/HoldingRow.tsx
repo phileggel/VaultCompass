@@ -10,7 +10,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { useCallback } from "react";
+import { type KeyboardEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { patchModalSearch } from "@/lib/modalSearch";
 import type { StoredPerfPeriod } from "@/lib/perfPeriodStorage";
@@ -132,6 +132,19 @@ export function HoldingRow({
     patchModalSearch(navigate, { modal: "edit-asset", editAssetId: row.assetId });
   }, [navigate, row.assetId, isArchived]);
 
+  // Keyboard parity with the double-click affordance: Enter on the focused row
+  // opens the Edit Asset modal. Enter bubbling up from an inner interactive
+  // element (action buttons, links) is never treated as a row action.
+  const handleRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTableRowElement>) => {
+      if (event.key !== "Enter" || event.defaultPrevented) return;
+      if ((event.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+      event.preventDefault();
+      handleOpenAssetDetail();
+    },
+    [handleOpenAssetDetail],
+  );
+
   // CSH-091 — cash row variant: no Buy/Sell/Inspect, only Deposit/Withdraw.
   if (row.isCash) {
     return (
@@ -201,7 +214,18 @@ export function HoldingRow({
   const performanceCell = selectPerformanceCell(row, perfPeriod);
 
   return (
-    <tr className="m3-tr" onDoubleClick={readOnly ? undefined : handleOpenAssetDetail}>
+    <tr
+      className="m3-tr"
+      id={`holding-row-${row.assetId}`}
+      tabIndex={readOnly ? undefined : 0}
+      aria-label={
+        readOnly || isArchived
+          ? undefined
+          : t("account_details.open_edit_asset", { name: row.assetName })
+      }
+      onDoubleClick={readOnly ? undefined : handleOpenAssetDetail}
+      onKeyDown={readOnly ? undefined : handleRowKeyDown}
+    >
       <td className="m3-td">
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
