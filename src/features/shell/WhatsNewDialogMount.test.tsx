@@ -2,9 +2,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WhatsNewDialogMount } from "./WhatsNewDialogMount";
 
-const { mockUseWhatsNewDialog, mockDismiss } = vi.hoisted(() => ({
+const { mockUseWhatsNewDialog, mockDismiss, mockNavigate, mockSearch } = vi.hoisted(() => ({
   mockUseWhatsNewDialog: vi.fn(),
   mockDismiss: vi.fn(),
+  mockNavigate: vi.fn(),
+  mockSearch: { value: {} as Record<string, unknown> },
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+  useSearch: () => mockSearch.value,
 }));
 
 vi.mock("@/features/whats_new/useWhatsNewDialog", () => ({
@@ -30,9 +37,14 @@ vi.mock("@/features/whats_new/WhatsNewDialog", () => ({
 
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
 
-describe("WhatsNewDialogMount (WNW-020/030/050)", () => {
+// The on-demand path parses the real bundled CHANGELOG.md, so a released
+// version present in it is needed to exercise WNW-080.
+const RELEASED_VERSION = "0.34.0";
+
+describe("WhatsNewDialogMount (WNW-020/030/050/080)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearch.value = {};
   });
 
   it("renders nothing while the hook reports no sections (WNW-030)", () => {
@@ -75,5 +87,53 @@ describe("WhatsNewDialogMount (WNW-020/030/050)", () => {
     render(<WhatsNewDialogMount />);
     fireEvent.click(screen.getByTestId("whats-new-dialog"));
     expect(mockDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the current version's section on demand via ?modal=whats-new (WNW-080)", () => {
+    mockSearch.value = { modal: "whats-new" };
+    mockUseWhatsNewDialog.mockReturnValue({
+      appVersion: RELEASED_VERSION,
+      sections: null,
+      dismiss: mockDismiss,
+    });
+    render(<WhatsNewDialogMount />);
+    expect(screen.getByTestId("whats-new-dialog")).toHaveTextContent(`${RELEASED_VERSION}:1`);
+  });
+
+  it("dismissing the on-demand dialog clears the URL param without acknowledging (WNW-080)", () => {
+    mockSearch.value = { modal: "whats-new" };
+    mockUseWhatsNewDialog.mockReturnValue({
+      appVersion: RELEASED_VERSION,
+      sections: null,
+      dismiss: mockDismiss,
+    });
+    render(<WhatsNewDialogMount />);
+    fireEvent.click(screen.getByTestId("whats-new-dialog"));
+    expect(mockDismiss).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("the launch dialog takes precedence over the on-demand request (WNW-080)", () => {
+    mockSearch.value = { modal: "whats-new" };
+    mockUseWhatsNewDialog.mockReturnValue({
+      appVersion: RELEASED_VERSION,
+      sections: [{ version: RELEASED_VERSION }, { version: "0.33.2" }],
+      dismiss: mockDismiss,
+    });
+    render(<WhatsNewDialogMount />);
+    expect(screen.getByTestId("whats-new-dialog")).toHaveTextContent(`${RELEASED_VERSION}:2`);
+    fireEvent.click(screen.getByTestId("whats-new-dialog"));
+    expect(mockDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders nothing on demand when the current version has no changelog section", () => {
+    mockSearch.value = { modal: "whats-new" };
+    mockUseWhatsNewDialog.mockReturnValue({
+      appVersion: "999.0.0",
+      sections: null,
+      dismiss: mockDismiss,
+    });
+    const { container } = render(<WhatsNewDialogMount />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

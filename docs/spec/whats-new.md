@@ -24,6 +24,10 @@ After the in-app updater (see [update.md](update.md)) installs a new version, th
 
 **WNW-060 — English-only content (frontend)**: The changelog content is displayed as written — English-only by design. Only the dialog chrome (title, dismiss action) is translated.
 
+### On-demand re-read
+
+**WNW-080 — Changelog re-read from About (frontend)**: The About modal offers a "What's new" action that re-opens the dialog with the current version's changelog section via the shell-mounted handler (`?modal=whats-new` URL param — the About feature never imports the whats-new feature). Dismissing this on-demand dialog only clears the URL param; the acknowledged version (WNW-010) is never written. The launch dialog (WNW-020/030) takes precedence when both would show, so acknowledgement cannot be bypassed. The action shows nothing when the changelog has no section for the current version.
+
 ### Dismissal
 
 **WNW-050 — Dismiss acknowledges the current version (frontend)**: The dialog offers a single dismiss action (also triggered by the close affordances). Dismissing writes the current version to storage and closes the dialog.

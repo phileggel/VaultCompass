@@ -176,6 +176,7 @@
     "checking": "Vérification…",
     "up_to_date": "L'application est à jour.",
     "check_failed": "La vérification a échoué. Veuillez réessayer.",
+    "whats_new": "Nouveautés",
     "license": "Licence MIT — © 2026 Philippe Eggel"
   },
   "field": {
