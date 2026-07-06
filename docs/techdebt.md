@@ -90,13 +90,3 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
      `InfrastructureError` reclassifies as application-layer (it's the typed application translation of opaque infra failures, per the DDD doc's travel rule — the NAME describes the source, the LAYER is application).
 
   Migration is mechanical (folder moves + module-path updates, ~50–100 import sites total). Cleanest as a single dedicated chore PR after the kit proposals land (so the project mirrors the kit-ratified spec).
-
----
-
-## 2026-05-30 — Row-level "edit asset" affordance is mouse-only
-
-- Found by: reviewer-frontend
-- Where: `src/features/account_details/account_details_view/HoldingRow.tsx:131` (holding row), `src/features/assets/asset_table/AssetTable.tsx:182` (asset row)
-- Context: branch `feat/ui-tweaks-account-asset` @ `8d904a1`
-- Severity: 🟡
-- Observation: The row-level "edit asset" affordance (double-click on a holding row, and the analogous AssetTable row) is mouse-only; there is no keyboard equivalent. Designing keyboard parity (e.g. Enter-to-edit) needs a consistent decision across both tables, since AssetTable's Enter/Space currently selects the row rather than opening edit.
