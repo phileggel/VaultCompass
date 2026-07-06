@@ -177,6 +177,7 @@ If any of the three fails, **DO NOT refactor** — match the current project sta
 - **Commits**: Conventional commits (`feat:`, `fix:`, etc.).
 - **Style**: React functional components, Rust traits for repositories.
 - **Lints**: Oxlint & Biome (FE), Clippy (BE). All must pass.
+- **Cross-feature imports (rides on F26)**: only generic primitives may cross feature folders — and those belong in `ui/`, not in a feature. Anything domain-flavored (view models, presenters, domain tables/charts) needed by two views means those views are ONE feature, reachable only via routing. Never import another feature's view/hook/store/gateway.
 
 ## 🖼 Frontend Visual Proof
 
