@@ -10,9 +10,10 @@ use crate::use_cases::shared::performance::{
 };
 use crate::use_cases::shared::valuation::{
     end_value_as_of, external_cash_flows, holding_end_value_as_of,
-    holding_performance_for_span_over_flows, load_priced_assets, load_rate_map_for_dates,
-    metric_for_span_over_flows, month_periods, parse_date, position_flows, year_periods, DatedFlow,
-    MonthPeriod, PerformanceMetric, PricedAsset, RateMap, YearPeriod, MICRO,
+    holding_performance_for_span_over_flows, in_kind_credit_dates, load_priced_assets,
+    load_rate_map_for_dates, metric_for_span_over_flows, month_periods, parse_date, position_flows,
+    year_periods, DatedFlow, MonthPeriod, PerformanceMetric, PricedAsset, RateMap, YearPeriod,
+    MICRO,
 };
 use chrono::{Datelike, Local, NaiveDate};
 use std::collections::{BTreeSet, HashMap};
@@ -199,11 +200,16 @@ impl GlobalPerformanceUseCase {
         asset_scope: Option<&str>,
     ) -> StdResult<ConvertedAccount, AccountError> {
         let priced_assets = load_priced_assets(&self.asset_service, &transactions).await?;
+        // PRF-071 — zero-cost credits are valued at their grant date, so this
+        // account's grant dates join the valued-date set for its own rate map.
+        let mut asset_rate_dates: BTreeSet<NaiveDate> = valued_dates.iter().copied().collect();
+        asset_rate_dates.extend(in_kind_credit_dates(&transactions));
+        let asset_rate_dates: Vec<NaiveDate> = asset_rate_dates.into_iter().collect();
         let rate_map = load_rate_map_for_dates(
             &self.currency_service,
             &priced_assets,
             &account.currency,
-            valued_dates,
+            &asset_rate_dates,
         )
         .await?;
 
@@ -367,7 +373,7 @@ impl ConvertedAccount {
                             convert_or_zero(transaction.total_amount, transaction_date_rate);
                     }
                     TransactionType::FreeShares => {
-                        asset_flow += self.in_kind_credit_reference(transaction, period_end);
+                        asset_flow += self.in_kind_credit_reference(transaction);
                     }
                     // INT-023 — interest on the cash line is a cash credit of
                     // `quantity`; on a non-cash asset it is an in-kind credit (INT-024).
@@ -376,7 +382,7 @@ impl ConvertedAccount {
                             cash_flow +=
                                 convert_or_zero(transaction.quantity, transaction_date_rate);
                         } else {
-                            asset_flow += self.in_kind_credit_reference(transaction, period_end);
+                            asset_flow += self.in_kind_credit_reference(transaction);
                         }
                     }
                     TransactionType::Dividend => {
@@ -401,7 +407,7 @@ impl ConvertedAccount {
                             convert_or_zero(transaction.total_amount, transaction_date_rate);
                     }
                     TransactionType::FreeShares | TransactionType::Interest => {
-                        asset_flow += self.in_kind_credit_reference(transaction, period_end);
+                        asset_flow += self.in_kind_credit_reference(transaction);
                     }
                     TransactionType::Deposit
                     | TransactionType::Withdrawal
@@ -423,17 +429,20 @@ impl ConvertedAccount {
         }
     }
 
-    /// The reference-currency market value of a zero-cost in-kind credit at
-    /// `period_end` (PRF-071 valuation converted at the period-end rate).
-    fn in_kind_credit_reference(&self, transaction: &Transaction, period_end: NaiveDate) -> i128 {
+    /// The reference-currency market value of a zero-cost in-kind credit as of
+    /// its grant date (PRF-071 valuation converted at the grant-date rate,
+    /// consistent with GPF-030's flow-at-its-own-date conversion).
+    fn in_kind_credit_reference(&self, transaction: &Transaction) -> i128 {
+        let Some(grant_date) = parse_date(&transaction.date) else {
+            return 0;
+        };
         let own_currency_value = zero_cost_credit_value(
             transaction,
             &self.priced_assets,
             &self.rate_map,
             &self.currency,
-            period_end,
         );
-        match self.reference_rate(period_end) {
+        match self.reference_rate(grant_date) {
             Some(rate) => own_currency_value * rate as i128 / MICRO,
             None => 0,
         }
@@ -1353,11 +1362,12 @@ mod tests {
         assert_eq!(row_2025.cash_flow, 1_000_000_000);
     }
 
-    // GPF-040 — a foreign account's zero-cost in-kind credit (FreeShares) lands
-    // in asset_flow valued at the period end and converted at the PERIOD-END
-    // rate (0.90), not the transaction-date rate (0.80).
+    // GPF-040/PRF-071 — a foreign account's zero-cost in-kind credit (FreeShares)
+    // lands in asset_flow valued at its GRANT date and converted at the
+    // grant-date rate (0.80), consistent with GPF-030's flow-at-its-own-date
+    // conversion; the period-end rate (0.90) applies only to end values.
     #[tokio::test]
-    async fn foreign_in_kind_credit_converts_at_period_end_rate() {
+    async fn foreign_in_kind_credit_converts_at_grant_date_rate() {
         let pool = make_pool().await;
         let (account_svc, asset_svc) = setup(&pool).await;
         asset_svc.seed_cash_asset("USD").await.unwrap();
@@ -1398,6 +1408,10 @@ mod tests {
             )
             .await
             .unwrap();
+        asset_svc
+            .record_asset_price(&stock, "2024-03-20", 100.0)
+            .await
+            .unwrap();
         account_svc
             .record_free_shares(
                 &account.id,
@@ -1421,12 +1435,12 @@ mod tests {
         let response = uc.get_global_performance(None, None).await.unwrap();
 
         let row = year_row(&response, 2024);
-        // 5 free shares × $100 (carry-forward price as of 2024-12-31) × 0.90
-        // (USD→EUR rate as of 2024-12-31) = 450 EUR. A transaction-date (0.80)
-        // conversion would read 400 EUR.
+        // 5 free shares × $100 (grant-date price, 2024-03-20) × 0.80 (USD→EUR
+        // rate as of the grant date) = 400 EUR. A period-end (0.90) conversion
+        // would read 450 EUR.
         assert_eq!(
-            row.asset_flow, 450_000_000,
-            "in-kind credit valued and converted at the period end"
+            row.asset_flow, 400_000_000,
+            "in-kind credit valued and converted at its grant date"
         );
         // 2000 USD deposit × 0.80 (rate as of 2024-03-15).
         assert_eq!(row.cash_flow, 1_600_000_000);

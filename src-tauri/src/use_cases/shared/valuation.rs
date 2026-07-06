@@ -123,14 +123,33 @@ pub(crate) async fn load_rate_map(
     currency_service: &CurrencyService,
     priced_assets: &HashMap<String, PricedAsset>,
     account_currency: &str,
+    transactions: &[Transaction],
     month_view_available: bool,
     earliest_date: NaiveDate,
     today: NaiveDate,
 ) -> StdResult<RateMap, AccountError> {
-    let dates: Vec<NaiveDate> = period_end_dates(month_view_available, earliest_date, today)
-        .into_iter()
-        .collect();
+    let mut dates = period_end_dates(month_view_available, earliest_date, today);
+    // PRF-071 — zero-cost credits are valued at their grant date, so those dates
+    // need a pre-resolved rate too.
+    dates.extend(in_kind_credit_dates(transactions));
+    let dates: Vec<NaiveDate> = dates.into_iter().collect();
     load_rate_map_for_dates(currency_service, priced_assets, account_currency, &dates).await
+}
+
+/// PRF-071 — the grant dates of the zero-cost in-kind credits in a transaction
+/// set (free shares, non-cash interest): the dates `zero_cost_credit_value`
+/// resolves a price and FX rate for. Cash-line interest is a plain cash credit
+/// and needs no valuation date.
+pub(crate) fn in_kind_credit_dates(transactions: &[Transaction]) -> BTreeSet<NaiveDate> {
+    transactions
+        .iter()
+        .filter(|t| match t.transaction_type {
+            TransactionType::FreeShares => true,
+            TransactionType::Interest => !crate::core::cash::is_cash_asset(&t.asset_id),
+            _ => false,
+        })
+        .filter_map(|t| parse_date(&t.date))
+        .collect()
 }
 
 /// Pre-resolves FX rates for each foreign holding currency at the caller-supplied

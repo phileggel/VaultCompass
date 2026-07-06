@@ -1081,8 +1081,9 @@ mod tests {
         );
     }
 
-    // PRF-071 / PRF-074 — free shares contribute their period-end market value to
-    // asset_flow (the price + FX carry-forward path), and the bridge balances.
+    // PRF-071 / PRF-074 — free shares contribute their grant-date market value to
+    // asset_flow (the price + FX carry-forward path); post-grant movement lands in
+    // pnl, and the bridge balances.
     #[tokio::test]
     async fn asset_flow_values_free_shares_at_market() {
         let pool = make_pool().await;
@@ -1112,7 +1113,8 @@ mod tests {
             })
             .await
             .unwrap();
-        // Fund + buy 5 units @ 1000 (cost 5_000), then receive 2 free shares, price 1200.
+        // Fund + buy 5 units @ 1000 (cost 5_000), then receive 2 free shares at a
+        // 1 150 grant-date price; the price then moves to 1 200 by period end.
         account_svc
             .record_deposit(&account.id, "2024-01-10".to_string(), 10_000_000_000, None)
             .await
@@ -1129,6 +1131,10 @@ mod tests {
                 None,
                 None,
             )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-01", 1150.0)
             .await
             .unwrap();
         account_svc
@@ -1156,16 +1162,16 @@ mod tests {
             .iter()
             .find(|p| p.year == 2024)
             .expect("2024 row");
-        // 2 free shares × 1200 = 2_400 EUR.
+        // 2 free shares × 1 150 grant-date price = 2 300 EUR.
         assert_eq!(
-            row.asset_flow, 2_400_000_000,
-            "free shares at period-end market"
+            row.asset_flow, 2_300_000_000,
+            "free shares at grant-date market"
         );
         assert_eq!(row.cash_flow, 10_000_000_000, "deposit only");
-        // pnl = price move on the 5 bought units only: 5 × (1200 − 1000) = 1_000 EUR.
+        // pnl = 5 bought × (1200 − 1000) + 2 free × (1200 − 1150) = 1 100 EUR.
         assert_eq!(
-            row.pnl, 1_000_000_000,
-            "appreciation on bought units, not the free shares"
+            row.pnl, 1_100_000_000,
+            "appreciation on bought units plus post-grant movement of the credits"
         );
         assert_eq!(
             row.end_value,
@@ -3106,6 +3112,10 @@ mod tests {
             )
             .await
             .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-01", 1150.0)
+            .await
+            .unwrap();
         account_svc
             .record_free_shares(
                 &account.id,
@@ -3139,12 +3149,134 @@ mod tests {
         assert_eq!(row.end_value, 8_400_000_000, "7 units × 1 200 EUR");
         assert_eq!(row.cash_flow, 5_000_000_000, "purchase cost");
         assert_eq!(
-            row.asset_flow, 2_400_000_000,
-            "2 free shares at the 1 200 EUR period-end market price"
+            row.asset_flow, 2_300_000_000,
+            "2 free shares at the 1 150 EUR grant-date market price"
         );
         assert_eq!(
-            row.pnl, 1_000_000_000,
-            "appreciation on the 5 bought units: 5 × (1 200 − 1 000) EUR"
+            row.pnl, 1_100_000_000,
+            "5 bought × (1 200 − 1 000) + 2 free × (1 200 − 1 150) EUR"
+        );
+        assert_eq!(
+            row.end_value,
+            row.previous_value + row.cash_flow + row.asset_flow + row.pnl,
+            "scoped bridge identity (PRF-084)"
+        );
+    }
+
+    // PRF-071 — a credit granted AND disposed of within the same period keeps a
+    // truthful decomposition: the grant-date valuation is unaffected by price
+    // movement after the sale (a period-end valuation would inject an
+    // equal-and-opposite phantom offset into asset_flow and pnl).
+    #[tokio::test]
+    async fn credit_disposed_within_period_carries_no_phantom_pnl() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Disposed Credit".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Disposed FSD".to_string(),
+                reference: "DFS".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        account_svc
+            .record_deposit(&account.id, "2024-01-05".to_string(), 5_000_000_000, None)
+            .await
+            .unwrap();
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-02-01".to_string(),
+                5_000_000,
+                1_000_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-01", 1150.0)
+            .await
+            .unwrap();
+        account_svc
+            .record_free_shares(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                2_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        // Sell everything mid-year at 1 200, then let the price run to 2 000 by
+        // period end — the disposed credit must not be re-marked at 2 000.
+        account_svc
+            .sell_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-06-15".to_string(),
+                7_000_000,
+                1_200_000_000,
+                1_000_000,
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-12-31", 2000.0)
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock.id))
+            .await
+            .unwrap();
+        let row = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+
+        assert_eq!(row.end_value, 0, "position closed at period end");
+        assert_eq!(
+            row.cash_flow,
+            5_000_000_000 - 8_400_000_000,
+            "buy 5 000 − sell 7 × 1 200"
+        );
+        assert_eq!(
+            row.asset_flow, 2_300_000_000,
+            "credit at its 1 150 grant-date value, immune to the post-sale 2 000 price"
+        );
+        assert_eq!(
+            row.pnl, 1_100_000_000,
+            "realized: 5 × (1 200 − 1 000) + 2 × (1 200 − 1 150), no phantom offset"
         );
         assert_eq!(
             row.end_value,
