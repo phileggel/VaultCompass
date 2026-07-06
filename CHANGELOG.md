@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0] - 2026-07-06
+
+### Added
+
+- correct buy/sell transactions by total amount (TRX-061, SEL-051)
+  Extends the total-entry toggle from the add flow to the edit modal: a
+  typed all-in total is stored verbatim and the unit price is derived.
+- open the asset editor with Enter on holding and asset rows
+- re-read the changelog from the About modal (WNW-080)
+  URL-driven (?modal=whats-new) through the shell mount per the cross-feature
+  rule; dismissing never writes the acknowledged version.
+- show current version's changelog on fresh start (WNW-030)
+  The upgrade TO the version introducing the dialog looked like a fresh install
+  and showed nothing. E2E pre-suite hook now seeds a 999.999.999 sentinel so the
+  fresh-start dialog cannot cover the suite.
+- opening balance neutral in windowed performance (PRF-086)
+  Windowed metrics/bridges value an OpeningBalance at entry-date market
+  (fallback typed cost); lifetime metrics keep cost so pre-account gains stay
+  in since-inception. Also extends the PRF-085 close-date freeze to the global
+  aggregation, which the single-account fix had missed.
+
+### Fixed
+
+- address review findings on total-entry edit and keyboard parity
+  Archived holding rows leave the tab order (were an unlabeled keyboard
+  dead-end); add correction-path total-validation tests; dedupe isTotalMode
+  via the hook. Two Rule-of-Three / isCashAsset deferrals filed as techdebt.
+- value zero-cost credits at grant date (PRF-071)
+  Period-end valuation re-marked disposed credits at prices they never held,
+  injecting phantom pnl offsets. Grant-date valuation attributes post-grant
+  movement to pnl and aligns GPF conversion with flow-at-its-own-date (GPF-030).
+- freeze closed-position cumulative metrics at close date (PRF-085)
+  A closed position's since-inception/YTD % drifted every period (sell weight
+  creeping toward 1: 35%->1307%->absent). Clamp the cumulative span to the date
+  quantity last reached zero; re-buys reopen the span.
+- suppress sign-flipped Dietz % on negative denominator (PRF-032)
+  A drained-early period (sell-all + withdraw) makes the weighted capital base
+  negative; the ratio then flips sign. Guard <= 0 like the scoped variant.
+
 ## [0.34.0] - 2026-07-05
 
 ### Added
