@@ -4,6 +4,7 @@ import type {
   AssetError,
   AssetPrice,
   CreateFeeScheduleDTO,
+  DeleteHoldingNoteDTO,
   DepositDTO,
   DividendDTO,
   DividendError,
@@ -11,6 +12,7 @@ import type {
   FetchAccountAssetPricesError,
   FreeSharesDTO,
   FreeSharesError,
+  HoldingNote,
   HoldingSnapshot,
   InterestError,
   ManagementFeeDTO,
@@ -23,6 +25,7 @@ import type {
   SplitError,
   Transaction,
   UpdateFeeScheduleDTO,
+  UpsertHoldingNoteDTO,
   WithdrawalDTO,
 } from "@/bindings";
 import { commands, events } from "@/bindings";
@@ -123,6 +126,16 @@ export const accountDetailsGateway = {
     assetId: string,
   ): Promise<Result<FeeSchedule | null, AccountError>> {
     return commands.getFeeSchedule(accountId, assetId);
+  },
+
+  // HNO-020 — create or fully replace the note pinned to an (account, asset) pair.
+  async upsertHoldingNote(dto: UpsertHoldingNoteDTO): Promise<Result<HoldingNote, AccountError>> {
+    return commands.upsertHoldingNote(dto);
+  },
+
+  // HNO-021 — delete the note for an (account, asset) pair (no-op success when absent).
+  async deleteHoldingNote(dto: DeleteHoldingNoteDTO): Promise<Result<null, AccountError>> {
+    return commands.deleteHoldingNote(dto);
   },
 
   // CSH-111 — editing a cash Deposit/Withdrawal persists via correct_transaction.

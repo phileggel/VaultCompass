@@ -311,6 +311,10 @@ const makeHoldingDetail = (overrides: Record<string, unknown> = {}) => ({
   performance_pct: null,
   dividends_received: 0,
   total_return_pct: null,
+  note_text: null,
+  note_threshold_price: null,
+  note_threshold_direction: null,
+  note_alarm_triggered: false,
   period_performance: {
     ytd: null,
     one_year: null,
@@ -707,5 +711,103 @@ describe("useAccountDetailsView — split modal target (SPL-061)", () => {
     act(() => result.current.handleSplitOpen("asset-split"));
     act(() => result.current.handleSplitSuccess());
     expect(result.current.splitTarget).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HNO-042 — holding-note modal target: built from the raw holding detail so
+// the modal prefills from the stored note (text + alarm pair, HNO-020).
+// ---------------------------------------------------------------------------
+describe("useAccountDetailsView — holding-note modal target (HNO-042)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  const seedNoteHoldings = (noteOverrides: Record<string, unknown> = {}) =>
+    mockGetAccountDetails.mockResolvedValueOnce({
+      status: "ok",
+      data: {
+        account_name: "Main",
+        holdings: [
+          makeHoldingDetail({
+            asset_id: "asset-noted",
+            asset_name: "Air Liquide",
+            asset_currency: "EUR",
+            ...noteOverrides,
+          }),
+        ],
+        closed_holdings: [],
+        total_holding_count: 1,
+        total_cost_basis: 0,
+        total_realized_pnl: 0,
+        total_unrealized_pnl: null,
+        total_global_value: 0,
+        total_dividends_received: 0,
+      },
+    } as never);
+
+  it("builds a create-mode target (existing null) when the holding has no note", async () => {
+    seedNoteHoldings();
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    expect(result.current.holdingNoteTarget).toBeNull();
+    act(() => result.current.handleHoldingNoteOpen("asset-noted"));
+    expect(result.current.holdingNoteTarget).toEqual({
+      assetId: "asset-noted",
+      assetName: "Air Liquide",
+      assetCurrency: "EUR",
+      existing: null,
+    });
+  });
+
+  it("builds an edit-mode target carrying the stored note and alarm pair", async () => {
+    seedNoteHoldings({
+      note_text: "buy 7 shares below 150",
+      note_threshold_price: 150_000_000,
+      note_threshold_direction: "Below",
+      note_alarm_triggered: true,
+    });
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    act(() => result.current.handleHoldingNoteOpen("asset-noted"));
+    expect(result.current.holdingNoteTarget).toEqual({
+      assetId: "asset-noted",
+      assetName: "Air Liquide",
+      assetCurrency: "EUR",
+      existing: {
+        text: "buy 7 shares below 150",
+        thresholdPrice: 150_000_000,
+        thresholdDirection: "Below",
+      },
+    });
+  });
+
+  it("handleHoldingNoteOpen is a no-op for an unknown asset", async () => {
+    seedNoteHoldings();
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    act(() => result.current.handleHoldingNoteOpen("asset-missing"));
+    expect(result.current.holdingNoteTarget).toBeNull();
+  });
+
+  it("handleHoldingNoteClose and handleHoldingNoteSuccess clear the target", async () => {
+    seedNoteHoldings();
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    act(() => result.current.handleHoldingNoteOpen("asset-noted"));
+    act(() => result.current.handleHoldingNoteClose());
+    expect(result.current.holdingNoteTarget).toBeNull();
+
+    act(() => result.current.handleHoldingNoteOpen("asset-noted"));
+    act(() => result.current.handleHoldingNoteSuccess());
+    expect(result.current.holdingNoteTarget).toBeNull();
   });
 });

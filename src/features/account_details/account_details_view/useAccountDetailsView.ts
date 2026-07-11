@@ -15,7 +15,7 @@ import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
 import { accountDetailsGateway, useCachedAssets } from "../gateway";
 import { priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
-import type { ModalTarget, SellTarget, SplitTarget } from "../shared/types";
+import type { HoldingNoteTarget, ModalTarget, SellTarget, SplitTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
 /** Local calendar date as ISO `YYYY-MM-DD` — the as-of selector's "today" default. */
@@ -94,6 +94,7 @@ export function useAccountDetailsView(accountId: string) {
     assetName: string;
   } | null>(null);
   const [splitTarget, setSplitTarget] = useState<SplitTarget | null>(null);
+  const [holdingNoteTarget, setHoldingNoteTarget] = useState<HoldingNoteTarget | null>(null);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -258,6 +259,37 @@ export function useAccountDetailsView(accountId: string) {
     data.retry();
   }, [data]);
 
+  // HNO-042 — note modal, opened per holding from its row action. The holding
+  // detail supplies the stored note (text + alarm) the modal prefills from
+  // (HNO-020); no note yet → create mode.
+  const handleHoldingNoteOpen = useCallback(
+    (assetId: string) => {
+      if (isAsOf) return;
+      const holding = data.holdingDetails.find((h) => h.asset_id === assetId);
+      if (!holding) return;
+      setHoldingNoteTarget({
+        assetId: holding.asset_id,
+        assetName: holding.asset_name,
+        assetCurrency: holding.asset_currency,
+        existing:
+          holding.note_text !== null
+            ? {
+                text: holding.note_text,
+                thresholdPrice: holding.note_threshold_price,
+                thresholdDirection: holding.note_threshold_direction,
+              }
+            : null,
+      });
+    },
+    [isAsOf, data.holdingDetails],
+  );
+  const handleHoldingNoteClose = useCallback(() => setHoldingNoteTarget(null), []);
+  // HNO-022 — the success path re-fetches the read so the row's note + bell update.
+  const handleHoldingNoteSuccess = useCallback(() => {
+    setHoldingNoteTarget(null);
+    data.retry();
+  }, [data]);
+
   // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
   // block/unblock command, then re-reads the asset list (so the row's lock
   // icon flips from the store, mirroring archive/unarchive) and confirms
@@ -376,6 +408,7 @@ export function useAccountDetailsView(accountId: string) {
     interestOpen,
     feeScheduleTarget,
     splitTarget,
+    holdingNoteTarget,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -414,6 +447,9 @@ export function useAccountDetailsView(accountId: string) {
     handleSplitOpen,
     handleSplitClose,
     handleSplitSuccess,
+    handleHoldingNoteOpen,
+    handleHoldingNoteClose,
+    handleHoldingNoteSuccess,
     handleTogglePriceRefreshLock,
   };
 }

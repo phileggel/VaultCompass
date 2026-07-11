@@ -28,6 +28,7 @@ import { DepositTransactionModal } from "../deposit_transaction/DepositTransacti
 import { DividendTransactionModal } from "../dividend_transaction/DividendTransactionModal";
 import { FeeScheduleModal } from "../fee_schedule/FeeScheduleModal";
 import { FreeSharesModal } from "../free_shares_transaction/FreeSharesModal";
+import { HoldingNoteModal } from "../holding_note/HoldingNoteModal";
 import { InterestModal } from "../interest_transaction/InterestModal";
 import { ManagementFeeModal } from "../management_fee_transaction/ManagementFeeModal";
 import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
@@ -376,6 +377,7 @@ export function AccountDetailsView() {
                           view.managementFeesEnabled ? view.handleFeeScheduleOpen : undefined
                         }
                         onSplit={view.handleSplitOpen}
+                        onNote={view.handleHoldingNoteOpen}
                         showManagementFees={view.managementFeesEnabled}
                         perfPeriod={view.perfPeriod}
                         readOnly={view.isAsOf}
@@ -588,6 +590,17 @@ export function AccountDetailsView() {
           accountId={accountId}
           target={view.splitTarget}
           onSubmitSuccess={view.handleSplitSuccess}
+        />
+      )}
+
+      {/* HNO-042 — holding-note modal for a specific holding (opened from its row action) */}
+      {view.holdingNoteTarget && (
+        <HoldingNoteModal
+          isOpen
+          onClose={view.handleHoldingNoteClose}
+          accountId={accountId}
+          target={view.holdingNoteTarget}
+          onSubmitSuccess={view.handleHoldingNoteSuccess}
         />
       )}
 

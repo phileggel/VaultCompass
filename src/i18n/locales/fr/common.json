@@ -359,6 +359,7 @@
     "action_record_management_fee": "Frais de gestion",
     "action_record_interest": "Enregistrer des intérêts",
     "action_manage_fee": "Gérer la planification des frais",
+    "action_note": "Note",
     "total_management_fees": "Total des frais de gestion",
     "column_management_fees": "Frais gestion",
     "as_of_date_label": "À la date du",
@@ -515,6 +516,22 @@
     "action_record": "Enregistrer la division",
     "recorded": "Division d'actions enregistrée.",
     "updated": "Division d'actions modifiée."
+  },
+  "holding_note": {
+    "modal_title": "Note sur {{asset}}",
+    "form_text_label": "Note",
+    "form_text_placeholder": "Écrivez un rappel pour cette position…",
+    "alarm_toggle_label": "M'alerter quand le prix franchit un seuil",
+    "form_direction_label": "Direction",
+    "direction_below": "En dessous",
+    "direction_above": "Au-dessus",
+    "form_price_label": "Prix seuil ({{currency}})",
+    "action_save": "Enregistrer la note",
+    "action_delete": "Supprimer la note",
+    "saved": "Note enregistrée.",
+    "deleted": "Note supprimée.",
+    "bell_armed": "Alarme de prix armée",
+    "bell_triggered": "Alarme de prix déclenchée"
   },
   "management_fee": {
     "modal_title": "Enregistrer des frais de gestion",
@@ -712,6 +729,12 @@
     "ArchivedAsset": "Impossible d'ouvrir un solde pour un actif archivé.",
     "InvalidTotalCost": "Le coût total ne doit pas être négatif.",
     "AmountNotPositive": "Le montant doit être supérieur à 0.",
-    "OpeningBalanceOnCashAsset": "Impossible d'ouvrir un solde sur l'actif Cash système."
+    "OpeningBalanceOnCashAsset": "Impossible d'ouvrir un solde sur l'actif Cash système.",
+    "NoteTextEmpty": "Le texte de la note ne peut pas être vide.",
+    "NoteTextTooLong": "Le texte de la note dépasse 500 caractères.",
+    "ThresholdNotPositive": "Le seuil d'alarme doit être un prix positif.",
+    "ThresholdIncomplete": "L'alarme nécessite un seuil et une direction.",
+    "NoteOnCashAsset": "Impossible d'épingler une note à la ligne de liquidités.",
+    "NoteOnUnheldAsset": "Cette position n'a aucun historique de détention pour y épingler une note."
   }
 }

@@ -359,6 +359,7 @@
     "action_record_management_fee": "Management fee",
     "action_record_interest": "Record interest",
     "action_manage_fee": "Manage fee schedule",
+    "action_note": "Note",
     "total_management_fees": "Total Management Fees",
     "column_management_fees": "Mgmt Fees",
     "as_of_date_label": "As of date",
@@ -515,6 +516,22 @@
     "action_record": "Record split",
     "recorded": "Stock split recorded.",
     "updated": "Stock split updated."
+  },
+  "holding_note": {
+    "modal_title": "Note on {{asset}}",
+    "form_text_label": "Note",
+    "form_text_placeholder": "Write a reminder for this position…",
+    "alarm_toggle_label": "Alert me when the price crosses a threshold",
+    "form_direction_label": "Direction",
+    "direction_below": "Below",
+    "direction_above": "Above",
+    "form_price_label": "Threshold price ({{currency}})",
+    "action_save": "Save note",
+    "action_delete": "Delete note",
+    "saved": "Note saved.",
+    "deleted": "Note deleted.",
+    "bell_armed": "Price alarm armed",
+    "bell_triggered": "Price alarm triggered"
   },
   "management_fee": {
     "modal_title": "Record a management fee",
@@ -712,6 +729,12 @@
     "ArchivedAsset": "Cannot open a balance for an archived asset.",
     "InvalidTotalCost": "Total cost must not be negative.",
     "AmountNotPositive": "Amount must be greater than 0.",
-    "OpeningBalanceOnCashAsset": "Cannot open a balance on the system Cash Asset."
+    "OpeningBalanceOnCashAsset": "Cannot open a balance on the system Cash Asset.",
+    "NoteTextEmpty": "The note text cannot be empty.",
+    "NoteTextTooLong": "The note text exceeds 500 characters.",
+    "ThresholdNotPositive": "The alarm threshold must be a positive price.",
+    "ThresholdIncomplete": "The alarm needs both a threshold and a direction.",
+    "NoteOnCashAsset": "A note cannot be pinned to the cash line.",
+    "NoteOnUnheldAsset": "This position has no holding history to pin a note to."
   }
 }

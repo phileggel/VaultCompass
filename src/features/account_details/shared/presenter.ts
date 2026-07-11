@@ -148,6 +148,20 @@ export function managementFeeErrorToI18n(err: ManagementFeeError | AccountError)
   return { key: `error.${err.code}` };
 }
 
+/**
+ * F27 — Maps the holding-note error surface to an i18n key (HNO-011/020/021).
+ * Both commands (`upsert_holding_note` / `delete_holding_note`) reject with the
+ * BC-wide `AccountError`. Every reachable code resolves to `error.{code}`; the
+ * two holding-internal codes that never reach the wire (`NegativeQuantity`,
+ * `NegativeAveragePrice`) have no i18n key, so they fall back to `error.Unknown`.
+ */
+export function holdingNoteErrorToI18n(err: AccountError): I18nMessage {
+  if (err.code === "NegativeQuantity" || err.code === "NegativeAveragePrice") {
+    return { key: "error.Unknown" };
+  }
+  return { key: `error.${err.code}` };
+}
+
 const DASH = "—";
 
 export interface HoldingRowViewModel {
@@ -200,6 +214,12 @@ export interface HoldingRowViewModel {
   sourceLabel: string | null;
   /** FX-rate staleness label (FXR-090); null/absent unless a converted value is shown. */
   fxStaleness?: StalenessLabel | null;
+  /** Text of the note pinned to this holding, or null when none exists (HNO-041). */
+  noteText: string | null;
+  /** True when the note carries a price alarm — drives the bell icon (HNO-041). */
+  noteHasAlarm: boolean;
+  /** True while the alarm's threshold is crossed — filled error-tone bell (HNO-030/041). */
+  noteAlarmTriggered: boolean;
 }
 
 /** The five windowed returns of the period selector — every period except the since-start default (ACD-054). */
@@ -441,6 +461,10 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
       staleness: null,
       sourceLabel: null,
       fxStaleness: null,
+      // HNO-011 — the cash line never carries a note (NoteOnCashAsset).
+      noteText: null,
+      noteHasAlarm: false,
+      noteAlarmTriggered: false,
     };
   }
   return {
@@ -488,6 +512,11 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
     // FXR-090 — staleness of the FX rate used to value this holding; null for
     // same-currency / no-rate holdings (fx_rate_date is None).
     fxStaleness: formatFxStaleness(detail.fx_rate_date, new Date()),
+    // HNO-041 — note line under the asset name; the alarm fields come as a pair
+    // (both or neither, HNO-011), so the threshold alone signals an alarm.
+    noteText: detail.note_text,
+    noteHasAlarm: detail.note_threshold_price !== null,
+    noteAlarmTriggered: detail.note_alarm_triggered,
   };
 }
 

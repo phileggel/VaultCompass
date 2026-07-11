@@ -51,6 +51,9 @@ const baseRow: HoldingRowViewModel = {
   isCash: false,
   staleness: { key: "mkt.staleness_today" },
   sourceLabel: "mkt.source_yahoo",
+  noteText: null,
+  noteHasAlarm: false,
+  noteAlarmTriggered: false,
 };
 
 const renderInTable = (
@@ -667,6 +670,122 @@ describe("HoldingRow — windowed performance cell (ACD-054)", () => {
     renderInTable({ ...baseRow, weightPct: "1,00%" }, false, "ten_years");
     const dash = screen.getByText("—");
     expect(dash).toHaveClass("text-m3-on-surface-variant");
+  });
+});
+
+// HNO-041 — note line under the asset name: truncated text with a full-text
+// tooltip, optional bell (armed outline vs triggered filled error tone).
+describe("HoldingRow — note line (HNO-041)", () => {
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  it("renders nothing when the holding has no note", () => {
+    renderInTable(baseRow);
+    expect(document.querySelector("#holding-note-asset-1")).toBeNull();
+    expect(document.querySelector("#holding-note-bell-asset-1")).toBeNull();
+  });
+
+  it("renders the note text with the full text as tooltip", () => {
+    renderInTable({ ...baseRow, noteText: "buy 7 shares below 150" });
+    const line = document.querySelector("#holding-note-asset-1");
+    expect(line).not.toBeNull();
+    expect(line).toHaveTextContent("buy 7 shares below 150");
+    expect(line).toHaveAttribute("title", "buy 7 shares below 150");
+    // Single truncated line — the text span carries the truncate class.
+    expect(line?.querySelector(".truncate")).not.toBeNull();
+  });
+
+  it("renders no bell when the note carries no alarm", () => {
+    renderInTable({ ...baseRow, noteText: "plain note" });
+    expect(document.querySelector("#holding-note-bell-asset-1")).toBeNull();
+  });
+
+  it("renders the armed bell in the on-surface-variant tone (not triggered)", () => {
+    renderInTable({ ...baseRow, noteText: "alert note", noteHasAlarm: true });
+    const bell = document.querySelector("#holding-note-bell-asset-1");
+    expect(bell).not.toBeNull();
+    expect(bell?.getAttribute("class")).toContain("text-m3-on-surface-variant");
+    expect(bell?.getAttribute("class")).not.toContain("text-m3-error");
+    expect(bell).toHaveAttribute("aria-label", "holding_note.bell_armed");
+  });
+
+  it("renders the triggered bell filled in the error tone (HNO-030)", () => {
+    renderInTable({
+      ...baseRow,
+      noteText: "alert note",
+      noteHasAlarm: true,
+      noteAlarmTriggered: true,
+    });
+    const bell = document.querySelector("#holding-note-bell-asset-1");
+    expect(bell).not.toBeNull();
+    expect(bell?.getAttribute("class")).toContain("text-m3-error");
+    expect(bell?.getAttribute("class")).toContain("fill-current");
+    expect(bell).toHaveAttribute("aria-label", "holding_note.bell_triggered");
+  });
+});
+
+// HNO-042 — Note action on the holding row (non-cash active rows; hidden for
+// archived assets and in the read-only as-of view — mirrors the split gating).
+describe("HoldingRow — note action (HNO-042)", () => {
+  const renderWithNote = (
+    row: HoldingRowViewModel,
+    onNote: (assetId: string) => void,
+    readOnly = false,
+  ) =>
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={row}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onNote={onNote}
+            readOnly={readOnly}
+          />
+        </tbody>
+      </table>,
+    );
+
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+  });
+
+  it("renders the note button with its stable id and calls onNote with the asset id", () => {
+    const onNote = vi.fn();
+    renderWithNote(baseRow, onNote);
+    const button = screen.getByRole("button", { name: "account_details.action_note" });
+    expect(button.id).toBe("action-note-asset-1");
+    fireEvent.click(button);
+    expect(onNote).toHaveBeenCalledWith("asset-1");
+  });
+
+  it("hides the note button when the asset is archived", () => {
+    useAppStore.setState({
+      assets: [{ id: "asset-1", is_archived: true, currency: "USD" }] as unknown as Asset[],
+      accounts: [],
+    });
+    renderWithNote(baseRow, vi.fn());
+    expect(document.querySelector("#action-note-asset-1")).toBeNull();
+  });
+
+  it("hides the note button in the read-only as-of view", () => {
+    renderWithNote(baseRow, vi.fn(), true);
+    expect(document.querySelector("#action-note-asset-1")).toBeNull();
+  });
+
+  it("does not render the note button on the cash row", () => {
+    const cashRow: HoldingRowViewModel = {
+      ...baseRow,
+      assetId: "system-cash-eur",
+      assetReference: "EUR",
+      isCash: true,
+    };
+    renderWithNote(cashRow, vi.fn());
+    expect(document.querySelector("#action-note-system-cash-eur")).toBeNull();
   });
 });
 

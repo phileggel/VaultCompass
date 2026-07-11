@@ -2,6 +2,8 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  Bell,
+  BellRing,
   History,
   Lock,
   LockOpen,
@@ -10,6 +12,7 @@ import {
   Plus,
   Scissors,
   Search,
+  StickyNote,
 } from "lucide-react";
 import { type KeyboardEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -37,6 +40,8 @@ type HoldingRowProps = {
   onManageFee?: (assetId: string, assetName: string) => void;
   /** SPL-061 — open the stock-split modal for this holding. */
   onSplit?: (assetId: string) => void;
+  /** HNO-042 — open the holding-note modal for this holding. */
+  onNote?: (assetId: string) => void;
   /** FEE-076 — render the Management Fees column; false when the account has the mechanism disabled. */
   showManagementFees?: boolean;
   /** ACD-054 — selected period for the Performance % column. */
@@ -56,6 +61,7 @@ export function HoldingRow({
   onTogglePriceRefreshLock,
   onManageFee,
   onSplit,
+  onNote,
   showManagementFees = true,
   perfPeriod = "since_start",
   readOnly = false,
@@ -124,6 +130,10 @@ export function HoldingRow({
   const handleSplit = useCallback(() => {
     onSplit?.(row.assetId);
   }, [onSplit, row.assetId]);
+
+  const handleNote = useCallback(() => {
+    onNote?.(row.assetId);
+  }, [onNote, row.assetId]);
 
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
@@ -240,6 +250,35 @@ export function HoldingRow({
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
           <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
+          {/* HNO-041 — pinned note: optional bell (armed / triggered) + single
+              truncated line, full text as tooltip */}
+          {row.noteText !== null && (
+            <span
+              id={`holding-note-${row.assetId}`}
+              title={row.noteText}
+              className="flex items-center gap-1 max-w-56 text-xs text-m3-on-surface-variant"
+            >
+              {row.noteHasAlarm &&
+                (row.noteAlarmTriggered ? (
+                  <BellRing
+                    id={`holding-note-bell-${row.assetId}`}
+                    size={12}
+                    className="shrink-0 text-m3-error fill-current"
+                    role="img"
+                    aria-label={t("holding_note.bell_triggered")}
+                  />
+                ) : (
+                  <Bell
+                    id={`holding-note-bell-${row.assetId}`}
+                    size={12}
+                    className="shrink-0 text-m3-on-surface-variant"
+                    role="img"
+                    aria-label={t("holding_note.bell_armed")}
+                  />
+                ))}
+              <span className="truncate">{row.noteText}</span>
+            </span>
+          )}
         </div>
       </td>
       <td id={`holding-quantity-${row.assetId}`} className="m3-td text-right tabular-nums">
@@ -419,6 +458,16 @@ export function HoldingRow({
                   id={`action-split-${row.assetId}`}
                   aria-label={t("transaction.action_split")}
                   onClick={handleSplit}
+                />
+              )}
+              {/* HNO-042 — Note action (non-cash active rows; hidden for archived assets) */}
+              {onNote && !isArchived && (
+                <IconButton
+                  icon={<StickyNote size={16} />}
+                  size="sm"
+                  id={`action-note-${row.assetId}`}
+                  aria-label={t("account_details.action_note")}
+                  onClick={handleNote}
                 />
               )}
               {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}

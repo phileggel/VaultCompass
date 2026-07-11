@@ -13,6 +13,7 @@ import {
   formatStaleness,
   freeSharesErrorToI18n,
   type HoldingRowViewModel,
+  holdingNoteErrorToI18n,
   interestErrorToI18n,
   managementFeeErrorToI18n,
   performanceColumnKey,
@@ -744,6 +745,29 @@ describe("managementFeeErrorToI18n (FEE-021/011/027)", () => {
   });
 });
 
+describe("holdingNoteErrorToI18n (HNO-011/020/021)", () => {
+  it.each([
+    "NoteTextEmpty",
+    "NoteTextTooLong",
+    "ThresholdNotPositive",
+    "ThresholdIncomplete",
+    "NoteOnCashAsset",
+    "NoteOnUnheldAsset",
+    "AccountNotFound",
+    "AssetNotFound",
+    "DatabaseError",
+  ] as const)("%s maps to its flat error key", (code) => {
+    expect(holdingNoteErrorToI18n({ code } as never)).toEqual({ key: `error.${code}` });
+  });
+
+  it.each([
+    "NegativeQuantity",
+    "NegativeAveragePrice",
+  ] as const)("keyless holding-internal code %s falls back to error.Unknown", (code) => {
+    expect(holdingNoteErrorToI18n({ code } as never)).toEqual({ key: "error.Unknown" });
+  });
+});
+
 describe("toHoldingRow / toAccountSummary — management fees (FEE-052/053)", () => {
   it("formats a holding's cumulative management fees", () => {
     const row = toHoldingRow(makeHolding({ management_fees: 4_250_000 }));
@@ -973,5 +997,55 @@ describe("performanceColumnKey (ACD-054)", () => {
     expect(performanceColumnKey("ten_years")).toBe(
       "account_details.column_performance_pct_ten_years",
     );
+  });
+});
+
+describe("toHoldingRow — note fields (HNO-041)", () => {
+  it("passes through a null note as no note and no alarm", () => {
+    const row = toHoldingRow(makeHolding());
+    expect(row.noteText).toBeNull();
+    expect(row.noteHasAlarm).toBe(false);
+    expect(row.noteAlarmTriggered).toBe(false);
+  });
+
+  it("carries the note text without an alarm when no threshold is stored", () => {
+    const row = toHoldingRow(makeHolding({ note_text: "plain reminder" }));
+    expect(row.noteText).toBe("plain reminder");
+    expect(row.noteHasAlarm).toBe(false);
+    expect(row.noteAlarmTriggered).toBe(false);
+  });
+
+  it("flags an armed alarm from the threshold pair (not triggered)", () => {
+    const row = toHoldingRow(
+      makeHolding({
+        note_text: "alert note",
+        note_threshold_price: 150_000_000,
+        note_threshold_direction: "Below",
+        note_alarm_triggered: false,
+      }),
+    );
+    expect(row.noteText).toBe("alert note");
+    expect(row.noteHasAlarm).toBe(true);
+    expect(row.noteAlarmTriggered).toBe(false);
+  });
+
+  it("flags a triggered alarm (HNO-030)", () => {
+    const row = toHoldingRow(
+      makeHolding({
+        note_text: "alert note",
+        note_threshold_price: 150_000_000,
+        note_threshold_direction: "Above",
+        note_alarm_triggered: true,
+      }),
+    );
+    expect(row.noteHasAlarm).toBe(true);
+    expect(row.noteAlarmTriggered).toBe(true);
+  });
+
+  it("cash row never carries a note (HNO-011)", () => {
+    const row = toHoldingRow(makeCashHolding());
+    expect(row.noteText).toBeNull();
+    expect(row.noteHasAlarm).toBe(false);
+    expect(row.noteAlarmTriggered).toBe(false);
   });
 });
