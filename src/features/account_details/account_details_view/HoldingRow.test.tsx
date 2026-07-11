@@ -669,3 +669,66 @@ describe("HoldingRow — windowed performance cell (ACD-054)", () => {
     expect(dash).toHaveClass("text-m3-on-surface-variant");
   });
 });
+
+// SPL-061 — Split action on the holding row (non-cash active rows; hidden for
+// archived assets and in the read-only as-of view).
+describe("HoldingRow — split action (SPL-061)", () => {
+  const renderWithSplit = (
+    row: HoldingRowViewModel,
+    onSplit: (assetId: string) => void,
+    readOnly = false,
+  ) =>
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={row}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onSplit={onSplit}
+            readOnly={readOnly}
+          />
+        </tbody>
+      </table>,
+    );
+
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+  });
+
+  it("renders the split button with its stable id and calls onSplit with the asset id", () => {
+    const onSplit = vi.fn();
+    renderWithSplit(baseRow, onSplit);
+    const button = screen.getByRole("button", { name: "transaction.action_split" });
+    expect(button.id).toBe("action-split-asset-1");
+    fireEvent.click(button);
+    expect(onSplit).toHaveBeenCalledWith("asset-1");
+  });
+
+  it("hides the split button when the asset is archived", () => {
+    useAppStore.setState({
+      assets: [{ id: "asset-1", is_archived: true, currency: "USD" }] as unknown as Asset[],
+      accounts: [],
+    });
+    renderWithSplit(baseRow, vi.fn());
+    expect(document.querySelector("#action-split-asset-1")).toBeNull();
+  });
+
+  it("hides the split button in the read-only as-of view", () => {
+    renderWithSplit(baseRow, vi.fn(), true);
+    expect(document.querySelector("#action-split-asset-1")).toBeNull();
+  });
+
+  it("does not render the split button on the cash row", () => {
+    const cashRow: HoldingRowViewModel = {
+      ...baseRow,
+      assetId: "system-cash-eur",
+      assetReference: "EUR",
+      isCash: true,
+    };
+    renderWithSplit(cashRow, vi.fn());
+    expect(document.querySelector("#action-split-system-cash-eur")).toBeNull();
+  });
+});

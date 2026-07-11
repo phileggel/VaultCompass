@@ -8,6 +8,7 @@ import { FreeSharesEditModalMount } from "@/features/shell/FreeSharesEditModalMo
 import { InterestEditModalMount } from "@/features/shell/InterestEditModalMount";
 import { MainLayout } from "@/features/shell/MainLayout";
 import { ManagementFeeEditModalMount } from "@/features/shell/ManagementFeeEditModalMount";
+import { SplitEditModalMount } from "@/features/shell/SplitEditModalMount";
 import { UnpricedPricesModalMount } from "@/features/shell/UnpricedPricesModalMount";
 import { WhatsNewDialogMount } from "@/features/shell/WhatsNewDialogMount";
 import { saveLastPath } from "@/lib/lastPath";
@@ -28,6 +29,7 @@ export function AppShell() {
       <FreeSharesEditModalMount />
       <InterestEditModalMount />
       <ManagementFeeEditModalMount />
+      <SplitEditModalMount />
       <UnpricedPricesModalMount />
       <AddTransactionModalMount />
       <WhatsNewDialogMount />

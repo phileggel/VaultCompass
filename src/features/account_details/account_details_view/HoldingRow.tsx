@@ -8,6 +8,7 @@ import {
   Minus,
   Percent,
   Plus,
+  Scissors,
   Search,
 } from "lucide-react";
 import { type KeyboardEvent, useCallback } from "react";
@@ -34,6 +35,8 @@ type HoldingRowProps = {
   onTogglePriceRefreshLock?: (assetId: string, currentlyBlocked: boolean) => void;
   /** FEE-011 — open the recurring fee-schedule modal for this holding. */
   onManageFee?: (assetId: string, assetName: string) => void;
+  /** SPL-061 — open the stock-split modal for this holding. */
+  onSplit?: (assetId: string) => void;
   /** FEE-076 — render the Management Fees column; false when the account has the mechanism disabled. */
   showManagementFees?: boolean;
   /** ACD-054 — selected period for the Performance % column. */
@@ -52,6 +55,7 @@ export function HoldingRow({
   onWithdraw,
   onTogglePriceRefreshLock,
   onManageFee,
+  onSplit,
   showManagementFees = true,
   perfPeriod = "since_start",
   readOnly = false,
@@ -116,6 +120,10 @@ export function HoldingRow({
   const handleManageFee = useCallback(() => {
     onManageFee?.(row.assetId, row.assetName);
   }, [onManageFee, row.assetId, row.assetName]);
+
+  const handleSplit = useCallback(() => {
+    onSplit?.(row.assetId);
+  }, [onSplit, row.assetId]);
 
   const asset = assets.find((a) => a.id === row.assetId);
   const isArchived = asset?.is_archived ?? false;
@@ -237,7 +245,9 @@ export function HoldingRow({
       <td id={`holding-quantity-${row.assetId}`} className="m3-td text-right tabular-nums">
         {row.quantity}
       </td>
-      <td className="m3-td text-right tabular-nums">{row.averagePrice}</td>
+      <td id={`holding-avg-price-${row.assetId}`} className="m3-td text-right tabular-nums">
+        {row.averagePrice}
+      </td>
       {/* SEL-042 — Realized P&L */}
       <td className="m3-td text-right">
         <PnlCell value={row.realizedPnl} raw={row.realizedPnlRaw} />
@@ -401,6 +411,16 @@ export function HoldingRow({
                 onClick={handleSell}
                 disabled={isArchived}
               />
+              {/* SPL-061 — Split action (non-cash active rows; hidden for archived assets) */}
+              {onSplit && !isArchived && (
+                <IconButton
+                  icon={<Scissors size={16} />}
+                  size="sm"
+                  id={`action-split-${row.assetId}`}
+                  aria-label={t("transaction.action_split")}
+                  onClick={handleSplit}
+                />
+              )}
               {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}
               {row.canEnterPrice && (
                 <IconButton

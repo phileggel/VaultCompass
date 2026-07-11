@@ -18,7 +18,9 @@ import type {
   OpenHoldingDTO,
   OpenHoldingError,
   RecordInterestDTO,
+  RecordSplitDTO,
   Result,
+  SplitError,
   Transaction,
   UpdateFeeScheduleDTO,
   WithdrawalDTO,
@@ -81,6 +83,11 @@ export const accountDetailsGateway = {
   // FSD-022 — record a zero-cost free-share distribution attributed to a held asset.
   async recordFreeShares(dto: FreeSharesDTO): Promise<Result<Transaction, FreeSharesError>> {
     return commands.recordFreeShares(dto);
+  },
+
+  // SPL-010/020 — record a stock split rescaling a held position at its date.
+  async recordSplit(dto: RecordSplitDTO): Promise<Result<Transaction, SplitError>> {
+    return commands.recordSplit(dto);
   },
 
   // INT-023/024 — record a zero-cost interest credit on a held asset or the cash line.

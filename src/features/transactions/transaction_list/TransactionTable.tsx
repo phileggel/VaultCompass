@@ -74,12 +74,16 @@ export function TransactionTable({
         </thead>
         <tbody>
           {rows.map((row) => {
-            // FSD-050 / FEE-055 / INT-030 — a free-share distribution, a management-fee
-            // deduction, or an interest credit moves no money: the unit-price and
-            // total-amount columns render the neutral placeholder (the quantity
-            // column still shows the credited/removed units).
+            // FSD-050 / FEE-055 / SPL-060 / INT-030 — a free-share distribution, a
+            // management-fee deduction, a stock split, or an interest credit moves no
+            // money: the unit-price and total-amount columns render the neutral
+            // placeholder (the quantity column still shows the credited/removed
+            // units, or the ×N ratio label for a split).
             const isQuantityOnly =
-              row.type === "FreeShares" || row.type === "ManagementFee" || row.type === "Interest";
+              row.type === "FreeShares" ||
+              row.type === "ManagementFee" ||
+              row.type === "Split" ||
+              row.type === "Interest";
             const moneyDash = (
               <span className="text-m3-on-surface-variant">
                 {t("account_details.pnl_placeholder")}

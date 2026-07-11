@@ -632,3 +632,80 @@ describe("useAccountDetailsView — management fees gate (FEE-076)", () => {
     expect(unknown.current.managementFeesEnabled).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SPL-061 — split modal target: built from the holding detail so the modal's
+// preview and price prefill consume the raw quantity/average/latest price.
+// ---------------------------------------------------------------------------
+describe("useAccountDetailsView — split modal target (SPL-061)", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "EUR" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  const seedHoldings = () =>
+    mockGetAccountDetails.mockResolvedValueOnce({
+      status: "ok",
+      data: {
+        account_name: "Main",
+        holdings: [
+          makeHoldingDetail({
+            asset_id: "asset-split",
+            asset_name: "Alphabet Inc",
+            quantity: 10_000_000,
+            average_price: 150_000_000,
+            current_price: 150_000_000,
+          }),
+        ],
+        closed_holdings: [],
+        total_holding_count: 1,
+        total_cost_basis: 0,
+        total_realized_pnl: 0,
+        total_unrealized_pnl: null,
+        total_global_value: 0,
+        total_dividends_received: 0,
+      },
+    } as never);
+
+  it("splitTarget starts null and captures the holding's raw figures on open", async () => {
+    seedHoldings();
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    expect(result.current.splitTarget).toBeNull();
+    act(() => result.current.handleSplitOpen("asset-split"));
+    expect(result.current.splitTarget).toEqual({
+      assetId: "asset-split",
+      assetName: "Alphabet Inc",
+      holdingQuantityMicro: 10_000_000,
+      averagePriceMicro: 150_000_000,
+      currentPriceMicro: 150_000_000,
+    });
+  });
+
+  it("handleSplitOpen is a no-op for an unknown asset", async () => {
+    seedHoldings();
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    act(() => result.current.handleSplitOpen("asset-missing"));
+    expect(result.current.splitTarget).toBeNull();
+  });
+
+  it("handleSplitClose and handleSplitSuccess clear the target", async () => {
+    seedHoldings();
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+    await act(async () => {});
+
+    act(() => result.current.handleSplitOpen("asset-split"));
+    act(() => result.current.handleSplitClose());
+    expect(result.current.splitTarget).toBeNull();
+
+    act(() => result.current.handleSplitOpen("asset-split"));
+    act(() => result.current.handleSplitSuccess());
+    expect(result.current.splitTarget).toBeNull();
+  });
+});

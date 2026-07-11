@@ -10,6 +10,7 @@ import type {
   HoldingPeriodPerformance,
   InterestError,
   ManagementFeeError,
+  SplitError,
 } from "@/bindings";
 import { isCashAsset } from "@/lib/cashAsset";
 import {
@@ -115,6 +116,21 @@ export function freeSharesErrorToI18n(err: FreeSharesError | AccountError): I18n
  * back to `error.Unknown`.
  */
 export function interestErrorToI18n(err: InterestError | AccountError): I18nMessage {
+  if (err.code === "NegativeQuantity" || err.code === "NegativeAveragePrice") {
+    return { key: "error.Unknown" };
+  }
+  return { key: `error.${err.code}` };
+}
+
+/**
+ * F27 — Maps the split error surfaces to an i18n key (SPL-011/012/021/030).
+ * Covers both the create path (`SplitError`) and the edit path
+ * (`AccountError`, via `correct_transaction`). Every reachable code resolves to
+ * `error.{code}`; the two holding-internal codes that never reach the wire
+ * (`NegativeQuantity`, `NegativeAveragePrice`) have no i18n key, so they fall
+ * back to `error.Unknown`.
+ */
+export function splitErrorToI18n(err: SplitError | AccountError): I18nMessage {
   if (err.code === "NegativeQuantity" || err.code === "NegativeAveragePrice") {
     return { key: "error.Unknown" };
   }

@@ -106,6 +106,28 @@ describe("TransactionTable", () => {
     expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
   });
 
+  it("renders the money placeholder for a Split row's unit price and total (SPL-060)", () => {
+    render(
+      <TransactionTable
+        rows={[
+          row({
+            id: "spl",
+            type: "Split",
+            quantity: "×2",
+            unitPrice: "0.000",
+            totalAmount: "0.000",
+          }),
+        ]}
+        {...baseProps}
+      />,
+    );
+    // unit-price and total cells fall back to the placeholder; the placeholder
+    // key also renders in the (null) realized-P&L cell → 3 occurrences.
+    expect(screen.getAllByText("account_details.pnl_placeholder")).toHaveLength(3);
+    // SPL-060 — the quantity column carries the ×N ratio label.
+    expect(screen.getByText("×2")).toBeInTheDocument();
+  });
+
   it("colours a positive realized P&L as a gain", () => {
     render(
       <TransactionTable

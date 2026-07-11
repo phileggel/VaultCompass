@@ -127,6 +127,46 @@ describe("toTransactionRow — FreeShares (FSD-022/050)", () => {
   });
 });
 
+// SPL-060 — a split row shows the micro-scaled factor riding in `quantity`
+// as a trimmed "×N" ratio label.
+describe("toTransactionRow — Split (SPL-060)", () => {
+  const splitTx = (factorMicros: number) => ({
+    id: "tx-spl-1",
+    account_id: "account-1",
+    asset_id: "asset-equity-1",
+    transaction_type: "Split" as const,
+    date: "2026-07-01",
+    quantity: factorMicros,
+    unit_price: 0,
+    exchange_rate: 1_000_000,
+    fees: 0,
+    total_amount: 0,
+    note: null,
+    realized_pnl: null,
+    created_at: "2026-07-01T10:00:00Z",
+  });
+
+  it("SPL-060: a whole factor renders without decimals (20_000_000 → '×20')", () => {
+    const row = toTransactionRow(splitTx(20_000_000), "Alphabet Inc", "My Account");
+    expect(row.quantity).toBe("×20");
+  });
+
+  it("SPL-060: a fractional factor renders trimmed (1_500_000 → '×1.5')", () => {
+    const row = toTransactionRow(splitTx(1_500_000), "Alphabet Inc", "My Account");
+    expect(row.quantity).toBe("×1.5");
+  });
+
+  it("SPL-060: a reverse-split factor renders trimmed (100_000 → '×0.1')", () => {
+    const row = toTransactionRow(splitTx(100_000), "Alphabet Inc", "My Account");
+    expect(row.quantity).toBe("×0.1");
+  });
+
+  it("SPL-060: type is 'Split' for i18n key construction", () => {
+    const row = toTransactionRow(splitTx(2_000_000), "Alphabet Inc", "My Account");
+    expect(row.type).toBe("Split");
+  });
+});
+
 // F27 layer-3 presenter — exhaustive variant coverage across AccountError
 // and OpenHoldingError. Payload-bearing variants get pre-formatted micros (presenter
 // owns the data formatting; component owns t()).

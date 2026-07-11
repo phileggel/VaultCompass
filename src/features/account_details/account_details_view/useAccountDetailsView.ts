@@ -15,7 +15,7 @@ import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
 import { accountDetailsGateway, useCachedAssets } from "../gateway";
 import { priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
-import type { ModalTarget, SellTarget } from "../shared/types";
+import type { ModalTarget, SellTarget, SplitTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
 /** Local calendar date as ISO `YYYY-MM-DD` — the as-of selector's "today" default. */
@@ -93,6 +93,7 @@ export function useAccountDetailsView(accountId: string) {
     assetId: string;
     assetName: string;
   } | null>(null);
+  const [splitTarget, setSplitTarget] = useState<SplitTarget | null>(null);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -233,6 +234,30 @@ export function useAccountDetailsView(accountId: string) {
     data.retry();
   }, [data]);
 
+  // SPL-061 — split modal, opened per holding from its row action. The holding
+  // detail supplies the quantity/average/latest price the modal's preview and
+  // price prefill consume (SPL-040).
+  const handleSplitOpen = useCallback(
+    (assetId: string) => {
+      if (isAsOf) return;
+      const holding = data.holdingDetails.find((h) => h.asset_id === assetId);
+      if (!holding) return;
+      setSplitTarget({
+        assetId: holding.asset_id,
+        assetName: holding.asset_name,
+        holdingQuantityMicro: holding.quantity,
+        averagePriceMicro: holding.average_price,
+        currentPriceMicro: holding.current_price,
+      });
+    },
+    [isAsOf, data.holdingDetails],
+  );
+  const handleSplitClose = useCallback(() => setSplitTarget(null), []);
+  const handleSplitSuccess = useCallback(() => {
+    setSplitTarget(null);
+    data.retry();
+  }, [data]);
+
   // MKT-153/156/157 — toggle the price-refresh lock on an asset. Calls the
   // block/unblock command, then re-reads the asset list (so the row's lock
   // icon flips from the store, mirroring archive/unarchive) and confirms
@@ -350,6 +375,7 @@ export function useAccountDetailsView(accountId: string) {
     managementFeeOpen,
     interestOpen,
     feeScheduleTarget,
+    splitTarget,
     // Handlers
     handleAddTransaction,
     handleBuyOpen,
@@ -385,6 +411,9 @@ export function useAccountDetailsView(accountId: string) {
     handleFeeScheduleOpen,
     handleFeeScheduleClose,
     handleFeeScheduleSuccess,
+    handleSplitOpen,
+    handleSplitClose,
+    handleSplitSuccess,
     handleTogglePriceRefreshLock,
   };
 }

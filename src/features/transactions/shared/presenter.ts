@@ -108,6 +108,17 @@ export interface TransactionRowViewModel {
   balance?: string;
 }
 
+const MICRO = 1_000_000;
+
+/**
+ * SPL-060 — a split row shows its factor as a "×N" ratio label in the quantity
+ * column, with the micro-scaled factor rendered as a trimmed decimal
+ * (20_000_000 → "×20", 1_500_000 → "×1.5", 100_000 → "×0.1").
+ */
+function formatSplitFactorLabel(factorMicros: number): string {
+  return `×${factorMicros / MICRO}`;
+}
+
 /**
  * Maps a raw Transaction + contextual names to a display-ready ViewModel (TRX-024).
  */
@@ -124,7 +135,10 @@ export function toTransactionRow(
     accountName,
     type: tx.transaction_type,
     date: tx.date,
-    quantity: microToFormatted(tx.quantity),
+    quantity:
+      tx.transaction_type === "Split"
+        ? formatSplitFactorLabel(tx.quantity)
+        : microToFormatted(tx.quantity),
     unitPrice: microToFormatted(tx.unit_price),
     exchangeRate: microToFormatted(tx.exchange_rate),
     fees: microToFormatted(tx.fees),

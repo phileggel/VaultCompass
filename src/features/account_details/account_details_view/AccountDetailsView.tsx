@@ -35,6 +35,7 @@ import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
 import { performanceColumnKey } from "../shared/presenter";
+import { SplitModal } from "../split_transaction/SplitModal";
 import { WithdrawalTransactionModal } from "../withdrawal_transaction/WithdrawalTransactionModal";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
 import { HoldingRow } from "./HoldingRow";
@@ -374,6 +375,7 @@ export function AccountDetailsView() {
                         onManageFee={
                           view.managementFeesEnabled ? view.handleFeeScheduleOpen : undefined
                         }
+                        onSplit={view.handleSplitOpen}
                         showManagementFees={view.managementFeesEnabled}
                         perfPeriod={view.perfPeriod}
                         readOnly={view.isAsOf}
@@ -575,6 +577,17 @@ export function AccountDetailsView() {
           accountId={accountId}
           heldAssets={view.interestEligibleHoldings}
           onSubmitSuccess={view.handleInterestSuccess}
+        />
+      )}
+
+      {/* SPL-061 — split modal for a specific holding (opened from its row action) */}
+      {view.splitTarget && (
+        <SplitModal
+          isOpen
+          onClose={view.handleSplitClose}
+          accountId={accountId}
+          target={view.splitTarget}
+          onSubmitSuccess={view.handleSplitSuccess}
         />
       )}
 

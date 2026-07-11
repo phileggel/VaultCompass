@@ -63,6 +63,14 @@ describe("routeEditTransaction", () => {
     );
   });
 
+  it("routes a Split to the split edit modal (SPL-030)", () => {
+    routeEditTransaction(navigate, tx("Split"), vi.fn());
+    expect(patchModalSearch).toHaveBeenCalledWith(
+      navigate,
+      expect.objectContaining({ modal: "edit-split" }),
+    );
+  });
+
   it("routes Interest to the interest edit modal (INT-040)", () => {
     routeEditTransaction(navigate, tx("Interest"), vi.fn());
     expect(patchModalSearch).toHaveBeenCalledWith(
