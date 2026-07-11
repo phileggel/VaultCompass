@@ -240,21 +240,8 @@ impl Account {
         note: Option<String>,
     ) -> Result<&Transaction> {
         let (unit_price, total_amount) = match total_amount {
-            Some(total) => {
-                // TRX-060 — the typed total must be strictly positive and cover the fees.
-                if total <= 0 {
-                    return Err(AccountError::TotalAmountNotPositive.into());
-                }
-                if total < fees {
-                    return Err(AccountError::TotalAmountBelowFees.into());
-                }
-                let derived_unit_price = Self::derive_unit_price_from_total(
-                    total as i128 - fees as i128,
-                    quantity,
-                    exchange_rate,
-                )?;
-                (derived_unit_price, total)
-            }
+            // TRX-060 — the typed total is ground truth; the unit price is derived.
+            Some(total) => Self::derive_purchase_from_total(total, quantity, exchange_rate, fees)?,
             None => (
                 unit_price,
                 Self::compute_purchase_total(quantity, unit_price, exchange_rate, fees),
@@ -335,18 +322,8 @@ impl Account {
         }
 
         let (unit_price, total_amount) = match total_amount {
-            Some(total) => {
-                // SEL-050 — the typed total must be strictly positive.
-                if total <= 0 {
-                    return Err(AccountError::TotalAmountNotPositive.into());
-                }
-                let derived_unit_price = Self::derive_unit_price_from_total(
-                    total as i128 + fees as i128,
-                    quantity,
-                    exchange_rate,
-                )?;
-                (derived_unit_price, total)
-            }
+            // SEL-050 — the typed net proceeds are ground truth; the unit price is derived.
+            Some(total) => Self::derive_sell_from_total(total, quantity, exchange_rate, fees)?,
             None => (
                 unit_price,
                 Self::compute_sell_total(quantity, unit_price, exchange_rate, fees),
@@ -473,31 +450,12 @@ impl Account {
                 // TRX-061 — the typed total is ground truth: stored verbatim,
                 // unit price derived from it (same validation as TRX-060).
                 (TransactionType::Purchase, Some(total)) => {
-                    if total <= 0 {
-                        return Err(AccountError::TotalAmountNotPositive.into());
-                    }
-                    if total < fees {
-                        return Err(AccountError::TotalAmountBelowFees.into());
-                    }
-                    let derived_unit_price = Self::derive_unit_price_from_total(
-                        total as i128 - fees as i128,
-                        quantity,
-                        exchange_rate,
-                    )?;
-                    (derived_unit_price, total)
+                    Self::derive_purchase_from_total(total, quantity, exchange_rate, fees)?
                 }
                 // SEL-051 — the typed net proceeds are ground truth: stored
                 // verbatim, unit price derived from them (same validation as SEL-050).
                 (TransactionType::Sell, Some(total)) => {
-                    if total <= 0 {
-                        return Err(AccountError::TotalAmountNotPositive.into());
-                    }
-                    let derived_unit_price = Self::derive_unit_price_from_total(
-                        total as i128 + fees as i128,
-                        quantity,
-                        exchange_rate,
-                    )?;
-                    (derived_unit_price, total)
+                    Self::derive_sell_from_total(total, quantity, exchange_rate, fees)?
                 }
                 (TransactionType::Purchase, None) => (
                     unit_price,
@@ -1429,6 +1387,49 @@ impl Account {
             (numerator - half) / denominator
         };
         i64::try_from(rounded).map_err(|_| AccountError::UnitPriceOutOfRange)
+    }
+
+    /// TRX-060 / TRX-061 — validates a typed all-in purchase total (strictly
+    /// positive, covers the fees) and derives the unit price from its securities
+    /// part (`total − fees`). Returns `(unit_price, total_amount)`.
+    fn derive_purchase_from_total(
+        total: i64,
+        quantity: i64,
+        exchange_rate: i64,
+        fees: i64,
+    ) -> StdResult<(i64, i64), AccountError> {
+        if total <= 0 {
+            return Err(AccountError::TotalAmountNotPositive);
+        }
+        if total < fees {
+            return Err(AccountError::TotalAmountBelowFees);
+        }
+        let unit_price = Self::derive_unit_price_from_total(
+            total as i128 - fees as i128,
+            quantity,
+            exchange_rate,
+        )?;
+        Ok((unit_price, total))
+    }
+
+    /// SEL-050 / SEL-051 — validates typed net sell proceeds (strictly positive)
+    /// and derives the unit price with the fees added back (`total + fees`).
+    /// Returns `(unit_price, total_amount)`.
+    fn derive_sell_from_total(
+        total: i64,
+        quantity: i64,
+        exchange_rate: i64,
+        fees: i64,
+    ) -> StdResult<(i64, i64), AccountError> {
+        if total <= 0 {
+            return Err(AccountError::TotalAmountNotPositive);
+        }
+        let unit_price = Self::derive_unit_price_from_total(
+            total as i128 + fees as i128,
+            quantity,
+            exchange_rate,
+        )?;
+        Ok((unit_price, total))
     }
 
     /// Computes total_amount for an OpeningBalance correction (TRX-051).
