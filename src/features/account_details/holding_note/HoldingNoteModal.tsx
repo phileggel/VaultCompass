@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ThresholdDirection } from "@/bindings";
 import { logger } from "@/lib/logger";
@@ -6,6 +6,7 @@ import { Button } from "@/ui/components/button/Button";
 import { CalcField } from "@/ui/components/field/CalcField";
 import { SelectField } from "@/ui/components/field/SelectField";
 import { TextareaField } from "@/ui/components/field/TextareaField";
+import { ConfirmationDialog } from "@/ui/components/modal/Dialog";
 import { FormModal } from "@/ui/components/modal/FormModal";
 import type { HoldingNoteTarget } from "../shared/types";
 import { NOTE_TEXT_MAX_LENGTH, useHoldingNote } from "./useHoldingNote";
@@ -42,6 +43,8 @@ export function HoldingNoteModal({
     handleSubmit,
     handleDelete,
   } = useHoldingNote({ accountId, target, onSubmitSuccess });
+  // HNO-021 — destructive action goes through the house confirm step.
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const directionOptions = useMemo(
     () => [
@@ -60,7 +63,7 @@ export function HoldingNoteModal({
             id="holding-note-delete"
             data-testid="holding-note-delete"
             variant="danger"
-            onClick={() => void handleDelete()}
+            onClick={() => setConfirmDelete(true)}
             disabled={isSubmitting}
           >
             {t("holding_note.action_delete")}
@@ -91,7 +94,7 @@ export function HoldingNoteModal({
         </div>
       </div>
     ),
-    [isEditMode, isSubmitting, isFormValid, t, onClose, handleDelete],
+    [isEditMode, isSubmitting, isFormValid, t, onClose],
   );
 
   return (
@@ -163,6 +166,20 @@ export function HoldingNoteModal({
           </p>
         )}
       </form>
+      {/* HNO-021 — confirm before the destructive delete (house precedent) */}
+      <ConfirmationDialog
+        confirmId="holding-note-delete-confirm"
+        isOpen={confirmDelete}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
+        title={t("holding_note.delete_confirm_title")}
+        message={t("holding_note.delete_confirm_message")}
+        confirmLabel={t("action.delete")}
+        cancelLabel={t("action.cancel")}
+      />
     </FormModal>
   );
 }

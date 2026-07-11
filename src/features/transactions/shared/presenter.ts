@@ -1,5 +1,5 @@
 import type { AccountError, OpenHoldingError, Transaction } from "@/bindings";
-import { microToFormatted } from "@/lib/microUnits";
+import { microToFormatted, microToFormattedFactor } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 
 /**
@@ -108,15 +108,13 @@ export interface TransactionRowViewModel {
   balance?: string;
 }
 
-const MICRO = 1_000_000;
-
 /**
  * SPL-060 — a split row shows its factor as a "×N" ratio label in the quantity
  * column, with the micro-scaled factor rendered as a trimmed decimal
  * (20_000_000 → "×20", 1_500_000 → "×1.5", 100_000 → "×0.1").
  */
 function formatSplitFactorLabel(factorMicros: number): string {
-  return `×${factorMicros / MICRO}`;
+  return `×${microToFormattedFactor(factorMicros)}`;
 }
 
 /**

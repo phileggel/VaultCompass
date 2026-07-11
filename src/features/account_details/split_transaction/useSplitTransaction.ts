@@ -2,7 +2,12 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getLastOperationDate, setLastOperationDate } from "@/lib/lastOperationDateStorage";
 import { logger } from "@/lib/logger";
-import { microToDecimal, microToFormattedPrice, microToFormattedQuantity } from "@/lib/microUnits";
+import {
+  decimalToMicro,
+  microToDecimal,
+  microToFormattedPrice,
+  microToFormattedQuantity,
+} from "@/lib/microUnits";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { accountDetailsGateway } from "../gateway";
@@ -86,17 +91,18 @@ export function useSplitTransaction({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // SPL-061 — micro-scaled factor: round(new × MICRO / old) from the ratio pair,
-  // or round(value × MICRO) from the decimal factor input in edit mode (SPL-030).
+  // or the decimal factor input converted at the input boundary in edit mode
+  // (SPL-030; decimalToMicro normalises the fr comma like every CalcField).
   const factorMicro = useMemo<number | null>(() => {
     if (isEditMode) {
-      const value = Number(formData.factor);
-      if (!Number.isFinite(value) || value <= 0) return null;
-      return Math.round(value * MICRO);
+      const micro = decimalToMicro(formData.factor);
+      return micro > 0 ? micro : null;
     }
     const newPart = parsePositiveInteger(formData.ratioNew);
     const oldPart = parsePositiveInteger(formData.ratioOld);
     if (newPart === null || oldPart === null) return null;
-    return Math.round((newPart * MICRO) / oldPart);
+    const factor = Math.round((newPart * MICRO) / oldPart);
+    return Number.isSafeInteger(factor) ? factor : null;
   }, [isEditMode, formData.factor, formData.ratioNew, formData.ratioOld]);
 
   // SPL-011 — the factor must be strictly positive and different from ×1.

@@ -66,12 +66,13 @@ describe("holding_note", () => {
   });
 
   // -------------------------------------------------------------------------
-  // HNO-042/020/030/041 — critical path:
-  //   open the note modal from the holding row → save a note with an Above-100
-  //   alarm (current price 120 → triggered) → the row shows the note text and
-  //   the triggered bell.
+  // HNO-042/020/030/041/021 — self-cleaning critical path (one scenario, like
+  //   free_shares.test.ts): open the note modal from the holding row → save a
+  //   note with an Above-100 alarm (current price 120 → triggered) → the row
+  //   carries the note text and the triggered bell → reopen prefilled →
+  //   delete → the line disappears.
   // -------------------------------------------------------------------------
-  it("HNO-042/020/041: save a note with a triggered Above alarm, row shows text + bell", async () => {
+  it("HNO-042/020/041/021: note round-trip — save with triggered alarm, row shows it, delete removes it", async () => {
     await navigateToAccounts();
     await navigateToAccountDetails(accId);
 
@@ -120,56 +121,46 @@ describe("holding_note", () => {
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // -------------------------------------------------------------------
-    // Step 5 — Row rendering (HNO-041): the note line shows the text under
-    //   the asset name and the bell renders (triggered: 120 > 100, HNO-030).
+    // Step 5 — Row rendering (HNO-041): the note line carries the full text
+    //   in its `title` (the tooltip) and the bell renders (triggered:
+    //   120 > 100, HNO-030). The title is asserted instead of getText():
+    //   the truncated single-line span can compute to zero width under the
+    //   headless CI font metrics, and WebDriver reports invisible text as "".
     // -------------------------------------------------------------------
     const noteLine = await $(`#holding-note-${astId}`);
     await noteLine.waitForExist({ timeout: 8000 });
-    await browser.waitUntil(async () => (await noteLine.getText()) === NOTE_TEXT, {
+    await browser.waitUntil(async () => (await noteLine.getAttribute("title")) === NOTE_TEXT, {
       timeout: 8000,
-      timeoutMsg: "The holding row must render the saved note text (HNO-041)",
+      timeoutMsg: "The holding row must carry the saved note text (HNO-041)",
     });
 
     const bell = await $(`#holding-note-bell-${astId}`);
     await bell.waitForExist({ timeout: 8000 });
-  });
-
-  // -------------------------------------------------------------------------
-  // HNO-020/021 — reopen prefilled, delete, note line disappears.
-  // -------------------------------------------------------------------------
-  it("HNO-021: reopen the note and delete it, the row line disappears", async () => {
-    await navigateToAccounts();
-    await navigateToAccountDetails(accId);
 
     // -------------------------------------------------------------------
-    // Step 1 — Reopen the modal; the stored note marks edit mode, so the
-    //   destructive Delete action is offered (HNO-042).
+    // Step 6 — Reopen the modal; the stored note marks edit mode, so the
+    //   destructive Delete action is offered (HNO-042). Delete (HNO-021).
     // -------------------------------------------------------------------
-    const noteBtn = await $(`#action-note-${astId}`);
-    await noteBtn.waitForExist({ timeout: 8000 });
     await noteBtn.click();
-
-    const form = await $("form#holding-note-form");
     await form.waitForExist({ timeout: 8000 });
 
-    // -------------------------------------------------------------------
-    // Step 2 — Delete (HNO-021).
-    // -------------------------------------------------------------------
     const deleteBtn = await $("#holding-note-delete");
     await deleteBtn.waitForExist({ timeout: 8000 });
     await deleteBtn.click();
+
+    // HNO-021 — the destructive action asks for confirmation first.
+    const confirmBtn = await $("#holding-note-delete-confirm");
+    await confirmBtn.waitForExist({ timeout: 5000 });
+    await confirmBtn.click();
 
     // The form must close on success.
     await form.waitForExist({ timeout: 8000, reverse: true });
 
     // -------------------------------------------------------------------
-    // Step 3 — The note line and its bell are gone (HNO-041: no note →
-    //   nothing renders).
+    // Step 7 — The note line and its bell are gone (HNO-041: no note →
+    //   nothing renders) — the scenario leaves no state behind.
     // -------------------------------------------------------------------
-    const noteLine = await $(`#holding-note-${astId}`);
     await noteLine.waitForExist({ timeout: 8000, reverse: true });
-
-    const bell = await $(`#holding-note-bell-${astId}`);
     await bell.waitForExist({ timeout: 2000, reverse: true });
   });
 });

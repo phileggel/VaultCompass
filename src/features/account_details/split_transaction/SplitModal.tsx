@@ -108,6 +108,9 @@ export function SplitModal({
             label={t("split.form_factor_label")}
             value={formData.factor}
             onValueChange={(v) => handleChange("factor", v)}
+            error={
+              formData.factor !== "" && ratioError ? t(ratioError.key, ratioError.vars) : undefined
+            }
             required
           />
         ) : (

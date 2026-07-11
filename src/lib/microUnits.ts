@@ -58,6 +58,16 @@ export function microToFormatted(micros: number, decimals = 3): string {
 }
 
 /**
+ * Locale-aware trimmed multiplier for a micro-scaled factor (SPL-060):
+ * 20_000_000 → "20", 1_500_000 → "1.5" (en) / "1,5" (fr), 100_000 → "0.1".
+ */
+export function microToFormattedFactor(factorMicros: number): string {
+  return new Intl.NumberFormat(_displayLocale, {
+    maximumFractionDigits: 6,
+  }).format(factorMicros / MICRO);
+}
+
+/**
  * Converts a price in micro-units to a locale-aware display string with adaptive
  * precision: 3 decimal places when the absolute value is below 10, 2 otherwise.
  * e.g. 7_500_000 → "7.500", 150_000_000 → "150.00"

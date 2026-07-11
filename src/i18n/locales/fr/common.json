@@ -531,7 +531,9 @@
     "saved": "Note enregistrée.",
     "deleted": "Note supprimée.",
     "bell_armed": "Alarme de prix armée",
-    "bell_triggered": "Alarme de prix déclenchée"
+    "bell_triggered": "Alarme de prix déclenchée",
+    "delete_confirm_title": "Supprimer la note",
+    "delete_confirm_message": "Supprimer la note de cette ligne ? L'alerte associée, le cas échéant, sera également supprimée."
   },
   "management_fee": {
     "modal_title": "Enregistrer des frais de gestion",

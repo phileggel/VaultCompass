@@ -138,13 +138,17 @@ describe("HoldingNoteModal (HNO-042)", () => {
     expect(screen.queryByTestId("holding-note-delete")).not.toBeInTheDocument();
   });
 
-  it("shows the delete button in edit mode and routes it to handleDelete", async () => {
+  it("delete goes through the confirm step before calling handleDelete (HNO-021)", async () => {
     const handleDelete = vi.fn();
     mockUseHoldingNote.mockReturnValue(makeHookReturn({ isEditMode: true, handleDelete }));
     render(<HoldingNoteModal {...BASE_PROPS} target={editTarget} />);
     const deleteButton = screen.getByTestId("holding-note-delete");
     expect(deleteButton).toBeInTheDocument();
     await userEvent.click(deleteButton);
+    // Not yet — the confirmation dialog intercepts the destructive action.
+    expect(handleDelete).not.toHaveBeenCalled();
+    expect(screen.getByText("holding_note.delete_confirm_title")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("action.delete"));
     expect(handleDelete).toHaveBeenCalledTimes(1);
   });
 

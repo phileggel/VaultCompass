@@ -151,14 +151,14 @@ describe("toTransactionRow — Split (SPL-060)", () => {
     expect(row.quantity).toBe("×20");
   });
 
-  it("SPL-060: a fractional factor renders trimmed (1_500_000 → '×1.5')", () => {
+  it("SPL-060: a fractional factor renders trimmed (1_500_000 → '×1,5' fr)", () => {
     const row = toTransactionRow(splitTx(1_500_000), "Alphabet Inc", "My Account");
-    expect(row.quantity).toBe("×1.5");
+    expect(row.quantity).toBe("×1,5");
   });
 
-  it("SPL-060: a reverse-split factor renders trimmed (100_000 → '×0.1')", () => {
+  it("SPL-060: a reverse-split factor renders trimmed (100_000 → '×0,1' fr)", () => {
     const row = toTransactionRow(splitTx(100_000), "Alphabet Inc", "My Account");
-    expect(row.quantity).toBe("×0.1");
+    expect(row.quantity).toBe("×0,1");
   });
 
   it("SPL-060: type is 'Split' for i18n key construction", () => {

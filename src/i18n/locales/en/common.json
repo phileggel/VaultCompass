@@ -531,7 +531,9 @@
     "saved": "Note saved.",
     "deleted": "Note deleted.",
     "bell_armed": "Price alarm armed",
-    "bell_triggered": "Price alarm triggered"
+    "bell_triggered": "Price alarm triggered",
+    "delete_confirm_title": "Delete note",
+    "delete_confirm_message": "Delete the note on this holding? The alarm, if any, is removed with it."
   },
   "management_fee": {
     "modal_title": "Record a management fee",
