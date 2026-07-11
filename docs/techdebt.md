@@ -10,6 +10,16 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-07-06 — Cash-asset OpeningBalance would distort the perf bridge (latent)
+
+- Found by: manual (OpeningBalance perf audit, next-batch T4)
+- Where: src-tauri/src/use_cases/shared/valuation.rs (`opening_balance_flow_value` Cash-class fallback vs `end_value_as_of` cash-leg skip)
+- Context: branch `next` @ v0.35.0
+- Severity: 🔵
+- Observation: `opening_balance_flow_value` returns `None` for a Cash-class asset and falls back to the typed cost, so a cash-line OpeningBalance would add its cost to `asset_flow`; but `end_value_as_of` gives an OpeningBalance no cash leg and skips Cash-class holdings in valuation, so the position contributes 0 to end value — net effect a spurious negative pnl of −(typed cost). Unreachable today: `open_holding` targets non-cash holdings and no supported flow records a cash OpeningBalance. Flagged for whenever a cash-line OB entry path is introduced; the fix would be either rejecting cash OBs in the domain or giving the OB a cash leg in valuation.
+
+---
+
 ## 2026-07-06 — Total-entry derive block duplicated across buy/sell/correct
 
 - Found by: reviewer-backend (during TRX-061/SEL-051 total-entry correction review)

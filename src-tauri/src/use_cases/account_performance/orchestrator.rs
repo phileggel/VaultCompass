@@ -1171,6 +1171,87 @@ mod tests {
         assert_eq!(scoped_row.pnl, 0);
     }
 
+    // PRF-086 — the add itself is flow-only, but the position's latent P&L after
+    // entry DOES count: post-entry market movement lands in the period pnl while
+    // the opening-balance flow stays at its entry-date market value.
+    #[tokio::test]
+    async fn opening_balance_latent_pnl_after_entry_counts_in_performance() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Transferred".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Transferred Stock".to_string(),
+                reference: "TRF".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        // 5 units, typed cost 1 000 EUR, worth 1 000 EUR/unit at entry (5 000),
+        // then the price rises to 1 200 EUR/unit by year end (6 000).
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-01", 1000.0)
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-12-30", 1200.0)
+            .await
+            .unwrap();
+        account_svc
+            .open_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                5_000_000,
+                1_000_000_000,
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+
+        let unscoped = uc.get_account_performance(&account.id, None).await.unwrap();
+        let row = unscoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        assert_eq!(row.end_value, 6_000_000_000);
+        assert_eq!(
+            row.asset_flow, 5_000_000_000,
+            "the flow stays at the entry-date market value"
+        );
+        assert_eq!(
+            row.pnl, 1_000_000_000,
+            "only the post-entry movement is performance"
+        );
+        let since = row.since_inception.as_ref().expect("since_inception");
+        assert_eq!(
+            since.gain, 5_000_000_000,
+            "lifetime gain = pre-account 4 000 + post-entry 1 000"
+        );
+    }
+
     // PRF-086 — with no usable price as of the entry date, the opening-balance
     // flow falls back to its typed cost (today's pre-fix behaviour).
     #[tokio::test]
