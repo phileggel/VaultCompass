@@ -89,6 +89,71 @@ pub enum FreeSharesTask {
     FreeSharesOnCashAsset,
 }
 
+/// Application-layer rejections specific to the `record_split` use case —
+/// cross-BC asset and holding checks performed by the orchestrator before
+/// delegating to `AccountService::record_split`.
+///
+/// Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+/// Tauri boundary into a flat `{ code: "..." }` shape.
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type, Clone)]
+#[serde(tag = "code")]
+pub enum SplitTask {
+    /// No asset exists with the requested ID (SPL-012).
+    #[error("Asset not found")]
+    AssetNotFound,
+    /// The asset is not currently held (quantity = 0 or no holding) (SPL-012).
+    #[error("Asset is not currently held in this account")]
+    AssetNotHeld,
+}
+
+/// Use-case composite for the **record split** failure surface.
+///
+/// - `AccountError` — every account-BC rejection (lookup, infrastructure, the
+///   split factory validation SPL-011, and the replay guards SPL-012/021).
+/// - `SplitTask` — use-case-owned (this file), the cross-BC asset checks.
+#[derive(Debug, thiserror::Error, serde::Serialize, specta::Type)]
+#[serde(untagged)]
+pub enum SplitError {
+    /// Account-BC rejection (lookup, infra, factory + replay validation).
+    #[error(transparent)]
+    Account(#[from] AccountError),
+    /// Use-case-layer rejection (cross-BC asset checks).
+    #[error(transparent)]
+    UseCase(#[from] SplitTask),
+}
+
+#[cfg(test)]
+mod split_error_wire_tests {
+    use super::*;
+
+    /// error-model.md — every `SplitError` variant must serialize to a flat
+    /// object carrying a string `code` (guards the `#[serde(untagged)]`
+    /// null-collapse regression across both leaves).
+    #[test]
+    fn each_variant_emits_a_code() {
+        let cases: Vec<SplitError> = vec![
+            AccountError::AccountNotFound {
+                account_id: "acc-1".to_string(),
+            }
+            .into(),
+            SplitTask::AssetNotFound.into(),
+            SplitTask::AssetNotHeld.into(),
+            AccountError::SplitFactorNotPositive.into(),
+            AccountError::SplitFactorIsOne.into(),
+            AccountError::SplitOnCashAsset.into(),
+            AccountError::SplitCollapsesPosition.into(),
+            AccountError::ClosedPosition.into(),
+        ];
+        for err in cases {
+            let value = serde_json::to_value(&err).expect("serialize SplitError");
+            assert!(
+                value.get("code").and_then(|c| c.as_str()).is_some(),
+                "SplitError variant did not emit a string `code`: {value}"
+            );
+        }
+    }
+}
+
 /// Use-case composite for the **record free shares** failure surface.
 ///
 /// - `AccountError` — every account-BC rejection (lookup, infrastructure, and

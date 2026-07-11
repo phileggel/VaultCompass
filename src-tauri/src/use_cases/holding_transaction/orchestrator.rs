@@ -1,6 +1,7 @@
 use super::error::{
     DividendError, DividendTask, FreeSharesError, FreeSharesTask, InterestError, InterestTask,
-    ManagementFeeError, ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
+    ManagementFeeError, ManagementFeeTask, OpenHoldingError, OpenHoldingTask, SplitError,
+    SplitTask,
 };
 use super::shared::ensure_cash_asset;
 use crate::context::account::{AccountError, AccountServiceContract, Transaction};
@@ -351,6 +352,62 @@ impl HoldingTransactionUseCase {
             .record_free_shares(account_id, asset_id, date, quantity, note)
             .await
             .map_err(FreeSharesError::Account)
+    }
+
+    /// Records a stock split rescaling a held position (SPL-010/012).
+    ///
+    /// Cross-BC guards (SPL-012): rejects if the account is unknown, the asset
+    /// is unknown, not currently held, or a Cash Asset. No cash leg. The factor
+    /// and replay guards (SPL-011/021) live in the account BC.
+    pub async fn record_split(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        factor: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, SplitError> {
+        // SPL-012 — account must exist (checked before any asset work).
+        self.account_service
+            .get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+
+        // SPL-012 — asset must exist and must not be a Cash Asset.
+        let asset = self
+            .asset_service
+            .get_asset_by_id(&asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, err = ?e, "record_split: get_asset_by_id failed");
+                AccountError::DatabaseError
+            })?;
+        match asset {
+            None => return Err(SplitTask::AssetNotFound.into()),
+            Some(a) if a.class == AssetClass::Cash => {
+                return Err(AccountError::SplitOnCashAsset.into())
+            }
+            Some(_) => {}
+        }
+
+        // SPL-012 — asset must be currently held (quantity > 0).
+        let held = self
+            .account_service
+            .get_holding_by_account_asset(account_id, &asset_id)
+            .await?;
+        match held {
+            Some(h) if h.quantity > 0 => {}
+            _ => return Err(SplitTask::AssetNotHeld.into()),
+        }
+
+        // Delegate to the account BC; its `AccountError` surfaces on the
+        // split wire as `SplitError::Account`.
+        self.account_service
+            .record_split(account_id, asset_id, date, factor, note)
+            .await
+            .map_err(SplitError::Account)
     }
 
     /// Records a management fee deduction on a held asset (FEE-012/011).

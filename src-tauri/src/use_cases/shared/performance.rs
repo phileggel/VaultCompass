@@ -472,7 +472,11 @@ fn period_bridge(
             // Cash↔asset swaps; net zero to Global Value (a sell's realized gain → residual pnl).
             // FEE-071 — a management fee is not a flow; its drag surfaces via the reduced
             // position value at period end, not as a flow adjustment.
-            TransactionType::Purchase | TransactionType::Sell | TransactionType::ManagementFee => {}
+            // SPL-050 — a split is not a flow.
+            TransactionType::Purchase
+            | TransactionType::Sell
+            | TransactionType::ManagementFee
+            | TransactionType::Split => {}
         }
     }
 
@@ -718,10 +722,12 @@ fn holding_period_bridge(
             }
             // Deposit/Withdrawal move the account's cash, never a position;
             // FEE-071 — a management fee's drag surfaces via the reduced
-            // position value at period end, not as a flow.
+            // position value at period end, not as a flow. SPL-050 — a split
+            // is not a flow.
             TransactionType::Deposit
             | TransactionType::Withdrawal
-            | TransactionType::ManagementFee => {}
+            | TransactionType::ManagementFee
+            | TransactionType::Split => {}
         }
     }
 

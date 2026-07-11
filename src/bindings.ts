@@ -518,6 +518,17 @@ async recordFreeShares(dto: FreeSharesDTO) : Promise<Result<Transaction, FreeSha
 }
 },
 /**
+ * Records a stock split rescaling a held position at its date (SPL-010/020).
+ */
+async recordSplit(dto: RecordSplitDTO) : Promise<Result<Transaction, SplitError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("record_split", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Records a one-off quantity-reducing management fee on a held asset (FEE-022).
  */
 async recordManagementFee(dto: ManagementFeeDTO) : Promise<Result<Transaction, ManagementFeeError>> {
@@ -937,6 +948,22 @@ export type AccountError =
  * representable range (TRX-060, SEL-050).
  */
 { code: "UnitPriceOutOfRange" } | 
+/**
+ * A split factor is zero or negative (SPL-011).
+ */
+{ code: "SplitFactorNotPositive" } | 
+/**
+ * A ×1 split is a no-op data-entry error (SPL-011).
+ */
+{ code: "SplitFactorIsOne" } | 
+/**
+ * The cash line cannot be split (SPL-012).
+ */
+{ code: "SplitOnCashAsset" } | 
+/**
+ * A reverse split would floor the open position to zero (SPL-021).
+ */
+{ code: "SplitCollapsesPosition" } | 
 /**
  * The management fee percentage is zero or negative (FEE-021).
  */
@@ -2606,6 +2633,30 @@ quantity_micros: number | null;
  */
 note: string | null }
 /**
+ * Parameters for recording a stock split on a held asset (SPL-010).
+ */
+export type RecordSplitDTO = { 
+/**
+ * Account whose position is rescaled.
+ */
+account_id: string; 
+/**
+ * The split asset — must be actively held (quantity > 0) and not a Cash Asset (SPL-012).
+ */
+asset_id: string; 
+/**
+ * Effective date of the split (YYYY-MM-DD, not in the future).
+ */
+date: string; 
+/**
+ * Micro-scaled split factor (20-for-1 → 20_000_000; 1-for-10 → 100_000), strictly positive and ≠ ×1 (SPL-011).
+ */
+factor: number; 
+/**
+ * Optional user note.
+ */
+note: string | null }
+/**
  * Parameters for recording a sale of an asset from an account.
  */
 export type SellHoldingDTO = { 
@@ -2647,6 +2698,39 @@ total_amount: number | null;
  * Optional user note.
  */
 note: string | null }
+/**
+ * Use-case composite for the **record split** failure surface.
+ * 
+ * - `AccountError` — every account-BC rejection (lookup, infrastructure, the
+ * split factory validation SPL-011, and the replay guards SPL-012/021).
+ * - `SplitTask` — use-case-owned (this file), the cross-BC asset checks.
+ */
+export type SplitError = 
+/**
+ * Account-BC rejection (lookup, infra, factory + replay validation).
+ */
+AccountError | 
+/**
+ * Use-case-layer rejection (cross-BC asset checks).
+ */
+SplitTask
+/**
+ * Application-layer rejections specific to the `record_split` use case —
+ * cross-BC asset and holding checks performed by the orchestrator before
+ * delegating to `AccountService::record_split`.
+ * 
+ * Tagged with `#[serde(tag = "code")]` so it serializes verbatim across the
+ * Tauri boundary into a flat `{ code: "..." }` shape.
+ */
+export type SplitTask = 
+/**
+ * No asset exists with the requested ID (SPL-012).
+ */
+{ code: "AssetNotFound" } | 
+/**
+ * The asset is not currently held (quantity = 0 or no holding) (SPL-012).
+ */
+{ code: "AssetNotHeld" }
 /**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
@@ -2741,6 +2825,11 @@ export type TransactionType =
  * Management fee deduction: shares removed at zero cost; cost basis unchanged, VWAP concentrates (FEE-012).
  */
 "ManagementFee" | 
+/**
+ * A stock split rescaling the position; the micro-scaled factor rides in
+ * `quantity`, no money moves (SPL-010/020).
+ */
+"Split" | 
 /**
  * Interest credited at zero cost: quantity rises, cost basis unchanged (INT-024);
  * on the account's cash line it credits the balance directly (INT-023).

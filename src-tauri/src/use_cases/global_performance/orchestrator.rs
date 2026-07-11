@@ -313,7 +313,8 @@ fn reference_rate_dates(
             | TransactionType::Dividend
             | TransactionType::FreeShares
             | TransactionType::Interest => true,
-            TransactionType::ManagementFee => false,
+            // SPL-050 — a split is not a flow and needs no rate.
+            TransactionType::ManagementFee | TransactionType::Split => false,
         })
         .filter_map(|transaction| parse_date(&transaction.date))
         .collect()
@@ -455,9 +456,11 @@ impl ConvertedAccount {
                         dividends +=
                             convert_or_zero(transaction.total_amount, transaction_date_rate);
                     }
+                    // SPL-050 — a split is not a flow.
                     TransactionType::Purchase
                     | TransactionType::Sell
-                    | TransactionType::ManagementFee => {}
+                    | TransactionType::ManagementFee
+                    | TransactionType::Split => {}
                 },
                 Some(_) => match transaction.transaction_type {
                     TransactionType::Purchase => {
@@ -488,9 +491,11 @@ impl ConvertedAccount {
                     TransactionType::FreeShares | TransactionType::Interest => {
                         asset_flow += self.in_kind_credit_reference(transaction);
                     }
+                    // SPL-050 — a split is not a flow.
                     TransactionType::Deposit
                     | TransactionType::Withdrawal
-                    | TransactionType::ManagementFee => {}
+                    | TransactionType::ManagementFee
+                    | TransactionType::Split => {}
                 },
             }
         }

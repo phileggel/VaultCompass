@@ -100,6 +100,18 @@ pub enum AccountError {
     /// representable range (TRX-060, SEL-050).
     #[error("Derived unit price is out of range")]
     UnitPriceOutOfRange,
+    /// A split factor is zero or negative (SPL-011).
+    #[error("Split factor must be strictly positive")]
+    SplitFactorNotPositive,
+    /// A ×1 split is a no-op data-entry error (SPL-011).
+    #[error("Split factor must differ from 1")]
+    SplitFactorIsOne,
+    /// The cash line cannot be split (SPL-012).
+    #[error("Cash line cannot be split")]
+    SplitOnCashAsset,
+    /// A reverse split would floor the open position to zero (SPL-021).
+    #[error("Split would collapse the position to zero")]
+    SplitCollapsesPosition,
 
     // --- ManagementFee factory validation (FEE-021) ---
     /// The management fee percentage is zero or negative (FEE-021).

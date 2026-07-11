@@ -1171,6 +1171,109 @@ mod tests {
         assert_eq!(scoped_row.pnl, 0);
     }
 
+    // SPL-050 — a split is not a flow and not performance: with the post-split
+    // price recorded, the bridge terms and pnl are identical to the no-split
+    // decomposition and the end value is continuous across the split.
+    #[tokio::test]
+    async fn split_is_performance_neutral() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Split".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualYear,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let stock = asset_svc
+            .create_asset(CreateAssetDTO {
+                name: "Split Stock".to_string(),
+                reference: "SPL".to_string(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "EUR".to_string(),
+                risk_level: 1,
+                category_id: SYSTEM_CATEGORY_ID.to_string(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        // 5 units transferred in at 1 000 EUR/unit (entry market 5 000), then a
+        // 2-for-1 split on 2024-06-01 with the post-split price recorded (500).
+        asset_svc
+            .record_asset_price(&stock.id, "2024-03-01", 1000.0)
+            .await
+            .unwrap();
+        account_svc
+            .open_holding(
+                &account.id,
+                stock.id.clone(),
+                "2024-03-01".to_string(),
+                5_000_000,
+                1_000_000_000,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .record_split(
+                &account.id,
+                stock.id.clone(),
+                "2024-06-01".to_string(),
+                2_000_000,
+                None,
+            )
+            .await
+            .unwrap();
+        asset_svc
+            .record_asset_price(&stock.id, "2024-06-01", 500.0)
+            .await
+            .unwrap();
+
+        let uc = AccountPerformanceUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+
+        let unscoped = uc.get_account_performance(&account.id, None).await.unwrap();
+        let row = unscoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("2024 row");
+        // 10 post-split units × 500 = the same 5 000 the position was worth pre-split.
+        assert_eq!(
+            row.end_value, 5_000_000_000,
+            "value continuous across the split"
+        );
+        assert_eq!(row.cash_flow, 0, "a split moves no cash");
+        assert_eq!(
+            row.asset_flow, 5_000_000_000,
+            "only the opening balance contributes a flow"
+        );
+        assert_eq!(row.pnl, 0, "the split itself produces no pnl");
+
+        // Scoped read decomposes identically (PRF-084).
+        let scoped = uc
+            .get_account_performance(&account.id, Some(&stock.id))
+            .await
+            .unwrap();
+        let scoped_row = scoped
+            .yearly
+            .iter()
+            .find(|p| p.year == 2024)
+            .expect("scoped 2024 row");
+        assert_eq!(scoped_row.end_value, 5_000_000_000);
+        assert_eq!(scoped_row.cash_flow, 0);
+        assert_eq!(scoped_row.asset_flow, 5_000_000_000);
+        assert_eq!(scoped_row.pnl, 0);
+    }
+
     // PRF-086 — the add itself is flow-only, but the position's latent P&L after
     // entry DOES count: post-entry market movement lands in the period pnl while
     // the opening-balance flow stays at its entry-date market value.

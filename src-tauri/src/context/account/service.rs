@@ -628,6 +628,29 @@ impl AccountService {
         Ok(tx)
     }
 
+    /// Records a stock split on a held asset (SPL-010/020).
+    ///
+    /// The micro-scaled factor rescales the position at the split date; the
+    /// cost basis is preserved and no money moves. Rejects splits on the cash
+    /// line, on closed positions, and rescales that collapse the position
+    /// (SPL-011/012/021).
+    pub async fn record_split(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        factor: i64,
+        note: Option<String>,
+    ) -> Result<Transaction, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, factor = factor, "record_split");
+        let mut account = load_account(&*self.account_repo, account_id).await?;
+        let tx = Transaction::split(account.id.clone(), asset_id, date, factor, note)?;
+        let tx = account.apply_split(tx).map_err(to_holding_tx_error)?;
+        save_account(&*self.account_repo, &mut account).await?;
+        self.emit_transaction_updated();
+        Ok(tx)
+    }
+
     // -------------------------------------------------------------------------
     // FEE-012/021/022/023/027 — management fee recording
     // -------------------------------------------------------------------------
@@ -1057,6 +1080,15 @@ pub trait AccountServiceContract: Send + Sync {
         quantity: i64,
         note: Option<String>,
     ) -> StdResult<Transaction, AccountError>;
+    /// Records a stock split rescaling a held position (SPL-010/020).
+    async fn record_split(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        factor: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
     /// Records a one-off management fee deduction on a held asset (FEE-012).
     async fn record_management_fee(
         &self,
@@ -1304,6 +1336,17 @@ impl AccountServiceContract for AccountService {
         note: Option<String>,
     ) -> StdResult<Transaction, AccountError> {
         AccountService::record_free_shares(self, account_id, asset_id, date, quantity, note).await
+    }
+
+    async fn record_split(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        factor: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_split(self, account_id, asset_id, date, factor, note).await
     }
 
     async fn record_management_fee(

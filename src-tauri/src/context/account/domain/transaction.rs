@@ -39,6 +39,9 @@ pub enum TransactionType {
     FreeShares,
     /// Management fee deduction: shares removed at zero cost; cost basis unchanged, VWAP concentrates (FEE-012).
     ManagementFee,
+    /// A stock split rescaling the position; the micro-scaled factor rides in
+    /// `quantity`, no money moves (SPL-010/020).
+    Split,
     /// Interest credited at zero cost: quantity rises, cost basis unchanged (INT-024);
     /// on the account's cash line it credits the balance directly (INT-023).
     Interest,
@@ -332,6 +335,67 @@ impl Transaction {
         created_at: String,
     ) -> StdResult<Self, AccountError> {
         let mut tx = Self::free_shares(account_id, asset_id, date, quantity, note)?;
+        tx.id = id;
+        tx.created_at = created_at;
+        Ok(tx)
+    }
+
+    /// Factory: builds a Split transaction (SPL-010/011).
+    ///
+    /// The micro-scaled split factor rides in `quantity` (20-for-1 →
+    /// 20_000_000); `unit_price = 0`, `exchange_rate = 1.0` micros, `fees = 0`,
+    /// `total_amount = 0` (a split moves no money), `realized_pnl = None`.
+    ///
+    /// SPL-011 — validates the date bounds, `factor > 0` and `factor ≠ ×1`
+    /// directly; the generic validator does not apply because it rejects
+    /// `total_amount = 0` for the `Split` type (only `OpeningBalance` allows 0,
+    /// TRX-045), which is exactly this type's convention.
+    pub fn split(
+        account_id: String,
+        asset_id: String,
+        date: String,
+        factor: i64,
+        note: Option<String>,
+    ) -> StdResult<Self, AccountError> {
+        Self::validate_date(&date)?;
+        if factor <= 0 {
+            return Err(AccountError::SplitFactorNotPositive);
+        }
+        if factor == 1_000_000 {
+            return Err(AccountError::SplitFactorIsOne);
+        }
+        Ok(Self {
+            id: Uuid::new_v4().to_string(),
+            account_id,
+            asset_id,
+            transaction_type: TransactionType::Split,
+            date,
+            quantity: factor,
+            unit_price: 0,
+            exchange_rate: 1_000_000,
+            fees: 0,
+            total_amount: 0,
+            note,
+            realized_pnl: None,
+            created_at: chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+                .to_string(),
+        })
+    }
+
+    /// Factory: rebuilds a Split transaction with a caller-supplied ID and
+    /// `created_at` (SPL-030 correction). Same packing and SPL-011 validation
+    /// as `split`, preserving the transaction's identity.
+    pub fn split_with_id(
+        id: String,
+        account_id: String,
+        asset_id: String,
+        date: String,
+        factor: i64,
+        note: Option<String>,
+        created_at: String,
+    ) -> StdResult<Self, AccountError> {
+        let mut tx = Self::split(account_id, asset_id, date, factor, note)?;
         tx.id = id;
         tx.created_at = created_at;
         Ok(tx)
@@ -1057,6 +1121,61 @@ mod tests {
     }
 
     // FSD-021 — quantity ≤ 0 must be rejected as QuantityNotPositive.
+    #[test]
+    fn split_factory_rejects_non_positive_factor() {
+        // SPL-011 — factor must be strictly positive
+        for factor in [0, -5_000_000] {
+            let err = Transaction::split(
+                "acc-1".to_string(),
+                "asset-xyz".to_string(),
+                "2024-06-15".to_string(),
+                factor,
+                None,
+            )
+            .unwrap_err();
+            assert!(
+                matches!(err, AccountError::SplitFactorNotPositive),
+                "expected SplitFactorNotPositive, got: {err:?}"
+            );
+        }
+    }
+
+    // SPL-011 — a ×1 split is a no-op data-entry error.
+    #[test]
+    fn split_factory_rejects_identity_factor() {
+        let err = Transaction::split(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            1_000_000,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AccountError::SplitFactorIsOne),
+            "expected SplitFactorIsOne, got: {err:?}"
+        );
+    }
+
+    // SPL-010 — the zero-money packing: factor in quantity, no money fields.
+    #[test]
+    fn split_factory_packs_factor_in_quantity_with_no_money() {
+        let tx = Transaction::split(
+            "acc-1".to_string(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            20_000_000,
+            None,
+        )
+        .unwrap();
+        assert_eq!(tx.transaction_type, TransactionType::Split);
+        assert_eq!(tx.quantity, 20_000_000);
+        assert_eq!(tx.unit_price, 0);
+        assert_eq!(tx.fees, 0);
+        assert_eq!(tx.total_amount, 0);
+        assert_eq!(tx.exchange_rate, 1_000_000);
+    }
+
     #[test]
     fn free_shares_factory_rejects_zero_quantity() {
         // FSD-021 — quantity must be strictly positive

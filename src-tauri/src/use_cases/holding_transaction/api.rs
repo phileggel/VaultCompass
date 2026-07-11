@@ -343,6 +343,42 @@ pub async fn record_free_shares(
 }
 
 // =============================================================================
+// Stock Split — DTO + command (SPL-010)
+// =============================================================================
+
+/// Parameters for recording a stock split on a held asset (SPL-010).
+#[derive(serde::Deserialize, specta::Type)]
+pub struct RecordSplitDTO {
+    /// Account whose position is rescaled.
+    pub account_id: String,
+    /// The split asset — must be actively held (quantity > 0) and not a Cash Asset (SPL-012).
+    pub asset_id: String,
+    /// Effective date of the split (YYYY-MM-DD, not in the future).
+    pub date: String,
+    /// Micro-scaled split factor (20-for-1 → 20_000_000; 1-for-10 → 100_000), strictly positive and ≠ ×1 (SPL-011).
+    pub factor: i64,
+    /// Optional user note.
+    pub note: Option<String>,
+}
+
+/// Records a stock split rescaling a held position at its date (SPL-010/020).
+#[tauri::command]
+#[specta::specta]
+pub async fn record_split(
+    uc: State<'_, HoldingTransactionUseCase>,
+    dto: RecordSplitDTO,
+) -> Result<Transaction, super::error::SplitError> {
+    uc.record_split(
+        &dto.account_id,
+        dto.asset_id,
+        dto.date,
+        dto.factor,
+        dto.note,
+    )
+    .await
+}
+
+// =============================================================================
 // Management Fee — DTO + command (FEE-020/022)
 // =============================================================================
 

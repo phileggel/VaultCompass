@@ -445,6 +445,18 @@ impl Account {
                 note,
                 created_at,
             )?
+        } else if tx_type == TransactionType::Split {
+            // SPL-030 — the corrected factor rides in `quantity`; money fields are
+            // ignored. Rebuild via the identity-preserving split factory (SPL-011).
+            Transaction::split_with_id(
+                tx_id.to_string(),
+                self.id.clone(),
+                asset_id.clone(),
+                date,
+                quantity,
+                note,
+                created_at,
+            )?
         } else {
             let (unit_price, total_amount) = match (tx_type, total_amount) {
                 // TRX-061 — the typed total is ground truth: stored verbatim,
@@ -481,12 +493,13 @@ impl Account {
                     unit_price,
                     ((quantity as i128 * exchange_rate as i128) / 1_000_000) as i64,
                 ),
-                // Never reached — FreeShares / ManagementFee / Interest take the
-                // dedicated branches above.
+                // Never reached — FreeShares / ManagementFee / Interest / Split
+                // take the dedicated branches above.
                 (
                     TransactionType::FreeShares
                     | TransactionType::ManagementFee
-                    | TransactionType::Interest,
+                    | TransactionType::Interest
+                    | TransactionType::Split,
                     _,
                 ) => (unit_price, 0),
             };
@@ -824,6 +837,39 @@ impl Account {
         Ok(tx)
     }
 
+    /// Aggregate-root method: applies a pre-built Split transaction to this
+    /// account (SPL-020). The transaction must have been built via
+    /// `Transaction::split`.
+    ///
+    /// The cash line cannot be split (SPL-012). The chronological replay applies
+    /// the rescale at the split's date and enforces the open-position and
+    /// collapse guards (SPL-012/021).
+    pub fn apply_split(&mut self, tx: Transaction) -> Result<Transaction> {
+        if crate::core::cash::is_cash_asset(&tx.asset_id) {
+            return Err(AccountError::SplitOnCashAsset.into());
+        }
+        self.transactions.push(tx.clone());
+        let pair_txs: Vec<&Transaction> = self
+            .transactions
+            .iter()
+            .filter(|t| t.asset_id == tx.asset_id)
+            .collect();
+        let (holding, _) = match self.recalculate_holding(&tx.asset_id, &pair_txs) {
+            Ok(result) => result,
+            Err(e) => {
+                self.transactions.pop();
+                return Err(e);
+            }
+        };
+
+        self.pending_changes
+            .push(AccountChange::TransactionInserted(tx.clone()));
+        self.pending_changes
+            .push(AccountChange::HoldingUpserted(holding.clone()));
+        self.upsert_holding_in_memory(holding);
+        Ok(tx)
+    }
+
     /// Applies a management fee deduction to the held asset (FEE-012/023).
     ///
     /// Removes `tx.quantity` shares at zero cost from the (account, asset) holding;
@@ -1119,6 +1165,21 @@ impl Account {
                 TransactionType::Interest => {
                     total_quantity += t.quantity as i128;
                 }
+                // SPL-020 — a split rescales the running quantity by the micro
+                // factor riding in `quantity`; the VWAP numerator is untouched, so
+                // the cost basis is preserved and the average price rescales
+                // implicitly. SPL-012/021 guards: no split on a closed position,
+                // no rescale that floors an open position to zero.
+                TransactionType::Split => {
+                    if total_quantity == 0 {
+                        return Err(AccountError::ClosedPosition.into());
+                    }
+                    let rescaled = total_quantity * t.quantity as i128 / MICRO;
+                    if rescaled == 0 {
+                        return Err(AccountError::SplitCollapsesPosition.into());
+                    }
+                    total_quantity = rescaled;
+                }
                 // CSH-032: a Withdrawal debits cash quantity by total_amount; never realises P&L
                 // and never tracks last_sold_date. CSH-080's eligibility guard runs in
                 // `replay_cash_holding` (insufficient-cash check), not here — `recalculate_holding`
@@ -1276,6 +1337,12 @@ impl Account {
                 TransactionType::Interest => {
                     total_quantity += t.quantity as i128;
                 }
+                // SPL-020 — rescale the running quantity; the VWAP numerator is
+                // untouched (cost basis preserved). Guards live in the validating
+                // replay (`recalculate_holding`); this as-of read mirrors the math.
+                TransactionType::Split => {
+                    total_quantity = total_quantity * t.quantity as i128 / MICRO;
+                }
                 // DIV-024 — a Dividend never affects the paying asset's holding.
                 TransactionType::Dividend => {}
             }
@@ -1323,9 +1390,11 @@ impl Account {
                         balance += transaction.quantity as i128;
                     }
                 }
+                // A split has no cash leg (SPL-010).
                 TransactionType::OpeningBalance
                 | TransactionType::FreeShares
-                | TransactionType::ManagementFee => {}
+                | TransactionType::ManagementFee
+                | TransactionType::Split => {}
             }
         }
         let value = balance.max(0);
@@ -4074,6 +4143,329 @@ mod tests {
                 AccountChange::HoldingUpserted(h) if h.asset_id == acc.cash_asset_id()
             )),
             "cash holding must NOT be updated by a free-share distribution (FSD-022d)"
+        );
+    }
+
+    // SPL-020 — apply_split rescales quantity by the factor and preserves the
+    // cost basis: the VWAP numerator is untouched, so the average rescales.
+    #[test]
+    fn spl_020_split_rescales_quantity_and_preserves_cost_basis() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // 20-for-1 split: 10 units @ 100 → 200 units @ 5, basis 1 000 unchanged.
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            micro(20),
+            None,
+        )
+        .unwrap();
+        acc.apply_split(tx).unwrap();
+
+        let h = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(h.quantity, micro(200));
+        assert_eq!(h.average_price, micro(5));
+        assert_eq!(
+            h.quantity as i128 * h.average_price as i128 / 1_000_000,
+            1_000_000_000
+        );
+    }
+
+    // SPL-020 — a reverse split concentrates the average by the same mechanics.
+    #[test]
+    fn spl_020_reverse_split_concentrates_average() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // 1-for-10 reverse split (factor ×0.1): 10 units @ 100 → 1 unit @ 1 000.
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-06-15".to_string(),
+            100_000,
+            None,
+        )
+        .unwrap();
+        acc.apply_split(tx).unwrap();
+
+        let h = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(h.quantity, micro(1));
+        assert_eq!(h.average_price, micro(1000));
+    }
+
+    // SPL-020 — a sell after the split consumes the rescaled average price.
+    #[test]
+    fn spl_020_sell_after_split_realizes_pnl_on_rescaled_average() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-02-01".to_string(),
+            micro(2),
+            None,
+        )
+        .unwrap();
+        acc.apply_split(tx).unwrap();
+
+        // 20 units @ avg 50; sell 10 @ 60 → pnl = 600 − 500 = 100.
+        let sell = acc
+            .sell_holding(
+                "asset-xyz".to_string(),
+                "2024-03-01".to_string(),
+                micro(10),
+                micro(60),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+        assert_eq!(sell.realized_pnl, Some(micro(100)));
+    }
+
+    // SPL-012 — a split on a fully sold (closed) position is rejected.
+    #[test]
+    fn spl_012_split_on_closed_position_is_rejected() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(5),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        acc.sell_holding(
+            "asset-xyz".to_string(),
+            "2024-02-01".to_string(),
+            micro(5),
+            micro(110),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-03-01".to_string(),
+            micro(2),
+            None,
+        )
+        .unwrap();
+        let err = acc.apply_split(tx).unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::ClosedPosition))
+                .unwrap_or(false),
+            "expected ClosedPosition, got: {err}"
+        );
+    }
+
+    // SPL-012 — the cash line cannot be split.
+    #[test]
+    fn spl_012_split_on_cash_line_is_rejected() {
+        let mut acc = cash_seeded_account();
+        let tx = Transaction::split(
+            acc.id.clone(),
+            acc.cash_asset_id(),
+            "2024-03-01".to_string(),
+            micro(2),
+            None,
+        )
+        .unwrap();
+        let err = acc.apply_split(tx).unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::SplitOnCashAsset))
+                .unwrap_or(false),
+            "expected SplitOnCashAsset, got: {err}"
+        );
+    }
+
+    // SPL-021 — a reverse split that floors an open position to zero is rejected.
+    #[test]
+    fn spl_021_collapsing_reverse_split_is_rejected() {
+        let mut acc = cash_seeded_account();
+        // Hold 0.5 units; a ×0.000001 reverse split would floor to 0.
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            500_000,
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-02-01".to_string(),
+            1,
+            None,
+        )
+        .unwrap();
+        let err = acc.apply_split(tx).unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::SplitCollapsesPosition))
+                .unwrap_or(false),
+            "expected SplitCollapsesPosition, got: {err}"
+        );
+    }
+
+    // SPL-030 — correcting a split's factor replays the rescale.
+    #[test]
+    fn spl_030_correct_split_factor_replays_the_rescale() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-02-01".to_string(),
+            micro(2),
+            None,
+        )
+        .unwrap();
+        let split_id = acc.apply_split(tx).unwrap().id.clone();
+
+        acc.correct_transaction(
+            &split_id,
+            "2024-02-01".to_string(),
+            micro(4), // new factor ×4
+            0,
+            micro(1),
+            0,
+            None, // total_amount (typed-total mode unused here)
+            None,
+        )
+        .unwrap();
+
+        let h = acc
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == "asset-xyz")
+            .unwrap();
+        assert_eq!(h.quantity, micro(40));
+        assert_eq!(h.average_price, micro(25));
+    }
+
+    // SPL-022 — moving a sell before the split re-validates against the
+    // pre-split quantity and cascades an oversell.
+    #[test]
+    fn spl_022_moving_sell_before_split_cascades_oversell() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-xyz".to_string(),
+            "2024-01-01".to_string(),
+            micro(10),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let tx = Transaction::split(
+            acc.id.clone(),
+            "asset-xyz".to_string(),
+            "2024-02-01".to_string(),
+            micro(2),
+            None,
+        )
+        .unwrap();
+        acc.apply_split(tx).unwrap();
+        // 20 units post-split; selling 15 is fine after the split…
+        let sell = acc
+            .sell_holding(
+                "asset-xyz".to_string(),
+                "2024-03-01".to_string(),
+                micro(15),
+                micro(60),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+        // …but moving that sell before the split (only 10 held) must cascade.
+        let err = acc
+            .correct_transaction(
+                &sell.id,
+                "2024-01-15".to_string(),
+                micro(15),
+                micro(60),
+                micro(1),
+                0,
+                None, // total_amount (typed-total mode unused here)
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::CascadingOversell))
+                .unwrap_or(false),
+            "expected CascadingOversell, got: {err}"
         );
     }
 

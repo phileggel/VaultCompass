@@ -447,10 +447,12 @@ pub(crate) fn end_value_as_of(
                     cash_balance += transaction.quantity as i128;
                 }
             }
-            // FSD-022d / FEE-022d — free-share and management-fee events have no cash leg.
+            // FSD-022d / FEE-022d / SPL-010 — free-share, management-fee and
+            // split events have no cash leg.
             TransactionType::OpeningBalance
             | TransactionType::FreeShares
-            | TransactionType::ManagementFee => {}
+            | TransactionType::ManagementFee
+            | TransactionType::Split => {}
         }
         match transaction.transaction_type {
             // FSD-070 — free shares enter the as-of-date unit reconstruction like a
@@ -471,7 +473,14 @@ pub(crate) fn end_value_as_of(
                     .entry(transaction.asset_id.as_str())
                     .or_insert(0) -= transaction.quantity as i128;
             }
-            _ => {}
+            // SPL-020 — a split rescales the running quantity (factor in `quantity`).
+            TransactionType::Split => {
+                let quantity = quantity_by_asset
+                    .entry(transaction.asset_id.as_str())
+                    .or_insert(0);
+                *quantity = *quantity * transaction.quantity as i128 / 1_000_000;
+            }
+            TransactionType::Deposit | TransactionType::Withdrawal | TransactionType::Dividend => {}
         }
     }
 
@@ -531,12 +540,14 @@ pub(crate) fn external_cash_flows(transactions: &[Transaction]) -> Vec<DatedFlow
         let amount = match transaction.transaction_type {
             TransactionType::Deposit | TransactionType::OpeningBalance => transaction.total_amount,
             TransactionType::Withdrawal => -transaction.total_amount,
+            // SPL-050 — a split is not a flow.
             TransactionType::Purchase
             | TransactionType::Sell
             | TransactionType::Dividend
             | TransactionType::FreeShares
             | TransactionType::ManagementFee
-            | TransactionType::Interest => continue,
+            | TransactionType::Interest
+            | TransactionType::Split => continue,
         };
         flows.push(DatedFlow { date, amount });
     }
@@ -564,12 +575,14 @@ pub(crate) fn external_cash_flows_windowed(
                 opening_balance_flow_value(transaction, priced_assets, rate_map, account_currency)
             }
             TransactionType::Withdrawal => -transaction.total_amount,
+            // SPL-050 — a split is not a flow.
             TransactionType::Purchase
             | TransactionType::Sell
             | TransactionType::Dividend
             | TransactionType::FreeShares
             | TransactionType::ManagementFee
-            | TransactionType::Interest => continue,
+            | TransactionType::Interest
+            | TransactionType::Split => continue,
         };
         flows.push(DatedFlow { date, amount });
     }
@@ -733,11 +746,13 @@ pub(crate) fn position_flows(asset_transactions: &[&Transaction]) -> PositionFlo
                 date,
                 amount: transaction.total_amount,
             }),
+            // SPL-050 — a split is not a flow.
             TransactionType::Deposit
             | TransactionType::Withdrawal
             | TransactionType::FreeShares
             | TransactionType::ManagementFee
-            | TransactionType::Interest => {}
+            | TransactionType::Interest
+            | TransactionType::Split => {}
         }
     }
     PositionFlows { trades, dividends }
@@ -780,11 +795,13 @@ pub(crate) fn position_flows_windowed(
                 date,
                 amount: transaction.total_amount,
             }),
+            // SPL-050 — a split is not a flow.
             TransactionType::Deposit
             | TransactionType::Withdrawal
             | TransactionType::FreeShares
             | TransactionType::ManagementFee
-            | TransactionType::Interest => {}
+            | TransactionType::Interest
+            | TransactionType::Split => {}
         }
     }
     PositionFlows { trades, dividends }
@@ -984,6 +1001,10 @@ pub(crate) fn holding_close_date_as_of(
             TransactionType::Sell
             | TransactionType::Withdrawal
             | TransactionType::ManagementFee => quantity -= transaction.quantity as i128,
+            // SPL-020 — a split rescales the running quantity (factor in `quantity`).
+            TransactionType::Split => {
+                quantity = quantity * transaction.quantity as i128 / 1_000_000
+            }
             TransactionType::Dividend => {}
         }
         if before > 0 && quantity <= 0 {
