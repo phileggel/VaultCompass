@@ -1,7 +1,7 @@
 use crate::context::account::{
-    Account, AccountError, AccountService, Transaction, TransactionType, UpdateFrequency,
+    Account, AccountError, AccountServiceContract, Transaction, TransactionType, UpdateFrequency,
 };
-use crate::context::asset::AssetService;
+use crate::context::asset::AssetServiceContract;
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
 use crate::use_cases::shared::performance::{
@@ -31,8 +31,8 @@ const IDENTITY_RATE_MICROS: i64 = 1_000_000;
 /// currency, with the single-account scopes served by the shared performance
 /// series engine (ADR-003, ADR-013).
 pub struct GlobalPerformanceUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
     currency_service: Arc<CurrencyService>,
 }
 
@@ -41,8 +41,8 @@ impl GlobalPerformanceUseCase {
     /// per-holding valuation rates (FXR-042/035) and the account-currency →
     /// reference-currency conversion (GPF-020/030).
     pub fn new(
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
         currency_service: Arc<CurrencyService>,
     ) -> Self {
         Self {
@@ -65,8 +65,8 @@ impl GlobalPerformanceUseCase {
         match account_id {
             Some(account_id) => {
                 account_performance_series(
-                    &self.account_service,
-                    &self.asset_service,
+                    self.account_service.as_ref(),
+                    self.asset_service.as_ref(),
                     &self.currency_service,
                     account_id,
                     asset_id,
@@ -212,7 +212,7 @@ impl GlobalPerformanceUseCase {
         valued_dates: &[NaiveDate],
         asset_scope: Option<&str>,
     ) -> StdResult<ConvertedAccount, AccountError> {
-        let priced_assets = load_priced_assets(&self.asset_service, &transactions).await?;
+        let priced_assets = load_priced_assets(self.asset_service.as_ref(), &transactions).await?;
         // PRF-071 — zero-cost credits are valued at their grant date, so this
         // account's grant dates join the valued-date set for its own rate map.
         let mut asset_rate_dates: BTreeSet<NaiveDate> = valued_dates.iter().copied().collect();
@@ -1232,8 +1232,8 @@ mod tests {
             .unwrap();
 
         let account_uc = AccountPerformanceUseCase::new(
-            Arc::clone(&account_svc),
-            Arc::clone(&asset_svc),
+            account_svc.clone(),
+            asset_svc.clone(),
             make_currency_service_with_no_rate(),
         );
         let global_uc = GlobalPerformanceUseCase::new(
@@ -1290,8 +1290,8 @@ mod tests {
             .unwrap();
 
         let account_uc = AccountPerformanceUseCase::new(
-            Arc::clone(&account_svc),
-            Arc::clone(&asset_svc),
+            account_svc.clone(),
+            asset_svc.clone(),
             make_currency_service_with_no_rate(),
         );
         let global_uc = GlobalPerformanceUseCase::new(

@@ -5,6 +5,7 @@ use super::domain::{
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
 use crate::use_cases::holding_transaction::OpenHoldingError;
+use async_trait::async_trait;
 use chrono::NaiveDate;
 use std::result::Result as StdResult;
 use std::sync::Arc;
@@ -925,6 +926,457 @@ impl AccountService {
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::FeeScheduleUpdated);
         }
+    }
+}
+
+/// Account application surface consumed by cross-BC use-case orchestrators.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait AccountServiceContract: Send + Sync {
+    /// Retrieves all non-deleted accounts.
+    async fn get_all(&self) -> StdResult<Vec<Account>, AccountError>;
+    /// Retrieves an account by ID.
+    async fn get_by_id(&self, id: &str) -> StdResult<Option<Account>, AccountError>;
+    /// Creates a new account.
+    async fn create(
+        &self,
+        name: String,
+        bank_name: String,
+        currency: String,
+        update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
+    ) -> StdResult<Account, AccountError>;
+    /// Seeds the account's 0-balance Cash Holding (CSH-012).
+    async fn seed_cash_holding(&self, account_id: &str) -> StdResult<(), AccountError>;
+    /// Retrieves all holdings for a given account (ACD-022, ADR-004).
+    async fn get_holdings_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<Holding>, AccountError>;
+    /// Retrieves a single holding by account/asset pair, or None (B19).
+    async fn get_holding_by_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> StdResult<Option<Holding>, AccountError>;
+    /// Retrieves every transaction for an account across all assets (PRF-021).
+    async fn get_all_transactions_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<Transaction>, AccountError>;
+    /// Records a purchase of an asset into the account (TRX-020, TRX-026, TRX-060).
+    #[allow(clippy::too_many_arguments)]
+    async fn buy_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        total_amount: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records a sale of an asset from the account (SEL-012, SEL-021, SEL-023, SEL-024, SEL-050).
+    #[allow(clippy::too_many_arguments)]
+    async fn sell_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        total_amount: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Corrects an existing transaction and recalculates the affected holding
+    /// (TRX-031, SEL-031, TRX-061, SEL-051).
+    #[allow(clippy::too_many_arguments)]
+    async fn correct_transaction(
+        &self,
+        account_id: &str,
+        tx_id: &str,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        total_amount: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Deletes a transaction and recalculates (or removes) the associated holding (TRX-034).
+    async fn cancel_transaction(
+        &self,
+        account_id: &str,
+        tx_id: &str,
+    ) -> StdResult<(), AccountError>;
+    /// Seeds a holding directly from a quantity and total cost (TRX-042, TRX-047).
+    async fn open_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        total_cost: i64,
+    ) -> StdResult<Transaction, OpenHoldingError>;
+    /// Records a Deposit (CSH-022) — cash inflow into the account.
+    async fn record_deposit(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records a Withdrawal (CSH-032) — cash outflow from the account.
+    async fn record_withdrawal(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records a cash Dividend attributed to a held paying asset (DIV-023).
+    async fn record_dividend(
+        &self,
+        account_id: &str,
+        paying_asset_id: String,
+        date: String,
+        amount_micros: i64,
+        exchange_rate: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records a FreeShares distribution attributed to a held distributing asset (FSD-022).
+    async fn record_free_shares(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records a one-off management fee deduction on a held asset (FEE-012).
+    async fn record_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records an Interest credit on a held asset or the account's cash line
+    /// (INT-021/022/023/024).
+    async fn record_interest(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: Option<i64>,
+        quantity_micros: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Returns true if any account holds a non-zero quantity of the given asset (OQ-6).
+    async fn has_active_holdings_for_asset(&self, asset_id: &str) -> StdResult<bool, AccountError>;
+    /// Returns true if any transaction references the given asset.
+    async fn has_holding_entries_for_asset(&self, asset_id: &str) -> StdResult<bool, AccountError>;
+    /// Returns the count of active holdings and total transactions for an account (ACC-020).
+    async fn get_deletion_summary(&self, account_id: &str) -> StdResult<(u32, u32), AccountError>;
+    /// Returns every active fee schedule across all accounts (FEE-040 catch-up).
+    async fn list_active_fee_schedules(&self) -> StdResult<Vec<FeeSchedule>, AccountError>;
+    /// Returns the active fee schedules of one account (FEE-074).
+    async fn list_active_fee_schedules_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<FeeSchedule>, AccountError>;
+    /// Advances a schedule's catch-up cursor to `last_applied_period` (FEE-043).
+    async fn advance_fee_schedule_cursor(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+        last_applied_period: String,
+    ) -> StdResult<(), AccountError>;
+}
+
+#[async_trait]
+impl AccountServiceContract for AccountService {
+    async fn get_all(&self) -> StdResult<Vec<Account>, AccountError> {
+        AccountService::get_all(self).await
+    }
+
+    async fn get_by_id(&self, id: &str) -> StdResult<Option<Account>, AccountError> {
+        AccountService::get_by_id(self, id).await
+    }
+
+    async fn create(
+        &self,
+        name: String,
+        bank_name: String,
+        currency: String,
+        update_frequency: UpdateFrequency,
+        management_fees_enabled: bool,
+    ) -> StdResult<Account, AccountError> {
+        AccountService::create(
+            self,
+            name,
+            bank_name,
+            currency,
+            update_frequency,
+            management_fees_enabled,
+        )
+        .await
+    }
+
+    async fn seed_cash_holding(&self, account_id: &str) -> StdResult<(), AccountError> {
+        AccountService::seed_cash_holding(self, account_id).await
+    }
+
+    async fn get_holdings_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<Holding>, AccountError> {
+        AccountService::get_holdings_for_account(self, account_id).await
+    }
+
+    async fn get_holding_by_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> StdResult<Option<Holding>, AccountError> {
+        AccountService::get_holding_by_account_asset(self, account_id, asset_id).await
+    }
+
+    async fn get_all_transactions_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<Transaction>, AccountError> {
+        AccountService::get_all_transactions_for_account(self, account_id).await
+    }
+
+    async fn buy_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        total_amount: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::buy_holding(
+            self,
+            account_id,
+            asset_id,
+            date,
+            quantity,
+            unit_price,
+            exchange_rate,
+            fees,
+            total_amount,
+            note,
+        )
+        .await
+    }
+
+    async fn sell_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        total_amount: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::sell_holding(
+            self,
+            account_id,
+            asset_id,
+            date,
+            quantity,
+            unit_price,
+            exchange_rate,
+            fees,
+            total_amount,
+            note,
+        )
+        .await
+    }
+
+    async fn correct_transaction(
+        &self,
+        account_id: &str,
+        tx_id: &str,
+        date: String,
+        quantity: i64,
+        unit_price: i64,
+        exchange_rate: i64,
+        fees: i64,
+        total_amount: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::correct_transaction(
+            self,
+            account_id,
+            tx_id,
+            date,
+            quantity,
+            unit_price,
+            exchange_rate,
+            fees,
+            total_amount,
+            note,
+        )
+        .await
+    }
+
+    async fn cancel_transaction(
+        &self,
+        account_id: &str,
+        tx_id: &str,
+    ) -> StdResult<(), AccountError> {
+        AccountService::cancel_transaction(self, account_id, tx_id).await
+    }
+
+    async fn open_holding(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        total_cost: i64,
+    ) -> StdResult<Transaction, OpenHoldingError> {
+        AccountService::open_holding(self, account_id, asset_id, date, quantity, total_cost).await
+    }
+
+    async fn record_deposit(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_deposit(self, account_id, date, amount, note).await
+    }
+
+    async fn record_withdrawal(
+        &self,
+        account_id: &str,
+        date: String,
+        amount: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_withdrawal(self, account_id, date, amount, note).await
+    }
+
+    async fn record_dividend(
+        &self,
+        account_id: &str,
+        paying_asset_id: String,
+        date: String,
+        amount_micros: i64,
+        exchange_rate: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_dividend(
+            self,
+            account_id,
+            paying_asset_id,
+            date,
+            amount_micros,
+            exchange_rate,
+            note,
+        )
+        .await
+    }
+
+    async fn record_free_shares(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_free_shares(self, account_id, asset_id, date, quantity, note).await
+    }
+
+    async fn record_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_management_fee(
+            self,
+            account_id,
+            asset_id,
+            date,
+            percent_micros,
+            note,
+        )
+        .await
+    }
+
+    async fn record_interest(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: Option<i64>,
+        quantity_micros: Option<i64>,
+        note: Option<String>,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_interest(
+            self,
+            account_id,
+            asset_id,
+            date,
+            percent_micros,
+            quantity_micros,
+            note,
+        )
+        .await
+    }
+
+    async fn has_active_holdings_for_asset(&self, asset_id: &str) -> StdResult<bool, AccountError> {
+        AccountService::has_active_holdings_for_asset(self, asset_id).await
+    }
+
+    async fn has_holding_entries_for_asset(&self, asset_id: &str) -> StdResult<bool, AccountError> {
+        AccountService::has_holding_entries_for_asset(self, asset_id).await
+    }
+
+    async fn get_deletion_summary(&self, account_id: &str) -> StdResult<(u32, u32), AccountError> {
+        AccountService::get_deletion_summary(self, account_id).await
+    }
+
+    async fn list_active_fee_schedules(&self) -> StdResult<Vec<FeeSchedule>, AccountError> {
+        AccountService::list_active_fee_schedules(self).await
+    }
+
+    async fn list_active_fee_schedules_for_account(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<FeeSchedule>, AccountError> {
+        AccountService::list_active_fee_schedules_for_account(self, account_id).await
+    }
+
+    async fn advance_fee_schedule_cursor(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+        last_applied_period: String,
+    ) -> StdResult<(), AccountError> {
+        AccountService::advance_fee_schedule_cursor(self, account_id, asset_id, last_applied_period)
+            .await
     }
 }
 

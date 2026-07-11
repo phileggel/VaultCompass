@@ -8,6 +8,7 @@ use crate::{
     core::{Event, SideEffectEventBus, BACKEND},
 };
 use anyhow::Result;
+use async_trait::async_trait;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -501,6 +502,51 @@ impl AssetService {
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::AssetPriceUpdated);
         }
+    }
+}
+
+/// Asset application surface consumed by cross-BC use-case orchestrators.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait AssetServiceContract: Send + Sync {
+    /// Retrieves a single asset by ID.
+    async fn get_asset_by_id(&self, asset_id: &str) -> StdResult<Option<Asset>, AssetError>;
+    /// Idempotently seeds the system Cash Asset for `currency` (CSH-010, CSH-011, CSH-017).
+    async fn seed_cash_asset(&self, currency: &str) -> Result<Asset>;
+    /// Archives an asset (reversible — R6).
+    async fn archive_asset(&self, asset_id: &str) -> StdResult<(), AssetError>;
+    /// Soft-deletes an asset and publishes an AssetUpdated event.
+    async fn delete_asset(&self, asset_id: &str) -> StdResult<(), AssetError>;
+    /// Returns the most recently dated market price for the given asset, or None (MKT-031).
+    async fn get_latest_price(&self, asset_id: &str) -> Result<Option<AssetPrice>>;
+    /// Returns all recorded market prices for the given asset, sorted date descending (MKT-072).
+    async fn get_asset_prices(&self, asset_id: &str) -> StdResult<Vec<AssetPrice>, AssetError>;
+}
+
+#[async_trait]
+impl AssetServiceContract for AssetService {
+    async fn get_asset_by_id(&self, asset_id: &str) -> StdResult<Option<Asset>, AssetError> {
+        AssetService::get_asset_by_id(self, asset_id).await
+    }
+
+    async fn seed_cash_asset(&self, currency: &str) -> Result<Asset> {
+        AssetService::seed_cash_asset(self, currency).await
+    }
+
+    async fn archive_asset(&self, asset_id: &str) -> StdResult<(), AssetError> {
+        AssetService::archive_asset(self, asset_id).await
+    }
+
+    async fn delete_asset(&self, asset_id: &str) -> StdResult<(), AssetError> {
+        AssetService::delete_asset(self, asset_id).await
+    }
+
+    async fn get_latest_price(&self, asset_id: &str) -> Result<Option<AssetPrice>> {
+        AssetService::get_latest_price(self, asset_id).await
+    }
+
+    async fn get_asset_prices(&self, asset_id: &str) -> StdResult<Vec<AssetPrice>, AssetError> {
+        AssetService::get_asset_prices(self, asset_id).await
     }
 }
 

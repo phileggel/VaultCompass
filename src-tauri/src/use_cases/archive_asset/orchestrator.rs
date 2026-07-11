@@ -1,18 +1,21 @@
 use super::error::{ArchiveAssetError, ArchiveAssetTask};
-use crate::context::account::AccountService;
-use crate::context::asset::AssetService;
+use crate::context::account::AccountServiceContract;
+use crate::context::asset::AssetServiceContract;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
 /// Guards and delegates asset archiving across the asset and account bounded contexts (OQ-6).
 pub struct ArchiveAssetUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
 }
 
 impl ArchiveAssetUseCase {
     /// Creates a new ArchiveAssetUseCase.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    pub fn new(
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
@@ -36,102 +39,23 @@ impl ArchiveAssetUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::account::{
-        AccountService, SqliteAccountRepository, SqliteHoldingRepository,
-        SqliteTransactionRepository, UpdateFrequency,
-    };
-    use crate::context::asset::{
-        AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
-        SqliteAssetPriceRepository, SqliteAssetRepository, SYSTEM_CATEGORY_ID,
-    };
-    use sqlx::sqlite::SqlitePoolOptions;
+    use crate::context::account::MockAccountServiceContract;
+    use crate::context::asset::MockAssetServiceContract;
+    use mockall::predicate::eq;
 
-    async fn setup_pool() -> sqlx::Pool<sqlx::Sqlite> {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("test pool");
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await
-            .expect("migrations");
-        pool
-    }
-
-    fn make_services(pool: &sqlx::Pool<sqlx::Sqlite>) -> (Arc<AccountService>, Arc<AssetService>) {
-        let account_svc = Arc::new(AccountService::new(
-            Box::new(SqliteAccountRepository::new(pool.clone())),
-            Box::new(SqliteHoldingRepository::new(pool.clone())),
-            Box::new(SqliteTransactionRepository::new(pool.clone())),
-        ));
-        let asset_svc = Arc::new(AssetService::new(
-            Box::new(SqliteAssetRepository::new(pool.clone())),
-            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
-        ));
-        (account_svc, asset_svc)
-    }
-
-    fn base_asset_dto() -> CreateAssetDTO {
-        CreateAssetDTO {
-            name: "Test Asset".to_string(),
-            reference: "TST".to_string(),
-            isin: None,
-            class: AssetClass::Stocks,
-            currency: "USD".to_string(),
-            risk_level: 1,
-            category_id: SYSTEM_CATEGORY_ID.to_string(),
-            exchange: None,
-            interest_bearing: false,
-        }
-    }
-
-    // OQ-6 — archive rejected when active holding exists
+    // OQ-6 — archive rejected when active holding exists; the asset BC is never reached.
     #[tokio::test]
     async fn archive_rejected_when_active_holdings() {
-        let pool = setup_pool().await;
-        let (account_svc, asset_svc) = make_services(&pool);
-
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
-        let account = account_svc
-            .create(
-                "Test Account".to_string(),
-                String::new(),
-                "USD".to_string(),
-                UpdateFrequency::ManualDay,
-                false,
-            )
-            .await
-            .unwrap();
-        // Cash is a Holding (CSH-090): seed cash before any purchase so CSH-041 holds.
-        asset_svc.seed_cash_asset("USD").await.unwrap();
+        let mut account_svc = MockAccountServiceContract::new();
         account_svc
-            .record_deposit(
-                &account.id,
-                "2020-01-01".to_string(),
-                1_000_000_000_000,
-                None,
-            )
-            .await
-            .unwrap();
-        account_svc
-            .buy_holding(
-                &account.id,
-                asset.id.clone(),
-                "2026-01-01".to_string(),
-                1_000_000,
-                10_000_000,
-                1_000_000,
-                0,
-                None,
-                None,
-            )
-            .await
-            .unwrap();
+            .expect_has_active_holdings_for_asset()
+            .once()
+            .with(eq("asset-1"))
+            .returning(|_| Ok(true));
+        let asset_svc = MockAssetServiceContract::new();
 
-        let uc = ArchiveAssetUseCase::new(account_svc, asset_svc);
-        let err = uc.archive_asset(&asset.id).await.unwrap_err();
+        let uc = ArchiveAssetUseCase::new(Arc::new(account_svc), Arc::new(asset_svc));
+        let err = uc.archive_asset("asset-1").await.unwrap_err();
         assert!(
             matches!(
                 err,
@@ -144,11 +68,39 @@ mod tests {
     // OQ-6 — archive succeeds when no active holdings exist
     #[tokio::test]
     async fn archive_succeeds_when_no_active_holdings() {
-        let pool = setup_pool().await;
-        let (account_svc, asset_svc) = make_services(&pool);
-        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let mut account_svc = MockAccountServiceContract::new();
+        account_svc
+            .expect_has_active_holdings_for_asset()
+            .once()
+            .with(eq("asset-1"))
+            .returning(|_| Ok(false));
+        let mut asset_svc = MockAssetServiceContract::new();
+        asset_svc
+            .expect_archive_asset()
+            .once()
+            .with(eq("asset-1"))
+            .returning(|_| Ok(()));
 
-        let uc = ArchiveAssetUseCase::new(account_svc, asset_svc);
-        uc.archive_asset(&asset.id).await.unwrap();
+        let uc = ArchiveAssetUseCase::new(Arc::new(account_svc), Arc::new(asset_svc));
+        uc.archive_asset("asset-1").await.unwrap();
+    }
+
+    // Cross-BC guard failure propagates as the account arm of the composite.
+    #[tokio::test]
+    async fn archive_propagates_account_guard_failure() {
+        use crate::context::account::AccountError;
+        let mut account_svc = MockAccountServiceContract::new();
+        account_svc
+            .expect_has_active_holdings_for_asset()
+            .once()
+            .returning(|_| Err(AccountError::DatabaseError));
+        let asset_svc = MockAssetServiceContract::new();
+
+        let uc = ArchiveAssetUseCase::new(Arc::new(account_svc), Arc::new(asset_svc));
+        let err = uc.archive_asset("asset-1").await.unwrap_err();
+        assert!(
+            matches!(err, ArchiveAssetError::Account(AccountError::DatabaseError)),
+            "got: {err:?}"
+        );
     }
 }

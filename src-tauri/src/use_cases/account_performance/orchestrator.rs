@@ -1,5 +1,5 @@
-use crate::context::account::{AccountError, AccountService};
-use crate::context::asset::AssetService;
+use crate::context::account::{AccountError, AccountServiceContract};
+use crate::context::asset::AssetServiceContract;
 use crate::context::currency::CurrencyService;
 use crate::use_cases::shared::performance::{
     account_performance_series, AccountPerformanceResponse,
@@ -10,8 +10,8 @@ use std::sync::Arc;
 /// Orchestrates a cross-context read of account transactions and asset price
 /// history to build per-period performance figures (ADR-003, ADR-013, PRF spec).
 pub struct AccountPerformanceUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
     currency_service: Arc<CurrencyService>,
 }
 
@@ -19,8 +19,8 @@ impl AccountPerformanceUseCase {
     /// Creates a new use case instance. The currency service is the valuation
     /// read port for foreign-currency holdings (FXR-042/035).
     pub fn new(
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
         currency_service: Arc<CurrencyService>,
     ) -> Self {
         Self {
@@ -38,8 +38,8 @@ impl AccountPerformanceUseCase {
         asset_id: Option<&str>,
     ) -> StdResult<AccountPerformanceResponse, AccountError> {
         account_performance_series(
-            &self.account_service,
-            &self.asset_service,
+            self.account_service.as_ref(),
+            self.asset_service.as_ref(),
             &self.currency_service,
             account_id,
             asset_id,

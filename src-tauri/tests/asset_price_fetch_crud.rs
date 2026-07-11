@@ -88,8 +88,8 @@ async fn build_ctx() -> Ctx {
         ));
 
         AssetPriceFetchUseCase::new(
-            Arc::clone(&account_service),
-            Arc::clone(&asset_service),
+            account_service.clone(),
+            asset_service.clone(),
             Arc::clone(&fetch_guard),
             dispatcher,
         )
@@ -275,8 +275,8 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
     );
@@ -399,8 +399,8 @@ async fn fetch_for_account_skips_locked_asset() {
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
     );
@@ -514,8 +514,8 @@ async fn fetch_for_account_includes_unblocked_asset() {
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
     );
@@ -612,8 +612,8 @@ async fn fetch_publishes_completion_event_with_counts() {
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
     );
@@ -765,8 +765,8 @@ async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_p
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
     );
@@ -933,8 +933,8 @@ async fn fetch_completion_unpriced_entry_has_none_last_price_when_never_priced()
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
     );
@@ -1070,8 +1070,8 @@ async fn fetch_completion_unpriced_list_excludes_successfully_fetched_asset() {
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
     );
@@ -1229,8 +1229,8 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
     );
@@ -1387,8 +1387,8 @@ async fn fetch_completion_locked_asset_absent_from_unpriced_list() {
         ),
     );
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
     );

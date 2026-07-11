@@ -70,11 +70,10 @@ async fn build_ctx() -> Ctx {
         Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
         Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
     ));
-    let use_case =
-        HoldingTransactionUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
+    let use_case = HoldingTransactionUseCase::new(account_service.clone(), asset_service.clone());
     let details_use_case = AccountDetailsUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         currency_service,
     );
 
@@ -438,8 +437,7 @@ async fn record_dividend_publishes_transaction_updated_event() {
         )
         .with_event_bus(Arc::clone(&bus)),
     );
-    let uc =
-        HoldingTransactionUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
+    let uc = HoldingTransactionUseCase::new(account_service.clone(), asset_service.clone());
 
     let asset = asset_service
         .create_asset(stocks_asset_dto("AAPL", "AAPL", "USD"))

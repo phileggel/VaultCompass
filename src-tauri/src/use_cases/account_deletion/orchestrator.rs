@@ -1,4 +1,4 @@
-use crate::context::account::{AccountError, AccountService};
+use crate::context::account::{AccountError, AccountServiceContract};
 use serde::Serialize;
 use specta::Type;
 use std::result::Result as StdResult;
@@ -18,12 +18,12 @@ pub struct AccountDeletionSummary {
 /// Injects only AccountService because after Phase 7 both holdings and
 /// transactions live within the account bounded context.
 pub struct AccountDeletionUseCase {
-    account_service: Arc<AccountService>,
+    account_service: Arc<dyn AccountServiceContract>,
 }
 
 impl AccountDeletionUseCase {
     /// Creates a new AccountDeletionUseCase.
-    pub fn new(account_service: Arc<AccountService>) -> Self {
+    pub fn new(account_service: Arc<dyn AccountServiceContract>) -> Self {
         Self { account_service }
     }
 

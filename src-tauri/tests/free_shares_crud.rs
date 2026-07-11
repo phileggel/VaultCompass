@@ -65,8 +65,7 @@ async fn build_ctx() -> Ctx {
         .with_event_bus(Arc::clone(&bus)),
     );
 
-    let use_case =
-        HoldingTransactionUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
+    let use_case = HoldingTransactionUseCase::new(account_service.clone(), asset_service.clone());
 
     Ctx {
         use_case,
@@ -375,8 +374,7 @@ async fn record_free_shares_publishes_transaction_updated_event() {
         )
         .with_event_bus(Arc::clone(&bus)),
     );
-    let uc =
-        HoldingTransactionUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
+    let uc = HoldingTransactionUseCase::new(account_service.clone(), asset_service.clone());
 
     let asset = asset_service
         .create_asset(stocks_asset_dto("AAPL", "AAPL", "USD"))
@@ -597,12 +595,11 @@ async fn record_free_shares_performance_neutrality() {
         Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
     ));
     let perf_use_case = AccountPerformanceUseCase::new(
-        Arc::clone(&account_service),
-        Arc::clone(&asset_service),
+        account_service.clone(),
+        asset_service.clone(),
         currency_service,
     );
-    let uc =
-        HoldingTransactionUseCase::new(Arc::clone(&account_service), Arc::clone(&asset_service));
+    let uc = HoldingTransactionUseCase::new(account_service.clone(), asset_service.clone());
 
     let asset = asset_service
         .create_asset(stocks_asset_dto("AAPL", "AAPL", "USD"))

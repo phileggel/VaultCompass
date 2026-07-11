@@ -3,7 +3,7 @@
 //! (PRF / GPF / FXR / ADR-013). Owned by no use case.
 
 use crate::context::account::{Account, AccountError, Transaction, TransactionType};
-use crate::context::asset::{AssetClass, AssetPrice, AssetService};
+use crate::context::asset::{AssetClass, AssetPrice, AssetServiceContract};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
 use chrono::{Datelike, NaiveDate};
@@ -63,7 +63,7 @@ pub struct PerformanceMetric {
 /// Shared with `account_summary` so the YTD computation reuses one loading pass
 /// (ADR-004 service-level reuse).
 pub(crate) async fn load_priced_assets(
-    asset_service: &AssetService,
+    asset_service: &dyn AssetServiceContract,
     transactions: &[Transaction],
 ) -> StdResult<HashMap<String, PricedAsset>, AccountError> {
     let mut priced_assets: HashMap<String, PricedAsset> = HashMap::new();
@@ -237,7 +237,7 @@ pub(crate) async fn load_rate_map_for_dates(
 /// baseline of 0 and is present (denominator is the weighted current-year flow).
 pub(crate) async fn compute_current_ytd_pct(
     account_currency: &str,
-    asset_service: &AssetService,
+    asset_service: &dyn AssetServiceContract,
     currency_service: &CurrencyService,
     transactions: &[Transaction],
     today: NaiveDate,
@@ -1207,7 +1207,7 @@ mod tests {
     }
 
     use crate::context::asset::{
-        Asset, AssetCategory, MockAssetCategoryRepository, MockAssetPriceRepository,
+        Asset, AssetCategory, AssetService, MockAssetCategoryRepository, MockAssetPriceRepository,
         MockAssetRepository, SYSTEM_CATEGORY_ID,
     };
     use crate::context::currency::domain::{

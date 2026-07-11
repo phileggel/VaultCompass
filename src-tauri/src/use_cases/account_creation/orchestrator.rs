@@ -1,5 +1,5 @@
-use crate::context::account::{Account, AccountError, AccountService, UpdateFrequency};
-use crate::context::asset::AssetService;
+use crate::context::account::{Account, AccountError, AccountServiceContract, UpdateFrequency};
+use crate::context::asset::AssetServiceContract;
 use crate::core::logger::BACKEND;
 use std::result::Result as StdResult;
 use std::sync::Arc;
@@ -8,13 +8,16 @@ use std::sync::Arc;
 /// (ACC-025). Injects `AccountService` + `AssetService` per ADR-003 / ADR-004 —
 /// no `account` → `asset` import is introduced.
 pub struct AccountCreationUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
 }
 
 impl AccountCreationUseCase {
     /// Creates a new `AccountCreationUseCase`.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    pub fn new(
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
@@ -67,10 +70,12 @@ impl AccountCreationUseCase {
 mod tests {
     use super::*;
     use crate::context::account::{
-        SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+        AccountService, SqliteAccountRepository, SqliteHoldingRepository,
+        SqliteTransactionRepository,
     };
     use crate::context::asset::{
-        SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
+        AssetService, SqliteAssetCategoryRepository, SqliteAssetPriceRepository,
+        SqliteAssetRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
 

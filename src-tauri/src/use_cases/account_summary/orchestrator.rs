@@ -1,5 +1,5 @@
-use crate::context::account::{Account, AccountError, AccountService, UpdateFrequency};
-use crate::context::asset::{AssetClass, AssetService};
+use crate::context::account::{Account, AccountError, AccountServiceContract, UpdateFrequency};
+use crate::context::asset::{AssetClass, AssetServiceContract};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
 use crate::use_cases::shared::valuation::compute_current_ytd_pct;
@@ -43,8 +43,8 @@ pub struct AccountSummary {
 /// Orchestrates a cross-context read of account + asset data to build the
 /// Accounts-list view (ACC-021, ADR-003).
 pub struct AccountSummaryUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
     currency_service: Arc<CurrencyService>,
 }
 
@@ -52,8 +52,8 @@ impl AccountSummaryUseCase {
     /// Creates a new use case instance. The currency service is the valuation
     /// read port for foreign-currency holdings (FXR-041/035).
     pub fn new(
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
         currency_service: Arc<CurrencyService>,
     ) -> Self {
         Self {
@@ -83,7 +83,7 @@ impl AccountSummaryUseCase {
                 .await?;
             let ytd_performance_pct = compute_current_ytd_pct(
                 &account.currency,
-                &self.asset_service,
+                self.asset_service.as_ref(),
                 &self.currency_service,
                 &transactions,
                 today,

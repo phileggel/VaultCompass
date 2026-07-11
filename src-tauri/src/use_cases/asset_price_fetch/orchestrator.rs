@@ -1,5 +1,7 @@
-use crate::context::account::{AccountError, AccountService};
-use crate::context::asset::{derive_yahoo_symbol_with_exchange, Asset, AssetError, AssetService};
+use crate::context::account::{AccountError, AccountServiceContract};
+use crate::context::asset::{
+    derive_yahoo_symbol_with_exchange, Asset, AssetError, AssetServiceContract,
+};
 use crate::context::currency::CurrencyPair;
 use crate::core::cash::system_cash_asset_id;
 use crate::core::logger::BACKEND;
@@ -14,8 +16,8 @@ use super::guard::FetchGuard;
 /// `fetch_for_account` (MKT-132 / MKT-131). Both methods share the same in-flight
 /// guard, dispatcher, and scope-building logic.
 pub struct AssetPriceFetchUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
     fetch_guard: Arc<FetchGuard>,
     dispatcher: Arc<Dispatcher>,
 }
@@ -23,8 +25,8 @@ pub struct AssetPriceFetchUseCase {
 impl AssetPriceFetchUseCase {
     /// Creates a new use case instance.
     pub fn new(
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
         fetch_guard: Arc<FetchGuard>,
         dispatcher: Arc<Dispatcher>,
     ) -> Self {
@@ -215,7 +217,7 @@ mod tests {
         SqliteTransactionRepository,
     };
     use crate::context::asset::{
-        MockAssetRepository, MockPriceProvider, SqliteAssetCategoryRepository,
+        AssetService, MockAssetRepository, MockPriceProvider, SqliteAssetCategoryRepository,
         SqliteAssetPriceRepository,
     };
     use crate::context::currency::{

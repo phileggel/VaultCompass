@@ -4,9 +4,9 @@
 //! cases, so neither imports from the other (B18).
 
 use crate::context::account::{
-    AccountError, AccountService, Transaction, TransactionType, UpdateFrequency,
+    AccountError, AccountServiceContract, Transaction, TransactionType, UpdateFrequency,
 };
-use crate::context::asset::{AssetClass, AssetService};
+use crate::context::asset::{AssetClass, AssetServiceContract};
 use crate::context::currency::CurrencyService;
 use crate::use_cases::shared::valuation::{
     end_value_as_of, holding_close_date_as_of, holding_end_value_as_of,
@@ -87,8 +87,8 @@ pub struct AccountPerformanceResponse {
 /// Orchestrates a cross-context read of account transactions and asset price
 /// history (ADR-003, ADR-013).
 pub(crate) async fn account_performance_series(
-    account_service: &AccountService,
-    asset_service: &AssetService,
+    account_service: &dyn AccountServiceContract,
+    asset_service: &dyn AssetServiceContract,
     currency_service: &CurrencyService,
     account_id: &str,
     asset_id: Option<&str>,

@@ -1,7 +1,7 @@
 use crate::context::account::{
-    Account, AccountError, AccountService, Transaction, TransactionType,
+    Account, AccountError, AccountServiceContract, Transaction, TransactionType,
 };
-use crate::context::asset::{AssetPriceSource, AssetService};
+use crate::context::asset::{AssetPriceSource, AssetServiceContract};
 use crate::context::currency::CurrencyService;
 use crate::core::cash::{is_cash_asset, system_cash_asset_id};
 use crate::core::logger::BACKEND;
@@ -151,8 +151,8 @@ pub struct AccountDetailsResponse {
 
 /// Orchestrates a cross-context read of account + asset data (ADR-003, ADR-004).
 pub struct AccountDetailsUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
     currency_service: Arc<CurrencyService>,
 }
 
@@ -160,8 +160,8 @@ impl AccountDetailsUseCase {
     /// Creates a new use case instance. The currency service is the valuation
     /// read port for foreign-currency holdings (FXR-030/035).
     pub fn new(
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
         currency_service: Arc<CurrencyService>,
     ) -> Self {
         Self {
@@ -277,7 +277,7 @@ impl AccountDetailsUseCase {
         // five window-start dates, so historical prices and FX rates for those
         // dates are preloaded once for all holdings.
         let window_starts = PeriodWindowStarts::ending_at(today_date);
-        let priced_assets = load_priced_assets(&self.asset_service, &all_txs).await?;
+        let priced_assets = load_priced_assets(self.asset_service.as_ref(), &all_txs).await?;
         // PRF-086 — opening balances are valued at their entry date inside the
         // window flows, so those dates join the pre-resolved set.
         let mut window_rate_dates: BTreeSet<NaiveDate> =

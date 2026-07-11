@@ -3,8 +3,8 @@ use super::error::{
     ManagementFeeError, ManagementFeeTask, OpenHoldingError, OpenHoldingTask,
 };
 use super::shared::ensure_cash_asset;
-use crate::context::account::{AccountError, AccountService, Transaction};
-use crate::context::asset::{AssetClass, AssetService};
+use crate::context::account::{AccountError, AccountServiceContract, Transaction};
+use crate::context::asset::{AssetClass, AssetServiceContract};
 use crate::core::logger::BACKEND;
 use std::sync::Arc;
 
@@ -16,13 +16,16 @@ use std::sync::Arc;
 /// drive the cross-BC `ensure_cash_asset` step inserted by the cash-tracking spec
 /// (CSH-040 / CSH-050 / CSH-042 / CSH-024).
 pub struct HoldingTransactionUseCase {
-    account_service: Arc<AccountService>,
-    asset_service: Arc<AssetService>,
+    account_service: Arc<dyn AccountServiceContract>,
+    asset_service: Arc<dyn AssetServiceContract>,
 }
 
 impl HoldingTransactionUseCase {
     /// Creates a new HoldingTransactionUseCase.
-    pub fn new(account_service: Arc<AccountService>, asset_service: Arc<AssetService>) -> Self {
+    pub fn new(
+        account_service: Arc<dyn AccountServiceContract>,
+        asset_service: Arc<dyn AssetServiceContract>,
+    ) -> Self {
         Self {
             account_service,
             asset_service,
@@ -709,7 +712,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         let tx = uc
             .open_holding(
                 &account.id,
@@ -759,7 +762,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         // Seed cash through the orchestrator so ensure_cash_for has been exercised
         // before the buy.
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(10_000), None)
@@ -870,7 +873,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         // Buy some of the asset first so the holding exists (DIV-011 eligibility).
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
@@ -1086,7 +1089,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1140,7 +1143,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1197,7 +1200,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), Arc::clone(&asset_svc));
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc.clone());
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1253,7 +1256,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1318,7 +1321,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), Arc::clone(&asset_svc));
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc.clone());
 
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
@@ -1569,7 +1572,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1626,7 +1629,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1769,7 +1772,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -1940,7 +1943,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -2000,7 +2003,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -2053,7 +2056,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -2111,7 +2114,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -2206,7 +2209,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();
@@ -2260,7 +2263,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = HoldingTransactionUseCase::new(Arc::clone(&account_svc), asset_svc);
+        let uc = HoldingTransactionUseCase::new(account_svc.clone(), asset_svc);
         uc.record_deposit(&account.id, "2024-01-01".to_string(), micro(1_000), None)
             .await
             .unwrap();

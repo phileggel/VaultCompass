@@ -198,56 +198,56 @@ pub fn run() {
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                     Arc::clone(&currency_service),
                 );
 
                 let account_summary_uc = AccountSummaryUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                     Arc::clone(&currency_service),
                 );
 
                 let account_performance_uc = AccountPerformanceUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                     Arc::clone(&currency_service),
                 );
 
                 let global_performance_uc = GlobalPerformanceUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                     Arc::clone(&currency_service),
                 );
 
                 let archive_asset_uc = ArchiveAssetUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                 );
 
                 let delete_asset_uc = DeleteAssetUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                 );
 
                 let account_deletion_uc =
-                    AccountDeletionUseCase::new(Arc::clone(&account_service));
+                    AccountDeletionUseCase::new(account_service.clone());
 
                 let account_creation_uc = AccountCreationUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                 );
 
                 let holding_transaction_uc = HoldingTransactionUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                 );
 
                 // FEE-040 — lazy catch-up generation across all active fee schedules,
                 // invoked by the frontend on app startup.
                 let fee_generation_uc =
-                    FeeGenerationOrchestrator::new(Arc::clone(&account_service));
+                    FeeGenerationOrchestrator::new(account_service.clone());
 
                 app_handle.manage(account_details_uc);
                 app_handle.manage(account_summary_uc);
@@ -273,8 +273,8 @@ pub fn run() {
                     Arc::new(|| chrono::Local::now().date_naive()),
                 ));
                 let asset_price_fetch_uc = Arc::new(AssetPriceFetchUseCase::new(
-                    Arc::clone(&account_service),
-                    Arc::clone(&asset_service),
+                    account_service.clone(),
+                    asset_service.clone(),
                     Arc::clone(&fetch_guard),
                     Arc::clone(&dispatcher),
                 ));

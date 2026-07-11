@@ -1,5 +1,5 @@
 use super::error::FeeGenerationError;
-use crate::context::account::{AccountError, AccountService, FeeFrequency, FeeSchedule};
+use crate::context::account::{AccountError, AccountServiceContract, FeeFrequency, FeeSchedule};
 use chrono::{Datelike, NaiveDate};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,12 +35,12 @@ fn next_period_end(freq: FeeFrequency, boundary: NaiveDate) -> Option<NaiveDate>
 /// Orchestrates periodic management fee deduction across all active fee schedules
 /// (FEE-040 — lazy catch-up generation).
 pub struct FeeGenerationOrchestrator {
-    account_service: Arc<AccountService>,
+    account_service: Arc<dyn AccountServiceContract>,
 }
 
 impl FeeGenerationOrchestrator {
     /// Creates a new orchestrator.
-    pub fn new(account_service: Arc<AccountService>) -> Self {
+    pub fn new(account_service: Arc<dyn AccountServiceContract>) -> Self {
         Self { account_service }
     }
 
@@ -285,7 +285,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         // Expect todo!() panic for now — this is the red baseline.
         let result = uc.apply_due_fee_deductions().await;
         // Once implemented: no schedules → no error.
@@ -355,7 +355,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         uc.apply_due_fee_deductions().await.unwrap();
 
         let txs = account_svc
@@ -405,7 +405,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         uc.apply_due_fee_deductions().await.unwrap();
 
         // Cursor must have advanced past start_date even though all periods were skipped.
@@ -452,7 +452,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         // Must succeed (not an error) even though all periods are skipped.
         uc.apply_due_fee_deductions().await.unwrap();
 
@@ -516,7 +516,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         uc.apply_due_fee_deductions().await.unwrap();
 
         let txs_after_first = account_svc
@@ -599,7 +599,7 @@ mod tests {
             .await
             .unwrap()
             .expect("schedule must exist");
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         // Deterministic "today" mid-April 2024 → Jan, Feb, Mar are the only completed periods.
         let today = chrono::NaiveDate::from_ymd_opt(2024, 4, 15).expect("valid date");
         uc.apply_schedule(&schedule, today).await.unwrap();
@@ -699,7 +699,7 @@ mod tests {
             .await
             .unwrap()
             .expect("schedule must exist");
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         let today = chrono::NaiveDate::from_ymd_opt(2024, 6, 15).expect("valid date");
         uc.apply_schedule(&schedule, today).await.unwrap();
 
@@ -786,7 +786,7 @@ mod tests {
             .await
             .unwrap();
 
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         uc.apply_due_fee_deductions().await.unwrap();
 
         let txs = account_svc
@@ -896,7 +896,7 @@ mod tests {
             .await
             .unwrap()
             .expect("schedule must exist");
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         let today = chrono::NaiveDate::from_ymd_opt(2024, 6, 15).expect("valid date");
         // FEE-047 — must not block / error even though Jan & Feb would oversell the Mar-15 sell.
         uc.apply_schedule(&schedule, today).await.unwrap();
@@ -995,7 +995,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let uc = FeeGenerationOrchestrator::new(Arc::clone(&account_svc));
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
         uc.apply_due_fee_deductions().await.unwrap();
         let txs = account_svc
             .get_all_transactions_for_account(&account.id)
