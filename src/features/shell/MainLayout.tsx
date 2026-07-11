@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { UpdateBanner, useUpdateBanner } from "@/features/update";
 import { logger } from "@/lib/logger";
-import { UpdateBanner, useUpdateBanner } from "@/lib/update";
 import { Snackbar } from "@/ui/components";
 import { Content } from "./Content";
 import { useFeeGeneration } from "./fee_generation/useFeeGeneration";
