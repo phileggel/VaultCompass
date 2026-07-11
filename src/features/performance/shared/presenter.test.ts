@@ -213,12 +213,12 @@ describe("presentPeriodRow — year row", () => {
     expect(row.annualizedYield?.pctFormatted).toBe("—");
   });
 
-  it("maps the bridge columns and the terms sum to end value (PRF-070–074)", () => {
+  it("maps the bridge columns; In/Out combines cash and asset flows (PRF-070–075)", () => {
     const row = presentPeriodRow(
       makeYearRow({
         previous_value: 9_000_000_000,
-        cash_flow: 500_000_000, // positive (cash in)
-        asset_flow: -200_000_000, // negative (asset out)
+        cash_flow: 500_000_000, // +€500.00 cash in
+        asset_flow: -200_000_000, // −€200.00 asset out
         dividends: 120_000_000,
         pnl: 580_000_000,
         end_value: 10_000_000_000,
@@ -226,9 +226,16 @@ describe("presentPeriodRow — year row", () => {
     );
     expect(row.previousValueFormatted).toBeTruthy();
     expect(row.dividendsFormatted).toBeTruthy();
-    // cash in (+) and asset out (−) get distinct sign colours.
-    expect(row.cashFlow.colorClass).not.toBe(row.assetFlow.colorClass);
+    // PRF-075 — the single In/Out cell is the net of the two backend terms: +300.00.
+    expect(row.externalFlow.formatted).toBe("300,00");
+    expect(row.externalFlow.colorClass).toBe("text-m3-success");
     expect(row.pnl.formatted).toBeTruthy();
+  });
+
+  it("PRF-075 — a net-negative combined flow is sign-coloured as an outflow", () => {
+    const row = presentPeriodRow(makeYearRow({ cash_flow: 100_000_000, asset_flow: -400_000_000 }));
+    expect(row.externalFlow.formatted).toBe("-300,00");
+    expect(row.externalFlow.colorClass).toBe("text-m3-error");
   });
 
   it("renders '—' for an absent period_over_period (first row, PRF-042)", () => {

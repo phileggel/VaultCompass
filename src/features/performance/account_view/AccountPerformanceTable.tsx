@@ -36,10 +36,7 @@ export function AccountPerformanceTable({
               {t("account_performance.column_prev_value")}
             </th>
             <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
-              {t("account_performance.column_cash_flow")}
-            </th>
-            <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
-              {t("account_performance.column_asset_flow")}
+              {t("account_performance.column_flows")}
             </th>
             <th scope="col" rowSpan={2} className="m3-th text-right align-bottom">
               {t("account_performance.column_dividends")}
@@ -120,16 +117,10 @@ export function AccountPerformanceTable({
                 {row.previousValueFormatted}
               </td>
               <td
-                data-testid={`${idPrefix}-cash-flow-${row.rowKey}`}
-                className={`m3-td text-right ${row.cashFlow.colorClass}`}
+                data-testid={`${idPrefix}-flow-${row.rowKey}`}
+                className={`m3-td text-right ${row.externalFlow.colorClass}`}
               >
-                {row.cashFlow.formatted}
-              </td>
-              <td
-                data-testid={`${idPrefix}-asset-flow-${row.rowKey}`}
-                className={`m3-td text-right ${row.assetFlow.colorClass}`}
-              >
-                {row.assetFlow.formatted}
+                {row.externalFlow.formatted}
               </td>
               <td data-testid={`${idPrefix}-dividends-${row.rowKey}`} className="m3-td text-right">
                 {row.dividendsFormatted}

@@ -140,10 +140,8 @@ export interface PeriodRowViewModel {
   endValueFormatted: string;
   /** Formatted previous period-end Global Value — the bridge baseline (PRF-074). */
   previousValueFormatted: string;
-  /** Cash in/out within the period (PRF-070) — sign-coloured. */
-  cashFlow: PnlCellViewModel;
-  /** Asset in/out within the period (PRF-071) — sign-coloured. */
-  assetFlow: PnlCellViewModel;
+  /** Combined external in/out within the period — cash (PRF-070) + in-kind asset (PRF-071) flows as one sign-coloured cell (PRF-075). */
+  externalFlow: PnlCellViewModel;
   /** Dividend income within the period (PRF-072). */
   dividendsFormatted: string;
   /** Investment P&L vs the previous period (PRF-073) — sign-coloured. */
@@ -213,8 +211,7 @@ export function presentPeriodRow(period: PerformancePeriod): PeriodRowViewModel 
     periodLabel: period.month !== null ? monthLabel(period.month) : String(period.year),
     endValueFormatted: formatEndValue(period.end_value),
     previousValueFormatted: formatEndValue(period.previous_value),
-    cashFlow: toPnlCell(period.cash_flow),
-    assetFlow: toPnlCell(period.asset_flow),
+    externalFlow: toPnlCell(period.cash_flow + period.asset_flow),
     dividendsFormatted: microToFormatted(period.dividends, 2),
     pnl: toPnlCell(period.pnl),
     periodOverPeriod: toMetricCell(period.period_over_period),
