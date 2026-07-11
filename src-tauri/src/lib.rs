@@ -12,8 +12,8 @@
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
 use crate::context::account::{
-    AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository, SqliteHoldingRepository,
-    SqliteTransactionRepository,
+    AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository,
+    SqliteHoldingNoteRepository, SqliteHoldingRepository, SqliteTransactionRepository,
 };
 use crate::context::asset::{
     AssetPriceRepository, AssetService, PriceProvider, ReqwestYahooClient,
@@ -173,6 +173,9 @@ pub fn run() {
                     )
                     .with_event_bus(event_bus.clone())
                     .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(
+                        db.pool.clone(),
+                    )))
+                    .with_holding_note_repo(Box::new(SqliteHoldingNoteRepository::new(
                         db.pool.clone(),
                     ))),
                 );

@@ -344,6 +344,10 @@ describe("presentAssetScopeOptions", () => {
     management_fees: 0,
     market_value: null,
     fee_rate_percent_micros: null,
+    note_text: null,
+    note_threshold_price: null,
+    note_threshold_direction: null,
+    note_alarm_triggered: false,
     period_performance: {
       ytd: null,
       one_year: null,

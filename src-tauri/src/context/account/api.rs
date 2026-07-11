@@ -1,7 +1,9 @@
 // Allow unreachable lint as tauri::command and specta::specta macros generate false positives
 #![allow(clippy::unreachable)]
 
-use super::domain::{Account, FeeFrequency, FeeSchedule, UpdateFrequency};
+use super::domain::{
+    Account, FeeFrequency, FeeSchedule, HoldingNote, ThresholdDirection, UpdateFrequency,
+};
 use crate::context::account::{AccountError, HoldingSnapshot, Transaction};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
@@ -221,5 +223,65 @@ pub async fn get_fee_schedule(
     state
         .account_service
         .get_fee_schedule(&account_id, &asset_id)
+        .await
+}
+
+// =============================================================================
+// Holding Note — DTOs + commands (HNO-020/021)
+// =============================================================================
+
+/// Parameters for creating or replacing a holding note (HNO-020).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct UpsertHoldingNoteDTO {
+    /// Account the note belongs to.
+    pub account_id: String,
+    /// The noted asset (identifies the note together with `account_id`).
+    pub asset_id: String,
+    /// Note text, 1-500 chars after trimming (HNO-011).
+    pub text: String,
+    /// Optional alarm threshold as a nominal asset-currency share price in micros (HNO-031).
+    pub threshold_price: Option<i64>,
+    /// Optional alarm direction; both alarm fields or neither (HNO-011).
+    pub threshold_direction: Option<ThresholdDirection>,
+}
+
+/// Parameters for deleting a holding note (HNO-021).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct DeleteHoldingNoteDTO {
+    /// Account the note belongs to.
+    pub account_id: String,
+    /// The noted asset (identifies the note together with `account_id`).
+    pub asset_id: String,
+}
+
+/// Creates or fully replaces the note for an (account, asset) pair (HNO-020).
+#[tauri::command]
+#[specta::specta]
+pub async fn upsert_holding_note(
+    state: State<'_, AppState>,
+    dto: UpsertHoldingNoteDTO,
+) -> Result<HoldingNote, AccountError> {
+    state
+        .account_service
+        .upsert_holding_note(
+            &dto.account_id,
+            dto.asset_id,
+            dto.text,
+            dto.threshold_price,
+            dto.threshold_direction,
+        )
+        .await
+}
+
+/// Deletes the note for an (account, asset) pair (HNO-021, silent if absent).
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_holding_note(
+    state: State<'_, AppState>,
+    dto: DeleteHoldingNoteDTO,
+) -> Result<(), AccountError> {
+    state
+        .account_service
+        .delete_holding_note(&dto.account_id, &dto.asset_id)
         .await
 }

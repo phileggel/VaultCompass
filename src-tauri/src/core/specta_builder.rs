@@ -31,6 +31,10 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<account::FeeFrequency>()
         .typ::<account::CreateFeeScheduleDTO>()
         .typ::<account::UpdateFeeScheduleDTO>()
+        .typ::<account::HoldingNote>()
+        .typ::<account::ThresholdDirection>()
+        .typ::<account::UpsertHoldingNoteDTO>()
+        .typ::<account::DeleteHoldingNoteDTO>()
         .typ::<holding_transaction::ManagementFeeDTO>()
         .typ::<holding_transaction::ManagementFeeError>()
         .typ::<holding_transaction::ManagementFeeTask>()
@@ -103,6 +107,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             account::update_fee_schedule,
             account::delete_fee_schedule,
             account::get_fee_schedule,
+            account::upsert_holding_note,
+            account::delete_holding_note,
             // ----- currency BC (FXR) -----
             currency::declare_currency_pair,
             currency::record_currency_rate,

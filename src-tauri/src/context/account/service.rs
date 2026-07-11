@@ -1,6 +1,7 @@
 use super::domain::{
-    Account, AccountRepository, FeeSchedule, FeeScheduleRepository, Holding, HoldingRepository,
-    HoldingSnapshot, Transaction, TransactionRepository, UpdateFrequency,
+    Account, AccountRepository, FeeSchedule, FeeScheduleRepository, Holding, HoldingNote,
+    HoldingNoteRepository, HoldingRepository, HoldingSnapshot, ThresholdDirection, Transaction,
+    TransactionRepository, UpdateFrequency,
 };
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
@@ -18,6 +19,7 @@ pub struct AccountService {
     transaction_repo: Box<dyn TransactionRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
     fee_schedule_repo: Option<Box<dyn FeeScheduleRepository>>,
+    holding_note_repo: Option<Box<dyn HoldingNoteRepository>>,
 }
 
 impl AccountService {
@@ -33,6 +35,7 @@ impl AccountService {
             transaction_repo,
             event_bus: None,
             fee_schedule_repo: None,
+            holding_note_repo: None,
         }
     }
 
@@ -54,6 +57,22 @@ impl AccountService {
     fn fee_schedule_repo(&self) -> StdResult<&dyn FeeScheduleRepository, AccountError> {
         self.fee_schedule_repo.as_deref().ok_or_else(|| {
             tracing::error!(target: BACKEND, "fee_schedule_repo not wired on AccountService");
+            AccountError::DatabaseError
+        })
+    }
+
+    /// Attaches the holding-note repository (HNO-010) — required for the
+    /// `*_holding_note` methods; absent in constructions that never touch them.
+    pub fn with_holding_note_repo(mut self, repo: Box<dyn HoldingNoteRepository>) -> Self {
+        self.holding_note_repo = Some(repo);
+        self
+    }
+
+    /// Returns the wired holding-note repository or a `DatabaseError` if absent
+    /// (a wiring bug — the repo must be attached via `with_holding_note_repo`).
+    fn holding_note_repo(&self) -> StdResult<&dyn HoldingNoteRepository, AccountError> {
+        self.holding_note_repo.as_deref().ok_or_else(|| {
+            tracing::error!(target: BACKEND, "holding_note_repo not wired on AccountService");
             AccountError::DatabaseError
         })
     }
@@ -930,6 +949,86 @@ impl AccountService {
     }
 
     // -------------------------------------------------------------------------
+    // HNO-010/011/020/021/040 — holding note CRUD
+    // -------------------------------------------------------------------------
+
+    /// Creates or fully replaces the note for the (account, asset) pair (HNO-020).
+    ///
+    /// HNO-011 — the account must exist (`AccountNotFound`), the asset must not
+    /// be the cash line (`NoteOnCashAsset`), and the pair must have at least one
+    /// transaction entry (`NoteOnUnheldAsset`); `HoldingNote::new` validates the
+    /// text and alarm fields.
+    pub async fn upsert_holding_note(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        text: String,
+        threshold_price: Option<i64>,
+        threshold_direction: Option<ThresholdDirection>,
+    ) -> Result<HoldingNote, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "upsert_holding_note");
+        self.get_by_id(account_id)
+            .await?
+            .ok_or_else(|| AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            })?;
+        if crate::core::cash::is_cash_asset(&asset_id) {
+            return Err(AccountError::NoteOnCashAsset);
+        }
+        if self
+            .get_transactions(account_id, &asset_id)
+            .await?
+            .is_empty()
+        {
+            return Err(AccountError::NoteOnUnheldAsset);
+        }
+        let note = HoldingNote::new(
+            account_id.to_string(),
+            asset_id,
+            text,
+            threshold_price,
+            threshold_direction,
+        )?;
+        self.holding_note_repo()?.upsert(&note).await.map_err(|e| {
+            tracing::error!(target: BACKEND, err = ?e, "upsert_holding_note: persist failed");
+            AccountError::DatabaseError
+        })?;
+        Ok(note)
+    }
+
+    /// Deletes the note for the (account, asset) pair (HNO-021).
+    ///
+    /// Silent no-op if no note exists (mirrors `delete_fee_schedule`).
+    pub async fn delete_holding_note(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<(), AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, "delete_holding_note");
+        self.holding_note_repo()?
+            .delete(account_id, asset_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "delete_holding_note: delete failed");
+                AccountError::DatabaseError
+            })
+    }
+
+    /// Returns all holding notes of one account (HNO-040).
+    pub async fn get_holding_notes(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<HoldingNote>, AccountError> {
+        self.holding_note_repo()?
+            .get_for_account(account_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_holding_notes: query failed");
+                AccountError::DatabaseError
+            })
+    }
+
+    // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
@@ -1129,6 +1228,26 @@ pub trait AccountServiceContract: Send + Sync {
         asset_id: &str,
         last_applied_period: String,
     ) -> StdResult<(), AccountError>;
+    /// Creates or fully replaces the note for the (account, asset) pair (HNO-020).
+    async fn upsert_holding_note(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        text: String,
+        threshold_price: Option<i64>,
+        threshold_direction: Option<ThresholdDirection>,
+    ) -> StdResult<HoldingNote, AccountError>;
+    /// Deletes the note for the (account, asset) pair; no-op if absent (HNO-021).
+    async fn delete_holding_note(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> StdResult<(), AccountError>;
+    /// Returns all holding notes of one account (HNO-040).
+    async fn get_holding_notes(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<HoldingNote>, AccountError>;
 }
 
 #[async_trait]
@@ -1421,6 +1540,40 @@ impl AccountServiceContract for AccountService {
         AccountService::advance_fee_schedule_cursor(self, account_id, asset_id, last_applied_period)
             .await
     }
+
+    async fn upsert_holding_note(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        text: String,
+        threshold_price: Option<i64>,
+        threshold_direction: Option<ThresholdDirection>,
+    ) -> StdResult<HoldingNote, AccountError> {
+        AccountService::upsert_holding_note(
+            self,
+            account_id,
+            asset_id,
+            text,
+            threshold_price,
+            threshold_direction,
+        )
+        .await
+    }
+
+    async fn delete_holding_note(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> StdResult<(), AccountError> {
+        AccountService::delete_holding_note(self, account_id, asset_id).await
+    }
+
+    async fn get_holding_notes(
+        &self,
+        account_id: &str,
+    ) -> StdResult<Vec<HoldingNote>, AccountError> {
+        AccountService::get_holding_notes(self, account_id).await
+    }
 }
 
 /// Loads an Account aggregate (with holdings + transactions) for the
@@ -1540,7 +1693,7 @@ mod tests {
     use crate::context::account::{
         AccountError, Holding, MockAccountRepository, MockHoldingRepository,
         MockTransactionRepository, SqliteAccountRepository, SqliteFeeScheduleRepository,
-        SqliteHoldingRepository, SqliteTransactionRepository,
+        SqliteHoldingNoteRepository, SqliteHoldingRepository, SqliteTransactionRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -1615,7 +1768,8 @@ mod tests {
             Box::new(SqliteHoldingRepository::new(pool.clone())),
             Box::new(SqliteTransactionRepository::new(pool.clone())),
         )
-        .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())));
+        .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())))
+        .with_holding_note_repo(Box::new(SqliteHoldingNoteRepository::new(pool.clone())));
         let asset_id = "test-asset-id".to_string();
         sqlx::query(
             "INSERT INTO assets (id, name, reference, asset_class, category_id, currency, risk_level)
@@ -4548,5 +4702,174 @@ mod tests {
         let schedule = found.unwrap();
         assert_eq!(schedule.annual_rate_percent_micros, 1_500_000);
         assert!(matches!(schedule.frequency, FeeFrequency::Quarterly));
+    }
+
+    // -------------------------------------------------------------------------
+    // HNO-010/011/020/021/040 — holding note CRUD
+    // -------------------------------------------------------------------------
+
+    /// Creates an account, funds it, and buys the setup asset so the
+    /// (account, asset) pair has transaction history (HNO-011 eligibility).
+    async fn make_account_with_held_asset(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+        svc: &AccountService,
+        asset_id: &str,
+    ) -> Account {
+        let account = svc
+            .create(
+                "Noted".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        seed_cash_for_account(pool, svc, &account.id, "EUR").await;
+        svc.buy_holding(
+            &account.id,
+            asset_id.to_string(),
+            "2024-01-15".to_string(),
+            1_000_000,
+            100_000_000,
+            1_000_000,
+            0,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        account
+    }
+
+    // HNO-020/021/040 — upsert → get → full replace → delete → delete-again no-op
+    #[tokio::test]
+    async fn hno_020_holding_note_round_trip() {
+        use crate::context::account::ThresholdDirection;
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = make_account_with_held_asset(&pool, &svc, &asset_id).await;
+
+        // Upsert stores the trimmed text (HNO-011).
+        let note = svc
+            .upsert_holding_note(
+                &account.id,
+                asset_id.clone(),
+                "  buy 7 below 150  ".to_string(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(note.text, "buy 7 below 150");
+
+        let notes = svc.get_holding_notes(&account.id).await.unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].asset_id, asset_id);
+        assert_eq!(notes[0].text, "buy 7 below 150");
+        assert!(notes[0].threshold_price.is_none());
+        assert!(notes[0].threshold_direction.is_none());
+
+        // HNO-020 — upsert fully replaces the note for the pair.
+        svc.upsert_holding_note(
+            &account.id,
+            asset_id.clone(),
+            "sell above 200".to_string(),
+            Some(200_000_000),
+            Some(ThresholdDirection::Above),
+        )
+        .await
+        .unwrap();
+        let notes = svc.get_holding_notes(&account.id).await.unwrap();
+        assert_eq!(notes.len(), 1, "upsert must replace, not add");
+        assert_eq!(notes[0].text, "sell above 200");
+        assert_eq!(notes[0].threshold_price, Some(200_000_000));
+        assert_eq!(
+            notes[0].threshold_direction,
+            Some(ThresholdDirection::Above)
+        );
+
+        // HNO-021 — delete removes the note; a second delete is a no-op success.
+        svc.delete_holding_note(&account.id, &asset_id)
+            .await
+            .unwrap();
+        assert!(svc.get_holding_notes(&account.id).await.unwrap().is_empty());
+        svc.delete_holding_note(&account.id, &asset_id)
+            .await
+            .expect("deleting a non-existent note must be a no-op success");
+    }
+
+    // HNO-011 — the cash line cannot carry a note
+    #[tokio::test]
+    async fn hno_011_upsert_holding_note_rejects_cash_line() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = make_account_with_held_asset(&pool, &svc, &asset_id).await;
+
+        let err = svc
+            .upsert_holding_note(
+                &account.id,
+                "system-cash-eur".to_string(),
+                "note on cash".to_string(),
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AccountError::NoteOnCashAsset), "got: {err:?}");
+    }
+
+    // HNO-011 — a pair without any transaction entry cannot carry a note
+    #[tokio::test]
+    async fn hno_011_upsert_holding_note_rejects_unheld_pair() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Unheld".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .upsert_holding_note(
+                &account.id,
+                asset_id.clone(),
+                "never traded".to_string(),
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AccountError::NoteOnUnheldAsset),
+            "got: {err:?}"
+        );
+    }
+
+    // HNO-011 — the account must exist
+    #[tokio::test]
+    async fn hno_011_upsert_holding_note_rejects_unknown_account() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+
+        let err = svc
+            .upsert_holding_note(
+                "nonexistent-account",
+                asset_id.clone(),
+                "orphan".to_string(),
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, AccountError::AccountNotFound { account_id } if account_id == "nonexistent-account"),
+            "got: {err:?}"
+        );
     }
 }

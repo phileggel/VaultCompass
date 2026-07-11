@@ -146,6 +146,26 @@ pub enum AccountError {
     #[error("Management fees are disabled on this account")]
     ManagementFeesDisabled,
 
+    // --- HoldingNote validation (HNO-011) ---
+    /// The holding note text is empty after trimming (HNO-011).
+    #[error("Note text cannot be empty")]
+    NoteTextEmpty,
+    /// The holding note text exceeds 500 characters (HNO-011).
+    #[error("Note text cannot exceed 500 characters")]
+    NoteTextTooLong,
+    /// The alarm threshold price is zero or negative (HNO-011).
+    #[error("Threshold price must be strictly positive")]
+    ThresholdNotPositive,
+    /// A direction without a threshold, or a threshold without a direction (HNO-011).
+    #[error("Provide both the threshold price and the direction, or neither")]
+    ThresholdIncomplete,
+    /// A holding note cannot target the account's cash line (HNO-011).
+    #[error("Cash line cannot carry a note")]
+    NoteOnCashAsset,
+    /// The (account, asset) pair has no transaction entry (HNO-011).
+    #[error("Cannot note an asset the account never held")]
+    NoteOnUnheldAsset,
+
     // --- Service-layer lookup / uniqueness / infrastructure ---
     /// No account exists with the requested ID.
     #[error("Account not found: {account_id}")]
@@ -322,6 +342,31 @@ mod tests {
         assert_eq!(
             to_value(AccountError::ManagementFeesDisabled).unwrap(),
             json!({ "code": "ManagementFeesDisabled" })
+        );
+        // HNO variants
+        assert_eq!(
+            to_value(AccountError::NoteTextEmpty).unwrap(),
+            json!({ "code": "NoteTextEmpty" })
+        );
+        assert_eq!(
+            to_value(AccountError::NoteTextTooLong).unwrap(),
+            json!({ "code": "NoteTextTooLong" })
+        );
+        assert_eq!(
+            to_value(AccountError::ThresholdNotPositive).unwrap(),
+            json!({ "code": "ThresholdNotPositive" })
+        );
+        assert_eq!(
+            to_value(AccountError::ThresholdIncomplete).unwrap(),
+            json!({ "code": "ThresholdIncomplete" })
+        );
+        assert_eq!(
+            to_value(AccountError::NoteOnCashAsset).unwrap(),
+            json!({ "code": "NoteOnCashAsset" })
+        );
+        assert_eq!(
+            to_value(AccountError::NoteOnUnheldAsset).unwrap(),
+            json!({ "code": "NoteOnUnheldAsset" })
         );
     }
 }

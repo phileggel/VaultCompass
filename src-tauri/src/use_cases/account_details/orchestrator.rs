@@ -1,5 +1,6 @@
 use crate::context::account::{
-    Account, AccountError, AccountServiceContract, Transaction, TransactionType,
+    Account, AccountError, AccountServiceContract, HoldingNote, ThresholdDirection, Transaction,
+    TransactionType,
 };
 use crate::context::asset::{AssetPriceSource, AssetServiceContract};
 use crate::context::currency::CurrencyService;
@@ -95,6 +96,22 @@ pub struct HoldingDetail {
     /// Windowed position returns (YTD / 1y / 2y / 5y / 10y) ending today
     /// (ACD-054–057). All fields None for the cash row and in the as-of view.
     pub period_performance: HoldingPeriodPerformance,
+    /// Text of the holding note pinned to this (account, asset) pair (HNO-040).
+    /// None when no note exists; always None in the as-of view — notes are a
+    /// live-view affordance.
+    pub note_text: Option<String>,
+    /// Alarm threshold of the note as a nominal asset-currency share price in
+    /// micros (HNO-031). None when no note or no alarm; always None in the
+    /// as-of view (HNO-040).
+    pub note_threshold_price: Option<i64>,
+    /// Alarm direction of the note relative to its threshold (HNO-030). None
+    /// when no note or no alarm; always None in the as-of view (HNO-040).
+    pub note_threshold_direction: Option<ThresholdDirection>,
+    /// Whether the note's price alarm is currently triggered, computed
+    /// statelessly from `current_price` on every live read (HNO-030). False
+    /// when no note, no alarm, or no price; always false in the as-of view
+    /// (HNO-040).
+    pub note_alarm_triggered: bool,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -265,6 +282,15 @@ impl AccountDetailsUseCase {
             .await?
             .into_iter()
             .map(|schedule| (schedule.asset_id, schedule.annual_rate_percent_micros))
+            .collect();
+
+        // HNO-040 — holding notes per asset for this account (live view only).
+        let note_by_asset: HashMap<String, HoldingNote> = self
+            .account_service
+            .get_holding_notes(account_id)
+            .await?
+            .into_iter()
+            .map(|note| (note.asset_id.clone(), note))
             .collect();
 
         // FXR-035 — valuation date for resolving FX rates is "today"; the
@@ -448,6 +474,12 @@ impl AccountDetailsUseCase {
                     market_value,
                 )
             };
+            // HNO-040 — the note rides on the live detail; HNO-030 — the alarm is
+            // computed against the same asset-currency current price the detail carries.
+            let note = note_by_asset.get(&holding.asset_id);
+            let note_alarm_triggered = note
+                .map(|note| note.alarm_triggered(current_price))
+                .unwrap_or(false);
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -465,10 +497,14 @@ impl AccountDetailsUseCase {
                 dividends_received,
                 total_return_pct,
                 fx_rate_date,
-                management_fees,         // FEE-052
-                market_value,            // ACD-052
-                fee_rate_percent_micros, // FEE-074
-                period_performance,      // ACD-054
+                management_fees,                               // FEE-052
+                market_value,                                  // ACD-052
+                fee_rate_percent_micros,                       // FEE-074
+                period_performance,                            // ACD-054
+                note_text: note.map(|note| note.text.clone()), // HNO-040
+                note_threshold_price: note.and_then(|note| note.threshold_price),
+                note_threshold_direction: note.and_then(|note| note.threshold_direction),
+                note_alarm_triggered, // HNO-030
             });
         }
 
@@ -834,6 +870,11 @@ impl AccountDetailsUseCase {
                 fee_rate_percent_micros: None, // FEE-074 — as-of view carries no schedule info
                 // ACD-054 — windowed returns are live-view only; the as-of view carries all-None.
                 period_performance: HoldingPeriodPerformance::default(),
+                // HNO-040 — notes are a live-view affordance; the as-of view omits them.
+                note_text: None,
+                note_threshold_price: None,
+                note_threshold_direction: None,
+                note_alarm_triggered: false,
             });
         }
 
@@ -877,6 +918,10 @@ impl AccountDetailsUseCase {
                 market_value: Some(cash_balance), // ACD-052 — cash value is its balance
                 fee_rate_percent_micros: None, // FEE-074
                 period_performance: HoldingPeriodPerformance::default(), // ACD-054
+                note_text: None,    // HNO-040 — no notes in the as-of view
+                note_threshold_price: None,
+                note_threshold_direction: None,
+                note_alarm_triggered: false,
             });
         }
 
@@ -1073,8 +1118,8 @@ mod tests {
     use super::*;
     use crate::context::account::{
         AccountService, Holding, HoldingRepository, SqliteAccountRepository,
-        SqliteFeeScheduleRepository, SqliteHoldingRepository, SqliteTransactionRepository,
-        UpdateFrequency,
+        SqliteFeeScheduleRepository, SqliteHoldingNoteRepository, SqliteHoldingRepository,
+        SqliteTransactionRepository, UpdateFrequency,
     };
     use crate::context::asset::AssetService;
     use crate::context::asset::{
@@ -1090,7 +1135,8 @@ mod tests {
                 Box::new(SqliteHoldingRepository::new(pool.clone())),
                 Box::new(SqliteTransactionRepository::new(pool.clone())),
             )
-            .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone()))),
+            .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())))
+            .with_holding_note_repo(Box::new(SqliteHoldingNoteRepository::new(pool.clone()))),
         );
         let asset_svc = Arc::new(AssetService::new(
             Box::new(SqliteAssetRepository::new(pool.clone())),
@@ -2376,6 +2422,195 @@ mod tests {
             .unwrap();
         assert_eq!(scheduled.fee_rate_percent_micros, Some(1_500_000));
         assert_eq!(plain.fee_rate_percent_micros, None);
+    }
+
+    // HNO-040 — the live read carries the note on the right HoldingDetail, with
+    // alarm_triggered computed from the current price (HNO-030); un-noted
+    // holdings and the cash row carry no note fields.
+    #[tokio::test]
+    async fn live_view_carries_note_on_the_right_holding_with_computed_alarm() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let noted_asset_id = make_stock(&asset_svc, "Noted Stock", "EUR").await;
+        let plain_asset_id = make_stock(&asset_svc, "Plain Stock", "EUR").await;
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &noted_asset_id,
+            "2026-01-15",
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &plain_asset_id,
+            "2026-01-15",
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        // current_price = 110.00 (asset currency) < threshold 120.00 → Below triggers.
+        asset_svc
+            .record_asset_price(&noted_asset_id, "2026-01-16", 110.0)
+            .await
+            .unwrap();
+        account_svc
+            .upsert_holding_note(
+                &account.id,
+                noted_asset_id.clone(),
+                "buy more below 120".to_string(),
+                Some(120_000_000),
+                Some(crate::context::account::ThresholdDirection::Below),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+
+        let noted = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == noted_asset_id)
+            .unwrap();
+        assert_eq!(noted.note_text.as_deref(), Some("buy more below 120"));
+        assert_eq!(noted.note_threshold_price, Some(120_000_000));
+        assert_eq!(
+            noted.note_threshold_direction,
+            Some(ThresholdDirection::Below)
+        );
+        assert!(
+            noted.note_alarm_triggered,
+            "price 110 < threshold 120 must trigger the Below alarm"
+        );
+
+        let plain = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == plain_asset_id)
+            .unwrap();
+        assert!(plain.note_text.is_none());
+        assert!(plain.note_threshold_price.is_none());
+        assert!(plain.note_threshold_direction.is_none());
+        assert!(!plain.note_alarm_triggered);
+
+        let cash = resp
+            .holdings
+            .iter()
+            .find(|h| is_cash_asset(&h.asset_id))
+            .unwrap();
+        assert!(cash.note_text.is_none());
+        assert!(!cash.note_alarm_triggered);
+    }
+
+    // HNO-030 — the alarm stays silent while the price sits on the wrong side of
+    // the threshold (no persisted state to reset).
+    #[tokio::test]
+    async fn live_view_alarm_not_triggered_when_price_on_armed_side() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let asset_id = make_stock(&asset_svc, "Armed Stock", "EUR").await;
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &asset_id,
+            "2026-01-15",
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        // current_price = 130.00 > threshold 120.00 → Below stays armed.
+        asset_svc
+            .record_asset_price(&asset_id, "2026-01-16", 130.0)
+            .await
+            .unwrap();
+        account_svc
+            .upsert_holding_note(
+                &account.id,
+                asset_id.clone(),
+                "buy more below 120".to_string(),
+                Some(120_000_000),
+                Some(crate::context::account::ThresholdDirection::Below),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let noted = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .unwrap();
+        assert_eq!(noted.note_text.as_deref(), Some("buy more below 120"));
+        assert!(!noted.note_alarm_triggered);
+    }
+
+    // HNO-040 — the as-of (historical) read omits notes entirely, even when the
+    // pair carries one in the live view.
+    #[tokio::test]
+    async fn as_of_view_omits_notes() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = make_eur_account(&account_svc).await;
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        let asset_id = make_stock(&asset_svc, "Noted Stock", "EUR").await;
+        deposit_and_buy(
+            &account_svc,
+            &account.id,
+            &asset_id,
+            "2026-01-15",
+            1_000_000,
+            100_000_000,
+        )
+        .await;
+        asset_svc
+            .record_asset_price(&asset_id, "2026-01-16", 110.0)
+            .await
+            .unwrap();
+        account_svc
+            .upsert_holding_note(
+                &account.id,
+                asset_id.clone(),
+                "buy more below 120".to_string(),
+                Some(120_000_000),
+                Some(crate::context::account::ThresholdDirection::Below),
+            )
+            .await
+            .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc
+            .get_account_details(&account.id, Some("2026-01-20"))
+            .await
+            .unwrap();
+        let holding = resp
+            .holdings
+            .iter()
+            .find(|h| h.asset_id == asset_id)
+            .unwrap();
+        assert!(holding.note_text.is_none(), "as-of view must omit the note");
+        assert!(holding.note_threshold_price.is_none());
+        assert!(holding.note_threshold_direction.is_none());
+        assert!(!holding.note_alarm_triggered);
     }
 
     // ACD-053 — total_net_cash_input sums deposits minus withdrawals since inception

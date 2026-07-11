@@ -323,6 +323,28 @@ async getFeeSchedule(accountId: string, assetId: string) : Promise<Result<FeeSch
 }
 },
 /**
+ * Creates or fully replaces the note for an (account, asset) pair (HNO-020).
+ */
+async upsertHoldingNote(dto: UpsertHoldingNoteDTO) : Promise<Result<HoldingNote, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("upsert_holding_note", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes the note for an (account, asset) pair (HNO-021, silent if absent).
+ */
+async deleteHoldingNote(dto: DeleteHoldingNoteDTO) : Promise<Result<null, AccountError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_holding_note", { dto }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Declares a currency pair (FXR-054). Idempotent: returns the existing pair
  * rather than duplicating it.
  */
@@ -1000,6 +1022,30 @@ export type AccountError =
  * The % management-fee mechanism is disabled on this account (FEE-077).
  */
 { code: "ManagementFeesDisabled" } | 
+/**
+ * The holding note text is empty after trimming (HNO-011).
+ */
+{ code: "NoteTextEmpty" } | 
+/**
+ * The holding note text exceeds 500 characters (HNO-011).
+ */
+{ code: "NoteTextTooLong" } | 
+/**
+ * The alarm threshold price is zero or negative (HNO-011).
+ */
+{ code: "ThresholdNotPositive" } | 
+/**
+ * A direction without a threshold, or a threshold without a direction (HNO-011).
+ */
+{ code: "ThresholdIncomplete" } | 
+/**
+ * A holding note cannot target the account's cash line (HNO-011).
+ */
+{ code: "NoteOnCashAsset" } | 
+/**
+ * The (account, asset) pair has no transaction entry (HNO-011).
+ */
+{ code: "NoteOnUnheldAsset" } | 
 /**
  * No account exists with the requested ID.
  */
@@ -1817,6 +1863,18 @@ export type DeleteAssetTask =
  */
 { code: "ExistingTransactions" }
 /**
+ * Parameters for deleting a holding note (HNO-021).
+ */
+export type DeleteHoldingNoteDTO = { 
+/**
+ * Account the note belongs to.
+ */
+account_id: string; 
+/**
+ * The noted asset (identifies the note together with `account_id`).
+ */
+asset_id: string }
+/**
  * Parameters for recording a cash deposit (CSH-020).
  */
 export type DepositDTO = { 
@@ -2295,7 +2353,60 @@ fee_rate_percent_micros: number | null;
  * Windowed position returns (YTD / 1y / 2y / 5y / 10y) ending today
  * (ACD-054–057). All fields None for the cash row and in the as-of view.
  */
-period_performance: HoldingPeriodPerformance }
+period_performance: HoldingPeriodPerformance; 
+/**
+ * Text of the holding note pinned to this (account, asset) pair (HNO-040).
+ * None when no note exists; always None in the as-of view — notes are a
+ * live-view affordance.
+ */
+note_text: string | null; 
+/**
+ * Alarm threshold of the note as a nominal asset-currency share price in
+ * micros (HNO-031). None when no note or no alarm; always None in the
+ * as-of view (HNO-040).
+ */
+note_threshold_price: number | null; 
+/**
+ * Alarm direction of the note relative to its threshold (HNO-030). None
+ * when no note or no alarm; always None in the as-of view (HNO-040).
+ */
+note_threshold_direction: ThresholdDirection | null; 
+/**
+ * Whether the note's price alarm is currently triggered, computed
+ * statelessly from `current_price` on every live read (HNO-030). False
+ * when no note, no alarm, or no price; always false in the as-of view
+ * (HNO-040).
+ */
+note_alarm_triggered: boolean }
+/**
+ * A free-text note pinned to an (account, asset) holding pair, with an optional
+ * price alarm — at most one note per pair (HNO-010).
+ * 
+ * `threshold_price` is a nominal share price in asset-currency micros (HNO-031);
+ * the alarm carries both `threshold_price` and `threshold_direction` or neither
+ * (HNO-011).
+ */
+export type HoldingNote = { 
+/**
+ * The owning account (PK part).
+ */
+account_id: string; 
+/**
+ * The held asset (PK part).
+ */
+asset_id: string; 
+/**
+ * Note text, trimmed, 1-500 chars (HNO-011).
+ */
+text: string; 
+/**
+ * Alarm threshold as a nominal asset-currency share price in micros (HNO-031).
+ */
+threshold_price: number | null; 
+/**
+ * Alarm direction relative to the threshold (HNO-030).
+ */
+threshold_direction: ThresholdDirection | null }
 /**
  * Windowed Simple Dietz position returns for one holding, in micro-percent
  * (5.25% = 5_250_000), each over a standard window ending today (ACD-054/055/056).
@@ -2732,6 +2843,18 @@ export type SplitTask =
  */
 { code: "AssetNotHeld" }
 /**
+ * Direction of a holding-note price alarm relative to its threshold (HNO-011).
+ */
+export type ThresholdDirection = 
+/**
+ * Triggers when the current price falls strictly below the threshold (HNO-030).
+ */
+"Below" | 
+/**
+ * Triggers when the current price rises strictly above the threshold (HNO-030).
+ */
+"Above"
+/**
  * A single financial event affecting an asset's quantity and cost basis within an account.
  * All financial fields are stored as i64 micro-units (ADR-001, TRX-024).
  */
@@ -3018,6 +3141,30 @@ export type UpdateInfo = {
  * Semantic version string of the available update (e.g. "1.2.3").
  */
 version: string }
+/**
+ * Parameters for creating or replacing a holding note (HNO-020).
+ */
+export type UpsertHoldingNoteDTO = { 
+/**
+ * Account the note belongs to.
+ */
+account_id: string; 
+/**
+ * The noted asset (identifies the note together with `account_id`).
+ */
+asset_id: string; 
+/**
+ * Note text, 1-500 chars after trimming (HNO-011).
+ */
+text: string; 
+/**
+ * Optional alarm threshold as a nominal asset-currency share price in micros (HNO-031).
+ */
+threshold_price: number | null; 
+/**
+ * Optional alarm direction; both alarm fields or neither (HNO-011).
+ */
+threshold_direction: ThresholdDirection | null }
 /**
  * Application-layer errors raised by the asset web-lookup use case (WEB-025).
  */
