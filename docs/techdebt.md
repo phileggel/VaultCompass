@@ -40,26 +40,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-07-06 — Total-entry derive block duplicated across buy/sell/correct
-
-- Found by: reviewer-backend (during TRX-061/SEL-051 total-entry correction review)
-- Where: src-tauri/src/context/account/domain/account.rs (`buy_holding`, `sell_holding`, `correct_transaction`)
-- Context: branch `next` @ TRX-061/SEL-051 (edit buy/sell by total amount)
-- Severity: 🔵
-- Observation: The typed-total validation + `derive_unit_price_from_total(...)` block (`total <= 0` → TotalAmountNotPositive, purchase-only `total < fees` → TotalAmountBelowFees, then derive) is now inlined four times — the Purchase and Sell arms of both `buy_holding`/`sell_holding` (TRX-060/SEL-050) and `correct_transaction` (TRX-061/SEL-051). Past the Rule of Three. The four copies are currently consistent (verified during review, no drift), so not urgent. Extraction into `derive_purchase_from_total(...)` / `derive_sell_from_total(...)` helpers shared by the entry and correction paths would remove the duplication, but it touches the pre-existing TRX-060/SEL-050 arms (beyond the TRX-061 file set) and needs a design call on the helper signature — deferred out of the total-entry-correction task rather than expanding its scope.
-
----
-
-## 2026-07-06 — `isCashAsset` crosses from `performance` into `account_details`
-
-- Found by: manual (during T9 performance-feature merge)
-- Where: src/features/performance/shared/presenter.ts, src/features/performance/shared/globalPresenter.ts
-- Context: branch `next` @ merge of account_performance + global_performance
-- Severity: 🟡
-- Observation: Both performance presenters import `isCashAsset` from `@/features/account_details/shared/presenter`, a cross-feature domain import that the project's stricter § Standards rule (CLAUDE.md, rides on F26) forbids — only generic primitives may cross, and those belong in `ui/`. This predates T9 (the merge only relocated the importing files); T9's mandate was a zero-logic mechanical move, so relocating `isCashAsset` was deferred. Resolution needs a design call on where the cash-asset predicate belongs: a shared asset helper (e.g. `ui/` or a dedicated `features/assets` export) that both `account_details` and `performance` import, rather than one feature reaching into another. Mechanical once the home is chosen, but it touches `account_details/shared/presenter.ts` and every current consumer of `isCashAsset`, so it is its own scoped change.
-
----
-
 ## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
 
 - Found by: reviewer-backend (during ISIN-lookup-split review)
@@ -87,7 +67,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `main` @ `114cb79`
 - Severity: 🟡
 - Observation: Three FE layout/coupling deltas surfaced by mirroring the BE architecture revisit on the frontend. The current shape works but encodes implicit conventions that diverge from the kit gold layout (now codified as F26/F27/F28 in `docs/frontend-rules.md` since kit v4.6+; the original kit issues phileggel/claude-kit#21/#22/#23 are effectively ratified). Migration is bit-by-bit per `CLAUDE.md` § Gold Standards & Bit-by-Bit Trajectory — apply gold to new code; defer existing-code reshape unless it fits the 50-LOC + locality + mechanical gates.
-  1. **`src/lib/update/` is a feature, mislocated.** It has full feature shape — `gateway.ts` + sub-feature folder (`update_banner/`) + hook + test — but lives under `src/lib/`. Per kit proposal #23, `lib/` (renamed `infra/`) hosts platform adapters only; features must live in `src/features/`. Move to `src/features/update/`. Mechanical rename + import-path update.
+  1. ~~**`src/lib/update/` is a feature, mislocated.**~~ Resolved 2026-07-11 (v0.36.0 batch): the banner UI + hook moved to `src/features/update/`; the updater command adapter stayed a platform adapter at `src/lib/updateGateway.ts` (reviewer-arch: a feature-owned gateway would force `about_page` into a cross-feature import — the refined cut is UI = feature, command adapter = lib).
 
   2. **`features/account_details/{buy,sell}_transaction/` cross-imports from `features/transactions/`.** Today the imports are `RecordPriceCheckbox` (component), `TransactionFormData` (type), `validateTransactionForm` / `validateSellForm` (pure functions), and `useTransactions` (hook with state). Per the F23 reframing in kit proposal #21, the first three (primitives) become fine; the fourth (behavior coupling via a hook) remains a code smell. Either `account_details` owns its own thin wrapper around the gateway calls it needs, or the two features consolidate. Worth deciding _with_ the consolidation question (delta #3) rather than fixing the hook coupling alone.
 

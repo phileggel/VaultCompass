@@ -163,7 +163,7 @@ Hard rules:
 
 ### Cross-feature modal opens — URL-driven shell mounts
 
-A feature must not import a sibling feature's modal. Instead the opener sets a `?modal=…` URL param (`openModalSearch` / `patchModalSearch` in `src/lib/modalSearch.ts`) and a mount component in `features/shell/` (e.g. `CashTransactionEditMount`, `AssetEditModalMount`, `FreeSharesEditModalMount`, `ManagementFeeEditModalMount`, `InterestEditModalMount`) renders the dialog while the param is present. The shell is the only layer that imports across features.
+A feature must not import a sibling feature's modal. Instead the opener sets a `?modal=…` URL param (`openModalSearch` / `patchModalSearch` in `src/lib/modalSearch.ts`) and a mount component in `features/shell/` (e.g. `CashTransactionEditMount`, `AssetEditModalMount`, `FreeSharesEditModalMount`, `ManagementFeeEditModalMount`, `InterestEditModalMount`, `SplitEditModalMount`) renders the dialog while the param is present. The shell is the only layer that imports across features.
 
 ---
 

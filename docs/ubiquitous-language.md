@@ -39,6 +39,24 @@ date, quantity, price, fees, and exchange rate. Owned directly by `Account` alon
 
 > Status: confirmed
 
+### Stock Split
+
+A corporate action that rescales a held position without changing its value: the share
+count is multiplied by the split factor and the average price divides accordingly, the
+cost basis staying intact. The position remains the same asset — a split (or an issuer
+rename) never creates a new one. A reverse split uses a factor below one.
+
+> Status: confirmed
+
+### Holding Note
+
+A free-text reminder the user pins to a position they hold, optionally carrying a price
+alarm — a share-price threshold and direction. The alarm is live: it rings while the
+current price is across the threshold and re-arms by itself when the price comes back.
+Distinct from a transaction's note.
+
+> Status: confirmed
+
 ---
 
 ## Asset Context
