@@ -1,5 +1,5 @@
 import type { Account, Asset } from "@/bindings";
-import { isCashAsset } from "@/features/account_details/shared/presenter";
+import { isCashAsset } from "@/lib/cashAsset";
 import type { AssetScopeOption } from "./presenter";
 
 /** One selectable account scope in the global-performance account selector. */

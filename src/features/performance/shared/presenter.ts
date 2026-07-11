@@ -4,7 +4,7 @@ import type {
   PerformanceMetric,
   PerformancePeriod,
 } from "@/bindings";
-import { isCashAsset } from "@/features/account_details/shared/presenter";
+import { isCashAsset } from "@/lib/cashAsset";
 import { microToFormatted } from "@/lib/microUnits";
 import type { I18nMessage } from "@/ui/format/i18n";
 

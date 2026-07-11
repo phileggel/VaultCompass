@@ -11,6 +11,7 @@ import type {
   InterestError,
   ManagementFeeError,
 } from "@/bindings";
+import { isCashAsset } from "@/lib/cashAsset";
 import {
   microToFormatted,
   microToFormattedPrice,
@@ -132,12 +133,6 @@ export function managementFeeErrorToI18n(err: ManagementFeeError | AccountError)
 }
 
 const DASH = "—";
-const CASH_ASSET_PREFIX = "system-cash-";
-
-/** True when the asset_id is the deterministic system Cash Asset ID (CSH-014). */
-export function isCashAsset(assetId: string): boolean {
-  return assetId.startsWith(CASH_ASSET_PREFIX);
-}
 
 export interface HoldingRowViewModel {
   assetId: string;

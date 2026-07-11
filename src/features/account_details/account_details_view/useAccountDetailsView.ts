@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { HoldingDetail } from "@/bindings";
+import { isCashAsset } from "@/lib/cashAsset";
 import { logger } from "@/lib/logger";
 import { patchModalSearch } from "@/lib/modalSearch";
 import {
@@ -13,7 +14,7 @@ import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
 import { accountDetailsGateway, useCachedAssets } from "../gateway";
-import { isCashAsset, priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
+import { priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
