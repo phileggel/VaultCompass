@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] - 2026-07-11
+
+### Added
+
+- per-holding note with price-alarm bell (HNO frontend)
+  Note modal (textarea + below/above threshold in asset currency), note
+  line under the asset name, armed/triggered bell states, delete flow;
+  E2E spec.
+- per-holding note with live price alarm (HNO backend)
+  holding_notes table (PK account+asset, cascading FKs), domain entity
+  with stateless alarm_triggered, upsert/delete commands, note + computed
+  alarm joined onto HoldingDetail in the live read (as-of omits them).
+- stock split modal, holding-row action, journal rendering (SPL FE)
+  Ratio-pair entry with live rescale preview, derived post-split price
+  record (SPL-040), URL-driven edit mount, xN journal label; E2E spec.
+- stock split transaction with value-neutral rescale (SPL backend)
+  New Split type: micro factor rides in quantity, replay rescales the
+  position with cost basis preserved; perf classifiers treat it as a
+  non-flow (SPL-050). Ships the SPL + HNO specs from spec review.
+- merge cash and asset flows into one In/Out column (PRF-075)
+  Display-only: the backend bridge terms stay separate for the PRF-074
+  identity; the FE sums them into a single sign-coloured cell.
+
+### Fixed
+
+- address FE and E2E review findings on split and note
+  Edit-mode factor parses via decimalToMicro (fr comma bug) + shows its
+  error; locale-aware xN label; delete-note confirm step; safe-integer
+  ratio guard; note E2E merged into one self-cleaning scenario asserting
+  the title attr (headless zero-width text trap).
+- address batch review findings (arch, backend)
+  updateGateway is a platform adapter, not feature surface - moved to
+  src/lib so About stops crossing into features/update; SPL-012 codifies
+  the FSD-011-style currently-held guard + orchestrator guard tests;
+  integration-parity + rollback asymmetry filed as techdebt.
+
 ## [0.35.0] - 2026-07-06
 
 ### Added
