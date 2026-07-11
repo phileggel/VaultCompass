@@ -10,6 +10,26 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-07-11 — SPL/HNO lack tests/ integration parity with sibling features
+
+- Found by: reviewer-backend (v0.36.0 batch review)
+- Where: src-tauri/tests/ (missing split_crud.rs / holding_note_crud.rs)
+- Context: branch `next` @ SPL + HNO features
+- Severity: 🔵
+- Observation: Every sibling quantity-event feature has a service-level integration test binary under `src-tauri/tests/` (`dividend_crud.rs`, `free_shares_crud.rs`, `management_fee_crud.rs`), but the new stock-split and holding-note features cover their stacks via inline lib tests only (domain + service + orchestrator + use-case). The behaviour coverage exists; what is missing is the tests/-binary parity that exercises the real SQLite wiring end-to-end in the same style as siblings. Mechanical to add by mirroring free_shares_crud.rs; deferred out of the feature batch to keep the diffs scoped.
+
+---
+
+## 2026-07-11 — correct_transaction splices without rollback on error
+
+- Found by: reviewer-backend (v0.36.0 batch review; pre-existing)
+- Where: src-tauri/src/context/account/domain/account.rs (`correct_transaction`)
+- Context: branch `next` @ v0.35.0
+- Severity: 🔵
+- Observation: `correct_transaction` replaces the transaction in `self.transactions` before `recalculate_holding` and does not restore the original on error, unlike the newer `apply_split`/`apply_free_shares` which pop on failure. Harmless today — every caller discards the aggregate on error and reloads — but the asymmetry is a trap for a future caller that keeps the aggregate alive after a failed correction. Align by snapshotting/restoring the replaced transaction on the error path.
+
+---
+
 ## 2026-07-06 — Cash-asset OpeningBalance would distort the perf bridge (latent)
 
 - Found by: manual (OpeningBalance perf audit, next-batch T4)

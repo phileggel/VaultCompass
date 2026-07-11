@@ -1468,7 +1468,79 @@ mod tests {
         let _ = cash_holdings; // presence assertion done via business logic; cash test is in account.rs
     }
 
-    // FSD-011 — AccountNotFound: unknown account is rejected before any asset check.
+    // SPL-012 — AssetNotFound: unknown asset_id is rejected.
+    #[tokio::test]
+    async fn record_split_rejects_unknown_asset() {
+        // SPL-012 — asset must exist
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_split(
+                &account.id,
+                "nonexistent-asset".to_string(),
+                "2024-06-15".to_string(),
+                2_000_000,
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{SplitError, SplitTask};
+        assert!(
+            matches!(err, SplitError::UseCase(SplitTask::AssetNotFound)),
+            "expected UseCase(AssetNotFound), got: {err:?}"
+        );
+    }
+
+    // SPL-012 — AssetNotHeld: asset exists but is not currently held.
+    #[tokio::test]
+    async fn record_split_rejects_asset_not_held() {
+        let pool = setup_pool().await;
+        let (account_svc, asset_svc) = make_services(&pool);
+        let asset = asset_svc.create_asset(base_asset_dto()).await.unwrap();
+        let account = account_svc
+            .create(
+                "Acc".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let uc = HoldingTransactionUseCase::new(account_svc, asset_svc);
+
+        let err = uc
+            .record_split(
+                &account.id,
+                asset.id.clone(),
+                "2024-06-15".to_string(),
+                2_000_000,
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        use crate::use_cases::holding_transaction::{SplitError, SplitTask};
+        assert!(
+            matches!(err, SplitError::UseCase(SplitTask::AssetNotHeld)),
+            "expected UseCase(AssetNotHeld), got: {err:?}"
+        );
+    }
+
+    // FSD-011 — account must exist (checked before any asset work).
     #[tokio::test]
     async fn record_free_shares_rejects_unknown_account() {
         // FSD-011 — account must exist

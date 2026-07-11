@@ -1168,8 +1168,10 @@ impl Account {
                 // SPL-020 — a split rescales the running quantity by the micro
                 // factor riding in `quantity`; the VWAP numerator is untouched, so
                 // the cost basis is preserved and the average price rescales
-                // implicitly. SPL-012/021 guards: no split on a closed position,
-                // no rescale that floors an open position to zero.
+                // implicitly. Deliberate deviation from the spec's display formula
+                // (`round(avg × old_qty / new_qty)`): deriving from the numerator
+                // rounds once instead of twice. SPL-012/021 guards: no split on a
+                // closed position, no rescale that floors an open position to zero.
                 TransactionType::Split => {
                     if total_quantity == 0 {
                         return Err(AccountError::ClosedPosition.into());

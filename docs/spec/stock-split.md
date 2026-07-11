@@ -18,7 +18,7 @@ SPL reuses the TRX `Transaction` entity with a new `TransactionType::Split` vari
 
 **SPL-011 — Factor validation (backend)**: The factor must be strictly positive (`SplitFactorNotPositive`) and different from ×1 (`SplitFactorIsOne` — a no-op split is a data-entry error). Both bounds are enforced in the domain factory.
 
-**SPL-012 — Eligible position (backend)**: A split applies to shares actually held: recording (or moving, via correction) a split onto a date where the replayed position quantity is zero is rejected (`ClosedPosition`). The cash line cannot be split (`SplitOnCashAsset`).
+**SPL-012 — Eligible position (backend)**: A split applies to shares actually held. The use case requires the asset to exist (`AssetNotFound`) and to be **currently held** — quantity > 0 today (`AssetNotHeld`) — matching the FreeShares/Interest cross-BC guard family (FSD-011); a backfilled split on a since-sold position is therefore rejected at the boundary. The domain replay additionally rejects a split dated where the replayed position quantity is zero (`ClosedPosition`). The cash line cannot be split (`SplitOnCashAsset`).
 
 ### Position rescale
 

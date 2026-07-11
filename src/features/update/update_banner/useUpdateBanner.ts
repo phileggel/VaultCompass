@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
-import { updateGateway } from "../gateway";
+import { updateGateway } from "@/lib/updateGateway";
 
 export type UpdateBannerState = "idle" | "available" | "downloading" | "ready" | "error";
 

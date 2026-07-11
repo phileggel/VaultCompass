@@ -6,7 +6,7 @@ const { mockCheckForUpdate } = vi.hoisted(() => ({
   mockCheckForUpdate: vi.fn(),
 }));
 
-vi.mock("@/features/update", () => ({
+vi.mock("@/lib/updateGateway", () => ({
   updateGateway: {
     checkForUpdate: mockCheckForUpdate,
   },

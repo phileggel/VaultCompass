@@ -16,7 +16,7 @@ let onAvailableCb: AvailableCallback | null = null;
 let onCompleteCb: CompleteCallback | null = null;
 let onErrorCb: ErrorCallback | null = null;
 
-vi.mock("../gateway", () => ({
+vi.mock("@/lib/updateGateway", () => ({
   updateGateway: {
     checkForUpdate: () => mockCheckForUpdate(),
     downloadUpdate: () => mockDownloadUpdate(),
