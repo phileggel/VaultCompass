@@ -332,13 +332,17 @@ class ReleaseManager:
             entry += "\n### Added\n"
             for commit in self.commits:
                 if commit["type"] == "feat":
-                    entry += f"- {commit['description']}\n"
+                    # The title is the user-facing changelog line; the body stays
+                    # developer-facing in git history (CLAUDE.md § Standards).
+                    entry += f"- {commit['description'].splitlines()[0]}\n"
 
         if self.fixes > 0:
             entry += "\n### Fixed\n"
             for commit in self.commits:
                 if commit["type"] == "fix":
-                    entry += f"- {commit['description']}\n"
+                    # The title is the user-facing changelog line; the body stays
+                    # developer-facing in git history (CLAUDE.md § Standards).
+                    entry += f"- {commit['description'].splitlines()[0]}\n"
 
         return entry + "\n"
 
