@@ -79,33 +79,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$VERSION" ]]; then
-    # Pick the latest release tag matching the downstream project's framework.
-    # Downstream Svelte projects declare `{"framework":"svelte"}` in
-    # .claude/kit.config.json — the bootstrap then filters to `svelte-v*` tags
-    # so subsequent syncs do not accidentally jump to a React release. Absent
-    # config (or `{"framework":"react"}`) keeps the legacy `v*` selection.
-    _kit_framework="react"
-    if [[ -f .claude/kit.config.json ]]; then
-        _kit_framework=$(python3 -c "
-import json, sys
-try:
-    fw = str(json.load(open('.claude/kit.config.json')).get('framework', 'react')).lower()
-    print(fw if fw in ('react', 'svelte') else 'react')
-except Exception:
-    print('react')
-" 2>/dev/null || echo react)
-    fi
-    if [[ "$_kit_framework" == "svelte" ]]; then
-        _tag_filter='^svelte-v[0-9]'
-    else
-        _tag_filter='^v[0-9]'
-    fi
+    # Pick the latest release tag (vX.Y.Z).
     VERSION=$(git ls-remote --tags --sort="v:refname" "$REPO" |
         sed 's/.*\///; s/\^{}//' |
-        grep -E "$_tag_filter" |
+        grep -E '^v[0-9]' |
         tail -n1)
     if [[ -z "$VERSION" ]]; then
-        echo -e "${YELLOW}⚠  No tag found matching framework=${_kit_framework}. Pass the version explicitly.${NC}" >&2
+        echo -e "${YELLOW}⚠  No release tag found. Pass the version explicitly.${NC}" >&2
         exit 1
     fi
 fi

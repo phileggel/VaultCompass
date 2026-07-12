@@ -1,7 +1,7 @@
 # Kit version
 
-claude-kit **v4.18.1** — synced 2026-06-11
+claude-kit **v5.0.0** — synced 2026-07-12
 
-## Changes since v4.18.0 (your previous sync)
+## Changes since v4.18.1 (your previous sync)
 
-- v4.18.1: pin biome to space indent (gh#77)
+- v5.0.0: drop svelte support, collapse to React-only
