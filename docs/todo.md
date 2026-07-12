@@ -10,7 +10,7 @@ The hard part is execution outside the app's lifetime — Tauri code doesn't run
 
 ## (kit) — Upstream: changelog entries should be commit titles only
 
-`scripts/release.py` is kit-owned (kit-manifest) and deliberately (`re.DOTALL`) copies the full commit message — title + body — into each `CHANGELOG.md` bullet. Since the changelog is end-user-facing (the What's-new dialog renders it in-app), bodies leak developer detail to users. Patched locally 2026-07-12 (`_build_changelog_entry` takes `description.splitlines()[0]` in the Added/Fixed loops); a non-force `just sync-kit` will conflict on it — re-apply until upstream ships. File a kit issue proposing titles-only (or a config flag) like the F26 rewrite (#85); this entry closes when the kit ships it.
+`scripts/release.py` is kit-owned (kit-manifest) and deliberately (`re.DOTALL`) copies the full commit message — title + body — into each `CHANGELOG.md` bullet. Since the changelog is end-user-facing (the What's-new dialog renders it in-app), bodies leak developer detail to users. Patched locally 2026-07-12 (`_build_changelog_entry` takes `description.splitlines()[0]` in the Added/Fixed loops); `just sync-kit` reverts it — re-apply until upstream ships (last re-applied after the v5.0.0 sync). Filed upstream as [phileggel/claude-kit#86](https://github.com/phileggel/claude-kit/issues/86) (2026-07-12); this entry closes when the kit ships it.
 
 ## (docs) — Rewrite F26: domain axis missing from the cross-feature import rule
 
@@ -32,10 +32,6 @@ F26 evaluates crossings only by behaviour (hooks/stores forbidden, presentationa
 The per-asset transaction page (`transaction_list/TransactionListPage.tsx`, route `/accounts/$accountId/transactions/$assetId`, the holdings-row loupe target) predates the account journal and is now a strict subset of it — both already share `TransactionTable`, `EditTransactionModal`, delete flow, and `routeEditTransaction`. Consolidate: the loupe navigates to the journal with the asset filter prepopulated (`/accounts/$accountId/journal?asset=<assetId>`); delete the TXL page/hook/route. Decided 2026-07-06: cash-statement columns (Cash out / Cash in / Balance) render only in the unfiltered (global) journal view; with an asset filter active the table shows plain Total Amount — a running balance over a filtered subset is misleading.
 
 Must carry over before deleting TXL: (1) add-transaction CTA + `AddTransactionModal` with prefill from the active filter; (2) the `pendingTransactionAssetId` deep-link round-trip — re-target its senders (`HoldingRow`, `ClosedHoldingRow`, `AssetManager` `returnPath` create-asset flow) to the journal route; (3) fold TXL-0xx spec rules into the journal spec. TXL's in-place account switcher is intentionally dropped. E2E: the suite uses `txl-*` stable ids throughout — rewrite those specs in the same PR (selector-removal trap).
-
-## (spec) — PFD (Portfolio Dashboard) unblocked, no spec written
-
-`docs/spec-index.md` lists PFD as `planning — paused — blocked on cash-tracking spec`. Cash-tracking shipped on 2026-05-06, so the blocker is lifted, but no `docs/spec/portfolio-dashboard.md` has been written yet. Next step when picked up: run `/spec-writer portfolio-dashboard` to author the cross-account aggregate-view spec (KPIs + per-account list, per the registry description), then the standard `/contract` → `feature-planner` flow. Update `docs/spec-index.md` to drop the "paused — blocked on cash-tracking spec" suffix at the same time.
 
 ## (backend) — Introduce dependency injection container for service wiring
 

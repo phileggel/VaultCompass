@@ -12,7 +12,7 @@
 | CAT     | Category                    | User-defined asset category management                                                                                       | active   |
 | UPD     | Application Update          | Auto-update detection, download, and install                                                                                 | active   |
 | WEB     | Asset Web Lookup            | Search OpenFIGI to pre-fill the Add Asset form                                                                               | active   |
-| PFD     | Portfolio Dashboard         | Cross-account aggregate view: KPIs + per-account list                                                                        | planning |
+| PFD     | Portfolio Dashboard         | Cross-account aggregate view — SUPERSEDED by GPF (global performance view) + the accounts list; improvements ride GPF/ACC    | retired  |
 | CSH     | Cash Tracking               | Cash-as-Holding (one per currency); Deposit/Withdrawal; Buy/Sell re-linked to cash                                           | active   |
 | PRF     | Account Performance         | Per-account value-over-time table: month/year rows, net-of-flows perf (MoM/YTD/all-time)                                     | planning |
 | DIV     | Cash Dividend               | Cash dividend transaction: income credited to cash, attributed to the paying asset                                           | active   |
