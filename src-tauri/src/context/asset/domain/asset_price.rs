@@ -90,6 +90,16 @@ pub struct Quote {
     pub date: Option<String>,
 }
 
+/// A single day's closing price (SPF-030) — always a completed trading day's
+/// close, never a live/intraday quote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DatedClose {
+    /// ISO 8601 calendar date this close is for (e.g. "2026-04-26").
+    pub date: String,
+    /// Closing price per unit in the asset's native currency (i64 micros, ADR-001).
+    pub price: i64,
+}
+
 /// External price-data provider trait (MKT-110, ADR-017).
 /// Returns the latest price as i64 micros (ADR-001) with its observation date (MKT-117).
 #[cfg_attr(test, mockall::automock)]
@@ -106,6 +116,27 @@ pub trait PriceProvider: Send + Sync {
     /// - `Err(_)` — transient HTTP / parse / IO failure. The dispatcher logs at
     ///   `tracing::warn!` and continues with the next asset (MKT-114).
     async fn fetch_price(&self, symbol: &str) -> anyhow::Result<Option<Quote>>;
+
+    /// Fetches the daily-close series for `symbol` covering `[from, to]`
+    /// inclusive (ISO dates), for the scheduled-fetch backfill window
+    /// (SPF-030/031). Non-trading days (weekends, holidays) are simply absent
+    /// from the result (SPF-032) — not an error. `Err(_)` is a per-asset skip
+    /// at the call site (SPF-041), same as `fetch_price`.
+    ///
+    /// Defaulted so existing single-purpose fakes (e.g. integration-test
+    /// providers exercising only `fetch_price`) do not need to implement a
+    /// method they never call; `ReqwestYahooClient` overrides it.
+    async fn fetch_daily_closes(
+        &self,
+        symbol: &str,
+        from: &str,
+        to: &str,
+    ) -> anyhow::Result<Vec<DatedClose>> {
+        let _ = (from, to);
+        Err(anyhow::anyhow!(
+            "daily close series not supported by this provider for symbol: {symbol}"
+        ))
+    }
 }
 
 /// Interface for AssetPrice persistence (upsert by (asset_id, date), MKT-025).

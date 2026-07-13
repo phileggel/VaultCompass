@@ -1,10 +1,6 @@
 use crate::context::account::{AccountError, AccountServiceContract};
-use crate::context::asset::{
-    derive_yahoo_symbol_with_exchange, Asset, AssetError, AssetServiceContract,
-};
-use crate::context::currency::CurrencyPair;
-use crate::core::cash::system_cash_asset_id;
-use crate::core::logger::BACKEND;
+use crate::context::asset::{Asset, AssetError, AssetServiceContract};
+use crate::use_cases::shared::scope::build_fx_pairs;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -129,84 +125,14 @@ impl AssetPriceFetchUseCase {
         Ok(())
     }
 
-    /// Loads every non-cash asset once and returns the auto-fetch `scope` (assets
-    /// with a derivable Yahoo symbol and an unlocked price refresh) alongside an
-    /// `asset_id → currency` map covering all loaded assets — including locked and
-    /// non-derivable ones, which are excluded from scope but still need their FX
-    /// pair followed by `build_fx_pairs`.
+    /// Builds the auto-fetch scope via the shared builder (MKT-116/151
+    /// exclusions live in `use_cases::shared::scope`).
     async fn build_scope(
         &self,
         asset_ids: HashSet<String>,
     ) -> Result<(Vec<(Asset, String)>, HashMap<String, String>), AssetError> {
-        let cash_prefix = system_cash_asset_id("");
-        let mut scope: Vec<(Asset, String)> = Vec::new();
-        let mut currency_by_asset: HashMap<String, String> = HashMap::new();
-        for asset_id in asset_ids {
-            if asset_id.starts_with(&cash_prefix) {
-                continue;
-            }
-            let asset = match self.asset_service.get_asset_by_id(&asset_id).await {
-                Ok(Some(asset)) => asset,
-                Ok(None) => continue,
-                Err(application_error) => {
-                    tracing::error!(
-                        target: BACKEND,
-                        asset_id = %asset_id,
-                        err = ?application_error,
-                        "fetch_scope: get_asset_by_id failed"
-                    );
-                    return Err(application_error);
-                }
-            };
-            currency_by_asset.insert(asset_id, asset.currency.clone());
-            // MKT-151 / ADR-014 — a locked asset is excluded from fetch scope,
-            // preserving its most recently recorded price (same shape as the
-            // system-cash exclusion above).
-            if asset.price_refresh_blocked {
-                continue;
-            }
-            let Some(symbol) =
-                derive_yahoo_symbol_with_exchange(&asset.reference, asset.exchange.as_ref())
-            else {
-                continue;
-            };
-            scope.push((asset, symbol));
-        }
-        Ok((scope, currency_by_asset))
+        crate::use_cases::shared::scope::build_scope(self.asset_service.as_ref(), asset_ids).await
     }
-}
-
-/// Derives the distinct foreign-currency `CurrencyPair`s (`asset_currency →
-/// account_currency`) for the active holdings in `inputs` (FXR-071/013), reading
-/// each asset's currency from the `currency_by_asset` map produced by
-/// `build_scope`. Cash holdings and same-currency holdings are excluded; an asset
-/// absent from the map (cash, not found) is skipped.
-fn build_fx_pairs(
-    inputs: Vec<(String, String)>,
-    currency_by_asset: &HashMap<String, String>,
-) -> Vec<CurrencyPair> {
-    let cash_prefix = system_cash_asset_id("");
-    let mut seen: HashSet<(String, String)> = HashSet::new();
-    let mut pairs: Vec<CurrencyPair> = Vec::new();
-
-    for (account_currency, asset_id) in inputs {
-        if asset_id.starts_with(&cash_prefix) {
-            continue;
-        }
-        let Some(asset_currency) = currency_by_asset.get(&asset_id) else {
-            continue;
-        };
-        if *asset_currency == account_currency {
-            continue;
-        }
-        if seen.insert((asset_currency.clone(), account_currency.clone())) {
-            pairs.push(CurrencyPair::from_storage(
-                asset_currency.clone(),
-                account_currency,
-            ));
-        }
-    }
-    pairs
 }
 
 #[cfg(test)]
@@ -221,8 +147,9 @@ mod tests {
         SqliteAssetPriceRepository,
     };
     use crate::context::currency::{
-        CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+        CurrencyPair, CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
     };
+    use crate::core::cash::system_cash_asset_id;
     use crate::core::SideEffectEventBus;
     use chrono::NaiveDate;
     use sqlx::sqlite::SqlitePoolOptions;

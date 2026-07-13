@@ -7,4 +7,6 @@
 //! import from another (B18).
 
 pub mod performance;
+/// Shared fetch-scope builder (SPF-040) reused by `asset_price_fetch` and `scheduled_fetch`.
+pub mod scope;
 pub mod valuation;

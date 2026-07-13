@@ -25,6 +25,7 @@ use crate::context::currency::{
 };
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
+use crate::shared::infrastructure::scheduler::platform_scheduler;
 use crate::use_cases::account_creation::AccountCreationUseCase;
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
 use crate::use_cases::account_details::AccountDetailsUseCase;
@@ -38,6 +39,9 @@ use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::use_cases::fee_generation::FeeGenerationOrchestrator;
 use crate::use_cases::global_performance::GlobalPerformanceUseCase;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
+use crate::use_cases::scheduled_fetch::{
+    ScheduledFetchOrchestrator, SqliteScheduledFetchRepository,
+};
 use crate::use_cases::update_checker::UpdateState;
 use anyhow::Context;
 use std::{fs, path::PathBuf, sync::Arc};
@@ -68,6 +72,12 @@ pub struct AppState {
 
 /// Update lifecycle state — managed separately so it is accessible without a DB.
 pub(crate) type ManagedUpdateState = Arc<UpdateState>;
+
+/// Headless entry for the OS-triggered scheduled run (SPF-016, SPF-020):
+/// no Tauri builder, no window — runs the sweep and returns the exit code.
+pub fn run_scheduled_fetch_headless() -> i32 {
+    tauri::async_runtime::block_on(use_cases::scheduled_fetch::headless::run())
+}
 
 /// Entry point for the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -269,7 +279,7 @@ pub fn run() {
                 let price_provider: Arc<dyn PriceProvider> = Arc::new(yahoo_price_client);
                 let fetch_guard = Arc::new(FetchGuard::new());
                 let dispatcher = Arc::new(PriceFetchDispatcher::new(
-                    price_provider,
+                    Arc::clone(&price_provider),
                     price_repo_for_fetch,
                     Arc::clone(&event_bus),
                     Arc::clone(&currency_service),
@@ -283,6 +293,25 @@ pub fn run() {
                 ));
                 app_handle.manage(asset_price_fetch_uc);
                 app_handle.manage(Arc::clone(&fetch_guard));
+
+                // ----- scheduled daily price download (SPF) -----
+                let scheduled_fetch_orchestrator = Arc::new(ScheduledFetchOrchestrator::new(
+                    account_service.clone(),
+                    asset_service.clone(),
+                    Arc::clone(&price_provider),
+                    Arc::clone(&currency_service),
+                    Arc::new(SqliteScheduledFetchRepository::new(db.pool.clone())),
+                    platform_scheduler(),
+                    Arc::new(|| chrono::Local::now().naive_local()),
+                ));
+                // SPF-015 — verify/repair the OS schedule against the stored
+                // configuration on every app start; failures are logged, never
+                // surfaced.
+                let self_heal_orchestrator = Arc::clone(&scheduled_fetch_orchestrator);
+                tauri::async_runtime::spawn(async move {
+                    self_heal_orchestrator.self_heal().await;
+                });
+                app_handle.manage(scheduled_fetch_orchestrator);
 
                 app_handle.manage(Arc::clone(&currency_service));
 
@@ -355,7 +384,7 @@ fn create_app_dirs(app: &tauri::AppHandle) -> anyhow::Result<AppDirectories> {
 }
 
 /// Initialize tracing with dual output: append to `app.log` and write to stderr.
-fn initialize_tracing(log_dir: &std::path::Path) -> anyhow::Result<()> {
+pub(crate) fn initialize_tracing(log_dir: &std::path::Path) -> anyhow::Result<()> {
     let log_file = log_dir.join("app.log");
 
     let file = fs::OpenOptions::new()

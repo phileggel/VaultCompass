@@ -1,5 +1,5 @@
 use crate::context::currency::domain::cross_rate::cross_rate_micros;
-use crate::context::currency::domain::rate_provider::RateProvider;
+use crate::context::currency::domain::rate_provider::{RateHistoryProvider, RateProvider};
 use crate::context::currency::domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRate,
     CurrencyRateRepository, CurrencyRateSource,
@@ -30,6 +30,7 @@ pub struct CurrencyService {
     rate_repo: Box<dyn CurrencyRateRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
     rate_provider: Option<Arc<dyn RateProvider>>,
+    rate_history_provider: Option<Arc<dyn RateHistoryProvider>>,
 }
 
 impl CurrencyService {
@@ -43,6 +44,7 @@ impl CurrencyService {
             rate_repo,
             event_bus: None,
             rate_provider: None,
+            rate_history_provider: None,
         }
     }
 
@@ -56,6 +58,13 @@ impl CurrencyService {
     /// (ADR-009, FXR-070). Without it, the auto-fetch path is a no-op.
     pub fn with_rate_provider(mut self, provider: Arc<dyn RateProvider>) -> Self {
         self.rate_provider = Some(provider);
+        self
+    }
+
+    /// Attaches the date-range history provider used by `refresh_all_rates_range`
+    /// (SPF-036). Without it, the scheduled-fetch FX backfill is a no-op.
+    pub fn with_rate_history_provider(mut self, provider: Arc<dyn RateHistoryProvider>) -> Self {
+        self.rate_history_provider = Some(provider);
         self
     }
 
@@ -350,6 +359,83 @@ impl CurrencyService {
                 Err(e) => {
                     // FXR-073 — a per-pair write failure is logged and skipped.
                     tracing::warn!(target: BACKEND, err = ?e, "refresh_all_rates: rate upsert failed; skipping pair");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Backfills dated FX reference rates for every persisted pair over
+    /// `[from, to]` (SPF-035/036), mirroring `refresh_all_rates`'s pair-ensure
+    /// step and per-pair EUR-leg skip (SPF-038), but writing one dated rate per
+    /// day the history provider actually published (SPF-037) instead of a
+    /// single latest snapshot. A missing history provider, an empty pair set,
+    /// or a total provider failure leaves stored rates untouched — not an
+    /// error (mirrors FXR-070/072, SPF-039 — never fails the caller's run).
+    pub async fn refresh_all_rates_range(
+        &self,
+        scope_pairs: Vec<CurrencyPair>,
+        from: &str,
+        to: &str,
+    ) -> StdResult<(), CurrencyError> {
+        for pair in scope_pairs {
+            self.pair_repo.upsert_pair(pair).await.map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "refresh_all_rates_range: pair ensure failure");
+                CurrencyError::DatabaseError
+            })?;
+        }
+
+        let pairs = self
+            .pair_repo
+            .list_pairs_with_latest_rate()
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "refresh_all_rates_range: list pairs failure");
+                CurrencyError::DatabaseError
+            })?;
+        if pairs.is_empty() {
+            return Ok(());
+        }
+
+        let Some(provider) = &self.rate_history_provider else {
+            tracing::warn!(target: BACKEND, "refresh_all_rates_range: no history provider configured; skipping fetch");
+            return Ok(());
+        };
+
+        let snapshots = match provider.fetch_eur_range(from, to).await {
+            Ok(snapshots) => snapshots,
+            Err(e) => {
+                // SPF-039 — total external failure: keep stored rates, no error.
+                tracing::warn!(target: BACKEND, err = ?e, "refresh_all_rates_range: history provider failed; keeping stored rates");
+                return Ok(());
+            }
+        };
+
+        for snapshot in snapshots {
+            let eur_leg = |currency: &str| -> Option<i64> {
+                if currency == "EUR" {
+                    Some(ONE_UNIT_MICROS)
+                } else {
+                    snapshot.rates.get(currency).copied()
+                }
+            };
+            for pair in &pairs {
+                let Some(rate_micros) =
+                    cross_rate_micros(eur_leg(&pair.from_currency), eur_leg(&pair.to_currency))
+                else {
+                    // SPF-038 — a missing EUR leg makes the pair unfetchable that day; skip it.
+                    continue;
+                };
+                let rate = CurrencyRate::from_storage(
+                    pair.from_currency.clone(),
+                    pair.to_currency.clone(),
+                    snapshot.date.clone(),
+                    rate_micros,
+                    snapshot.source.clone(),
+                );
+                if let Err(e) = self.rate_repo.upsert_rate(rate).await {
+                    // A per-pair write failure is logged and skipped (mirrors FXR-073).
+                    tracing::warn!(target: BACKEND, err = ?e, "refresh_all_rates_range: rate upsert failed; skipping pair");
                 }
             }
         }
@@ -1671,5 +1757,222 @@ mod tests {
             result.is_ok(),
             "a per-pair upsert failure must be skipped, not surfaced: {result:?}"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // refresh_all_rates_range — SPF-035/036/037/038/039
+    // -------------------------------------------------------------------------
+
+    fn make_service_with_history_provider(
+        pair_repo: MockCurrencyPairRepository,
+        rate_repo: MockCurrencyRateRepository,
+        history_provider: Arc<dyn RateHistoryProvider>,
+    ) -> CurrencyService {
+        CurrencyService::new(Box::new(pair_repo), Box::new(rate_repo))
+            .with_rate_history_provider(history_provider)
+    }
+
+    // SPF-035/036 — a 2-day history for a persisted pair writes one dated rate
+    // per published day.
+    #[tokio::test]
+    async fn refresh_all_rates_range_writes_one_dated_rate_per_published_day() {
+        use crate::context::currency::domain::rate_provider::MockRateHistoryProvider;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_upsert_rate()
+            .times(2)
+            .withf(|r: &CurrencyRate| {
+                r.from_currency == "USD"
+                    && r.to_currency == "EUR"
+                    && (r.date == "2026-06-29" || r.date == "2026-06-30")
+            })
+            .returning(Ok);
+
+        let mut history_provider = MockRateHistoryProvider::new();
+        history_provider
+            .expect_fetch_eur_range()
+            .times(1)
+            .returning(|_, _| {
+                Ok(vec![
+                    make_snapshot("2026-06-29", 1_140_000),
+                    make_snapshot("2026-06-30", 1_141_000),
+                ])
+            });
+
+        let svc = make_service_with_history_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(history_provider) as Arc<dyn RateHistoryProvider>,
+        );
+
+        let result = svc
+            .refresh_all_rates_range(vec![make_pair("USD", "EUR")], "2026-06-29", "2026-06-30")
+            .await;
+        assert!(result.is_ok(), "happy path must return Ok: {result:?}");
+    }
+
+    // SPF-037 — a day absent from the provider's history writes nothing for
+    // that day; only the published days produce a row.
+    #[tokio::test]
+    async fn refresh_all_rates_range_writes_nothing_for_an_absent_day() {
+        use crate::context::currency::domain::rate_provider::MockRateHistoryProvider;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        // Only ONE published day in the range → exactly one upsert.
+        rate_repo.expect_upsert_rate().times(1).returning(Ok);
+
+        let mut history_provider = MockRateHistoryProvider::new();
+        history_provider
+            .expect_fetch_eur_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![make_snapshot("2026-06-29", 1_140_000)]));
+
+        let svc = make_service_with_history_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(history_provider) as Arc<dyn RateHistoryProvider>,
+        );
+
+        let result = svc
+            .refresh_all_rates_range(vec![make_pair("USD", "EUR")], "2026-06-27", "2026-06-29")
+            .await;
+        assert!(result.is_ok(), "got: {result:?}");
+    }
+
+    // SPF-038 — a pair whose EUR leg is missing on a given day is silently
+    // skipped for that day; the run continues.
+    #[tokio::test]
+    async fn refresh_all_rates_range_skips_pair_missing_eur_leg() {
+        use crate::context::currency::domain::rate_provider::{
+            EurSnapshot, MockRateHistoryProvider,
+        };
+        use std::collections::HashMap;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "JPY".to_string(),
+                    to_currency: "KRW".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo.expect_upsert_rate().times(0);
+
+        let mut history_provider = MockRateHistoryProvider::new();
+        history_provider
+            .expect_fetch_eur_range()
+            .times(1)
+            .returning(|_, _| {
+                Ok(vec![EurSnapshot {
+                    date: "2026-06-29".to_string(),
+                    rates: HashMap::from([("JPY".to_string(), 185_740_000i64)]),
+                    source: CurrencyRateSource::Frankfurter,
+                }])
+            });
+
+        let svc = make_service_with_history_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(history_provider) as Arc<dyn RateHistoryProvider>,
+        );
+
+        let result = svc
+            .refresh_all_rates_range(vec![make_pair("JPY", "KRW")], "2026-06-29", "2026-06-29")
+            .await;
+        assert!(
+            result.is_ok(),
+            "missing-leg skip must not surface as error: {result:?}"
+        );
+    }
+
+    // SPF-039 — a total history-provider failure degrades to Ok (never fails
+    // the caller's run); mirrors refresh_all_rates's FXR-070 degrade path.
+    #[tokio::test]
+    async fn refresh_all_rates_range_provider_failure_returns_ok() {
+        use crate::context::currency::domain::rate_provider::MockRateHistoryProvider;
+
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        pair_repo
+            .expect_list_pairs_with_latest_rate()
+            .times(1)
+            .returning(|| {
+                Ok(vec![CurrencyPairSummary {
+                    from_currency: "USD".to_string(),
+                    to_currency: "EUR".to_string(),
+                    latest_rate: None,
+                    latest_rate_date: None,
+                    latest_rate_source: None,
+                }])
+            });
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo.expect_upsert_rate().times(0);
+
+        let mut history_provider = MockRateHistoryProvider::new();
+        history_provider
+            .expect_fetch_eur_range()
+            .times(1)
+            .returning(|_, _| Err(anyhow::anyhow!("provider unreachable")));
+
+        let svc = make_service_with_history_provider(
+            pair_repo,
+            rate_repo,
+            Arc::new(history_provider) as Arc<dyn RateHistoryProvider>,
+        );
+
+        let result = svc
+            .refresh_all_rates_range(vec![make_pair("USD", "EUR")], "2026-06-01", "2026-06-30")
+            .await;
+        assert!(
+            result.is_ok(),
+            "provider failure must degrade gracefully (Ok): {result:?}"
+        );
+    }
+
+    fn make_snapshot(
+        date: &str,
+        usd_rate: i64,
+    ) -> crate::context::currency::domain::rate_provider::EurSnapshot {
+        crate::context::currency::domain::rate_provider::EurSnapshot {
+            date: date.to_string(),
+            rates: std::collections::HashMap::from([("USD".to_string(), usd_rate)]),
+            source: CurrencyRateSource::Frankfurter,
+        }
     }
 }

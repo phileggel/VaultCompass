@@ -4,7 +4,7 @@ use crate::{
     use_cases::{
         account_creation, account_deletion, account_details, account_performance, account_summary,
         archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, fee_generation,
-        global_performance, holding_transaction, update_checker,
+        global_performance, holding_transaction, scheduled_fetch, update_checker,
     },
 };
 
@@ -76,6 +76,11 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<asset_price_fetch::FetchAccountAssetPricesError>()
         .typ::<asset_price_fetch::FetchPriceTask>()
         .typ::<update_checker::UpdateInfo>()
+        .typ::<scheduled_fetch::ScheduledFetchConfiguration>()
+        .typ::<scheduled_fetch::ScheduledFetchRun>()
+        .typ::<scheduled_fetch::ScheduledFetchOutcome>()
+        .typ::<scheduled_fetch::ScheduledFetchStatus>()
+        .typ::<scheduled_fetch::ScheduledFetchError>()
         .commands(tauri_specta::collect_commands![
             // ----- asset BC -----
             asset::get_assets,
@@ -143,6 +148,8 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             update_checker::check_for_update,
             update_checker::download_update,
             update_checker::install_update,
+            scheduled_fetch::configure_scheduled_fetch,
+            scheduled_fetch::get_scheduled_fetch_status,
             // ----- core -----
             logger::log_frontend
         ])

@@ -1,6 +1,6 @@
 use super::domain::{
     Asset, AssetCategory, AssetCategoryRepository, AssetClass, AssetPrice, AssetPriceRepository,
-    AssetPriceSource, AssetRepository, SYSTEM_CATEGORY_ID,
+    AssetPriceSource, AssetRepository, DatedClose, SYSTEM_CATEGORY_ID,
 };
 use super::error::AssetError;
 use crate::{
@@ -503,6 +503,35 @@ impl AssetService {
             bus.publish(Event::AssetPriceUpdated);
         }
     }
+
+    /// Upserts a scheduled-fetch daily-close series for `asset_id`: one
+    /// per-`(asset, date)` upsert per entry (MKT-025, latest-write-wins per
+    /// ADR-012), stamped `source = YahooFinance` (MKT-102, SPF-034). Returns the
+    /// count of rows written. `closes` already excludes non-trading days
+    /// (SPF-032) — an empty series writes nothing and returns `Ok(0)`. No event
+    /// is published — the headless scheduled-fetch path never notifies a
+    /// running app (SPF-024).
+    pub async fn record_daily_closes(
+        &self,
+        asset_id: &str,
+        closes: Vec<DatedClose>,
+    ) -> StdResult<u32, AssetError> {
+        let mut written: u32 = 0;
+        for close in closes {
+            let record = AssetPrice::restore(
+                asset_id.to_string(),
+                close.date,
+                close.price,
+                AssetPriceSource::YahooFinance,
+            );
+            self.price_repo.upsert(record).await.map_err(|e| {
+                tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "record_daily_closes: upsert failure");
+                AssetError::DatabaseError
+            })?;
+            written += 1;
+        }
+        Ok(written)
+    }
 }
 
 /// Asset application surface consumed by cross-BC use-case orchestrators.
@@ -521,6 +550,12 @@ pub trait AssetServiceContract: Send + Sync {
     async fn get_latest_price(&self, asset_id: &str) -> Result<Option<AssetPrice>>;
     /// Returns all recorded market prices for the given asset, sorted date descending (MKT-072).
     async fn get_asset_prices(&self, asset_id: &str) -> StdResult<Vec<AssetPrice>, AssetError>;
+    /// Records a daily-close series for an asset with source=YahooFinance (SPF-034); no event published (SPF-024).
+    async fn record_daily_closes(
+        &self,
+        asset_id: &str,
+        closes: Vec<DatedClose>,
+    ) -> StdResult<u32, AssetError>;
 }
 
 #[async_trait]
@@ -547,6 +582,14 @@ impl AssetServiceContract for AssetService {
 
     async fn get_asset_prices(&self, asset_id: &str) -> StdResult<Vec<AssetPrice>, AssetError> {
         AssetService::get_asset_prices(self, asset_id).await
+    }
+
+    async fn record_daily_closes(
+        &self,
+        asset_id: &str,
+        closes: Vec<DatedClose>,
+    ) -> StdResult<u32, AssetError> {
+        AssetService::record_daily_closes(self, asset_id, closes).await
     }
 }
 
@@ -2389,6 +2432,86 @@ mod tests {
             MockAssetPriceRepository::new(),
         );
         let err = svc.archive_asset("some-id").await.unwrap_err();
+        assert!(matches!(err, AssetError::DatabaseError), "got: {err:?}");
+    }
+
+    // -------------------------------------------------------------------------
+    // record_daily_closes (SPF-030/031/032/034)
+    // -------------------------------------------------------------------------
+
+    // SPF-034 — each DatedClose is upserted with source=YahooFinance; the
+    // returned count matches the number of entries written.
+    #[tokio::test]
+    async fn record_daily_closes_upserts_each_entry_with_yahoo_finance_source() {
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_upsert()
+            .withf(|p| {
+                p.asset_id == "asset-id"
+                    && p.source == AssetPriceSource::YahooFinance
+                    && (p.date == "2026-06-08" || p.date == "2026-06-09")
+            })
+            .times(2)
+            .returning(|_| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        let count = svc
+            .record_daily_closes(
+                "asset-id",
+                vec![
+                    DatedClose {
+                        date: "2026-06-08".to_string(),
+                        price: 290_000_000,
+                    },
+                    DatedClose {
+                        date: "2026-06-09".to_string(),
+                        price: 291_000_000,
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(count, 2, "SPF-050 relies on this count for updated_count");
+    }
+
+    // SPF-032 — an empty series (all days absent — non-trading days) writes
+    // nothing and returns Ok(0); this is not a skip or an error.
+    #[tokio::test]
+    async fn record_daily_closes_with_empty_series_writes_nothing() {
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_upsert().times(0);
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        let count = svc.record_daily_closes("asset-id", vec![]).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    // A per-write repository failure surfaces as the typed DatabaseError.
+    #[tokio::test]
+    async fn record_daily_closes_surfaces_database_error_on_upsert_failure() {
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_upsert()
+            .return_once(|_| Err(SimulatedDbError.into()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+        let err = svc
+            .record_daily_closes(
+                "asset-id",
+                vec![DatedClose {
+                    date: "2026-06-08".to_string(),
+                    price: 290_000_000,
+                }],
+            )
+            .await
+            .unwrap_err();
         assert!(matches!(err, AssetError::DatabaseError), "got: {err:?}");
     }
 }

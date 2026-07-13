@@ -28,6 +28,8 @@ pub mod fee_generation;
 pub mod global_performance;
 /// Holding transaction: unified cross-BC orchestrators for buy/sell/correct/cancel/open (TRX, SEL, CSH).
 pub mod holding_transaction;
+/// Scheduled Price Fetch: daily download of closing prices and exchange rates, even while the app is closed (SPF spec).
+pub mod scheduled_fetch;
 /// Shared stateless valuation helpers reused across performance/summary use cases — owned by neither.
 pub mod shared;
 /// Application auto-update: detection, download, and installation (R1–R27).

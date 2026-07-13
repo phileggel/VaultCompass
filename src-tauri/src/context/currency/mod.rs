@@ -18,10 +18,13 @@ pub use api::*;
 pub use application::{CurrencyService, ResolvedRate};
 pub use domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRate,
-    CurrencyRateRepository, CurrencyRateSource, EurSnapshot, RateProvider,
+    CurrencyRateRepository, CurrencyRateSource, EurSnapshot, RateHistoryProvider, RateProvider,
 };
 pub use error::CurrencyError;
 pub use infrastructure::{
     ChainedRateProvider, ReqwestEcbClient, ReqwestFrankfurterClient, SqliteCurrencyPairRepository,
     SqliteCurrencyRateRepository,
 };
+
+#[cfg(test)]
+pub use domain::{MockCurrencyPairRepository, MockCurrencyRateRepository};

@@ -9,7 +9,7 @@ pub mod rate_provider;
 
 pub use currency_pair::{CurrencyPair, CurrencyPairRepository, CurrencyPairSummary};
 pub use currency_rate::{CurrencyRate, CurrencyRateRepository, CurrencyRateSource};
-pub use rate_provider::{EurSnapshot, RateProvider};
+pub use rate_provider::{EurSnapshot, RateHistoryProvider, RateProvider};
 
 #[cfg(test)]
 pub use currency_pair::MockCurrencyPairRepository;

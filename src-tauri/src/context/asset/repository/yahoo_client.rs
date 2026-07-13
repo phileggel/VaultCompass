@@ -1,4 +1,4 @@
-use crate::context::asset::domain::{PriceProvider, Quote};
+use crate::context::asset::domain::{DatedClose, PriceProvider, Quote};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use std::time::Duration;
@@ -10,6 +10,7 @@ const YAHOO_CHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart
 /// Yahoo rejects the default reqwest user agent; present a browser-like one.
 const USER_AGENT: &str = "Mozilla/5.0";
 const REQUEST_TIMEOUT_SECS: u64 = 10;
+const SECONDS_PER_DAY: i64 = 86_400;
 const MICROS_PER_UNIT: f64 = 1_000_000.0;
 /// Minor-unit divisor for pence/cents/agorot quotes (MKT-125).
 const MINOR_UNIT_DIVISOR: f64 = 100.0;
@@ -55,6 +56,41 @@ impl PriceProvider for ReqwestYahooClient {
         parse_quote(&body)
             .with_context(|| format!("Yahoo response parse failed for symbol: {symbol}"))
     }
+
+    /// Fetches the daily-close series for the scheduled-fetch backfill window
+    /// (SPF-030/031) via `/v8/chart/?period1=…&period2=…&interval=1d`.
+    async fn fetch_daily_closes(
+        &self,
+        symbol: &str,
+        from: &str,
+        to: &str,
+    ) -> anyhow::Result<Vec<DatedClose>> {
+        let period1 = utc_day_start_epoch_seconds(from)?;
+        // period2 is the end of `to` (23:59:59 UTC) so the range is inclusive.
+        let period2 = utc_day_start_epoch_seconds(to)? + SECONDS_PER_DAY - 1;
+        let url =
+            format!("{YAHOO_CHART_URL}{symbol}?period1={period1}&period2={period2}&interval=1d");
+        let response = self
+            .client
+            .get(&url)
+            .header(reqwest::header::USER_AGENT, USER_AGENT)
+            .send()
+            .await
+            .with_context(|| format!("Yahoo daily-close request failed for symbol: {symbol}"))?;
+        // Yahoo returns 200 with a JSON `chart.error` for an unknown symbol; only a
+        // genuine transport failure is a non-success status.
+        if !response.status().is_success() {
+            anyhow::bail!("Yahoo returned status {} for {symbol}", response.status());
+        }
+        let body = crate::shared::infrastructure::http::read_capped_text(response)
+            .await
+            .with_context(|| {
+                format!("Yahoo daily-close response read failed for symbol: {symbol}")
+            })?;
+        parse_daily_closes(&body).with_context(|| {
+            format!("Yahoo daily-close response parse failed for symbol: {symbol}")
+        })
+    }
 }
 
 /// Yahoo `/v8/chart/` response shape — only the fields we consume.
@@ -74,6 +110,23 @@ struct Chart {
 #[derive(serde::Deserialize)]
 struct ChartResult {
     meta: Meta,
+    /// UNIX timestamps, one per trading day in the requested range (SPF-030/031).
+    /// Absent for the single-quote `parse_quote` request shape.
+    timestamp: Option<Vec<i64>>,
+    /// Parallel `close[]` series lives under `indicators.quote[0]`.
+    indicators: Option<Indicators>,
+}
+
+#[derive(serde::Deserialize)]
+struct Indicators {
+    quote: Vec<QuoteSeries>,
+}
+
+#[derive(serde::Deserialize)]
+struct QuoteSeries {
+    /// Daily close, parallel to `ChartResult::timestamp`. `null` for a
+    /// non-trading day within the requested range (SPF-032).
+    close: Vec<Option<f64>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -140,6 +193,74 @@ fn normalize_minor_unit(price: f64, currency: Option<&str>) -> f64 {
         Some("GBp") | Some("ZAc") | Some("ILA") => price / MINOR_UNIT_DIVISOR,
         _ => price,
     }
+}
+
+/// Parses the daily-close series from a Yahoo chart JSON body covering a date
+/// range (SPF-030/031).
+///
+/// - `Ok(closes)` — one [`DatedClose`] per completed trading day in the response
+///   (MKT-125 sub-unit normalization applied); non-trading days are simply
+///   absent from `timestamp[]`/`close[]` (SPF-032), not represented at all.
+/// - `Ok(empty)` — unknown/delisted symbol (`chart.error` present, MKT-114).
+/// - `Err(_)` — malformed JSON.
+fn parse_daily_closes(body: &str) -> Result<Vec<DatedClose>> {
+    let envelope: ChartEnvelope =
+        serde_json::from_str(body).context("Yahoo chart JSON parse failed")?;
+    // Unknown / delisted symbol — Yahoo populates `error` and nulls `result` (MKT-114).
+    if envelope.chart.error.is_some() {
+        return Ok(Vec::new());
+    }
+    let Some(result) = envelope
+        .chart
+        .result
+        .and_then(|mut results| results.drain(..).next())
+    else {
+        return Ok(Vec::new());
+    };
+    // Dates are the exchange-local calendar day via gmtoffset, UTC when absent
+    // (same convention as `parse_quote`, MKT-117).
+    let gmtoffset = result.meta.gmtoffset.unwrap_or(0);
+    let currency = result.meta.currency;
+    let timestamps = result.timestamp.unwrap_or_default();
+    let close_series = result
+        .indicators
+        .and_then(|indicators| indicators.quote.into_iter().next())
+        .map(|series| series.close)
+        .unwrap_or_default();
+    let mut daily_closes = Vec::new();
+    for (timestamp, close) in timestamps.into_iter().zip(close_series) {
+        // SPF-032 — a null close (non-trading day) produces no row.
+        let Some(raw_close) = close else {
+            continue;
+        };
+        // A non-finite or non-positive close is provider garbage, not data —
+        // skipped like a null close (same guard as `parse_quote`, MKT-021).
+        if !raw_close.is_finite() || raw_close <= 0.0 {
+            continue;
+        }
+        // MKT-125 — pence/cents/agorot quotes are divided by 100 to the major ISO unit.
+        let price = normalize_minor_unit(raw_close, currency.as_deref());
+        let Some(date) = chrono::DateTime::from_timestamp(timestamp + gmtoffset, 0)
+            .map(|datetime| datetime.naive_utc().date().format("%Y-%m-%d").to_string())
+        else {
+            continue;
+        };
+        daily_closes.push(DatedClose {
+            date,
+            price: (price * MICROS_PER_UNIT).round() as i64,
+        });
+    }
+    Ok(daily_closes)
+}
+
+/// Epoch seconds at 00:00:00 UTC on the given ISO `yyyy-mm-dd` date.
+fn utc_day_start_epoch_seconds(date: &str) -> Result<i64> {
+    let parsed = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .with_context(|| format!("invalid ISO date: {date}"))?;
+    Ok(parsed
+        .and_time(chrono::NaiveTime::MIN)
+        .and_utc()
+        .timestamp())
 }
 
 #[cfg(test)]
@@ -213,5 +334,95 @@ mod tests {
     fn rejects_non_positive_price() {
         let body = r#"{"chart":{"result":[{"meta":{"currency":"USD","symbol":"AAPL","regularMarketPrice":0.0,"regularMarketTime":1781294401,"gmtoffset":0}}],"error":null}}"#;
         assert!(parse_quote(body).is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // parse_daily_closes (SPF-030/031/032/125)
+    // -------------------------------------------------------------------------
+
+    // SPF-030/031 — a normal 3-day US range parses one DatedClose per trading day.
+    #[test]
+    fn parses_a_daily_close_series() {
+        let body = r#"{"chart":{"result":[{
+            "meta":{"currency":"USD","symbol":"AAPL"},
+            "timestamp":[1781121600,1781208000,1781294400],
+            "indicators":{"quote":[{"close":[290.0,291.0,292.0]}]}
+        }],"error":null}}"#;
+        let closes = parse_daily_closes(body).unwrap();
+        assert_eq!(closes.len(), 3, "one DatedClose per trading day");
+        assert_eq!(closes[0].price, 290_000_000);
+        assert_eq!(closes[2].price, 292_000_000);
+    }
+
+    // SPF-032 — a `null` close (non-trading day inside the requested range)
+    // produces no row for that day; the day is simply absent from the result.
+    #[test]
+    fn null_close_entries_produce_no_row() {
+        let body = r#"{"chart":{"result":[{
+            "meta":{"currency":"USD","symbol":"AAPL"},
+            "timestamp":[1781121600,1781208000,1781294400],
+            "indicators":{"quote":[{"close":[290.0,null,292.0]}]}
+        }],"error":null}}"#;
+        let closes = parse_daily_closes(body).unwrap();
+        assert_eq!(
+            closes.len(),
+            2,
+            "the null day must not produce a row (SPF-032)"
+        );
+    }
+
+    // MKT-021 — a non-finite or non-positive close is provider garbage and is
+    // skipped like a null close, never converted to a corrupted micro price.
+    #[test]
+    fn non_finite_or_non_positive_closes_produce_no_row() {
+        let body = r#"{"chart":{"result":[{
+            "meta":{"currency":"USD","symbol":"AAPL"},
+            "timestamp":[1781121600,1781208000,1781294400,1781380800],
+            "indicators":{"quote":[{"close":[290.0,0.0,-5.0,null]}]}
+        }],"error":null}}"#;
+        let closes = parse_daily_closes(body).unwrap();
+        assert_eq!(closes.len(), 1, "zero and negative closes must be skipped");
+        assert_eq!(closes[0].price, 290_000_000);
+    }
+
+    // MKT-125 — a London (LSE) daily-close series in GBp is divided by 100 to GBP.
+    #[test]
+    fn parses_daily_close_series_normalizes_gbp_pence() {
+        let body = r#"{"chart":{"result":[{
+            "meta":{"currency":"GBp","symbol":"VOD.L"},
+            "timestamp":[1781121600],
+            "indicators":{"quote":[{"close":[115.75]}]}
+        }],"error":null}}"#;
+        let closes = parse_daily_closes(body).unwrap();
+        assert_eq!(closes.len(), 1);
+        // 115.75 GBp = 1.1575 GBP → 1_157_500 micros.
+        assert_eq!(closes[0].price, 1_157_500);
+    }
+
+    // MKT-114 — an unknown symbol (chart.error present) is a quiet skip (empty vec).
+    #[test]
+    fn daily_close_series_unknown_symbol_returns_empty() {
+        let body = r#"{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}"#;
+        assert_eq!(parse_daily_closes(body).unwrap(), Vec::new());
+    }
+
+    // Malformed JSON is an Err.
+    #[test]
+    fn daily_close_series_malformed_json_returns_err() {
+        assert!(parse_daily_closes("not json {{").is_err());
+    }
+
+    // SPF-030 — each close is dated to its trading day via the parallel timestamp.
+    #[test]
+    fn parses_daily_close_series_dates_each_close_to_its_trading_day() {
+        // 1780948800 → 2026-06-08, 1781121600 → 2026-06-10 (UTC dates).
+        let body = r#"{"chart":{"result":[{
+            "meta":{"currency":"USD","symbol":"AAPL"},
+            "timestamp":[1780948800,1781121600],
+            "indicators":{"quote":[{"close":[290.0,292.0]}]}
+        }],"error":null}}"#;
+        let closes = parse_daily_closes(body).unwrap();
+        assert_eq!(closes[0].date, "2026-06-08");
+        assert_eq!(closes[1].date, "2026-06-10");
     }
 }
