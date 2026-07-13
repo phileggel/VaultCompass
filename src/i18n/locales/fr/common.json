@@ -205,7 +205,17 @@
     "auto_record_price_label": "Enregistrer automatiquement le prix de transaction comme prix de marché",
     "auto_record_price_description": "Si activé, la case d'enregistrement automatique sera pré-cochée dans les nouveaux formulaires de transaction.",
     "auto_fetch_label": "Récupérer automatiquement les prix au démarrage",
-    "auto_fetch_description": "Si activé, l'application récupère les prix actuels depuis Yahoo Finance pour toutes les positions actives à chaque démarrage."
+    "auto_fetch_description": "Si activé, l'application récupère les prix actuels depuis Yahoo Finance pour toutes les positions actives à chaque démarrage.",
+    "scheduled_fetch_label": "Téléchargement quotidien des prix",
+    "scheduled_fetch_description": "Télécharge les cours de clôture et les taux de change une fois par jour à l'heure choisie — même application fermée.",
+    "scheduled_fetch_time_label": "Heure du téléchargement",
+    "scheduled_fetch": {
+      "loading": "Chargement…",
+      "status_none": "Aucun téléchargement pour l'instant.",
+      "status_succeeded": "Dernier téléchargement : {{executedAt}} — {{updatedCount}} mis à jour, {{skippedCount}} ignorés.",
+      "status_failed": "Le dernier téléchargement a échoué le {{executedAt}}. Il sera retenté automatiquement.",
+      "status_skipped": "Dernière vérification le {{executedAt}} : les prix étaient déjà à jour."
+    }
   },
   "shell": {
     "sidebar_collapse": "Réduire le menu",
@@ -659,6 +669,12 @@
     }
   },
   "error": {
+    "scheduled_fetch": {
+      "InvalidTriggerTime": "L'heure du téléchargement n'est pas une heure valide.",
+      "ScheduleRegistrationFailed": "La planification quotidienne n'a pas pu être enregistrée auprès du système.",
+      "ScheduleRemovalFailed": "La planification quotidienne n'a pas pu être retirée du système.",
+      "DatabaseError": "Une erreur de base de données inattendue s'est produite. Veuillez réessayer."
+    },
     "currency": {
       "NotPositive": "Le taux doit être supérieur à 0.",
       "NonFinite": "Le taux doit être un nombre fini.",
