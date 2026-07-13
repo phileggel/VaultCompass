@@ -16,7 +16,9 @@ pub mod yahoo_exchange_mapper;
 pub mod yahoo_symbol;
 
 pub use asset::*;
-pub use asset_price::{AssetPrice, AssetPriceRepository, AssetPriceSource, PriceProvider, Quote};
+pub use asset_price::{
+    AssetPrice, AssetPriceRepository, AssetPriceSource, DatedClose, PriceProvider, Quote,
+};
 pub use category::*;
 pub use exchange::Exchange;
 pub use yahoo_symbol::{derive_yahoo_symbol, derive_yahoo_symbol_with_exchange};

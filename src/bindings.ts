@@ -744,6 +744,31 @@ async installUpdate() : Promise<Result<null, UpdateError>> {
 }
 },
 /**
+ * Applies a configuration change to the daily price download (SPF-010–013,
+ * SPF-019). Registers/removes the OS schedule before persisting so the
+ * configuration never contradicts the OS schedule.
+ */
+async configureScheduledFetch(enabled: boolean, triggerTime: string) : Promise<Result<null, ScheduledFetchError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("configure_scheduled_fetch", { enabled, triggerTime }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Reads the current configuration and the most recent run for the Settings
+ * section's status line (SPF-052).
+ */
+async getScheduledFetchStatus() : Promise<Result<ScheduledFetchStatus, ScheduledFetchError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_scheduled_fetch_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Tauri command allowing the frontend to emit structured log entries
  * into the backend tracing system (visible in app logs and collect-logs output).
  */
@@ -2767,6 +2792,98 @@ factor: number;
  * Optional user note.
  */
 note: string | null }
+/**
+ * The device-wide configuration of the daily download (SPF-010). Exactly one
+ * configuration exists (singleton row, migration-seeded).
+ */
+export type ScheduledFetchConfiguration = { 
+/**
+ * Whether the daily download is active on this device. Off by default (SPF-010).
+ */
+enabled: boolean; 
+/**
+ * Local wall-clock time of day the download runs, "HH:MM" (SPF-014).
+ */
+trigger_time: string }
+/**
+ * Flat error enum for the scheduled-fetch use case (`configure_scheduled_fetch`,
+ * `get_scheduled_fetch_status`). Use-case-owned persistence (spec Context
+ * divergence) means there is no bounded-context enum to wrap — this is the
+ * entire wire-facing failure surface (SPF-013, SPF-019).
+ */
+export type ScheduledFetchError = 
+/**
+ * The trigger time is not a well-formed "HH:MM" time of day (SPF-019).
+ */
+{ code: "InvalidTriggerTime" } | 
+/**
+ * The OS schedule could not be registered (SPF-013).
+ */
+{ code: "ScheduleRegistrationFailed" } | 
+/**
+ * The OS schedule could not be removed (SPF-013).
+ */
+{ code: "ScheduleRemovalFailed" } | 
+/**
+ * An unexpected database error occurred.
+ */
+{ code: "DatabaseError" }
+/**
+ * Outcome of one scheduled-fetch run (SPF-050).
+ */
+export type ScheduledFetchOutcome = 
+/**
+ * The run completed its sweep (including a zero-update empty scope, SPF-042).
+ */
+"Succeeded" | 
+/**
+ * The provider was unreachable after the bounded retry budget (SPF-051).
+ */
+"Failed" | 
+/**
+ * The once-per-day guard exited the run before any external call (SPF-021).
+ */
+"SkippedAlreadyRun"
+/**
+ * The record of one execution of the scheduled download (SPF-050). Runs
+ * accumulate as an auditable history and power the once-per-day guard
+ * (SPF-021) and the settings status line (SPF-052).
+ */
+export type ScheduledFetchRun = { 
+/**
+ * When the run actually executed — may be later than the trigger when
+ * catching up (SPF-022).
+ */
+executed_at: string; 
+/**
+ * The calendar day this run settles — always the latest pending trigger
+ * at execution time (SPF-021, SPF-022).
+ */
+trigger_date: string; 
+/**
+ * Whether the run succeeded, failed, or was guard-skipped.
+ */
+outcome: ScheduledFetchOutcome; 
+/**
+ * Number of assets whose prices were written by this run (SPF-050).
+ */
+updated_count: number; 
+/**
+ * Number of in-scope assets the run could not price (SPF-041).
+ */
+skipped_count: number }
+/**
+ * Wire-facing status returned by `get_scheduled_fetch_status` (SPF-052).
+ */
+export type ScheduledFetchStatus = { 
+/**
+ * The current device configuration.
+ */
+configuration: ScheduledFetchConfiguration; 
+/**
+ * The most recent run, or `None` when no run has ever executed (SPF-052 — fresh install).
+ */
+last_run: ScheduledFetchRun | null }
 /**
  * Parameters for recording a sale of an asset from an account.
  */

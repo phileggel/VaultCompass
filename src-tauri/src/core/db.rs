@@ -43,10 +43,16 @@ impl Database {
 
         tracing::trace!(target: BACKEND, "Connecting to database: {}", db_path.to_string_lossy());
 
+        // WAL + busy_timeout: the OS-scheduled headless run (SPF-020/023) can
+        // execute while the interactive app holds the same database — WAL lets
+        // the two processes interleave reads/writes, busy_timeout absorbs
+        // short write-lock contention instead of erroring.
         let connect_options = SqliteConnectOptions::new()
             .filename(&db_path)
             .create_if_missing(true)
             .foreign_keys(true)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+            .busy_timeout(std::time::Duration::from_secs(5))
             .disable_statement_logging();
 
         let pool = SqlitePoolOptions::new()
