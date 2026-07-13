@@ -124,7 +124,9 @@ jobs:
   backend:
     name: Backend — quality + coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 40: a Cargo.lock change misses the Rust cache and the cold tarpaulin
+    # build pushes the job past 30 (bit PR #94; warm-cache baseline is ~21).
+    timeout-minutes: 40
     env:
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "-C debuginfo=0"
