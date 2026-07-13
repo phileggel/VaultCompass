@@ -163,3 +163,11 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Symptom** — Repeated local headless E2E runs green; the same suite red on CI with WebDriver "element click intercepted" on buttons in a dense flex row. Same app, same window size, same xvfb wrapper. The variable was the runner's installed fonts: wider fallback glyph metrics pushed a borderline `whitespace-nowrap` stats block into overlapping the sibling button group — locally the same row fit by a few pixels.
 
 **Mitigation** — (1) Treat "element click intercepted" appearing across several unrelated specs as a layout-overflow signal, not per-spec flakiness — look for what the failing clicks share spatially (here: all targets lived in one header row). (2) Make dense rows wrap-tolerant (`flex-wrap` on the row and its groups) instead of relying on the current viewport fitting; nowrap text inside a `min-w-0` flex child overflows _over_ siblings rather than clipping. (3) Gate a release tag on the CI E2E run of the merge commit, not only on local E2E — text-metric-sensitive layouts are exactly the class of breakage only CI reveals.
+
+## L-010 — A CI job timeout must budget the cold cache-miss build, not the warm one
+
+**First observed**: 2026-07-13 (PR #94 backend coverage job cancelled at 30m with every test green)
+
+**Symptom** — A coverage job that runs ~21 minutes on a warm dependency cache was cancelled at its 30-minute limit; the log showed tests passing steadily right up to the cutoff, plus orphaned tooling processes at cleanup — which reads like a hang but is just whatever was mid-flight when the axe fell. The trigger: the PR changed the lockfile (new dependency + a feature flag on an existing one), invalidating the dependency cache and forcing a cold instrumented rebuild.
+
+**Mitigation** — (1) Before diagnosing a "hung" CI job, check whether steady progress was still being logged at cancellation — a timeout mid-progress is a budget problem, not a deadlock. (2) Size `timeout-minutes` for the cold-cache path (lockfile changes are routine), keeping headroom of roughly the warm duration's half. (3) A local run of the same tool over the suspect tests separates "genuinely hangs" from "ran out of time" in minutes.

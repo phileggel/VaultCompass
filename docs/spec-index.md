@@ -25,7 +25,7 @@
 | WNW     | What's New Dialog           | Once-per-upgrade dialog stacking the CHANGELOG sections between the last-seen and current app versions                       | active   |
 | SPL     | Stock Split                 | Value-neutral corporate action rescaling a held position (quantity × factor, cost basis preserved); same asset, never a fork | active   |
 | HNO     | Holding Note                | Per-position free-text note with optional live share-price alarm (below/above threshold, in-app bell only)                   | active   |
-| SPF     | Scheduled Price Fetch       | Daily OS-scheduled close-of-day price + FX download that runs even when the app is closed; in-app setup only                 | planning |
+| SPF     | Scheduled Price Fetch       | Daily OS-scheduled close-of-day price + FX download that runs even when the app is closed; in-app setup only                 | active   |
 
 ---
 

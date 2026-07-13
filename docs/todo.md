@@ -2,12 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (infra) — Scheduled daily automatic price download, app-closed (deferred)
-
-Deferred — not for the current batch. Goal: download market prices **once per day after a user-set time** (e.g. every day at 19:00 French time, Europe/Paris) **even if the main app is not running**. Today's auto-fetch only fires on app cold-start (MKT), so it never runs when the app is closed.
-
-The hard part is execution outside the app's lifetime — Tauri code doesn't run when the window is closed. Options to weigh at planning time: (a) register an **OS-level scheduled task** on first enable — cron (Linux) / Task Scheduler (Windows) / launchd (macOS) — that launches the app binary in a **headless `--fetch-prices` CLI mode** which opens the existing SQLite DB, runs the current `use_cases/asset_price_fetch` pipeline (Yahoo keyless), writes prices, and exits; (b) a persistent **tray/background mode** + autostart (`tauri-plugin-autostart`) that keeps a lightweight process resident to fire an in-process timer; (c) a companion background service. (a) is the most faithful to "app not started" but needs per-OS scheduler registration + the headless binary to resolve the app's DB path and config. Config surface: enable/disable, time-of-day + timezone (default Europe/Paris, handle DST), **once-per-day dedupe** (skip if a successful fetch already ran on/after today's trigger). Reuse the existing fetch pipeline and `AssetPriceFetchCompleted` eventing so the running app (if later opened) reflects the background fetch. Cross-platform packaging + permissions are the main risk; size it as its own batch.
-
 ## (kit) — Upstream: changelog entries should be commit titles only
 
 `scripts/release.py` is kit-owned (kit-manifest) and deliberately (`re.DOTALL`) copies the full commit message — title + body — into each `CHANGELOG.md` bullet. Since the changelog is end-user-facing (the What's-new dialog renders it in-app), bodies leak developer detail to users. Patched locally 2026-07-12 (`_build_changelog_entry` takes `description.splitlines()[0]` in the Added/Fixed loops); `just sync-kit` reverts it — re-apply until upstream ships (last re-applied after the v5.0.0 sync). Filed upstream as [phileggel/claude-kit#86](https://github.com/phileggel/claude-kit/issues/86) (2026-07-12); this entry closes when the kit ships it.
