@@ -371,6 +371,26 @@ mod tests {
         );
     }
 
+    // SPF-033 — a trading day still in progress at the run carries a null (or
+    // absent) close in the chart series: only the completed days produce rows;
+    // the in-progress day is written by the next run through the backfill.
+    #[test]
+    fn in_progress_trading_day_contributes_only_completed_closes() {
+        let body = r#"{"chart":{"result":[{
+            "meta":{"currency":"USD","symbol":"AAPL"},
+            "timestamp":[1780948800,1781121600,1781208000],
+            "indicators":{"quote":[{"close":[290.0,292.5,null]}]}
+        }],"error":null}}"#;
+        let closes = parse_daily_closes(body).unwrap();
+        assert_eq!(
+            closes.len(),
+            2,
+            "the in-progress (null-close) day must produce no row"
+        );
+        assert_eq!(closes[0].price, 290_000_000);
+        assert_eq!(closes[1].price, 292_500_000);
+    }
+
     // MKT-021 — a non-finite or non-positive close is provider garbage and is
     // skipped like a null close, never converted to a corrupted micro price.
     #[test]

@@ -42,6 +42,18 @@ export async function navigateToAccountDetails(accountId: string): Promise<void>
 }
 
 /**
+ * Navigates to the Settings page via the sidebar nav button (`#nav-settings`),
+ * waiting for the scheduled-fetch section to confirm the route rendered.
+ */
+export async function navigateToSettings(): Promise<void> {
+  const settingsNav = await $("#nav-settings");
+  await settingsNav.waitForExist({ timeout: 15000 });
+  await settingsNav.click();
+  const toggle = await $("#scheduled-fetch-toggle");
+  await toggle.waitForExist({ timeout: 10000 });
+}
+
+/**
  * Clicks an Account Details header record action by its stable id
  * (`add-menu-open-balance`, `add-menu-dividend`, `add-menu-free-shares`). These are
  * direct big square buttons (DIV-012; the former dropdown was flattened). Cash
