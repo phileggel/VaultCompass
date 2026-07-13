@@ -8,3 +8,15 @@ export function formatIsoDateNumeric(isoDate: string, locale: string): string {
   const date = new Date(`${isoDate}T12:00:00`);
   return Number.isNaN(date.getTime()) ? isoDate : new Intl.DateTimeFormat(locale).format(date);
 }
+
+/**
+ * Format an ISO date-time (YYYY-MM-DDTHH:MM:SS) as a locale medium date +
+ * short time — e.g. `12 juil. 2026, 19:00` for `fr`. Returns the raw input
+ * unchanged if it does not parse.
+ */
+export function formatIsoDateTime(isoDateTime: string, locale: string): string {
+  const date = new Date(isoDateTime);
+  return Number.isNaN(date.getTime())
+    ? isoDateTime
+    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}

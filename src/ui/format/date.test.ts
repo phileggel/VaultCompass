@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatIsoDateNumeric } from "./date";
+import { formatIsoDateNumeric, formatIsoDateTime } from "./date";
 
 describe("formatIsoDateNumeric", () => {
   it("formats an ISO date as French numeric DD/MM/YYYY", () => {
@@ -17,5 +17,19 @@ describe("formatIsoDateNumeric", () => {
 
   it("returns the raw input unchanged when it does not parse", () => {
     expect(formatIsoDateNumeric("not-a-date", "fr")).toBe("not-a-date");
+  });
+});
+
+describe("formatIsoDateTime", () => {
+  it("formats an ISO date-time as a French medium date + short time", () => {
+    expect(formatIsoDateTime("2026-07-12T19:00:12", "fr")).toBe("12 juil. 2026, 19:00");
+  });
+
+  it("formats an ISO date-time as a US medium date + short time", () => {
+    expect(formatIsoDateTime("2026-07-12T19:00:12", "en")).toBe("Jul 12, 2026, 7:00 PM");
+  });
+
+  it("returns the raw input unchanged when it does not parse", () => {
+    expect(formatIsoDateTime("not-a-timestamp", "fr")).toBe("not-a-timestamp");
   });
 });

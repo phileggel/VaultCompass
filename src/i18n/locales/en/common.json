@@ -205,7 +205,17 @@
     "auto_record_price_label": "Automatically record transaction price as market price",
     "auto_record_price_description": "When enabled, new transaction forms will have the auto-record checkbox pre-checked.",
     "auto_fetch_label": "Automatically fetch prices on launch",
-    "auto_fetch_description": "When enabled, the app fetches current prices from Yahoo Finance for all active holdings every time it starts."
+    "auto_fetch_description": "When enabled, the app fetches current prices from Yahoo Finance for all active holdings every time it starts.",
+    "scheduled_fetch_label": "Daily price download",
+    "scheduled_fetch_description": "Downloads closing prices and exchange rates once per day at the chosen time — even when the app is closed.",
+    "scheduled_fetch_time_label": "Download time",
+    "scheduled_fetch": {
+      "loading": "Loading…",
+      "status_none": "No download yet.",
+      "status_succeeded": "Last download: {{executedAt}} — {{updatedCount}} updated, {{skippedCount}} skipped.",
+      "status_failed": "Last download failed on {{executedAt}}. It will be retried automatically.",
+      "status_skipped": "Last check on {{executedAt}}: prices were already up to date."
+    }
   },
   "shell": {
     "sidebar_collapse": "Collapse menu",
@@ -659,6 +669,12 @@
     }
   },
   "error": {
+    "scheduled_fetch": {
+      "InvalidTriggerTime": "The download time is not a valid time of day.",
+      "ScheduleRegistrationFailed": "The daily schedule could not be registered with the operating system.",
+      "ScheduleRemovalFailed": "The daily schedule could not be removed from the operating system.",
+      "DatabaseError": "An unexpected database error occurred. Please try again."
+    },
     "currency": {
       "NotPositive": "Rate must be greater than 0.",
       "NonFinite": "Rate must be a finite number.",
