@@ -681,6 +681,107 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
+    // self_heal — SPF-015
+    // -------------------------------------------------------------------------
+
+    // SPF-015 — an enabled configuration re-registers the OS schedule on app
+    // start (repairs a missing/stale entry, e.g. after the app binary moved).
+    #[tokio::test]
+    async fn self_heal_reregisters_when_enabled() {
+        let mut repository = MockScheduledFetchRepository::new();
+        repository
+            .expect_get_configuration()
+            .times(1)
+            .returning(|| {
+                Ok(ScheduledFetchConfiguration::restore(
+                    true,
+                    "19:00".to_string(),
+                ))
+            });
+        let mut scheduler = MockDailyFetchScheduler::new();
+        scheduler
+            .expect_register()
+            .times(1)
+            .withf(|trigger_time| trigger_time == "19:00")
+            .returning(|_| Ok(()));
+
+        let orchestrator = make_orchestrator(
+            MockAccountServiceContract::new(),
+            MockAssetServiceContract::new(),
+            MockPriceProvider::new(),
+            repository,
+            scheduler,
+            now_after_trigger(),
+        );
+
+        orchestrator.self_heal().await;
+    }
+
+    // SPF-015 — a disabled configuration silently removes a leftover schedule.
+    #[tokio::test]
+    async fn self_heal_removes_leftover_schedule_when_disabled() {
+        let mut repository = MockScheduledFetchRepository::new();
+        repository
+            .expect_get_configuration()
+            .times(1)
+            .returning(|| {
+                Ok(ScheduledFetchConfiguration::restore(
+                    false,
+                    "22:15".to_string(),
+                ))
+            });
+        let mut scheduler = MockDailyFetchScheduler::new();
+        scheduler
+            .expect_is_registered()
+            .times(1)
+            .returning(|| Ok(true));
+        scheduler.expect_remove().times(1).returning(|| Ok(()));
+
+        let orchestrator = make_orchestrator(
+            MockAccountServiceContract::new(),
+            MockAssetServiceContract::new(),
+            MockPriceProvider::new(),
+            repository,
+            scheduler,
+            now_after_trigger(),
+        );
+
+        orchestrator.self_heal().await;
+    }
+
+    // SPF-015 — disabled with nothing registered touches nothing.
+    #[tokio::test]
+    async fn self_heal_does_nothing_when_disabled_and_not_registered() {
+        let mut repository = MockScheduledFetchRepository::new();
+        repository
+            .expect_get_configuration()
+            .times(1)
+            .returning(|| {
+                Ok(ScheduledFetchConfiguration::restore(
+                    false,
+                    "22:15".to_string(),
+                ))
+            });
+        let mut scheduler = MockDailyFetchScheduler::new();
+        scheduler
+            .expect_is_registered()
+            .times(1)
+            .returning(|| Ok(false));
+        scheduler.expect_remove().times(0);
+
+        let orchestrator = make_orchestrator(
+            MockAccountServiceContract::new(),
+            MockAssetServiceContract::new(),
+            MockPriceProvider::new(),
+            repository,
+            scheduler,
+            now_after_trigger(),
+        );
+
+        orchestrator.self_heal().await;
+    }
+
+    // -------------------------------------------------------------------------
     // status — SPF-052
     // -------------------------------------------------------------------------
 

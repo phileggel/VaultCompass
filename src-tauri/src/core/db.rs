@@ -72,3 +72,25 @@ impl Database {
         Ok(db)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SPF-023 — the OS-scheduled headless run and the interactive app share
+    // this database as two processes; WAL is the config that makes their
+    // interleaved reads/writes safe. Locks the pragma in so a connect-options
+    // change can't silently drop it.
+    #[tokio::test]
+    async fn database_opens_in_wal_journal_mode() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let db = Database::new(dir.path().to_path_buf())
+            .await
+            .expect("database");
+        let row: (String,) = sqlx::query_as("PRAGMA journal_mode")
+            .fetch_one(&db.pool)
+            .await
+            .expect("pragma query");
+        assert_eq!(row.0.to_lowercase(), "wal");
+    }
+}
