@@ -69,8 +69,12 @@ core/                 shared infra (legacy bucket — new shared code goes in sh
 shared/               gold-layout shared infra (docs/backend-rules.md B0/B37)
   infrastructure/
     http.rs           shared reqwest client construction + capped body reads
+    scheduler/        DailyFetchScheduler trait + per-OS adapters (systemd/schtasks/launchd)
+                      registering the daily scheduled fetch (SPF); NoopScheduler under E2E
 
-lib.rs                composition root — wires services, use cases, dispatchers; calls app_handle.manage()
+lib.rs                composition root — wires services, use cases, dispatchers; calls app_handle.manage().
+                      Also exposes run_scheduled_fetch_headless() — the OS-triggered `--scheduled-fetch`
+                      invocation (main.rs branch) that runs the daily download without a window (SPF-020)
 ```
 
 **Hard rules:**

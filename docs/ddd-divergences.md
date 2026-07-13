@@ -166,6 +166,18 @@ Read this when:
 
 ---
 
+## 14. The scheduled-fetch use case owns its own persistence
+
+**Pattern**: Use cases orchestrate across bounded contexts; persisted aggregates and their repositories live inside a bounded context.
+
+**Practice**: `use_cases/scheduled_fetch/repository.rs` persists `ScheduledFetchConfiguration` (device singleton) and `ScheduledFetchRun` (execution history) directly, with no owning bounded context.
+
+**Trade**: Both entities are operational records of the orchestration itself — a run sweeps `asset` prices and `currency` rates, so neither BC can own its configuration or its outcome without inverting the dependency. A dedicated bounded context for two small records fails the ceremony/benefit test. Precedent: `update_checker`'s use-case-scoped `UpdateState`.
+
+**When to revisit**: If scheduling grows more aggregates (per-asset schedules, notification preferences), promote the trio to a real `context/scheduling/` bounded context.
+
+---
+
 ## What we follow strictly (not divergences)
 
 For reference, the patterns this codebase enforces tightly:

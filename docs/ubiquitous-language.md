@@ -289,6 +289,24 @@ A fetch task triggered manually by the user from an account detail page. Scope: 
 
 > Status: confirmed
 
+### Scheduled fetch
+
+The once-daily automatic download of closing prices and exchange rates, launched by the operating system at the configured trigger time — it runs even while the app is closed and records nothing but daily closes, never a live intraday quote.
+
+> Status: confirmed
+
+### Trigger time
+
+The local wall-clock time of day the scheduled fetch runs (default 22:15). A trigger missed while the machine was off executes at the next start; the run settles the latest pending trigger day.
+
+> Status: confirmed
+
+### Backfill
+
+Recording every missed trading-day close since the last successful scheduled fetch, up to 30 days back. Older gaps are left untouched.
+
+> Status: confirmed
+
 ### External provider
 
 A third-party HTTP service that returns current asset prices. Currently Yahoo Finance — keyless, no credential required (ADR-017). "provider" in prose means an External provider.
