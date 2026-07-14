@@ -521,12 +521,12 @@ impl Account {
             )?
         };
 
-        // Replace the transaction in-memory
-        if let Some(slot) = self.transactions.iter_mut().find(|t| t.id == tx_id) {
-            *slot = updated_tx;
-        } else {
-            return Err(AccountError::TransactionNotFound.into());
-        }
+        // Replace the transaction in-memory, keeping the original so a failed
+        // recalculation restores the history instead of leaving the splice behind
+        let original_tx = match self.transactions.iter_mut().find(|t| t.id == tx_id) {
+            Some(slot) => std::mem::replace(slot, updated_tx),
+            None => return Err(AccountError::TransactionNotFound.into()),
+        };
 
         // Full recalculation for the (account, asset) pair — SEL-032 cascading check inside
         let pair_txs: Vec<&Transaction> = self
@@ -534,7 +534,15 @@ impl Account {
             .iter()
             .filter(|t| t.asset_id == asset_id)
             .collect();
-        let (holding, pnl_map) = self.recalculate_holding(&asset_id, &pair_txs)?;
+        let (holding, pnl_map) = match self.recalculate_holding(&asset_id, &pair_txs) {
+            Ok(result) => result,
+            Err(e) => {
+                if let Some(slot) = self.transactions.iter_mut().find(|t| t.id == tx_id) {
+                    *slot = original_tx;
+                }
+                return Err(e);
+            }
+        };
 
         // Attach updated realized_pnl to all sells in the pair (excluding the corrected tx itself,
         // which is handled unconditionally below to cover the Purchase case too)
@@ -572,7 +580,12 @@ impl Account {
 
         // CSH-042 / CSH-051 — chronological replay over Deposit / Withdrawal / Purchase / Sell.
         // OpeningBalance corrections do not touch cash (CSH-060), so the replay is harmless on them.
-        self.replay_cash_holding()?;
+        if let Err(e) = self.replay_cash_holding() {
+            if let Some(slot) = self.transactions.iter_mut().find(|t| t.id == tx_id) {
+                *slot = original_tx;
+            }
+            return Err(e.into());
+        }
 
         self.transactions
             .iter()
@@ -2743,6 +2756,63 @@ mod tests {
             matches!(op_err, AccountError::CascadingOversell),
             "expected CascadingOversell when moving a sell before its buy, got: {op_err}"
         );
+    }
+
+    // A failed correction must leave the history untouched: the original
+    // transaction stays in `transactions`, not the spliced-in replacement.
+    #[test]
+    fn correct_transaction_restores_original_on_recalculation_failure() {
+        let mut acc = cash_seeded_account();
+        acc.buy_holding(
+            "asset-1".to_string(),
+            "2024-06-01".to_string(),
+            micro(2),
+            micro(100),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let sell = acc
+            .sell_holding(
+                "asset-1".to_string(),
+                "2024-07-01".to_string(),
+                micro(1),
+                micro(150),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .unwrap()
+            .clone();
+
+        // Moving the sell before its buy fails the cascading oversell check
+        acc.correct_transaction(
+            &sell.id,
+            "2024-05-01".to_string(),
+            micro(1),
+            micro(150),
+            micro(1),
+            0,
+            None,
+            None,
+        )
+        .unwrap_err();
+
+        let stored = acc
+            .transactions
+            .iter()
+            .find(|t| t.id == sell.id)
+            .expect("sell must remain in history after a failed correction");
+        assert_eq!(
+            stored.date, sell.date,
+            "failed correction must restore the original date, not keep the spliced one"
+        );
+        assert_eq!(stored.quantity, sell.quantity);
+        assert_eq!(stored.unit_price, sell.unit_price);
+        assert_eq!(stored.total_amount, sell.total_amount);
     }
 
     // TRX-034 — cancel_transaction removes holding when it was the last transaction
