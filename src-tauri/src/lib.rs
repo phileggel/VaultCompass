@@ -11,20 +11,17 @@
 #![cfg_attr(not(test), deny(clippy::todo))]
 #![cfg_attr(not(test), deny(clippy::unimplemented))]
 
-use crate::context::account::{
-    AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository,
-    SqliteHoldingNoteRepository, SqliteHoldingRepository, SqliteTransactionRepository,
-};
+use crate::context::account::AccountService;
 use crate::context::asset::{
     AssetPriceRepository, AssetService, PriceProvider, ReqwestYahooClient,
-    SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
+    SqliteAssetPriceRepository,
 };
 use crate::context::currency::{
-    ChainedRateProvider, CurrencyService, RateProvider, ReqwestEcbClient, ReqwestFrankfurterClient,
-    SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
+    ChainedRateProvider, RateProvider, ReqwestEcbClient, ReqwestFrankfurterClient,
 };
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
+use crate::shared::infrastructure::container::AppContainer;
 use crate::shared::infrastructure::scheduler::platform_scheduler;
 use crate::use_cases::account_creation::AccountCreationUseCase;
 use crate::use_cases::account_deletion::AccountDeletionUseCase;
@@ -158,57 +155,29 @@ pub fn run() {
                     }
                 });
 
-                let asset_repo = SqliteAssetRepository::new(db.pool.clone());
-                let category_repo = SqliteAssetCategoryRepository::new(db.pool.clone());
-                let price_repo = SqliteAssetPriceRepository::new(db.pool.clone());
                 let price_repo_for_fetch: Arc<dyn AssetPriceRepository> =
                     Arc::new(SqliteAssetPriceRepository::new(db.pool.clone()));
 
-                let asset_service = Arc::new(
-                    AssetService::new(
-                        Box::new(asset_repo),
-                        Box::new(category_repo),
-                        Box::new(price_repo),
-                    )
-                    .with_event_bus(event_bus.clone()),
-                );
-
-                let account_repo = SqliteAccountRepository::new(db.pool.clone());
-                let holding_repo_for_svc = SqliteHoldingRepository::new(db.pool.clone());
-                let transaction_repo_for_svc = SqliteTransactionRepository::new(db.pool.clone());
-                let account_service = Arc::new(
-                    AccountService::new(
-                        Box::new(account_repo),
-                        Box::new(holding_repo_for_svc),
-                        Box::new(transaction_repo_for_svc),
-                    )
-                    .with_event_bus(event_bus.clone())
-                    .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(
-                        db.pool.clone(),
-                    )))
-                    .with_holding_note_repo(Box::new(SqliteHoldingNoteRepository::new(
-                        db.pool.clone(),
-                    ))),
-                );
-
-                // ----- currency BC (FXR) -----
-                // Built before the account use cases so it can be injected as the
-                // valuation read port (FXR-035) for foreign-currency holdings, and
-                // carries the ADR-009 provider chain (Frankfurter → ECB) used by the
-                // piggybacked auto-fetch (FXR-070).
+                // ADR-009 provider chain (Frankfurter → ECB) used by the currency
+                // BC's piggybacked auto-fetch (FXR-070).
                 let rate_provider_chain: Arc<dyn RateProvider> = Arc::new(ChainedRateProvider::new(
                     vec![
                         Arc::new(frankfurter_client) as Arc<dyn RateProvider>,
                         Arc::new(ecb_client) as Arc<dyn RateProvider>,
                     ],
                 ));
-                let currency_service = Arc::new(
-                    CurrencyService::new(
-                        Box::new(SqliteCurrencyPairRepository::new(db.pool.clone())),
-                        Box::new(SqliteCurrencyRateRepository::new(db.pool.clone())),
-                    )
-                    .with_event_bus(event_bus.clone())
-                    .with_rate_provider(rate_provider_chain),
+
+                let AppContainer {
+                    account_service,
+                    asset_service,
+                    currency_service,
+                    price_provider,
+                } = AppContainer::build(
+                    db.pool.clone(),
+                    Arc::new(yahoo_price_client) as Arc<dyn PriceProvider>,
+                    Some(rate_provider_chain),
+                    None,
+                    Some(Arc::clone(&event_bus)),
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(
@@ -277,7 +246,6 @@ pub fn run() {
                 app_handle.manage(AssetWebLookupUseCase::new(Arc::new(ReqwestOpenFigiClient::new())));
 
                 // ----- asset price fetch (keyless Yahoo Finance, ADR-017) -----
-                let price_provider: Arc<dyn PriceProvider> = Arc::new(yahoo_price_client);
                 let fetch_guard = Arc::new(FetchGuard::new());
                 let dispatcher = Arc::new(PriceFetchDispatcher::new(
                     Arc::clone(&price_provider),

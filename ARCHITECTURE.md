@@ -68,6 +68,7 @@ core/                 shared infra (legacy bucket — new shared code goes in sh
 
 shared/               gold-layout shared infra (docs/backend-rules.md B0/B37)
   infrastructure/
+    container.rs      AppContainer — boxes SQLite repos into the application services; consumed by both entry points (lib.rs setup, headless scheduled fetch)
     http.rs           shared reqwest client construction + capped body reads
     scheduler/        DailyFetchScheduler trait + per-OS adapters (systemd/schtasks/launchd)
                       registering the daily scheduled fetch (SPF); NoopScheduler under E2E

@@ -5,18 +5,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::context::account::{
-    AccountService, SqliteAccountRepository, SqliteHoldingRepository, SqliteTransactionRepository,
-};
-use crate::context::asset::{
-    AssetService, ReqwestYahooClient, SqliteAssetCategoryRepository, SqliteAssetPriceRepository,
-    SqliteAssetRepository,
-};
-use crate::context::currency::{
-    CurrencyService, ReqwestFrankfurterClient, SqliteCurrencyPairRepository,
-    SqliteCurrencyRateRepository,
-};
+use crate::context::asset::{PriceProvider, ReqwestYahooClient};
+use crate::context::currency::{RateHistoryProvider, ReqwestFrankfurterClient};
 use crate::core::{Database, BACKEND};
+use crate::shared::infrastructure::container::AppContainer;
 use crate::shared::infrastructure::scheduler::platform_scheduler;
 
 use super::orchestrator::ScheduledFetchOrchestrator;
@@ -80,16 +72,6 @@ pub async fn run() -> i32 {
     };
     let pool = database.pool;
 
-    let account_service = Arc::new(AccountService::new(
-        Box::new(SqliteAccountRepository::new(pool.clone())),
-        Box::new(SqliteHoldingRepository::new(pool.clone())),
-        Box::new(SqliteTransactionRepository::new(pool.clone())),
-    ));
-    let asset_service = Arc::new(AssetService::new(
-        Box::new(SqliteAssetRepository::new(pool.clone())),
-        Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
-        Box::new(SqliteAssetPriceRepository::new(pool.clone())),
-    ));
     let frankfurter_client = match ReqwestFrankfurterClient::new() {
         Ok(client) => Arc::new(client),
         Err(error) => {
@@ -97,13 +79,6 @@ pub async fn run() -> i32 {
             return 1;
         }
     };
-    let currency_service = Arc::new(
-        CurrencyService::new(
-            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-        )
-        .with_rate_history_provider(frankfurter_client),
-    );
     let price_provider = match ReqwestYahooClient::new() {
         Ok(client) => Arc::new(client),
         Err(error) => {
@@ -111,13 +86,23 @@ pub async fn run() -> i32 {
             return 1;
         }
     };
+
+    // No event bus: the headless run must never publish side-effect events
+    // (SPF-024 — there is no window to forward them to).
+    let container = AppContainer::build(
+        pool.clone(),
+        price_provider as Arc<dyn PriceProvider>,
+        None,
+        Some(frankfurter_client as Arc<dyn RateHistoryProvider>),
+        None,
+    );
     let repository = Arc::new(SqliteScheduledFetchRepository::new(pool));
 
     let orchestrator = ScheduledFetchOrchestrator::new(
-        account_service,
-        asset_service,
-        price_provider,
-        currency_service,
+        container.account_service,
+        container.asset_service,
+        container.price_provider,
+        container.currency_service,
         repository,
         platform_scheduler(),
         Arc::new(|| chrono::Local::now().naive_local()),
