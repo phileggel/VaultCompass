@@ -13,6 +13,20 @@ const DASH = "—";
 /** The two granularities of the performance table: monthly rows or yearly rows (PRF-013/014). */
 export type PerformanceViewMode = "month" | "year";
 
+/**
+ * PRF-014 / GPF-014 — resolves the view mode to open with: the remembered choice when
+ * still valid, clamped to year view when a remembered month view is no longer available,
+ * else the default (month when available, otherwise year).
+ */
+export function resolveViewMode(
+  remembered: PerformanceViewMode | null,
+  monthAvailable: boolean,
+): PerformanceViewMode {
+  if (remembered === "month" && !monthAvailable) return "year";
+  if (remembered !== null) return remembered;
+  return monthAvailable ? "month" : "year";
+}
+
 const MONTH_LABEL_KEYS = [
   "account_performance.month.january",
   "account_performance.month.february",

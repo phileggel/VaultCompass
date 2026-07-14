@@ -16,6 +16,7 @@ import {
   presentAssetScopeOptions,
   presentPeriodRow,
   presentValueChartSeries,
+  resolveViewMode,
 } from "./presenter";
 
 // ---- Helpers ----------------------------------------------------------------
@@ -57,6 +58,28 @@ const makeMonthRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePe
   since_inception: makeMetric({ gain: 2_000_000_000, pct: 20_000_000 }),
   annualized_yield: null, // year-row concept only
   ...overrides,
+});
+
+// ---- resolveViewMode (PRF-014 / GPF-014) ------------------------------------
+
+describe("resolveViewMode", () => {
+  it("returns the remembered mode when still valid", () => {
+    expect(resolveViewMode("year", true)).toBe("year");
+    expect(resolveViewMode("month", true)).toBe("month");
+    expect(resolveViewMode("year", false)).toBe("year");
+  });
+
+  it("clamps a remembered month view to year when month view is unavailable", () => {
+    expect(resolveViewMode("month", false)).toBe("year");
+  });
+
+  it("defaults to month when available and nothing is remembered", () => {
+    expect(resolveViewMode(null, true)).toBe("month");
+  });
+
+  it("defaults to year when month view is unavailable and nothing is remembered", () => {
+    expect(resolveViewMode(null, false)).toBe("year");
+  });
 });
 
 // ---- presentAccountPerformanceError (F27, PRF-016, PRF-027) -----------------

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getPerfViewMode, setPerfViewMode } from "./perfViewModeStorage";
+import {
+  getGlobalPerfViewMode,
+  getPerfViewMode,
+  setGlobalPerfViewMode,
+  setPerfViewMode,
+} from "./perfViewModeStorage";
 
 describe("perfViewModeStorage", () => {
   afterEach(() => localStorage.clear());
@@ -33,5 +38,36 @@ describe("perfViewModeStorage", () => {
   it("treats an unrecognized stored value as no preference", () => {
     localStorage.setItem("perf_view_mode_acc-1", "weekly");
     expect(getPerfViewMode("acc-1")).toBeNull();
+  });
+});
+
+describe("perfViewModeStorage — global view", () => {
+  afterEach(() => localStorage.clear());
+
+  it("returns null when no global preference is stored", () => {
+    expect(getGlobalPerfViewMode()).toBeNull();
+  });
+
+  it("round-trips the stored global view mode", () => {
+    setGlobalPerfViewMode("year");
+    expect(getGlobalPerfViewMode()).toBe("year");
+  });
+
+  it("overwrites the stored global mode (last write wins)", () => {
+    setGlobalPerfViewMode("month");
+    setGlobalPerfViewMode("year");
+    expect(getGlobalPerfViewMode()).toBe("year");
+  });
+
+  it("treats an unrecognized stored value as no preference", () => {
+    localStorage.setItem("global_perf_view_mode", "weekly");
+    expect(getGlobalPerfViewMode()).toBeNull();
+  });
+
+  it("does not collide with a per-account preference", () => {
+    setPerfViewMode("acc-1", "month");
+    expect(getGlobalPerfViewMode()).toBeNull();
+    setGlobalPerfViewMode("year");
+    expect(getPerfViewMode("acc-1")).toBe("month");
   });
 });

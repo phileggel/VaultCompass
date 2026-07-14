@@ -165,6 +165,7 @@ const makeDetailsResponse = (): AccountDetailsResponse => ({
 describe("GlobalPerformancePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     useAppStore.setState({
       accounts: [
         makeAccount({ id: "account-2", name: "Zeta Bank" }),

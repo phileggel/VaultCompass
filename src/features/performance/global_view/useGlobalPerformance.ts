@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AccountPerformanceResponse } from "@/bindings";
 import { logger } from "@/lib/logger";
+import { getGlobalPerfViewMode, setGlobalPerfViewMode } from "@/lib/perfViewModeStorage";
 import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import type { I18nMessage } from "@/ui/format/i18n";
@@ -19,6 +20,7 @@ import {
   presentAssetScopeOptions,
   presentPeriodRow,
   presentValueChartSeries,
+  resolveViewMode,
   type ValueChartPoint,
 } from "../shared/presenter";
 
@@ -99,7 +101,9 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
       if (requestSeq !== requestSeqRef.current) return;
       if (result.status === "ok") {
         setData(result.data);
-        setViewMode(result.data.month_view_available ? "month" : "year");
+        // GPF-014 — restore the remembered view mode (clamped to availability),
+        // falling back to the default when there is no stored preference.
+        setViewMode(resolveViewMode(getGlobalPerfViewMode(), result.data.month_view_available));
         const firstMonthlyYear = result.data.monthly[0]?.year ?? null;
         setSelectedYear(firstMonthlyYear);
       } else {
@@ -171,6 +175,12 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
     };
   }, [fetchPerformance]);
 
+  // GPF-014 — remember the user's choice on every toggle, mirroring the per-account page.
+  const selectViewMode = useCallback((mode: PerformanceViewMode) => {
+    setViewMode(mode);
+    setGlobalPerfViewMode(mode);
+  }, []);
+
   const monthViewAvailable = data?.month_view_available ?? false;
 
   const isEmpty = useMemo(
@@ -233,7 +243,7 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
     monthViewAvailable,
     isEmpty,
     viewMode,
-    setViewMode,
+    setViewMode: selectViewMode,
     availableYears,
     selectedYear,
     setSelectedYear,

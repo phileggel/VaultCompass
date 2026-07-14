@@ -144,6 +144,7 @@ const makeDetailsResponse = (
 describe("useGlobalPerformance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     useAppStore.setState({
       accounts: [
         makeAccount({ id: "account-2", name: "Zeta Bank" }),
@@ -356,6 +357,54 @@ describe("useGlobalPerformance", () => {
     await waitFor(() => expect(result.current.viewMode).toBe("month"));
     expect(result.current.selectedYear).toBe(2025);
     expect(result.current.availableYears).toEqual([2025, 2024]);
+  });
+
+  // GPF-014 — a remembered "year" preference overrides the month-view default
+  it("restores the remembered view mode over the default (GPF-014)", async () => {
+    localStorage.setItem("global_perf_view_mode", "year");
+    vi.mocked(gateway.globalPerformanceGateway.getGlobalPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        month_view_available: true,
+        monthly: [makeYearRow({ year: 2025, month: 5 })],
+      }),
+    });
+
+    const { result } = renderHook(() => useGlobalPerformance());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.viewMode).toBe("year");
+  });
+
+  // GPF-014 — toggling the view mode persists the choice on the device
+  it("persists the view mode when the user toggles it (GPF-014)", async () => {
+    vi.mocked(gateway.globalPerformanceGateway.getGlobalPerformance).mockResolvedValue({
+      status: "ok",
+      data: makeResponse({
+        month_view_available: true,
+        monthly: [makeYearRow({ year: 2025, month: 5 })],
+      }),
+    });
+
+    const { result } = renderHook(() => useGlobalPerformance());
+    await waitFor(() => expect(result.current.viewMode).toBe("month"));
+
+    act(() => result.current.setViewMode("year"));
+
+    expect(result.current.viewMode).toBe("year");
+    expect(localStorage.getItem("global_perf_view_mode")).toBe("year");
+  });
+
+  // GPF-014 — a remembered "month" is clamped to year view when month view is gone
+  it("falls back to year view when the remembered month view is unavailable (GPF-014)", async () => {
+    localStorage.setItem("global_perf_view_mode", "month");
+
+    const { result } = renderHook(() => useGlobalPerformance());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.viewMode).toBe("year");
+    // The stored preference is left intact for when month view returns.
+    expect(localStorage.getItem("global_perf_view_mode")).toBe("month");
   });
 
   // GPF-015 — the empty portfolio read is exposed as isEmpty
