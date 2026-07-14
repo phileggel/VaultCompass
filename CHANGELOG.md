@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.37.0] - 2026-07-14
+
+### Added
+
+- enter a dividend directly in the account currency
+- download past exchange rates so old performance shows correctly
+- remember the month or year choice on the global performance view
+- set up the daily download from the app settings
+- daily price download runs on a schedule, even with the app closed
+
+### Fixed
+
+- patch a network security vulnerability
+- scroll through the full exchange-rate history of a currency pair
+
 ## [0.36.0] - 2026-07-11
 
 ### Added
