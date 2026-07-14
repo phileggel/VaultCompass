@@ -112,85 +112,97 @@ export function CurrencyRatesView() {
             {t("currency.action_add_pair")}
           </Button>
         </div>
-        <div className="flex-1 overflow-auto">{body}</div>
-      </div>
+        {/* When a pair is drilled into, the pairs list shrinks so the rate
+            history below gets a bounded, scrollable region of its own — the
+            shell's <main> is overflow-hidden, so anything outside this h-full
+            column is unreachable (bit the EUR-USD history). */}
+        <div
+          className={selectedPair ? "max-h-[40%] shrink-0 overflow-auto" : "flex-1 overflow-auto"}
+        >
+          {body}
+        </div>
 
-      {selectedPair && (
-        <div className="px-4 py-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">
-              {selectedPair.fromCurrency} → {selectedPair.toCurrency}
-            </h3>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="tonal"
-                size="sm"
-                id="currency-rates-action-record-rate"
-                data-testid="action-record-rate"
-                onClick={() =>
-                  setRecordTarget({
-                    from: selectedPair.fromCurrency,
-                    to: selectedPair.toCurrency,
-                  })
-                }
-              >
-                {t("currency.action_record_rate")}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={clearSelection}>
-                {t("action.close")}
-              </Button>
+        {selectedPair && (
+          <div className="flex min-h-0 flex-1 flex-col gap-2 border-t border-neutral-30 pt-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">
+                {selectedPair.fromCurrency} → {selectedPair.toCurrency}
+              </h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="tonal"
+                  size="sm"
+                  id="currency-rates-action-record-rate"
+                  data-testid="action-record-rate"
+                  onClick={() =>
+                    setRecordTarget({
+                      from: selectedPair.fromCurrency,
+                      to: selectedPair.toCurrency,
+                    })
+                  }
+                >
+                  {t("currency.action_record_rate")}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={clearSelection}>
+                  {t("action.close")}
+                </Button>
+              </div>
+            </div>
+            {ratesError && (
+              <p role="alert" data-testid="currency-rates-rates-error" className="text-m3-error">
+                {t(ratesError.key, ratesError.vars)}
+              </p>
+            )}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <table className="w-full">
+                <tbody>
+                  {rates.map((rate) => {
+                    const rateKey = `${rate.from_currency}-${rate.to_currency}-${rate.date}`;
+                    return (
+                      <tr
+                        key={rateKey}
+                        id={`rate-row-${rateKey}`}
+                        className="m3-tr"
+                        data-testid={`rate-row-${rateKey}`}
+                      >
+                        <td className="m3-td tabular-nums">
+                          {formatIsoDateNumeric(rate.date, i18n.language)}
+                        </td>
+                        <td className="m3-td text-right tabular-nums">
+                          {formatRateMicros(rate.rate)}
+                        </td>
+                        <td className="m3-td text-right text-xs text-m3-on-surface-variant">
+                          {t(formatRateSource(rate.source) ?? "")}
+                        </td>
+                        <td className="m3-td text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              id={`action-edit-rate-${rateKey}`}
+                              onClick={() => setEditTarget(rate)}
+                            >
+                              {t("action.edit")}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              id={`action-delete-rate-${rateKey}`}
+                              onClick={() => setDeleteTarget(rate)}
+                            >
+                              {t("action.delete")}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-          {ratesError && (
-            <p role="alert" data-testid="currency-rates-rates-error" className="text-m3-error">
-              {t(ratesError.key, ratesError.vars)}
-            </p>
-          )}
-          <table className="w-full">
-            <tbody>
-              {rates.map((rate) => {
-                const rateKey = `${rate.from_currency}-${rate.to_currency}-${rate.date}`;
-                return (
-                  <tr
-                    key={rateKey}
-                    id={`rate-row-${rateKey}`}
-                    className="m3-tr"
-                    data-testid={`rate-row-${rateKey}`}
-                  >
-                    <td className="m3-td tabular-nums">
-                      {formatIsoDateNumeric(rate.date, i18n.language)}
-                    </td>
-                    <td className="m3-td text-right tabular-nums">{formatRateMicros(rate.rate)}</td>
-                    <td className="m3-td text-right text-xs text-m3-on-surface-variant">
-                      {t(formatRateSource(rate.source) ?? "")}
-                    </td>
-                    <td className="m3-td text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          id={`action-edit-rate-${rateKey}`}
-                          onClick={() => setEditTarget(rate)}
-                        >
-                          {t("action.edit")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          id={`action-delete-rate-${rateKey}`}
-                          onClick={() => setDeleteTarget(rate)}
-                        >
-                          {t("action.delete")}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        )}
+      </div>
 
       <DeclarePairModal
         isOpen={isAddPairOpen}
