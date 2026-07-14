@@ -281,4 +281,64 @@ describe("useDividendTransaction (DIV-020/021/022/025)", () => {
       }),
     );
   });
+
+  // DIV-028 — the entry-mode switch exists only for a foreign-currency asset,
+  // and switching to account-currency mode hides the exchange rate.
+  it("offers the account-currency mode only for a foreign asset and hides the rate in it", () => {
+    const { result } = renderHook(() => useDividendTransaction(BASE_PROPS));
+
+    act(() => result.current.handleChange("assetId", "asset-eur-1"));
+    expect(result.current.showCurrencyModeSwitch).toBe(false);
+
+    act(() => result.current.handleChange("assetId", "asset-usd-1"));
+    expect(result.current.showCurrencyModeSwitch).toBe(true);
+    expect(result.current.showExchangeRate).toBe(true);
+    expect(result.current.amountCurrency).toBe("USD");
+
+    act(() => result.current.setAmountInAccountCurrency(true));
+    expect(result.current.showExchangeRate).toBe(false);
+    expect(result.current.amountCurrency).toBe("EUR");
+  });
+
+  // DIV-029 — account-currency mode records the typed amount verbatim with rate 1,
+  // ignoring whatever rate the form previously held.
+  it("records the typed amount with an exchange rate of 1 in account-currency mode", async () => {
+    mockRecordDividend.mockResolvedValue({ status: "ok", data: {} });
+    const { result } = renderHook(() => useDividendTransaction(BASE_PROPS));
+
+    act(() => result.current.handleChange("assetId", "asset-usd-1"));
+    act(() => result.current.handleChange("amount", "250"));
+    act(() => result.current.handleChange("exchangeRate", "0.92"));
+    act(() => result.current.setAmountInAccountCurrency(true));
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockRecordDividend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset_id: "asset-usd-1",
+        amount_micros: 250_000_000,
+        exchange_rate: 1_000_000,
+      }),
+    );
+  });
+
+  // DIV-022 unchanged — asset-currency mode still converts via the supplied rate.
+  it("keeps the supplied rate when the amount stays in the asset currency", async () => {
+    mockRecordDividend.mockResolvedValue({ status: "ok", data: {} });
+    const { result } = renderHook(() => useDividendTransaction(BASE_PROPS));
+
+    act(() => result.current.handleChange("assetId", "asset-usd-1"));
+    act(() => result.current.handleChange("amount", "250"));
+    act(() => result.current.handleChange("exchangeRate", "0.92"));
+
+    await act(async () => {
+      await result.current.handleSubmit(fakeSubmit);
+    });
+
+    expect(mockRecordDividend).toHaveBeenCalledWith(
+      expect.objectContaining({ exchange_rate: 920_000 }),
+    );
+  });
 });

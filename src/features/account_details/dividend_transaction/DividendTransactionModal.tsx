@@ -43,6 +43,10 @@ export function DividendTransactionModal({
     isSubmitting,
     isFormValid,
     showExchangeRate,
+    showCurrencyModeSwitch,
+    amountInAccountCurrency,
+    setAmountInAccountCurrency,
+    amountCurrency,
     handleChange,
     handleSubmit,
     handleAddAnother,
@@ -53,9 +57,6 @@ export function DividendTransactionModal({
     onSubmitSuccess,
     onRecorded,
   });
-
-  const selectedCurrency =
-    heldAssets.find((a) => a.assetId === formData.assetId)?.assetCurrency ?? accountCurrency;
 
   const footer = useMemo(
     () => (
@@ -120,11 +121,28 @@ export function DividendTransactionModal({
           required
         />
 
-        {/* DIV-021 — net amount in the paying asset's native currency */}
+        {/* DIV-028 — entry-mode switch, only when the currencies differ */}
+        {showCurrencyModeSwitch && (
+          <label className="flex items-center gap-3 cursor-pointer group">
+            <input
+              id="dividend-trx-account-currency-mode"
+              data-testid="dividend-trx-account-currency-mode"
+              type="checkbox"
+              checked={amountInAccountCurrency}
+              onChange={(e) => setAmountInAccountCurrency(e.target.checked)}
+              className="accent-m3-primary w-4 h-4"
+            />
+            <span className="text-sm text-m3-on-surface group-hover:text-m3-primary transition-colors">
+              {t("dividend.form_account_currency_mode", { currency: accountCurrency })}
+            </span>
+          </label>
+        )}
+
+        {/* DIV-021/028 — amount in the selected entry currency */}
         <CalcField
           id="dividend-trx-amount"
           data-testid="dividend-trx-amount"
-          label={`${t("dividend.form_amount_label")} (${selectedCurrency})`}
+          label={`${t("dividend.form_amount_label")} (${amountCurrency})`}
           value={formData.amount}
           onValueChange={(v) => handleChange("amount", v)}
           placeholder={t("dividend.form_amount_placeholder")}

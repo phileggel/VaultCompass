@@ -487,6 +487,7 @@
     "form_select_asset": "Select an asset…",
     "form_amount_label": "Net amount",
     "form_amount_placeholder": "0.00",
+    "form_account_currency_mode": "Enter the amount in {{currency}} (what the account actually received)",
     "action_record": "Record dividend",
     "action_record_and_add_another": "Record & add another",
     "recorded": "Dividend recorded."

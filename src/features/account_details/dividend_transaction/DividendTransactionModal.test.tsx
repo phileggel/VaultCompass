@@ -67,6 +67,10 @@ const makeHookReturn = (overrides: Record<string, unknown> = {}) => ({
   isSubmitting: false,
   isFormValid: false,
   showExchangeRate: false,
+  showCurrencyModeSwitch: false,
+  amountInAccountCurrency: false,
+  setAmountInAccountCurrency: vi.fn(),
+  amountCurrency: "EUR",
   handleChange: vi.fn(),
   handleSubmit: vi.fn(),
   ...overrides,
@@ -222,6 +226,7 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
       makeHookReturn({
         handleChange,
         showExchangeRate: true,
+        amountCurrency: "USD",
         formData: {
           assetId: "asset-usd-1",
           date: TODAY,
@@ -265,5 +270,26 @@ describe("DividendTransactionModal (DIV-020/021/022/025)", () => {
     await userEvent.click(cancelButton);
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // DIV-028 — the account-currency switch renders for a foreign asset and
+  // drives the hook's mode setter.
+  it("toggles the account-currency entry mode from its checkbox (DIV-028)", () => {
+    const setAmountInAccountCurrency = vi.fn();
+    mockUseDividendTransaction.mockReturnValue(
+      makeHookReturn({ showCurrencyModeSwitch: true, setAmountInAccountCurrency }),
+    );
+    render(<DividendTransactionModal {...BASE_PROPS} />);
+
+    fireEvent.click(screen.getByTestId("dividend-trx-account-currency-mode"));
+    expect(setAmountInAccountCurrency).toHaveBeenCalledWith(true);
+  });
+
+  // DIV-028 — no switch for a same-currency asset.
+  it("hides the account-currency switch when the currencies match (DIV-028)", () => {
+    mockUseDividendTransaction.mockReturnValue(makeHookReturn({ showCurrencyModeSwitch: false }));
+    render(<DividendTransactionModal {...BASE_PROPS} />);
+
+    expect(screen.queryByTestId("dividend-trx-account-currency-mode")).toBeNull();
   });
 });

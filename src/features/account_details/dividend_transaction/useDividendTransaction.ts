@@ -53,18 +53,31 @@ export function useDividendTransaction({
   }));
   const [error, setError] = useState<I18nMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // DIV-028 — when the paying asset's currency differs, the amount can be
+  // typed directly in the account currency (no rate to look up).
+  const [amountInAccountCurrency, setAmountInAccountCurrency] = useState(false);
 
   const selectedAsset = useMemo(
     () => heldAssets.find((a) => a.assetId === formData.assetId) ?? null,
     [heldAssets, formData.assetId],
   );
 
-  // DIV-022 — exchange rate only relevant when the paying asset's currency
-  // differs from the account currency.
-  const showExchangeRate = useMemo(
+  // DIV-028 — the entry-mode switch only exists when the currencies differ.
+  const showCurrencyModeSwitch = useMemo(
     () => selectedAsset !== null && selectedAsset.assetCurrency !== accountCurrency,
     [selectedAsset, accountCurrency],
   );
+
+  // DIV-022/028 — exchange rate only relevant when the paying asset's currency
+  // differs from the account currency AND the amount is typed in the asset
+  // currency (account-currency mode needs no rate).
+  const showExchangeRate = showCurrencyModeSwitch && !amountInAccountCurrency;
+
+  // DIV-028 — the currency the typed amount is denominated in.
+  const amountCurrency =
+    amountInAccountCurrency || selectedAsset === null
+      ? accountCurrency
+      : selectedAsset.assetCurrency;
 
   // DIV-021 — asset selected, amount strictly positive, date valid.
   const isFormValid = useMemo(
@@ -100,7 +113,12 @@ export function useDividendTransaction({
         asset_id: formData.assetId,
         date: formData.date,
         amount_micros: decimalToMicro(formData.amount),
-        exchange_rate: decimalToMicro(formData.exchangeRate),
+        // DIV-029 — account-currency mode credits the typed amount verbatim
+        // (rate 1); asset-currency mode converts via the supplied rate.
+        exchange_rate:
+          showCurrencyModeSwitch && amountInAccountCurrency
+            ? decimalToMicro("1")
+            : decimalToMicro(formData.exchangeRate),
         note: formData.note || null,
       });
       if (result.status === "error") {
@@ -114,7 +132,7 @@ export function useDividendTransaction({
     } finally {
       setIsSubmitting(false);
     }
-  }, [accountId, formData, t, showSnackbar]);
+  }, [accountId, formData, t, showSnackbar, showCurrencyModeSwitch, amountInAccountCurrency]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -142,6 +160,10 @@ export function useDividendTransaction({
     isSubmitting,
     isFormValid,
     showExchangeRate,
+    showCurrencyModeSwitch,
+    amountInAccountCurrency,
+    setAmountInAccountCurrency,
+    amountCurrency,
     handleChange,
     handleSubmit,
     handleAddAnother,
