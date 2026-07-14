@@ -131,4 +131,50 @@ describe("useCurrencyRatesView", () => {
     unmount();
     await waitFor(() => expect(unlisten).toHaveBeenCalled());
   });
+
+  // FXR-110 — a successful backfill resolves with the written count and
+  // refreshes the pair list (and the drilled-in history when one is open).
+  it("backfillHistory resolves ok with the written count and refetches", async () => {
+    vi.mocked(gateway.getCurrencyPairs).mockResolvedValue({ status: "ok", data: [PAIR] });
+    vi.mocked(gateway.getCurrencyRates).mockResolvedValue({ status: "ok", data: [RATE] });
+    vi.mocked(gateway.backfillCurrencyRateHistory).mockResolvedValue({
+      status: "ok",
+      data: 42,
+    });
+
+    const { result } = renderHook(() => useCurrencyRatesView());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let outcome: Awaited<ReturnType<typeof result.current.backfillHistory>> | undefined;
+    await act(async () => {
+      outcome = await result.current.backfillHistory();
+    });
+
+    expect(outcome).toEqual({ status: "ok", ratesWritten: 42 });
+    expect(gateway.getCurrencyPairs).toHaveBeenCalledTimes(2); // mount + post-backfill
+    expect(result.current.isBackfilling).toBe(false);
+  });
+
+  // FXR-114 — an unreachable provider surfaces as a presented message.
+  it("backfillHistory resolves an error message when the provider is unreachable", async () => {
+    vi.mocked(gateway.getCurrencyPairs).mockResolvedValue({ status: "ok", data: [PAIR] });
+    vi.mocked(gateway.backfillCurrencyRateHistory).mockResolvedValue({
+      status: "error",
+      error: { code: "ProviderUnreachable" },
+    });
+
+    const { result } = renderHook(() => useCurrencyRatesView());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let outcome: Awaited<ReturnType<typeof result.current.backfillHistory>> | undefined;
+    await act(async () => {
+      outcome = await result.current.backfillHistory();
+    });
+
+    expect(outcome).toEqual({
+      status: "error",
+      message: { key: "error.currency.ProviderUnreachable" },
+    });
+    expect(gateway.getCurrencyPairs).toHaveBeenCalledTimes(1); // mount only — no refetch
+  });
 });

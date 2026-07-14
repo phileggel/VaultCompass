@@ -637,6 +637,9 @@
     "loading": "Chargement des paires de devises…",
     "empty": "Aucune paire de devises suivie pour l'instant.",
     "action_add_pair": "Ajouter une paire",
+    "action_backfill_history": "Télécharger l'historique des taux",
+    "backfill_running": "Téléchargement…",
+    "backfill_success": "{{count}} taux historiques téléchargés.",
     "action_record_rate": "Saisir un taux",
     "action_record_fx_rate": "Ajouter un taux de change",
     "declare_pair_title": "Ajouter une paire de devises",
@@ -683,6 +686,7 @@
       "InvalidCurrency": "Code de devise ISO 4217 invalide.",
       "IdentityPair": "Les devises source et cible doivent être différentes.",
       "RateNotFound": "L'enregistrement du taux est introuvable.",
+      "ProviderUnreachable": "Le fournisseur de taux de change est injoignable. Veuillez réessayer plus tard.",
       "DatabaseError": "Une erreur de base de données inattendue est survenue. Veuillez réessayer."
     },
     "InvalidExchange": "La place de cotation \"{{exchange_code}}\" sélectionnée n'est pas dans la liste prise en charge.",

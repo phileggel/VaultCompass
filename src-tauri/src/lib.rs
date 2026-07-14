@@ -39,6 +39,7 @@ use crate::use_cases::delete_asset::DeleteAssetUseCase;
 use crate::use_cases::fee_generation::FeeGenerationOrchestrator;
 use crate::use_cases::global_performance::GlobalPerformanceUseCase;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
+use crate::use_cases::rate_history_backfill::RateHistoryBackfillUseCase;
 use crate::use_cases::scheduled_fetch::{
     ScheduledFetchOrchestrator, SqliteScheduledFetchRepository,
 };
@@ -312,6 +313,12 @@ pub fn run() {
                     self_heal_orchestrator.self_heal().await;
                 });
                 app_handle.manage(scheduled_fetch_orchestrator);
+
+                // FXR-110 — historical rate backfill for the Currency Rates view.
+                app_handle.manage(Arc::new(RateHistoryBackfillUseCase::new(
+                    account_service.clone(),
+                    Arc::clone(&currency_service),
+                )));
 
                 app_handle.manage(Arc::clone(&currency_service));
 

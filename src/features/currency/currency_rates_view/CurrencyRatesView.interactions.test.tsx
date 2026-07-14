@@ -105,6 +105,8 @@ const baseHook = {
   selectPair: vi.fn(),
   clearSelection: vi.fn(),
   refetch: vi.fn(),
+  isBackfilling: false,
+  backfillHistory: vi.fn().mockResolvedValue({ status: "ok" as const, ratesWritten: 0 }),
 };
 
 function mockHook(overrides: Partial<typeof baseHook> = {}) {
@@ -219,5 +221,24 @@ describe("CurrencyRatesView interactions", () => {
 
     await user.click(screen.getByTestId("delete-success"));
     expect(screen.queryByTestId("mock-delete-rate")).not.toBeInTheDocument();
+  });
+
+  // FXR-110 — the history download triggers the backfill action
+  it("triggers the history backfill from its header action", async () => {
+    const user = userEvent.setup();
+    const backfillHistory = vi.fn().mockResolvedValue({ status: "ok" as const, ratesWritten: 42 });
+    mockHook({ backfillHistory });
+    render(<CurrencyRatesView />);
+
+    await user.click(screen.getByTestId("action-backfill-history"));
+    expect(backfillHistory).toHaveBeenCalledTimes(1);
+  });
+
+  // FXR-110 — the action is disabled while the download is in flight
+  it("disables the history backfill action while it runs", () => {
+    mockHook({ isBackfilling: true });
+    render(<CurrencyRatesView />);
+
+    expect(screen.getByTestId("action-backfill-history")).toBeDisabled();
   });
 });

@@ -171,6 +171,20 @@ This feature does not add fields to `HoldingDetail`; it changes the **conditions
 
 **FXR-091 — No-rate indication (frontend)**: When a foreign-currency holding has no usable rate (FXR-034), the affected columns show the same "—" as a holding with no recorded price; "no FX rate" and "no market price" are not distinguished in v1 (parallels MKT-032's deferred disambiguation). The staleness label (FXR-090) still communicates freshness when a rate does exist.
 
+### Historical Rate Backfill (110–119)
+
+Historical valuations (yearly/monthly performance, as-of-date views) need a rate **at each historical date**; the fetch paths above only ever write current rates, so an account whose history predates its pairs values foreign holdings at 0 in the past (FXR-034) and its performance percentages degrade to "—" (PRF-032). The backfill fills the historical rate series in one action.
+
+**FXR-110 — Backfill action (frontend)**: The Currency Rates view offers a "Download rate history" action. While the download is in progress the action is disabled with a pending indicator; on success a snackbar reports how many rates were written and the view refreshes; on failure a snackbar reports the error.
+
+**FXR-111 — Range anchor (backend)**: The backfill covers the full span any valuation can ask for: from the **earliest transaction date across all accounts** through today. When no transaction exists, or no pair is persisted, the action succeeds quietly with zero writes.
+
+**FXR-112 — Dated daily series (backend)**: For every persisted pair (FXR-071 scope), the backfill records one dated rate per day the provider published, via the same dated-series semantics as the scheduled fetch (SPF-035–038): absent days write nothing, a pair the provider cannot serve is silently skipped (FXR-073), cross-rates compute per FXR-080–083, and rows carry the provider source (FXR-102).
+
+**FXR-113 — Existing rows follow latest-write-wins (backend)**: Backfilled rows upsert by `(pair, date)` per ADR-012 — a manual rate previously entered on a covered date is overwritten, exactly as the current-rate fetch overwrites a same-day manual rate.
+
+**FXR-114 — Total provider failure is surfaced (backend)**: Unlike the piggybacked fetch (FXR-073/SPF-039, silent), a user-triggered backfill whose provider is entirely unreachable is rejected with a specific error so the frontend can report it (FXR-110). Per-pair skips within a reachable provider remain silent.
+
 ### Source Field on CurrencyRate (100–109)
 
 **FXR-100 — CurrencyRateSource enum (backend)**: `CurrencyRate.source` is of type `CurrencyRateSource` with variants `Manual | Frankfurter | Ecb` (ADR-009), persisted as a SQLite text discriminant matching the variant name (consistent with `AssetPrice.source`). Exposed on the frontend wire surface.

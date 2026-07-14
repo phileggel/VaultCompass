@@ -1,6 +1,23 @@
-import type { CurrencyError, CurrencyRateSource } from "@/bindings";
+import type { CurrencyError, CurrencyRateSource, RateHistoryBackfillError } from "@/bindings";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { formatStalenessLabel, type StalenessLabel } from "@/ui/format/staleness";
+
+/**
+ * F27 — Maps a `RateHistoryBackfillError` (FXR-110/114) to an i18n key.
+ * Reuses the `error.currency.*` namespace — both codes describe the same
+ * bounded context's failures.
+ */
+export function rateHistoryBackfillErrorToI18n(error: RateHistoryBackfillError): I18nMessage {
+  switch (error.code) {
+    case "ProviderUnreachable":
+    case "DatabaseError":
+      return { key: `error.currency.${error.code}` };
+    default: {
+      const _exhaustive: never = error;
+      return _exhaustive;
+    }
+  }
+}
 
 /**
  * F27 — Maps a `CurrencyError` to an i18n key (+ optional interpolation vars).
@@ -19,6 +36,7 @@ export function currencyErrorToI18n(error: CurrencyError): I18nMessage {
     case "InvalidCurrency":
     case "IdentityPair":
     case "RateNotFound":
+    case "ProviderUnreachable":
     case "DatabaseError":
       return { key: `error.currency.${error.code}` };
     default: {

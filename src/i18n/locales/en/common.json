@@ -637,6 +637,9 @@
     "loading": "Loading currency pairs…",
     "empty": "No currency pairs followed yet.",
     "action_add_pair": "Add pair",
+    "action_backfill_history": "Download rate history",
+    "backfill_running": "Downloading…",
+    "backfill_success": "{{count}} historical rates downloaded.",
     "action_record_rate": "Record rate",
     "action_record_fx_rate": "Add FX rate",
     "declare_pair_title": "Add a currency pair",
@@ -683,6 +686,7 @@
       "InvalidCurrency": "Not a valid ISO 4217 currency code.",
       "IdentityPair": "Source and target currencies must differ.",
       "RateNotFound": "The rate record was not found.",
+      "ProviderUnreachable": "The exchange-rate provider could not be reached. Please try again later.",
       "DatabaseError": "An unexpected database error occurred. Please try again."
     },
     "InvalidExchange": "The selected exchange \"{{exchange_code}}\" is not in the supported list.",

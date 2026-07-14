@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CurrencyRate } from "@/bindings";
 import { Button } from "@/ui/components/button/Button";
+import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
 import { DeclarePairModal } from "../declare_pair/DeclarePairModal";
 import { DeleteRateConfirmation, RecordRateModal } from "../record_rate/RecordRateModal";
@@ -21,7 +22,20 @@ export function CurrencyRatesView() {
     selectPair,
     clearSelection,
     refetch,
+    isBackfilling,
+    backfillHistory,
   } = useCurrencyRatesView();
+  const showSnackbar = useSnackbar();
+
+  // FXR-110 — one-click historical download; outcome lands in a snackbar.
+  const handleBackfill = async () => {
+    const outcome = await backfillHistory();
+    if (outcome.status === "ok") {
+      showSnackbar(t("currency.backfill_success", { count: outcome.ratesWritten }));
+    } else {
+      showSnackbar(t(outcome.message.key, outcome.message.vars));
+    }
+  };
 
   const [isAddPairOpen, setIsAddPairOpen] = useState(false);
   const [recordTarget, setRecordTarget] = useState<{ from: string; to: string } | null>(null);
@@ -102,15 +116,27 @@ export function CurrencyRatesView() {
       <div className="flex h-full flex-col gap-2 p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-medium text-m3-on-surface">{t("currency.view_title")}</h2>
-          <Button
-            variant="tonal"
-            size="sm"
-            id="action-add-pair"
-            data-testid="action-add-pair"
-            onClick={() => setIsAddPairOpen(true)}
-          >
-            {t("currency.action_add_pair")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              id="action-backfill-history"
+              data-testid="action-backfill-history"
+              disabled={isBackfilling}
+              onClick={() => void handleBackfill()}
+            >
+              {t(isBackfilling ? "currency.backfill_running" : "currency.action_backfill_history")}
+            </Button>
+            <Button
+              variant="tonal"
+              size="sm"
+              id="action-add-pair"
+              data-testid="action-add-pair"
+              onClick={() => setIsAddPairOpen(true)}
+            >
+              {t("currency.action_add_pair")}
+            </Button>
+          </div>
         </div>
         {/* When a pair is drilled into, the pairs list shrinks so the rate
             history below gets a bounded, scrollable region of its own — the

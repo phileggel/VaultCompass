@@ -5,6 +5,7 @@ import {
   type CurrencyRate,
   commands,
   events,
+  type RateHistoryBackfillError,
   type Result,
 } from "../../bindings";
 
@@ -65,6 +66,13 @@ export async function getCurrencyRates(
   return await commands.getCurrencyRates(fromCurrency, toCurrency);
 }
 
+/** FXR-110 — downloads the full dated rate history for every persisted pair. */
+export async function backfillCurrencyRateHistory(): Promise<
+  Result<number, RateHistoryBackfillError>
+> {
+  return await commands.backfillCurrencyRateHistory();
+}
+
 /** Subscribe to the backend event bus; invokes `callback` with each event's discriminant (FXR-026/037). */
 export async function subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
   return events.event.listen((event) => {
@@ -79,5 +87,6 @@ export const currencyGateway = {
   deleteCurrencyRate,
   getCurrencyPairs,
   getCurrencyRates,
+  backfillCurrencyRateHistory,
   subscribeToEvents,
 };

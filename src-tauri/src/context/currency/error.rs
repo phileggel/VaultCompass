@@ -50,6 +50,12 @@ pub enum CurrencyError {
         date: String,
     },
 
+    /// The external rate provider could not be reached at all during a
+    /// user-triggered history backfill (FXR-114). The piggybacked fetch paths
+    /// never raise this — they degrade silently (FXR-073).
+    #[error("The exchange-rate provider could not be reached")]
+    ProviderUnreachable,
+
     /// An infrastructure / database failure occurred. The full diagnostic is
     /// preserved server-side via `tracing::error!`; the wire surface carries
     /// no hint.

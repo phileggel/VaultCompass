@@ -769,6 +769,19 @@ async getScheduledFetchStatus() : Promise<Result<ScheduledFetchStatus, Scheduled
 }
 },
 /**
+ * Backfills the historical exchange-rate series for every persisted pair,
+ * from the earliest transaction date across all accounts through today
+ * (FXR-110–114). Returns the number of rate rows written.
+ */
+async backfillCurrencyRateHistory() : Promise<Result<number, RateHistoryBackfillError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("backfill_currency_rate_history") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Tauri command allowing the frontend to emit structured log entries
  * into the backend tracing system (visible in app logs and collect-logs output).
  */
@@ -1750,6 +1763,12 @@ export type CurrencyError =
  * No rate exists for the given pair on the given date (FXR-052/053).
  */
 { code: "RateNotFound"; from_currency: string; to_currency: string; date: string } | 
+/**
+ * The external rate provider could not be reached at all during a
+ * user-triggered history backfill (FXR-114). The piggybacked fetch paths
+ * never raise this — they degrade silently (FXR-073).
+ */
+{ code: "ProviderUnreachable" } | 
 /**
  * An infrastructure / database failure occurred. The full diagnostic is
  * preserved server-side via `tracing::error!`; the wire surface carries
@@ -2736,6 +2755,19 @@ since_inception: PerformanceMetric | null;
  * percentage is absent or the cumulative is a total loss (root undefined).
  */
 annualized_yield: PerformanceMetric | null }
+/**
+ * Flat wire-facing error enum for `backfill_currency_rate_history`
+ * (FXR-110/114).
+ */
+export type RateHistoryBackfillError = 
+/**
+ * The external rate provider could not be reached at all (FXR-114).
+ */
+{ code: "ProviderUnreachable" } | 
+/**
+ * An unexpected database error occurred.
+ */
+{ code: "DatabaseError" }
 /**
  * Parameters for recording an interest credit on a held asset or the account's
  * cash line (INT-020). The amount is either a rate or a direct quantity —
