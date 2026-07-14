@@ -667,6 +667,8 @@ impl Account {
     /// `total_amount = total_cost` (direct). `unit_price = floor(total_cost * MICRO / quantity)`.
     /// `fees = 0`, `exchange_rate = 1_000_000`. TRX-026 formula does not apply.
     /// OpeningBalance rows participate in VWAP identically to Purchase (TRX-048).
+    /// The cash line cannot be seeded via an opening balance (CSH-061); initial
+    /// cash is recorded via a Deposit instead.
     pub fn open_holding(
         &mut self,
         asset_id: String,
@@ -674,6 +676,12 @@ impl Account {
         quantity: i64,
         total_cost: i64,
     ) -> Result<&Transaction> {
+        // CSH-061 — the cash line is never seeded via an opening balance; a
+        // cash-line OpeningBalance would count as a typed-cost flow in the
+        // performance bridge while contributing nothing to end value.
+        if crate::core::cash::is_cash_asset(&asset_id) {
+            return Err(AccountError::OpeningBalanceOnCashAsset.into());
+        }
         if quantity <= 0 {
             return Err(AccountError::QuantityNotPositive.into());
         }
@@ -2919,6 +2927,27 @@ mod tests {
                 .map(|e| matches!(e, AccountError::InvalidTotalCost))
                 .unwrap_or(false),
             "expected InvalidTotalCost, got: {err}"
+        );
+    }
+
+    // CSH-061 — an opening balance cannot target the cash line.
+    #[test]
+    fn open_holding_rejects_cash_line() {
+        let mut acc = cash_seeded_account();
+        let cash_asset_id = acc.cash_asset_id();
+        let err = acc
+            .open_holding(
+                cash_asset_id,
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<AccountError>()
+                .map(|e| matches!(e, AccountError::OpeningBalanceOnCashAsset))
+                .unwrap_or(false),
+            "expected OpeningBalanceOnCashAsset, got: {err}"
         );
     }
 

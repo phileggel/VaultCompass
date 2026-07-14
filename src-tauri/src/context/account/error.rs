@@ -32,6 +32,10 @@ pub enum AccountError {
     /// mined / gifted / airdropped position).
     #[error("Total cost must not be negative")]
     InvalidTotalCost,
+    /// An opening balance cannot target the account's cash line (CSH-061);
+    /// initial cash is recorded via a Deposit instead.
+    #[error("Opening balance cannot target the cash line")]
+    OpeningBalanceOnCashAsset,
 
     // --- Account aggregate operations (buy/sell/correct/cancel/cash) ---
     /// Attempt to sell an asset with no open position (quantity = 0).
@@ -217,6 +221,10 @@ mod tests {
         assert_eq!(
             to_value(AccountError::InvalidTotalCost).unwrap(),
             json!({ "code": "InvalidTotalCost" })
+        );
+        assert_eq!(
+            to_value(AccountError::OpeningBalanceOnCashAsset).unwrap(),
+            json!({ "code": "OpeningBalanceOnCashAsset" })
         );
         assert_eq!(
             to_value(AccountError::ClosedPosition).unwrap(),

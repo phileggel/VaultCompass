@@ -939,6 +939,11 @@ export type AccountError =
  */
 { code: "InvalidTotalCost" } | 
 /**
+ * An opening balance cannot target the account's cash line (CSH-061);
+ * initial cash is recorded via a Deposit instead.
+ */
+{ code: "OpeningBalanceOnCashAsset" } | 
+/**
  * Attempt to sell an asset with no open position (quantity = 0).
  */
 { code: "ClosedPosition" } | 

@@ -1755,6 +1755,12 @@ mod tests {
             OpenHoldingError::Account(AccountError::QuantityNotPositive)
         ));
 
+        // AccountError leaf → cash-line guard (CSH-061)
+        assert!(matches!(
+            to_open_holding_error(anyhow::Error::new(AccountError::OpeningBalanceOnCashAsset)),
+            OpenHoldingError::Account(AccountError::OpeningBalanceOnCashAsset)
+        ));
+
         // Anything else → Application(DatabaseError) (the catch-all path)
         assert!(matches!(
             to_open_holding_error(anyhow::anyhow!("synthetic infra failure")),
@@ -2627,6 +2633,44 @@ mod tests {
                 OpenHoldingError::Account(AccountError::QuantityNotPositive)
             ),
             "expected TxValidation(QuantityNotPositive), got: {err:?}"
+        );
+    }
+
+    // CSH-061 — open_holding rejects the account's cash line through the service
+    #[tokio::test]
+    async fn open_holding_rejects_cash_line_through_the_service() {
+        use crate::context::account::AccountError;
+        use OpenHoldingError;
+        let pool = make_pool().await;
+        let (svc, _asset_id) = setup(&pool).await;
+        let account = svc
+            .create(
+                "Acc".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+
+        let err = svc
+            .open_holding(
+                &account.id,
+                crate::core::cash::system_cash_asset_id("EUR"),
+                "2024-01-01".to_string(),
+                micro(1),
+                micro(100),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(
+                err,
+                OpenHoldingError::Account(AccountError::OpeningBalanceOnCashAsset)
+            ),
+            "expected Account(OpeningBalanceOnCashAsset), got: {err:?}"
         );
     }
 
