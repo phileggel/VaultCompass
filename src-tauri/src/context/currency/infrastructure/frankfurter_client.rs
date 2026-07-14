@@ -54,6 +54,13 @@ impl RateProvider for ReqwestFrankfurterClient {
 #[async_trait]
 impl RateHistoryProvider for ReqwestFrankfurterClient {
     async fn fetch_eur_range(&self, from: &str, to: &str) -> Result<Vec<EurSnapshot>> {
+        // The raw substitution below must never receive anything but strict
+        // ISO dates — guarded here so the outbound URL stays injection-proof
+        // even if a future write path skips the domain's date validation.
+        for date in [from, to] {
+            chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                .with_context(|| format!("fetch_eur_range: not an ISO date: {date}"))?;
+        }
         let url = FRANKFURTER_RANGE_URL_TEMPLATE
             .replace("{from}", from)
             .replace("{to}", to);

@@ -101,6 +101,10 @@ mod tests {
             json!({ "code": "InvalidCurrency", "currency": "XX" })
         );
         assert_eq!(
+            to_value(CurrencyError::ProviderUnreachable).unwrap(),
+            json!({ "code": "ProviderUnreachable" })
+        );
+        assert_eq!(
             to_value(CurrencyError::IdentityPair).unwrap(),
             json!({ "code": "IdentityPair" })
         );

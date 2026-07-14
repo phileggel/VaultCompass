@@ -60,7 +60,7 @@ const makeMonthRow = (overrides: Partial<PerformancePeriod> = {}): PerformancePe
   ...overrides,
 });
 
-// ---- resolveViewMode (PRF-014 / GPF-014) ------------------------------------
+// ---- resolveViewMode (PRF-014 / GPF-016) ------------------------------------
 
 describe("resolveViewMode", () => {
   it("returns the remembered mode when still valid", () => {

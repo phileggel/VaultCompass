@@ -342,8 +342,8 @@ describe("useGlobalPerformance", () => {
     expect(result.current.rows).toHaveLength(1);
   });
 
-  // GPF-014 — month view available opens in month view with the most recent year selected
-  it("opens in month view with the most recent year when month view is available (GPF-014)", async () => {
+  // GPF-016 — month view available opens in month view with the most recent year selected
+  it("opens in month view with the most recent year when month view is available (GPF-016)", async () => {
     vi.mocked(gateway.globalPerformanceGateway.getGlobalPerformance).mockResolvedValue({
       status: "ok",
       data: makeResponse({
@@ -359,8 +359,8 @@ describe("useGlobalPerformance", () => {
     expect(result.current.availableYears).toEqual([2025, 2024]);
   });
 
-  // GPF-014 — a remembered "year" preference overrides the month-view default
-  it("restores the remembered view mode over the default (GPF-014)", async () => {
+  // GPF-016 — a remembered "year" preference overrides the month-view default
+  it("restores the remembered view mode over the default (GPF-016)", async () => {
     localStorage.setItem("global_perf_view_mode", "year");
     vi.mocked(gateway.globalPerformanceGateway.getGlobalPerformance).mockResolvedValue({
       status: "ok",
@@ -376,8 +376,8 @@ describe("useGlobalPerformance", () => {
     expect(result.current.viewMode).toBe("year");
   });
 
-  // GPF-014 — toggling the view mode persists the choice on the device
-  it("persists the view mode when the user toggles it (GPF-014)", async () => {
+  // GPF-016 — toggling the view mode persists the choice on the device
+  it("persists the view mode when the user toggles it (GPF-016)", async () => {
     vi.mocked(gateway.globalPerformanceGateway.getGlobalPerformance).mockResolvedValue({
       status: "ok",
       data: makeResponse({
@@ -395,8 +395,8 @@ describe("useGlobalPerformance", () => {
     expect(localStorage.getItem("global_perf_view_mode")).toBe("year");
   });
 
-  // GPF-014 — a remembered "month" is clamped to year view when month view is gone
-  it("falls back to year view when the remembered month view is unavailable (GPF-014)", async () => {
+  // GPF-016 — a remembered "month" is clamped to year view when month view is gone
+  it("falls back to year view when the remembered month view is unavailable (GPF-016)", async () => {
     localStorage.setItem("global_perf_view_mode", "month");
 
     const { result } = renderHook(() => useGlobalPerformance());

@@ -31,9 +31,10 @@ export function CurrencyRatesView() {
   const handleBackfill = async () => {
     const outcome = await backfillHistory();
     if (outcome.status === "ok") {
-      showSnackbar(t("currency.backfill_success", { count: outcome.ratesWritten }));
+      showSnackbar(t("currency.backfill_success", { count: outcome.ratesWritten }), "success");
     } else {
-      showSnackbar(t(outcome.message.key, outcome.message.vars));
+      // FXR-114 — the failure is surfaced distinctly, not as a neutral toast.
+      showSnackbar(t(outcome.message.key, outcome.message.vars), "error");
     }
   };
 
@@ -122,6 +123,7 @@ export function CurrencyRatesView() {
               size="sm"
               id="action-backfill-history"
               data-testid="action-backfill-history"
+              loading={isBackfilling}
               disabled={isBackfilling}
               onClick={() => void handleBackfill()}
             >
@@ -169,7 +171,12 @@ export function CurrencyRatesView() {
                 >
                   {t("currency.action_record_rate")}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={clearSelection}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  id="currency-rates-close-drilldown"
+                  onClick={clearSelection}
+                >
                   {t("action.close")}
                 </Button>
               </div>

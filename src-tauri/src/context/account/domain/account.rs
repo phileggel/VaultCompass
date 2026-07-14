@@ -386,6 +386,11 @@ impl Account {
     /// `unit_price` is derived from it; the caller-supplied `unit_price` is
     /// ignored. On every other transaction type the field is ignored and the
     /// type-specific recompute applies.
+    ///
+    /// On a recalculation/replay failure only the spliced transaction slot is
+    /// restored — derived state already mutated by the attempt (sibling sells'
+    /// realized P&L, the upserted holding) is not rolled back. Callers must
+    /// discard the aggregate on `Err` and reload, as `AccountService` does.
     #[allow(clippy::too_many_arguments)]
     pub fn correct_transaction(
         &mut self,

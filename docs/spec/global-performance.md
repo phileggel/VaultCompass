@@ -33,6 +33,8 @@ This is a **feature spec** spanning the `account`, `asset`, and `currency` bound
 
 **GPF-015 — Empty portfolio (backend)**: When no account is included (no accounts, no in-scope transactions, or an asset scope no account holds), the read succeeds with the PRF-043-shaped empty result: empty yearly and monthly series, `currency = "EUR"`, empty `account_name`, `month_view_available = false`.
 
+**GPF-016 — Remembered view granularity (frontend)**: The global view's month/year selection persists on the device (the global twin of PRF-014): the last choice is restored on the next visit, clamped to the year view when the month view is unavailable (GPF-014), and defaults to the month view when available and nothing is stored.
+
 ### Aggregated Values and Metrics (020–039)
 
 **GPF-020 — Aggregated period end value (backend)**: A period row's end value is the sum over included accounts of the account's own end value at the period end — the account's Global Value (PRF-020–024) in the all-accounts read, the scoped position value (PRF-082) in the asset-scoped read, each computed with the account's own machinery in the account's own currency — converted at the account-currency → EUR rate as of the period end (carry-forward, FXR-042; identity for EUR accounts). An account with no usable rate as of that period end contributes `0` for that period (FXR-034).

@@ -25,7 +25,7 @@ export function setPerfViewMode(accountId: string, mode: StoredPerfViewMode): vo
 
 /**
  * The remembered view mode for the global performance page, or null when no
- * preference is stored yet (the caller then applies the GPF-014 default).
+ * preference is stored yet (the caller then applies the GPF-016 default).
  */
 export function getGlobalPerfViewMode(): StoredPerfViewMode | null {
   const stored = localStorage.getItem(GLOBAL_KEY);

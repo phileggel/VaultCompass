@@ -385,3 +385,25 @@ mod management_fee_error_wire_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod open_holding_error_wire_tests {
+    use super::*;
+    use crate::context::account::AccountError;
+
+    /// The cash-line rejection exists at both the command level
+    /// (`OpenHoldingTask`, CSH-061) and the domain level
+    /// (`AccountError`, defense in depth). CSH-061 defines a SINGLE wire code,
+    /// so both wrappers intentionally serialize to the identical
+    /// `{ "code": "OpeningBalanceOnCashAsset" }` — the FE mapping and i18n key
+    /// are shared. This test pins the aliasing so a future rename of either
+    /// side surfaces as a failure instead of a silent wire fork.
+    #[test]
+    fn cash_line_rejection_shares_one_wire_code_across_both_layers() {
+        let command_level: OpenHoldingError = OpenHoldingTask::OpeningBalanceOnCashAsset.into();
+        let domain_level: OpenHoldingError = AccountError::OpeningBalanceOnCashAsset.into();
+        let expected = serde_json::json!({ "code": "OpeningBalanceOnCashAsset" });
+        assert_eq!(serde_json::to_value(&command_level).unwrap(), expected);
+        assert_eq!(serde_json::to_value(&domain_level).unwrap(), expected);
+    }
+}

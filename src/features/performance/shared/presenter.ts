@@ -14,7 +14,7 @@ const DASH = "—";
 export type PerformanceViewMode = "month" | "year";
 
 /**
- * PRF-014 / GPF-014 — resolves the view mode to open with: the remembered choice when
+ * PRF-014 / GPF-016 — resolves the view mode to open with: the remembered choice when
  * still valid, clamped to year view when a remembered month view is no longer available,
  * else the default (month when available, otherwise year).
  */

@@ -101,7 +101,7 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
       if (requestSeq !== requestSeqRef.current) return;
       if (result.status === "ok") {
         setData(result.data);
-        // GPF-014 — restore the remembered view mode (clamped to availability),
+        // GPF-016 — restore the remembered view mode (clamped to availability),
         // falling back to the default when there is no stored preference.
         setViewMode(resolveViewMode(getGlobalPerfViewMode(), result.data.month_view_available));
         const firstMonthlyYear = result.data.monthly[0]?.year ?? null;
@@ -175,7 +175,7 @@ export function useGlobalPerformance(): UseGlobalPerformanceResult {
     };
   }, [fetchPerformance]);
 
-  // GPF-014 — remember the user's choice on every toggle, mirroring the per-account page.
+  // GPF-016 — remember the user's choice on every toggle, mirroring the per-account page.
   const selectViewMode = useCallback((mode: PerformanceViewMode) => {
     setViewMode(mode);
     setGlobalPerfViewMode(mode);
