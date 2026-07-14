@@ -15,6 +15,30 @@ The user normally passes the spec path explicitly. If no document is specified, 
 
 ---
 
+## Not to be confused with
+
+- **`spec-reviewer`** — runs at the START of Workflow A, on the spec document itself (is each rule atomic, testable, contractable?). This agent (`spec-checker`) runs at the END, on the code and tests, verifying each rule is actually implemented and covered. Same spec, opposite ends of the pipeline, opposite inputs (document vs. code).
+- **`reviewer-backend` / `reviewer-frontend` / `reviewer-arch`** — code reviewers that judge implementation quality (correctness, architecture, idiom). This agent judges spec compliance — is every rule present and tested? — not code quality.
+- **`plan-reviewer`** — structural review of the plan document, pre-implementation. This agent is outcome verification, post-implementation.
+
+---
+
+## When to use
+
+- **After implementation is complete** — once code and tests exist for the feature, as the final spec-compliance gate before commit
+- **Final gate in Workflow A** — its sign-off (every rule implemented + tested) is the HARD GATE before the final commit
+- **After re-implementation** — when the user fixes gaps and re-runs, run again to confirm full coverage
+
+---
+
+## When NOT to use
+
+- **Validating the spec document** — use `spec-reviewer`; this agent assumes the spec is already validated and checks the code against it
+- **Reviewing code quality** — use `reviewer-backend` / `reviewer-frontend` / `reviewer-arch`; this agent verifies rule coverage, not implementation quality
+- **Before implementation is complete** — this agent needs code and tests to exist; run it as the final gate, not mid-implementation
+
+---
+
 ## Process
 
 ### Step 1 — Extract rules & context

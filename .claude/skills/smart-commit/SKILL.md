@@ -59,6 +59,7 @@ Use **AskUserQuestion** to get:
 1. Commit type (mandatory, default to suggested)
 2. Optional scope (e.g. `domain`, `feature`, `ci`) — leave blank for no scope
 3. Commit message (imperative, **English**, ≤72 characters) — pre-populate with the suggested title from step 4 (including its char count) so the user can accept or adjust inline without a back-and-forth correction loop
+   - **`feat`/`fix` titles are user-facing.** Only `feat` and `fix` titles reach the generated `CHANGELOG.md` (release.py's Added/Fixed sections), which some projects render verbatim in an in-app "What's new". Write the title's description as a plain user-visible outcome — no rule IDs/trigrams (`REF-010`), no internal jargon or abbreviations. Push the technical _why_ into the body. (The conventional-commit `scope` is separate and fine.) Titles for other types (`chore`, `refactor`, `docs`, `test`, `ci`) don't reach the changelog and may stay technical.
 4. Commit body (optional, **English**, max 5 lines):
    - **Body explains _why_, not _what_.** The diff is the _what_. The body captures intent, constraint, tradeoff, or non-obvious reasoning the diff cannot convey. Do not enumerate changes — that's the AI default and it produces noise; resist it.
    - Footer rules: `BREAKING CHANGE:` is ignored toward the 5-line limit. `Co-Authored-By:` is **forbidden** (blocked by the commit-msg hook). `Refs:` (e.g. `Refs: #123`) is allowed and counts toward the 5 lines.
@@ -105,9 +106,10 @@ git log -1 --oneline
 2. All linters must pass (`just check`) before committing
 3. Commit message must be in **English** and follow conventional format: `type: message` or `type(scope): message`
 4. Body explains _why_, not _what_ — the diff is the _what_; do not enumerate changes
-5. Never use `git add -A` — stage files explicitly by name
-6. User confirmation required before commit
-7. No bypassing rules in production
+5. `feat`/`fix` titles are user-facing — only they reach the CHANGELOG; write them as plain outcomes (no rule IDs, trigrams, or internal jargon), technical detail goes in the body
+6. Never use `git add -A` — stage files explicitly by name
+7. User confirmation required before commit
+8. No bypassing rules in production
 
 ---
 

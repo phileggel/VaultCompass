@@ -178,7 +178,6 @@ If any of the three fails, **DO NOT refactor** — match the current project sta
 - **One changelog line per user-visible change**: a `feat`/`fix` commit must add user-visible value of its own. A commit that doesn't (review fixups of a not-yet-released feature, second-layer wiring of a feature another commit already announced) is **amended into its feature commit** while still on the branch, or **typed `refactor`/`chore`/`test`/`docs`** so it never reaches the changelog. Two near-identical `feat`/`fix` titles in one release are the tell — reword or merge before release.
 - **Style**: React functional components, Rust traits for repositories.
 - **Lints**: Oxlint & Biome (FE), Clippy (BE). All must pass.
-- **Cross-feature imports (rides on F26)**: only generic primitives may cross feature folders — and those belong in `ui/`, not in a feature. Anything domain-flavored (view models, presenters, domain tables/charts) needed by two views means those views are ONE feature, reachable only via routing. Never import another feature's view/hook/store/gateway.
 
 ## 🖼 Frontend Visual Proof
 

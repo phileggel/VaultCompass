@@ -148,11 +148,16 @@ class ReleaseManager:
 
         commit_type, scope, bang, description = match.groups()
         is_breaking = bang == "!" or "BREAKING CHANGE" in message
+        # Changelog bullets are user-facing — some projects render CHANGELOG.md
+        # in an in-app "What's new" dialog. Keep only the title line; the body
+        # (rule IDs, layer notes, rationale) stays developer-facing in git
+        # history via `original`, never leaking into the changelog (gh#86).
+        title = description.splitlines()[0].strip()
 
         return {
             "type": commit_type,
             "scope": scope,
-            "description": description,
+            "description": title,
             "breaking": is_breaking,
             "original": message,
         }
@@ -332,17 +337,13 @@ class ReleaseManager:
             entry += "\n### Added\n"
             for commit in self.commits:
                 if commit["type"] == "feat":
-                    # The title is the user-facing changelog line; the body stays
-                    # developer-facing in git history (CLAUDE.md § Standards).
-                    entry += f"- {commit['description'].splitlines()[0]}\n"
+                    entry += f"- {commit['description']}\n"
 
         if self.fixes > 0:
             entry += "\n### Fixed\n"
             for commit in self.commits:
                 if commit["type"] == "fix":
-                    # The title is the user-facing changelog line; the body stays
-                    # developer-facing in git history (CLAUDE.md § Standards).
-                    entry += f"- {commit['description'].splitlines()[0]}\n"
+                    entry += f"- {commit['description']}\n"
 
         return entry + "\n"
 

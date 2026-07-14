@@ -139,8 +139,9 @@ The v4.5 error pipeline runs gateway → hook → presenter → component, each 
 ### Cross-feature imports (F23 navigation + F26 imports)
 
 - Inter-feature navigation NOT through the router (`useNavigate`, route paths) — flag direct cross-feature page-component renders (🔴, F23)
-- **Behaviour import** from a sibling feature (hook, store) — code smell; promote per F26 (hooks → `ui/hooks/`; stores → `infra/cache/` or `infra/settings/`) (🟡, F26)
-- **Primitive import** from a sibling feature (type, pure function, presentational component) — fine; do not flag (F26)
+- **Behaviour import** from a sibling feature — forbidden (🟡, F26). A hook or store _promotes_ (hooks → `ui/hooks/`; stores → `infra/cache/` or `infra/settings/`); a crossing **gateway** has no promotion target — it signals a wrong boundary, so flag it as merge/re-cut the feature
+- **Generic-primitive import** from a sibling feature (generic type, pure formatter, Button-grade component) — the primitive is misplaced: it belongs in `ui/`/`infra/`, not inside a feature. Flag as promote-to-`ui/`; do not accept the cross-feature path (🟡, F26)
+- **Domain-flavoured import** from a sibling feature (view model, presenter, domain-specific table/chart — even when presentational) — the two features share a domain and are miscut; flag as merge/re-cut the feature, NOT as promote (🟡, F26)
 - **Cross-feature store import** (specific F26 case) (🟡, F26):
   - _Grep_: `grep -rP 'import\s+\{[^}]*\buse(?:[A-Z][A-Za-z0-9]*)?Store\b[^}]*\}\s+from\s+"@/features/' src/features/` — the optional `(?:[A-Z][A-Za-z0-9]*)?` middle catches both `usePatientStore` and bare `useStore` (Zustand single-store-per-feature convention).
   - _Path scope_: flag only when the importing file is under `src/features/<self>/` AND `<self> != <other>`. `App.tsx` and `shell/` legitimately import feature stores — do not flag those.

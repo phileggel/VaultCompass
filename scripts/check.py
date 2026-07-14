@@ -46,12 +46,13 @@ SKIP_FRONTEND_ABSENT = "package.json absent"
 SKIP_BACKEND_ABSENT = f"{BACKEND_DIR}/Cargo.toml absent"
 SKIP_SQLX_ABSENT = f"{BACKEND_DIR}/.sqlx/ absent"
 
-# Markdown drift gate (gh#68). Biome doesn't cover .md and
-# `npm run format:docs` is write-only — without this step, drift
-# slips through PRs and `just format` silently rewrites unrelated
-# files on the next contributor's branch. Gated on package.json
-# because prettier ships via the JS devDep stack; pure-backend
-# projects skip rather than carry an npm dep just for md linting.
+# Markdown drift gate (gh#68). Biome doesn't cover .md, so this is
+# the only formatting check for markdown. `just format`'s fixer runs
+# prettier with the SAME args plus `--write` (gh#82), so checker and
+# fixer stay in lockstep by construction — no reliance on a project's
+# `format:docs` glob. Gated on package.json because prettier ships via
+# the JS devDep stack; pure-backend projects skip rather than carry an
+# npm dep just for md linting.
 # `**/*.md` must reach prettier as a literal string (prettier
 # handles globs internally via fast-glob); do NOT switch to
 # shell=True or pre-expand the glob.
@@ -63,6 +64,43 @@ _PRETTIER_DOCS_CMD = [
     "--ignore-path",
     ".gitignore",
 ]
+
+# Below this much allocatable RAM (GiB), a full run serialises the FE and BE
+# groups and caps cargo's job count so it doesn't drive a low-memory desktop
+# into swap (gh#81). Above it — and on CI — behaviour is unchanged.
+_MEMORY_PRESSURE_GB = 8.0
+
+
+def _available_ram_gb() -> float | None:
+    """Best-effort allocatable-RAM probe, in GiB. Returns None when it can't be
+    read (unknown OS, unreadable source) so callers fall back to today's
+    uncapped behaviour — this must never raise. No third-party dependency.
+
+    Reads host memory, not any cgroup limit, so a memory-capped CI container
+    sees the host's (large) figure and does not throttle — the desired
+    CI-unaffected behaviour (gh#81)."""
+    # Linux: MemAvailable is the kernel's own estimate of what can be allocated
+    # without swapping — the right signal for "how many build jobs fit?".
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / (1024 * 1024)  # kB → GiB
+    except (OSError, ValueError, IndexError):
+        pass
+    # POSIX fallback: free physical pages × page size. On many platforms
+    # (notably macOS) SC_AVPHYS_PAGES is absent from sysconf_names and this
+    # raises → None → no throttle, which is the safe fallback. Counts only
+    # free pages (ignores reclaimable cache), so it throttles a touch more
+    # eagerly than MemAvailable would — acceptable for a safety cap.
+    try:
+        gb = (os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")) / (1024**3)
+        # sysconf may return -1 for an indeterminate limit without raising;
+        # a non-positive result is meaningless, so treat it as unreadable.
+        return gb if gb > 0 else None
+    except (ValueError, OSError, AttributeError):
+        return None
+
 
 # Strip ANSI escape sequences when measuring visible cell width for the
 # report table. Needed because `f"{s:<30}"` pads by string length, which
@@ -129,7 +167,37 @@ class QualityChecker:
         # when debugging a single step's failure). Single-group modes
         # (--frontend / --backend / --format / --fast) imply sequential —
         # there's nothing to parallelise against.
-        self.sequential = sequential or fast_mode or frontend_only or backend_only
+        base_sequential = sequential or fast_mode or frontend_only or backend_only
+        # gh#81 — on a low-memory machine a full run (Vite build + cargo
+        # compiles, cargo spawning one rustc/linker per core) can exhaust RAM
+        # and swap the whole desktop. Auto-throttle two ways, each with an env
+        # override; both no-op on CI / high-RAM boxes and never change results,
+        # only resource use. RAM unreadable → no throttle (today's behaviour).
+        self._ram_gb = _available_ram_gb()
+        self._throttle_notes: list[str] = []
+
+        seq_override = os.environ.get("KIT_CHECK_SEQUENTIAL")
+        if seq_override in ("0", "1"):
+            mem_sequential = seq_override == "1"
+            if mem_sequential and not base_sequential:
+                self._throttle_notes.append(
+                    "groups serialised (KIT_CHECK_SEQUENTIAL=1)"
+                )
+        elif self._ram_gb is not None and self._ram_gb <= _MEMORY_PRESSURE_GB:
+            mem_sequential = True
+            self._throttle_notes.append(
+                f"groups serialised ({self._ram_gb:.1f} GiB RAM "
+                f"≤ {_MEMORY_PRESSURE_GB:.0f} GiB)"
+            )
+        else:
+            mem_sequential = False
+        self.sequential = base_sequential or mem_sequential
+
+        self.cargo_jobs_env = self._compute_cargo_jobs_env()
+        capped = self.cargo_jobs_env.get("CARGO_BUILD_JOBS")
+        if capped:
+            self._throttle_notes.append(f"cargo jobs capped at {capped}")
+
         self.frontend_only = frontend_only
         self.backend_only = backend_only
         self.format_only = format_only
@@ -386,6 +454,12 @@ class QualityChecker:
                 f"{INFO}⏩ --skip-tests: skipping test execution; build/lint/format still run.{RESET}"
             )
 
+        if self._throttle_notes:
+            print(
+                f"{INFO}🧠 Low-memory throttle: {'; '.join(self._throttle_notes)} "
+                f"(override: KIT_CHECK_JOBS / KIT_CHECK_SEQUENTIAL).{RESET}"
+            )
+
         # Mark groups that won't run as SKIPPED so the final report doesn't
         # render their "Pending" defaults as failures. These writes run on
         # the main thread before the executor starts, so they're race-free
@@ -514,6 +588,44 @@ class QualityChecker:
                 err_output = tsc_res.stdout.strip() if not self.verbose else ""
                 self._record_failure("TSC", err_output)
 
+    def _compute_cargo_jobs_env(self) -> dict[str, str]:
+        """CARGO_BUILD_JOBS cap for cargo subprocesses, sized to available RAM
+        so a low-memory machine doesn't spawn one rustc/linker per core and
+        swap. Returns {} (cargo's default, unchanged) when RAM is ample,
+        unreadable, or the cap would equal the CPU count — so CI and beefy dev
+        boxes are unaffected.
+
+        Env contract: KIT_CHECK_JOBS=N forces the cap to N on any machine (a
+        value < 1 or non-integer is ignored, falling through to auto-detect);
+        when the auto-cap is active it overrides any ambient CARGO_BUILD_JOBS,
+        but leaves it untouched when it returns {} (gh#81)."""
+        override = os.environ.get("KIT_CHECK_JOBS")
+        if override:
+            try:
+                n = int(override)
+            except ValueError:
+                n = 0
+            if n >= 1:
+                return {"CARGO_BUILD_JOBS": str(n)}
+        # Auto-cap only under memory pressure — the SAME gate as serialisation,
+        # so a high-RAM machine (even a many-core one whose RAM/core ratio is
+        # low) is never capped and never sees the throttle banner. CI, reading
+        # the host's large MemAvailable, stays here too.
+        if self._ram_gb is None or self._ram_gb > _MEMORY_PRESSURE_GB:
+            return {}
+        ncpu = os.cpu_count() or 1
+        # One codegen/link job needs roughly 1–2 GiB at peak; budget ~2 GiB
+        # each and never drop below 1.
+        cap = min(ncpu, max(1, int(self._ram_gb // 2)))
+        if cap >= ncpu:
+            return {}  # no effective cap — leave cargo's default untouched
+        return {"CARGO_BUILD_JOBS": str(cap)}
+
+    def _cargo_env(self, **extra: str) -> dict[str, str]:
+        """Env overrides for a cargo subprocess: the RAM-based job cap (if any)
+        merged with step-specific vars like SQLX_OFFLINE."""
+        return {**self.cargo_jobs_env, **extra}
+
     def _run_backend_group(self):
         """Backend steps: rust tests, sqlx, clippy, fmt."""
         run_tests = not self.fast_mode and not self.skip_tests
@@ -529,7 +641,7 @@ class QualityChecker:
                     "Rust Lib Tests",
                     ["cargo", "test", "--lib"],
                     cwd=self.repo_root / BACKEND_DIR,
-                    env_update={"SQLX_OFFLINE": "true"},
+                    env_update=self._cargo_env(SQLX_OFFLINE="true"),
                 ):
                     self._set_metric("rust_lib", STATUS_PASS)
 
@@ -543,7 +655,7 @@ class QualityChecker:
                     "Rust Behavior Tests",
                     ["cargo", "test", "--tests"],
                     cwd=self.repo_root / BACKEND_DIR,
-                    env_update={"SQLX_OFFLINE": "true"},
+                    env_update=self._cargo_env(SQLX_OFFLINE="true"),
                 ):
                     self._set_metric("rust_beh", STATUS_PASS)
 
@@ -556,7 +668,7 @@ class QualityChecker:
                 "Clippy",
                 ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
                 cwd=self.repo_root / BACKEND_DIR,
-                env_update={"SQLX_OFFLINE": "true"},
+                env_update=self._cargo_env(SQLX_OFFLINE="true"),
             ):
                 self._set_metric("clippy", STATUS_PASS)
 

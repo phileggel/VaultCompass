@@ -59,8 +59,8 @@ _COMPONENT_RE = re.compile(
 def _imports_module(imports: list[str], name: str) -> bool:
     """True iff `imports` includes a relative reference to a module named `name`
     inside the same feature (e.g. `./gateway`, `../shared/presenter`). Cross-
-    feature imports are intentionally excluded — they are an F26 smell, not a
-    same-feature dependency."""
+    feature imports are intentionally excluded — they are an F26 violation, not
+    a same-feature dependency."""
     pattern = re.compile(rf"\.{{1,2}}/(?:[^/]+/)*{re.escape(name)}(?:\.ts)?$")
     return any(pattern.match(i) for i in imports)
 

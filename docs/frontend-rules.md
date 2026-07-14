@@ -82,7 +82,7 @@ Stateful UI state has three legitimate homes, distinguished by scope:
 | FE-persisted settings  | UI prefs (theme, locale, layout)     | `infra/settings/`       |
 | Feature-local UI state | Single-feature draft/modal state     | `features/{x}/store.ts` |
 
-The shared cache is seeded by initial fetches and updated via Tauri events. Cross-feature reads of the shared cache MUST go through each feature's own gateway (which reads selectors from the cache); direct cross-feature store imports remain a SHOULD-NOT per **F26**.
+The shared cache is seeded by initial fetches and updated via Tauri events. Cross-feature reads of the shared cache MUST go through each feature's own gateway (which reads selectors from the cache); direct cross-feature store imports are forbidden per **F26** (behaviour never crosses).
 
 Widget-local runtime state (e.g. snackbar mount internals) stays colocated with the widget in `ui/components/`. The `infra/` exclusion above refers only to that widget-local case — app-wide singletons are explicitly included.
 
@@ -307,9 +307,13 @@ The only authorised cross-feature navigation wiring points are:
 
 ## Cross-feature imports
 
-**F26** — Cross-feature imports are evaluated by what is imported, not by the fact of crossing:
+**F26** — Feature folders are domain boundaries. Cross-feature imports are evaluated on TWO axes — behaviour AND domain — not by the fact of crossing alone:
 
-- **Primitive imports are fine.** Types, pure functions, and presentational components MAY be imported across feature boundaries. They are not behaviour coupling — they are shared primitives. Example: `features/account_details/.../X.tsx` importing `TransactionFormData` (type), `validateTransactionForm` (pure), or `RecordPriceCheckbox` (presentational) from `features/transactions/shared/` is acceptable.
-- **Behaviour imports are a code smell.** A hook or store imported from another feature couples the two features behaviourally and typically signals one of: wrong feature boundary, missing shared layer, or a piece of behaviour that should be promoted (see destinations below). Treat the import as SHOULD-NOT and prefer promotion when it appears twice.
+- **Views/pages never cross.** A feature's page or view is NEVER imported by another feature — routing (F23) is the only entry to another feature's surface.
+- **Behaviour never crosses.** Hooks, stores, and gateways MUST NOT be imported across features — behaviour coupling signals a wrong feature boundary.
+- **Generic primitives don't live in a feature.** Button-grade components, pure formatters, and generic types MUST NOT sit inside a feature at all — promote them to `ui/` (or `infra/`) and import from there, never from a sibling feature.
+- **Domain-flavoured artifacts crossing means the boundary is wrong.** View models, presenters, and domain-specific tables/charts needed by more than one view mean those views are ONE feature — merge or re-cut the feature instead of importing across. A presentational component is not automatically shareable: if it renders a specific domain's view model, it belongs to that domain's feature, not to `ui/`.
 
-Promotion destinations (see F28): generic UI hooks → `ui/hooks/`; app-wide stores → `infra/cache/` (BE/FE data) or `infra/settings/` (FE prefs); cross-cutting platform adapters → `infra/`.
+Net effect: no import path under `src/features/` may reference a sibling feature's folder. (An import is cross-feature when it reaches into `features/<other>/…`; imports from `ui/`, `infra/`, `shell/`, and `src/`-root singletons are not.)
+
+Promotion destinations (see F28): generic UI hooks → `ui/hooks/`; generic components → `ui/`; app-wide stores → `infra/cache/` (BE/FE data) or `infra/settings/` (FE prefs); cross-cutting platform adapters → `infra/`. Domain-shared artifacts are NOT promoted — they signal a feature cut too small; merge the views instead.

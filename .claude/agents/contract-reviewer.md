@@ -18,6 +18,21 @@ sound enough to anchor test stubs and a TypeScript API.
 
 ---
 
+## When to use
+
+- **After `/contract`** — once the contract is written or updated, before `/feature-planner` consumes it
+- **Before `/feature-planner`** — validates the contract anchors test stubs and the TypeScript API correctly
+- **After `/contract` re-runs** — when the user fixes findings and re-emits the contract, run again
+
+---
+
+## When NOT to use
+
+- **Reviewing the spec** — use `spec-reviewer`; this agent assumes the spec is already validated and checks the contract derived from it
+- **Verifying command coverage in code or tests** — use `spec-checker` after implementation; this agent validates the contract document, not the implementation
+
+---
+
 ## Input
 
 The user passes a contract path (e.g. `docs/contracts/user-contract.md`).

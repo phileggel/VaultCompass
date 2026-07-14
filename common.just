@@ -53,11 +53,15 @@ prepare-sqlx:
     @if [ -d src-tauri ]; then cd src-tauri && SQLX_OFFLINE=false DATABASE_URL="sqlite:.local/dev_check.sqlite" cargo sqlx prepare -- --tests; else echo "ℹ skipping prepare-sqlx (no src-tauri/)"; fi
 
 # Auto-fix formatting and linting
+# Markdown fixer runs prettier directly with the SAME args as check.py's
+# _PRETTIER_DOCS_CMD (`--write` mirroring its `--check`), so `just format`
+# always satisfies `just check` — no drift via a project-local `format:docs`
+# glob. Keeps the package.json guard: prettier ships via the JS devDep stack.
 format:
     @if [ -d src-tauri ]; then cd src-tauri && cargo fmt; else echo "ℹ skipping cargo fmt (no src-tauri/)"; fi
     @if [ -d src-tauri ]; then cd src-tauri && cargo clippy --fix --allow-dirty --quiet; else echo "ℹ skipping clippy (no src-tauri/)"; fi
     @if [ -f package.json ]; then npm run format:fix; else echo "ℹ skipping format:fix (no package.json)"; fi
-    @if [ -f package.json ]; then npm run format:docs; else echo "ℹ skipping format:docs (no package.json)"; fi
+    @if [ -f package.json ]; then npx prettier --write "**/*.md" --ignore-path .gitignore; else echo "ℹ skipping prettier docs (no package.json)"; fi
 
 # ⚠️  Destructive: deletes local database and recreates schema
 clean-db:

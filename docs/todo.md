@@ -2,25 +2,6 @@
 
 <!-- Add new tech debt and backlog items here. Format: ## (domain) — Short title -->
 
-## (kit) — Upstream: changelog entries should be commit titles only
-
-`scripts/release.py` is kit-owned (kit-manifest) and deliberately (`re.DOTALL`) copies the full commit message — title + body — into each `CHANGELOG.md` bullet. Since the changelog is end-user-facing (the What's-new dialog renders it in-app), bodies leak developer detail to users. Patched locally 2026-07-12 (`_build_changelog_entry` takes `description.splitlines()[0]` in the Added/Fixed loops); `just sync-kit` reverts it — re-apply until upstream ships (last re-applied after the v5.0.0 sync). Filed upstream as [phileggel/claude-kit#86](https://github.com/phileggel/claude-kit/issues/86) (2026-07-12); this entry closes when the kit ships it.
-
-## (docs) — Rewrite F26: domain axis missing from the cross-feature import rule
-
-F26 evaluates crossings only by behaviour (hooks/stores forbidden, presentational allowed) and misses the domain axis — a domain-flavored dumb component crossing features is the same wrong-boundary smell (bit us: the performance table/chart, which prompted the account+global performance merge into `features/performance/`, shipped 2026-07-06). Proposed rewrite:
-
-> **F26** — Feature folders are domain boundaries. Cross-feature imports are evaluated on two axes: behaviour AND domain.
->
-> - Views/pages are NEVER imported across features — routing is the only entry to another feature's surface.
-> - Hooks, stores, and gateways NEVER cross — behaviour coupling signals a wrong feature boundary.
-> - Generic primitives (Button-grade components, pure formatters, generic types) MUST NOT live in a feature at all — promote to `ui/` and import from there.
-> - Domain-flavored artifacts (view models, presenters, domain tables/charts) needed by more than one view mean those views are ONE feature — merge or re-cut the feature instead of importing across.
->
-> Net effect: no import path in `src/features/` may reference a sibling feature's folder.
-
-`docs/frontend-rules.md` is kit-managed (read-only for project content) — filed upstream as [phileggel/claude-kit#85](https://github.com/phileggel/claude-kit/issues/85) (2026-07-06); until the kit ships it, the project-side rule lives in CLAUDE.md § Standards. This entry closes when a kit sync delivers the rewritten F26.
-
 ## (frontend) — Merge TXL per-asset page into the account journal (deferred)
 
 The per-asset transaction page (`transaction_list/TransactionListPage.tsx`, route `/accounts/$accountId/transactions/$assetId`, the holdings-row loupe target) predates the account journal and is now a strict subset of it — both already share `TransactionTable`, `EditTransactionModal`, delete flow, and `routeEditTransaction`. Consolidate: the loupe navigates to the journal with the asset filter prepopulated (`/accounts/$accountId/journal?asset=<assetId>`); delete the TXL page/hook/route. Decided 2026-07-06: cash-statement columns (Cash out / Cash in / Balance) render only in the unfiltered (global) journal view; with an asset filter active the table shows plain Total Amount — a running balance over a filtered subset is misleading.

@@ -20,6 +20,21 @@ Given a spec document, verify it is complete, consistent, and implementable befo
 
 ---
 
+## When to use
+
+- **After `spec-writer` produces a draft** — once the spec exists, before `/contract` derives the domain contract
+- **First quality gate in Workflow A** — validates the spec is complete and contractable before any downstream artifact is generated
+- **After `spec-writer` re-runs** — when the user fixes findings and re-emits the spec, run again
+
+---
+
+## When NOT to use
+
+- **Verifying rule coverage in code or tests** — use `spec-checker` after implementation; this agent reviews the spec document, not outcomes
+- **Reviewing the contract** — use `contract-reviewer`; this agent runs before `/contract`, on the spec it derives from
+
+---
+
 ## Input
 
 The user passes a spec path (e.g. `docs/spec/fund-payment.md`).
