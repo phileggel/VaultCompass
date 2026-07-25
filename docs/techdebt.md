@@ -10,13 +10,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-07-11 — SPL/HNO lack tests/ integration parity with sibling features
+## 2026-07-25 — Linux bundle carries Tauri template leftovers
 
-- Found by: reviewer-backend (v0.36.0 batch review)
-- Where: src-tauri/tests/ (missing split_crud.rs / holding_note_crud.rs)
-- Context: branch `next` @ SPL + HNO features
+- Found by: main-agent
+- Where: src-tauri/Cargo.toml, src-tauri/tauri.conf.json
+- Context: branch `main` @ `09d622c`
 - Severity: 🔵
-- Observation: Every sibling quantity-event feature has a service-level integration test binary under `src-tauri/tests/` (`dividend_crud.rs`, `free_shares_crud.rs`, `management_fee_crud.rs`), but the new stock-split and holding-note features cover their stacks via inline lib tests only (domain + service + orchestrator + use-case). The behaviour coverage exists; what is missing is the tests/-binary parity that exercises the real SQLite wiring end-to-end in the same style as siblings. Mechanical to add by mirroring free_shares_crud.rs; deferred out of the feature batch to keep the diffs scoped.
+- Observation: The locally-built `.deb` installs the app binary under the template name `tauri-app` (not `vault-compass`) and also packages `generate_bindings`, a dev-only helper binary, into the installer. The Windows NSIS pipeline is likely affected the same way (binary name inside the installer). Menu entries and app labels are correct; only the on-disk binary names and the extra packaged binary are off.
 
 ---
 
