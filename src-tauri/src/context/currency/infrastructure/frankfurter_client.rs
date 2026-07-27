@@ -12,6 +12,13 @@ const FRANKFURTER_URL: &str = "https://api.frankfurter.dev/v1/latest?base=EUR";
 /// `/v1/{from}..{to}?base=EUR`.
 const FRANKFURTER_RANGE_URL_TEMPLATE: &str = "https://api.frankfurter.dev/v1/{from}..{to}?base=EUR";
 const REQUEST_TIMEOUT_SECS: u64 = 10;
+/// A dated range response carries every published date in the span — a
+/// decade of daily full-table rates is under 2 MiB, so 8 MiB bounds memory
+/// against a hostile server while never truncating an honest payload.
+const MAX_RANGE_BODY_BYTES: usize = 8 * 1024 * 1024;
+/// Range bodies are hundreds of KiB; on a slow connection the snapshot
+/// timeout would cut the download mid-body.
+const RANGE_TIMEOUT_SECS: u64 = 30;
 const MICROS_PER_UNIT: f64 = 1_000_000.0;
 
 /// Production [`RateProvider`] backed by the Frankfurter JSON endpoint (ADR-009, FXR-070).
@@ -67,15 +74,19 @@ impl RateHistoryProvider for ReqwestFrankfurterClient {
         let response = self
             .client
             .get(url)
+            .timeout(Duration::from_secs(RANGE_TIMEOUT_SECS))
             .send()
             .await
             .context("Frankfurter range fetch request failed")?;
         if !response.status().is_success() {
             anyhow::bail!("Frankfurter returned status {}", response.status());
         }
-        let body = crate::shared::infrastructure::http::read_capped_text(response)
-            .await
-            .context("Frankfurter range response read failed")?;
+        let body = crate::shared::infrastructure::http::read_text_capped_at(
+            response,
+            MAX_RANGE_BODY_BYTES,
+        )
+        .await
+        .context("Frankfurter range response read failed")?;
         parse_frankfurter_range(&body)
     }
 }

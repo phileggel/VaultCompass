@@ -17,7 +17,8 @@ use crate::context::asset::{
     SqliteAssetPriceRepository,
 };
 use crate::context::currency::{
-    ChainedRateProvider, RateProvider, ReqwestEcbClient, ReqwestFrankfurterClient,
+    ChainedRateProvider, RateHistoryProvider, RateProvider, ReqwestEcbClient,
+    ReqwestFrankfurterClient,
 };
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
@@ -124,7 +125,7 @@ pub fn run() {
             // HTTP clients (ADR-009 rate providers, ADR-017 price provider) are built here,
             // outside the keep-running async block, so a TLS-init failure surfaces as a
             // graceful setup error rather than a panic.
-            let frankfurter_client = ReqwestFrankfurterClient::new()?;
+            let frankfurter_client = Arc::new(ReqwestFrankfurterClient::new()?);
             let ecb_client = ReqwestEcbClient::new()?;
             let yahoo_price_client = ReqwestYahooClient::new()?;
 
@@ -162,7 +163,7 @@ pub fn run() {
                 // BC's piggybacked auto-fetch (FXR-070).
                 let rate_provider_chain: Arc<dyn RateProvider> = Arc::new(ChainedRateProvider::new(
                     vec![
-                        Arc::new(frankfurter_client) as Arc<dyn RateProvider>,
+                        Arc::clone(&frankfurter_client) as Arc<dyn RateProvider>,
                         Arc::new(ecb_client) as Arc<dyn RateProvider>,
                     ],
                 ));
@@ -176,7 +177,7 @@ pub fn run() {
                     db.pool.clone(),
                     Arc::new(yahoo_price_client) as Arc<dyn PriceProvider>,
                     Some(rate_provider_chain),
-                    None,
+                    Some(frankfurter_client as Arc<dyn RateHistoryProvider>),
                     Some(Arc::clone(&event_bus)),
                 );
 
