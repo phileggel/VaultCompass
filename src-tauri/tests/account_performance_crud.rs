@@ -221,3 +221,163 @@ async fn get_account_performance_priced_stock_included_in_end_value() {
         "gain must be 400 EUR (stock appreciation)"
     );
 }
+
+// PRF-032/086 — an account opened with a zero-cost opening balance (employee
+// free shares), liquidated and withdrawn early, then funded by later deposits:
+// the lifetime Dietz denominator stays non-positive, so the since-inception
+// percentage and the annualized yield are suppressed while the windowed
+// period metric keeps computing. Correcting the opening balance's total cost
+// releases the lifetime metrics.
+#[tokio::test]
+async fn zero_cost_opening_balance_suppresses_lifetime_metrics_until_corrected() {
+    let pool = make_pool().await;
+    let ctx = build_ctx(&pool).await;
+    ctx.asset_service.seed_cash_asset("EUR").await.unwrap();
+    let account = ctx
+        .account_service
+        .create(
+            "Granted Shares Account".to_string(),
+            String::new(),
+            "EUR".to_string(),
+            UpdateFrequency::Automatic,
+            false,
+        )
+        .await
+        .unwrap();
+    let stock = ctx
+        .asset_service
+        .create_asset(CreateAssetDTO {
+            name: "Granted Stock".to_string(),
+            reference: "GRT".to_string(),
+            isin: None,
+            class: vault_compass_lib::context::asset::AssetClass::Stocks,
+            currency: "EUR".to_string(),
+            risk_level: 2,
+            category_id: SYSTEM_CATEGORY_ID.to_string(),
+            exchange: None,
+            interest_bearing: false,
+        })
+        .await
+        .unwrap();
+
+    // 10 granted units enter at zero typed cost; the market priced them 100 EUR.
+    let opening = ctx
+        .account_service
+        .open_holding(
+            &account.id,
+            stock.id.clone(),
+            "2019-01-02".to_string(),
+            10_000_000,
+            0,
+        )
+        .await
+        .unwrap();
+    ctx.asset_service
+        .record_asset_price(&stock.id, "2019-01-02", 100.0)
+        .await
+        .unwrap();
+    // Liquidate at the entry price and withdraw all proceeds.
+    ctx.account_service
+        .sell_holding(
+            &account.id,
+            stock.id.clone(),
+            "2019-01-10".to_string(),
+            10_000_000,
+            100_000_000,
+            1_000_000,
+            0,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    ctx.account_service
+        .record_withdrawal(&account.id, "2019-02-01".to_string(), 1_000_000_000, None)
+        .await
+        .unwrap();
+    // Fresh capital the following year.
+    ctx.account_service
+        .record_deposit(&account.id, "2020-06-01".to_string(), 500_000_000, None)
+        .await
+        .unwrap();
+
+    let resp = ctx
+        .use_case
+        .get_account_performance(&account.id, None)
+        .await
+        .unwrap();
+    let year_2020 = resp
+        .yearly
+        .iter()
+        .find(|p| p.year == 2020)
+        .expect("2020 row");
+    assert!(
+        year_2020
+            .period_over_period
+            .as_ref()
+            .and_then(|m| m.pct)
+            .is_some(),
+        "windowed period metric must compute (positive window denominator)"
+    );
+    assert!(
+        year_2020
+            .since_inception
+            .as_ref()
+            .and_then(|m| m.pct)
+            .is_none(),
+        "since-inception % must be suppressed: lifetime flows are 0 (OB) − 1000 + 500"
+    );
+    assert!(
+        year_2020
+            .annualized_yield
+            .as_ref()
+            .and_then(|m| m.pct)
+            .is_none(),
+        "annualized yield must be suppressed with the since-inception denominator"
+    );
+
+    // Correct the opening balance to its entry-date market value. TRX-051: the
+    // edit form sends total_cost / quantity as the unit price; the domain
+    // recomputes the total from it and ignores a typed total on this type.
+    ctx.account_service
+        .correct_transaction(
+            &account.id,
+            &opening.id,
+            "2019-01-02".to_string(),
+            10_000_000,
+            100_000_000,
+            1_000_000,
+            0,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let resp = ctx
+        .use_case
+        .get_account_performance(&account.id, None)
+        .await
+        .unwrap();
+    let year_2020 = resp
+        .yearly
+        .iter()
+        .find(|p| p.year == 2020)
+        .expect("2020 row after correction");
+    assert!(
+        year_2020
+            .since_inception
+            .as_ref()
+            .and_then(|m| m.pct)
+            .is_some(),
+        "since-inception % must compute once the opening capital is declared"
+    );
+    assert!(
+        year_2020
+            .annualized_yield
+            .as_ref()
+            .and_then(|m| m.pct)
+            .is_some(),
+        "annualized yield must compute once the opening capital is declared"
+    );
+}
