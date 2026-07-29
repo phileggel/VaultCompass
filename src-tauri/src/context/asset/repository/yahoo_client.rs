@@ -125,7 +125,11 @@ struct Indicators {
 #[derive(serde::Deserialize)]
 struct QuoteSeries {
     /// Daily close, parallel to `ChartResult::timestamp`. `null` for a
-    /// non-trading day within the requested range (SPF-032).
+    /// non-trading day within the requested range (SPF-032). Absent entirely
+    /// (`"quote":[{}]`) for a thinly-traded listing with no bars in the
+    /// window — the meta price is still usable, so the field must not make
+    /// deserialization fail.
+    #[serde(default)]
     close: Vec<Option<f64>>,
 }
 
@@ -313,6 +317,25 @@ mod tests {
         let body =
             r#"{"chart":{"result":[{"meta":{"currency":"USD","symbol":"AAPL"}}],"error":null}}"#;
         assert_eq!(parse_quote(body).unwrap(), None);
+    }
+
+    // A thinly-traded listing with no bars in the window carries an EMPTY bar
+    // series (`"quote":[{}]`) next to a usable meta price — the price must
+    // parse (real-world shape: a Frankfurt-listed mutual fund).
+    #[test]
+    fn parses_meta_price_when_bar_series_is_empty() {
+        let body = r#"{"chart":{"result":[{"meta":{"currency":"EUR","symbol":"0P0001RJOO.F","instrumentType":"MUTUALFUND","regularMarketPrice":136.29,"regularMarketTime":1784836800,"gmtoffset":7200},"indicators":{"quote":[{}],"adjclose":[{}]}}],"error":null}}"#;
+        let quote = parse_quote(body).unwrap().expect("a usable quote");
+        assert_eq!(quote.price, 136_290_000);
+        assert_eq!(quote.date.as_deref(), Some("2026-07-23"));
+    }
+
+    // The same empty-bar-series shape in a range response yields zero daily
+    // closes instead of a parse error (the scheduled fetch skips quietly).
+    #[test]
+    fn empty_bar_series_yields_no_daily_closes() {
+        let body = r#"{"chart":{"result":[{"meta":{"currency":"EUR","symbol":"0P0001RJOO.F","gmtoffset":7200},"indicators":{"quote":[{}],"adjclose":[{}]}}],"error":null}}"#;
+        assert!(parse_daily_closes(body).unwrap().is_empty());
     }
 
     // A timestamp without gmtoffset still yields a date (offset defaults to 0/UTC).
