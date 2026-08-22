@@ -10,6 +10,14 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-08-22 — ADR-006 unit of work is accepted but unimplemented
+
+- Found by: feature-planner (multi-device sync plan, D1) — confirmed by plan-reviewer and by grep
+- Where: src-tauri/src/ (no `UnitOfWork` / `TransactionManager` / `uow` anywhere; three raw `sqlx` transactions at `context/account/repository/account.rs:268`, `context/asset/repository/category.rs:109`, `context/asset/repository/asset_price.rs:128`)
+- Context: branch `feat/multi-device-sync` @ `a9ed932`
+- Severity: 🟡
+- Observation: `docs/adr/006-unit-of-work.md` is Accepted and `docs/uow_example.md` documents the pattern, but nothing in the codebase implements it; cross-aggregate writes open ad-hoc transactions. ADR-019 originally relied on it for change capture and was amended in place to a `ChangeRecorder` port on the live connection instead. Decide later whether to implement ADR-006 (and route the recorder through it) or supersede it; status left Accepted meanwhile.
+
 ## 2026-08-22 — FEE spec carries contract vocabulary and out-of-order rules
 
 - Found by: spec-reviewer (round 3 of the SYN/CFR review, `.review/spec-reviewer-2026-08-22-03.md`)

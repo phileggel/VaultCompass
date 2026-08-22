@@ -13,13 +13,13 @@
 
 ### Account CRUD
 
-| Command                        | Args                                                                                                 | Return                   | Errors                                                                                                          |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `get_accounts`                 | —                                                                                                    | `Vec<Account>`           | `DatabaseError`                                                                                                 |
-| `add_account`                  | `CreateAccountDTO { name: String, currency: String, update_frequency: UpdateFrequency }`             | `Account`                | `NameEmpty` (ACC-002), `NameAlreadyExists` (ACC-003), `InvalidCurrency { currency }` (TRX-021), `DatabaseError` |
-| `update_account`               | `UpdateAccountDTO { id: String, name: String, currency: String, update_frequency: UpdateFrequency }` | `Account`                | `NameEmpty` (ACC-002), `NameAlreadyExists` (ACC-003), `InvalidCurrency { currency }` (TRX-021), `DatabaseError` |
-| `delete_account`               | `id: String`                                                                                         | `()`                     | `DatabaseError` _(ACC-005, ACC-006 — plain DELETE, silent on missing row)_                                      |
-| `get_account_deletion_summary` | `account_id: String`                                                                                 | `AccountDeletionSummary` | `DatabaseError` _(read-only; counts are 0 if account has no data — no NotFound raised)_                         |
+| Command                        | Args                                                                                                 | Return                   | Errors                                                                                                                                                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_accounts`                 | —                                                                                                    | `Vec<Account>`           | `DatabaseError`                                                                                                                                                                                                                              |
+| `add_account`                  | `CreateAccountDTO { name: String, currency: String, update_frequency: UpdateFrequency }`             | `Account`                | `NameEmpty` (ACC-002), `NameAlreadyExists` (ACC-003 — binds the name being set, CFR-035), `InvalidCurrency { currency }` (TRX-021), `DatabaseError`                                                                                          |
+| `update_account`               | `UpdateAccountDTO { id: String, name: String, currency: String, update_frequency: UpdateFrequency }` | `Account`                | `NameEmpty` (ACC-002), `NameAlreadyExists` (ACC-003 — binds the name being set; editing other fields of an account whose name already clashes after a merge is accepted, CFR-035), `InvalidCurrency { currency }` (TRX-021), `DatabaseError` |
+| `delete_account`               | `id: String`                                                                                         | `()`                     | `DatabaseError` _(ACC-005, ACC-006 — plain DELETE, silent on missing row)_                                                                                                                                                                   |
+| `get_account_deletion_summary` | `account_id: String`                                                                                 | `AccountDeletionSummary` | `DatabaseError` _(read-only; counts are 0 if account has no data — no NotFound raised)_                                                                                                                                                      |
 
 ### Account Details
 
@@ -148,7 +148,7 @@
 | `update_fee_schedule`      | `UpdateFeeScheduleDTO`                 | `FeeSchedule`         | `ScheduleNotFound` (FEE-060), `RateNotPositive` (FEE-032), `RateAboveHundred` (FEE-032), `InvalidDate` (FEE-032), `EndBeforeStart` (FEE-032), `DatabaseError`                                                                                                                                                                           |
 | `delete_fee_schedule`      | `account_id: String, asset_id: String` | `()`                  | `DatabaseError` (FEE-062 — silent on missing schedule, mirrors `delete_account`)                                                                                                                                                                                                                                                        |
 | `get_fee_schedule`         | `account_id: String, asset_id: String` | `Option<FeeSchedule>` | `DatabaseError` (FEE-030 — returns `None` when no schedule exists for the pair)                                                                                                                                                                                                                                                         |
-| `apply_due_fee_deductions` | —                                      | `()`                  | `DatabaseError` (FEE-040/044/047 — frontend-triggered on app startup; generates due completed periods for every active schedule, skipping any that would oversell)                                                                                                                                                                      |
+| `apply_due_fee_deductions` | —                                      | `()`                  | `DatabaseError` (FEE-040/044/047 — frontend-triggered on app startup; when multi-device sync is enabled and not paused the launch sync runs first inside this command, SYN-060, so generation sees the merged ledger; then generates due completed periods for every active schedule, skipping any that would oversell)                 |
 
 ---
 
@@ -157,7 +157,7 @@
 ```rust
 struct Account {
     id: String,                          // unique identifier
-    name: String,                        // user-defined display name (normalised, unique)
+    name: String,                        // user-defined display name (normalised; unique among names set on this device — after a multi-device merge two accounts may share a name until the user renames one, CFR-035)
     currency: String,                    // ISO 4217 currency code (TRX-021)
     update_frequency: UpdateFrequency,   // how often the user plans to update data
 }
@@ -332,6 +332,7 @@ struct HoldingDetail {
     dividends_received: i64,            // micros, account currency; sum of dividend cash for this (account, asset); 0 when none; always computable (DIV-070)
     total_return_pct: Option<i64>,      // micros; (unrealized_pnl + dividends_received) × 100 / cost_basis; None under the same conditions as performance_pct (DIV-071)
     management_fees: i64,               // micros, account currency; cumulative fee value (Σ removed_qty × price_as_of(date)) for this (account, asset); 0 when none (FEE-052)
+    inconsistency: Option<HoldingInconsistency>, // derived on read; Some when the merged ledger oversells the position or overdraws cash (SYN-040, CFR-042); None otherwise — see sync-contract.md
 }
 
 // Closed position — quantity = 0 (ACD-044)
@@ -366,6 +367,7 @@ struct AccountSummary {
     total_global_value: i64,                   // micros, account currency: same algorithm as AccountDetailsResponse.total_global_value (CSH-094)
     total_unrealized_pnl: Option<i64>,         // micros, account currency: account-wide unrealized P&L, same algorithm as AccountDetailsResponse.total_unrealized_pnl (MKT-040 / ACC-023); None when no holding qualifies
     ytd_performance_pct: Option<i64>,          // micro-percent: year-to-date net-of-flows performance since Jan 1, reusing PRF-034 (ACC-024); first-year accounts use an inception baseline (present, not None); None only when the Simple-Dietz denominator is 0 (PRF-032)
+    has_inconsistent_holding: bool,            // derived on read; true when any holding of the account carries an inconsistency (SYN-040, CFR-042)
 }
 ```
 
@@ -426,7 +428,7 @@ struct FeeSchedule {
     start_date: String,                  // ISO date YYYY-MM-DD; immutable after first generation (FEE-060)
     end_date: Option<String>,            // ISO date; None = open-ended (FEE-045)
     active: bool,                        // false while paused — no deductions generated (FEE-061)
-    last_applied_period: Option<String>, // ISO date of last generated period boundary; None initially (FEE-043)
+    last_applied_period: Option<String>, // ISO date of last generated period boundary; None initially (FEE-043). Between devices this is its own synced record identified by (account_id, asset_id), merged by maximum (CFR-044); exposed here as a derived read field
 }
 
 // Create a fee schedule (FEE-030). At most one per (account, asset) — ScheduleAlreadyExists otherwise.
@@ -477,6 +479,7 @@ struct UpdateFeeScheduleDTO {
 
 ## Changelog
 
+- 2026-08-22 — Amended by `multi-device-sync` + `sync-conflict-resolution` specs: `HoldingDetail.inconsistency` and `AccountSummary.has_inconsistent_holding` (derived, SYN-040 / CFR-042); `FeeSchedule.last_applied_period` documented as the derived read of the synced catch-up record (CFR-044); `apply_due_fee_deductions` runs the launch sync first (SYN-060); `Account.name` / `update_account.NameAlreadyExists` bind the name being set (CFR-035).
 - 2026-05-29 — Added by `account-performance` spec: `get_account_performance` (+ `AccountPerformanceResponse`, `PerformancePeriod`, `PerformanceMetric` types; PRF-060 re-uses existing subscribed events)
 - 2026-05-31 — Added by `cash-dividend` spec: `record_dividend` (+ `DividendDTO`); `TransactionType::Dividend` variant; `HoldingDetail.dividends_received` + `.total_return_pct`; `AccountDetailsResponse.total_dividends_received`; edit/delete reuse `correct_transaction`/`cancel_transaction` (DIV-040/041)
 - 2026-05-31 — `cash-transaction-history` (CSH-110/111): no command change — cash Deposit/Withdrawal edit reuses `correct_transaction` and delete reuses `cancel_transaction` (both already accept the cash `TransactionType`s); the feature is a frontend entry point (cash-row inspect action + dedicated cash modals in edit mode). Contract surface unchanged.
