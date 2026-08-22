@@ -17,7 +17,7 @@
       "Bash(gh run view *)",
       "Bash(gh run list *)",
       "Bash(gh repo view *)",
-      "Write(.review/**)"
+      "Edit(.review/**)"
     ]
   }
 }
