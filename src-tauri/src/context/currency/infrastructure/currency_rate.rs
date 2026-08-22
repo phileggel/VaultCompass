@@ -1,20 +1,42 @@
 use crate::context::currency::domain::{CurrencyRate, CurrencyRateRepository, CurrencyRateSource};
 use crate::core::logger::BACKEND;
+use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::infrastructure::change_recorder::{
+    ChangeRecorder, NoopChangeRecorder, RankColumns,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use sqlx::SqlitePool;
 use std::str::FromStr;
+use std::sync::Arc;
 
 /// SQLite-backed implementation of `CurrencyRateRepository`.
 pub struct SqliteCurrencyRateRepository {
     pool: SqlitePool,
+    change_recorder: Arc<dyn ChangeRecorder>,
 }
 
 impl SqliteCurrencyRateRepository {
     /// Creates a new repository backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            change_recorder: Arc::new(NoopChangeRecorder),
+        }
     }
+
+    /// Attaches the change recorder every write appends through (SYN-020).
+    pub fn with_change_recorder(mut self, change_recorder: Arc<dyn ChangeRecorder>) -> Self {
+        self.change_recorder = change_recorder;
+        self
+    }
+}
+
+fn identity(from_currency: &str, to_currency: &str, date: &str) -> RecordIdentity {
+    RecordIdentity::canonical(
+        RecordKind::CurrencyRate,
+        &[from_currency, to_currency, date],
+    )
 }
 
 #[derive(sqlx::FromRow)]
@@ -50,6 +72,20 @@ impl From<RateRow> for CurrencyRate {
 impl CurrencyRateRepository for SqliteCurrencyRateRepository {
     async fn upsert_rate(&self, rate: CurrencyRate) -> Result<CurrencyRate> {
         let source = rate.source.to_string();
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin currency rate upsert")?;
+        let existing = sqlx::query_scalar!(
+            "SELECT date FROM currency_rates WHERE from_currency = ? AND to_currency = ? AND date = ?",
+            rate.from_currency,
+            rate.to_currency,
+            rate.date
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to look up currency rate")?;
         sqlx::query!(
             "INSERT INTO currency_rates (from_currency, to_currency, date, rate, source)
              VALUES (?, ?, ?, ?, ?)
@@ -61,23 +97,75 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
             rate.rate,
             source,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("Failed to upsert currency rate")?;
+        let operation = if existing.is_some() {
+            Operation::Updated
+        } else {
+            Operation::Created
+        };
+        let draft = ChangeDraft::new(
+            RecordKind::CurrencyRate,
+            identity(&rate.from_currency, &rate.to_currency, &rate.date),
+            operation,
+            Origin::User,
+            None,
+            Some(serde_json::to_string(&rate)?),
+        );
+        let rank = self.change_recorder.record(&mut tx, draft).await?;
+        if let Some(rank) = rank {
+            let columns = RankColumns::from(rank);
+            sqlx::query!(
+                "UPDATE currency_rates SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+                 WHERE from_currency = ? AND to_currency = ? AND date = ?",
+                columns.logical_timestamp,
+                columns.origin,
+                columns.device_id,
+                rate.from_currency,
+                rate.to_currency,
+                rate.date
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to stamp rank on currency rate")?;
+        }
+        tx.commit()
+            .await
+            .context("Failed to commit currency rate upsert")?;
         Ok(rate)
     }
 
     async fn delete_rate(&self, from_currency: &str, to_currency: &str, date: &str) -> Result<()> {
-        sqlx::query!(
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin currency rate delete")?;
+        let deleted = sqlx::query!(
             "DELETE FROM currency_rates
              WHERE from_currency = ? AND to_currency = ? AND date = ?",
             from_currency,
             to_currency,
             date,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("Failed to delete currency rate")?;
+        if deleted.rows_affected() > 0 {
+            let draft = ChangeDraft::new(
+                RecordKind::CurrencyRate,
+                identity(from_currency, to_currency, date),
+                Operation::Removed,
+                Origin::User,
+                None,
+                None,
+            );
+            self.change_recorder.record(&mut tx, draft).await?;
+        }
+        tx.commit()
+            .await
+            .context("Failed to commit currency rate delete")?;
         Ok(())
     }
 
@@ -360,5 +448,128 @@ mod tests {
             .expect("exact-date match should be returned");
         assert_eq!(got.date, "2026-05-15");
         assert_eq!(got.rate, 940_000);
+    }
+
+    use crate::context::sync::SqliteChangeRecorder;
+    use std::sync::Arc;
+
+    async fn make_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query!(
+            "INSERT INTO currency_pairs (from_currency, to_currency) VALUES ('USD', 'EUR')"
+        )
+        .execute(&pool)
+        .await
+        .expect("seed pair");
+        pool
+    }
+
+    async fn seed_sync_device(pool: &SqlitePool) {
+        sqlx::query!(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, 'desktop-device', 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 0,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#
+        )
+        .execute(pool)
+        .await
+        .expect("seed sync_device");
+    }
+
+    async fn changes_with_operation(pool: &SqlitePool, operation: &str) -> i64 {
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM changes WHERE operation = ?",
+            operation
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    fn manual_rate(date: &str, micros: i64) -> CurrencyRate {
+        CurrencyRate::from_storage(
+            "USD".into(),
+            "EUR".into(),
+            date.into(),
+            micros,
+            CurrencyRateSource::Manual,
+        )
+    }
+
+    // SYN-020/021 — upsert_rate (creation) records exactly one Created change, rank-stamped
+    // (origin User; CFR-050 resolves rate observations without regard to origin).
+    #[tokio::test]
+    async fn upsert_rate_records_one_created_change_with_rank_stamped() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteCurrencyRateRepository::new(pool.clone()).with_change_recorder(recorder);
+
+        repo.upsert_rate(manual_rate("2026-08-20", 920_000))
+            .await
+            .unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Created").await, 1);
+        let row = sqlx::query!(
+            "SELECT sync_logical_timestamp FROM currency_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' AND date = '2026-08-20'"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(row.sync_logical_timestamp.is_some());
+    }
+
+    // SYN-020 — overwriting the same (pair, date) key records exactly one Updated change.
+    #[tokio::test]
+    async fn upsert_rate_overwrite_records_one_updated_change() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let setup_repo = SqliteCurrencyRateRepository::new(pool.clone());
+        setup_repo
+            .upsert_rate(manual_rate("2026-08-20", 920_000))
+            .await
+            .unwrap();
+
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteCurrencyRateRepository::new(pool.clone()).with_change_recorder(recorder);
+        repo.upsert_rate(manual_rate("2026-08-20", 930_000))
+            .await
+            .unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Updated").await, 1);
+    }
+
+    // SYN-020/024 — delete_rate records exactly one Removed change and a tombstone.
+    #[tokio::test]
+    async fn delete_rate_records_one_removed_change_and_tombstone() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let setup_repo = SqliteCurrencyRateRepository::new(pool.clone());
+        setup_repo
+            .upsert_rate(manual_rate("2026-08-20", 920_000))
+            .await
+            .unwrap();
+
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteCurrencyRateRepository::new(pool.clone()).with_change_recorder(recorder);
+        repo.delete_rate("USD", "EUR", "2026-08-20").await.unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Removed").await, 1);
+        let tombstone = sqlx::query!(
+            "SELECT record_identity FROM tombstones WHERE record_kind = 'CurrencyRate' AND record_identity = 'USD:EUR:2026-08-20'"
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert!(tombstone.is_some());
     }
 }

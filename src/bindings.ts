@@ -2140,7 +2140,8 @@ end_date: string | null;
 active: boolean; 
 /**
  * The last completed period boundary that was applied, as ISO date (FEE-043).
- * None when no periods have been applied yet.
+ * None when no periods have been applied yet. A derived read of the schedule's
+ * `FeeCatchUpPosition` (CFR-044); never written through the schedule itself.
  */
 last_applied_period: string | null }
 /**

@@ -1,5 +1,8 @@
 //! Shared infrastructure adapters reused by multiple bounded contexts.
 
+/// `ChangeRecorder` port — every synced repository write appends a change through it
+/// (SYN-020, ADR-019).
+pub mod change_recorder;
 /// Composition root wiring repositories into application services.
 pub mod container;
 /// Outbound HTTP response helpers.

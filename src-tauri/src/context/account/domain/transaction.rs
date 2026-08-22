@@ -458,6 +458,23 @@ impl Transaction {
         Ok(tx)
     }
 
+    /// Factory: builds a generated ManagementFee deduction (FEE-040) under the
+    /// deterministic identity FEE-048 assigns it, so two devices generating the same
+    /// period converge on one transaction. Same zero-cost packing and FEE-021
+    /// validation as `management_fee`.
+    pub fn generated_management_fee(
+        id: String,
+        account_id: String,
+        asset_id: String,
+        date: String,
+        quantity: i64,
+    ) -> StdResult<Self, AccountError> {
+        let created_at = chrono::Utc::now()
+            .format("%Y-%m-%dT%H:%M:%S%.6fZ")
+            .to_string();
+        Self::management_fee_with_id(id, account_id, asset_id, date, quantity, None, created_at)
+    }
+
     /// Factory: builds an Interest transaction (INT-021/024).
     ///
     /// Zero-cost convention: `unit_price = 0`, `exchange_rate = 1_000_000`,
@@ -634,10 +651,6 @@ pub trait TransactionRepository: Send + Sync {
     async fn get_asset_ids_for_account(&self, account_id: &str) -> Result<Vec<String>>;
     /// Returns sum of realized_pnl grouped by asset_id for Sell transactions in the account (SEL-038).
     async fn get_realized_pnl_by_account(&self, account_id: &str) -> Result<Vec<(String, i64)>>;
-    /// Persists a new transaction.
-    async fn create(&self, tx: Transaction) -> Result<Transaction>;
-    /// Updates an existing transaction.
-    async fn update(&self, tx: Transaction) -> Result<Transaction>;
     /// Deletes a transaction by ID.
     async fn delete(&self, id: &str) -> Result<()>;
     /// Returns true if any transaction references this asset (across all accounts).

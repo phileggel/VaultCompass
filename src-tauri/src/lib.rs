@@ -20,8 +20,10 @@ use crate::context::currency::{
     ChainedRateProvider, RateHistoryProvider, RateProvider, ReqwestEcbClient,
     ReqwestFrankfurterClient,
 };
+use crate::context::sync::SqliteChangeRecorder;
 use crate::core::event_bus::Event;
 use crate::core::{create_specta_builder, Database, SideEffectEventBus, BACKEND};
+use crate::shared::infrastructure::change_recorder::ChangeRecorder;
 use crate::shared::infrastructure::container::AppContainer;
 use crate::shared::infrastructure::scheduler::platform_scheduler;
 use crate::use_cases::account_creation::AccountCreationUseCase;
@@ -179,6 +181,7 @@ pub fn run() {
                     Some(rate_provider_chain),
                     Some(frankfurter_client as Arc<dyn RateHistoryProvider>),
                     Some(Arc::clone(&event_bus)),
+                    Arc::new(SqliteChangeRecorder::new(db.pool.clone())) as Arc<dyn ChangeRecorder>,
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(

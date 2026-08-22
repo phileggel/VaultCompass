@@ -2,8 +2,11 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::context::account::domain::{Transaction, TransactionRepository, TransactionType};
+use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::infrastructure::change_recorder::{ChangeRecorder, NoopChangeRecorder};
 
 #[derive(sqlx::FromRow)]
 struct TransactionRow {
@@ -51,12 +54,22 @@ impl TryFrom<TransactionRow> for Transaction {
 #[derive(Clone)]
 pub struct SqliteTransactionRepository {
     pool: Pool<Sqlite>,
+    change_recorder: Arc<dyn ChangeRecorder>,
 }
 
 impl SqliteTransactionRepository {
     /// Creates a new SqliteTransactionRepository.
     pub fn new(pool: Pool<Sqlite>) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            change_recorder: Arc::new(NoopChangeRecorder),
+        }
+    }
+
+    /// Attaches the change recorder every write appends through (SYN-020).
+    pub fn with_change_recorder(mut self, change_recorder: Arc<dyn ChangeRecorder>) -> Self {
+        self.change_recorder = change_recorder;
+        self
     }
 }
 
@@ -121,57 +134,6 @@ impl TransactionRepository for SqliteTransactionRepository {
             .collect::<Result<Vec<_>>>()
     }
 
-    async fn create(&self, tx: Transaction) -> Result<Transaction> {
-        let transaction_type = tx.transaction_type.to_string();
-        sqlx::query!(
-            r#"INSERT INTO transactions (id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-            tx.id,
-            tx.account_id,
-            tx.asset_id,
-            transaction_type,
-            tx.date,
-            tx.quantity,
-            tx.unit_price,
-            tx.exchange_rate,
-            tx.fees,
-            tx.total_amount,
-            tx.note,
-            tx.realized_pnl,
-            tx.created_at
-        )
-        .execute(&self.pool)
-        .await
-        .with_context(|| format!("Failed to create transaction {}", tx.id))?;
-
-        Ok(tx)
-    }
-
-    async fn update(&self, tx: Transaction) -> Result<Transaction> {
-        let transaction_type = tx.transaction_type.to_string();
-        // created_at is intentionally excluded from SET — it is immutable after creation (SEL-024).
-        sqlx::query!(
-            r#"UPDATE transactions SET account_id = ?, asset_id = ?, transaction_type = ?, date = ?, quantity = ?, unit_price = ?, exchange_rate = ?, fees = ?, total_amount = ?, note = ?, realized_pnl = ? WHERE id = ?"#,
-            tx.account_id,
-            tx.asset_id,
-            transaction_type,
-            tx.date,
-            tx.quantity,
-            tx.unit_price,
-            tx.exchange_rate,
-            tx.fees,
-            tx.total_amount,
-            tx.note,
-            tx.realized_pnl,
-            tx.id
-        )
-        .execute(&self.pool)
-        .await
-        .with_context(|| format!("Failed to update transaction {}", tx.id))?;
-
-        Ok(tx)
-    }
-
     async fn get_realized_pnl_by_account(&self, account_id: &str) -> Result<Vec<(String, i64)>> {
         #[derive(sqlx::FromRow)]
         struct PnlRow {
@@ -209,10 +171,30 @@ impl TransactionRepository for SqliteTransactionRepository {
     }
 
     async fn delete(&self, id: &str) -> Result<()> {
-        sqlx::query!(r#"DELETE FROM transactions WHERE id = ?"#, id)
-            .execute(&self.pool)
+        let mut db_tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin DB transaction for transaction delete")?;
+        let deleted = sqlx::query!(r#"DELETE FROM transactions WHERE id = ?"#, id)
+            .execute(&mut *db_tx)
             .await
             .with_context(|| format!("Failed to delete transaction {}", id))?;
+        if deleted.rows_affected() > 0 {
+            let draft = ChangeDraft::new(
+                RecordKind::Transaction,
+                RecordIdentity::canonical(RecordKind::Transaction, &[id]),
+                Operation::Removed,
+                Origin::User,
+                None,
+                None,
+            );
+            self.change_recorder.record(&mut db_tx, draft).await?;
+        }
+        db_tx
+            .commit()
+            .await
+            .context("Failed to commit transaction delete")?;
 
         Ok(())
     }

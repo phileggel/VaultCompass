@@ -1,7 +1,7 @@
 use super::domain::{
-    Account, AccountRepository, FeeSchedule, FeeScheduleRepository, Holding, HoldingNote,
-    HoldingNoteRepository, HoldingRepository, HoldingSnapshot, ThresholdDirection, Transaction,
-    TransactionRepository, UpdateFrequency,
+    Account, AccountRepository, FeeCatchUpPosition, FeeCatchUpRepository, FeeSchedule,
+    FeeScheduleRepository, Holding, HoldingNote, HoldingNoteRepository, HoldingRepository,
+    HoldingSnapshot, ThresholdDirection, Transaction, TransactionRepository, UpdateFrequency,
 };
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
@@ -19,6 +19,7 @@ pub struct AccountService {
     transaction_repo: Box<dyn TransactionRepository>,
     event_bus: Option<Arc<SideEffectEventBus>>,
     fee_schedule_repo: Option<Box<dyn FeeScheduleRepository>>,
+    fee_catch_up_repo: Option<Box<dyn FeeCatchUpRepository>>,
     holding_note_repo: Option<Box<dyn HoldingNoteRepository>>,
 }
 
@@ -35,6 +36,7 @@ impl AccountService {
             transaction_repo,
             event_bus: None,
             fee_schedule_repo: None,
+            fee_catch_up_repo: None,
             holding_note_repo: None,
         }
     }
@@ -57,6 +59,22 @@ impl AccountService {
     fn fee_schedule_repo(&self) -> StdResult<&dyn FeeScheduleRepository, AccountError> {
         self.fee_schedule_repo.as_deref().ok_or_else(|| {
             tracing::error!(target: BACKEND, "fee_schedule_repo not wired on AccountService");
+            AccountError::DatabaseError
+        })
+    }
+
+    /// Attaches the fee catch-up position repository (FEE-043, CFR-044) — required
+    /// by `advance_fee_schedule_cursor`; absent in constructions that never touch it.
+    pub fn with_fee_catch_up_repo(mut self, repo: Box<dyn FeeCatchUpRepository>) -> Self {
+        self.fee_catch_up_repo = Some(repo);
+        self
+    }
+
+    /// Returns the wired fee catch-up repository or a `DatabaseError` if absent
+    /// (a wiring bug — the repo must be attached via `with_fee_catch_up_repo`).
+    fn fee_catch_up_repo(&self) -> StdResult<&dyn FeeCatchUpRepository, AccountError> {
+        self.fee_catch_up_repo.as_deref().ok_or_else(|| {
+            tracing::error!(target: BACKEND, "fee_catch_up_repo not wired on AccountService");
             AccountError::DatabaseError
         })
     }
@@ -193,13 +211,49 @@ impl AccountService {
     }
 
     /// Permanently deletes an account and cascades to its holdings (R5).
+    ///
+    /// SYN-024/CFR-030 — every synced child (transactions, holding notes, fee schedules,
+    /// catch-up positions) is removed through its own repository first, so each leaves
+    /// its own change and tombstone instead of vanishing under the database cascade.
     pub async fn delete(&self, id: &str) -> StdResult<(), AccountError> {
         info!(target: BACKEND, account_id = %id, "deleting account");
+        self.remove_children(id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, account_id = %id, err = ?e, "delete: child removal failure");
+            AccountError::DatabaseError
+        })?;
         self.account_repo.delete(id).await.map_err(|e| {
             tracing::error!(target: BACKEND, account_id = %id, err = ?e, "delete: repository failure");
             AccountError::DatabaseError
         })?;
         self.emit_account_updated();
+        Ok(())
+    }
+
+    async fn remove_children(&self, account_id: &str) -> anyhow::Result<()> {
+        for transaction in self
+            .transaction_repo
+            .get_all_for_account(account_id)
+            .await?
+        {
+            self.transaction_repo.delete(&transaction.id).await?;
+        }
+        if let Some(repo) = self.holding_note_repo.as_deref() {
+            for note in repo.get_for_account(account_id).await? {
+                repo.delete(&note.account_id, &note.asset_id).await?;
+            }
+        }
+        if let Some(repo) = self.fee_schedule_repo.as_deref() {
+            for schedule in repo.get_by_account(account_id).await? {
+                repo.delete_by_account_asset(&schedule.account_id, &schedule.asset_id)
+                    .await?;
+            }
+        }
+        if let Some(repo) = self.fee_catch_up_repo.as_deref() {
+            for position in repo.get_by_account(account_id).await? {
+                repo.delete_by_account_asset(&position.account_id, &position.asset_id)
+                    .await?;
+            }
+        }
         Ok(())
     }
 
@@ -690,6 +744,42 @@ impl AccountService {
         note: Option<String>,
     ) -> Result<Transaction, AccountError> {
         info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, percent_micros = percent_micros, "record_management_fee");
+        self.apply_management_fee_deduction(account_id, asset_id, date, percent_micros, note, None)
+            .await
+    }
+
+    /// Records a generated management fee deduction (FEE-040) under the deterministic
+    /// identity FEE-048 assigns it (`deduction_id`); otherwise identical to a one-off
+    /// deduction without a note.
+    pub async fn record_generated_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        deduction_id: String,
+    ) -> Result<Transaction, AccountError> {
+        info!(target: BACKEND, account_id = %account_id, asset_id = %asset_id, percent_micros = percent_micros, deduction_id = %deduction_id, "record_generated_management_fee");
+        self.apply_management_fee_deduction(
+            account_id,
+            asset_id,
+            date,
+            percent_micros,
+            None,
+            Some(deduction_id),
+        )
+        .await
+    }
+
+    async fn apply_management_fee_deduction(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        note: Option<String>,
+        deduction_id: Option<String>,
+    ) -> Result<Transaction, AccountError> {
         // FEE-021 — percentage is micro-percent: strictly positive, at most 100%.
         if percent_micros <= 0 {
             return Err(AccountError::PercentageNotPositive);
@@ -703,7 +793,16 @@ impl AccountService {
         // FEE-022a — removed qty = floor(holding_qty_as_of(date) × percent / 100%).
         let quantity_as_of = account.holding_quantity_as_of(&asset_id, &date);
         let removed = (quantity_as_of as i128 * percent_micros as i128 / 100_000_000) as i64;
-        let tx = Transaction::management_fee(account.id.clone(), asset_id, date, removed, note)?;
+        let tx = match deduction_id {
+            Some(id) => Transaction::generated_management_fee(
+                id,
+                account.id.clone(),
+                asset_id,
+                date,
+                removed,
+            )?,
+            None => Transaction::management_fee(account.id.clone(), asset_id, date, removed, note)?,
+        };
         let tx = account
             .apply_management_fee(tx)
             .map_err(to_holding_tx_error)?;
@@ -922,29 +1021,25 @@ impl AccountService {
         })
     }
 
-    /// Advances a schedule's catch-up cursor to `last_applied_period` (FEE-043).
-    /// Silent no-op if the schedule no longer exists.
+    /// Advances a schedule's catch-up cursor to `last_applied_period` (FEE-043) by
+    /// merging the schedule's `FeeCatchUpPosition` by maximum (CFR-044).
     pub async fn advance_fee_schedule_cursor(
         &self,
         account_id: &str,
         asset_id: &str,
         last_applied_period: String,
     ) -> Result<(), AccountError> {
-        let repo = self.fee_schedule_repo()?;
-        let existing = repo
-            .get_by_account_asset(account_id, asset_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(target: BACKEND, err = ?e, "advance_fee_schedule_cursor: lookup failed");
-                AccountError::DatabaseError
-            })?;
-        if let Some(schedule) = existing {
-            let schedule = schedule.advance_cursor(last_applied_period);
-            repo.update(&schedule).await.map_err(|e| {
-                tracing::error!(target: BACKEND, err = ?e, "advance_fee_schedule_cursor: persist failed");
-                AccountError::DatabaseError
-            })?;
-        }
+        let repo = self.fee_catch_up_repo()?;
+        repo.upsert(FeeCatchUpPosition {
+            account_id: account_id.to_string(),
+            asset_id: asset_id.to_string(),
+            last_applied_period,
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!(target: BACKEND, err = ?e, "advance_fee_schedule_cursor: persist failed");
+            AccountError::DatabaseError
+        })?;
         Ok(())
     }
 
@@ -1196,6 +1291,15 @@ pub trait AccountServiceContract: Send + Sync {
         date: String,
         percent_micros: i64,
         note: Option<String>,
+    ) -> StdResult<Transaction, AccountError>;
+    /// Records a generated management fee deduction under its FEE-048 identity (FEE-040).
+    async fn record_generated_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        deduction_id: String,
     ) -> StdResult<Transaction, AccountError>;
     /// Records an Interest credit on a held asset or the account's cash line
     /// (INT-021/022/023/024).
@@ -1487,6 +1591,25 @@ impl AccountServiceContract for AccountService {
         .await
     }
 
+    async fn record_generated_management_fee(
+        &self,
+        account_id: &str,
+        asset_id: String,
+        date: String,
+        percent_micros: i64,
+        deduction_id: String,
+    ) -> StdResult<Transaction, AccountError> {
+        AccountService::record_generated_management_fee(
+            self,
+            account_id,
+            asset_id,
+            date,
+            percent_micros,
+            deduction_id,
+        )
+        .await
+    }
+
     async fn record_interest(
         &self,
         account_id: &str,
@@ -1691,9 +1814,10 @@ mod tests {
     // catch constraint violations) and mock-based unit tests (fast delegation checks).
     // SQLite tests are grouped first; mock-based unit tests follow after the section header.
     use crate::context::account::{
-        AccountError, Holding, MockAccountRepository, MockHoldingRepository,
-        MockTransactionRepository, SqliteAccountRepository, SqliteFeeScheduleRepository,
-        SqliteHoldingNoteRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+        AccountError, Holding, MockAccountRepository, MockFeeCatchUpRepository,
+        MockHoldingRepository, MockTransactionRepository, SqliteAccountRepository,
+        SqliteFeeScheduleRepository, SqliteHoldingNoteRepository, SqliteHoldingRepository,
+        SqliteTransactionRepository,
     };
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -3307,10 +3431,14 @@ mod tests {
             .expect_delete()
             .once()
             .returning(|_| Err(SimulatedSaveError.into()));
+        let mut mock_tr = MockTransactionRepository::new();
+        mock_tr
+            .expect_get_all_for_account()
+            .returning(|_| Ok(vec![]));
         let svc = AccountService::new(
             Box::new(mock_ar),
             Box::new(MockHoldingRepository::new()),
-            Box::new(MockTransactionRepository::new()),
+            Box::new(mock_tr),
         );
         let err = svc.delete("any-id").await.unwrap_err();
         assert!(matches!(err, AccountError::DatabaseError), "got: {err:?}");
@@ -4915,5 +5043,59 @@ mod tests {
             matches!(&err, AccountError::AccountNotFound { account_id } if account_id == "nonexistent-account"),
             "got: {err:?}"
         );
+    }
+
+    // D5/FEE-043 — advance_fee_schedule_cursor writes the FeeCatchUpRepository (a record of
+    // its own, CFR-044) instead of mutating the FeeSchedule row; the schedule's own rank
+    // stays a user record (CFR-016) untouched by generation.
+    #[tokio::test]
+    async fn advance_fee_schedule_cursor_writes_the_fee_catch_up_repository() {
+        let mut mock_catch_up = MockFeeCatchUpRepository::new();
+        mock_catch_up
+            .expect_upsert()
+            .withf(|position: &FeeCatchUpPosition| {
+                position.account_id == "acc-1"
+                    && position.asset_id == "asset-1"
+                    && position.last_applied_period == "2026-08-31"
+            })
+            .once()
+            .returning(Ok);
+
+        let svc = AccountService::new(
+            Box::new(MockAccountRepository::new()),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(MockTransactionRepository::new()),
+        )
+        .with_fee_catch_up_repo(Box::new(mock_catch_up));
+
+        svc.advance_fee_schedule_cursor("acc-1", "asset-1", "2026-08-31".to_string())
+            .await
+            .unwrap();
+    }
+
+    // SYN-024/CFR-030 — deleting an account must enumerate its children (transactions here;
+    // holding notes and fee schedules follow the same shape) BEFORE the cascade delete, so
+    // each child records its own Removed change and tombstone (SYN-020) rather than silently
+    // vanishing under the database's `ON DELETE CASCADE` — invisible to Rust, and therefore
+    // invisible to the change log.
+    #[tokio::test]
+    async fn delete_enumerates_transactions_before_deleting_the_account() {
+        let mut mock_ar = MockAccountRepository::new();
+        mock_ar.expect_delete().returning(|_| Ok(()));
+
+        let mut mock_tr = MockTransactionRepository::new();
+        mock_tr
+            .expect_get_all_for_account()
+            .withf(|account_id: &str| account_id == "acc-1")
+            .once()
+            .returning(|_| Ok(vec![]));
+
+        let svc = AccountService::new(
+            Box::new(mock_ar),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(mock_tr),
+        );
+
+        svc.delete("acc-1").await.unwrap();
     }
 }

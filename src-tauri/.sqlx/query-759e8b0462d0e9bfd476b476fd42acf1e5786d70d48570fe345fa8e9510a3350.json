@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT asset_id FROM asset_prices WHERE asset_id = ? AND date = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "asset_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "759e8b0462d0e9bfd476b476fd42acf1e5786d70d48570fe345fa8e9510a3350"
+}

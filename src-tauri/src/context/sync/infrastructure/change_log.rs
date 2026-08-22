@@ -1,0 +1,497 @@
+//! `SqliteChangeRecorder` — the SQLite-backed `ChangeRecorder` (D1, PR-A). Dormant when no
+//! `sync_device` row exists (SYN-010) or while the device is paused (SYN-070); otherwise
+//! appends to `changes` / `tombstones` and advances `sync_device.logical_clock` (SYN-025,
+//! CFR-010) on the same connection as the write it describes (SYN-020).
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+use anyhow::Context;
+use sqlx::{Pool, Sqlite, SqliteConnection};
+
+use crate::core::logger::BACKEND;
+use crate::shared::domain::{ChangeDraft, LogicalTimestamp, Operation, Rank};
+use crate::shared::infrastructure::change_recorder::ChangeRecorder;
+
+/// Releases the apply gate (SYN-020) when dropped.
+pub struct SuspendGuard {
+    suspended: Arc<AtomicBool>,
+}
+
+impl Drop for SuspendGuard {
+    fn drop(&mut self) {
+        self.suspended.store(false, Ordering::SeqCst);
+    }
+}
+
+/// SQLite-backed `ChangeRecorder`. Reads/writes the `sync_device` singleton (id = 1),
+/// `changes`, and `tombstones` tables through the connection handed to `record()` so the
+/// change is written in the same transaction as the record it describes (SYN-020).
+pub struct SqliteChangeRecorder {
+    pool: Pool<Sqlite>,
+    suspended: Arc<AtomicBool>,
+}
+
+impl SqliteChangeRecorder {
+    /// Creates a recorder backed by the given connection pool.
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self {
+            pool,
+            suspended: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// Holds the apply gate (SYN-020) until the returned guard is dropped: `is_recording()`
+    /// reports `false` for its lifetime. The `tokio::Mutex` that guarantees a local write and
+    /// an in-progress apply never interleave (SYN-064) lands in PR-C as `SyncGate`; this
+    /// recorder only carries its half of the invariant — the two must land together
+    /// (D1, reviewer-checkable).
+    pub fn suspend(&self) -> SuspendGuard {
+        self.suspended.store(true, Ordering::SeqCst);
+        SuspendGuard {
+            suspended: Arc::clone(&self.suspended),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ChangeRecorder for SqliteChangeRecorder {
+    async fn record(
+        &self,
+        conn: &mut SqliteConnection,
+        draft: ChangeDraft,
+    ) -> anyhow::Result<Option<Rank>> {
+        if self.suspended.load(Ordering::SeqCst) {
+            return Ok(Rank::NEVER);
+        }
+        let device =
+            sqlx::query!("SELECT device_id, paused, logical_clock FROM sync_device WHERE id = 1")
+                .fetch_optional(&mut *conn)
+                .await
+                .context("Failed to read sync_device")?;
+        let Some(device) = device else {
+            return Ok(Rank::NEVER);
+        };
+        if device.paused != 0 {
+            return Ok(Rank::NEVER);
+        }
+
+        let sequence = sqlx::query_scalar!(
+            r#"SELECT COALESCE(MAX(sequence), 0) + 1 AS "sequence!: i64" FROM changes WHERE device_id = ?"#,
+            device.device_id
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .context("Failed to allocate change sequence")?;
+
+        let logical_clock = device.logical_clock + 1;
+        sqlx::query!(
+            "UPDATE sync_device SET logical_clock = ? WHERE id = 1",
+            logical_clock
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to advance logical clock")?;
+        let logical_timestamp = LogicalTimestamp::new(logical_clock as u64);
+
+        let based_on = draft
+            .based_on
+            .as_ref()
+            .map(|timestamp| timestamp.as_str().to_string());
+        let record_kind = draft.record_kind.to_string();
+        let record_identity = draft.record_identity.as_str().to_string();
+        let operation = draft.operation.to_string();
+        let origin = draft.origin.to_string();
+        let logical_timestamp_text = logical_timestamp.as_str().to_string();
+        sqlx::query!(
+            r#"INSERT INTO changes
+               (device_id, sequence, logical_timestamp, based_on, record_kind, record_identity,
+                operation, origin, content, published)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)"#,
+            device.device_id,
+            sequence,
+            logical_timestamp_text,
+            based_on,
+            record_kind,
+            record_identity,
+            operation,
+            origin,
+            draft.content
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to insert change")?;
+
+        match draft.operation {
+            Operation::Removed => {
+                sqlx::query!(
+                    r#"INSERT INTO tombstones (record_kind, record_identity, logical_timestamp, origin, removed_by)
+                       VALUES (?, ?, ?, ?, ?)
+                       ON CONFLICT(record_kind, record_identity) DO UPDATE SET
+                           logical_timestamp = excluded.logical_timestamp,
+                           origin = excluded.origin,
+                           removed_by = excluded.removed_by"#,
+                    record_kind,
+                    record_identity,
+                    logical_timestamp_text,
+                    origin,
+                    device.device_id
+                )
+                .execute(&mut *conn)
+                .await
+                .context("Failed to upsert tombstone")?;
+            }
+            Operation::Created => {
+                sqlx::query!(
+                    "DELETE FROM tombstones WHERE record_kind = ? AND record_identity = ?",
+                    record_kind,
+                    record_identity
+                )
+                .execute(&mut *conn)
+                .await
+                .context("Failed to clear tombstone")?;
+            }
+            Operation::Updated => {}
+        }
+
+        Ok(Some(Rank {
+            origin: draft.origin,
+            logical_timestamp,
+            device_id: device.device_id,
+        }))
+    }
+
+    async fn is_recording(&self) -> bool {
+        if self.suspended.load(Ordering::SeqCst) {
+            return false;
+        }
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!: i64" FROM sync_device WHERE id = 1 AND paused = 0"#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map(|count| count > 0)
+        .unwrap_or_else(|error| {
+            tracing::error!(target: BACKEND, err = ?error, "is_recording: sync_device lookup failed");
+            false
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::domain::{Operation, Origin, RecordIdentity, RecordKind};
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn make_pool() -> Pool<Sqlite> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    async fn seed_sync_device(pool: &Pool<Sqlite>, device_id: &str) {
+        sqlx::query!(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, ?, 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 0,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#,
+            device_id,
+        )
+        .execute(pool)
+        .await
+        .expect("seed sync_device");
+    }
+
+    fn account_created_draft(account_id: &str) -> ChangeDraft {
+        ChangeDraft::new(
+            RecordKind::Account,
+            RecordIdentity::canonical(RecordKind::Account, &[account_id]),
+            Operation::Created,
+            Origin::User,
+            None,
+            Some(format!("{{\"id\":\"{account_id}\"}}")),
+        )
+    }
+
+    // SYN-010 — dormant when no sync_device row exists: records nothing, returns the NEVER
+    // sentinel.
+    #[tokio::test]
+    async fn record_is_dormant_and_returns_never_when_no_sync_device_row_exists() {
+        let pool = make_pool().await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        let rank = recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .expect("dormant record must not error");
+        assert_eq!(rank, Rank::NEVER);
+        drop(conn);
+
+        let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM changes")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "SYN-010: nothing is recorded while dormant");
+    }
+
+    // SYN-025/CFR-010 — with a sync_device row present, three successive records for this
+    // device allocate sequence 1, 2, 3 and a strictly increasing logical timestamp each time.
+    #[tokio::test]
+    async fn record_allocates_sequence_and_advances_logical_timestamp_per_device() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        let rank_1 = recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .expect("record 1")
+            .expect("sync_device row exists: must be ranked, not NEVER");
+        let rank_2 = recorder
+            .record(&mut conn, account_created_draft("account-2"))
+            .await
+            .expect("record 2")
+            .expect("sync_device row exists: must be ranked, not NEVER");
+        let rank_3 = recorder
+            .record(&mut conn, account_created_draft("account-3"))
+            .await
+            .expect("record 3")
+            .expect("sync_device row exists: must be ranked, not NEVER");
+
+        assert!(rank_2.logical_timestamp > rank_1.logical_timestamp);
+        assert!(rank_3.logical_timestamp > rank_2.logical_timestamp);
+        drop(conn);
+
+        let sequences: Vec<i64> = sqlx::query_scalar!(
+            "SELECT sequence FROM changes WHERE device_id = ? ORDER BY sequence ASC",
+            "desktop-device"
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            sequences,
+            vec![1, 2, 3],
+            "SYN-025: strictly increasing, never reused"
+        );
+    }
+
+    // CFR-016 — the recorder stores whatever origin the draft carries: an Application-origin
+    // draft (a generated fee deduction, an auto-fetched price) is stamped `origin = Application`,
+    // not silently promoted to User.
+    #[tokio::test]
+    async fn record_stores_application_origin_verbatim() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        let draft = ChangeDraft::new(
+            RecordKind::AssetPrice,
+            RecordIdentity::canonical(RecordKind::AssetPrice, &["asset-1", "2026-08-20"]),
+            Operation::Created,
+            Origin::Application,
+            None,
+            Some("{\"price\":100000000}".to_string()),
+        );
+        let rank = recorder
+            .record(&mut conn, draft)
+            .await
+            .unwrap()
+            .expect("sync_device row exists: must be ranked");
+        assert_eq!(rank.origin, Origin::Application);
+        drop(conn);
+
+        let row = sqlx::query!("SELECT origin FROM changes WHERE device_id = 'desktop-device'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(row.origin, "Application");
+    }
+
+    // CFR-014 — a recorded change writes exactly one `changes` row carrying the draft's
+    // operation, origin, record_kind, record_identity, and content.
+    #[tokio::test]
+    async fn record_writes_one_changes_row_with_the_drafts_fields() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .unwrap();
+        drop(conn);
+
+        let row = sqlx::query!(
+            "SELECT operation, origin, record_kind, record_identity, content FROM changes WHERE device_id = ?",
+            "desktop-device"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.operation, "Created");
+        assert_eq!(row.origin, "User");
+        assert_eq!(row.record_kind, "Account");
+        assert_eq!(row.record_identity, "account-1");
+        assert_eq!(row.content.as_deref(), Some("{\"id\":\"account-1\"}"));
+    }
+
+    // CFR-015/SYN-024 — a Removed change leaves a permanent tombstone.
+    #[tokio::test]
+    async fn record_writes_a_tombstone_on_removed_operation() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        let draft = ChangeDraft::new(
+            RecordKind::Account,
+            RecordIdentity::canonical(RecordKind::Account, &["account-1"]),
+            Operation::Removed,
+            Origin::User,
+            None,
+            None,
+        );
+        recorder.record(&mut conn, draft).await.unwrap();
+        drop(conn);
+
+        let tombstone = sqlx::query!(
+            "SELECT record_kind, record_identity, removed_by FROM tombstones WHERE record_kind = 'Account' AND record_identity = 'account-1'"
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert!(tombstone.is_some(), "CFR-015: a removal leaves a tombstone");
+        assert_eq!(tombstone.unwrap().removed_by, "desktop-device");
+    }
+
+    // CFR-015/CFR-022 — a later Created for the same identity removes the prior tombstone
+    // (a re-creation supersedes the removal it followed).
+    #[tokio::test]
+    async fn record_removes_prior_tombstone_on_later_created() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        let removed = ChangeDraft::new(
+            RecordKind::Account,
+            RecordIdentity::canonical(RecordKind::Account, &["account-1"]),
+            Operation::Removed,
+            Origin::User,
+            None,
+            None,
+        );
+        recorder.record(&mut conn, removed).await.unwrap();
+        recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .unwrap();
+        drop(conn);
+
+        let tombstone = sqlx::query!(
+            "SELECT record_kind FROM tombstones WHERE record_kind = 'Account' AND record_identity = 'account-1'"
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert!(
+            tombstone.is_none(),
+            "a later Created removes the prior tombstone for the same identity"
+        );
+    }
+
+    // SYN-020 — the apply gate: is_recording() is false while an apply is in progress
+    // (`suspend()`'s guard), and true again once the guard is dropped.
+    #[tokio::test]
+    async fn is_recording_false_while_apply_gate_held() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+
+        assert!(
+            recorder.is_recording().await,
+            "recording before any gate is held"
+        );
+        let guard = recorder.suspend();
+        assert!(
+            !recorder.is_recording().await,
+            "SYN-020: gate held, must not record"
+        );
+        drop(guard);
+        assert!(
+            recorder.is_recording().await,
+            "gate released, recording resumes"
+        );
+    }
+
+    // SYN-020 — while the apply gate is held, record() writes nothing and reports the NEVER
+    // sentinel; once the guard drops, the same recorder records again.
+    #[tokio::test]
+    async fn record_writes_nothing_while_suspended_and_resumes_after_guard_drops() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+
+        let guard = recorder.suspend();
+        let rank = recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .expect("suspended record must not error");
+        assert_eq!(
+            rank,
+            Rank::NEVER,
+            "SYN-020: nothing is recorded during an apply"
+        );
+        drop(guard);
+
+        let rank = recorder
+            .record(&mut conn, account_created_draft("account-2"))
+            .await
+            .expect("record after resume");
+        assert!(
+            rank.is_some(),
+            "recording resumes once the gate is released"
+        );
+        drop(conn);
+
+        let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM changes")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "only the post-resume record left a changes row");
+    }
+
+    // SYN-070 — a paused device's recorder reports not-recording.
+    #[tokio::test]
+    async fn is_recording_false_when_device_is_paused() {
+        let pool = make_pool().await;
+        sqlx::query!(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, 'desktop-device', 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 1,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#,
+        )
+        .execute(&pool)
+        .await
+        .expect("seed paused sync_device");
+        let recorder = SqliteChangeRecorder::new(pool);
+
+        assert!(!recorder.is_recording().await);
+    }
+}

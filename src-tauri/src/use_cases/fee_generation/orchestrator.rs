@@ -1,6 +1,7 @@
 use super::error::FeeGenerationError;
 use crate::context::account::{AccountError, AccountServiceContract, FeeFrequency, FeeSchedule};
 use chrono::{Datelike, NaiveDate};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -114,14 +115,19 @@ impl FeeGenerationOrchestrator {
             if boundary >= start && after_cursor {
                 if per_period_percent > 0 {
                     let dated = boundary.format("%Y-%m-%d").to_string();
+                    let deduction_id = deterministic_deduction_id(
+                        &schedule.account_id,
+                        &schedule.asset_id,
+                        &dated,
+                    );
                     let result = self
                         .account_service
-                        .record_management_fee(
+                        .record_generated_management_fee(
                             &schedule.account_id,
                             schedule.asset_id.clone(),
                             dated,
                             per_period_percent,
-                            None,
+                            deduction_id,
                         )
                         .await;
                     match result {
@@ -155,12 +161,24 @@ impl FeeGenerationOrchestrator {
     }
 }
 
+/// FEE-048 — the deterministic identity of a generated deduction: derived from the holding
+/// it charges (account, asset) and its period boundary, never from the schedule's own id, so
+/// two devices generating the same period converge on one transaction record (CFR-034/043).
+/// One-off deductions (FEE-02x) keep a freshly generated uuid v4 — this function is never
+/// called for them.
+fn deterministic_deduction_id(account_id: &str, asset_id: &str, period_boundary: &str) -> String {
+    let digest = Sha256::digest(format!("{account_id}|{asset_id}|{period_boundary}"));
+    let hex = format!("{digest:x}");
+    format!("fee-{}", &hex[..32])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::context::account::{
-        Account, AccountService, SqliteAccountRepository, SqliteFeeScheduleRepository,
-        SqliteHoldingRepository, SqliteTransactionRepository, TransactionType, UpdateFrequency,
+        Account, AccountService, SqliteAccountRepository, SqliteFeeCatchUpRepository,
+        SqliteFeeScheduleRepository, SqliteHoldingRepository, SqliteTransactionRepository,
+        TransactionType, UpdateFrequency,
     };
     use crate::context::asset::{
         AssetClass, AssetService, CreateAssetDTO, SqliteAssetCategoryRepository,
@@ -188,7 +206,8 @@ mod tests {
                 Box::new(SqliteHoldingRepository::new(pool.clone())),
                 Box::new(SqliteTransactionRepository::new(pool.clone())),
             )
-            .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone()))),
+            .with_fee_schedule_repo(Box::new(SqliteFeeScheduleRepository::new(pool.clone())))
+            .with_fee_catch_up_repo(Box::new(SqliteFeeCatchUpRepository::new(pool.clone()))),
         )
     }
 
@@ -1037,5 +1056,31 @@ mod tests {
             schedule.last_applied_period.is_some(),
             "cursor advances after backfill"
         );
+    }
+
+    // FEE-048/CFR-034/043 — same (account, asset, period) always yields the same id, so two
+    // devices generating the same period independently converge on one transaction.
+    #[test]
+    fn deterministic_deduction_id_is_stable_for_the_same_holding_and_period() {
+        let first = deterministic_deduction_id("acc-1", "asset-1", "2026-08-31");
+        let second = deterministic_deduction_id("acc-1", "asset-1", "2026-08-31");
+        assert_eq!(first, second);
+    }
+
+    // FEE-048 — a different period boundary yields a different id.
+    #[test]
+    fn deterministic_deduction_id_differs_for_a_different_period() {
+        let august = deterministic_deduction_id("acc-1", "asset-1", "2026-08-31");
+        let september = deterministic_deduction_id("acc-1", "asset-1", "2026-09-30");
+        assert_ne!(august, september);
+    }
+
+    // FEE-048 — a different holding (account or asset) yields a different id for the same
+    // period.
+    #[test]
+    fn deterministic_deduction_id_differs_for_a_different_holding() {
+        let one = deterministic_deduction_id("acc-1", "asset-1", "2026-08-31");
+        let other = deterministic_deduction_id("acc-2", "asset-1", "2026-08-31");
+        assert_ne!(one, other);
     }
 }

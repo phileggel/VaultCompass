@@ -73,7 +73,8 @@ pub struct FeeSchedule {
     /// Whether the schedule is currently active (FEE-061).
     pub active: bool,
     /// The last completed period boundary that was applied, as ISO date (FEE-043).
-    /// None when no periods have been applied yet.
+    /// None when no periods have been applied yet. A derived read of the schedule's
+    /// `FeeCatchUpPosition` (CFR-044); never written through the schedule itself.
     pub last_applied_period: Option<String>,
 }
 
@@ -142,12 +143,6 @@ impl FeeSchedule {
         Ok(self)
     }
 
-    /// Advances the catch-up cursor to the given completed period boundary (FEE-043).
-    pub fn advance_cursor(mut self, last_applied_period: String) -> Self {
-        self.last_applied_period = Some(last_applied_period);
-        self
-    }
-
     /// Reconstructs a FeeSchedule from storage without validation.
     #[allow(clippy::too_many_arguments)]
     pub fn restore(
@@ -189,10 +184,47 @@ pub trait FeeScheduleRepository: Send + Sync {
     async fn get_all_active(&self) -> Result<Vec<FeeSchedule>>;
     /// Fetches the active fee schedules of one account.
     async fn get_active_by_account(&self, account_id: &str) -> Result<Vec<FeeSchedule>>;
+    /// Fetches every fee schedule of one account, active or not.
+    async fn get_by_account(&self, account_id: &str) -> Result<Vec<FeeSchedule>>;
     /// Inserts a new fee schedule.
     async fn insert(&self, schedule: &FeeSchedule) -> Result<()>;
     /// Updates an existing fee schedule in place.
     async fn update(&self, schedule: &FeeSchedule) -> Result<()>;
     /// Deletes a fee schedule by (account_id, asset_id). No-op if not found (FEE-062).
+    async fn delete_by_account_asset(&self, account_id: &str, asset_id: &str) -> Result<()>;
+}
+
+/// The fee catch-up cursor (FEE-043) as its own synced record (CFR-044, D5): identified by
+/// the schedule's `(account_id, asset_id)` — not a field of `FeeSchedule` — so it can merge
+/// by maximum between devices independently of the schedule's own rank (CFR-016).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FeeCatchUpPosition {
+    /// The account of the schedule this position belongs to.
+    pub account_id: String,
+    /// The charged asset of the schedule this position belongs to.
+    pub asset_id: String,
+    /// The boundary date (ISO `YYYY-MM-DD`) of the most recently generated or skipped
+    /// period (FEE-043).
+    pub last_applied_period: String,
+}
+
+/// Interface for fee catch-up position persistence (D5, CFR-044).
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait FeeCatchUpRepository: Send + Sync {
+    /// Fetches the catch-up position for a given (account, asset) pair, if generation has
+    /// ever run for that holding.
+    async fn get_by_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<Option<FeeCatchUpPosition>>;
+    /// Fetches every catch-up position of one account.
+    async fn get_by_account(&self, account_id: &str) -> Result<Vec<FeeCatchUpPosition>>;
+    /// Merges `incoming` into the stored position by **maximum** (CFR-044): the stored
+    /// `last_applied_period` becomes the later of the stored and incoming values, never
+    /// moving backwards, whatever order changes arrive in.
+    async fn upsert(&self, incoming: FeeCatchUpPosition) -> Result<FeeCatchUpPosition>;
+    /// Deletes the catch-up position of one (account, asset) pair. No-op if absent.
     async fn delete_by_account_asset(&self, account_id: &str, asset_id: &str) -> Result<()>;
 }

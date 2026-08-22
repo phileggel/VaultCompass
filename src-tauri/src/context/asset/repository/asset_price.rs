@@ -1,9 +1,14 @@
 use super::super::domain::{AssetPrice, AssetPriceRepository, AssetPriceSource};
 use crate::core::logger::BACKEND;
+use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::infrastructure::change_recorder::{
+    ChangeRecorder, NoopChangeRecorder, RankColumns,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, Sqlite, SqliteConnection};
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(sqlx::FromRow)]
 struct AssetPriceRow {
@@ -30,18 +35,35 @@ impl From<AssetPriceRow> for AssetPrice {
 /// SQLite implementation of AssetPriceRepository.
 pub struct SqliteAssetPriceRepository {
     pool: Pool<Sqlite>,
+    change_recorder: Arc<dyn ChangeRecorder>,
 }
 
 impl SqliteAssetPriceRepository {
     /// Creates a new repository backed by the given connection pool.
     pub fn new(pool: Pool<Sqlite>) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            change_recorder: Arc::new(NoopChangeRecorder),
+        }
     }
-}
 
-#[async_trait]
-impl AssetPriceRepository for SqliteAssetPriceRepository {
-    async fn upsert(&self, price: AssetPrice) -> Result<()> {
+    /// Attaches the change recorder every write appends through (SYN-020).
+    pub fn with_change_recorder(mut self, change_recorder: Arc<dyn ChangeRecorder>) -> Self {
+        self.change_recorder = change_recorder;
+        self
+    }
+
+    /// Writes `price` on `conn` (insert or overwrite of its `(asset_id, date)` key) and
+    /// records the matching Created / Updated change, rank-stamping the row.
+    async fn write_price(&self, conn: &mut SqliteConnection, price: &AssetPrice) -> Result<()> {
+        let existing = sqlx::query_scalar!(
+            "SELECT asset_id FROM asset_prices WHERE asset_id = ? AND date = ?",
+            price.asset_id,
+            price.date
+        )
+        .fetch_optional(&mut *conn)
+        .await
+        .context("Failed to look up asset price")?;
         let source = price.source.to_string();
         sqlx::query!(
             "INSERT INTO asset_prices (asset_id, date, price, source) VALUES (?, ?, ?, ?)
@@ -51,9 +73,88 @@ impl AssetPriceRepository for SqliteAssetPriceRepository {
             price.price,
             source,
         )
-        .execute(&self.pool)
+        .execute(&mut *conn)
         .await
         .context("Failed to upsert asset price")?;
+        let operation = if existing.is_some() {
+            Operation::Updated
+        } else {
+            Operation::Created
+        };
+        let draft = ChangeDraft::new(
+            RecordKind::AssetPrice,
+            identity(&price.asset_id, &price.date),
+            operation,
+            Origin::User,
+            None,
+            Some(serde_json::to_string(price)?),
+        );
+        let rank = self.change_recorder.record(conn, draft).await?;
+        if let Some(rank) = rank {
+            let columns = RankColumns::from(rank);
+            sqlx::query!(
+                "UPDATE asset_prices SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+                 WHERE asset_id = ? AND date = ?",
+                columns.logical_timestamp,
+                columns.origin,
+                columns.device_id,
+                price.asset_id,
+                price.date
+            )
+            .execute(conn)
+            .await
+            .context("Failed to stamp rank on asset price")?;
+        }
+        Ok(())
+    }
+
+    /// Deletes the `(asset_id, date)` row on `conn` and records its removal; a missing
+    /// row records nothing (SYN-020).
+    async fn delete_price(
+        &self,
+        conn: &mut SqliteConnection,
+        asset_id: &str,
+        date: &str,
+    ) -> Result<()> {
+        let deleted = sqlx::query!(
+            "DELETE FROM asset_prices WHERE asset_id = ? AND date = ?",
+            asset_id,
+            date,
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to delete asset price")?;
+        if deleted.rows_affected() > 0 {
+            let draft = ChangeDraft::new(
+                RecordKind::AssetPrice,
+                identity(asset_id, date),
+                Operation::Removed,
+                Origin::User,
+                None,
+                None,
+            );
+            self.change_recorder.record(conn, draft).await?;
+        }
+        Ok(())
+    }
+}
+
+fn identity(asset_id: &str, date: &str) -> RecordIdentity {
+    RecordIdentity::canonical(RecordKind::AssetPrice, &[asset_id, date])
+}
+
+#[async_trait]
+impl AssetPriceRepository for SqliteAssetPriceRepository {
+    async fn upsert(&self, price: AssetPrice) -> Result<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin asset price upsert")?;
+        self.write_price(&mut tx, &price).await?;
+        tx.commit()
+            .await
+            .context("Failed to commit asset price upsert")?;
         Ok(())
     }
 
@@ -102,14 +203,15 @@ impl AssetPriceRepository for SqliteAssetPriceRepository {
     }
 
     async fn delete(&self, asset_id: &str, date: &str) -> Result<()> {
-        sqlx::query!(
-            "DELETE FROM asset_prices WHERE asset_id = ? AND date = ?",
-            asset_id,
-            date,
-        )
-        .execute(&self.pool)
-        .await
-        .context("Failed to delete asset price")?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin asset price delete")?;
+        self.delete_price(&mut tx, asset_id, date).await?;
+        tx.commit()
+            .await
+            .context("Failed to commit asset price delete")?;
         Ok(())
     }
 
@@ -129,27 +231,8 @@ impl AssetPriceRepository for SqliteAssetPriceRepository {
             .await
             .context("Failed to begin transaction")?;
 
-        sqlx::query!(
-            "DELETE FROM asset_prices WHERE asset_id = ? AND date = ?",
-            asset_id,
-            original_date,
-        )
-        .execute(&mut *tx)
-        .await
-        .context("Failed to delete original asset price")?;
-
-        let source = new_price.source.to_string();
-        sqlx::query!(
-            "INSERT INTO asset_prices (asset_id, date, price, source) VALUES (?, ?, ?, ?)
-             ON CONFLICT(asset_id, date) DO UPDATE SET price = excluded.price, source = excluded.source",
-            new_price.asset_id,
-            new_price.date,
-            new_price.price,
-            source,
-        )
-        .execute(&mut *tx)
-        .await
-        .context("Failed to upsert new asset price")?;
+        self.delete_price(&mut tx, asset_id, original_date).await?;
+        self.write_price(&mut tx, &new_price).await?;
 
         tx.commit()
             .await
@@ -542,5 +625,169 @@ mod tests {
         assert_eq!(prices.len(), 1);
         assert_eq!(prices[0].date, "2026-01-02");
         assert_eq!(prices[0].price, 200_000_000);
+    }
+
+    use crate::context::sync::SqliteChangeRecorder;
+    use std::sync::Arc;
+
+    async fn make_pool() -> Pool<Sqlite> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    async fn seed_sync_device(pool: &Pool<Sqlite>) {
+        sqlx::query!(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, 'desktop-device', 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 0,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#
+        )
+        .execute(pool)
+        .await
+        .expect("seed sync_device");
+    }
+
+    async fn changes_with_operation(pool: &Pool<Sqlite>, operation: &str) -> i64 {
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM changes WHERE operation = ?",
+            operation
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    // SYN-020/021 — upsert (creation) records exactly one Created change, rank-stamped.
+    #[tokio::test]
+    async fn upsert_records_one_created_change_with_rank_stamped() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        seed_asset(&pool, "asset-1").await;
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteAssetPriceRepository::new(pool.clone()).with_change_recorder(recorder);
+
+        repo.upsert(AssetPrice::restore(
+            "asset-1".into(),
+            "2026-08-20".into(),
+            100_000_000,
+            AssetPriceSource::Manual,
+        ))
+        .await
+        .unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Created").await, 1);
+        let row = sqlx::query!(
+            "SELECT sync_logical_timestamp FROM asset_prices WHERE asset_id = 'asset-1' AND date = '2026-08-20'"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(row.sync_logical_timestamp.is_some());
+    }
+
+    // SYN-020/024 — delete records exactly one Removed change and a tombstone.
+    #[tokio::test]
+    async fn delete_records_one_removed_change_and_tombstone() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        seed_asset(&pool, "asset-1").await;
+        let setup_repo = SqliteAssetPriceRepository::new(pool.clone());
+        setup_repo
+            .upsert(AssetPrice::restore(
+                "asset-1".into(),
+                "2026-08-20".into(),
+                100_000_000,
+                AssetPriceSource::Manual,
+            ))
+            .await
+            .unwrap();
+
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteAssetPriceRepository::new(pool.clone()).with_change_recorder(recorder);
+        repo.delete("asset-1", "2026-08-20").await.unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Removed").await, 1);
+        let tombstone = sqlx::query!(
+            "SELECT record_identity FROM tombstones WHERE record_kind = 'AssetPrice' AND record_identity = 'asset-1:2026-08-20'"
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert!(tombstone.is_some());
+    }
+
+    // SYN-021/D1 — replace_atomic (a date correction) emits two changes: a Removed at the
+    // old (asset_id, date) identity and a Created at the new one.
+    #[tokio::test]
+    async fn replace_atomic_records_removed_old_identity_and_created_new_identity() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        seed_asset(&pool, "asset-1").await;
+        let setup_repo = SqliteAssetPriceRepository::new(pool.clone());
+        setup_repo
+            .upsert(AssetPrice::restore(
+                "asset-1".into(),
+                "2026-08-20".into(),
+                100_000_000,
+                AssetPriceSource::Manual,
+            ))
+            .await
+            .unwrap();
+
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteAssetPriceRepository::new(pool.clone()).with_change_recorder(recorder);
+        let new_price = AssetPrice::restore(
+            "asset-1".into(),
+            "2026-08-21".into(),
+            105_000_000,
+            AssetPriceSource::Manual,
+        );
+        repo.replace_atomic("asset-1", "2026-08-20", new_price)
+            .await
+            .unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Removed").await, 1);
+        assert_eq!(changes_with_operation(&pool, "Created").await, 1);
+        let tombstone = sqlx::query!(
+            "SELECT record_identity FROM tombstones WHERE record_kind = 'AssetPrice' AND record_identity = 'asset-1:2026-08-20'"
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert!(tombstone.is_some(), "the old date's identity is tombstoned");
+    }
+
+    // SYN-020 — a failed write records no change (rollback).
+    #[tokio::test]
+    async fn upsert_of_a_price_for_an_unknown_asset_records_no_change() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteAssetPriceRepository::new(pool.clone()).with_change_recorder(recorder);
+
+        let result = repo
+            .upsert(AssetPrice::restore(
+                "unknown-asset".into(),
+                "2026-08-20".into(),
+                100_000_000,
+                AssetPriceSource::Manual,
+            ))
+            .await;
+        assert!(result.is_err(), "FK violation: no such asset");
+
+        assert_eq!(
+            changes_with_operation(&pool, "Created").await,
+            0,
+            "SYN-020: a failed write records no change"
+        );
     }
 }

@@ -2,20 +2,35 @@ use crate::context::currency::domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRateSource,
 };
 use crate::core::logger::BACKEND;
+use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::infrastructure::change_recorder::{
+    ChangeRecorder, NoopChangeRecorder, RankColumns,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use sqlx::SqlitePool;
 use std::str::FromStr;
+use std::sync::Arc;
 
 /// SQLite-backed implementation of `CurrencyPairRepository`.
 pub struct SqliteCurrencyPairRepository {
     pool: SqlitePool,
+    change_recorder: Arc<dyn ChangeRecorder>,
 }
 
 impl SqliteCurrencyPairRepository {
     /// Creates a new repository backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            change_recorder: Arc::new(NoopChangeRecorder),
+        }
+    }
+
+    /// Attaches the change recorder every write appends through (SYN-020).
+    pub fn with_change_recorder(mut self, change_recorder: Arc<dyn ChangeRecorder>) -> Self {
+        self.change_recorder = change_recorder;
+        self
     }
 }
 
@@ -31,15 +46,52 @@ struct PairSummaryRow {
 #[async_trait]
 impl CurrencyPairRepository for SqliteCurrencyPairRepository {
     async fn upsert_pair(&self, pair: CurrencyPair) -> Result<CurrencyPair> {
-        sqlx::query!(
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin currency pair upsert")?;
+        let inserted = sqlx::query!(
             "INSERT INTO currency_pairs (from_currency, to_currency) VALUES (?, ?)
              ON CONFLICT(from_currency, to_currency) DO NOTHING",
             pair.from_currency,
             pair.to_currency,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("Failed to upsert currency pair")?;
+        if inserted.rows_affected() > 0 {
+            let draft = ChangeDraft::new(
+                RecordKind::CurrencyPair,
+                RecordIdentity::canonical(
+                    RecordKind::CurrencyPair,
+                    &[&pair.from_currency, &pair.to_currency],
+                ),
+                Operation::Created,
+                Origin::User,
+                None,
+                Some(serde_json::to_string(&pair)?),
+            );
+            let rank = self.change_recorder.record(&mut tx, draft).await?;
+            if let Some(rank) = rank {
+                let columns = RankColumns::from(rank);
+                sqlx::query!(
+                    "UPDATE currency_pairs SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+                     WHERE from_currency = ? AND to_currency = ?",
+                    columns.logical_timestamp,
+                    columns.origin,
+                    columns.device_id,
+                    pair.from_currency,
+                    pair.to_currency
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to stamp rank on currency pair")?;
+            }
+        }
+        tx.commit()
+            .await
+            .context("Failed to commit currency pair upsert")?;
         Ok(pair)
     }
 
@@ -199,6 +251,90 @@ mod tests {
         assert_eq!(
             pairs[0].latest_rate_source,
             Some(CurrencyRateSource::Manual)
+        );
+    }
+
+    use crate::context::sync::SqliteChangeRecorder;
+    use std::sync::Arc;
+
+    async fn make_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    async fn seed_sync_device(pool: &SqlitePool) {
+        sqlx::query!(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, 'desktop-device', 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 0,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#
+        )
+        .execute(pool)
+        .await
+        .expect("seed sync_device");
+    }
+
+    async fn changes_with_operation(pool: &SqlitePool, operation: &str) -> i64 {
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM changes WHERE operation = ?",
+            operation
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    // SYN-020/021 — upsert_pair records exactly one Created change, rank-stamped.
+    #[tokio::test]
+    async fn upsert_pair_records_one_created_change_with_rank_stamped() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteCurrencyPairRepository::new(pool.clone()).with_change_recorder(recorder);
+
+        repo.upsert_pair(CurrencyPair::from_storage("USD".into(), "EUR".into()))
+            .await
+            .unwrap();
+
+        assert_eq!(changes_with_operation(&pool, "Created").await, 1);
+        let row = sqlx::query!(
+            "SELECT sync_logical_timestamp FROM currency_pairs WHERE from_currency = 'USD' AND to_currency = 'EUR'"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(row.sync_logical_timestamp.is_some());
+    }
+
+    // SYN-020 — a repeated upsert_pair for the same key is a no-op (ON CONFLICT DO NOTHING)
+    // and must record no second change.
+    #[tokio::test]
+    async fn upsert_pair_idempotent_second_call_records_no_change() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteCurrencyPairRepository::new(pool.clone()).with_change_recorder(recorder);
+
+        repo.upsert_pair(CurrencyPair::from_storage("USD".into(), "EUR".into()))
+            .await
+            .unwrap();
+        repo.upsert_pair(CurrencyPair::from_storage("USD".into(), "EUR".into()))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            changes_with_operation(&pool, "Created").await,
+            1,
+            "the second, no-op upsert must not record a second change"
         );
     }
 }

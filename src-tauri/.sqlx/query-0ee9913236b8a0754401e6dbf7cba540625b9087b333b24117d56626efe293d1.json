@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, account_id, asset_id, annual_rate_micros, frequency, start_date, end_date, active, last_applied_period\n               FROM fee_schedules WHERE active = 1 AND account_id = ?",
+  "query": "SELECT s.id, s.account_id, s.asset_id, s.annual_rate_micros, s.frequency, s.start_date, s.end_date, s.active,\n                      p.last_applied_period AS \"last_applied_period?: String\"\n               FROM fee_schedules s\n               LEFT JOIN fee_catch_up_positions p ON p.account_id = s.account_id AND p.asset_id = s.asset_id\n               WHERE s.active = 1 AND s.account_id = ?",
   "describe": {
     "columns": [
       {
@@ -44,7 +44,7 @@
         "type_info": "Integer"
       },
       {
-        "name": "last_applied_period",
+        "name": "last_applied_period?: String",
         "ordinal": 8,
         "type_info": "Text"
       }
@@ -61,8 +61,8 @@
       false,
       true,
       false,
-      true
+      false
     ]
   },
-  "hash": "900c994cd79c6538ec5fe59423eeacb7c005baf263330de43a408cae1a4204ed"
+  "hash": "0ee9913236b8a0754401e6dbf7cba540625b9087b333b24117d56626efe293d1"
 }

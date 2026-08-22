@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use crate::context::asset::{PriceProvider, ReqwestYahooClient};
 use crate::context::currency::{RateHistoryProvider, ReqwestFrankfurterClient};
+use crate::context::sync::SqliteChangeRecorder;
 use crate::core::{Database, BACKEND};
+use crate::shared::infrastructure::change_recorder::ChangeRecorder;
 use crate::shared::infrastructure::container::AppContainer;
 use crate::shared::infrastructure::scheduler::platform_scheduler;
 
@@ -95,6 +97,7 @@ pub async fn run() -> i32 {
         None,
         Some(frankfurter_client as Arc<dyn RateHistoryProvider>),
         None,
+        Arc::new(SqliteChangeRecorder::new(pool.clone())) as Arc<dyn ChangeRecorder>,
     );
     let repository = Arc::new(SqliteScheduledFetchRepository::new(pool));
 
