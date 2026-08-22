@@ -2,11 +2,13 @@ use super::category::AssetCategory;
 use super::exchange::{self, Exchange};
 use super::isin::validate_isin;
 use crate::context::asset::error::AssetError;
+use crate::shared::domain::Rank;
 use anyhow::Result;
 use async_trait::async_trait;
 use iso_currency::Currency;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -1084,4 +1086,8 @@ pub trait AssetRepository: Send + Sync {
     async fn block_price_refresh(&self, id: &str) -> Result<()>;
     /// Clears the price-refresh lock on an asset (MKT-150).
     async fn unblock_price_refresh(&self, id: &str) -> Result<()>;
+    /// Stamps `rank` on every asset, category, and asset price whose rank columns are still
+    /// NULL (CFR-014, D6), on `conn` — the first publish's enrolment transaction (SYN-013).
+    /// Returns how many rows were stamped.
+    async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64>;
 }

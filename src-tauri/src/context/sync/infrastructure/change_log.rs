@@ -1,17 +1,33 @@
 //! `SqliteChangeRecorder` — the SQLite-backed `ChangeRecorder` (D1, PR-A). Dormant when no
 //! `sync_device` row exists (SYN-010) or while the device is paused (SYN-070); otherwise
 //! appends to `changes` / `tombstones` and advances `sync_device.logical_clock` (SYN-025,
-//! CFR-010) on the same connection as the write it describes (SYN-020).
+//! CFR-010) on the same connection as the write it describes (SYN-020), then tells the
+//! recorded-change hook so the settling-interval batcher restarts its window (SYN-067).
+//!
+//! `SqliteChangeLogRepository` — the SQLite-backed `ChangeLogRepository`: the publish run's
+//! reads of the same `changes` table and the enrolment transaction's writes (SYN-013).
 
+use std::future::Future;
+use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::Context;
-use sqlx::{Pool, Sqlite, SqliteConnection};
+use sqlx::{Pool, Sqlite, SqliteConnection, Transaction};
 
+use crate::context::sync::domain::{ChangeLogRepository, SegmentChange, SyncDevice};
+use crate::context::sync::error::SyncError;
 use crate::core::logger::BACKEND;
 use crate::shared::domain::{ChangeDraft, LogicalTimestamp, Operation, Rank};
 use crate::shared::infrastructure::change_recorder::ChangeRecorder;
+
+/// The future a recorded-change hook returns.
+pub type HookFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Called after every change recorded on an enabled, non-paused device (SYN-067) — the
+/// settling-interval batcher restarts its window from it.
+pub type RecordedChangeHook = Arc<dyn Fn() -> HookFuture + Send + Sync>;
 
 /// Releases the apply gate (SYN-020) when dropped.
 pub struct SuspendGuard {
@@ -30,6 +46,7 @@ impl Drop for SuspendGuard {
 pub struct SqliteChangeRecorder {
     pool: Pool<Sqlite>,
     suspended: Arc<AtomicBool>,
+    on_recorded: Option<RecordedChangeHook>,
 }
 
 impl SqliteChangeRecorder {
@@ -38,7 +55,14 @@ impl SqliteChangeRecorder {
         Self {
             pool,
             suspended: Arc::new(AtomicBool::new(false)),
+            on_recorded: None,
         }
+    }
+
+    /// Attaches the hook told after every recorded change (SYN-067).
+    pub fn with_recorded_change_hook(mut self, hook: RecordedChangeHook) -> Self {
+        self.on_recorded = Some(hook);
+        self
     }
 
     /// Holds the apply gate (SYN-020) until the returned guard is dropped: `is_recording()`
@@ -154,6 +178,10 @@ impl ChangeRecorder for SqliteChangeRecorder {
             Operation::Updated => {}
         }
 
+        if let Some(hook) = &self.on_recorded {
+            hook().await;
+        }
+
         Ok(Some(Rank {
             origin: draft.origin,
             logical_timestamp,
@@ -178,11 +206,236 @@ impl ChangeRecorder for SqliteChangeRecorder {
     }
 }
 
+/// SQLite-backed `ChangeLogRepository`.
+pub struct SqliteChangeLogRepository {
+    pool: Pool<Sqlite>,
+}
+
+impl SqliteChangeLogRepository {
+    /// Creates a repository backed by the given connection pool.
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self { pool }
+    }
+}
+
+fn database_error(context: &'static str, error: sqlx::Error) -> SyncError {
+    tracing::error!(target: BACKEND, err = ?error, "{context}");
+    SyncError::DatabaseError
+}
+
+fn parse_stored<T: FromStr>(column: &'static str, value: &str) -> Result<T, SyncError> {
+    T::from_str(value).map_err(|_| {
+        tracing::error!(target: BACKEND, column, value, "changes: unknown stored value");
+        SyncError::DatabaseError
+    })
+}
+
+#[derive(sqlx::FromRow)]
+struct ChangeRow {
+    sequence: i64,
+    logical_timestamp: String,
+    based_on: Option<String>,
+    record_kind: String,
+    record_identity: String,
+    operation: String,
+    origin: String,
+    content: Option<String>,
+}
+
+impl TryFrom<ChangeRow> for SegmentChange {
+    type Error = SyncError;
+
+    fn try_from(row: ChangeRow) -> Result<Self, SyncError> {
+        Ok(SegmentChange {
+            sequence: row.sequence,
+            logical_timestamp: row.logical_timestamp,
+            based_on: row.based_on,
+            record_kind: parse_stored("record_kind", &row.record_kind)?,
+            record_identity: row.record_identity,
+            operation: parse_stored("operation", &row.operation)?,
+            origin: parse_stored("origin", &row.origin)?,
+            content: row.content,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl ChangeLogRepository for SqliteChangeLogRepository {
+    async fn kept_key_bytes(&self) -> Result<Option<Vec<u8>>, SyncError> {
+        sqlx::query_scalar!(
+            r#"SELECT derived_key AS "derived_key!: Vec<u8>" FROM sync_device WHERE id = 1"#
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| database_error("kept_key_bytes: query failed", error))
+    }
+
+    async fn logical_clock(&self) -> Result<i64, SyncError> {
+        sqlx::query_scalar!(
+            r#"SELECT COALESCE(MAX(logical_clock), 0) AS "logical_clock!: i64" FROM sync_device WHERE id = 1"#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| database_error("logical_clock: query failed", error))
+    }
+
+    async fn list_unpublished(&self, device_id: &str) -> Result<Vec<SegmentChange>, SyncError> {
+        let rows = sqlx::query_as!(
+            ChangeRow,
+            r#"SELECT sequence, logical_timestamp, based_on, record_kind, record_identity,
+                      operation, origin, content
+               FROM changes WHERE device_id = ? AND published = 0
+               ORDER BY sequence ASC"#,
+            device_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| database_error("list_unpublished: query failed", error))?;
+        rows.into_iter().map(SegmentChange::try_from).collect()
+    }
+
+    async fn mark_published(
+        &self,
+        device_id: &str,
+        first_sequence: i64,
+        last_sequence: i64,
+    ) -> Result<(), SyncError> {
+        sqlx::query!(
+            "UPDATE changes SET published = 1 WHERE device_id = ? AND sequence BETWEEN ? AND ?",
+            device_id,
+            first_sequence,
+            last_sequence
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|error| database_error("mark_published: update failed", error))?;
+        Ok(())
+    }
+
+    async fn latest_published_sequence(&self, device_id: &str) -> Result<i64, SyncError> {
+        sqlx::query_scalar!(
+            r#"SELECT COALESCE(MAX(sequence), 0) AS "sequence!: i64"
+               FROM changes WHERE device_id = ? AND published = 1"#,
+            device_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| database_error("latest_published_sequence: query failed", error))
+    }
+
+    async fn begin(&self) -> Result<Transaction<'static, Sqlite>, SyncError> {
+        self.pool
+            .begin()
+            .await
+            .map_err(|error| database_error("begin: transaction not opened", error))
+    }
+
+    async fn save_enrolment(
+        &self,
+        conn: &mut SqliteConnection,
+        device: &SyncDevice,
+        derived_key: &[u8],
+        logical_clock: i64,
+    ) -> Result<(), SyncError> {
+        let data_format_version = i64::from(device.data_format_version);
+        sqlx::query!(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                   device_id = excluded.device_id,
+                   device_name = excluded.device_name,
+                   folder = excluded.folder,
+                   joined_at = excluded.joined_at,
+                   paused = excluded.paused,
+                   portfolio_created_at = excluded.portfolio_created_at,
+                   logical_clock = excluded.logical_clock,
+                   derived_key = excluded.derived_key,
+                   data_format_version = excluded.data_format_version"#,
+            device.device_id,
+            device.device_name,
+            device.folder,
+            device.joined_at,
+            device.portfolio_created_at,
+            logical_clock,
+            derived_key,
+            data_format_version
+        )
+        .execute(conn)
+        .await
+        .map_err(|error| database_error("save_enrolment: write failed", error))?;
+        Ok(())
+    }
+
+    async fn retire_earlier_changes(
+        &self,
+        conn: &mut SqliteConnection,
+        device_id: &str,
+    ) -> Result<(), SyncError> {
+        sqlx::query!(
+            "UPDATE changes SET published = 1 WHERE device_id = ?",
+            device_id
+        )
+        .execute(conn)
+        .await
+        .map_err(|error| database_error("retire_earlier_changes: update failed", error))?;
+        Ok(())
+    }
+
+    async fn next_sequence(
+        &self,
+        conn: &mut SqliteConnection,
+        device_id: &str,
+    ) -> Result<i64, SyncError> {
+        sqlx::query_scalar!(
+            r#"SELECT COALESCE(MAX(sequence), 0) + 1 AS "sequence!: i64" FROM changes WHERE device_id = ?"#,
+            device_id
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|error| database_error("next_sequence: query failed", error))
+    }
+
+    async fn append_published_change(
+        &self,
+        conn: &mut SqliteConnection,
+        device_id: &str,
+        change: &SegmentChange,
+    ) -> Result<(), SyncError> {
+        let record_kind = change.record_kind.to_string();
+        let operation = change.operation.to_string();
+        let origin = change.origin.to_string();
+        sqlx::query!(
+            r#"INSERT INTO changes
+               (device_id, sequence, logical_timestamp, based_on, record_kind, record_identity,
+                operation, origin, content, published)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"#,
+            device_id,
+            change.sequence,
+            change.logical_timestamp,
+            change.based_on,
+            record_kind,
+            change.record_identity,
+            operation,
+            origin,
+            change.content
+        )
+        .execute(conn)
+        .await
+        .map_err(|error| database_error("append_published_change: insert failed", error))?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::sync::application::publisher::{Publisher, SETTLING_INTERVAL};
     use crate::shared::domain::{Operation, Origin, RecordIdentity, RecordKind};
     use sqlx::sqlite::SqlitePoolOptions;
+    use std::sync::atomic::AtomicUsize;
+    use std::time::Duration;
 
     async fn make_pool() -> Pool<Sqlite> {
         let pool = SqlitePoolOptions::new()
@@ -474,6 +727,112 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1, "only the post-resume record left a changes row");
+    }
+
+    // SYN-067 — a recorded change restarts the settling window through the hook: exactly one
+    // publish fires once the window elapses, and none before. The clock is paused only once
+    // the database work is done — the pool's own timeouts must not be auto-advanced.
+    #[tokio::test]
+    async fn recorded_change_publishes_once_after_the_settling_window() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let published = Arc::new(AtomicUsize::new(0));
+        let published_for_hook = Arc::clone(&published);
+        let hook = Arc::new(Publisher::new()).recorded_change_hook(move || {
+            published_for_hook.fetch_add(1, Ordering::SeqCst);
+            async {}
+        });
+        let recorder = SqliteChangeRecorder::new(pool.clone()).with_recorded_change_hook(hook);
+        let mut conn = pool.acquire().await.expect("conn");
+
+        recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .expect("record")
+            .expect("sync_device row exists: must be ranked");
+        drop(conn);
+        tokio::time::pause();
+        assert_eq!(
+            published.load(Ordering::SeqCst),
+            0,
+            "nothing publishes before the settling window elapses"
+        );
+
+        tokio::time::advance(SETTLING_INTERVAL + Duration::from_millis(1)).await;
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            published.load(Ordering::SeqCst),
+            1,
+            "SYN-067: the recorded change publishes once the settling window elapses"
+        );
+        tokio::time::advance(SETTLING_INTERVAL).await;
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            published.load(Ordering::SeqCst),
+            1,
+            "a burst publishes exactly once"
+        );
+    }
+
+    // SYN-010 — a dormant recorder (no sync_device row) never tells the hook.
+    #[tokio::test]
+    async fn dormant_record_does_not_call_the_hook() {
+        let pool = make_pool().await;
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_for_hook = Arc::clone(&called);
+        let hook: RecordedChangeHook = Arc::new(move || {
+            called_for_hook.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {})
+        });
+        let recorder = SqliteChangeRecorder::new(pool.clone()).with_recorded_change_hook(hook);
+        let mut conn = pool.acquire().await.expect("conn");
+
+        recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .expect("dormant record must not error");
+        assert_eq!(called.load(Ordering::SeqCst), 0);
+    }
+
+    // SYN-060 — the repository lists only unpublished changes, in sequence order, and marks
+    // a range published.
+    #[tokio::test]
+    async fn change_log_repository_lists_unpublished_and_marks_published() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+        for account_id in ["account-1", "account-2", "account-3"] {
+            recorder
+                .record(&mut conn, account_created_draft(account_id))
+                .await
+                .expect("record");
+        }
+        drop(conn);
+        let repository = SqliteChangeLogRepository::new(pool.clone());
+
+        repository
+            .mark_published("desktop-device", 1, 1)
+            .await
+            .expect("mark published");
+        let unpublished = repository
+            .list_unpublished("desktop-device")
+            .await
+            .expect("list");
+        let sequences: Vec<i64> = unpublished.iter().map(|change| change.sequence).collect();
+        assert_eq!(sequences, vec![2, 3]);
+        assert_eq!(
+            repository
+                .latest_published_sequence("desktop-device")
+                .await
+                .expect("latest"),
+            1
+        );
+        assert_eq!(repository.logical_clock().await.expect("clock"), 3);
     }
 
     // SYN-070 — a paused device's recorder reports not-recording.

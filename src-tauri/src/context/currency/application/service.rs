@@ -8,6 +8,8 @@ use crate::context::currency::domain::{
 };
 use crate::context::currency::error::CurrencyError;
 use crate::core::{Event, SideEffectEventBus, BACKEND};
+use crate::shared::domain::Rank;
+use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -89,6 +91,23 @@ impl CurrencyService {
             tracing::error!(target: BACKEND, err = ?e, "declare_currency_pair: repository failure");
             CurrencyError::DatabaseError
         })
+    }
+
+    /// Stamps `rank` on every currency-owned synced row that has never been ranked (CFR-014,
+    /// D6), on the first publish's enrolment transaction (SYN-013). Returns how many rows
+    /// were stamped.
+    pub async fn stamp_sync_rank(
+        &self,
+        conn: &mut SqliteConnection,
+        rank: &Rank,
+    ) -> StdResult<u64, CurrencyError> {
+        self.pair_repo
+            .stamp_sync_rank(conn, rank)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "stamp_sync_rank: repository failure");
+                CurrencyError::DatabaseError
+            })
     }
 
     /// Records a rate for a pair, ensuring the pair exists first (FXR-013 ergonomics).

@@ -418,6 +418,127 @@ async getCurrencyRates(fromCurrency: string, toCurrency: string) : Promise<Resul
 }
 },
 /**
+ * Pauses sync on this device (SYN-070).
+ */
+async pauseSync() : Promise<Result<SyncStatus, SyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pause_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Leaves sync on this device for good, keeping the local portfolio (SYN-082).
+ */
+async leaveSync() : Promise<Result<null, SyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("leave_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Renames this device (SYN-072).
+ */
+async renameSyncDevice(deviceName: string) : Promise<Result<SyncStatus, SyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_sync_device", { deviceName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Dismisses a conflict notice (SYN-066).
+ */
+async dismissConflictNotice(noticeId: string) : Promise<Result<null, SyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("dismiss_conflict_notice", { noticeId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Pre-flight read of a candidate folder (SYN-011/014/019). Never rejects.
+ */
+async inspectSyncFolder(folder: string) : Promise<Result<SyncFolderState, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("inspect_sync_folder", { folder }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Enables sync on this device (SYN-011).
+ */
+async enableSync(folder: string, passphrase: string, deviceName: string) : Promise<Result<SyncStatus, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("enable_sync", { folder, passphrase, deviceName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Starts the portfolio over under a new passphrase (SYN-071).
+ */
+async startSyncOver(folder: string, passphrase: string, deviceName: string) : Promise<Result<SyncStatus, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_sync_over", { folder, passphrase, deviceName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Designates a different folder for an already-enrolled device (SYN-074).
+ */
+async changeSyncFolder(folder: string) : Promise<Result<SyncStatus, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_sync_folder", { folder }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Runs a publish-only sync immediately (SYN-061).
+ */
+async syncNow() : Promise<Result<SyncReport, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("sync_now") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Resumes sync on a paused device (SYN-073).
+ */
+async resumeSync() : Promise<Result<SyncReport, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("resume_sync") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Reads the current sync status (SYN-063).
+ */
+async getSyncStatus() : Promise<Result<SyncStatus, PortfolioSyncError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_sync_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Archives an asset, guarded against active holdings (OQ-6).
  */
 async archiveAsset(id: string) : Promise<Result<null, ArchiveAssetError>> {
@@ -1592,6 +1713,66 @@ dividends_received: number;
  */
 last_sold_date: string }
 /**
+ * One persisted, dismissible notice (SYN-066, CFR-060).
+ */
+export type ConflictNotice = { 
+/**
+ * Identifies the notice, so it can be dismissed individually.
+ */
+notice_id: string; 
+/**
+ * Which reportable outcome raised it.
+ */
+kind: ConflictNoticeKind; 
+/**
+ * The kind of the record concerned.
+ */
+record_kind: RecordKind; 
+/**
+ * The record's canonical identity (CFR-012).
+ */
+record_identity: string; 
+/**
+ * A human-readable label, captured when raised.
+ */
+record_label: string; 
+/**
+ * The device whose change prevailed or removed the parent.
+ */
+other_device_id: string; 
+/**
+ * That device's name at the time the notice was raised.
+ */
+other_device_name: string; 
+/**
+ * When the notice was raised.
+ */
+raised_at: string }
+/**
+ * Exactly CFR-060's reportable outcomes.
+ */
+export type ConflictNoticeKind = 
+/**
+ * A losing edit was overruled by a higher-ranked one.
+ */
+"OverruledEdit" | 
+/**
+ * A losing removal was overruled by a higher-ranked edit.
+ */
+"OverruledRemoval" | 
+/**
+ * A child record was dropped because its parent was removed.
+ */
+"DroppedChild" | 
+/**
+ * Two independently created records collided on the same natural key.
+ */
+"NaturalKeyCollision" | 
+/**
+ * Two records ended up sharing the same display name.
+ */
+"DuplicateName"
+/**
  * Parameters for correcting an existing transaction.
  * `asset_id` is immutable — taken from the existing transaction.
  */
@@ -2059,7 +2240,14 @@ export type Event =
 /**
  * A fee schedule was created, updated, paused, reactivated, or deleted (FEE-064).
  */
-{ type: "FeeScheduleUpdated" }
+{ type: "FeeScheduleUpdated" } | 
+/**
+ * A sync run completed — automatic, launch, `sync_now`, or `resume_sync` — that applied
+ * at least one change or whose failures/paused state changed since the previous run
+ * (SYN-063/064). A bare marker: the frontend treats it as a global refresh and re-reads
+ * `get_sync_status`.
+ */
+{ type: "SyncCompleted" }
 /**
  * A canonical trading venue identified by its ISO 10383 MIC code.
  */
@@ -2204,6 +2392,35 @@ export type FetchPriceTask =
  * Catch-all for unexpected runtime failures not attributable to a specific BC.
  */
 { code: "UnknownError" }
+/**
+ * Why a folder cannot be used (SYN-019/069). Structured so the frontend can translate it.
+ */
+export type FolderProblem = 
+/**
+ * The folder does not exist.
+ */
+"Missing" | 
+/**
+ * The path exists but is not a directory.
+ */
+"NotADirectory" | 
+/**
+ * The process cannot read/write the folder.
+ */
+"PermissionDenied" | 
+/**
+ * The folder's volume is not mounted.
+ */
+"Unmounted" | 
+/**
+ * The volume has no space left.
+ */
+"OutOfSpace" | 
+/**
+ * Catch-all: a mid-write failure, a failed whole-file rename (SYN-032), or an encryption
+ * failure during publish.
+ */
+"IoFailure"
 /**
  * Parameters for recording a zero-cost free-share distribution from a held
  * distributing asset (FSD-020). No amount, no unit price, no exchange rate,
@@ -2429,6 +2646,26 @@ note_threshold_direction: ThresholdDirection | null;
  */
 note_alarm_triggered: boolean }
 /**
+ * A holding whose merged ledger breaks an invariant (CFR-042). Derived on read, never stored.
+ */
+export type HoldingInconsistency = 
+/**
+ * The replayed quantity is negative.
+ */
+{ Oversold: { 
+/**
+ * The oversold quantity, in micros, negative by construction.
+ */
+quantity: number } } | 
+/**
+ * The replayed cash balance is negative, in the account's currency.
+ */
+{ CashOverdrawn: { 
+/**
+ * The overdrawn amount, in micros, negative by construction.
+ */
+amount: number } }
+/**
  * A free-text note pinned to an (account, asset) holding pair, with an optional
  * price alarm — at most one note per pair (HNO-010).
  * 
@@ -2498,6 +2735,30 @@ quantity: number;
  * VWAP cost basis per unit, account currency (micro-units), 0 when never held.
  */
 average_price: number }
+/**
+ * One inconsistent holding surfaced in sync status (SYN-040).
+ */
+export type InconsistentHolding = { 
+/**
+ * The affected account.
+ */
+account_id: string; 
+/**
+ * Its display name.
+ */
+account_name: string; 
+/**
+ * The affected asset.
+ */
+asset_id: string; 
+/**
+ * Its display name.
+ */
+asset_name: string; 
+/**
+ * Why the holding is inconsistent.
+ */
+reason: HoldingInconsistency }
 /**
  * Use-case composite for the **record interest** failure surface.
  * 
@@ -2762,6 +3023,56 @@ since_inception: PerformanceMetric | null;
  */
 annualized_yield: PerformanceMetric | null }
 /**
+ * The wire-facing error for every `use_cases::portfolio_sync` command.
+ */
+export type PortfolioSyncError = 
+/**
+ * A sync-BC rejection (folder, passphrase, device state).
+ */
+SyncError | 
+/**
+ * An account-BC rejection surfaced while reading or rebuilding the portfolio.
+ */
+AccountError | 
+/**
+ * An asset-BC rejection surfaced while reading or rebuilding the portfolio.
+ */
+AssetError | 
+/**
+ * A currency-BC rejection surfaced while reading or rebuilding the portfolio.
+ */
+CurrencyError | 
+/**
+ * An orchestrator-level guard or the catch-all.
+ */
+PortfolioSyncTask
+/**
+ * Orchestrator-level guards and the catch-all — the codes `PortfolioSyncError` itself never
+ * re-declares. PR-B raises only `InstallationHoldsUserData` (the join branch, always
+ * returned in PR-B per D3) and `PortfolioCreatedElsewhere` (delegated straight from
+ * `SyncError`, wired here too since the orchestrator surfaces it verbatim); `HistoryIncomplete`
+ * and `RebuildInterrupted` are PR-C join/rebuild codes declared now so the wire shape is
+ * stable across PR-B/PR-C.
+ */
+export type PortfolioSyncTask = 
+/**
+ * The joining installation holds user-entered records (SYN-014). PR-B always returns
+ * this for the join branch — the rebuild lands in PR-C.
+ */
+{ code: "InstallationHoldsUserData" } | 
+/**
+ * A segment of the replay set could not be read while joining (SYN-036, PR-C).
+ */
+{ code: "HistoryIncomplete" } | 
+/**
+ * The rebuild transaction was interrupted; the device is left as before (SYN-080, PR-C).
+ */
+{ code: "RebuildInterrupted" } | 
+/**
+ * An unexpected failure not attributable to a specific BC's database.
+ */
+{ code: "UnknownError" }
+/**
  * Flat wire-facing error enum for `backfill_currency_rate_history`
  * (FXR-110/114).
  */
@@ -2807,6 +3118,52 @@ quantity_micros: number | null;
  */
 note: string | null }
 /**
+ * The ten synced record kinds (SYN-021). `holdings`, performance figures, and device-local
+ * data (scheduled fetch config, window state, the sync configuration itself) are deliberately
+ * absent (SYN-022/023).
+ */
+export type RecordKind = 
+/**
+ * An account, identified by its own id.
+ */
+"Account" | 
+/**
+ * An asset category, identified by its own id.
+ */
+"Category" | 
+/**
+ * An asset, identified by its own id.
+ */
+"Asset" | 
+/**
+ * A transaction, identified by its own id.
+ */
+"Transaction" | 
+/**
+ * A management fee schedule, identified by (account_id, asset_id).
+ */
+"FeeSchedule" | 
+/**
+ * A fee catch-up position, identified by (account_id, asset_id).
+ */
+"FeeCatchUpPosition" | 
+/**
+ * An asset price, identified by (asset_id, date).
+ */
+"AssetPrice" | 
+/**
+ * A currency pair, identified by (from_currency, to_currency).
+ */
+"CurrencyPair" | 
+/**
+ * A currency rate, identified by (from_currency, to_currency, date).
+ */
+"CurrencyRate" | 
+/**
+ * A holding note, identified by (account_id, asset_id).
+ */
+"HoldingNote"
+/**
  * Parameters for recording a stock split on a held asset (SPL-010).
  */
 export type RecordSplitDTO = { 
@@ -2830,6 +3187,26 @@ factor: number;
  * Optional user note.
  */
 note: string | null }
+/**
+ * One other device known from the roster (the manifest set, SYN-037).
+ */
+export type RosterEntry = { 
+/**
+ * The other device's identity.
+ */
+device_id: string; 
+/**
+ * Its current name.
+ */
+device_name: string; 
+/**
+ * The data format of the application that last published from it (SYN-035).
+ */
+data_format_version: number; 
+/**
+ * When its changes were last applied here; `None` if never (PR-C applies).
+ */
+last_applied_at: string | null }
 /**
  * The device-wide configuration of the daily download (SPF-010). Exactly one
  * configuration exists (singleton row, migration-seeded).
@@ -2997,6 +3374,230 @@ export type SplitTask =
  * The asset is not currently held (quantity = 0 or no holding) (SPL-012).
  */
 { code: "AssetNotHeld" }
+/**
+ * Every failure the `sync` bounded context can raise. `#[serde(tag = "code")]` makes each
+ * variant serialize as `{ "code": "VariantName", ...payload }` on the wire.
+ */
+export type SyncError = 
+/**
+ * Sync is already enabled on this device (SYN-010 precondition guard).
+ */
+{ code: "AlreadyEnabled" } | 
+/**
+ * Sync has never been enabled on this device (SYN-010 precondition guard).
+ */
+{ code: "SyncDisabled" } | 
+/**
+ * The device is paused; running a sync is rejected (SYN-070).
+ */
+{ code: "SyncPaused" } | 
+/**
+ * `pause_sync` on an already-paused device (SYN-070 precondition guard).
+ */
+{ code: "AlreadyPaused" } | 
+/**
+ * `resume_sync` on a device that is not paused (SYN-073 precondition guard).
+ */
+{ code: "NotPaused" } | 
+/**
+ * The passphrase is shorter than the required minimum (SYN-012).
+ */
+{ code: "PassphraseTooShort"; minimum: number } | 
+/**
+ * The device name is empty or whitespace-only (SYN-018).
+ */
+{ code: "DeviceNameBlank" } | 
+/**
+ * The designated folder cannot be used (SYN-019/069).
+ */
+{ code: "FolderUnavailable"; problem: FolderProblem } | 
+/**
+ * The folder holds a portfolio published in a data format newer than this build reads
+ * (SYN-019/035).
+ */
+{ code: "UpdateRequired"; data_format_version: number } | 
+/**
+ * The folder header cannot be used: its key-derivation parameters are outside the range
+ * this build runs with (SYN-051) — a corrupt or hostile header, never one this device
+ * can derive a key against.
+ */
+{ code: "HeaderRejected" } | 
+/**
+ * The passphrase does not match the portfolio's passphrase check (SYN-015/055). Only
+ * reachable from the join path, shipped in PR-C.
+ */
+{ code: "PassphraseMismatch" } | 
+/**
+ * Publishing failed partway; everything written was rolled back (SYN-013).
+ */
+{ code: "PublishFailed"; problem: FolderProblem } | 
+/**
+ * Another device published the folder header between this device's pre-check and its
+ * own write (SYN-081).
+ */
+{ code: "PortfolioCreatedElsewhere" } | 
+/**
+ * `dismiss_conflict_notice` for a notice that does not exist (SYN-066).
+ */
+{ code: "NoticeNotFound"; notice_id: string } | 
+/**
+ * `change_sync_folder` to a non-empty folder whose passphrase check does not match the
+ * kept key (SYN-074).
+ */
+{ code: "FolderHoldsOtherPortfolio" } | 
+/**
+ * An infrastructure / database failure occurred. The full diagnostic is preserved
+ * server-side via `tracing::error!`; the wire surface carries no hint.
+ */
+{ code: "DatabaseError" }
+/**
+ * Why the last run needs attention (SYN-063). Any number may apply at once.
+ */
+export type SyncFailure = 
+/**
+ * A segment or manifest could not be decrypted or validated (SYN-034). PR-C reads.
+ */
+{ UnreadableFiles: { 
+/**
+ * How many files were skipped.
+ */
+count: number } } | 
+/**
+ * A file in the folder is written in a data format newer than this build reads (SYN-035).
+ */
+{ UpdateRequired: { 
+/**
+ * The data format version found.
+ */
+data_format_version: number } } | 
+/**
+ * The designated folder could not be read or written this run (SYN-069).
+ */
+{ FolderUnavailable: { 
+/**
+ * Why the folder could not be used.
+ */
+problem: FolderProblem } } | 
+/**
+ * The portfolio was started over elsewhere; this device has paused itself (SYN-084).
+ */
+"PortfolioReset"
+/**
+ * Pre-flight read of a candidate folder (SYN-011/014/019). Never rejects — every condition is
+ * reported in the returned state.
+ */
+export type SyncFolderState = { 
+/**
+ * `None` when the folder exists and is writable; the problem otherwise.
+ */
+problem: FolderProblem | null; 
+/**
+ * Whether a folder header is present.
+ */
+holds_portfolio: boolean; 
+/**
+ * The header's data format version, when `holds_portfolio` is true.
+ */
+data_format_version: number | null; 
+/**
+ * `false` → joining would raise `UpdateRequired` (SYN-035).
+ */
+format_readable: boolean; 
+/**
+ * `true` → joining would raise `InstallationHoldsUserData` (SYN-014).
+ */
+installation_holds_user_data: boolean }
+/**
+ * Outcome of one run — the return value of `sync_now` / `resume_sync`; an automatic run's
+ * outcome reaches the frontend through `get_sync_status` after `SyncCompleted`.
+ */
+export type SyncReport = { 
+/**
+ * Changes published this run.
+ */
+published_changes: number; 
+/**
+ * Changes applied this run. Always 0 in PR-B — applying starts in PR-C.
+ */
+applied_changes: number; 
+/**
+ * Changes held back this run. Always 0 in PR-B.
+ */
+held_back_changes: number; 
+/**
+ * Changes dropped this run (CFR-032). Always 0 in PR-B.
+ */
+dropped_changes: number; 
+/**
+ * Conflict notices raised this run. Always 0 in PR-B.
+ */
+notices_raised: number; 
+/**
+ * Empty when the run completed cleanly.
+ */
+failures: SyncFailure[]; 
+/**
+ * When the run finished.
+ */
+completed_at: string; 
+/**
+ * The device state after the run (SYN-084 may have paused it).
+ */
+status: SyncStatus }
+/**
+ * What the Settings section and the shell indicator read (SYN-063).
+ */
+export type SyncStatus = { 
+/**
+ * Whether sync is enabled on this device.
+ */
+enabled: boolean; 
+/**
+ * Whether sync is paused on this device.
+ */
+paused: boolean; 
+/**
+ * `None` while disabled.
+ */
+device_id: string | null; 
+/**
+ * `None` while disabled.
+ */
+device_name: string | null; 
+/**
+ * `None` while disabled.
+ */
+folder: string | null; 
+/**
+ * `None` when never synced.
+ */
+last_sync_completed_at: string | null; 
+/**
+ * Every other device known from the roster (SYN-037).
+ */
+roster: RosterEntry[]; 
+/**
+ * Count of held-back changes (SYN-041). Always 0 in PR-B — nothing holds a change back
+ * until PR-C's apply path exists.
+ */
+held_back_count: number; 
+/**
+ * `None` when `held_back_count == 0`.
+ */
+oldest_held_back_since: string | null; 
+/**
+ * Undismissed conflict notices (SYN-066). Always empty in PR-B.
+ */
+notices: ConflictNotice[]; 
+/**
+ * Derived on read from the account BC's replayed ledger (CFR-042/SYN-040). Always empty
+ * in PR-B.
+ */
+inconsistent_holdings: InconsistentHolding[]; 
+/**
+ * Empty when the last run was healthy; several may hold at once.
+ */
+failures: SyncFailure[] }
 /**
  * Direction of a holding-note price alarm relative to its threshold (HNO-011).
  */

@@ -1,8 +1,10 @@
 use crate::context::currency::error::CurrencyError;
+use crate::shared::domain::Rank;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 
 /// A directed currency pair the system follows for valuation (FXR-013/014).
@@ -77,6 +79,11 @@ pub trait CurrencyPairRepository: Send + Sync {
 
     /// Returns all pairs enriched with their most-recent rate (FXR-051/035).
     async fn list_pairs_with_latest_rate(&self) -> Result<Vec<CurrencyPairSummary>>;
+
+    /// Stamps `rank` on every currency pair and currency rate whose rank columns are still
+    /// NULL (CFR-014, D6), on `conn` — the first publish's enrolment transaction (SYN-013).
+    /// Returns how many rows were stamped.
+    async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64>;
 }
 
 #[cfg(test)]

@@ -5,9 +5,11 @@ use super::domain::{
 };
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
+use crate::shared::domain::Rank;
 use crate::use_cases::holding_transaction::OpenHoldingError;
 use async_trait::async_trait;
 use chrono::NaiveDate;
+use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 use tracing::info;
@@ -1019,6 +1021,47 @@ impl AccountService {
             tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "list_active_fee_schedules_for_account: query failed");
             AccountError::DatabaseError
         })
+    }
+
+    /// Returns every fee schedule of one account, active or not (SYN-013/021).
+    pub async fn list_fee_schedules_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<FeeSchedule>, AccountError> {
+        let repo = self.fee_schedule_repo()?;
+        repo.get_by_account(account_id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "list_fee_schedules_for_account: query failed");
+            AccountError::DatabaseError
+        })
+    }
+
+    /// Returns every fee catch-up position of one account (SYN-013/021, CFR-044).
+    pub async fn list_fee_catch_up_positions_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<FeeCatchUpPosition>, AccountError> {
+        let repo = self.fee_catch_up_repo()?;
+        repo.get_by_account(account_id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "list_fee_catch_up_positions_for_account: query failed");
+            AccountError::DatabaseError
+        })
+    }
+
+    /// Stamps `rank` on every account-owned synced row that has never been ranked (CFR-014,
+    /// D6), on the first publish's enrolment transaction (SYN-013). Returns how many rows
+    /// were stamped.
+    pub async fn stamp_sync_rank(
+        &self,
+        conn: &mut SqliteConnection,
+        rank: &Rank,
+    ) -> StdResult<u64, AccountError> {
+        self.account_repo
+            .stamp_sync_rank(conn, rank)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "stamp_sync_rank: repository failure");
+                AccountError::DatabaseError
+            })
     }
 
     /// Advances a schedule's catch-up cursor to `last_applied_period` (FEE-043) by

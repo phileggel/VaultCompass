@@ -190,6 +190,18 @@ Read this when:
 
 ---
 
+## 16. Ports that take the live database connection
+
+**Pattern**: A repository port exposes domain-level operations only; persistence handles (connections, transactions) never cross the port boundary, and a use case never touches a connection.
+
+**Practice**: `RankStamper` (`context/sync/domain/rank_stamper.rs`), `ChangeLogRepository` (`context/sync/domain/change_log.rs`) and the `stamp_sync_rank(conn, rank)` method on the account, asset and currency repository traits all take a `&mut sqlx::SqliteConnection`; `use_cases/portfolio_sync/rank_stamper.rs` forwards that connection to the three services.
+
+**Trade**: The first publish must write the header's first segment, stamp every existing row in three bounded contexts and enrol the device in **one** transaction (SYN-013: "rolled back on failure"). Without a unit of work (ADR-006 is unimplemented — see `docs/techdebt.md`), the only way to keep those writes atomic across contexts is to hand the enrolment transaction through the ports, as `ChangeRecorder` already does. Each context still owns its own SQL; the use case only carries the handle.
+
+**When to revisit**: When ADR-006's unit of work lands, the ports take the unit of work instead of a raw connection and the use case stops seeing sqlx types.
+
+---
+
 ## What we follow strictly (not divergences)
 
 For reference, the patterns this codebase enforces tightly:

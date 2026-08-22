@@ -1,11 +1,11 @@
 use crate::{
-    context::{account, asset, currency},
+    context::{account, asset, currency, sync},
     core::{logger, Event},
     use_cases::{
         account_creation, account_deletion, account_details, account_performance, account_summary,
         archive_asset, asset_price_fetch, asset_web_lookup, delete_asset, fee_generation,
-        global_performance, holding_transaction, rate_history_backfill, scheduled_fetch,
-        update_checker,
+        global_performance, holding_transaction, portfolio_sync, rate_history_backfill,
+        scheduled_fetch, update_checker,
     },
 };
 
@@ -46,7 +46,22 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<currency::CurrencyRateSource>()
         .typ::<currency::CurrencyPairSummary>()
         .typ::<currency::CurrencyError>()
+        // ----- sync BC (SYN/CFR) -----
+        .typ::<sync::SyncFolderState>()
+        .typ::<sync::FolderProblem>()
+        .typ::<sync::SyncStatus>()
+        .typ::<sync::RosterEntry>()
+        .typ::<sync::ConflictNotice>()
+        .typ::<sync::ConflictNoticeKind>()
+        .typ::<crate::shared::domain::RecordKind>()
+        .typ::<sync::SyncFailure>()
+        .typ::<sync::InconsistentHolding>()
+        .typ::<sync::HoldingInconsistency>()
+        .typ::<sync::SyncReport>()
+        .typ::<sync::SyncError>()
         // ----- use cases -----
+        .typ::<portfolio_sync::PortfolioSyncError>()
+        .typ::<portfolio_sync::PortfolioSyncTask>()
         .typ::<archive_asset::ArchiveAssetTask>()
         .typ::<archive_asset::ArchiveAssetError>()
         .typ::<delete_asset::DeleteAssetTask>()
@@ -123,7 +138,19 @@ pub fn create_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             currency::delete_currency_rate,
             currency::get_currency_pairs,
             currency::get_currency_rates,
+            // ----- sync BC (SYN/CFR) -----
+            sync::pause_sync,
+            sync::leave_sync,
+            sync::rename_sync_device,
+            sync::dismiss_conflict_notice,
             // ----- use cases -----
+            portfolio_sync::inspect_sync_folder,
+            portfolio_sync::enable_sync,
+            portfolio_sync::start_sync_over,
+            portfolio_sync::change_sync_folder,
+            portfolio_sync::sync_now,
+            portfolio_sync::resume_sync,
+            portfolio_sync::get_sync_status,
             archive_asset::archive_asset,
             delete_asset::delete_asset,
             holding_transaction::open_holding,

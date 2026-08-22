@@ -6,9 +6,11 @@ use super::error::AssetError;
 use crate::{
     context::asset::{CreateAssetDTO, UpdateAssetDTO},
     core::{Event, SideEffectEventBus, BACKEND},
+    shared::domain::Rank,
 };
 use anyhow::Result;
 use async_trait::async_trait;
+use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -61,6 +63,23 @@ impl AssetService {
             .await
             .map_err(|e| {
                 tracing::error!(target: BACKEND, err = ?e, "get_all_assets_with_archived: repository failure");
+                AssetError::DatabaseError
+            })
+    }
+
+    /// Stamps `rank` on every asset-owned synced row that has never been ranked (CFR-014,
+    /// D6), on the first publish's enrolment transaction (SYN-013). Returns how many rows
+    /// were stamped.
+    pub async fn stamp_sync_rank(
+        &self,
+        conn: &mut SqliteConnection,
+        rank: &Rank,
+    ) -> StdResult<u64, AssetError> {
+        self.asset_repo
+            .stamp_sync_rank(conn, rank)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, err = ?e, "stamp_sync_rank: repository failure");
                 AssetError::DatabaseError
             })
     }

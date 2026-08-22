@@ -2,13 +2,13 @@ use crate::context::currency::domain::{
     CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRateSource,
 };
 use crate::core::logger::BACKEND;
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{ChangeDraft, Operation, Origin, Rank, RecordIdentity, RecordKind};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use sqlx::SqlitePool;
+use sqlx::{SqliteConnection, SqlitePool};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -45,6 +45,39 @@ struct PairSummaryRow {
 
 #[async_trait]
 impl CurrencyPairRepository for SqliteCurrencyPairRepository {
+    async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64> {
+        let columns = RankColumns::from(rank.clone());
+        let (timestamp, origin, device_id) = (
+            &columns.logical_timestamp,
+            &columns.origin,
+            &columns.device_id,
+        );
+        let mut stamped = 0;
+        stamped += sqlx::query!(
+            "UPDATE currency_pairs SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked currency pairs")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE currency_rates SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked currency rates")?
+        .rows_affected();
+        Ok(stamped)
+    }
+
     async fn upsert_pair(&self, pair: CurrencyPair) -> Result<CurrencyPair> {
         let mut tx = self
             .pool
@@ -176,6 +209,38 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed rate");
+    }
+
+    // CFR-014/D6 — stamp_sync_rank ranks every unranked pair and rate once; a second call
+    // finds nothing left to stamp.
+    #[tokio::test]
+    async fn stamp_sync_rank_stamps_unranked_pairs_and_rates_once() {
+        let pool = setup_pool().await;
+        let repo = SqliteCurrencyPairRepository::new(pool.clone());
+        repo.upsert_pair(CurrencyPair::from_storage("USD".into(), "EUR".into()))
+            .await
+            .unwrap();
+        insert_rate(&pool, "USD", "EUR", "2026-08-01", 920_000).await;
+
+        let rank = Rank {
+            origin: Origin::User,
+            logical_timestamp: crate::shared::domain::LogicalTimestamp::new(99),
+            device_id: "desktop-device".to_string(),
+        };
+        let mut conn = pool.acquire().await.unwrap();
+        let stamped = repo.stamp_sync_rank(&mut conn, &rank).await.unwrap();
+        assert_eq!(stamped, 2, "one pair and one rate are stamped");
+        let stamped_again = repo.stamp_sync_rank(&mut conn, &rank).await.unwrap();
+        assert_eq!(stamped_again, 0, "already-ranked rows are never restamped");
+        drop(conn);
+
+        let pair_stamp: Option<String> = sqlx::query_scalar(
+            "SELECT sync_logical_timestamp FROM currency_pairs WHERE from_currency = 'USD'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(pair_stamp.as_deref(), Some("00000000000000000099"));
     }
 
     // FXR-054 — upsert_pair persists a new pair and returns it

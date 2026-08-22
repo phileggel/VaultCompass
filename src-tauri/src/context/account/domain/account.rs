@@ -1,11 +1,13 @@
 use super::holding::{Holding, HoldingAsOfReconstruction, HoldingSnapshot};
 use super::transaction::{Transaction, TransactionType};
 use crate::context::account::error::AccountError;
+use crate::shared::domain::Rank;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use iso_currency::Currency;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -1579,6 +1581,10 @@ pub trait AccountRepository: Send + Sync {
     /// Atomically applies all pending changes accumulated by aggregate operations.
     /// Clears `pending_changes` on the aggregate after a successful commit.
     async fn save(&self, account: &mut Account) -> Result<()>;
+    /// Stamps `rank` on every account, transaction, fee schedule, fee catch-up position, and
+    /// holding note whose rank columns are still NULL (CFR-014, D6), on `conn` — the first
+    /// publish's enrolment transaction (SYN-013). Returns how many rows were stamped.
+    async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64>;
 }
 
 /// Test-only convenience helpers for cash recording. Production code composes

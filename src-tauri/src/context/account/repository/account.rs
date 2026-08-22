@@ -8,7 +8,7 @@ use crate::context::account::domain::{
     UpdateFrequency,
 };
 use crate::core::logger::BACKEND;
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{ChangeDraft, Operation, Origin, Rank, RecordIdentity, RecordKind};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -188,6 +188,72 @@ fn transaction_identity(transaction_id: &str) -> RecordIdentity {
 
 #[async_trait::async_trait]
 impl AccountRepository for SqliteAccountRepository {
+    async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64> {
+        let columns = RankColumns::from(rank.clone());
+        let (timestamp, origin, device_id) = (
+            &columns.logical_timestamp,
+            &columns.origin,
+            &columns.device_id,
+        );
+        let mut stamped = 0;
+        stamped += sqlx::query!(
+            "UPDATE accounts SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked accounts")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE transactions SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked transactions")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE fee_schedules SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked fee schedules")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE fee_catch_up_positions SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked fee catch-up positions")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE holding_notes SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked holding notes")?
+        .rows_affected();
+        Ok(stamped)
+    }
+
     async fn get_all(&self) -> Result<Vec<Account>> {
         let rows = sqlx::query_as!(
             AccountRow,
@@ -631,6 +697,54 @@ mod tests {
             "CFR-014: the row's rank columns are stamped"
         );
         assert_eq!(row.sync_origin.as_deref(), Some("User"));
+    }
+
+    // CFR-014/D6 — stamp_sync_rank ranks only the rows that were never ranked; a row the
+    // recorder already ranked keeps its own rank.
+    #[tokio::test]
+    async fn stamp_sync_rank_stamps_only_unranked_rows() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        let unranked = new_account();
+        SqliteAccountRepository::new(pool.clone())
+            .create(unranked.clone())
+            .await
+            .unwrap();
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteAccountRepository::new(pool.clone()).with_change_recorder(recorder);
+        let mut ranked = new_account();
+        ranked.id = "acc-ranked".to_string();
+        ranked.name = "Ranked".to_string();
+        repo.create(ranked.clone()).await.unwrap();
+
+        let rank = crate::shared::domain::Rank {
+            origin: Origin::User,
+            logical_timestamp: crate::shared::domain::LogicalTimestamp::new(99),
+            device_id: "desktop-device".to_string(),
+        };
+        let mut conn = pool.acquire().await.unwrap();
+        let stamped = repo.stamp_sync_rank(&mut conn, &rank).await.unwrap();
+        drop(conn);
+        assert_eq!(stamped, 1, "only the unranked account is stamped");
+
+        let rows = sqlx::query!("SELECT id, sync_logical_timestamp FROM accounts ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        let stamp_of = |id: &str| {
+            rows.iter()
+                .find(|row| row.id == id)
+                .and_then(|row| row.sync_logical_timestamp.clone())
+        };
+        assert_eq!(
+            stamp_of(&unranked.id).as_deref(),
+            Some("00000000000000000099")
+        );
+        assert_ne!(
+            stamp_of(&ranked.id).as_deref(),
+            Some("00000000000000000099"),
+            "a row the recorder ranked keeps its rank"
+        );
     }
 
     // SYN-020 — update records exactly one Updated change.

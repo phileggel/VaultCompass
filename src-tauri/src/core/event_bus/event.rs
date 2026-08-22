@@ -44,6 +44,11 @@ pub enum Event {
     CurrencyRateUpdated,
     /// A fee schedule was created, updated, paused, reactivated, or deleted (FEE-064).
     FeeScheduleUpdated,
+    /// A sync run completed — automatic, launch, `sync_now`, or `resume_sync` — that applied
+    /// at least one change or whose failures/paused state changed since the previous run
+    /// (SYN-063/064). A bare marker: the frontend treats it as a global refresh and re-reads
+    /// `get_sync_status`.
+    SyncCompleted,
 }
 
 /// One asset a price-fetch task could not price (MKT-170/171), carried in the
@@ -67,4 +72,21 @@ pub struct UnpricedAsset {
     pub last_price: Option<i64>,
     /// ISO 8601 date of `last_price`; absent when there is no recorded price.
     pub last_price_date: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SYN-064/D10 — SyncCompleted serializes with the `#[serde(tag = "type")]` discriminator
+    // this enum already uses for every other variant, and carries no payload.
+    #[test]
+    fn sync_completed_serializes_with_its_type_tag() {
+        let value = serde_json::to_value(Event::SyncCompleted).unwrap();
+        assert_eq!(
+            value.get("type").and_then(|t| t.as_str()),
+            Some("SyncCompleted")
+        );
+        assert_eq!(value.as_object().map(|fields| fields.len()), Some(1));
+    }
 }

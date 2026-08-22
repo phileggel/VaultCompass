@@ -161,6 +161,50 @@ impl SqliteAssetRepository {
 
 #[async_trait::async_trait]
 impl AssetRepository for SqliteAssetRepository {
+    async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64> {
+        let columns = RankColumns::from(rank.clone());
+        let (timestamp, origin, device_id) = (
+            &columns.logical_timestamp,
+            &columns.origin,
+            &columns.device_id,
+        );
+        let mut stamped = 0;
+        stamped += sqlx::query!(
+            "UPDATE assets SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked assets")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE categories SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked categories")?
+        .rows_affected();
+        stamped += sqlx::query!(
+            "UPDATE asset_prices SET sync_logical_timestamp = ?, sync_origin = ?, sync_device_id = ?
+             WHERE sync_logical_timestamp IS NULL",
+            timestamp,
+            origin,
+            device_id
+        )
+        .execute(&mut *conn)
+        .await
+        .context("Failed to stamp unranked asset prices")?
+        .rows_affected();
+        Ok(stamped)
+    }
+
     async fn get_all(&self) -> Result<Vec<Asset>> {
         let rows = sqlx::query_as!(
             AssetRow,
@@ -600,6 +644,57 @@ mod tests {
             .await
             .unwrap();
         assert!(row.sync_logical_timestamp.is_some());
+    }
+
+    // CFR-014/D6 — stamp_sync_rank ranks only the rows that were never ranked; a row the
+    // recorder already ranked keeps its own rank.
+    #[tokio::test]
+    async fn stamp_sync_rank_stamps_only_unranked_rows() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool).await;
+        SqliteAssetRepository::new(pool.clone())
+            .create(test_asset("a-unranked"))
+            .await
+            .unwrap();
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteAssetRepository::new(pool.clone()).with_change_recorder(recorder);
+        repo.create(test_asset("a-ranked")).await.unwrap();
+
+        let rank = Rank {
+            origin: Origin::User,
+            logical_timestamp: crate::shared::domain::LogicalTimestamp::new(99),
+            device_id: "desktop-device".to_string(),
+        };
+        let mut conn = pool.acquire().await.unwrap();
+        let stamped = repo.stamp_sync_rank(&mut conn, &rank).await.unwrap();
+        drop(conn);
+        assert!(stamped >= 1, "the unranked asset is stamped: {stamped}");
+
+        let rows = sqlx::query!("SELECT id, sync_logical_timestamp FROM assets")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        let stamp_of = |id: &str| {
+            rows.iter()
+                .find(|row| row.id == id)
+                .and_then(|row| row.sync_logical_timestamp.clone())
+        };
+        assert_eq!(
+            stamp_of("a-unranked").as_deref(),
+            Some("00000000000000000099")
+        );
+        assert_ne!(
+            stamp_of("a-ranked").as_deref(),
+            Some("00000000000000000099"),
+            "a row the recorder ranked keeps its rank"
+        );
+        let unranked_categories: i64 = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM categories WHERE sync_logical_timestamp IS NULL"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(unranked_categories, 0, "categories are stamped too");
     }
 
     // SYN-020 — update records exactly one Updated change.

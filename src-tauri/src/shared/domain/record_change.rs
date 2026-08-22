@@ -11,7 +11,17 @@ use specta::Type;
 /// data (scheduled fetch config, window state, the sync configuration itself) are deliberately
 /// absent (SYN-022/023).
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type, strum_macros::Display,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Type,
+    strum_macros::Display,
+    strum_macros::EnumString,
 )]
 pub enum RecordKind {
     /// An account, identified by its own id.
@@ -52,6 +62,7 @@ pub enum RecordKind {
     Deserialize,
     Type,
     strum_macros::Display,
+    strum_macros::EnumString,
 )]
 pub enum Origin {
     /// The application generated the change on its own (a fee deduction, an auto-fetched price).
@@ -62,7 +73,16 @@ pub enum Origin {
 
 /// Whether the record was created, updated, or removed (SYN Entity Definition — Change).
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, strum_macros::Display,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Type,
+    strum_macros::Display,
+    strum_macros::EnumString,
 )]
 pub enum Operation {
     /// The record came into existence.
