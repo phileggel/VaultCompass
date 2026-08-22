@@ -271,3 +271,7 @@ The Account Details header gains a new total: **Global Value** (cash + market va
 4. User sells half of the asset for €900 → cash credited to €4 300, AAPL holding quantity halved.
 5. User clicks "Withdraw", enters €1 000 → cash drops to €3 300.
 6. User attempts a Buy for €4 000 → form shows "Not enough cash in this account. Current balance: €3 300."
+
+## Cross-amendments
+
+- **CFR-042** — a merge of independently valid purchases may overdraw the cash holding; CSH-080's `quantity ≥ 0` then holds only once the user corrects the ledger, and the cash holding is marked inconsistent meanwhile (SYN-040, see `sync-conflict-resolution.md`).

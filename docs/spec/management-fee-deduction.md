@@ -30,16 +30,16 @@ A quantity-only event removing shares of a held asset to pay a management fee �
 
 A recurring rule that generates fee deductions for one (account, asset) holding at a fixed cadence.
 
-| Field                 | Business meaning                                                                                                                                   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `account_id`          | The account the schedule applies to.                                                                                                               |
-| `asset_id`            | The charged asset.                                                                                                                                 |
-| `annual_rate`         | The annual fee rate (e.g. TER) as a percentage; the per-period removal is this rate scaled to the frequency.                                       |
-| `frequency`           | How often a deduction is generated (see FEE-034).                                                                                                  |
-| `start_date`          | The first business date from which deductions are generated.                                                                                       |
-| `end_date`            | Optional date after which no further deductions are generated.                                                                                     |
-| `active`              | Whether the schedule currently generates deductions.                                                                                               |
-| `last_applied_period` | The period-boundary **date** of the most recent generated deduction — the catch-up cursor (FEE-043). Unset until the first deduction is generated. |
+| Field                 | Business meaning                                                                                                                                                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account_id`          | The account the schedule applies to.                                                                                                                                                                                                         |
+| `asset_id`            | The charged asset.                                                                                                                                                                                                                           |
+| `annual_rate`         | The annual fee rate (e.g. TER) as a percentage; the per-period removal is this rate scaled to the frequency.                                                                                                                                 |
+| `frequency`           | How often a deduction is generated (see FEE-034).                                                                                                                                                                                            |
+| `start_date`          | The first business date from which deductions are generated.                                                                                                                                                                                 |
+| `end_date`            | Optional date after which no further deductions are generated.                                                                                                                                                                               |
+| `active`              | Whether the schedule currently generates deductions.                                                                                                                                                                                         |
+| `last_applied_period` | The period-boundary **date** of the most recent generated deduction — the catch-up cursor (FEE-043). Unset until the first deduction is generated. Travels with the schedule between devices and only ever moves forward (CFR-043, CFR-044). |
 
 ---
 
@@ -85,13 +85,13 @@ A recurring rule that generates fee deductions for one (account, asset) holding 
 
 ### Recurring Generation (040–049)
 
-**FEE-040 — Lazy catch-up on app open (backend)**: On application startup, for every `active` schedule, the system generates a FeeDeduction for each **completed** due period whose boundary date is on or after `start_date` and strictly after `last_applied_period`, up to the most recently completed period as of today, in chronological order. The in-progress current period is **not** charged until its boundary has passed, so no deduction is ever future-dated (FEE-021, TRX-020). A schedule whose `start_date` is in the past therefore **backfills** every elapsed completed period on first open. No always-on scheduler is involved. <!-- AI-Decision: lazy materialization on app open; novel for this codebase — see ADR-SUGGESTED -->
+**FEE-040 — Lazy catch-up on app open (backend)**: On application startup, for every `active` schedule, the system generates a FeeDeduction for each **completed** due period whose boundary date is on or after `start_date` and strictly after `last_applied_period`, up to the most recently completed period as of today, in chronological order. The in-progress current period is **not** charged until its boundary has passed, so no deduction is ever future-dated (FEE-021, TRX-020). A schedule whose `start_date` is in the past therefore **backfills** every elapsed completed period on first open. No always-on scheduler is involved. When the installation shares its portfolio with other devices, the catch-up runs after the launch sync (SYN-060), so it sees the merged ledger. <!-- AI-Decision: lazy materialization on app open — ADR-018 -->
 
 **FEE-041 — Per-period removal amount (backend)**: Each generated deduction removes `floor(holding_quantity × annual_rate ÷ periods_per_year)` shares, computed against the holding quantity **as of that period** — deductions are applied sequentially, so each one reduces the base for the next.
 
 **FEE-042 — Period date convention (backend)**: Each generated deduction is dated at its period boundary (e.g. the last calendar day of the month for a monthly cadence).
 
-**FEE-043 — Idempotency via cursor (backend)**: Generation advances `last_applied_period` to the boundary date of the period just generated (or skipped, FEE-047). A deduction is never generated twice for the same period, and **deleting a generated deduction does not cause it to be regenerated** — the cursor is the source of truth, not the presence of the transaction.
+**FEE-043 — Idempotency via cursor (backend)**: Generation advances `last_applied_period` to the boundary date of the period just generated (or skipped, FEE-047). A deduction is never generated twice for the same period, and **deleting a generated deduction does not cause it to be regenerated** — the cursor is the source of truth, not the presence of the transaction. When the schedule is shared between devices, the cursor merges to the most advanced value and never moves backwards (CFR-043, CFR-044).
 
 **FEE-044 — Catch-up across long absences (backend)**: If the application was not opened for several periods, all missed periods are generated at once on the next open, each dated at its own period boundary and applied sequentially (FEE-041).
 
@@ -100,6 +100,8 @@ A recurring rule that generates fee deductions for one (account, asset) holding 
 **FEE-046 — Generated deductions enter replay (backend)**: Generated FeeDeductions participate in the chronological replay (TRX-031/036) at their `date` exactly like one-off deductions; downstream sells and valuation reflect them.
 
 **FEE-047 — Generation replay-safety (backend)**: If a generated deduction would cause a downstream oversell (FEE-027) — e.g. a backfilled period dated before an already-recorded Sell — that period's deduction is **skipped**: no FeeDeduction is created, the cursor still advances past it (FEE-043), and the skip is logged. Automatic generation never blocks app startup.
+
+**FEE-048 — Deterministic deduction identity (backend)**: A generated deduction's identity is derived from the holding it charges — the **account and asset** — and its period boundary (never from the schedule's local key), so generating the same period for the same holding — on the same device, or on two devices that later merge (CFR-034, CFR-043) — always yields the same transaction, and two generations of one period converge to a single deduction rather than charging the holding twice. One-off deductions (FEE-02x) keep a freshly generated identity.
 
 ### Cost Basis, Valuation & Management Fees Display (050–059)
 
@@ -139,13 +141,13 @@ A recurring rule that generates fee deductions for one (account, asset) holding 
 
 **FEE-073 — Foreign-currency holdings (backend)**: For a charged asset whose currency differs from the account currency, the fee value uses the account-currency conversion path (FXR) as of the deduction date, consistent with holding valuation (FXR-042). A deduction with no usable rate contributes `0` to the Management Fees figure (FEE-054, FXR-034).
 
-**FEE-075 — Account-level management-fees parameter**: the `Account` aggregate carries `management_fees_enabled: bool`. New accounts are created with `false`; the schema migration backfills `true` for every account existing before the parameter (behavior-preserving). The parameter is editable both ways at any time from the account forms (creation and edit).
+**FEE-075 — Account-level management-fees parameter (frontend + backend)**: the `Account` aggregate carries `management_fees_enabled: bool`. New accounts are created with `false`; the schema migration backfills `true` for every account existing before the parameter (behavior-preserving). The parameter is editable both ways at any time from the account forms (creation and edit).
 
-**FEE-076 — Disabled-state UI**: when an account's `management_fees_enabled` is `false`, the account-details view hides every % fee surface: the one-off management-fee header button (FEE-010), the per-row Manage-fee button (FEE-011), the Management Fees column (FEE-052) with its fee-rate indicator (FEE-074), and the header total (FEE-053).
+**FEE-076 — Disabled-state UI (frontend)**: when an account's `management_fees_enabled` is `false`, the account-details view hides every % fee surface: the one-off management-fee header button (FEE-010), the per-row Manage-fee button (FEE-011), the Management Fees column (FEE-052) with its fee-rate indicator (FEE-074), and the header total (FEE-053).
 
-**FEE-077 — Backend enforcement**: `record_management_fee` and `create_fee_schedule` reject with `AccountError::ManagementFeesDisabled` when the target account's parameter is `false` (guard on the aggregate: `Account::ensure_management_fees_enabled`). Existing schedules remain readable, editable, and deletable regardless of the parameter — only the creation of new fee instruments is rejected, so disabling never traps data.
+**FEE-077 — Backend enforcement (backend)**: `record_management_fee` and `create_fee_schedule` reject with `AccountError::ManagementFeesDisabled` when the target account's parameter is `false` (guard on the aggregate: `Account::ensure_management_fees_enabled`). Existing schedules remain readable, editable, and deletable regardless of the parameter — only the creation of new fee instruments is rejected, so disabling never traps data.
 
-**FEE-078 — Catch-up pause**: the startup catch-up (FEE-040) skips every schedule whose account has the parameter disabled, without advancing the `last_applied_period` cursor. Re-enabling the parameter resumes generation with a backfill of the paused periods on the next catch-up run (the schedule models fees the fund charges regardless of app configuration), subject to the FEE-044/047 oversell and zero-quantity guards.
+**FEE-078 — Catch-up pause (backend)**: the startup catch-up (FEE-040) skips every schedule whose account has the parameter disabled, without advancing the `last_applied_period` cursor. Re-enabling the parameter resumes generation with a backfill of the paused periods on the next catch-up run (the schedule models fees the fund charges regardless of app configuration), subject to the FEE-044/047 oversell and zero-quantity guards.
 
 **FEE-074 — Fee-rate indicator on the holding line**: Each `HoldingDetail` exposes `fee_rate_percent_micros: Option<i64>` — the annual rate of the holding's **active** fee schedule (micro-percent, FEE-032); `None` when no active schedule exists (inactive schedules and one-off fees don't count). The live view resolves it from the active-schedules list in one query; the as-of view always carries `None` — the schedule is today's configuration, not part of the historical reconstruction. The frontend renders the rate inside the Management Fees cell, after the cumulative amount (e.g. "12,34 · 1,50%"); the cell shows the amount alone when no active schedule exists.
 
@@ -238,7 +240,5 @@ Resolved in the spec-reviewer round:
 - [x] **Frequency immutable**: a schedule's cadence and `start_date` are frozen after the first deduction; changing cadence means delete + recreate, sidestepping mid-stream proration (FEE-060).
 
 A few mechanical defaults remain flagged inline with `<!-- AI-Decision -->` for later review: single schedule per holding (FEE-031); only `annual_rate`/`end_date` editable with `frequency` + `start_date` frozen after first generation (FEE-060); a paused span is not back-generated on reactivation (FEE-061).
-
-> `ADR-SUGGESTED`: the recurring-deduction **materialization strategy** (lazy catch-up on app open with a per-schedule cursor, FEE-040/043/044) is a non-obvious, costly-to-reverse design choice for a server-less desktop app. Recommend running `/adr-writer` for it before implementation.
 
 None — all questions have been resolved.

@@ -10,6 +10,14 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-08-22 — FEE spec carries contract vocabulary and out-of-order rules
+
+- Found by: spec-reviewer (round 3 of the SYN/CFR review, `.review/spec-reviewer-2026-08-22-03.md`)
+- Where: docs/spec/management-fee-deduction.md (FEE-074, FEE-077)
+- Context: branch `feat/multi-device-sync` @ `a127abe`
+- Severity: 🔵
+- Observation: FEE-077 names an error variant and a method, FEE-074 names a typed field (`fee_rate_percent_micros: Option<i64>`) — contract vocabulary inside a spec ("what & why, never how"). FEE-074 also sits after FEE-078, out of numeric order. Pre-existing; only the missing scope tags on FEE-075–078 were fixed as boyscout while the file was touched for FEE-043/048. Rewording to behaviour-only text needs a judgement pass, not a mechanical edit — do it in a docs-only PR.
+
 ## 2026-07-25 — Linux bundle carries Tauri template leftovers
 
 - Found by: main-agent

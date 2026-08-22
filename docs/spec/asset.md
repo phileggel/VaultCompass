@@ -234,3 +234,7 @@ Display a snackbar notification after mutation operations (creation, modificatio
 ## Open questions
 
 None — all questions have been resolved.
+
+## Cross-amendments
+
+- **CFR-017** — a transaction or price recorded on another device against an asset archived here is applied as it is; AST-006's "can no longer be modified" binds user entry on a device, not merge (see `sync-conflict-resolution.md`).

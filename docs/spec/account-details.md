@@ -238,3 +238,7 @@ UPDATE holdings SET
 3. Data loads: user sees active positions with cost basis and the account totals.
 4. If closed positions exist, they appear below the active table with realized P&L and last sold date.
 5. User can add a transaction via the FAB or "Add Transaction" button.
+
+## Cross-amendments
+
+- **SYN-040** — the holding row carries an _inconsistent_ marker with its reason when merged transactions break a holding invariant (see `multi-device-sync.md`).

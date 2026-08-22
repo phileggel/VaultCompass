@@ -323,3 +323,67 @@ A third-party HTTP service that returns current asset prices. Currently Yahoo Fi
 | `get_asset_prices`   | Return all recorded prices for an asset, ordered by date descending. Errors: `AssetNotFound`, `Unknown`                                                                               | confirmed |
 | `update_asset_price` | Change the date and/or price of an existing price record; atomic delete-old + upsert-new when date changes. Errors: `NotFound`, `NotPositive`, `NonFinite`, `DateInFuture`, `Unknown` | confirmed |
 | `delete_asset_price` | Remove a specific price record by `(asset_id, date)`. Errors: `NotFound`, `Unknown`                                                                                                   | confirmed |
+
+---
+
+## Multi-Device Sync Concepts (introduced by SYN spec)
+
+### Device
+
+> Status: confirmed
+
+One installation of the application taking part in sharing a portfolio. Known to the other devices by a stable identity and a user-chosen name.
+
+### Change
+
+> Status: confirmed
+
+One recorded modification of one record — a creation, an update, or a removal — made on one device. The unit exchanged between devices.
+
+### Logical Timestamp
+
+> Status: confirmed
+
+The ordering value every change carries. It is always greater than every change the device had recorded or applied before, so "later" between two independent edits of the same record is well defined on every device regardless of clock differences.
+
+### Segment
+
+> Status: confirmed
+
+A published file carrying a consecutive batch of one device's changes. Once published it is never modified.
+
+### Area
+
+> Status: confirmed
+
+The part of the shared folder that one device publishes into. Only that device writes there, except when another device starts the portfolio over.
+
+### Manifest
+
+> Status: confirmed
+
+A device's published identity card: its identity, its name, its data-format version, and how far it has published.
+
+### Roster
+
+> Status: confirmed
+
+The set of manifests in the folder — every device currently sharing the portfolio, as each device sees it.
+
+### Sync Cursor
+
+> Status: confirmed
+
+How far this device has applied another device's changes. Distinct from a fee schedule's catch-up cursor (FEE-043), which tracks generated deduction periods.
+
+### Sync Passphrase
+
+> Status: confirmed
+
+The secret every device sharing a portfolio holds, from which the key that encrypts every published file is derived. Never stored in readable form; there is no recovery if it is forgotten.
+
+### Inconsistent Holding
+
+> Status: confirmed
+
+A holding whose merged transactions, each valid on the device that recorded it, together break an invariant (for example an oversold position). Kept visible with its reason until the user corrects or removes one of the transactions.

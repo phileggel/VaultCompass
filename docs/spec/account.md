@@ -175,3 +175,8 @@ Full-width table, default sort by Name ascending. Floating action button (bottom
 
 - **Archiving**: Implement account archiving (soft-delete) instead of permanent deletion to preserve transaction history.
 - **Success feedback**: Implement snackbar notifications for all mutations (ACC-014 currently only covers error feedback).
+
+## Cross-amendments
+
+- **SYN-040** — the accounts list marks an account that contains an inconsistent holding (see `multi-device-sync.md`).
+- **CFR-035** — after a merge two accounts may carry the same name; ACC-003's uniqueness check binds the name being set by the user, not names that already clash (see `sync-conflict-resolution.md`).

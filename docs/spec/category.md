@@ -115,3 +115,8 @@ A full RTL component test would require mocking the Zustand store and the gatewa
 ## Open questions
 
 None — all questions have been resolved.
+
+## Cross-amendments
+
+- **CFR-030** — an asset whose category was removed on another device is shown in the default category, derived on read; CAT-003's reassignment is never re-run on apply.
+- **CFR-035** — after a merge two categories may carry the same name; CAT-001's uniqueness check binds the name being set by the user, not names that already clash (see `sync-conflict-resolution.md`).

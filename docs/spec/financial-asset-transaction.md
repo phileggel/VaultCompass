@@ -211,3 +211,7 @@ _`transaction_type` is not shown in the form. It is hardcoded to `Purchase` unti
 4. User enters Quantity, Unit Price, and Fees.
 5. Total Amount is auto-calculated and read-only.
 6. User clicks "Save".
+
+## Cross-amendments
+
+- **CFR-041** — when the portfolio is shared between devices, `created_at` is carried verbatim with the transaction and never re-derived, and the TRX-036 order gains a third key — transaction identity — for same-date, same-`created_at` entries from different devices (see `sync-conflict-resolution.md`).
