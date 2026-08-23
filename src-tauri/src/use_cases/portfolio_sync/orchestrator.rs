@@ -15,6 +15,7 @@ use crate::context::sync::{
     SyncReport, SyncRun, SyncService, SyncStateRepository, SyncStatus, DATA_FORMAT_VERSION,
 };
 use crate::core::cash::{is_cash_asset, SYSTEM_CASH_CATEGORY_ID};
+use crate::core::BACKEND;
 use crate::use_cases::shared::inconsistency::holding_inconsistency;
 
 use super::applier::ServiceChangeApplier;
@@ -230,6 +231,19 @@ impl PortfolioSyncOrchestrator {
         let report = self.sync_run.run(&device, &self.applier).await?;
         self.sync_service.remember_run(&report);
         Ok(report)
+    }
+
+    /// The automatic sync a settled burst of recorded changes fires (SYN-060/067): a full run
+    /// on an enabled, non-paused device. Never fails outward — a failed run is logged, and
+    /// the next recorded change retries.
+    pub async fn sync_after_changes(&self) {
+        match self.sync_now().await {
+            Ok(_) => {}
+            Err(PortfolioSyncError::Sync(SyncError::SyncDisabled | SyncError::SyncPaused)) => {}
+            Err(error) => {
+                tracing::warn!(target: BACKEND, err = %error, "automatic sync: run failed");
+            }
+        }
     }
 
     /// Resumes sync on a paused device: publishes paused-era changes, then runs as `sync_now`
@@ -1095,6 +1109,104 @@ mod tests {
             !status.inconsistent_holdings.is_empty(),
             "CFR-042/SYN-040: an overdrawn cash holding must be enriched into \
              get_sync_status().inconsistent_holdings"
+        );
+    }
+
+    // SYN-060/067 — the automatic run is a silent no-op while sync is disabled or paused
+    // (the folder store has no expectations: any call would panic).
+    #[tokio::test]
+    async fn sync_after_changes_is_a_no_op_while_disabled_or_paused() {
+        let pool = make_pool().await;
+        let mut state_repo = MockSyncStateRepository::new();
+        state_repo.expect_get_device().returning(|| Ok(None));
+        let mut paused = MockSyncStateRepository::new();
+        paused
+            .expect_get_device()
+            .returning(|| Ok(Some(device().pause().unwrap())));
+
+        build_ctx_with_state_repo(
+            &pool,
+            Arc::new(state_repo),
+            Arc::new(MockFolderStore::new()),
+        )
+        .orchestrator
+        .sync_after_changes()
+        .await;
+        build_ctx_with_state_repo(&pool, Arc::new(paused), Arc::new(MockFolderStore::new()))
+            .orchestrator
+            .sync_after_changes()
+            .await;
+    }
+
+    // SYN-083 — a joining installation's own observations (prices, currency pairs and
+    // rates) are discarded before the shared history replaces them; its records stay.
+    #[tokio::test]
+    async fn discard_observations_drops_prices_pairs_and_rates_but_keeps_records() {
+        let pool = make_pool().await;
+        let ctx = build_ctx_with_state_repo(
+            &pool,
+            Arc::new(SqliteSyncStateRepository::new(pool.clone())),
+            Arc::new(MockFolderStore::new()),
+        );
+        let asset = ctx
+            .asset_service
+            .create_asset(crate::context::asset::CreateAssetDTO {
+                name: "AAPL".into(),
+                reference: "AAPL".into(),
+                isin: None,
+                class: crate::context::asset::AssetClass::Stocks,
+                currency: "USD".into(),
+                risk_level: 2,
+                category_id: SYSTEM_CATEGORY_ID.into(),
+                exchange: None,
+                interest_bearing: false,
+            })
+            .await
+            .unwrap();
+        ctx.asset_service
+            .record_asset_price(&asset.id, "2026-08-20", 150.0)
+            .await
+            .unwrap();
+        ctx.orchestrator
+            .currency_service
+            .declare_currency_pair("USD".into(), "EUR".into())
+            .await
+            .unwrap();
+        ctx.orchestrator
+            .currency_service
+            .record_currency_rate("USD".into(), "EUR".into(), "2026-08-20".into(), 920_000)
+            .await
+            .unwrap();
+
+        let mut conn = pool.acquire().await.unwrap();
+        crate::context::sync::ChangeApplier::discard_observations(
+            &ctx.orchestrator.applier,
+            &mut conn,
+        )
+        .await
+        .expect("discard succeeds");
+        drop(conn);
+
+        assert!(ctx
+            .asset_service
+            .get_latest_price(&asset.id)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(ctx
+            .orchestrator
+            .currency_service
+            .list_currency_pairs()
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(
+            ctx.asset_service
+                .get_asset_by_id(&asset.id)
+                .await
+                .unwrap()
+                .is_some(),
+            "the asset record itself is not an observation"
         );
     }
 }

@@ -10,6 +10,14 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-08-23 — Applied holding notes and currency pairs raise no domain event
+
+- Found by: reviewer-frontend (PR-D, `.review/reviewer-frontend-2026-08-23-01.md`) + main agent
+- Where: src-tauri/src/context/account/service.rs (`apply_holding_note`), src-tauri/src/context/currency/application/service.rs (`apply_currency_pair`)
+- Context: branch `feat/multi-device-sync-e2e` @ `78b43cd`
+- Severity: 🔵
+- Observation: Every other apply path re-raises the event a local write would (SYN-064), but holding notes and currency pairs have no local-write event at all, so their apply paths raise nothing. The frontend compensates by re-fetching the account-details and currency-rates views on the bare `SyncCompleted` marker — correct, but a view open on an unrelated page does one redundant fetch per run. A `HoldingNoteUpdated` / `CurrencyPairUpdated` pair (raised by local writes and apply alike) would make the refresh precise; its own small PR, both layers.
+
 ## 2026-08-23 — Local writes do not take the sync gate
 
 - Found by: reviewer-security + reviewer-backend (PR-C, `.review/reviewer-security-2026-08-23-01.md`)

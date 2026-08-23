@@ -146,11 +146,11 @@ Read this when:
 
 **Pattern**: B43 keeps the `application/ domain/ infrastructure/` layer folders present even when empty, to document the layering and reserve the spot.
 
-**Practice**: `shared/` currently holds only `shared/infrastructure/` (its first resident, `http::read_capped_text`). `shared/application/` and `shared/domain/` are not created until they have a real resident.
+**Practice**: `shared/` holds `shared/infrastructure/` (first resident `http::read_capped_text`) and `shared/domain/` (created with its first resident, `record_change.rs` — the change-log vocabulary every bounded context records in). `shared/application/` does not exist until a cross-BC application helper needs it.
 
-**Trade**: Empty placeholder modules are speculative scaffolding (YAGNI) — they add module-tree noise with no consumer. The layer a cross-cutting util belongs to is obvious from its single populated folder; reserving the other two buys nothing until shared application/domain logic actually exists.
+**Trade**: Empty placeholder modules are speculative scaffolding (YAGNI) — they add module-tree noise with no consumer. Each layer folder appears together with its first resident, so the tree documents what exists rather than what might.
 
-**When to revisit**: Add `shared/application/` or `shared/domain/` the moment the first cross-BC application or domain helper lands there — created together with its resident, not ahead of it.
+**When to revisit**: Add `shared/application/` the moment the first cross-BC application helper lands there — created together with its resident, not ahead of it.
 
 ---
 
@@ -194,9 +194,9 @@ Read this when:
 
 **Pattern**: A repository port exposes domain-level operations only; persistence handles (connections, transactions) never cross the port boundary, and a use case never touches a connection.
 
-**Practice**: `RankStamper` (`context/sync/domain/rank_stamper.rs`), `ChangeLogRepository` (`context/sync/domain/change_log.rs`) and the `stamp_sync_rank(conn, rank)` method on the account, asset and currency repository traits all take a `&mut sqlx::SqliteConnection`; `use_cases/portfolio_sync/rank_stamper.rs` forwards that connection to the three services.
+**Practice**: `ChangeRecorder` (`shared/infrastructure/change_recorder.rs`), `RankStamper` (`context/sync/domain/rank_stamper.rs`), `ChangeLogRepository` (`context/sync/domain/change_log.rs`) and the `stamp_sync_rank(conn, rank)` method on the account, asset and currency repository traits all take a `&mut sqlx::SqliteConnection`; `use_cases/portfolio_sync/rank_stamper.rs` forwards that connection to the three services. `ChangeRecorder` sits under `shared/infrastructure/`, not `shared/domain/`, for the same reason: its signature names a persistence handle.
 
-**Trade**: The first publish must write the header's first segment, stamp every existing row in three bounded contexts and enrol the device in **one** transaction (SYN-013: "rolled back on failure"). Without a unit of work (ADR-006 is unimplemented — see `docs/techdebt.md`), the only way to keep those writes atomic across contexts is to hand the enrolment transaction through the ports, as `ChangeRecorder` already does. Each context still owns its own SQL; the use case only carries the handle.
+**Trade**: A record and its change row must commit together (SYN-020), and the first publish must write the header's first segment, stamp every existing row in three bounded contexts and enrol the device in **one** transaction (SYN-013: "rolled back on failure"). Without a unit of work (ADR-006 is unimplemented — see `docs/techdebt.md`), the only way to keep those writes atomic is to hand the live transaction through the ports. Each context still owns its own SQL; the use case only carries the handle.
 
 **When to revisit**: When ADR-006's unit of work lands, the ports take the unit of work instead of a raw connection and the use case stops seeing sqlx types.
 

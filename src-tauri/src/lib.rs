@@ -198,16 +198,6 @@ pub fn run() {
                         .with_run(Arc::clone(&sync_run))
                         .with_event_bus(Arc::clone(&event_bus)),
                 );
-                // SYN-067 — every recorded change restarts the settling window; a settled
-                // burst publishes once.
-                let publishing_service = Arc::clone(&sync_service);
-                change_recorder.attach_recorded_change_hook(
-                    Arc::new(Publisher::new()).recorded_change_hook(move || {
-                        let sync_service = Arc::clone(&publishing_service);
-                        async move { sync_service.publish_recorded_changes().await }
-                    }),
-                );
-
                 let AppContainer {
                     account_service,
                     asset_service,
@@ -219,7 +209,7 @@ pub fn run() {
                     Some(rate_provider_chain),
                     Some(frankfurter_client as Arc<dyn RateHistoryProvider>),
                     Some(Arc::clone(&event_bus)),
-                    change_recorder as Arc<dyn ChangeRecorder>,
+                    Arc::clone(&change_recorder) as Arc<dyn ChangeRecorder>,
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(
@@ -297,6 +287,15 @@ pub fn run() {
                         state_repo: sync_state_repo,
                         folder_store: sync_folder_store,
                     }));
+                // SYN-060/067 — every recorded change restarts the settling window; a settled
+                // burst runs one automatic sync.
+                let automatic_sync = Arc::clone(&portfolio_sync_uc);
+                change_recorder.attach_recorded_change_hook(
+                    Arc::new(Publisher::new()).recorded_change_hook(move || {
+                        let portfolio_sync = Arc::clone(&automatic_sync);
+                        async move { portfolio_sync.sync_after_changes().await }
+                    }),
+                );
 
                 // FEE-040 — lazy catch-up generation across all active fee schedules,
                 // invoked by the frontend on app startup; SYN-060 — one sync runs first.

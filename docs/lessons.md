@@ -171,3 +171,11 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Symptom** — A coverage job that runs ~21 minutes on a warm dependency cache was cancelled at its 30-minute limit; the log showed tests passing steadily right up to the cutoff, plus orphaned tooling processes at cleanup — which reads like a hang but is just whatever was mid-flight when the axe fell. The trigger: the PR changed the lockfile (new dependency + a feature flag on an existing one), invalidating the dependency cache and forcing a cold instrumented rebuild.
 
 **Mitigation** — (1) Before diagnosing a "hung" CI job, check whether steady progress was still being logged at cancellation — a timeout mid-progress is a budget problem, not a deadlock. (2) Size `timeout-minutes` for the cold-cache path (lockfile changes are routine), keeping headroom of roughly the warm duration's half. (3) A local run of the same tool over the suspect tests separates "genuinely hangs" from "ran out of time" in minutes.
+
+## L-011 — Before bisecting a local-only E2E failure, run a known-green tag on the same machine
+
+**First observed**: 2026-08-23 (multi-device sync PR-E: every E2E spec that writes through IPC timed out locally while CI on the same commit was green)
+
+**Symptom** — Write commands invoked from E2E (`execute/async` seeds, a form submit) never resolved locally: WebDriver script timeouts, a modal stuck in its submitting state. Backend probes showed the command completing in milliseconds; read-only specs passed. It looked like a regression in the freshly merged feature, and an hour went into instrumenting it.
+
+**Mitigation** — (1) When CI is green on the same commit, first run one E2E spec from a known-green release tag in a `git worktree` on the same machine; if it fails the same way, the environment is the variable (here: the local WebKitGTK/driver stack losing IPC responses under load) and the bisect is pointless. (2) Kill stale drivers with `pkill -x <name>`, never `pkill -f <pattern>` — the pattern matches the shell running the command and kills it (exit 144), silently skipping everything after it. (3) Gate the merge on the CI E2E run (the suite runs on the main push) and fix forward if it reddens.

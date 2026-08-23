@@ -5559,12 +5559,9 @@ mod tests {
     // -------------------------------------------------------------------------
 
     // CFR-035 — editing other fields of an account whose name already clashes (post-merge)
-    // must be accepted: the guard must bind the name being *set*, not any name that
-    // already clashes. A real `idx_accounts_name_lower` UNIQUE index (M
-    // `202604040001_accounts_constraints.sql`) makes two real rows sharing a name
-    // unconstructible today — CFR-035 needs that index relaxed, a migration change out of
-    // this test-writing pass's scope (flagged in the report) — so this test isolates the
-    // *service guard* on a mock repository, independent of the schema question.
+    // must be accepted: the guard binds the name being *set*, not any name that already
+    // clashes. This test isolates the service guard on a mock repository; the schema side
+    // (duplicate names coexisting) is covered by the repository tests.
     #[tokio::test]
     async fn update_accepts_editing_other_fields_when_the_unchanged_name_already_clashes() {
         let mut mock_repo = MockAccountRepository::new();

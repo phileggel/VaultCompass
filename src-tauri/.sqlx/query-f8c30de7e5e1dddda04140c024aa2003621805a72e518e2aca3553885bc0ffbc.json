@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT device_id, paused, logical_clock FROM sync_device WHERE id = 1",
+  "query": "SELECT device_id, logical_clock FROM sync_device WHERE id = 1",
   "describe": {
     "columns": [
       {
@@ -9,13 +9,8 @@
         "type_info": "Text"
       },
       {
-        "name": "paused",
-        "ordinal": 1,
-        "type_info": "Integer"
-      },
-      {
         "name": "logical_clock",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Integer"
       }
     ],
@@ -24,9 +19,8 @@
     },
     "nullable": [
       false,
-      false,
       false
     ]
   },
-  "hash": "66db5c3d9e09a0d84d56e3a5000f08124ce1be90c963d95839f771bc8b06849e"
+  "hash": "f8c30de7e5e1dddda04140c024aa2003621805a72e518e2aca3553885bc0ffbc"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT COUNT(*) AS \"count!: i64\" FROM sync_device WHERE id = 1 AND paused = 0",
+  "query": "SELECT COUNT(*) AS \"count!: i64\" FROM sync_device WHERE id = 1",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "6a2fb68ed17e80abc49080642d36f04aa53dd8ee667ed4cbe594fdb95d061d97"
+  "hash": "25e8ad79191a4dc4490446c1978c29602396a7d33575a9ce0e115b60504c93f5"
 }

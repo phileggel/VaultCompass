@@ -127,6 +127,8 @@ impl ChangeApplier for ServiceChangeApplier {
 
     async fn write(&self, conn: &mut SqliteConnection, change: &Change) -> Result<(), SyncError> {
         let kind = change.record_kind;
+        // reviewer-security FP: identity always equals the content's canonical identity —
+        // `check_received_change` rejected every other change at read time — see PR #102
         let identity = change.record_identity.as_str();
         if change.operation == Operation::Removed {
             return match kind {

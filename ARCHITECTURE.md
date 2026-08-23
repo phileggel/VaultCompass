@@ -67,7 +67,10 @@ core/                 shared infra (legacy bucket — new shared code goes in sh
   cash.rs             system cash asset id helpers (shared without crossing a BC boundary)
 
 shared/               gold-layout shared infra (docs/backend-rules.md B0/B37)
+  domain/
+    record_change.rs  RecordChange / RecordKind / Operation / Origin — the per-device change-log vocabulary every BC writes in (SYN-020/021, ADR-019)
   infrastructure/
+    change_recorder.rs ChangeRecorder port — records one change on the live write connection so the record and its change row commit together (divergence #16)
     container.rs      AppContainer — boxes SQLite repos into the application services; consumed by both entry points (lib.rs setup, headless scheduled fetch)
     http.rs           shared reqwest client construction + capped body reads
     scheduler/        DailyFetchScheduler trait + per-OS adapters (systemd/schtasks/launchd)
@@ -85,7 +88,7 @@ lib.rs                composition root — wires services, use cases, dispatcher
 - Repositories return `Result<T, anyhow::Error>`. Services translate to typed `{BC}Error`. Use cases compose via `#[from]`. See `docs/error-model.md`.
 - See [`docs/backend-patterns.md`](docs/backend-patterns.md) for the row-mapping recipe and orchestrator shape.
 
-> Contexts: `account/`, `asset/`, `currency/`. The newer `currency/` BC follows the gold `application/domain/infrastructure` trio with `api.rs` + `error.rs`, rather than the `repository/` + `service.rs` shape shown in the template above. Asset prices are auto-fetched from the keyless Yahoo Finance `/v8/chart/` endpoint (`asset/repository/yahoo_client.rs`, ADR-017) — no API key, so no credential bounded context.
+> Contexts: `account/`, `asset/`, `currency/`, `sync/`. The newer `currency/` and `sync/` BCs follow the gold `application/domain/infrastructure` trio with `api.rs` + `error.rs`, rather than the `repository/` + `service.rs` shape shown in the template above. `sync/` owns the device identity, the encrypted shared folder (Argon2id-derived key, XChaCha20-Poly1305 segments), the change-log repository, and the single conflict-resolution engine `domain/resolution.rs` (ADR-019, spec CFR); `use_cases/portfolio_sync/` applies the resolved changes through the other three BCs' services and owns the eleven sync commands. Asset prices are auto-fetched from the keyless Yahoo Finance `/v8/chart/` endpoint (`asset/repository/yahoo_client.rs`, ADR-017) — no API key, so no credential bounded context.
 
 ---
 
@@ -93,17 +96,18 @@ lib.rs                composition root — wires services, use cases, dispatcher
 
 Backend publishes events on every state change. Frontend listens via a single `events.event.listen()` subscription in `src/lib/store.ts:init()` and dispatches to the right fetcher.
 
-| Event                      | Published by                                                                | Frontend re-fetches                                                                                                        |
-| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `AssetUpdated`             | `context/asset/` writes                                                     | `assets`                                                                                                                   |
-| `CategoryUpdated`          | `context/asset/` category writes                                            | `categories`                                                                                                               |
-| `AssetPriceUpdated`        | `context/asset/` price writes + `use_cases/asset_price_fetch/`              | `account_details`, `performance` (per-page)                                                                                |
-| `AccountUpdated`           | `context/account/` account writes                                           | `accounts`, `performance` (per-page)                                                                                       |
-| `TransactionUpdated`       | `context/account/` holding / transaction writes                             | `account_details`, `transactions`, `performance` (per-page)                                                                |
-| `CurrencyRateUpdated`      | `context/currency/` rate writes + provider fetch                            | `account_details`, `currency_rates_view`                                                                                   |
-| `FeeScheduleUpdated`       | `context/account/` fee-schedule CRUD                                        | `account_details`                                                                                                          |
-| `AssetPriceFetchProgress`  | `use_cases/asset_price_fetch/` dispatcher (task start + per asset, MKT-180) | shell progress bar via the global store (`lib/store.ts`); no re-fetch                                                      |
-| `AssetPriceFetchCompleted` | `use_cases/asset_price_fetch/` dispatcher (bulk fetch end, MKT-181)         | `account_details`, `accounts`, `performance` (per-page); progress bar cleared + unpriced list refreshed via `lib/store.ts` |
+| Event                      | Published by                                                                                                                       | Frontend re-fetches                                                                                                                                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AssetUpdated`             | `context/asset/` writes                                                                                                            | `assets`                                                                                                                                                                                                                                         |
+| `CategoryUpdated`          | `context/asset/` category writes                                                                                                   | `categories`                                                                                                                                                                                                                                     |
+| `AssetPriceUpdated`        | `context/asset/` price writes + `use_cases/asset_price_fetch/`                                                                     | `account_details`, `performance` (per-page)                                                                                                                                                                                                      |
+| `AccountUpdated`           | `context/account/` account writes                                                                                                  | `accounts`, `performance` (per-page)                                                                                                                                                                                                             |
+| `TransactionUpdated`       | `context/account/` holding / transaction writes                                                                                    | `account_details`, `transactions`, `performance` (per-page)                                                                                                                                                                                      |
+| `CurrencyRateUpdated`      | `context/currency/` rate writes + provider fetch                                                                                   | `account_details`, `currency_rates_view`                                                                                                                                                                                                         |
+| `FeeScheduleUpdated`       | `context/account/` fee-schedule CRUD                                                                                               | `account_details`                                                                                                                                                                                                                                |
+| `AssetPriceFetchProgress`  | `use_cases/asset_price_fetch/` dispatcher (task start + per asset, MKT-180)                                                        | shell progress bar via the global store (`lib/store.ts`); no re-fetch                                                                                                                                                                            |
+| `AssetPriceFetchCompleted` | `use_cases/asset_price_fetch/` dispatcher (bulk fetch end, MKT-181)                                                                | `account_details`, `accounts`, `performance` (per-page); progress bar cleared + unpriced list refreshed via `lib/store.ts`                                                                                                                       |
+| `SyncCompleted`            | `context/sync/` `SyncService::remember_run` — a run that applied changes or changed the device's failures / paused state (SYN-064) | bare marker: `lib/store.ts` re-fetches assets, categories, accounts; `shell/sync_indicator` re-reads `get_sync_status`; `account_details`, `currency_rates_view` re-fetch (applied holding notes and currency pairs raise no event of their own) |
 
 Adding a new event: declare the variant in `core/event_bus/event.rs`, publish from the service after persistence (`bus.publish(Event::Foo)`), subscribe in the relevant feature hook.
 
@@ -182,6 +186,7 @@ These are the load-bearing architectural choices that aren't obvious from readin
 - **Repository folder is still named `repository/`** (gold standard is `infrastructure/`). Bit-by-bit migration tracked in [`docs/techdebt.md`](docs/techdebt.md).
 - **`anyhow::Error` in repo trait error type** is intentional. See [`docs/ddd-divergences.md`](docs/ddd-divergences.md) #10.
 - **Update lifecycle state (`UpdateState`)** is managed before the DB is ready so the frontend can show a migration-failure screen.
+- **Multi-device sync is a per-device append-only change log merged by one resolution engine** — no CRDT library, no SQLite triggers, no server; transport is a user-owned cloud folder. See [ADR-019](docs/adr/019-per-device-change-log-multi-device-sync.md), specs `SYN` + `CFR`, and divergences #15/#16.
 
 ---
 

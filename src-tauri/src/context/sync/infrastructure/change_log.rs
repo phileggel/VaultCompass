@@ -1,6 +1,7 @@
 //! `SqliteChangeRecorder` — the SQLite-backed `ChangeRecorder` (D1, PR-A). Dormant when no
-//! `sync_device` row exists (SYN-010), while the device is paused (SYN-070), or while an
-//! apply holds its gate (SYN-020); otherwise asks the resolution engine whether the local
+//! `sync_device` row exists (SYN-010) or while an apply holds its gate (SYN-020) — a paused
+//! device keeps recording (SYN-070), its changes publish on resume (SYN-026/073); otherwise
+//! asks the resolution engine whether the local
 //! write outranks the record's tombstone (CFR-016), appends to `changes` / `tombstones`,
 //! and advances `sync_device.logical_clock` (SYN-025, CFR-010) on the same connection as
 //! the write it describes (SYN-020), then tells the recorded-change hook so the
@@ -30,8 +31,9 @@ use crate::shared::infrastructure::change_recorder::{
 /// The future a recorded-change hook returns.
 pub type HookFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-/// Called after every change recorded on an enabled, non-paused device (SYN-067) — the
-/// settling-interval batcher restarts its window from it.
+/// Called after every change recorded on an enabled device (SYN-067) — the
+/// settling-interval batcher restarts its window from it; a paused device's batcher
+/// publishes nothing until resume (SYN-070).
 pub type RecordedChangeHook = Arc<dyn Fn() -> HookFuture + Send + Sync>;
 
 /// SQLite-backed `ChangeRecorder`. Reads/writes the `sync_device` singleton (id = 1),
@@ -98,17 +100,13 @@ impl ChangeRecorder for SqliteChangeRecorder {
         if self.suspended.load(Ordering::SeqCst) {
             return Ok(Rank::NEVER);
         }
-        let device =
-            sqlx::query!("SELECT device_id, paused, logical_clock FROM sync_device WHERE id = 1")
-                .fetch_optional(&mut *conn)
-                .await
-                .context("Failed to read sync_device")?;
+        let device = sqlx::query!("SELECT device_id, logical_clock FROM sync_device WHERE id = 1")
+            .fetch_optional(&mut *conn)
+            .await
+            .context("Failed to read sync_device")?;
         let Some(device) = device else {
             return Ok(Rank::NEVER);
         };
-        if device.paused != 0 {
-            return Ok(Rank::NEVER);
-        }
 
         let sequence = sqlx::query_scalar!(
             r#"SELECT COALESCE(MAX(sequence), 0) + 1 AS "sequence!: i64" FROM changes WHERE device_id = ?"#,
@@ -220,7 +218,7 @@ impl ChangeRecorder for SqliteChangeRecorder {
             return false;
         }
         sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS "count!: i64" FROM sync_device WHERE id = 1 AND paused = 0"#
+            r#"SELECT COUNT(*) AS "count!: i64" FROM sync_device WHERE id = 1"#
         )
         .fetch_one(&self.pool)
         .await
@@ -1091,9 +1089,9 @@ mod tests {
         assert_eq!(repository.logical_clock().await.expect("clock"), 3);
     }
 
-    // SYN-070 — a paused device's recorder reports not-recording.
+    // SYN-070/026 — a paused device keeps recording: its changes publish on resume.
     #[tokio::test]
-    async fn is_recording_false_when_device_is_paused() {
+    async fn is_recording_true_when_device_is_paused() {
         let pool = make_pool().await;
         sqlx::query!(
             r#"INSERT INTO sync_device
@@ -1105,8 +1103,15 @@ mod tests {
         .execute(&pool)
         .await
         .expect("seed paused sync_device");
-        let recorder = SqliteChangeRecorder::new(pool);
+        let recorder = SqliteChangeRecorder::new(pool.clone());
 
-        assert!(!recorder.is_recording().await);
+        assert!(recorder.is_recording().await);
+        let mut conn = pool.acquire().await.expect("conn");
+        let rank = recorder
+            .record(&mut conn, account_created_draft("acc-paused"))
+            .await
+            .expect("record")
+            .expect("a paused device still records");
+        assert_eq!(rank.logical_timestamp, LogicalTimestamp::new(1));
     }
 }

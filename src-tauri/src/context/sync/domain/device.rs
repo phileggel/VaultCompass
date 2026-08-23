@@ -282,7 +282,7 @@ mod tests {
         assert!(!device.device_id.trim().is_empty());
     }
 
-    // SYN-016 — two devices enrolling independently never present the same identity.
+    // SYN-016 — each enrolment draws a fresh random identity; two draws differ.
     #[test]
     fn new_generates_different_ids_across_calls() {
         let first = SyncDevice::new(

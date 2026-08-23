@@ -1663,4 +1663,32 @@ mod tests {
         .is_none());
         assert!(notice_for(&Outcome::MergeMax).is_none());
     }
+
+    // SYN-035 — a change written in an older data format keeps the local value of every
+    // field it does not carry; a field it carries wins; with nothing local it applies as is.
+    #[test]
+    fn upgraded_content_lays_the_incoming_fields_over_the_local_ones() {
+        let incoming = change(
+            "laptop",
+            RecordKind::Account,
+            "account-livret",
+            Operation::Updated,
+            Origin::User,
+            7,
+            Some(3),
+            Some(r#"{"id":"account-livret","name":"Livret B"}"#),
+        );
+        let local = r#"{"id":"account-livret","name":"Livret A","bank_name":"Boursorama"}"#;
+
+        let merged: serde_json::Value =
+            serde_json::from_str(&upgraded_content(&incoming, Some(local)).unwrap()).unwrap();
+        assert_eq!(merged["name"], "Livret B");
+        assert_eq!(merged["bank_name"], "Boursorama");
+
+        assert_eq!(
+            upgraded_content(&incoming, None).as_deref(),
+            incoming.content.as_deref(),
+            "nothing local: the incoming content applies as is"
+        );
+    }
 }

@@ -185,29 +185,6 @@ impl SyncService {
         Ok(())
     }
 
-    /// The automatic publish-only run a settled burst of recorded changes fires (SYN-067):
-    /// publishes on an enabled, non-paused device and remembers the run. Never fails outward —
-    /// a failed run is logged, and the next recorded change retries.
-    pub async fn publish_recorded_changes(&self) {
-        let device = match self.state_repo.get_device().await {
-            Ok(Some(device)) if !device.paused => device,
-            Ok(_) => return,
-            Err(error) => {
-                tracing::warn!(target: BACKEND, err = %error, "publish_recorded_changes: device not loaded");
-                return;
-            }
-        };
-        let Ok(sync_run) = self.sync_run() else {
-            return;
-        };
-        match sync_run.publish(&device).await {
-            Ok(report) => self.remember_run(&report),
-            Err(error) => {
-                tracing::warn!(target: BACKEND, err = %error, "publish_recorded_changes: run failed");
-            }
-        }
-    }
-
     /// Dismisses a conflict notice (SYN-066). `NoticeNotFound` when it does not exist.
     pub async fn dismiss_conflict_notice(&self, notice_id: String) -> Result<(), SyncError> {
         let _device = self.require_device().await?;
@@ -460,19 +437,6 @@ mod tests {
                 problem: crate::context::sync::domain::FolderProblem::Unmounted
             })
         ));
-    }
-
-    // SYN-067/070 — the automatic publish never touches the folder while the device is paused
-    // (the folder store has no expectations: any call would panic).
-    #[tokio::test]
-    async fn publish_recorded_changes_does_nothing_while_paused() {
-        let mut state_repo = MockSyncStateRepository::new();
-        state_repo
-            .expect_get_device()
-            .returning(|| Ok(Some(paused_device())));
-        let service = SyncService::new(Arc::new(state_repo), Arc::new(MockFolderStore::new()));
-        service.publish_recorded_changes().await;
-        assert!(service.last_run().is_none());
     }
 
     // SYN-066 — dismiss_conflict_notice surfaces NoticeNotFound for an unknown id.

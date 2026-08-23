@@ -100,7 +100,7 @@ impl TransactionRepository for SqliteTransactionRepository {
             r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at
                FROM transactions
                WHERE account_id = ? AND asset_id = ?
-               ORDER BY date ASC, created_at ASC"#,
+               ORDER BY date ASC, created_at ASC, id ASC"#,
             account_id,
             asset_id
         )
@@ -124,7 +124,7 @@ impl TransactionRepository for SqliteTransactionRepository {
             r#"SELECT id, account_id, asset_id, transaction_type, date, quantity, unit_price, exchange_rate, fees, total_amount, note, realized_pnl, created_at
                FROM transactions
                WHERE account_id = ?
-               ORDER BY date ASC, created_at ASC"#,
+               ORDER BY date ASC, created_at ASC, id ASC"#,
             account_id
         )
         .fetch_all(&self.pool)

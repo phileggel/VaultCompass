@@ -138,7 +138,7 @@ The one readable file in the folder: what every device needs to derive the encry
 
 **SYN-015 — Wrong passphrase is detected (frontend + backend)**: Joining with a passphrase that does not match the one the portfolio was encrypted with is rejected with a specific error before anything is rebuilt (SYN-055). The error states only that the passphrase does not match.
 
-**SYN-016 — Device identity (backend)**: On enabling, the device generates a stable identity and keeps it for its lifetime. Two devices sharing a folder never present the same identity: a device that finds its own identity already published by a manifest it did not write regenerates before publishing anything.
+**SYN-016 — Device identity (backend)**: On enabling, the device generates a stable random identity (a version-4 UUID, whose collision chance is negligible) and keeps it for its lifetime; two devices sharing a folder never present the same identity.
 
 **SYN-017 — Honest positioning (frontend)**: Every surface that enables or explains sync states that the shared copy is encrypted and that the local copy on each device is not. The wording never implies that the data on this machine is protected by the passphrase.
 
@@ -148,7 +148,7 @@ The one readable file in the folder: what every device needs to derive the encry
 
 ### Recording Changes (020–029)
 
-**SYN-020 — Every write is recorded (backend)**: On a device with sync enabled and not paused, every creation, update, and removal of a synced record **made on this device** produces exactly one change, recorded together with the write it describes so that neither can exist without the other. A write the application makes on its own is first compared as CFR-020 compares an incoming change (CFR-016); if it does not outrank the record's current state it is not made and no change is recorded. Applying another device's change never records a change. Every synced record keeps the logical timestamp, origin, and device of the change that produced its current state (CFR-014).
+**SYN-020 — Every write is recorded (backend)**: On a device with sync enabled — paused or not (SYN-070) — every creation, update, and removal of a synced record **made on this device** produces exactly one change, recorded together with the write it describes so that neither can exist without the other. A write the application makes on its own is first compared as CFR-020 compares an incoming change (CFR-016); if it does not outrank the record's current state it is not made and no change is recorded. Applying another device's change never records a change. Every synced record keeps the logical timestamp, origin, and device of the change that produced its current state (CFR-014).
 
 **SYN-021 — Synced records (backend)**: The following kinds of records are synced: accounts, categories, assets, transactions (every type, including generated fee deductions), fee schedules, fee catch-up positions (CFR-044), asset prices, currency pairs, currency rates, holding notes. A change on any of these is recorded and published. Record identity per kind is defined in CFR-012; fee schedules, catch-up positions, and currency pairs take their identity from their natural key (CFR-034).
 
