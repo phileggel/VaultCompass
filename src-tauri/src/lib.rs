@@ -40,7 +40,7 @@ use crate::use_cases::asset_price_fetch::dispatcher::Dispatcher as PriceFetchDis
 use crate::use_cases::asset_price_fetch::{AssetPriceFetchUseCase, FetchGuard};
 use crate::use_cases::asset_web_lookup::{AssetWebLookupUseCase, ReqwestOpenFigiClient};
 use crate::use_cases::delete_asset::DeleteAssetUseCase;
-use crate::use_cases::fee_generation::FeeGenerationOrchestrator;
+use crate::use_cases::fee_generation::{FeeGenerationOrchestrator, LaunchSyncSurface};
 use crate::use_cases::global_performance::GlobalPerformanceUseCase;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
 use crate::use_cases::portfolio_sync::{
@@ -178,17 +178,19 @@ pub fn run() {
                     ],
                 ));
 
-                // ----- multi-device sync (SYN) — publish-only in this build -----
+                // ----- multi-device sync (SYN) -----
                 let sync_state_repo: Arc<dyn SyncStateRepository> =
                     Arc::new(SqliteSyncStateRepository::new(db.pool.clone()));
                 let sync_folder_store: Arc<dyn FolderStore> =
                     Arc::new(FsFolderStore::new(PathBuf::new()));
                 let sync_change_log: Arc<dyn ChangeLogRepository> =
                     Arc::new(SqliteChangeLogRepository::new(db.pool.clone()));
+                let change_recorder = Arc::new(SqliteChangeRecorder::new(db.pool.clone()));
                 let sync_run = Arc::new(SyncRun::new(
                     Arc::clone(&sync_change_log),
                     Arc::clone(&sync_state_repo),
                     Arc::clone(&sync_folder_store),
+                    Arc::clone(&change_recorder) as Arc<dyn ChangeRecorder>,
                 ));
                 let sync_service = Arc::new(
                     SyncService::new(Arc::clone(&sync_state_repo), Arc::clone(&sync_folder_store))
@@ -197,13 +199,12 @@ pub fn run() {
                 // SYN-067 — every recorded change restarts the settling window; a settled
                 // burst publishes once.
                 let publishing_service = Arc::clone(&sync_service);
-                let change_recorder = SqliteChangeRecorder::new(db.pool.clone())
-                    .with_recorded_change_hook(Arc::new(Publisher::new()).recorded_change_hook(
-                        move || {
-                            let sync_service = Arc::clone(&publishing_service);
-                            async move { sync_service.publish_recorded_changes().await }
-                        },
-                    ));
+                change_recorder.attach_recorded_change_hook(
+                    Arc::new(Publisher::new()).recorded_change_hook(move || {
+                        let sync_service = Arc::clone(&publishing_service);
+                        async move { sync_service.publish_recorded_changes().await }
+                    }),
+                );
 
                 let AppContainer {
                     account_service,
@@ -216,7 +217,7 @@ pub fn run() {
                     Some(rate_provider_chain),
                     Some(frankfurter_client as Arc<dyn RateHistoryProvider>),
                     Some(Arc::clone(&event_bus)),
-                    Arc::new(change_recorder) as Arc<dyn ChangeRecorder>,
+                    change_recorder as Arc<dyn ChangeRecorder>,
                 );
 
                 let account_details_uc = AccountDetailsUseCase::new(
@@ -266,10 +267,38 @@ pub fn run() {
                     asset_service.clone(),
                 );
 
+                // The first-device publish reads and ranks the whole portfolio through the
+                // owning contexts' services (ADR-004); a join and a run write through them.
+                let first_publish = Arc::new(FirstPublish::new(
+                    sync_change_log,
+                    Arc::clone(&sync_state_repo),
+                    Arc::clone(&sync_folder_store),
+                    Arc::new(ServiceRankStamper::new(
+                        account_service.clone(),
+                        asset_service.clone(),
+                        Arc::clone(&currency_service),
+                    )),
+                    Arc::new(ServicePortfolioSnapshot::new(
+                        account_service.clone(),
+                        asset_service.clone(),
+                        Arc::clone(&currency_service),
+                    )),
+                ));
+                let portfolio_sync_uc = Arc::new(PortfolioSyncOrchestrator::new(
+                    account_service.clone(),
+                    asset_service.clone(),
+                    Arc::clone(&currency_service),
+                    Arc::clone(&sync_service),
+                    first_publish,
+                    sync_run,
+                    sync_state_repo,
+                    sync_folder_store,
+                ));
+
                 // FEE-040 — lazy catch-up generation across all active fee schedules,
-                // invoked by the frontend on app startup.
-                let fee_generation_uc =
-                    FeeGenerationOrchestrator::new(account_service.clone());
+                // invoked by the frontend on app startup; SYN-060 — one sync runs first.
+                let fee_generation_uc = FeeGenerationOrchestrator::new(account_service.clone())
+                    .with_launch_sync(Arc::new(LaunchSync(Arc::clone(&portfolio_sync_uc))));
 
                 app_handle.manage(account_details_uc);
                 app_handle.manage(account_summary_uc);
@@ -327,33 +356,7 @@ pub fn run() {
                     Arc::clone(&currency_service),
                 )));
 
-                // The first-device publish reads and ranks the whole portfolio through the
-                // owning contexts' services (ADR-004).
-                let first_publish = Arc::new(FirstPublish::new(
-                    sync_change_log,
-                    Arc::clone(&sync_state_repo),
-                    Arc::clone(&sync_folder_store),
-                    Arc::new(ServiceRankStamper::new(
-                        account_service.clone(),
-                        asset_service.clone(),
-                        Arc::clone(&currency_service),
-                    )),
-                    Arc::new(ServicePortfolioSnapshot::new(
-                        account_service.clone(),
-                        asset_service.clone(),
-                        Arc::clone(&currency_service),
-                    )),
-                ));
-                app_handle.manage(PortfolioSyncOrchestrator::new(
-                    account_service.clone(),
-                    asset_service.clone(),
-                    Arc::clone(&currency_service),
-                    Arc::clone(&sync_service),
-                    first_publish,
-                    sync_run,
-                    sync_state_repo,
-                    sync_folder_store,
-                ));
+                app_handle.manage(portfolio_sync_uc);
                 app_handle.manage(sync_service);
 
                 app_handle.manage(Arc::clone(&currency_service));
@@ -373,6 +376,20 @@ pub fn run() {
         .invoke_handler(invoke_handler)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// SYN-060/D9 — the launch sync the fee-generation use case runs before generating: one
+/// full run through the portfolio-sync use case, composed here so neither use case imports
+/// the other (B18). Never fails outward — sync disabled, paused, or failing is logged.
+struct LaunchSync(Arc<PortfolioSyncOrchestrator>);
+
+#[async_trait::async_trait]
+impl LaunchSyncSurface for LaunchSync {
+    async fn run_launch_sync(&self) {
+        if let Err(error) = self.0.sync_now().await {
+            tracing::info!(target: BACKEND, err = %error, "launch sync skipped");
+        }
+    }
 }
 
 /// Application directory paths resolved at startup.

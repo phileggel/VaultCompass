@@ -1,10 +1,16 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use super::super::domain::{exchange, Asset, AssetCategory, AssetClass, AssetRepository};
-use crate::shared::domain::{ChangeDraft, Operation, Origin, Rank, RecordIdentity, RecordKind};
+use super::super::domain::{
+    exchange, Asset, AssetCategory, AssetClass, AssetPrice, AssetPriceSource, AssetRepository,
+};
+use crate::core::logger::BACKEND;
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, Rank, RecordIdentity, RecordKind,
+    SyncedRecord,
+};
 use crate::shared::infrastructure::change_recorder::{
-    ChangeRecorder, NoopChangeRecorder, RankColumns,
+    rank_from_columns, ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
 use anyhow::{Context, Result};
 use sqlx::{Pool, Sqlite, SqliteConnection};
@@ -18,8 +24,8 @@ struct AssetRow {
     asset_class: String,
     currency: String,
     risk_level: i64,
-    category_id: String,
-    category_name: String,
+    category_id: Option<String>,
+    category_name: Option<String>,
     is_archived: bool,
     exchange_code: Option<String>,
     price_refresh_blocked: bool,
@@ -30,11 +36,17 @@ impl From<AssetRow> for Asset {
     fn from(row: AssetRow) -> Self {
         let asset_class = AssetClass::from_str(&row.asset_class).unwrap_or_default();
         let exchange = row.exchange_code.as_deref().and_then(exchange::lookup);
+        // CFR-030 — an asset whose category stands removed is shown in the default category,
+        // derived on read; the stored category id is left as it is.
+        let category = match (row.category_id, row.category_name) {
+            (Some(id), Some(name)) => AssetCategory::from_storage(id, name),
+            _ => AssetCategory::default(),
+        };
         Asset::restore(
             row.id,
             row.name,
             asset_class,
-            AssetCategory::from_storage(row.category_id, row.category_name),
+            category,
             row.currency,
             row.risk_level.try_into().unwrap_or(0),
             row.reference,
@@ -55,14 +67,14 @@ pub(super) async fn fetch_asset(conn: &mut SqliteConnection, id: &str) -> Result
         r#"
         SELECT
             a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
-            c.id as category_id,
-            c.name as category_name,
+            c.id as "category_id?: String",
+            c.name as "category_name?: String",
             a.is_archived as "is_archived: bool",
             a.exchange_code,
             a.price_refresh_blocked as "price_refresh_blocked: bool",
             a.interest_bearing as "interest_bearing: bool"
         FROM assets a
-        JOIN categories c ON a.category_id = c.id
+        LEFT JOIN categories c ON a.category_id = c.id AND c.is_deleted = 0
         WHERE a.id = ?
         "#,
         id
@@ -93,8 +105,51 @@ pub(super) async fn stamp_asset_rank(
     Ok(())
 }
 
+/// CFR-011 — the logical timestamp of the asset's current state, the `based_on` of the next
+/// local change to it; `None` while absent or never ranked.
+pub(super) async fn current_asset_timestamp(
+    conn: &mut SqliteConnection,
+    id: &str,
+) -> Result<Option<LogicalTimestamp>> {
+    let stored = sqlx::query_scalar!(
+        r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String" FROM assets WHERE id = ?"#,
+        id
+    )
+    .fetch_optional(conn)
+    .await
+    .with_context(|| format!("Failed to read the rank of asset with id: {}", id))?;
+    Ok(stored
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp)))
+}
+
 pub(super) fn asset_identity(id: &str) -> RecordIdentity {
     RecordIdentity::canonical(RecordKind::Asset, &[id])
+}
+
+/// Splits an `asset:date` price identity (CFR-012) into its two keys.
+fn split_price_identity(identity: &str) -> Result<(&str, &str)> {
+    identity
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("malformed asset price identity: '{identity}'"))
+}
+
+/// The three rank columns of one synced row (CFR-014).
+#[derive(sqlx::FromRow)]
+struct RankRow {
+    sync_logical_timestamp: Option<String>,
+    sync_origin: Option<String>,
+    sync_device_id: Option<String>,
+}
+
+impl RankRow {
+    fn rank(self) -> Option<Rank> {
+        rank_from_columns(
+            self.sync_logical_timestamp,
+            self.sync_origin,
+            self.sync_device_id,
+        )
+    }
 }
 
 /// SQLite implementation of the AssetRepository.
@@ -124,13 +179,14 @@ impl SqliteAssetRepository {
         conn: &mut SqliteConnection,
         asset: &Asset,
         operation: Operation,
+        based_on: Option<LogicalTimestamp>,
     ) -> Result<()> {
         let draft = ChangeDraft::new(
             RecordKind::Asset,
             asset_identity(&asset.id),
             operation,
             Origin::User,
-            None,
+            based_on,
             Some(serde_json::to_string(asset)?),
         );
         let rank = self.change_recorder.record(conn, draft).await?;
@@ -140,21 +196,45 @@ impl SqliteAssetRepository {
         Ok(())
     }
 
-    /// Re-reads the asset an id-only update touched and records it as Updated; a
-    /// statement that matched no row records nothing (SYN-020).
+    /// Re-reads the asset an id-only update touched and records it as Updated, based on the
+    /// state the update found (CFR-011); a statement that matched no row records nothing
+    /// (SYN-020).
     async fn record_updated_by_id(
         &self,
         conn: &mut SqliteConnection,
         id: &str,
+        based_on: Option<LogicalTimestamp>,
         rows_affected: u64,
     ) -> Result<()> {
         if rows_affected == 0 {
             return Ok(());
         }
         if let Some(asset) = fetch_asset(conn, id).await? {
-            self.record_asset_state(conn, &asset, Operation::Updated)
+            self.record_asset_state(conn, &asset, Operation::Updated, based_on)
                 .await?;
         }
+        Ok(())
+    }
+
+    /// One id-only column update (archive, unarchive, block, unblock), recorded as an
+    /// Updated change of the asset's full state.
+    async fn update_flag(&self, id: &str, statement: &str, what: &str) -> Result<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .with_context(|| format!("Failed to begin asset {what}"))?;
+        let based_on = current_asset_timestamp(&mut tx, id).await?;
+        let written = sqlx::query(statement)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .with_context(|| format!("Failed to {what} asset with id: {}", id))?;
+        self.record_updated_by_id(&mut tx, id, based_on, written.rows_affected())
+            .await?;
+        tx.commit()
+            .await
+            .with_context(|| format!("Failed to commit asset {what}"))?;
         Ok(())
     }
 }
@@ -211,15 +291,15 @@ impl AssetRepository for SqliteAssetRepository {
             r#"
             SELECT
                 a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
-                c.id as category_id,
-                c.name as category_name,
+                c.id as "category_id?: String",
+                c.name as "category_name?: String",
                 a.is_archived as "is_archived: bool",
                 a.exchange_code,
                 a.price_refresh_blocked as "price_refresh_blocked: bool",
                 a.interest_bearing as "interest_bearing: bool"
             FROM assets a
-            JOIN categories c ON a.category_id = c.id
-            WHERE a.is_deleted = 0 AND a.is_archived = 0 AND c.is_deleted = 0
+            LEFT JOIN categories c ON a.category_id = c.id AND c.is_deleted = 0
+            WHERE a.is_deleted = 0 AND a.is_archived = 0
             "#
         )
         .fetch_all(&self.pool)
@@ -235,15 +315,15 @@ impl AssetRepository for SqliteAssetRepository {
             r#"
             SELECT
                 a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
-                c.id as category_id,
-                c.name as category_name,
+                c.id as "category_id?: String",
+                c.name as "category_name?: String",
                 a.is_archived as "is_archived: bool",
                 a.exchange_code,
                 a.price_refresh_blocked as "price_refresh_blocked: bool",
                 a.interest_bearing as "interest_bearing: bool"
             FROM assets a
-            JOIN categories c ON a.category_id = c.id
-            WHERE a.is_deleted = 0 AND c.is_deleted = 0
+            LEFT JOIN categories c ON a.category_id = c.id AND c.is_deleted = 0
+            WHERE a.is_deleted = 0
             "#
         )
         .fetch_all(&self.pool)
@@ -259,17 +339,15 @@ impl AssetRepository for SqliteAssetRepository {
             r#"
             SELECT
                 a.id, a.name, a.reference, a.isin, a.asset_class, a.currency, a.risk_level,
-                c.id as category_id,
-                c.name as category_name,
+                c.id as "category_id?: String",
+                c.name as "category_name?: String",
                 a.is_archived as "is_archived: bool",
                 a.exchange_code,
                 a.price_refresh_blocked as "price_refresh_blocked: bool",
                 a.interest_bearing as "interest_bearing: bool"
             FROM assets a
-            JOIN categories c ON a.category_id = c.id
-            WHERE a.id = ?
-                AND a.is_deleted = 0
-                AND c.is_deleted = 0
+            LEFT JOIN categories c ON a.category_id = c.id AND c.is_deleted = 0
+            WHERE a.id = ? AND a.is_deleted = 0
             "#,
             id
         )
@@ -304,7 +382,7 @@ impl AssetRepository for SqliteAssetRepository {
         .execute(&mut *tx)
         .await
         .with_context(|| format!("Failed to create asset: {}", asset.name))?;
-        self.record_asset_state(&mut tx, &asset, Operation::Created)
+        self.record_asset_state(&mut tx, &asset, Operation::Created, None)
             .await?;
         tx.commit().await.context("Failed to commit asset create")?;
         Ok(asset)
@@ -318,6 +396,7 @@ impl AssetRepository for SqliteAssetRepository {
             .begin()
             .await
             .context("Failed to begin asset update")?;
+        let based_on = current_asset_timestamp(&mut tx, &asset.id).await?;
         let written = sqlx::query!(
             r#"UPDATE assets SET name = ?, reference = ?, isin = ?, asset_class = ?, currency = ?, risk_level = ?, category_id = ?, exchange_code = ?, interest_bearing = ? WHERE id = ? AND is_archived = 0"#,
             asset.name,
@@ -335,7 +414,7 @@ impl AssetRepository for SqliteAssetRepository {
         .await
         .with_context(|| format!("Failed to update asset with id: {}", asset.id))?;
         if written.rows_affected() > 0 {
-            self.record_asset_state(&mut tx, &asset, Operation::Updated)
+            self.record_asset_state(&mut tx, &asset, Operation::Updated, based_on)
                 .await?;
         }
         tx.commit().await.context("Failed to commit asset update")?;
@@ -348,6 +427,7 @@ impl AssetRepository for SqliteAssetRepository {
             .begin()
             .await
             .context("Failed to begin asset delete")?;
+        let based_on = current_asset_timestamp(&mut tx, id).await?;
         let deleted = sqlx::query!(r#"UPDATE assets SET is_deleted = 1 WHERE id = ?"#, id)
             .execute(&mut *tx)
             .await
@@ -358,7 +438,7 @@ impl AssetRepository for SqliteAssetRepository {
                 asset_identity(id),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut tx, draft).await?;
@@ -368,86 +448,340 @@ impl AssetRepository for SqliteAssetRepository {
     }
 
     async fn archive(&self, id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin asset archive")?;
-        let written = sqlx::query!(
-            r#"UPDATE assets SET is_archived = 1 WHERE id = ? AND is_deleted = 0"#,
-            id
+        self.update_flag(
+            id,
+            "UPDATE assets SET is_archived = 1 WHERE id = ? AND is_deleted = 0",
+            "archive",
         )
-        .execute(&mut *tx)
         .await
-        .with_context(|| format!("Failed to archive asset with id: {}", id))?;
-        self.record_updated_by_id(&mut tx, id, written.rows_affected())
-            .await?;
-        tx.commit()
-            .await
-            .context("Failed to commit asset archive")?;
-        Ok(())
     }
 
     async fn unarchive(&self, id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin asset unarchive")?;
-        let written = sqlx::query!(
-            r#"UPDATE assets SET is_archived = 0 WHERE id = ? AND is_deleted = 0"#,
-            id
+        self.update_flag(
+            id,
+            "UPDATE assets SET is_archived = 0 WHERE id = ? AND is_deleted = 0",
+            "unarchive",
         )
-        .execute(&mut *tx)
         .await
-        .with_context(|| format!("Failed to unarchive asset with id: {}", id))?;
-        self.record_updated_by_id(&mut tx, id, written.rows_affected())
-            .await?;
-        tx.commit()
-            .await
-            .context("Failed to commit asset unarchive")?;
-        Ok(())
     }
 
     async fn block_price_refresh(&self, id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin asset price-refresh block")?;
-        let written = sqlx::query!(
-            r#"UPDATE assets SET price_refresh_blocked = 1 WHERE id = ? AND is_deleted = 0"#,
-            id
+        self.update_flag(
+            id,
+            "UPDATE assets SET price_refresh_blocked = 1 WHERE id = ? AND is_deleted = 0",
+            "price-refresh block",
         )
-        .execute(&mut *tx)
         .await
-        .with_context(|| format!("Failed to block price refresh for asset with id: {}", id))?;
-        self.record_updated_by_id(&mut tx, id, written.rows_affected())
-            .await?;
-        tx.commit()
-            .await
-            .context("Failed to commit asset price-refresh block")?;
-        Ok(())
     }
 
     async fn unblock_price_refresh(&self, id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin asset price-refresh unblock")?;
-        let written = sqlx::query!(
-            r#"UPDATE assets SET price_refresh_blocked = 0 WHERE id = ? AND is_deleted = 0"#,
-            id
+        self.update_flag(
+            id,
+            "UPDATE assets SET price_refresh_blocked = 0 WHERE id = ? AND is_deleted = 0",
+            "price-refresh unblock",
         )
-        .execute(&mut *tx)
         .await
-        .with_context(|| format!("Failed to unblock price refresh for asset with id: {}", id))?;
-        self.record_updated_by_id(&mut tx, id, written.rows_affected())
-            .await?;
-        tx.commit()
+    }
+
+    async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<Option<SyncedRecord>> {
+        match kind {
+            RecordKind::Asset => {
+                let Some(asset) = fetch_asset(conn, identity).await? else {
+                    return Ok(None);
+                };
+                let rank = sqlx::query_as!(
+                    RankRow,
+                    "SELECT sync_logical_timestamp, sync_origin, sync_device_id FROM assets WHERE id = ?",
+                    identity
+                )
+                .fetch_optional(conn)
+                .await
+                .with_context(|| format!("Failed to read the rank of asset {}", identity))?
+                .and_then(RankRow::rank);
+                Ok(Some(SyncedRecord {
+                    rank,
+                    content: serde_json::to_string(&asset)?,
+                }))
+            }
+            RecordKind::Category => {
+                let row = sqlx::query!(
+                    "SELECT id, name, sync_logical_timestamp, sync_origin, sync_device_id FROM categories WHERE id = ?",
+                    identity
+                )
+                .fetch_optional(conn)
+                .await
+                .with_context(|| format!("Failed to read synced category {}", identity))?;
+                row.map(|row| {
+                    let category = AssetCategory::from_storage(row.id, row.name);
+                    Ok(SyncedRecord {
+                        rank: rank_from_columns(
+                            row.sync_logical_timestamp,
+                            row.sync_origin,
+                            row.sync_device_id,
+                        ),
+                        content: serde_json::to_string(&category)?,
+                    })
+                })
+                .transpose()
+            }
+            RecordKind::AssetPrice => {
+                let (asset_id, date) = split_price_identity(identity)?;
+                let row = sqlx::query!(
+                    r#"SELECT asset_id, date, price, source, sync_logical_timestamp, sync_origin, sync_device_id
+                       FROM asset_prices WHERE asset_id = ? AND date = ?"#,
+                    asset_id,
+                    date
+                )
+                .fetch_optional(conn)
+                .await
+                .with_context(|| format!("Failed to read synced asset price {}", identity))?;
+                row.map(|row| {
+                    let source = AssetPriceSource::from_str(&row.source).unwrap_or_else(|_| {
+                        tracing::warn!(target: BACKEND, value = %row.source, "unknown asset_prices.source value, falling back to Manual");
+                        AssetPriceSource::Manual
+                    });
+                    let price = AssetPrice::restore(row.asset_id, row.date, row.price, source);
+                    Ok(SyncedRecord {
+                        rank: rank_from_columns(
+                            row.sync_logical_timestamp,
+                            row.sync_origin,
+                            row.sync_device_id,
+                        ),
+                        content: serde_json::to_string(&price)?,
+                    })
+                })
+                .transpose()
+            }
+            RecordKind::Account
+            | RecordKind::Transaction
+            | RecordKind::FeeSchedule
+            | RecordKind::FeeCatchUpPosition
+            | RecordKind::CurrencyPair
+            | RecordKind::CurrencyRate
+            | RecordKind::HoldingNote => Ok(None),
+        }
+    }
+
+    async fn clashing_category_name_rank(
+        &self,
+        conn: &mut SqliteConnection,
+        category_id: &str,
+        name: &str,
+    ) -> Result<Option<Rank>> {
+        let row = sqlx::query_as!(
+            RankRow,
+            r#"SELECT sync_logical_timestamp, sync_origin, sync_device_id
+               FROM categories WHERE LOWER(name) = LOWER(?) AND id <> ? AND is_deleted = 0
+               ORDER BY sync_origin, sync_logical_timestamp, sync_device_id, id
+               LIMIT 1"#,
+            name,
+            category_id
+        )
+        .fetch_optional(conn)
+        .await
+        .with_context(|| format!("Failed to look up categories named {}", name))?;
+        Ok(row.and_then(RankRow::rank))
+    }
+
+    async fn apply_asset(
+        &self,
+        conn: &mut SqliteConnection,
+        asset: &Asset,
+        rank: &Rank,
+    ) -> Result<()> {
+        let asset_class_str = asset.class.to_string();
+        let exchange_code = asset.exchange.as_ref().map(|e| e.code.clone());
+        let columns = RankColumns::from(rank.clone());
+        sqlx::query!(
+            r#"INSERT INTO assets (id, name, reference, isin, asset_class, currency, risk_level, is_deleted,
+                                   is_archived, category_id, exchange_code, price_refresh_blocked, interest_bearing,
+                                   sync_logical_timestamp, sync_origin, sync_device_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                   name = excluded.name,
+                   reference = excluded.reference,
+                   isin = excluded.isin,
+                   asset_class = excluded.asset_class,
+                   currency = excluded.currency,
+                   risk_level = excluded.risk_level,
+                   is_deleted = 0,
+                   is_archived = excluded.is_archived,
+                   category_id = excluded.category_id,
+                   exchange_code = excluded.exchange_code,
+                   price_refresh_blocked = excluded.price_refresh_blocked,
+                   interest_bearing = excluded.interest_bearing,
+                   sync_logical_timestamp = excluded.sync_logical_timestamp,
+                   sync_origin = excluded.sync_origin,
+                   sync_device_id = excluded.sync_device_id"#,
+            asset.id,
+            asset.name,
+            asset.reference,
+            asset.isin,
+            asset_class_str,
+            asset.currency,
+            asset.risk_level,
+            asset.is_archived,
+            asset.category.id,
+            exchange_code,
+            asset.price_refresh_blocked,
+            asset.interest_bearing,
+            columns.logical_timestamp,
+            columns.origin,
+            columns.device_id
+        )
+        .execute(conn)
+        .await
+        .with_context(|| format!("Failed to apply asset {}", asset.id))?;
+        Ok(())
+    }
+
+    async fn apply_category(
+        &self,
+        conn: &mut SqliteConnection,
+        category: &AssetCategory,
+        rank: &Rank,
+    ) -> Result<()> {
+        let columns = RankColumns::from(rank.clone());
+        sqlx::query!(
+            r#"INSERT INTO categories (id, name, is_deleted, sync_logical_timestamp, sync_origin, sync_device_id)
+               VALUES (?, ?, 0, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                   name = excluded.name,
+                   is_deleted = 0,
+                   sync_logical_timestamp = excluded.sync_logical_timestamp,
+                   sync_origin = excluded.sync_origin,
+                   sync_device_id = excluded.sync_device_id"#,
+            category.id,
+            category.name,
+            columns.logical_timestamp,
+            columns.origin,
+            columns.device_id
+        )
+        .execute(conn)
+        .await
+        .with_context(|| format!("Failed to apply category {}", category.id))?;
+        Ok(())
+    }
+
+    async fn apply_asset_price(
+        &self,
+        conn: &mut SqliteConnection,
+        price: &AssetPrice,
+        rank: &Rank,
+    ) -> Result<()> {
+        let source = price.source.to_string();
+        let columns = RankColumns::from(rank.clone());
+        sqlx::query!(
+            r#"INSERT INTO asset_prices (asset_id, date, price, source, sync_logical_timestamp, sync_origin, sync_device_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(asset_id, date) DO UPDATE SET
+                   price = excluded.price,
+                   source = excluded.source,
+                   sync_logical_timestamp = excluded.sync_logical_timestamp,
+                   sync_origin = excluded.sync_origin,
+                   sync_device_id = excluded.sync_device_id"#,
+            price.asset_id,
+            price.date,
+            price.price,
+            source,
+            columns.logical_timestamp,
+            columns.origin,
+            columns.device_id
+        )
+        .execute(conn)
+        .await
+        .context("Failed to apply asset price")?;
+        Ok(())
+    }
+
+    async fn remove_synced(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<()> {
+        match kind {
+            RecordKind::Asset => {
+                sqlx::query!("UPDATE assets SET is_deleted = 1 WHERE id = ?", identity)
+                    .execute(conn)
+                    .await
+                    .with_context(|| format!("Failed to remove asset {}", identity))?;
+            }
+            RecordKind::Category => {
+                sqlx::query!(
+                    "UPDATE categories SET is_deleted = 1 WHERE id = ?",
+                    identity
+                )
+                .execute(conn)
+                .await
+                .with_context(|| format!("Failed to remove category {}", identity))?;
+            }
+            RecordKind::AssetPrice => {
+                let (asset_id, date) = split_price_identity(identity)?;
+                sqlx::query!(
+                    "DELETE FROM asset_prices WHERE asset_id = ? AND date = ?",
+                    asset_id,
+                    date
+                )
+                .execute(conn)
+                .await
+                .with_context(|| format!("Failed to remove asset price {}", identity))?;
+            }
+            RecordKind::Account
+            | RecordKind::Transaction
+            | RecordKind::FeeSchedule
+            | RecordKind::FeeCatchUpPosition
+            | RecordKind::CurrencyPair
+            | RecordKind::CurrencyRate
+            | RecordKind::HoldingNote => {}
+        }
+        Ok(())
+    }
+
+    async fn discard_asset_prices(&self, conn: &mut SqliteConnection) -> Result<()> {
+        sqlx::query!("DELETE FROM asset_prices")
+            .execute(conn)
             .await
-            .context("Failed to commit asset price-refresh unblock")?;
+            .context("Failed to discard asset prices")?;
+        Ok(())
+    }
+
+    async fn ensure_seeded(
+        &self,
+        conn: &mut SqliteConnection,
+        category: &AssetCategory,
+        asset: &Asset,
+    ) -> Result<()> {
+        sqlx::query!(
+            "INSERT OR IGNORE INTO categories (id, name, is_deleted) VALUES (?, ?, 0)",
+            category.id,
+            category.name
+        )
+        .execute(&mut *conn)
+        .await
+        .with_context(|| format!("Failed to seed category {}", category.id))?;
+        let asset_class_str = asset.class.to_string();
+        sqlx::query!(
+            r#"INSERT OR IGNORE INTO assets (id, name, reference, isin, asset_class, currency, risk_level, is_deleted, is_archived, category_id, exchange_code, interest_bearing)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, NULL, ?)"#,
+            asset.id,
+            asset.name,
+            asset.reference,
+            asset.isin,
+            asset_class_str,
+            asset.currency,
+            asset.risk_level,
+            asset.category.id,
+            asset.interest_bearing
+        )
+        .execute(conn)
+        .await
+        .with_context(|| format!("Failed to seed asset {}", asset.id))?;
         Ok(())
     }
 }
@@ -816,5 +1150,85 @@ mod tests {
             1,
             "only the first (successful) create recorded a change"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // CFR-030 — an asset whose category stands removed (tombstoned by another device's
+    // merge) resolves to the default category on read, instead of disappearing under an
+    // INNER JOIN. `get_all`, `get_all_including_archived`, and `get_by_id` all read
+    // `categories` through `JOIN … WHERE c.is_deleted = 0` today, which drops the asset
+    // entirely once its category is tombstoned — the fix is a `LEFT JOIN` resolving to
+    // `SYSTEM_CATEGORY_ID`, derived on read, nothing rewritten.
+    // -------------------------------------------------------------------------
+
+    use crate::context::asset::SYSTEM_CATEGORY_ID;
+
+    async fn seed_asset_in_a_removed_category(pool: &Pool<Sqlite>, asset_id: &str) {
+        sqlx::query(
+            "INSERT INTO categories (id, name, is_deleted) VALUES ('cat-removed', 'Tech', 0)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed category");
+        sqlx::query(
+            "INSERT INTO assets (id, name, reference, asset_class, currency, risk_level, category_id, is_archived)
+             VALUES (?, 'Orphaned Asset', 'REF', 'Stocks', 'USD', 3, 'cat-removed', 0)",
+        )
+        .bind(asset_id)
+        .execute(pool)
+        .await
+        .expect("seed asset");
+        // Simulates the category's tombstone having applied on this device (CFR-030)
+        // before the asset row itself was ever visited — the state a joining/syncing
+        // device can genuinely be in between applying the two changes.
+        sqlx::query("UPDATE categories SET is_deleted = 1 WHERE id = 'cat-removed'")
+            .execute(pool)
+            .await
+            .expect("mark category removed");
+    }
+
+    // CFR-030 — get_all must still return the asset, with the default category resolved.
+    #[tokio::test]
+    async fn get_all_resolves_a_removed_category_to_the_default_instead_of_dropping_the_asset() {
+        let pool = setup_pool().await;
+        seed_asset_in_a_removed_category(&pool, "asset-orphaned").await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        let assets = repo.get_all().await.unwrap();
+        let orphaned = assets
+            .iter()
+            .find(|asset| asset.id == "asset-orphaned")
+            .expect("CFR-030: the asset must not disappear when its category is tombstoned");
+        assert_eq!(orphaned.category.id, SYSTEM_CATEGORY_ID);
+    }
+
+    // CFR-030 — get_all_including_archived must likewise resolve, not drop.
+    #[tokio::test]
+    async fn get_all_including_archived_resolves_a_removed_category() {
+        let pool = setup_pool().await;
+        seed_asset_in_a_removed_category(&pool, "asset-orphaned").await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        let assets = repo.get_all_including_archived().await.unwrap();
+        let orphaned = assets
+            .iter()
+            .find(|asset| asset.id == "asset-orphaned")
+            .expect("CFR-030: the asset must not disappear when its category is tombstoned");
+        assert_eq!(orphaned.category.id, SYSTEM_CATEGORY_ID);
+    }
+
+    // CFR-030 — get_by_id must likewise resolve, not return None.
+    #[tokio::test]
+    async fn get_by_id_resolves_a_removed_category() {
+        let pool = setup_pool().await;
+        seed_asset_in_a_removed_category(&pool, "asset-orphaned").await;
+        let repo = SqliteAssetRepository::new(pool);
+
+        let asset = repo
+            .get_by_id("asset-orphaned")
+            .await
+            .unwrap()
+            .expect("CFR-030: the asset must still be found by id");
+        assert_eq!(asset.category.id, SYSTEM_CATEGORY_ID);
     }
 }

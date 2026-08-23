@@ -1,11 +1,13 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, Sqlite, SqliteConnection};
 use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::context::account::domain::{HoldingNote, HoldingNoteRepository, ThresholdDirection};
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -67,6 +69,27 @@ fn identity(account_id: &str, asset_id: &str) -> RecordIdentity {
     RecordIdentity::canonical(RecordKind::HoldingNote, &[account_id, asset_id])
 }
 
+/// CFR-011 — the logical timestamp of the note's current state, the `based_on` of the next
+/// local change to it; `None` while absent or never ranked.
+async fn current_timestamp(
+    conn: &mut SqliteConnection,
+    account_id: &str,
+    asset_id: &str,
+) -> Result<Option<LogicalTimestamp>> {
+    let stored = sqlx::query_scalar!(
+        r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String"
+           FROM holding_notes WHERE account_id = ? AND asset_id = ?"#,
+        account_id,
+        asset_id
+    )
+    .fetch_optional(conn)
+    .await
+    .context("read holding note rank")?;
+    Ok(stored
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp)))
+}
+
 #[async_trait]
 impl HoldingNoteRepository for SqliteHoldingNoteRepository {
     async fn upsert(&self, note: &HoldingNote) -> Result<()> {
@@ -84,6 +107,7 @@ impl HoldingNoteRepository for SqliteHoldingNoteRepository {
         .fetch_optional(&mut *tx)
         .await
         .context("lookup holding note")?;
+        let based_on = current_timestamp(&mut tx, &note.account_id, &note.asset_id).await?;
         sqlx::query!(
             r#"INSERT INTO holding_notes (account_id, asset_id, text, threshold_price, threshold_direction)
                VALUES (?, ?, ?, ?, ?)
@@ -110,7 +134,7 @@ impl HoldingNoteRepository for SqliteHoldingNoteRepository {
             identity(&note.account_id, &note.asset_id),
             operation,
             Origin::User,
-            None,
+            based_on,
             Some(serde_json::to_string(note)?),
         );
         let rank = self.change_recorder.record(&mut tx, draft).await?;
@@ -140,6 +164,7 @@ impl HoldingNoteRepository for SqliteHoldingNoteRepository {
             .begin()
             .await
             .context("begin delete holding note")?;
+        let based_on = current_timestamp(&mut tx, account_id, asset_id).await?;
         let deleted = sqlx::query!(
             r#"DELETE FROM holding_notes WHERE account_id = ? AND asset_id = ?"#,
             account_id,
@@ -154,7 +179,7 @@ impl HoldingNoteRepository for SqliteHoldingNoteRepository {
                 identity(account_id, asset_id),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut tx, draft).await?;

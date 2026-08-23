@@ -1,16 +1,22 @@
-//! Application layer of the sync bounded context (B0/B38). `resolution.rs`'s consumer (the
-//! full apply executor) lands in PR-C — PR-B ships publish-only.
+//! Application layer of the sync bounded context (B0/B38): the first-device enrolment, the
+//! join rebuild, the sync run with its apply executor (the resolution engine's only
+//! consumer), the settling-interval batcher, and the device-lifecycle service.
 
+/// The apply executor — carries out the resolution engine's decisions (D4).
+pub mod apply;
 /// Enrolling as the first device of a new shared portfolio (SYN-013/026/081).
 pub mod first_publish;
+/// Joining a portfolio another device created — the full-history rebuild (SYN-014/036/080).
+pub mod join;
 /// Settling-interval batching, 5s / 30s cap (SYN-067).
 pub mod publisher;
-/// One sync run — publish-only in PR-B (SYN-060/061/067/069).
+/// One sync run: publish, read, apply (SYN-060/061/065/067/069).
 pub mod run;
 /// `SyncService` — device lifecycle, status assembly, notice dismissal.
 pub mod service;
 
 pub use first_publish::FirstPublish;
+pub use join::JoinError;
 pub use publisher::Publisher;
-pub use run::SyncRun;
+pub use run::{SyncGate, SyncRun};
 pub use service::SyncService;

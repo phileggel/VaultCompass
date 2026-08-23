@@ -1,6 +1,8 @@
 use crate::context::currency::domain::{CurrencyRate, CurrencyRateRepository, CurrencyRateSource};
 use crate::core::logger::BACKEND;
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -77,8 +79,8 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
             .begin()
             .await
             .context("Failed to begin currency rate upsert")?;
-        let existing = sqlx::query_scalar!(
-            "SELECT date FROM currency_rates WHERE from_currency = ? AND to_currency = ? AND date = ?",
+        let existing = sqlx::query!(
+            "SELECT sync_logical_timestamp FROM currency_rates WHERE from_currency = ? AND to_currency = ? AND date = ?",
             rate.from_currency,
             rate.to_currency,
             rate.date
@@ -86,6 +88,11 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
         .fetch_optional(&mut *tx)
         .await
         .context("Failed to look up currency rate")?;
+        // CFR-011 — the next change is based on the state this device holds.
+        let based_on = existing
+            .as_ref()
+            .and_then(|row| row.sync_logical_timestamp.as_deref())
+            .and_then(LogicalTimestamp::from_wire);
         sqlx::query!(
             "INSERT INTO currency_rates (from_currency, to_currency, date, rate, source)
              VALUES (?, ?, ?, ?, ?)
@@ -105,12 +112,18 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
         } else {
             Operation::Created
         };
+        // CFR-016 — a rate the application fetched on its own is an application change.
+        let origin = if rate.source == CurrencyRateSource::Manual {
+            Origin::User
+        } else {
+            Origin::Application
+        };
         let draft = ChangeDraft::new(
             RecordKind::CurrencyRate,
             identity(&rate.from_currency, &rate.to_currency, &rate.date),
             operation,
-            Origin::User,
-            None,
+            origin,
+            based_on,
             Some(serde_json::to_string(&rate)?),
         );
         let rank = self.change_recorder.record(&mut tx, draft).await?;
@@ -142,6 +155,18 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
             .begin()
             .await
             .context("Failed to begin currency rate delete")?;
+        let based_on = sqlx::query_scalar!(
+            r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String"
+               FROM currency_rates WHERE from_currency = ? AND to_currency = ? AND date = ?"#,
+            from_currency,
+            to_currency,
+            date,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to read currency rate rank")?
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp));
         let deleted = sqlx::query!(
             "DELETE FROM currency_rates
              WHERE from_currency = ? AND to_currency = ? AND date = ?",
@@ -158,7 +183,7 @@ impl CurrencyRateRepository for SqliteCurrencyRateRepository {
                 identity(from_currency, to_currency, date),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut tx, draft).await?;

@@ -1,5 +1,6 @@
+use super::currency_rate::CurrencyRate;
 use crate::context::currency::error::CurrencyError;
-use crate::shared::domain::Rank;
+use crate::shared::domain::{Rank, RecordKind, SyncedRecord};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -84,6 +85,39 @@ pub trait CurrencyPairRepository: Send + Sync {
     /// NULL (CFR-014, D6), on `conn` — the first publish's enrolment transaction (SYN-013).
     /// Returns how many rows were stamped.
     async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64>;
+
+    /// The synced record of `kind` this device holds for `identity` — its rank and its
+    /// content as the change capture serializes it (CFR-014) — on `conn`; `None` when it
+    /// holds none. Covers currency pairs and currency rates.
+    async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<Option<SyncedRecord>>;
+    /// Writes a currency pair verbatim, stamped with `rank`, on `conn` (CFR-017/034).
+    async fn apply_pair(
+        &self,
+        conn: &mut SqliteConnection,
+        pair: &CurrencyPair,
+        rank: &Rank,
+    ) -> Result<()>;
+    /// Writes a currency rate verbatim, stamped with `rank`, on `conn` (CFR-050).
+    async fn apply_rate(
+        &self,
+        conn: &mut SqliteConnection,
+        rate: &CurrencyRate,
+        rank: &Rank,
+    ) -> Result<()>;
+    /// Removes the synced record of `kind` for `identity`, on `conn`. A no-op when absent.
+    async fn remove_synced(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<()>;
+    /// SYN-083 — deletes every currency rate and currency pair, on `conn`.
+    async fn discard_pairs_and_rates(&self, conn: &mut SqliteConnection) -> Result<()>;
 }
 
 #[cfg(test)]

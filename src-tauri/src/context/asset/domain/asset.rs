@@ -1,8 +1,9 @@
+use super::asset_price::AssetPrice;
 use super::category::AssetCategory;
 use super::exchange::{self, Exchange};
 use super::isin::validate_isin;
 use crate::context::asset::error::AssetError;
-use crate::shared::domain::Rank;
+use crate::shared::domain::{Rank, RecordKind, SyncedRecord};
 use anyhow::Result;
 use async_trait::async_trait;
 use iso_currency::Currency;
@@ -1090,4 +1091,63 @@ pub trait AssetRepository: Send + Sync {
     /// NULL (CFR-014, D6), on `conn` — the first publish's enrolment transaction (SYN-013).
     /// Returns how many rows were stamped.
     async fn stamp_sync_rank(&self, conn: &mut SqliteConnection, rank: &Rank) -> Result<u64>;
+
+    /// The synced record of `kind` this device holds for `identity` — its rank and its
+    /// content as the change capture serializes it (CFR-014) — on `conn`; `None` when it
+    /// holds none. Covers assets, categories, and asset prices.
+    async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<Option<SyncedRecord>>;
+    /// The rank of another live category carrying `name` (case-insensitive, CFR-035), on
+    /// `conn` — the lowest-ranked one, then by id, when several do; `None` when no other
+    /// category does or it has never been ranked.
+    async fn clashing_category_name_rank(
+        &self,
+        conn: &mut SqliteConnection,
+        category_id: &str,
+        name: &str,
+    ) -> Result<Option<Rank>>;
+    /// Writes `asset` verbatim — created or replaced in full, whatever its archived state —
+    /// stamped with `rank` (CFR-017/014), on `conn`.
+    async fn apply_asset(
+        &self,
+        conn: &mut SqliteConnection,
+        asset: &Asset,
+        rank: &Rank,
+    ) -> Result<()>;
+    /// Writes `category` verbatim, stamped with `rank`, on `conn` (CFR-017).
+    async fn apply_category(
+        &self,
+        conn: &mut SqliteConnection,
+        category: &AssetCategory,
+        rank: &Rank,
+    ) -> Result<()>;
+    /// Writes an asset price verbatim, stamped with `rank`, on `conn` (CFR-050).
+    async fn apply_asset_price(
+        &self,
+        conn: &mut SqliteConnection,
+        price: &AssetPrice,
+        rank: &Rank,
+    ) -> Result<()>;
+    /// Removes the synced record of `kind` for `identity`, on `conn`: an asset or a category
+    /// is soft-deleted, a price deleted. A no-op when absent.
+    async fn remove_synced(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<()>;
+    /// SYN-083 — deletes every asset price, on `conn`.
+    async fn discard_asset_prices(&self, conn: &mut SqliteConnection) -> Result<()>;
+    /// Ensures the system-seeded `category` and `asset` exist, on `conn` (SYN-027/CSH-010);
+    /// rows already present are left untouched.
+    async fn ensure_seeded(
+        &self,
+        conn: &mut SqliteConnection,
+        category: &AssetCategory,
+        asset: &Asset,
+    ) -> Result<()>;
 }

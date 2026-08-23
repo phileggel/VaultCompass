@@ -1,7 +1,8 @@
 //! Cross-BC orchestration for the seven sync commands that read from or write into the
 //! account/asset/currency bounded contexts (D3, ADR-003/ADR-004): a first publish reads the
-//! whole portfolio, a join rebuilds it (PR-C), and status enriches with inconsistent holdings
-//! (PR-C). Injects each BC's service — never a repository, never a sibling use case (B18).
+//! whole portfolio, a join rebuilds it, a run applies other devices' changes through the
+//! owning services (`ServiceChangeApplier`), and status enriches with inconsistent holdings.
+//! Injects each BC's service — never a repository, never a sibling use case (B18).
 
 use std::sync::Arc;
 
@@ -10,12 +11,24 @@ use crate::context::asset::{AssetService, SYSTEM_CATEGORY_ID};
 use crate::context::currency::CurrencyService;
 use crate::context::sync::{
     ensure_device_name, ensure_passphrase_length, header_data_format_version, FirstPublish,
-    FolderStore, SyncError, SyncFailure, SyncFolderState, SyncReport, SyncRun, SyncService,
-    SyncStateRepository, SyncStatus, DATA_FORMAT_VERSION,
+    FolderStore, InconsistentHolding, JoinError, SyncError, SyncFailure, SyncFolderState,
+    SyncReport, SyncRun, SyncService, SyncStateRepository, SyncStatus, DATA_FORMAT_VERSION,
 };
 use crate::core::cash::{is_cash_asset, SYSTEM_CASH_CATEGORY_ID};
+use crate::use_cases::shared::inconsistency::holding_inconsistency;
 
+use super::applier::ServiceChangeApplier;
 use super::error::{PortfolioSyncError, PortfolioSyncTask};
+
+impl From<JoinError> for PortfolioSyncError {
+    fn from(error: JoinError) -> Self {
+        match error {
+            JoinError::Sync(error) => error.into(),
+            JoinError::HistoryIncomplete => PortfolioSyncTask::HistoryIncomplete.into(),
+            JoinError::RebuildInterrupted => PortfolioSyncTask::RebuildInterrupted.into(),
+        }
+    }
+}
 
 /// Orchestrates the cross-BC sync commands (D3).
 pub struct PortfolioSyncOrchestrator {
@@ -27,6 +40,7 @@ pub struct PortfolioSyncOrchestrator {
     sync_run: Arc<SyncRun>,
     state_repo: Arc<dyn SyncStateRepository>,
     folder_store: Arc<dyn FolderStore>,
+    applier: ServiceChangeApplier,
 }
 
 impl PortfolioSyncOrchestrator {
@@ -43,6 +57,11 @@ impl PortfolioSyncOrchestrator {
         state_repo: Arc<dyn SyncStateRepository>,
         folder_store: Arc<dyn FolderStore>,
     ) -> Self {
+        let applier = ServiceChangeApplier::new(
+            Arc::clone(&account_service),
+            Arc::clone(&asset_service),
+            Arc::clone(&currency_service),
+        );
         Self {
             account_service,
             asset_service,
@@ -52,6 +71,7 @@ impl PortfolioSyncOrchestrator {
             sync_run,
             state_repo,
             folder_store,
+            applier,
         }
     }
 
@@ -110,8 +130,9 @@ impl PortfolioSyncOrchestrator {
     }
 
     /// Enables sync (SYN-011). The first-device branch (no header yet) delegates to
-    /// `FirstPublish`; the join branch (a header already exists) always returns
-    /// `InstallationHoldsUserData` in PR-B — the rebuild ships in PR-C.
+    /// `FirstPublish`; the join branch (a header already exists) rebuilds the portfolio
+    /// from the folder's history (SYN-014/036/080) — only on an installation that holds no
+    /// user data (`InstallationHoldsUserData`).
     pub async fn enable_sync(
         &self,
         folder: String,
@@ -122,12 +143,18 @@ impl PortfolioSyncOrchestrator {
             return Err(SyncError::AlreadyEnabled.into());
         }
         self.folder_store.retarget(&folder);
-        if self.folder_store.read_header_bytes().await?.is_some() {
+        if self.folder_store.read_header_bytes().await?.is_none() {
+            return Ok(self
+                .first_publish
+                .enable_as_first_device(folder, passphrase, device_name)
+                .await?);
+        }
+        if self.installation_holds_user_data().await? {
             return Err(PortfolioSyncTask::InstallationHoldsUserData.into());
         }
         Ok(self
-            .first_publish
-            .enable_as_first_device(folder, passphrase, device_name)
+            .sync_run
+            .join(&self.applier, folder, passphrase, device_name)
             .await?)
     }
 
@@ -170,7 +197,8 @@ impl PortfolioSyncOrchestrator {
         Ok(self.first_publish.change_folder(device, folder).await?)
     }
 
-    /// Runs a publish-only sync immediately (SYN-061).
+    /// Runs a full sync immediately (SYN-061): publish, then apply the other devices'
+    /// changes through the owning services.
     pub async fn sync_now(&self) -> Result<SyncReport, PortfolioSyncError> {
         let device = self
             .state_repo
@@ -178,7 +206,7 @@ impl PortfolioSyncOrchestrator {
             .await?
             .ok_or(SyncError::SyncDisabled)?;
         device.ensure_not_paused()?;
-        let report = self.sync_run.publish(&device).await?;
+        let report = self.sync_run.run(&device, &self.applier).await?;
         self.sync_service.remember_run(&report);
         Ok(report)
     }
@@ -194,7 +222,7 @@ impl PortfolioSyncOrchestrator {
             .await
             .map_err(|problem| SyncError::FolderUnavailable { problem })?;
         let resumed = device.resume()?;
-        let report = self.sync_run.publish(&resumed).await?;
+        let report = self.sync_run.run(&resumed, &self.applier).await?;
         if let Some(problem) = report.failures.iter().find_map(|failure| match failure {
             SyncFailure::FolderUnavailable { problem } => Some(*problem),
             _ => None,
@@ -208,9 +236,41 @@ impl PortfolioSyncOrchestrator {
         Ok(report)
     }
 
-    /// Reads the current sync status, enriched with inconsistent holdings (PR-C).
+    /// Reads the current sync status, enriched with the holdings whose replayed ledger
+    /// breaks an invariant (CFR-042/SYN-040) — a cross-BC read of the account BC's holdings
+    /// and the asset BC's names.
     pub async fn get_sync_status(&self) -> Result<SyncStatus, PortfolioSyncError> {
-        Ok(self.sync_service.status().await?)
+        let mut status = self.sync_service.status().await?;
+        status.inconsistent_holdings = self.inconsistent_holdings().await?;
+        Ok(status)
+    }
+
+    async fn inconsistent_holdings(&self) -> Result<Vec<InconsistentHolding>, PortfolioSyncError> {
+        let mut inconsistent = Vec::new();
+        for account in self.account_service.get_all().await? {
+            for holding in self
+                .account_service
+                .get_holdings_for_account(&account.id)
+                .await?
+            {
+                let Some(reason) = holding_inconsistency(&holding) else {
+                    continue;
+                };
+                let asset_name = self
+                    .asset_service
+                    .get_asset_by_id(&holding.asset_id)
+                    .await?
+                    .map_or_else(|| holding.asset_id.clone(), |asset| asset.name);
+                inconsistent.push(InconsistentHolding {
+                    account_id: account.id.clone(),
+                    account_name: account.name.clone(),
+                    asset_id: holding.asset_id,
+                    asset_name,
+                    reason,
+                });
+            }
+        }
+        Ok(inconsistent)
     }
 }
 
@@ -225,10 +285,16 @@ mod tests {
         SqliteAssetCategoryRepository, SqliteAssetPriceRepository, SqliteAssetRepository,
     };
     use crate::context::currency::{SqliteCurrencyPairRepository, SqliteCurrencyRateRepository};
-    use crate::context::sync::{
-        FolderProblem, MockFolderStore, MockSyncStateRepository, SqliteChangeLogRepository,
-        SqliteSyncStateRepository, SyncDevice,
+    use crate::context::sync::infrastructure::codec::{
+        encode_header, encode_manifest, encode_segment,
     };
+    use crate::context::sync::infrastructure::crypto::{derive_key, make_check};
+    use crate::context::sync::{
+        segment_file_name, DerivationParameters, FolderHeader, FolderProblem, Manifest,
+        MockFolderStore, MockSyncStateRepository, Segment, SegmentChange,
+        SqliteChangeLogRepository, SqliteSyncStateRepository, SyncDevice,
+    };
+    use crate::shared::domain::{Operation, Origin, RecordKind};
     use crate::use_cases::portfolio_sync::{ServicePortfolioSnapshot, ServiceRankStamper};
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -247,6 +313,8 @@ mod tests {
 
     struct Ctx {
         orchestrator: PortfolioSyncOrchestrator,
+        account_service: Arc<AccountService>,
+        asset_service: Arc<AssetService>,
     }
 
     fn build_ctx_with_state_repo(
@@ -273,6 +341,7 @@ mod tests {
             change_log.clone(),
             Arc::clone(&state_repo),
             Arc::clone(&folder_store),
+            Arc::new(crate::shared::infrastructure::change_recorder::NoopChangeRecorder),
         ));
         let sync_service = Arc::new(
             SyncService::new(Arc::clone(&state_repo), Arc::clone(&folder_store))
@@ -296,8 +365,8 @@ mod tests {
             snapshot,
         ));
         let orchestrator = PortfolioSyncOrchestrator::new(
-            account_service,
-            asset_service,
+            Arc::clone(&account_service),
+            Arc::clone(&asset_service),
             currency_service,
             sync_service,
             first_publish,
@@ -305,7 +374,11 @@ mod tests {
             state_repo,
             folder_store,
         );
-        Ctx { orchestrator }
+        Ctx {
+            orchestrator,
+            account_service,
+            asset_service,
+        }
     }
 
     fn device() -> SyncDevice {
@@ -439,10 +512,10 @@ mod tests {
         ));
     }
 
-    // D3/SYN-014 — the join branch (a header already exists) always returns
-    // InstallationHoldsUserData in PR-B; the rebuild is PR-C's job.
+    // SYN-014 — the join branch (a header already exists) rejects an installation that
+    // holds user data before reading anything else from the folder.
     #[tokio::test]
-    async fn enable_sync_join_branch_always_returns_installation_holds_user_data_in_pr_b() {
+    async fn enable_sync_join_branch_rejects_an_installation_holding_user_data() {
         let pool = make_pool().await;
         let mut state_repo = MockSyncStateRepository::new();
         state_repo.expect_get_device().returning(|| Ok(None));
@@ -452,6 +525,16 @@ mod tests {
             .expect_read_header_bytes()
             .returning(|| Ok(Some(b"{\"data_format_version\":1}".to_vec())));
         let ctx = build_ctx_with_state_repo(&pool, Arc::new(state_repo), Arc::new(folder_store));
+        ctx.account_service
+            .create(
+                "Mine".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
 
         let result = ctx
             .orchestrator
@@ -634,5 +717,363 @@ mod tests {
             .await
             .expect("must not error");
         assert!(!status.enabled);
+    }
+
+    // -------------------------------------------------------------------------
+    // SYN-014/015/036/080 — the join / rebuild branch of enable_sync
+    // -------------------------------------------------------------------------
+
+    const PASSPHRASE: &str = "correct horse battery staple";
+
+    fn empty_install_state_repo() -> MockSyncStateRepository {
+        let mut state_repo = MockSyncStateRepository::new();
+        state_repo.expect_get_device().returning(|| Ok(None));
+        state_repo
+    }
+
+    /// The portfolio Desktop published: its header (sealed check under the key the
+    /// passphrase derives), a manifest at sequence 1, and one segment — the bytes a joining
+    /// device reads from the folder.
+    struct PublishedPortfolio {
+        header: Vec<u8>,
+        manifest: Vec<u8>,
+        segment: Vec<u8>,
+        segment_name: String,
+    }
+
+    fn published_portfolio(
+        changes: Vec<SegmentChange>,
+        latest_sequence: i64,
+    ) -> PublishedPortfolio {
+        let derivation_parameters = DerivationParameters {
+            salt: vec![7; 16],
+            memory_cost_kib: 19_456,
+            iterations: 2,
+            parallelism: 1,
+        };
+        let key = derive_key(PASSPHRASE, &derivation_parameters).expect("key derives");
+        let header = encode_header(&FolderHeader {
+            derivation_parameters,
+            passphrase_check: make_check(&key),
+            data_format_version: DATA_FORMAT_VERSION,
+            created_at: format!("{:020}", 1),
+            created_by_device_id: "desktop-device".into(),
+        })
+        .expect("header encodes");
+        let manifest = encode_manifest(
+            &key,
+            &Manifest {
+                device_id: "desktop-device".into(),
+                device_name: "Desktop".into(),
+                data_format_version: DATA_FORMAT_VERSION,
+                latest_sequence,
+            },
+        )
+        .expect("manifest encodes");
+        let changes_count = changes.len() as i64;
+        let segment = encode_segment(
+            &key,
+            &Segment {
+                device_id: "desktop-device".into(),
+                first_sequence: 1,
+                last_sequence: changes_count,
+                data_format_version: DATA_FORMAT_VERSION,
+                changes,
+            },
+        )
+        .expect("segment encodes");
+        PublishedPortfolio {
+            header,
+            manifest,
+            segment,
+            segment_name: segment_file_name(1, changes_count),
+        }
+    }
+
+    fn desktop_change(
+        sequence: i64,
+        record_kind: RecordKind,
+        identity: &str,
+        content: &str,
+    ) -> SegmentChange {
+        SegmentChange {
+            sequence,
+            logical_timestamp: format!("{:020}", 1),
+            based_on: None,
+            record_kind,
+            record_identity: identity.into(),
+            operation: Operation::Created,
+            origin: Origin::User,
+            content: Some(content.into()),
+        }
+    }
+
+    /// The folder as the joiner sees it: Desktop's area, and room for the joiner's manifest.
+    fn folder_holding(published: PublishedPortfolio) -> MockFolderStore {
+        let mut folder_store = MockFolderStore::new();
+        folder_store.expect_retarget().return_const(());
+        folder_store.expect_check_available().returning(|| Ok(()));
+        let header = published.header;
+        folder_store
+            .expect_read_header_bytes()
+            .returning(move || Ok(Some(header.clone())));
+        folder_store
+            .expect_list_device_ids()
+            .returning(|| Ok(vec!["desktop-device".into()]));
+        let manifest = published.manifest;
+        folder_store
+            .expect_read_manifest_bytes()
+            .returning(move |_| Ok(Some(manifest.clone())));
+        let segment_names = vec![published.segment_name];
+        folder_store
+            .expect_list_segment_names()
+            .returning(move |_| Ok(segment_names.clone()));
+        let segment = published.segment;
+        folder_store
+            .expect_read_segment_bytes()
+            .returning(move |_, _| Ok(Some(segment.clone())));
+        folder_store
+            .expect_write_manifest()
+            .returning(|_, _| Ok(()));
+        folder_store
+            .expect_remove_device_area()
+            .returning(|_| Ok(()));
+        folder_store
+    }
+
+    fn account_content(id: &str, name: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","name":"{name}","bank_name":"","currency":"EUR","update_frequency":"ManualMonth","management_fees_enabled":false}}"#
+        )
+    }
+
+    // SYN-014/036 — a fresh installation joining an existing portfolio rebuilds it by
+    // replaying every published change: the account Desktop published exists locally, the
+    // device row is written, and the cursor on Desktop stands at its latest sequence.
+    #[tokio::test]
+    async fn enable_sync_join_branch_rebuilds_when_installation_holds_no_user_data() {
+        let pool = make_pool().await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let published = published_portfolio(
+            vec![desktop_change(
+                1,
+                RecordKind::Account,
+                "account-desktop",
+                &account_content("account-desktop", "Livret A"),
+            )],
+            1,
+        );
+        let ctx = build_ctx_with_state_repo(
+            &pool,
+            Arc::clone(&state_repo),
+            Arc::new(folder_holding(published)),
+        );
+
+        let result = ctx
+            .orchestrator
+            .enable_sync("/tmp/sync".into(), PASSPHRASE.into(), "Laptop".into())
+            .await;
+        assert!(
+            matches!(&result, Ok(status) if status.enabled),
+            "SYN-014/036: a fresh installation must rebuild and succeed, got {result:?}"
+        );
+        let account = ctx
+            .account_service
+            .get_by_id("account-desktop")
+            .await
+            .unwrap()
+            .expect("SYN-036: the replayed account must exist locally");
+        assert_eq!(account.name, "Livret A");
+        assert_eq!(
+            state_repo
+                .get_cursor("desktop-device")
+                .await
+                .unwrap()
+                .map(|cursor| cursor.applied_through),
+            Some(1),
+            "SYN-033: the cursor on Desktop must stand at its latest sequence"
+        );
+    }
+
+    // SYN-015 — a passphrase that does not match the portfolio's is rejected before
+    // anything is read or rebuilt: the state repository is never written.
+    #[tokio::test]
+    async fn enable_sync_join_branch_rejects_passphrase_mismatch_before_rebuilding() {
+        let pool = make_pool().await;
+        let published = published_portfolio(vec![], 0);
+        let ctx = build_ctx_with_state_repo(
+            &pool,
+            Arc::new(empty_install_state_repo()),
+            Arc::new(folder_holding(published)),
+        );
+
+        let result = ctx
+            .orchestrator
+            .enable_sync(
+                "/tmp/sync".into(),
+                "a wrong passphrase, still long enough".into(),
+                "Laptop".into(),
+            )
+            .await;
+        assert!(
+            matches!(
+                result,
+                Err(PortfolioSyncError::Sync(SyncError::PassphraseMismatch))
+            ),
+            "SYN-015: a wrong passphrase must be rejected before any rebuild, got {result:?}"
+        );
+    }
+
+    // SYN-036 — a manifest announcing more history than the segments carry rejects with
+    // HistoryIncomplete: a join never skips a file the way a steady-state sync does.
+    #[tokio::test]
+    async fn enable_sync_join_branch_returns_history_incomplete_on_unreadable_segment() {
+        let pool = make_pool().await;
+        let published = published_portfolio(
+            vec![desktop_change(
+                1,
+                RecordKind::Account,
+                "account-desktop",
+                &account_content("account-desktop", "Livret A"),
+            )],
+            2,
+        );
+        let ctx = build_ctx_with_state_repo(
+            &pool,
+            Arc::new(empty_install_state_repo()),
+            Arc::new(folder_holding(published)),
+        );
+
+        let result = ctx
+            .orchestrator
+            .enable_sync("/tmp/sync".into(), PASSPHRASE.into(), "Laptop".into())
+            .await;
+        assert!(
+            matches!(
+                result,
+                Err(PortfolioSyncError::Task(
+                    PortfolioSyncTask::HistoryIncomplete
+                ))
+            ),
+            "SYN-036: an unreadable segment in the replay set must be HistoryIncomplete, \
+             got {result:?}"
+        );
+    }
+
+    // SYN-080 — a rebuild interrupted partway (a change whose content this build cannot
+    // write) leaves the device exactly as before: no sync_device row, no account, retriable.
+    #[tokio::test]
+    async fn enable_sync_join_branch_rolls_back_after_a_rebuild_interruption() {
+        let pool = make_pool().await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let published = published_portfolio(
+            vec![
+                desktop_change(
+                    1,
+                    RecordKind::Account,
+                    "account-desktop",
+                    &account_content("account-desktop", "Livret A"),
+                ),
+                // Passes the SYN-034 shape check (its identity is its own `id`) but cannot be
+                // written — the required fields are missing — so the rebuild is interrupted.
+                desktop_change(
+                    2,
+                    RecordKind::Account,
+                    "account-broken",
+                    r#"{"id":"account-broken","name":"Broken"}"#,
+                ),
+            ],
+            2,
+        );
+        let ctx = build_ctx_with_state_repo(&pool, state_repo, Arc::new(folder_holding(published)));
+
+        let result = ctx
+            .orchestrator
+            .enable_sync("/tmp/sync".into(), PASSPHRASE.into(), "Laptop".into())
+            .await;
+        assert!(
+            matches!(
+                result,
+                Err(PortfolioSyncError::Task(
+                    PortfolioSyncTask::RebuildInterrupted
+                ))
+            ),
+            "SYN-080: an interrupted rebuild must be reported as RebuildInterrupted, \
+             got {result:?}"
+        );
+        let device_row_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sync_device")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            device_row_count, 0,
+            "SYN-080: an interrupted rebuild must leave no sync_device row"
+        );
+        assert!(
+            ctx.account_service
+                .get_by_id("account-desktop")
+                .await
+                .unwrap()
+                .is_none(),
+            "SYN-080: the change applied before the interruption must be rolled back"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // get_sync_status — cross-BC enrichment with inconsistent holdings (CFR-042/SYN-040)
+    // -------------------------------------------------------------------------
+
+    // get_sync_status must enrich SyncStatus.inconsistent_holdings from the account BC's
+    // replayed ledger — a cross-BC read, like account_details — not always report empty.
+    #[tokio::test]
+    async fn get_sync_status_enriches_inconsistent_holdings_from_the_account_bc() {
+        let pool = make_pool().await;
+        let mut state_repo = MockSyncStateRepository::new();
+        state_repo
+            .expect_get_device()
+            .returning(|| Ok(Some(device())));
+        state_repo
+            .expect_list_undismissed_notices()
+            .returning(|| Ok(vec![]));
+        state_repo.expect_list_held_back().returning(|| Ok(vec![]));
+        let ctx = build_ctx_with_state_repo(
+            &pool,
+            Arc::new(state_repo),
+            Arc::new(MockFolderStore::new()),
+        );
+        let account = ctx
+            .account_service
+            .create(
+                "Inconsistent".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        ctx.asset_service.seed_cash_asset("EUR").await.unwrap();
+        ctx.account_service
+            .seed_cash_holding(&account.id)
+            .await
+            .unwrap();
+        let cash_asset_id = crate::core::cash::system_cash_asset_id("EUR");
+        sqlx::query(
+            "UPDATE holdings SET quantity = -5000000 WHERE account_id = ? AND asset_id = ?",
+        )
+        .bind(&account.id)
+        .bind(&cash_asset_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let status = ctx.orchestrator.get_sync_status().await.unwrap();
+        assert!(
+            !status.inconsistent_holdings.is_empty(),
+            "CFR-042/SYN-040: an overdrawn cash holding must be enriched into \
+             get_sync_status().inconsistent_holdings"
+        );
     }
 }

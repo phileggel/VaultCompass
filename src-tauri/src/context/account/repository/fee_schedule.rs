@@ -5,7 +5,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::context::account::domain::{FeeFrequency, FeeSchedule, FeeScheduleRepository};
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -96,9 +98,30 @@ fn identity(account_id: &str, asset_id: &str) -> RecordIdentity {
     RecordIdentity::canonical(RecordKind::FeeSchedule, &[account_id, asset_id])
 }
 
+/// CFR-011 — the logical timestamp of the schedule's current state, the `based_on` of the
+/// next local change to it; `None` while absent or never ranked.
+async fn current_timestamp(
+    conn: &mut SqliteConnection,
+    account_id: &str,
+    asset_id: &str,
+) -> Result<Option<LogicalTimestamp>> {
+    let stored = sqlx::query_scalar!(
+        r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String"
+           FROM fee_schedules WHERE account_id = ? AND asset_id = ?"#,
+        account_id,
+        asset_id
+    )
+    .fetch_optional(conn)
+    .await
+    .context("read fee schedule rank")?;
+    Ok(stored
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp)))
+}
+
 /// The schedule's own state as change content: `last_applied_period` is the derived read
 /// of its `FeeCatchUpPosition` (CFR-044), never part of the schedule record.
-fn schedule_content(schedule: &FeeSchedule) -> Result<String> {
+pub(super) fn schedule_content(schedule: &FeeSchedule) -> Result<String> {
     let mut value = serde_json::to_value(schedule)?;
     if let Some(fields) = value.as_object_mut() {
         fields.remove("last_applied_period");
@@ -220,6 +243,7 @@ impl FeeScheduleRepository for SqliteFeeScheduleRepository {
             .begin()
             .await
             .context("begin update fee schedule")?;
+        let based_on = current_timestamp(&mut tx, &schedule.account_id, &schedule.asset_id).await?;
         let written = sqlx::query!(
             r#"UPDATE fee_schedules
                SET annual_rate_micros = ?, frequency = ?, start_date = ?, end_date = ?, active = ?
@@ -240,7 +264,7 @@ impl FeeScheduleRepository for SqliteFeeScheduleRepository {
                 identity(&schedule.account_id, &schedule.asset_id),
                 Operation::Updated,
                 Origin::User,
-                None,
+                based_on,
                 Some(schedule_content(schedule)?),
             );
             self.record(&mut tx, &schedule.id, draft).await?;
@@ -255,6 +279,7 @@ impl FeeScheduleRepository for SqliteFeeScheduleRepository {
             .begin()
             .await
             .context("begin delete fee schedule")?;
+        let based_on = current_timestamp(&mut tx, account_id, asset_id).await?;
         let deleted = sqlx::query!(
             r#"DELETE FROM fee_schedules WHERE account_id = ? AND asset_id = ?"#,
             account_id,
@@ -269,7 +294,7 @@ impl FeeScheduleRepository for SqliteFeeScheduleRepository {
                 identity(account_id, asset_id),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut tx, draft).await?;

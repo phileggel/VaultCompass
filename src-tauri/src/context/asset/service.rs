@@ -6,7 +6,7 @@ use super::error::AssetError;
 use crate::{
     context::asset::{CreateAssetDTO, UpdateAssetDTO},
     core::{Event, SideEffectEventBus, BACKEND},
-    shared::domain::Rank,
+    shared::domain::{Rank, RecordKind, SyncedRecord},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -345,10 +345,18 @@ impl AssetService {
         label: &str,
     ) -> StdResult<AssetCategory, AssetError> {
         let existing = load_category_for_crud(&*self.category_repo, id).await?;
+        // CFR-035 — the uniqueness rule (CAT-001) binds the label being set: a label that
+        // already clashes after a merge is accepted unchanged, a rename into another
+        // category's label is rejected.
+        let label_changes = !existing.name.eq_ignore_ascii_case(label);
         let candidate = existing.update_from(label.to_string())?;
-        if let Some(other) = find_category_by_name(&*self.category_repo, &candidate.name).await? {
-            if other.id != id {
-                return Err(AssetError::DuplicateName);
+        if label_changes {
+            if let Some(other) =
+                find_category_by_name(&*self.category_repo, &candidate.name).await?
+            {
+                if other.id != id {
+                    return Err(AssetError::DuplicateName);
+                }
             }
         }
         let category = self.category_repo.update(candidate).await.map_err(|e| {
@@ -551,6 +559,180 @@ impl AssetService {
         }
         Ok(written)
     }
+
+    // -------------------------------------------------------------------------
+    // Apply entry points (CFR-017) — merge executor writes; no entry guards run
+    // -------------------------------------------------------------------------
+
+    /// The synced record of `kind` this device holds for `identity` (CFR-014), on the apply
+    /// transaction's connection; `None` when it holds none.
+    pub async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> StdResult<Option<SyncedRecord>, AssetError> {
+        self.asset_repo
+            .synced_record(conn, kind, identity)
+            .await
+            .map_err(|e| applied_write_error("synced_record", e))
+    }
+
+    /// The rank of another category labelled `name` (CFR-035), on the apply transaction's
+    /// connection; `None` when none clashes.
+    pub async fn clashing_category_name(
+        &self,
+        conn: &mut SqliteConnection,
+        category_id: &str,
+        name: &str,
+    ) -> StdResult<Option<Rank>, AssetError> {
+        self.asset_repo
+            .clashing_category_name_rank(conn, category_id, name)
+            .await
+            .map_err(|e| applied_write_error("clashing_category_name", e))
+    }
+
+    /// Ensures the system Cash Asset for `currency` and the Cash category exist (CSH-010,
+    /// SYN-027/CFR-033) on the apply transaction's connection — the seeding
+    /// `seed_cash_asset` performs, without the event.
+    pub async fn ensure_cash_asset(
+        &self,
+        conn: &mut SqliteConnection,
+        currency: &str,
+    ) -> StdResult<(), AssetError> {
+        let category = AssetCategory::with_id(
+            crate::core::cash::SYSTEM_CASH_CATEGORY_ID.to_string(),
+            crate::core::cash::SYSTEM_CASH_CATEGORY_LABEL.to_string(),
+        )?;
+        let asset = Asset::with_id(
+            crate::core::cash::system_cash_asset_id(currency),
+            format!("Cash {}", currency.to_uppercase()),
+            AssetClass::Cash,
+            category.clone(),
+            currency.to_string(),
+            1,
+            currency.to_uppercase(),
+            None,
+            false,
+            None,
+            false,
+            false,
+        )?;
+        self.asset_repo
+            .ensure_seeded(conn, &category, &asset)
+            .await
+            .map_err(|e| applied_write_error("ensure_cash_asset", e))
+    }
+
+    /// Applies an incoming asset change verbatim (CFR-017): an archived asset, a category
+    /// pointing at a since-removed category — none of today's entry guards run. Stamps
+    /// `rank` on the row (CFR-014).
+    pub async fn apply_asset(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AssetError> {
+        let asset: Asset = synced_content(content)?;
+        self.asset_repo
+            .apply_asset(conn, &asset, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_asset", e))?;
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetUpdated);
+        }
+        Ok(())
+    }
+
+    /// Applies an incoming category change verbatim (CFR-017); CFR-035's duplicate-label
+    /// coexistence is the same shape as the account-name guard.
+    pub async fn apply_category(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AssetError> {
+        let category: AssetCategory = synced_content(content)?;
+        self.asset_repo
+            .apply_category(conn, &category, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_category", e))?;
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::CategoryUpdated);
+        }
+        Ok(())
+    }
+
+    /// Applies an incoming asset price verbatim (CFR-017): the observation merge rule
+    /// (CFR-050) has already decided it prevails.
+    pub async fn apply_asset_price(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AssetError> {
+        let price: AssetPrice = synced_content(content)?;
+        self.asset_repo
+            .apply_asset_price(conn, &price, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_asset_price", e))?;
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::AssetPriceUpdated);
+        }
+        Ok(())
+    }
+
+    /// Applies an incoming removal of `kind`/`identity` (CFR-017/CFR-030): an asset or a
+    /// category is removed as it is removed locally, its assets left on the removed
+    /// category — shown in the default category on read (CFR-030) — never a cascade
+    /// removal (only an account owns others).
+    pub async fn apply_removal(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> StdResult<(), AssetError> {
+        self.asset_repo
+            .remove_synced(conn, kind, identity)
+            .await
+            .map_err(|e| applied_write_error("apply_removal", e))?;
+        if let Some(bus) = &self.event_bus {
+            match kind {
+                RecordKind::Asset => bus.publish(Event::AssetUpdated),
+                RecordKind::Category => bus.publish(Event::CategoryUpdated),
+                RecordKind::AssetPrice => bus.publish(Event::AssetPriceUpdated),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// SYN-083 — discards every asset price this installation holds, on the rebuild
+    /// transaction's connection, before the shared history's observations replace them.
+    pub async fn discard_asset_prices(
+        &self,
+        conn: &mut SqliteConnection,
+    ) -> StdResult<(), AssetError> {
+        self.asset_repo
+            .discard_asset_prices(conn)
+            .await
+            .map_err(|e| applied_write_error("discard_asset_prices", e))
+    }
+}
+
+/// Reads a synced change's content into the record it carries (CFR-017). A payload this
+/// build cannot read is an infrastructure failure: logged, surfaced as `DatabaseError`.
+fn synced_content<T: serde::de::DeserializeOwned>(content: &str) -> StdResult<T, AssetError> {
+    serde_json::from_str(content).map_err(|e| {
+        tracing::error!(target: BACKEND, err = %e, "synced content: malformed payload");
+        AssetError::DatabaseError
+    })
+}
+
+/// Translates a failed applied write into `DatabaseError` after logging it.
+fn applied_write_error(context: &'static str, e: anyhow::Error) -> AssetError {
+    tracing::error!(target: BACKEND, err = ?e, "{context}: repository failure");
+    AssetError::DatabaseError
 }
 
 /// Asset application surface consumed by cross-BC use-case orchestrators.
@@ -1242,7 +1424,7 @@ mod tests {
         cr.expect_get_by_id().times(1).return_once(|_| {
             Ok(Some(AssetCategory::from_storage(
                 "cat2-id".to_string(),
-                "Bonds".to_string(),
+                "Stocks".to_string(),
             )))
         });
         cr.expect_find_by_name().times(1).return_once(|_| {
@@ -2532,5 +2714,182 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, AssetError::DatabaseError), "got: {err:?}");
+    }
+
+    // -------------------------------------------------------------------------
+    // CFR-017 — apply entry points bypass entry guards
+    // -------------------------------------------------------------------------
+
+    use crate::shared::domain::{LogicalTimestamp, Origin, Rank, RecordKind};
+
+    fn incoming_rank(device_id: &str, timestamp: u64) -> Rank {
+        Rank {
+            origin: Origin::User,
+            logical_timestamp: LogicalTimestamp::new(timestamp),
+            device_id: device_id.to_string(),
+        }
+    }
+
+    // CFR-017 — apply_asset writes an archived incoming asset verbatim; no entry guard
+    // (e.g. "cannot edit an archived asset") ever runs.
+    /// A connection the apply entry points write through (SYN-065) — the repositories
+    /// behind them are mocked, so the connection itself is never touched.
+    async fn apply_conn() -> sqlx::pool::PoolConnection<sqlx::Sqlite> {
+        sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool")
+            .acquire()
+            .await
+            .expect("connection")
+    }
+
+    // CFR-017 — apply_asset writes the incoming content verbatim, archived flag included,
+    // through the repository's apply write: no create/update guard runs.
+    #[tokio::test]
+    async fn apply_asset_writes_an_archived_asset_verbatim() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_apply_asset()
+            .withf(|_, asset, rank| {
+                asset.id == "asset-from-laptop" && asset.is_archived && rank.device_id == "laptop"
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let content = serde_json::to_string(&make_asset("asset-from-laptop", true)).unwrap();
+        svc.apply_asset(
+            &mut *apply_conn().await,
+            &content,
+            incoming_rank("laptop", 100),
+        )
+        .await
+        .expect("CFR-017: applying an archived asset must succeed, no re-validation");
+    }
+
+    // CFR-017 — apply_category writes the incoming category verbatim.
+    #[tokio::test]
+    async fn apply_category_writes_incoming_category_verbatim() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_apply_category()
+            .withf(|_, category, _| category.id == "cat-from-laptop" && category.name == "Tech")
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let content = r#"{"id":"cat-from-laptop","name":"Tech"}"#;
+        svc.apply_category(
+            &mut *apply_conn().await,
+            content,
+            incoming_rank("laptop", 100),
+        )
+        .await
+        .expect("CFR-017: applying an incoming category must succeed");
+    }
+
+    // CFR-050 — apply_asset_price writes the observation the engine decided prevails; the
+    // service itself runs no rank check.
+    #[tokio::test]
+    async fn apply_asset_price_merges_by_observation_rule() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_apply_asset_price()
+            .withf(|_, price, _| price.asset_id == "asset-1" && price.price == 58_250_000)
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        let content =
+            r#"{"asset_id":"asset-1","date":"2026-08-21","price":58250000,"source":"Manual"}"#;
+        svc.apply_asset_price(
+            &mut *apply_conn().await,
+            content,
+            incoming_rank("laptop", 1_300),
+        )
+        .await
+        .expect("CFR-050: an observation always applies by timestamp, no rank check");
+    }
+
+    // CFR-017 — apply_removal of a category removes it through the repository's apply write.
+    #[tokio::test]
+    async fn apply_removal_of_a_category_succeeds() {
+        let mut ar = MockAssetRepository::new();
+        ar.expect_remove_synced()
+            .withf(|_, kind, identity| *kind == RecordKind::Category && identity == "cat-1")
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = make_svc(
+            ar,
+            MockAssetCategoryRepository::new(),
+            MockAssetPriceRepository::new(),
+        );
+        svc.apply_removal(&mut *apply_conn().await, RecordKind::Category, "cat-1")
+            .await
+            .expect("CFR-017: an incoming category removal must apply");
+    }
+
+    #[tokio::test]
+    async fn update_category_accepts_the_unchanged_label_even_when_it_already_clashes() {
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id().returning(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "cat-1".to_string(),
+                "Tech".to_string(),
+            )))
+        });
+        cr.expect_find_by_name().returning(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "cat-clash".to_string(),
+                "Tech".to_string(),
+            )))
+        });
+        cr.expect_update().returning(Ok);
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
+
+        let result = svc.update_category("cat-1", "Tech").await;
+        assert!(
+            result.is_ok(),
+            "CFR-035: the unchanged label must be accepted despite the clash, got {result:?}"
+        );
+    }
+
+    // CFR-035 — changing the label TO one another category already holds is still
+    // rejected: the guard binds the label being set.
+    #[tokio::test]
+    async fn update_category_still_rejects_changing_the_label_to_one_another_category_holds() {
+        let mut cr = MockAssetCategoryRepository::new();
+        cr.expect_get_by_id().returning(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "cat-1".to_string(),
+                "Old Label".to_string(),
+            )))
+        });
+        cr.expect_find_by_name().returning(|_| {
+            Ok(Some(AssetCategory::from_storage(
+                "cat-2".to_string(),
+                "Growth".to_string(),
+            )))
+        });
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            cr,
+            MockAssetPriceRepository::new(),
+        );
+
+        let result = svc.update_category("cat-1", "Growth").await;
+        assert!(matches!(result, Err(AssetError::DuplicateName)));
     }
 }

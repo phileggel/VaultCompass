@@ -1,6 +1,8 @@
 use super::super::domain::{AssetPrice, AssetPriceRepository, AssetPriceSource};
 use crate::core::logger::BACKEND;
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -56,14 +58,19 @@ impl SqliteAssetPriceRepository {
     /// Writes `price` on `conn` (insert or overwrite of its `(asset_id, date)` key) and
     /// records the matching Created / Updated change, rank-stamping the row.
     async fn write_price(&self, conn: &mut SqliteConnection, price: &AssetPrice) -> Result<()> {
-        let existing = sqlx::query_scalar!(
-            "SELECT asset_id FROM asset_prices WHERE asset_id = ? AND date = ?",
+        let existing = sqlx::query!(
+            "SELECT sync_logical_timestamp FROM asset_prices WHERE asset_id = ? AND date = ?",
             price.asset_id,
             price.date
         )
         .fetch_optional(&mut *conn)
         .await
         .context("Failed to look up asset price")?;
+        // CFR-011 — the next change is based on the state this device holds.
+        let based_on = existing
+            .as_ref()
+            .and_then(|row| row.sync_logical_timestamp.as_deref())
+            .and_then(LogicalTimestamp::from_wire);
         let source = price.source.to_string();
         sqlx::query!(
             "INSERT INTO asset_prices (asset_id, date, price, source) VALUES (?, ?, ?, ?)
@@ -81,12 +88,18 @@ impl SqliteAssetPriceRepository {
         } else {
             Operation::Created
         };
+        // CFR-016 — a price the application fetched on its own is an application change.
+        let origin = if price.source == AssetPriceSource::Manual {
+            Origin::User
+        } else {
+            Origin::Application
+        };
         let draft = ChangeDraft::new(
             RecordKind::AssetPrice,
             identity(&price.asset_id, &price.date),
             operation,
-            Origin::User,
-            None,
+            origin,
+            based_on,
             Some(serde_json::to_string(price)?),
         );
         let rank = self.change_recorder.record(conn, draft).await?;
@@ -116,6 +129,17 @@ impl SqliteAssetPriceRepository {
         asset_id: &str,
         date: &str,
     ) -> Result<()> {
+        let based_on = sqlx::query_scalar!(
+            r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String"
+               FROM asset_prices WHERE asset_id = ? AND date = ?"#,
+            asset_id,
+            date,
+        )
+        .fetch_optional(&mut *conn)
+        .await
+        .context("Failed to read asset price rank")?
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp));
         let deleted = sqlx::query!(
             "DELETE FROM asset_prices WHERE asset_id = ? AND date = ?",
             asset_id,
@@ -130,7 +154,7 @@ impl SqliteAssetPriceRepository {
                 identity(asset_id, date),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(conn, draft).await?;

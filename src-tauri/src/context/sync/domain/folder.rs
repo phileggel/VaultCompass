@@ -123,6 +123,20 @@ pub struct Segment {
     pub changes: Vec<SegmentChange>,
 }
 
+/// The file name of a segment carrying `first_sequence..=last_sequence` (SYN-031, D8):
+/// `seg-<first20>-<last20>.bin`, zero-padded so filesystem order is sequence order.
+pub fn segment_file_name(first_sequence: i64, last_sequence: i64) -> String {
+    format!("seg-{first_sequence:020}-{last_sequence:020}.bin")
+}
+
+/// The sequence range a segment file name carries, or `None` for a name that is not a
+/// segment's.
+pub fn segment_sequence_range(name: &str) -> Option<(i64, i64)> {
+    let range = name.strip_prefix("seg-")?.strip_suffix(".bin")?;
+    let (first, last) = range.split_once('-')?;
+    Some((first.parse().ok()?, last.parse().ok()?))
+}
+
 /// The result of a write-if-absent header publish (SYN-081).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WriteHeaderOutcome {
@@ -172,6 +186,14 @@ pub trait FolderStore: Send + Sync {
     /// Lists `device_id`'s published segment file names, in filesystem order, ignoring any
     /// `*.tmp-*` file left by an interrupted write (SYN-032).
     async fn list_segment_names(&self, device_id: &str) -> Result<Vec<String>, SyncError>;
+
+    /// Reads one of `device_id`'s published segments by the name `list_segment_names`
+    /// returned, or `None` when it is gone.
+    async fn read_segment_bytes(
+        &self,
+        device_id: &str,
+        name: &str,
+    ) -> Result<Option<Vec<u8>>, SyncError>;
 
     /// Lists every device area present in the folder (the roster's file-system half, SYN-037).
     async fn list_device_ids(&self) -> Result<Vec<String>, SyncError>;

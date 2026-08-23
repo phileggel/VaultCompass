@@ -4,8 +4,10 @@ use crate::context::account::{
 };
 use crate::context::asset::{AssetPriceSource, AssetServiceContract};
 use crate::context::currency::CurrencyService;
+use crate::context::sync::HoldingInconsistency;
 use crate::core::cash::{is_cash_asset, system_cash_asset_id};
 use crate::core::logger::BACKEND;
+use crate::use_cases::shared::inconsistency::holding_inconsistency;
 use crate::use_cases::shared::valuation::{
     holding_metric_for_span, load_priced_assets, load_rate_map_for_dates, market_valued_flow_dates,
     PricedAsset, RateMap, MICRO,
@@ -112,6 +114,10 @@ pub struct HoldingDetail {
     /// when no note, no alarm, or no price; always false in the as-of view
     /// (HNO-040).
     pub note_alarm_triggered: bool,
+    /// Derived from the merged (or single-device) replayed ledger; `Some` when the
+    /// holding's quantity is negative (`Oversold`) or, for the Cash Holding, its balance is
+    /// negative (`CashOverdrawn`, CSH-080). `None` otherwise (SYN-040, CFR-042).
+    pub inconsistency: Option<HoldingInconsistency>,
 }
 
 /// Enriched view of a fully-closed position (quantity == 0, ACD-044).
@@ -480,6 +486,8 @@ impl AccountDetailsUseCase {
             let note_alarm_triggered = note
                 .map(|note| note.alarm_triggered(current_price))
                 .unwrap_or(false);
+            // CFR-042/SYN-040 — derived from the replayed holding, never stored.
+            let inconsistency = holding_inconsistency(&holding);
             details.push(HoldingDetail {
                 asset_id: holding.asset_id,
                 asset_name: asset.name,
@@ -505,6 +513,7 @@ impl AccountDetailsUseCase {
                 note_threshold_price: note.and_then(|note| note.threshold_price),
                 note_threshold_direction: note.and_then(|note| note.threshold_direction),
                 note_alarm_triggered, // HNO-030
+                inconsistency,        // CFR-042/SYN-040
             });
         }
 
@@ -875,6 +884,7 @@ impl AccountDetailsUseCase {
                 note_threshold_price: None,
                 note_threshold_direction: None,
                 note_alarm_triggered: false,
+                inconsistency: None, // SYN-040 — never derived in the as-of / closed views
             });
         }
 
@@ -922,6 +932,7 @@ impl AccountDetailsUseCase {
                 note_threshold_price: None,
                 note_threshold_direction: None,
                 note_alarm_triggered: false,
+                inconsistency: None, // SYN-040 — never derived in the as-of / closed views
             });
         }
 
@@ -5441,6 +5452,56 @@ mod tests {
         assert_eq!(
             years_before(leap_day, 4),
             NaiveDate::from_ymd_opt(2020, 2, 29).expect("valid date")
+        );
+    }
+
+    // CFR-042/SYN-040 — a holding whose replayed ledger overdraws the cash balance (a
+    // state only a merge of two independently valid withdrawals can reach — no single
+    // device write passes the insufficient-cash guard) must derive `CashOverdrawn`, not a
+    // hardcoded `None`.
+    #[tokio::test]
+    async fn cash_overdrawn_holding_derives_inconsistency() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Test".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc.seed_cash_holding(&account.id).await.unwrap();
+        // Simulates the state a merge of two devices' independently valid withdrawals can
+        // leave behind (CFR-042) — unreachable through any single local write's guard.
+        let cash_asset_id = crate::core::cash::system_cash_asset_id("EUR");
+        sqlx::query(
+            "UPDATE holdings SET quantity = -5000000 WHERE account_id = ? AND asset_id = ?",
+        )
+        .bind(&account.id)
+        .bind(&cash_asset_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let uc = AccountDetailsUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let resp = uc.get_account_details(&account.id, None).await.unwrap();
+        let cash_row = resp
+            .holdings
+            .iter()
+            .find(|holding| holding.asset_id == cash_asset_id)
+            .expect("the overdrawn cash holding must still be shown, per CSH-090");
+        assert_eq!(
+            cash_row.inconsistency,
+            Some(HoldingInconsistency::CashOverdrawn { amount: -5_000_000 }),
+            "CFR-042/SYN-040: a negative cash balance must be derived as CashOverdrawn"
         );
     }
 }

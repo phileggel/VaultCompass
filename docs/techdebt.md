@@ -10,6 +10,30 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-08-23 — Local writes do not take the sync gate
+
+- Found by: reviewer-security + reviewer-backend (PR-C, `.review/reviewer-security-2026-08-23-01.md`)
+- Where: src-tauri/src/context/sync/application/run.rs (`SyncGate`), every synced repository write
+- Context: branch `feat/multi-device-sync-resolve` @ `4d6ec37`
+- Severity: 🟡
+- Observation: SYN-064 says a local write and an in-progress apply never interleave. The apply holds `SyncGate` and runs in one SQLite write transaction with the change recorder suspended; local writes do not take the gate. SQLite's single writer serialises them at the database level and the recorder reads the logical clock under that lock, so the remaining window is a local write that computed `based_on` before an apply committed — benign for the rank order, but not the guarantee the spec states. Closing it means a `begin_write()` helper on the recorder that takes the gate before opening the transaction, applied at all 30 capture sites — its own PR.
+
+## 2026-08-23 — Held-back changes and conflict notices have no bound
+
+- Found by: reviewer-security (PR-C)
+- Where: src-tauri/src/context/sync/application/run.rs (`apply_intake`), `held_back_changes`, `conflict_notices`
+- Context: branch `feat/multi-device-sync-resolve` @ `4d6ec37`
+- Severity: 🟡
+- Observation: A hostile or buggy peer could grow `held_back_changes` without bound (every run retries all of them) and `conflict_notices` never evicts. Unreachable for one user's own desktops; add caps / eviction before any multi-user or untrusted-peer scenario.
+
+## 2026-08-23 — Join replays a device's whole history in memory
+
+- Found by: reviewer-security (PR-C)
+- Where: src-tauri/src/context/sync/application/join.rs
+- Context: branch `feat/multi-device-sync-resolve` @ `4d6ec37`
+- Severity: 🔵
+- Observation: Only the per-file 64 MiB cap bounds a join; the full history of each device is held in memory inside one transaction. Acceptable under the KISS cut (a personal portfolio's history is a few KB a month); revisit with checkpoints if history or device count grows.
+
 ## 2026-08-22 — Account-deletion cascade is no longer a single transaction
 
 - Found by: reviewer-backend (PR-A change capture, `.review/reviewer-backend-2026-08-22-01.md`)

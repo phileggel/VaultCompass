@@ -1,32 +1,35 @@
-//! Multi-device sync bounded context (SYN + CFR, ADR-019). PR-A shipped only the change-log
-//! slice; PR-B adds the device aggregate, folder/crypto/codec infrastructure, the publish-only
-//! run, and the first-device publish path (D2). The resolution engine and the apply executor
-//! land in PR-C.
+//! Multi-device sync bounded context (SYN + CFR, ADR-019): the change log, the device
+//! aggregate, folder/crypto/codec infrastructure, the first-device publish path, the
+//! resolution engine, the full run (publish, read, resolve, apply), and the join rebuild (D2).
 
 /// External API and Tauri command handlers (boundary, BC root per B39) — the four BC-local
 /// commands (D3): `pause_sync`, `leave_sync`, `rename_sync_device`, `dismiss_conflict_notice`.
 pub mod api;
-/// Application layer (gold layout, B0/B38): device lifecycle, the publish-only run, the
-/// settling-interval batcher, and enrolling as the first device.
+/// Application layer (gold layout, B0/B38): device lifecycle, the sync run and its apply
+/// executor, the join rebuild, the settling-interval batcher, and enrolling as the first
+/// device.
 pub mod application;
-/// Domain layer (gold layout, B0/B38): the device aggregate, folder/manifest/segment value
-/// objects, and the wire shapes assembled into `SyncStatus`. The resolution engine
-/// (`resolution.rs`) lands in PR-C.
+/// Domain layer (gold layout, B0/B38): the resolution engine, the device aggregate,
+/// folder/manifest/segment value objects, the ports, and the wire shapes assembled into
+/// `SyncStatus`.
 pub mod domain;
 /// Flat BC error enum (`SyncError`).
 pub mod error;
-/// Infrastructure layer — `SqliteChangeRecorder` (PR-A); crypto, codec, folder store, and the
-/// SQLite-backed sync state repository (PR-B).
+/// Infrastructure layer — `SqliteChangeRecorder`, crypto, codec, folder store, and the
+/// SQLite-backed change-log and sync state repositories.
 pub mod infrastructure;
 
 pub use api::*;
-pub use application::{FirstPublish, Publisher, SyncRun, SyncService};
+pub use application::{FirstPublish, JoinError, Publisher, SyncGate, SyncRun, SyncService};
 pub use domain::{
-    ensure_device_name, ChangeLogRepository, ConflictNotice, ConflictNoticeKind,
-    DerivationParameters, FolderHeader, FolderProblem, FolderStore, HeldBackChange,
-    HoldingInconsistency, InconsistentHolding, Manifest, PortfolioRecord, PortfolioSnapshot,
-    RankStamper, RosterEntry, Segment, SegmentChange, SyncCursor, SyncDevice, SyncFailure,
-    SyncFolderState, SyncReport, SyncStateRepository, SyncStatus, Tombstone, WriteHeaderOutcome,
+    cascade_child_tombstones, collision_notice, duplicate_name_notice, ensure_device_name,
+    local_write_allowed, notice_for, reference_outcome, resolve, resolve_observation,
+    segment_file_name, segment_sequence_range, Change, ChangeApplier, ChangeLogRepository,
+    Concurrency, ConflictNotice, ConflictNoticeKind, DerivationParameters, FolderHeader,
+    FolderProblem, FolderStore, HeldBackChange, HoldingInconsistency, InconsistentHolding,
+    Manifest, NoticeDraft, Outcome, PortfolioRecord, PortfolioSnapshot, RankStamper, RecordState,
+    RosterEntry, Segment, SegmentChange, SyncCursor, SyncDevice, SyncFailure, SyncFolderState,
+    SyncReport, SyncStateRepository, SyncStatus, Tombstone, WaitingFor, WriteHeaderOutcome,
 };
 pub use error::SyncError;
 pub use infrastructure::codec::{header_data_format_version, DATA_FORMAT_VERSION};
@@ -38,5 +41,6 @@ pub use infrastructure::{
 
 #[cfg(test)]
 pub use domain::{
-    MockFolderStore, MockPortfolioSnapshot, MockRankStamper, MockSyncStateRepository,
+    MockChangeApplier, MockFolderStore, MockPortfolioSnapshot, MockRankStamper,
+    MockSyncStateRepository,
 };

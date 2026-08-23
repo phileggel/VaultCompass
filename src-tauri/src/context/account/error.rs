@@ -180,6 +180,11 @@ pub enum AccountError {
     /// Account name (case-insensitive) collides with an existing one.
     #[error("Account name already exists")]
     NameAlreadyExists,
+    /// The application's own write (a generated fee deduction) was refused: the user's
+    /// removal of the record outranks it (CFR-016). Never user-facing — the generation
+    /// path treats it as a skipped period (FEE-047).
+    #[error("The user's change outranks the application's write")]
+    ApplicationWriteOutranked,
     /// Application-layer translation of any infrastructure failure from an
     /// account-side repository call. No `hint` payload on the wire; the full
     /// diagnostic chain is preserved server-side via `tracing::error!` at the

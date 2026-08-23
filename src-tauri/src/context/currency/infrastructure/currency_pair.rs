@@ -1,10 +1,12 @@
 use crate::context::currency::domain::{
-    CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRateSource,
+    CurrencyPair, CurrencyPairRepository, CurrencyPairSummary, CurrencyRate, CurrencyRateSource,
 };
 use crate::core::logger::BACKEND;
-use crate::shared::domain::{ChangeDraft, Operation, Origin, Rank, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, Operation, Origin, Rank, RecordIdentity, RecordKind, SyncedRecord,
+};
 use crate::shared::infrastructure::change_recorder::{
-    ChangeRecorder, NoopChangeRecorder, RankColumns,
+    rank_from_columns, ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -31,6 +33,17 @@ impl SqliteCurrencyPairRepository {
     pub fn with_change_recorder(mut self, change_recorder: Arc<dyn ChangeRecorder>) -> Self {
         self.change_recorder = change_recorder;
         self
+    }
+}
+
+/// Splits a `from:to` pair identity or a `from:to:date` rate identity (CFR-012).
+/// The two currencies of a `from:to` pair identity and, for a `from:to:date` rate identity,
+/// its date (CFR-012).
+fn split_identity(identity: &str) -> Result<(&str, &str, Option<&str>)> {
+    let mut keys = identity.split(':');
+    match (keys.next(), keys.next(), keys.next()) {
+        (Some(from_currency), Some(to_currency), date) => Ok((from_currency, to_currency, date)),
+        _ => anyhow::bail!("malformed currency identity: '{identity}'"),
     }
 }
 
@@ -126,6 +139,201 @@ impl CurrencyPairRepository for SqliteCurrencyPairRepository {
             .await
             .context("Failed to commit currency pair upsert")?;
         Ok(pair)
+    }
+
+    async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<Option<SyncedRecord>> {
+        let (from_currency, to_currency, date) = split_identity(identity)?;
+        match kind {
+            RecordKind::CurrencyPair => {
+                let row = sqlx::query!(
+                    r#"SELECT from_currency, to_currency, sync_logical_timestamp, sync_origin, sync_device_id
+                       FROM currency_pairs WHERE from_currency = ? AND to_currency = ?"#,
+                    from_currency,
+                    to_currency
+                )
+                .fetch_optional(conn)
+                .await
+                .with_context(|| format!("Failed to read synced currency pair {}", identity))?;
+                row.map(|row| {
+                    let pair = CurrencyPair::from_storage(row.from_currency, row.to_currency);
+                    Ok(SyncedRecord {
+                        rank: rank_from_columns(
+                            row.sync_logical_timestamp,
+                            row.sync_origin,
+                            row.sync_device_id,
+                        ),
+                        content: serde_json::to_string(&pair)?,
+                    })
+                })
+                .transpose()
+            }
+            RecordKind::CurrencyRate => {
+                let Some(date) = date else {
+                    anyhow::bail!("malformed currency rate identity: '{identity}'");
+                };
+                let row = sqlx::query!(
+                    r#"SELECT from_currency, to_currency, date, rate, source,
+                              sync_logical_timestamp, sync_origin, sync_device_id
+                       FROM currency_rates WHERE from_currency = ? AND to_currency = ? AND date = ?"#,
+                    from_currency,
+                    to_currency,
+                    date
+                )
+                .fetch_optional(conn)
+                .await
+                .with_context(|| format!("Failed to read synced currency rate {}", identity))?;
+                row.map(|row| {
+                    let source = CurrencyRateSource::from_str(&row.source).unwrap_or_else(|_| {
+                        tracing::warn!(target: BACKEND, value = %row.source, "unknown currency_rates.source value, falling back to Manual");
+                        CurrencyRateSource::Manual
+                    });
+                    let rate = CurrencyRate::from_storage(
+                        row.from_currency,
+                        row.to_currency,
+                        row.date,
+                        row.rate,
+                        source,
+                    );
+                    Ok(SyncedRecord {
+                        rank: rank_from_columns(
+                            row.sync_logical_timestamp,
+                            row.sync_origin,
+                            row.sync_device_id,
+                        ),
+                        content: serde_json::to_string(&rate)?,
+                    })
+                })
+                .transpose()
+            }
+            RecordKind::Account
+            | RecordKind::Category
+            | RecordKind::Asset
+            | RecordKind::Transaction
+            | RecordKind::FeeSchedule
+            | RecordKind::FeeCatchUpPosition
+            | RecordKind::AssetPrice
+            | RecordKind::HoldingNote => Ok(None),
+        }
+    }
+
+    async fn apply_pair(
+        &self,
+        conn: &mut SqliteConnection,
+        pair: &CurrencyPair,
+        rank: &Rank,
+    ) -> Result<()> {
+        let columns = RankColumns::from(rank.clone());
+        sqlx::query!(
+            r#"INSERT INTO currency_pairs (from_currency, to_currency, sync_logical_timestamp, sync_origin, sync_device_id)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(from_currency, to_currency) DO UPDATE SET
+                   sync_logical_timestamp = excluded.sync_logical_timestamp,
+                   sync_origin = excluded.sync_origin,
+                   sync_device_id = excluded.sync_device_id"#,
+            pair.from_currency,
+            pair.to_currency,
+            columns.logical_timestamp,
+            columns.origin,
+            columns.device_id
+        )
+        .execute(conn)
+        .await
+        .context("Failed to apply currency pair")?;
+        Ok(())
+    }
+
+    async fn apply_rate(
+        &self,
+        conn: &mut SqliteConnection,
+        rate: &CurrencyRate,
+        rank: &Rank,
+    ) -> Result<()> {
+        let source = rate.source.to_string();
+        let columns = RankColumns::from(rank.clone());
+        sqlx::query!(
+            r#"INSERT INTO currency_rates (from_currency, to_currency, date, rate, source,
+                                           sync_logical_timestamp, sync_origin, sync_device_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(from_currency, to_currency, date) DO UPDATE SET
+                   rate = excluded.rate,
+                   source = excluded.source,
+                   sync_logical_timestamp = excluded.sync_logical_timestamp,
+                   sync_origin = excluded.sync_origin,
+                   sync_device_id = excluded.sync_device_id"#,
+            rate.from_currency,
+            rate.to_currency,
+            rate.date,
+            rate.rate,
+            source,
+            columns.logical_timestamp,
+            columns.origin,
+            columns.device_id
+        )
+        .execute(conn)
+        .await
+        .context("Failed to apply currency rate")?;
+        Ok(())
+    }
+
+    async fn remove_synced(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<()> {
+        let (from_currency, to_currency, date) = split_identity(identity)?;
+        match kind {
+            RecordKind::CurrencyPair => {
+                sqlx::query!(
+                    "DELETE FROM currency_pairs WHERE from_currency = ? AND to_currency = ?",
+                    from_currency,
+                    to_currency
+                )
+                .execute(conn)
+                .await
+                .with_context(|| format!("Failed to remove currency pair {}", identity))?;
+            }
+            RecordKind::CurrencyRate => {
+                let Some(date) = date else {
+                    anyhow::bail!("malformed currency rate identity: '{identity}'");
+                };
+                sqlx::query!(
+                    "DELETE FROM currency_rates WHERE from_currency = ? AND to_currency = ? AND date = ?",
+                    from_currency,
+                    to_currency,
+                    date
+                )
+                .execute(conn)
+                .await
+                .with_context(|| format!("Failed to remove currency rate {}", identity))?;
+            }
+            RecordKind::Account
+            | RecordKind::Category
+            | RecordKind::Asset
+            | RecordKind::Transaction
+            | RecordKind::FeeSchedule
+            | RecordKind::FeeCatchUpPosition
+            | RecordKind::AssetPrice
+            | RecordKind::HoldingNote => {}
+        }
+        Ok(())
+    }
+
+    async fn discard_pairs_and_rates(&self, conn: &mut SqliteConnection) -> Result<()> {
+        sqlx::query!("DELETE FROM currency_rates")
+            .execute(&mut *conn)
+            .await
+            .context("Failed to discard currency rates")?;
+        sqlx::query!("DELETE FROM currency_pairs")
+            .execute(conn)
+            .await
+            .context("Failed to discard currency pairs")?;
+        Ok(())
     }
 
     async fn list_pairs_with_latest_rate(&self) -> Result<Vec<CurrencyPairSummary>> {

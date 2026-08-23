@@ -5,7 +5,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::context::account::domain::{Transaction, TransactionRepository, TransactionType};
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{ChangeRecorder, NoopChangeRecorder};
 
 #[derive(sqlx::FromRow)]
@@ -176,6 +178,16 @@ impl TransactionRepository for SqliteTransactionRepository {
             .begin()
             .await
             .context("Failed to begin DB transaction for transaction delete")?;
+        // CFR-011 — the removal is based on the state this device holds.
+        let based_on = sqlx::query_scalar!(
+            r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String" FROM transactions WHERE id = ?"#,
+            id
+        )
+        .fetch_optional(&mut *db_tx)
+        .await
+        .with_context(|| format!("Failed to read the rank of transaction {}", id))?
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp));
         let deleted = sqlx::query!(r#"DELETE FROM transactions WHERE id = ?"#, id)
             .execute(&mut *db_tx)
             .await
@@ -186,7 +198,7 @@ impl TransactionRepository for SqliteTransactionRepository {
                 RecordIdentity::canonical(RecordKind::Transaction, &[id]),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut db_tx, draft).await?;

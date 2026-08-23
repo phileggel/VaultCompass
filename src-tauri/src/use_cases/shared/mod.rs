@@ -6,6 +6,8 @@
 //! `account_summary` and `global_performance` compose, so no use case has to
 //! import from another (B18).
 
+/// Derived holding inconsistency (CFR-042/SYN-040) reused by every account-reading use case.
+pub mod inconsistency;
 pub mod performance;
 /// Shared fetch-scope builder (SPF-040) reused by `asset_price_fetch` and `scheduled_fetch`.
 pub mod scope;

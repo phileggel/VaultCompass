@@ -20,6 +20,7 @@ function makeAccount(
     total_global_value,
     total_unrealized_pnl,
     ytd_performance_pct,
+    has_inconsistent_holding: false,
   };
 }
 

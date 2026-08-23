@@ -6,6 +6,8 @@
 //! apply a state-dependent change and return the updated aggregate, `ensure_not_paused` is a
 //! fail-fast guard.
 
+use sqlx::SqliteConnection;
+
 use crate::context::sync::domain::conflict_notice::ConflictNotice;
 use crate::context::sync::domain::cursor::SyncCursor;
 use crate::context::sync::domain::held_back::HeldBackChange;
@@ -179,16 +181,40 @@ pub trait SyncStateRepository: Send + Sync {
     async fn get_cursor(&self, device_id: &str) -> Result<Option<SyncCursor>, SyncError>;
     /// Inserts or updates the cursor for its device.
     async fn upsert_cursor(&self, cursor: &SyncCursor) -> Result<(), SyncError>;
+    /// `upsert_cursor` on the apply transaction's connection (SYN-065).
+    async fn upsert_cursor_on(
+        &self,
+        conn: &mut SqliteConnection,
+        cursor: &SyncCursor,
+    ) -> Result<(), SyncError>;
 
     /// Persists a held-back change (SYN-041).
     async fn insert_held_back(&self, change: &HeldBackChange) -> Result<(), SyncError>;
+    /// `insert_held_back` on the apply transaction's connection (SYN-065).
+    async fn insert_held_back_on(
+        &self,
+        conn: &mut SqliteConnection,
+        change: &HeldBackChange,
+    ) -> Result<(), SyncError>;
     /// Lists every held-back change, oldest first.
     async fn list_held_back(&self) -> Result<Vec<HeldBackChange>, SyncError>;
     /// Removes a held-back change once it has been applied or dropped.
     async fn remove_held_back(&self, id: &str) -> Result<(), SyncError>;
+    /// `remove_held_back` on the apply transaction's connection (SYN-065).
+    async fn remove_held_back_on(
+        &self,
+        conn: &mut SqliteConnection,
+        id: &str,
+    ) -> Result<(), SyncError>;
 
     /// Persists a conflict notice (SYN-066).
     async fn insert_notice(&self, notice: &ConflictNotice) -> Result<(), SyncError>;
+    /// `insert_notice` on the apply transaction's connection (SYN-065).
+    async fn insert_notice_on(
+        &self,
+        conn: &mut SqliteConnection,
+        notice: &ConflictNotice,
+    ) -> Result<(), SyncError>;
     /// Lists undismissed notices only.
     async fn list_undismissed_notices(&self) -> Result<Vec<ConflictNotice>, SyncError>;
     /// Marks a notice dismissed. `SyncError::NoticeNotFound` when it does not exist.

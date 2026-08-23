@@ -13,4 +13,4 @@ pub mod orchestrator;
 
 pub use api::*;
 pub use error::FeeGenerationError;
-pub use orchestrator::FeeGenerationOrchestrator;
+pub use orchestrator::{FeeGenerationOrchestrator, LaunchSyncSurface};

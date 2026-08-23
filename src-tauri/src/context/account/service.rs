@@ -5,7 +5,8 @@ use super::domain::{
 };
 use super::error::AccountError;
 use crate::core::{logger::BACKEND, Event, SideEffectEventBus};
-use crate::shared::domain::Rank;
+use crate::shared::domain::{Rank, RecordKind, SyncedChild, SyncedRecord};
+use crate::shared::infrastructure::change_recorder::LocalWriteOutranked;
 use crate::use_cases::holding_transaction::OpenHoldingError;
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -198,9 +199,19 @@ impl AccountService {
             update_frequency,
             management_fees_enabled,
         )?;
-        if let Some(existing) = find_account_by_name(&*self.account_repo, &account.name).await? {
-            if existing.id != account.id {
-                return Err(AccountError::NameAlreadyExists);
+        // CFR-035 — the uniqueness rule (ACC-003) binds the name being set: a name that
+        // already clashes after a merge is accepted unchanged, a rename into another
+        // account's name is rejected.
+        let name_changes = self
+            .get_by_id(&account.id)
+            .await?
+            .is_none_or(|current| !current.name.eq_ignore_ascii_case(&account.name));
+        if name_changes {
+            if let Some(existing) = find_account_by_name(&*self.account_repo, &account.name).await?
+            {
+                if existing.id != account.id {
+                    return Err(AccountError::NameAlreadyExists);
+                }
             }
         }
         info!(target: BACKEND, account_id = %account.id, name = %account.name, "updating account");
@@ -795,19 +806,29 @@ impl AccountService {
         // FEE-022a — removed qty = floor(holding_qty_as_of(date) × percent / 100%).
         let quantity_as_of = account.holding_quantity_as_of(&asset_id, &date);
         let removed = (quantity_as_of as i128 * percent_micros as i128 / 100_000_000) as i64;
+        // CFR-016 — a generated deduction is the application's own write; a one-off
+        // deduction is the user's.
         let tx = match deduction_id {
-            Some(id) => Transaction::generated_management_fee(
-                id,
-                account.id.clone(),
-                asset_id,
-                date,
-                removed,
-            )?,
-            None => Transaction::management_fee(account.id.clone(), asset_id, date, removed, note)?,
+            Some(id) => {
+                let tx = Transaction::generated_management_fee(
+                    id,
+                    account.id.clone(),
+                    asset_id,
+                    date,
+                    removed,
+                )?;
+                account
+                    .apply_generated_management_fee(tx)
+                    .map_err(to_holding_tx_error)?
+            }
+            None => {
+                let tx =
+                    Transaction::management_fee(account.id.clone(), asset_id, date, removed, note)?;
+                account
+                    .apply_management_fee(tx)
+                    .map_err(to_holding_tx_error)?
+            }
         };
-        let tx = account
-            .apply_management_fee(tx)
-            .map_err(to_holding_tx_error)?;
         save_account(&*self.account_repo, &mut account).await?;
         self.emit_transaction_updated();
         Ok(tx)
@@ -1164,6 +1185,237 @@ impl AccountService {
                 tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "get_holding_notes: query failed");
                 AccountError::DatabaseError
             })
+    }
+
+    // -------------------------------------------------------------------------
+    // Apply entry points (CFR-017) — merge executor writes; no entry guards run
+    // -------------------------------------------------------------------------
+
+    /// The synced record of `kind` this device holds for `identity` (CFR-014), on the apply
+    /// transaction's connection; `None` when it holds none.
+    pub async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> StdResult<Option<SyncedRecord>, AccountError> {
+        self.account_repo
+            .synced_record(conn, kind, identity)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, identity = %identity, err = ?e, "synced_record: repository failure");
+                AccountError::DatabaseError
+            })
+    }
+
+    /// Every synced child of `account_id` this device holds (CFR-030), on the apply
+    /// transaction's connection.
+    pub async fn synced_children(
+        &self,
+        conn: &mut SqliteConnection,
+        account_id: &str,
+    ) -> StdResult<Vec<SyncedChild>, AccountError> {
+        self.account_repo
+            .synced_children(conn, account_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "synced_children: repository failure");
+                AccountError::DatabaseError
+            })
+    }
+
+    /// The rank of another account named `name` (CFR-035), on the apply transaction's
+    /// connection; `None` when none clashes.
+    pub async fn clashing_account_name(
+        &self,
+        conn: &mut SqliteConnection,
+        account_id: &str,
+        name: &str,
+    ) -> StdResult<Option<Rank>, AccountError> {
+        self.account_repo
+            .clashing_name_rank(conn, account_id, name)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: BACKEND, name = %name, err = ?e, "clashing_account_name: repository failure");
+                AccountError::DatabaseError
+            })
+    }
+
+    /// Applies an incoming account change verbatim (CFR-017): no entry guards run — an
+    /// account whose incoming state would fail today's validation is still written, since
+    /// it was valid where it was recorded. Stamps `rank` on the row (CFR-014) and seeds the
+    /// account's 0-balance cash holding (CSH-012); the cash asset must already exist
+    /// (SYN-027 — the caller ensures it).
+    pub async fn apply_account(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AccountError> {
+        let account: Account = synced_content(content)?;
+        self.account_repo
+            .apply_account(conn, &account, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_account", e))?;
+        let mut aggregate = self.load_applied(conn, &account.id).await?;
+        aggregate.seed_cash_holding();
+        self.account_repo
+            .save_applied(conn, &mut aggregate, None)
+            .await
+            .map_err(|e| applied_write_error("apply_account", e))?;
+        self.emit_account_updated();
+        Ok(())
+    }
+
+    /// Applies an incoming transaction verbatim (CFR-017): an oversell or an
+    /// insufficient-cash combination is not rejected — CFR-042 surfaces it as a derived
+    /// inconsistency instead. The transaction's asset must already exist (SYN-027 — the
+    /// caller seeds the cash asset). Stamps `rank` on the row (CFR-014).
+    pub async fn apply_transaction(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AccountError> {
+        let transaction: Transaction = synced_content(content)?;
+        let mut account = self.load_applied(conn, &transaction.account_id).await?;
+        let transaction_id = transaction.id.clone();
+        account.apply_synced_transaction(transaction);
+        self.account_repo
+            .save_applied(conn, &mut account, Some((transaction_id, rank)))
+            .await
+            .map_err(|e| applied_write_error("apply_transaction", e))?;
+        self.emit_transaction_updated();
+        Ok(())
+    }
+
+    /// Applies an incoming holding note verbatim (CFR-017).
+    pub async fn apply_holding_note(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AccountError> {
+        let note: HoldingNote = synced_content(content)?;
+        self.account_repo
+            .apply_holding_note(conn, &note, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_holding_note", e))
+    }
+
+    /// Applies an incoming fee schedule verbatim (CFR-017) — a user record (CFR-016), so an
+    /// incoming application-origin write can never outrank it once a user has touched it.
+    pub async fn apply_fee_schedule(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AccountError> {
+        let schedule: FeeSchedule = synced_content(content)?;
+        self.account_repo
+            .apply_fee_schedule(conn, &schedule, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_fee_schedule", e))?;
+        self.emit_fee_schedule_updated();
+        Ok(())
+    }
+
+    /// Applies an incoming fee catch-up position by maximum, never by rank (CFR-044).
+    pub async fn apply_catch_up_position(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), AccountError> {
+        let position: FeeCatchUpPosition = synced_content(content)?;
+        self.account_repo
+            .apply_catch_up_position(conn, &position, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_catch_up_position", e))
+    }
+
+    /// Applies an incoming removal of `kind`/`identity` (CFR-017/CFR-030): removing an
+    /// account removes every child of it this device holds (its transactions, holding
+    /// notes, fee schedules, and their catch-up positions); removing a transaction replays
+    /// the holdings it leaves behind. A no-op for a record this device does not hold.
+    pub async fn apply_removal(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> StdResult<(), AccountError> {
+        match kind {
+            RecordKind::Account => {
+                self.account_repo
+                    .remove_account(conn, identity)
+                    .await
+                    .map_err(|e| applied_write_error("apply_removal", e))?;
+                self.emit_account_updated();
+            }
+            RecordKind::Transaction => {
+                let account_id = self
+                    .account_repo
+                    .account_id_of_transaction(conn, identity)
+                    .await
+                    .map_err(|e| applied_write_error("apply_removal", e))?;
+                let Some(account_id) = account_id else {
+                    return Ok(());
+                };
+                let mut account = self.load_applied(conn, &account_id).await?;
+                account.remove_synced_transaction(identity);
+                self.account_repo
+                    .save_applied(conn, &mut account, None)
+                    .await
+                    .map_err(|e| applied_write_error("apply_removal", e))?;
+                self.emit_transaction_updated();
+            }
+            RecordKind::HoldingNote => {
+                let (account_id, asset_id) = holding_keys(identity)?;
+                self.account_repo
+                    .remove_holding_note(conn, account_id, asset_id)
+                    .await
+                    .map_err(|e| applied_write_error("apply_removal", e))?;
+            }
+            RecordKind::FeeSchedule => {
+                let (account_id, asset_id) = holding_keys(identity)?;
+                self.account_repo
+                    .remove_fee_schedule(conn, account_id, asset_id)
+                    .await
+                    .map_err(|e| applied_write_error("apply_removal", e))?;
+                self.emit_fee_schedule_updated();
+            }
+            RecordKind::FeeCatchUpPosition => {
+                let (account_id, asset_id) = holding_keys(identity)?;
+                self.account_repo
+                    .remove_catch_up_position(conn, account_id, asset_id)
+                    .await
+                    .map_err(|e| applied_write_error("apply_removal", e))?;
+            }
+            RecordKind::Category
+            | RecordKind::Asset
+            | RecordKind::AssetPrice
+            | RecordKind::CurrencyPair
+            | RecordKind::CurrencyRate => {}
+        }
+        Ok(())
+    }
+
+    /// Loads the aggregate an applied change targets, on the apply transaction's connection.
+    async fn load_applied(
+        &self,
+        conn: &mut SqliteConnection,
+        account_id: &str,
+    ) -> StdResult<Account, AccountError> {
+        match self.account_repo.load_aggregate(conn, account_id).await {
+            Ok(Some(account)) => Ok(account),
+            Ok(None) => Err(AccountError::AccountNotFound {
+                account_id: account_id.to_string(),
+            }),
+            Err(e) => {
+                tracing::error!(target: BACKEND, account_id = %account_id, err = ?e, "load_applied: repository failure");
+                Err(AccountError::DatabaseError)
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -1770,6 +2022,12 @@ async fn save_account(
     account: &mut Account,
 ) -> Result<(), AccountError> {
     repo.save(account).await.map_err(|e| {
+        // CFR-016 — the change recorder refused the application's own write: the
+        // repository's transaction rolled back with it, nothing to report as a failure.
+        if let Some(refused) = e.downcast_ref::<LocalWriteOutranked>() {
+            tracing::info!(target: BACKEND, account_id = %account.id, record_identity = %refused.record_identity, "save_account: application write outranked by the user's state");
+            return AccountError::ApplicationWriteOutranked;
+        }
         tracing::error!(target: BACKEND, account_id = %account.id, err = ?e, "save_account: repository failure");
         AccountError::DatabaseError
     })
@@ -1834,6 +2092,29 @@ fn to_holding_tx_error(e: anyhow::Error) -> AccountError {
             AccountError::DatabaseError
         }
     }
+}
+
+/// Reads a synced change's content into the record it carries (CFR-017). A payload this
+/// build cannot read is an infrastructure failure: logged, surfaced as `DatabaseError`.
+fn synced_content<T: serde::de::DeserializeOwned>(content: &str) -> Result<T, AccountError> {
+    serde_json::from_str(content).map_err(|e| {
+        tracing::error!(target: BACKEND, err = %e, "synced content: malformed payload");
+        AccountError::DatabaseError
+    })
+}
+
+/// The two keys of an `account:asset` identity (CFR-012).
+fn holding_keys(identity: &str) -> Result<(&str, &str), AccountError> {
+    identity.split_once(':').ok_or_else(|| {
+        tracing::error!(target: BACKEND, identity = %identity, "synced identity: malformed holding key");
+        AccountError::DatabaseError
+    })
+}
+
+/// Translates a failed applied write into `DatabaseError` after logging it.
+fn applied_write_error(context: &'static str, e: anyhow::Error) -> AccountError {
+    tracing::error!(target: BACKEND, err = ?e, "{context}: repository failure");
+    AccountError::DatabaseError
 }
 
 /// Bridge for the open_holding aggregate method, which still returns
@@ -5140,5 +5421,238 @@ mod tests {
         );
 
         svc.delete("acc-1").await.unwrap();
+    }
+
+    // -------------------------------------------------------------------------
+    // CFR-017 — apply entry points bypass entry guards
+    // -------------------------------------------------------------------------
+
+    use crate::shared::domain::{LogicalTimestamp, Origin};
+
+    fn incoming_rank(device_id: &str, timestamp: u64) -> Rank {
+        Rank {
+            origin: Origin::User,
+            logical_timestamp: LogicalTimestamp::new(timestamp),
+            device_id: device_id.to_string(),
+        }
+    }
+
+    /// Seeds the cash asset an applied account's cash holding refers to (SYN-027 — in
+    /// production the apply executor seeds it before the account is written).
+    async fn seed_cash_asset_row(pool: &sqlx::Pool<sqlx::Sqlite>, currency: &str) {
+        sqlx::query(
+            "INSERT INTO assets (id, name, reference, asset_class, category_id, currency, risk_level)
+             VALUES (?, ?, ?, 'Cash', 'default-uncategorized', ?, 1)",
+        )
+        .bind(crate::core::cash::system_cash_asset_id(currency))
+        .bind(format!("Cash {currency}"))
+        .bind(currency)
+        .bind(currency)
+        .execute(pool)
+        .await
+        .expect("seed cash asset row");
+    }
+
+    // CFR-017 — apply_account writes the incoming content verbatim and stamps the rank,
+    // creating the account when this device has never seen it.
+    #[tokio::test]
+    async fn apply_account_creates_the_record_and_stamps_the_incoming_rank() {
+        let pool = make_pool().await;
+        seed_cash_asset_row(&pool, "EUR").await;
+        let svc = AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        );
+        let content = r#"{"id":"account-from-laptop","name":"Livret A","bank_name":"","currency":"EUR","update_frequency":"ManualMonth","management_fees_enabled":false}"#;
+        let mut conn = pool.acquire().await.unwrap();
+        svc.apply_account(&mut conn, content, incoming_rank("laptop", 100))
+            .await
+            .expect("CFR-017: applying a never-seen account must succeed");
+        drop(conn);
+
+        let stamped: (String,) =
+            sqlx::query_as("SELECT sync_device_id FROM accounts WHERE id = 'account-from-laptop'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            stamped.0, "laptop",
+            "CFR-014: the incoming rank must be stamped"
+        );
+    }
+
+    // CFR-017 — apply_transaction runs no entry guards: a sell that oversells the position
+    // is applied as-is (the invariant break is CFR-042's derived inconsistency, never a
+    // rejection at apply time).
+    #[tokio::test]
+    async fn apply_transaction_allows_an_oversell() {
+        let pool = make_pool().await;
+        let (svc, asset_id) = setup(&pool).await;
+        seed_cash_asset_row(&pool, "EUR").await;
+        let account = svc
+            .create(
+                "Oversold".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let content = format!(
+            r#"{{"id":"tx-oversell","account_id":"{}","asset_id":"{asset_id}",
+                "transaction_type":"Sell","date":"2026-08-20","quantity":10000000,
+                "unit_price":50000000,"exchange_rate":1000000,"fees":0,
+                "total_amount":500000000,"note":null,"realized_pnl":null,
+                "created_at":"2026-08-20T10:00:00Z"}}"#,
+            account.id
+        );
+        let mut conn = pool.acquire().await.unwrap();
+        svc.apply_transaction(&mut conn, &content, incoming_rank("laptop", 200))
+            .await
+            .expect("CFR-017: an oversell must be applied, never rejected");
+        drop(conn);
+
+        let holding = svc
+            .get_holding_by_account_asset(&account.id, &asset_id)
+            .await
+            .unwrap()
+            .expect("the oversold holding is kept, negative (CFR-042)");
+        assert_eq!(holding.quantity, -10_000_000);
+    }
+
+    // CFR-017/CFR-030 — apply_removal of an account removes it and (via the cascade) every
+    // child this device holds, without re-running the delete guards a local delete would.
+    #[tokio::test]
+    async fn apply_removal_removes_the_account() {
+        let pool = make_pool().await;
+        let svc = AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        );
+        let account = svc
+            .create(
+                "To Remove".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        svc.apply_removal(&mut conn, RecordKind::Account, &account.id)
+            .await
+            .expect("CFR-017: an incoming account removal must apply");
+        drop(conn);
+        assert!(
+            svc.get_by_id(&account.id).await.unwrap().is_none(),
+            "the account must be gone after the removal applies"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // CFR-035 — the name-uniqueness guard binds the name being set, not names that
+    // already clash after a multi-device merge
+    // -------------------------------------------------------------------------
+
+    // CFR-035 — editing other fields of an account whose name already clashes (post-merge)
+    // must be accepted: the guard must bind the name being *set*, not any name that
+    // already clashes. A real `idx_accounts_name_lower` UNIQUE index (M
+    // `202604040001_accounts_constraints.sql`) makes two real rows sharing a name
+    // unconstructible today — CFR-035 needs that index relaxed, a migration change out of
+    // this test-writing pass's scope (flagged in the report) — so this test isolates the
+    // *service guard* on a mock repository, independent of the schema question.
+    #[tokio::test]
+    async fn update_accepts_editing_other_fields_when_the_unchanged_name_already_clashes() {
+        let mut mock_repo = MockAccountRepository::new();
+        mock_repo.expect_get_by_id().returning(|_| {
+            Ok(Some(Account::restore(
+                "account-1".into(),
+                "Livret A".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )))
+        });
+        // Post-merge state: another account ("account-clash") already holds this exact
+        // name. The name being submitted is unchanged from the edited account's own name.
+        mock_repo.expect_find_by_name().returning(|_| {
+            Ok(Some(Account::restore(
+                "account-clash".into(),
+                "Livret A".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )))
+        });
+        mock_repo.expect_update().returning(Ok);
+        let svc = AccountService::new(
+            Box::new(mock_repo),
+            Box::new(MockHoldingRepository::new()),
+            Box::new(MockTransactionRepository::new()),
+        );
+
+        let result = svc
+            .update(
+                "account-1".into(),
+                "Livret A".into(), // unchanged name — still clashes with account-clash
+                "Fortuneo".into(), // only the bank name changes
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await;
+        assert!(
+            result.is_ok(),
+            "CFR-035: editing other fields of a clashing-named account must be accepted, got {result:?}"
+        );
+    }
+
+    // CFR-035 — changing the name TO one another account already holds is still rejected:
+    // the guard binds the name being set.
+    #[tokio::test]
+    async fn update_still_rejects_changing_the_name_to_one_another_account_holds() {
+        let pool = make_pool().await;
+        let svc = AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        );
+        svc.create(
+            "Existing".into(),
+            String::new(),
+            "EUR".into(),
+            UpdateFrequency::ManualMonth,
+            false,
+        )
+        .await
+        .unwrap();
+        let renaming = svc
+            .create(
+                "Renaming".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+
+        let result = svc
+            .update(
+                renaming.id,
+                "Existing".into(),
+                String::new(),
+                "EUR".into(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await;
+        assert!(matches!(result, Err(AccountError::NameAlreadyExists)));
     }
 }

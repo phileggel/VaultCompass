@@ -8,7 +8,7 @@ use crate::context::currency::domain::{
 };
 use crate::context::currency::error::CurrencyError;
 use crate::core::{Event, SideEffectEventBus, BACKEND};
-use crate::shared::domain::Rank;
+use crate::shared::domain::{Rank, RecordKind, SyncedRecord};
 use sqlx::SqliteConnection;
 use std::result::Result as StdResult;
 use std::sync::Arc;
@@ -108,6 +108,84 @@ impl CurrencyService {
                 tracing::error!(target: BACKEND, err = ?e, "stamp_sync_rank: repository failure");
                 CurrencyError::DatabaseError
             })
+    }
+
+    // -------------------------------------------------------------------------
+    // Apply entry points (CFR-017) — merge executor writes; no entry guards run
+    // -------------------------------------------------------------------------
+
+    /// The synced record of `kind` this device holds for `identity` (CFR-014), on the apply
+    /// transaction's connection; `None` when it holds none.
+    pub async fn synced_record(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> StdResult<Option<SyncedRecord>, CurrencyError> {
+        self.pair_repo
+            .synced_record(conn, kind, identity)
+            .await
+            .map_err(|e| applied_write_error("synced_record", e))
+    }
+
+    /// Applies an incoming currency pair verbatim (CFR-017); its identity is its own
+    /// natural key (CFR-034), so two devices declaring the same pair produce one record.
+    pub async fn apply_currency_pair(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), CurrencyError> {
+        let pair: CurrencyPair = synced_content(content)?;
+        self.pair_repo
+            .apply_pair(conn, &pair, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_currency_pair", e))
+    }
+
+    /// Applies an incoming currency rate verbatim (CFR-017): the observation merge rule
+    /// (CFR-050) has already decided it prevails.
+    pub async fn apply_currency_rate(
+        &self,
+        conn: &mut SqliteConnection,
+        content: &str,
+        rank: Rank,
+    ) -> StdResult<(), CurrencyError> {
+        let rate: CurrencyRate = synced_content(content)?;
+        self.pair_repo
+            .apply_rate(conn, &rate, &rank)
+            .await
+            .map_err(|e| applied_write_error("apply_currency_rate", e))?;
+        self.notify_rate_updated();
+        Ok(())
+    }
+
+    /// Applies an incoming removal of `kind`/`identity` (CFR-017). Currency records have no
+    /// children — no cascade applies here (only an account owns others, CFR-030).
+    pub async fn apply_removal(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> StdResult<(), CurrencyError> {
+        self.pair_repo
+            .remove_synced(conn, kind, identity)
+            .await
+            .map_err(|e| applied_write_error("apply_removal", e))?;
+        self.notify_rate_updated();
+        Ok(())
+    }
+
+    /// SYN-083 — discards every currency pair and rate this installation holds, on the
+    /// rebuild transaction's connection, before the shared history's replace them.
+    pub async fn discard_pairs_and_rates(
+        &self,
+        conn: &mut SqliteConnection,
+    ) -> StdResult<(), CurrencyError> {
+        self.pair_repo
+            .discard_pairs_and_rates(conn)
+            .await
+            .map_err(|e| applied_write_error("discard_pairs_and_rates", e))
     }
 
     /// Records a rate for a pair, ensuring the pair exists first (FXR-013 ergonomics).
@@ -510,6 +588,21 @@ impl CurrencyService {
         }
         written
     }
+}
+
+/// Reads a synced change's content into the record it carries (CFR-017). A payload this
+/// build cannot read is an infrastructure failure: logged, surfaced as `DatabaseError`.
+fn synced_content<T: serde::de::DeserializeOwned>(content: &str) -> StdResult<T, CurrencyError> {
+    serde_json::from_str(content).map_err(|e| {
+        tracing::error!(target: BACKEND, err = %e, "synced content: malformed payload");
+        CurrencyError::DatabaseError
+    })
+}
+
+/// Translates a failed applied write into `DatabaseError` after logging it.
+fn applied_write_error(context: &'static str, e: anyhow::Error) -> CurrencyError {
+    tracing::error!(target: BACKEND, err = ?e, "{context}: repository failure");
+    CurrencyError::DatabaseError
 }
 
 #[cfg(test)]
@@ -2163,6 +2256,107 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(written, 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // CFR-017 — apply entry points bypass entry guards
+    // -------------------------------------------------------------------------
+
+    use crate::shared::domain::{LogicalTimestamp, Origin};
+
+    fn incoming_rank(device_id: &str, timestamp: u64) -> Rank {
+        Rank {
+            origin: Origin::User,
+            logical_timestamp: LogicalTimestamp::new(timestamp),
+            device_id: device_id.to_string(),
+        }
+    }
+
+    /// A connection the apply entry points write through (SYN-065) — the repositories
+    /// behind them are mocked, so the connection itself is never touched.
+    async fn apply_conn() -> sqlx::pool::PoolConnection<sqlx::Sqlite> {
+        sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("test pool")
+            .acquire()
+            .await
+            .expect("connection")
+    }
+
+    // CFR-017/CFR-034 — apply_currency_pair writes the incoming pair verbatim.
+    #[tokio::test]
+    async fn apply_currency_pair_writes_incoming_pair_verbatim() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo
+            .expect_apply_pair()
+            .withf(|_, pair, rank| {
+                pair.from_currency == "USD"
+                    && pair.to_currency == "EUR"
+                    && rank.device_id == "laptop"
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(MockCurrencyRateRepository::new()),
+        );
+        let content = r#"{"from_currency":"USD","to_currency":"EUR"}"#;
+        svc.apply_currency_pair(
+            &mut *apply_conn().await,
+            content,
+            incoming_rank("laptop", 100),
+        )
+        .await
+        .expect("CFR-017: applying an incoming currency pair must succeed");
+    }
+
+    // CFR-050 — apply_currency_rate writes the observation the engine decided prevails; the
+    // service itself runs no rank check.
+    #[tokio::test]
+    async fn apply_currency_rate_merges_by_observation_rule() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo
+            .expect_apply_rate()
+            .withf(|_, rate, _| rate.date == "2026-08-21" && rate.rate == 920_000)
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(MockCurrencyRateRepository::new()),
+        );
+        let content = r#"{"from_currency":"USD","to_currency":"EUR","date":"2026-08-21","rate":920000,"source":"Manual"}"#;
+        svc.apply_currency_rate(
+            &mut *apply_conn().await,
+            content,
+            incoming_rank("laptop", 1_300),
+        )
+        .await
+        .expect("CFR-050: an observation always applies by timestamp, no rank check");
+    }
+
+    // CFR-017 — apply_removal of a currency pair applies with no cascade (currency records
+    // have no children).
+    #[tokio::test]
+    async fn apply_removal_of_a_currency_pair_succeeds() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo
+            .expect_remove_synced()
+            .withf(|_, kind, identity| *kind == RecordKind::CurrencyPair && identity == "USD:EUR")
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let svc = CurrencyService::new(
+            Box::new(pair_repo),
+            Box::new(MockCurrencyRateRepository::new()),
+        );
+        svc.apply_removal(
+            &mut *apply_conn().await,
+            RecordKind::CurrencyPair,
+            "USD:EUR",
+        )
+        .await
+        .expect("CFR-017: an incoming currency-pair removal must apply");
     }
 
     fn make_snapshot(

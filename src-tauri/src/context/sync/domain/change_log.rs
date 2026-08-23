@@ -8,11 +8,45 @@ use sqlx::{Sqlite, SqliteConnection, Transaction};
 
 use crate::context::sync::domain::device::SyncDevice;
 use crate::context::sync::domain::folder::SegmentChange;
+use crate::context::sync::domain::tombstone::Tombstone;
 use crate::context::sync::error::SyncError;
+use crate::shared::domain::RecordKind;
 
-/// Persistence for the change log and the enrolment-owned device state.
+/// Persistence for the change log, the tombstones (CFR-015), and the enrolment-owned device
+/// state.
 #[async_trait::async_trait]
 pub trait ChangeLogRepository: Send + Sync {
+    /// The tombstone this device holds for `identity`, on `conn` (CFR-015).
+    async fn tombstone(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<Option<Tombstone>, SyncError>;
+
+    /// Writes (or replaces) a tombstone, on `conn` (CFR-015).
+    async fn upsert_tombstone(
+        &self,
+        conn: &mut SqliteConnection,
+        tombstone: &Tombstone,
+    ) -> Result<(), SyncError>;
+
+    /// Removes the tombstone a prevailing creation or update supersedes, on `conn` (CFR-022).
+    async fn clear_tombstone(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<(), SyncError>;
+
+    /// Advances the logical clock to at least `at_least`, on `conn` (CFR-010: a logical
+    /// timestamp is greater than every change the device has applied).
+    async fn advance_logical_clock(
+        &self,
+        conn: &mut SqliteConnection,
+        at_least: i64,
+    ) -> Result<(), SyncError>;
+
     /// The raw bytes of the kept key (SYN-052), or `None` while sync has never been enabled.
     async fn kept_key_bytes(&self) -> Result<Option<Vec<u8>>, SyncError>;
 

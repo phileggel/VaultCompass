@@ -4,12 +4,14 @@
 //! `dismiss_conflict_notice`) stay on `context::sync::api` instead.
 
 mod api;
+mod applier;
 mod error;
 mod orchestrator;
 mod rank_stamper;
 mod snapshot;
 
 pub use api::*;
+pub use applier::ServiceChangeApplier;
 pub use error::{PortfolioSyncError, PortfolioSyncTask};
 pub use orchestrator::PortfolioSyncOrchestrator;
 pub use rank_stamper::ServiceRankStamper;

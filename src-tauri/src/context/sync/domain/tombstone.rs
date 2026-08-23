@@ -1,9 +1,8 @@
-//! `Tombstone` (CFR-015): what a removal leaves behind. Read-side value object mirroring the
-//! `tombstones` table PR-A already writes via `SqliteChangeRecorder`; PR-B does not read
-//! tombstones yet (that starts with PR-C's resolution engine) but the shape is declared here
-//! so the sync domain module is complete per D2's file list.
+//! `Tombstone` (CFR-015): what a removal leaves behind — written by `SqliteChangeRecorder`
+//! for a local removal and by the apply executor for an applied one, read by the executor as
+//! the record's current state.
 
-use crate::shared::domain::{LogicalTimestamp, Origin, RecordKind};
+use crate::shared::domain::{LogicalTimestamp, Origin, Rank, RecordKind};
 
 /// What a removal leaves behind (CFR-015): stands in for the removed record when a later or
 /// earlier change to it arrives. Permanent — never pruned.
@@ -19,4 +18,15 @@ pub struct Tombstone {
     pub origin: Origin,
     /// The device that removed it, named in conflict notices.
     pub removed_by: String,
+}
+
+impl Tombstone {
+    /// The rank the removal carries (CFR-020).
+    pub fn rank(&self) -> Rank {
+        Rank {
+            origin: self.origin,
+            logical_timestamp: self.logical_timestamp.clone(),
+            device_id: self.removed_by.clone(),
+        }
+    }
 }

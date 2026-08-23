@@ -262,6 +262,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
         total_global_value: 470_000_000,
         total_unrealized_pnl: null,
         ytd_performance_pct: null,
+        has_inconsistent_holding: false,
       },
     ];
     mockInvoke.mockResolvedValue(summaries);

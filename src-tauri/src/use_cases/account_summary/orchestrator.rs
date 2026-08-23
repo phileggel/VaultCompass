@@ -2,6 +2,7 @@ use crate::context::account::{Account, AccountError, AccountServiceContract, Upd
 use crate::context::asset::{AssetClass, AssetServiceContract};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
+use crate::use_cases::shared::inconsistency::holding_inconsistency;
 use crate::use_cases::shared::valuation::compute_current_ytd_pct;
 use serde::Serialize;
 use specta::Type;
@@ -38,6 +39,9 @@ pub struct AccountSummary {
     /// not positive (PRF-032). A first-calendar-year account uses a year-start
     /// baseline of 0 and is present.
     pub ytd_performance_pct: Option<i64>,
+    /// Whether any holding of this account carries a derived inconsistency (SYN-040,
+    /// CFR-042) — marks the account row in the Accounts list.
+    pub has_inconsistent_holding: bool,
 }
 
 /// Orchestrates a cross-context read of account + asset data to build the
@@ -89,6 +93,13 @@ impl AccountSummaryUseCase {
                 today,
             )
             .await?;
+            // CFR-042/SYN-040 — derived from the replayed holdings, never stored.
+            let has_inconsistent_holding = self
+                .account_service
+                .get_holdings_for_account(&account.id)
+                .await?
+                .iter()
+                .any(|holding| holding_inconsistency(holding).is_some());
             summaries.push(AccountSummary {
                 id: account.id,
                 name: account.name,
@@ -97,6 +108,7 @@ impl AccountSummaryUseCase {
                 total_global_value,
                 total_unrealized_pnl,
                 ytd_performance_pct,
+                has_inconsistent_holding,
             });
         }
         Ok(summaries)
@@ -1222,6 +1234,50 @@ mod tests {
             summaries[0].ytd_performance_pct.is_none(),
             "account with no transactions must have ytd_performance_pct = None; got {:?}",
             summaries[0].ytd_performance_pct
+        );
+    }
+
+    // CFR-042/SYN-040 — an account with an overdrawn cash holding (a merge-only state, no
+    // single write's guard reaches it) must have `has_inconsistent_holding = true`, not a
+    // hardcoded `false`.
+    #[tokio::test]
+    async fn account_with_overdrawn_cash_holding_has_inconsistent_holding_flag_set() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        let account = account_svc
+            .create(
+                "Inconsistent".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        asset_svc.seed_cash_asset("EUR").await.unwrap();
+        account_svc
+            .record_deposit(&account.id, "2026-01-01".to_string(), 1_000_000, None)
+            .await
+            .unwrap();
+        let cash_asset_id = crate::core::cash::system_cash_asset_id("EUR");
+        sqlx::query(
+            "UPDATE holdings SET quantity = -5000000 WHERE account_id = ? AND asset_id = ?",
+        )
+        .bind(&account.id)
+        .bind(&cash_asset_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+        let summaries = uc.get_account_summaries().await.unwrap();
+        assert!(
+            summaries[0].has_inconsistent_holding,
+            "CFR-042/SYN-040: an overdrawn cash holding must set has_inconsistent_holding"
         );
     }
 }

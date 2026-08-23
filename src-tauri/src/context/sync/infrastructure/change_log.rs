@@ -1,8 +1,10 @@
 //! `SqliteChangeRecorder` — the SQLite-backed `ChangeRecorder` (D1, PR-A). Dormant when no
-//! `sync_device` row exists (SYN-010) or while the device is paused (SYN-070); otherwise
-//! appends to `changes` / `tombstones` and advances `sync_device.logical_clock` (SYN-025,
-//! CFR-010) on the same connection as the write it describes (SYN-020), then tells the
-//! recorded-change hook so the settling-interval batcher restarts its window (SYN-067).
+//! `sync_device` row exists (SYN-010), while the device is paused (SYN-070), or while an
+//! apply holds its gate (SYN-020); otherwise asks the resolution engine whether the local
+//! write outranks the record's tombstone (CFR-016), appends to `changes` / `tombstones`,
+//! and advances `sync_device.logical_clock` (SYN-025, CFR-010) on the same connection as
+//! the write it describes (SYN-020), then tells the recorded-change hook so the
+//! settling-interval batcher restarts its window (SYN-067).
 //!
 //! `SqliteChangeLogRepository` — the SQLite-backed `ChangeLogRepository`: the publish run's
 //! reads of the same `changes` table and the enrolment transaction's writes (SYN-013).
@@ -11,16 +13,20 @@ use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use anyhow::Context;
 use sqlx::{Pool, Sqlite, SqliteConnection, Transaction};
 
-use crate::context::sync::domain::{ChangeLogRepository, SegmentChange, SyncDevice};
+use crate::context::sync::domain::{
+    local_write_allowed, ChangeLogRepository, RecordState, SegmentChange, SyncDevice, Tombstone,
+};
 use crate::context::sync::error::SyncError;
 use crate::core::logger::BACKEND;
-use crate::shared::domain::{ChangeDraft, LogicalTimestamp, Operation, Rank};
-use crate::shared::infrastructure::change_recorder::ChangeRecorder;
+use crate::shared::domain::{ChangeDraft, LogicalTimestamp, Operation, Rank, RecordKind};
+use crate::shared::infrastructure::change_recorder::{
+    ChangeRecorder, LocalWriteOutranked, SuspendGuard,
+};
 
 /// The future a recorded-change hook returns.
 pub type HookFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -29,24 +35,13 @@ pub type HookFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 /// settling-interval batcher restarts its window from it.
 pub type RecordedChangeHook = Arc<dyn Fn() -> HookFuture + Send + Sync>;
 
-/// Releases the apply gate (SYN-020) when dropped.
-pub struct SuspendGuard {
-    suspended: Arc<AtomicBool>,
-}
-
-impl Drop for SuspendGuard {
-    fn drop(&mut self) {
-        self.suspended.store(false, Ordering::SeqCst);
-    }
-}
-
 /// SQLite-backed `ChangeRecorder`. Reads/writes the `sync_device` singleton (id = 1),
 /// `changes`, and `tombstones` tables through the connection handed to `record()` so the
 /// change is written in the same transaction as the record it describes (SYN-020).
 pub struct SqliteChangeRecorder {
     pool: Pool<Sqlite>,
     suspended: Arc<AtomicBool>,
-    on_recorded: Option<RecordedChangeHook>,
+    on_recorded: OnceLock<RecordedChangeHook>,
 }
 
 impl SqliteChangeRecorder {
@@ -55,26 +50,42 @@ impl SqliteChangeRecorder {
         Self {
             pool,
             suspended: Arc::new(AtomicBool::new(false)),
-            on_recorded: None,
+            on_recorded: OnceLock::new(),
         }
     }
 
-    /// Attaches the hook told after every recorded change (SYN-067).
-    pub fn with_recorded_change_hook(mut self, hook: RecordedChangeHook) -> Self {
-        self.on_recorded = Some(hook);
-        self
+    /// Attaches the hook told after every recorded change (SYN-067) — once; the recorder
+    /// is shared before the publishing side that the hook reaches exists.
+    pub fn attach_recorded_change_hook(&self, hook: RecordedChangeHook) {
+        if self.on_recorded.set(hook).is_err() {
+            tracing::warn!(target: BACKEND, "attach_recorded_change_hook: a hook is already attached");
+        }
     }
 
-    /// Holds the apply gate (SYN-020) until the returned guard is dropped: `is_recording()`
-    /// reports `false` for its lifetime. The `tokio::Mutex` that guarantees a local write and
-    /// an in-progress apply never interleave (SYN-064) lands in PR-C as `SyncGate`; this
-    /// recorder only carries its half of the invariant — the two must land together
-    /// (D1, reviewer-checkable).
-    pub fn suspend(&self) -> SuspendGuard {
-        self.suspended.store(true, Ordering::SeqCst);
-        SuspendGuard {
-            suspended: Arc::clone(&self.suspended),
-        }
+    /// CFR-016 — the record's current state as this recorder knows it: the tombstone a
+    /// removal left. A live row is the owning context's — a creation over it fails on its
+    /// own key before the recorder is reached, and no application-origin update of a
+    /// rank-resolved kind exists.
+    async fn current_state(
+        conn: &mut SqliteConnection,
+        record_kind: &str,
+        record_identity: &str,
+    ) -> anyhow::Result<Option<RecordState>> {
+        let row = sqlx::query_as!(
+            TombstoneRow,
+            r#"SELECT record_kind, record_identity, logical_timestamp, origin, removed_by
+               FROM tombstones WHERE record_kind = ? AND record_identity = ?"#,
+            record_kind,
+            record_identity
+        )
+        .fetch_optional(conn)
+        .await
+        .context("Failed to read the record's tombstone")?;
+        Ok(row
+            .map(Tombstone::try_from)
+            .transpose()
+            .context("Failed to read the record's tombstone")?
+            .map(|tombstone| RecordState::Tombstone(tombstone.rank())))
     }
 }
 
@@ -109,6 +120,25 @@ impl ChangeRecorder for SqliteChangeRecorder {
         .context("Failed to allocate change sequence")?;
 
         let logical_clock = device.logical_clock + 1;
+        let logical_timestamp = LogicalTimestamp::new(logical_clock as u64);
+        let record_kind = draft.record_kind.to_string();
+        let record_identity = draft.record_identity.as_str().to_string();
+        if draft.operation != Operation::Removed {
+            let draft_rank = Rank {
+                origin: draft.origin,
+                logical_timestamp: logical_timestamp.clone(),
+                device_id: device.device_id.clone(),
+            };
+            let current = Self::current_state(conn, &record_kind, &record_identity).await?;
+            if !local_write_allowed(draft.record_kind, &draft_rank, current.as_ref()) {
+                return Err(LocalWriteOutranked {
+                    record_kind: draft.record_kind,
+                    record_identity,
+                }
+                .into());
+            }
+        }
+
         sqlx::query!(
             "UPDATE sync_device SET logical_clock = ? WHERE id = 1",
             logical_clock
@@ -116,14 +146,11 @@ impl ChangeRecorder for SqliteChangeRecorder {
         .execute(&mut *conn)
         .await
         .context("Failed to advance logical clock")?;
-        let logical_timestamp = LogicalTimestamp::new(logical_clock as u64);
 
         let based_on = draft
             .based_on
             .as_ref()
             .map(|timestamp| timestamp.as_str().to_string());
-        let record_kind = draft.record_kind.to_string();
-        let record_identity = draft.record_identity.as_str().to_string();
         let operation = draft.operation.to_string();
         let origin = draft.origin.to_string();
         let logical_timestamp_text = logical_timestamp.as_str().to_string();
@@ -178,7 +205,7 @@ impl ChangeRecorder for SqliteChangeRecorder {
             Operation::Updated => {}
         }
 
-        if let Some(hook) = &self.on_recorded {
+        if let Some(hook) = self.on_recorded.get() {
             hook().await;
         }
 
@@ -203,6 +230,10 @@ impl ChangeRecorder for SqliteChangeRecorder {
             tracing::error!(target: BACKEND, err = ?error, "is_recording: sync_device lookup failed");
             false
         })
+    }
+
+    fn suspend(&self) -> SuspendGuard {
+        SuspendGuard::holding(Arc::clone(&self.suspended))
     }
 }
 
@@ -259,8 +290,116 @@ impl TryFrom<ChangeRow> for SegmentChange {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct TombstoneRow {
+    record_kind: String,
+    record_identity: String,
+    logical_timestamp: String,
+    origin: String,
+    removed_by: String,
+}
+
+impl TryFrom<TombstoneRow> for Tombstone {
+    type Error = SyncError;
+
+    fn try_from(row: TombstoneRow) -> Result<Self, SyncError> {
+        let logical_timestamp =
+            LogicalTimestamp::from_wire(&row.logical_timestamp).ok_or_else(|| {
+                tracing::error!(target: BACKEND, value = %row.logical_timestamp, "tombstones: malformed logical timestamp");
+                SyncError::DatabaseError
+            })?;
+        Ok(Tombstone {
+            record_kind: parse_stored("record_kind", &row.record_kind)?,
+            record_identity: row.record_identity,
+            logical_timestamp,
+            origin: parse_stored("origin", &row.origin)?,
+            removed_by: row.removed_by,
+        })
+    }
+}
+
 #[async_trait::async_trait]
 impl ChangeLogRepository for SqliteChangeLogRepository {
+    async fn tombstone(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<Option<Tombstone>, SyncError> {
+        let record_kind = kind.to_string();
+        let row = sqlx::query_as!(
+            TombstoneRow,
+            r#"SELECT record_kind, record_identity, logical_timestamp, origin, removed_by
+               FROM tombstones WHERE record_kind = ? AND record_identity = ?"#,
+            record_kind,
+            identity
+        )
+        .fetch_optional(conn)
+        .await
+        .map_err(|error| database_error("tombstone: query failed", error))?;
+        row.map(Tombstone::try_from).transpose()
+    }
+
+    async fn upsert_tombstone(
+        &self,
+        conn: &mut SqliteConnection,
+        tombstone: &Tombstone,
+    ) -> Result<(), SyncError> {
+        let record_kind = tombstone.record_kind.to_string();
+        let logical_timestamp = tombstone.logical_timestamp.as_str().to_string();
+        let origin = tombstone.origin.to_string();
+        sqlx::query!(
+            r#"INSERT INTO tombstones (record_kind, record_identity, logical_timestamp, origin, removed_by)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(record_kind, record_identity) DO UPDATE SET
+                   logical_timestamp = excluded.logical_timestamp,
+                   origin = excluded.origin,
+                   removed_by = excluded.removed_by"#,
+            record_kind,
+            tombstone.record_identity,
+            logical_timestamp,
+            origin,
+            tombstone.removed_by
+        )
+        .execute(conn)
+        .await
+        .map_err(|error| database_error("upsert_tombstone: write failed", error))?;
+        Ok(())
+    }
+
+    async fn clear_tombstone(
+        &self,
+        conn: &mut SqliteConnection,
+        kind: RecordKind,
+        identity: &str,
+    ) -> Result<(), SyncError> {
+        let record_kind = kind.to_string();
+        sqlx::query!(
+            "DELETE FROM tombstones WHERE record_kind = ? AND record_identity = ?",
+            record_kind,
+            identity
+        )
+        .execute(conn)
+        .await
+        .map_err(|error| database_error("clear_tombstone: delete failed", error))?;
+        Ok(())
+    }
+
+    async fn advance_logical_clock(
+        &self,
+        conn: &mut SqliteConnection,
+        at_least: i64,
+    ) -> Result<(), SyncError> {
+        sqlx::query!(
+            "UPDATE sync_device SET logical_clock = MAX(logical_clock, ?) WHERE id = 1",
+            at_least
+        )
+        .execute(conn)
+        .await
+        .map_err(|error| database_error("advance_logical_clock: update failed", error))?;
+        Ok(())
+    }
+
     async fn kept_key_bytes(&self) -> Result<Option<Vec<u8>>, SyncError> {
         sqlx::query_scalar!(
             r#"SELECT derived_key AS "derived_key!: Vec<u8>" FROM sync_device WHERE id = 1"#
@@ -667,6 +806,134 @@ mod tests {
         );
     }
 
+    // CFR-016 — the application's own creation over a tombstone the user left is refused
+    // with a typed error the caller's transaction rolls back on: no changes row, no clock
+    // advance, and the user's tombstone stands.
+    #[tokio::test]
+    async fn application_write_over_a_user_tombstone_is_refused_and_rolls_back() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+        let user_removal = ChangeDraft::new(
+            RecordKind::Transaction,
+            RecordIdentity::canonical(RecordKind::Transaction, &["fee-deduction-1"]),
+            Operation::Removed,
+            Origin::User,
+            None,
+            None,
+        );
+        recorder.record(&mut conn, user_removal).await.unwrap();
+        drop(conn);
+
+        let mut transaction = pool.begin().await.expect("transaction");
+        let regeneration = ChangeDraft::new(
+            RecordKind::Transaction,
+            RecordIdentity::canonical(RecordKind::Transaction, &["fee-deduction-1"]),
+            Operation::Created,
+            Origin::Application,
+            None,
+            Some("{\"id\":\"fee-deduction-1\"}".to_string()),
+        );
+        let refused = recorder
+            .record(&mut transaction, regeneration)
+            .await
+            .expect_err("CFR-016: the regeneration must be refused");
+        assert_eq!(
+            refused.downcast_ref::<LocalWriteOutranked>(),
+            Some(&LocalWriteOutranked {
+                record_kind: RecordKind::Transaction,
+                record_identity: "fee-deduction-1".into(),
+            }),
+            "the refusal must be the typed error the repository rolls back on: {refused:?}"
+        );
+        drop(transaction);
+
+        let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM changes")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "only the user's removal is recorded");
+        let clock: i64 = sqlx::query_scalar("SELECT logical_clock FROM sync_device WHERE id = 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(clock, 1, "a refused write advances nothing");
+        let tombstone_origin: Option<String> = sqlx::query_scalar(
+            "SELECT origin FROM tombstones WHERE record_kind = 'Transaction' AND record_identity = 'fee-deduction-1'",
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            tombstone_origin.as_deref(),
+            Some("User"),
+            "the user's tombstone stands"
+        );
+    }
+
+    // CFR-016/CFR-020 — a user write is never refused: the user's own re-creation over the
+    // user's tombstone records and clears the tombstone.
+    #[tokio::test]
+    async fn user_write_over_a_tombstone_is_never_refused() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+        let removal = ChangeDraft::new(
+            RecordKind::Account,
+            RecordIdentity::canonical(RecordKind::Account, &["account-1"]),
+            Operation::Removed,
+            Origin::User,
+            None,
+            None,
+        );
+        recorder.record(&mut conn, removal).await.unwrap();
+
+        let rank = recorder
+            .record(&mut conn, account_created_draft("account-1"))
+            .await
+            .expect("a user write is never refused")
+            .expect("sync_device row exists: must be ranked");
+        assert_eq!(rank.origin, Origin::User);
+    }
+
+    // CFR-050 — an observation never consults origin: the application's auto-fetched price
+    // records over a price the user removed.
+    #[tokio::test]
+    async fn observation_write_over_a_user_tombstone_is_never_refused() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        let mut conn = pool.acquire().await.expect("conn");
+        let identity =
+            RecordIdentity::canonical(RecordKind::AssetPrice, &["asset-1", "2026-08-20"]);
+        let user_removal = ChangeDraft::new(
+            RecordKind::AssetPrice,
+            identity.clone(),
+            Operation::Removed,
+            Origin::User,
+            None,
+            None,
+        );
+        recorder.record(&mut conn, user_removal).await.unwrap();
+
+        let fetched = ChangeDraft::new(
+            RecordKind::AssetPrice,
+            identity,
+            Operation::Created,
+            Origin::Application,
+            None,
+            Some("{\"price\":100000000}".to_string()),
+        );
+        let rank = recorder
+            .record(&mut conn, fetched)
+            .await
+            .expect("CFR-050: an observation is never refused on origin")
+            .expect("sync_device row exists: must be ranked");
+        assert_eq!(rank.origin, Origin::Application);
+    }
+
     // SYN-020 — the apply gate: is_recording() is false while an apply is in progress
     // (`suspend()`'s guard), and true again once the guard is dropped.
     #[tokio::test]
@@ -742,7 +1009,8 @@ mod tests {
             published_for_hook.fetch_add(1, Ordering::SeqCst);
             async {}
         });
-        let recorder = SqliteChangeRecorder::new(pool.clone()).with_recorded_change_hook(hook);
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        recorder.attach_recorded_change_hook(hook);
         let mut conn = pool.acquire().await.expect("conn");
 
         recorder
@@ -788,7 +1056,8 @@ mod tests {
             called_for_hook.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {})
         });
-        let recorder = SqliteChangeRecorder::new(pool.clone()).with_recorded_change_hook(hook);
+        let recorder = SqliteChangeRecorder::new(pool.clone());
+        recorder.attach_recorded_change_hook(hook);
         let mut conn = pool.acquire().await.expect("conn");
 
         recorder

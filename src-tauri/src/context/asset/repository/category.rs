@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use super::super::domain::{AssetCategory, AssetCategoryRepository};
-use super::asset::{asset_identity, fetch_asset, stamp_asset_rank};
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use super::asset::{asset_identity, current_asset_timestamp, fetch_asset, stamp_asset_rank};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -48,13 +50,14 @@ impl SqliteAssetCategoryRepository {
         conn: &mut SqliteConnection,
         category: &AssetCategory,
         operation: Operation,
+        based_on: Option<LogicalTimestamp>,
     ) -> Result<()> {
         let draft = ChangeDraft::new(
             RecordKind::Category,
             category_identity(&category.id),
             operation,
             Origin::User,
-            None,
+            based_on,
             Some(serde_json::to_string(category)?),
         );
         let rank = self.change_recorder.record(conn, draft).await?;
@@ -77,6 +80,24 @@ impl SqliteAssetCategoryRepository {
 
 fn category_identity(id: &str) -> RecordIdentity {
     RecordIdentity::canonical(RecordKind::Category, &[id])
+}
+
+/// CFR-011 — the logical timestamp of the category's current state, the `based_on` of the
+/// next local change to it; `None` while absent or never ranked.
+async fn current_category_timestamp(
+    conn: &mut SqliteConnection,
+    id: &str,
+) -> Result<Option<LogicalTimestamp>> {
+    let stored = sqlx::query_scalar!(
+        r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String" FROM categories WHERE id = ?"#,
+        id
+    )
+    .fetch_optional(conn)
+    .await
+    .with_context(|| format!("Failed to read the rank of category {}", id))?;
+    Ok(stored
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp)))
 }
 
 #[async_trait::async_trait]
@@ -145,7 +166,7 @@ impl AssetCategoryRepository for SqliteAssetCategoryRepository {
         .execute(&mut *tx)
         .await
         .with_context(|| format!("Failed to create category: {}", category.name))?;
-        self.record_category_state(&mut tx, &category, Operation::Created)
+        self.record_category_state(&mut tx, &category, Operation::Created, None)
             .await?;
         tx.commit()
             .await
@@ -160,6 +181,7 @@ impl AssetCategoryRepository for SqliteAssetCategoryRepository {
             .begin()
             .await
             .context("Failed to begin category update")?;
+        let based_on = current_category_timestamp(&mut tx, &category.id).await?;
         let written = sqlx::query!(
             r#"UPDATE categories SET name = ? WHERE id = ?"#,
             category.name,
@@ -169,7 +191,7 @@ impl AssetCategoryRepository for SqliteAssetCategoryRepository {
         .await
         .with_context(|| format!("Failed to update category: {}", category.id))?;
         if written.rows_affected() > 0 {
-            self.record_category_state(&mut tx, &category, Operation::Updated)
+            self.record_category_state(&mut tx, &category, Operation::Updated, based_on)
                 .await?;
         }
         tx.commit()
@@ -201,13 +223,14 @@ impl AssetCategoryRepository for SqliteAssetCategoryRepository {
 
         // CFR-030 — every reassigned asset is its own Updated change.
         for asset_id in &reassigned_asset_ids {
+            let based_on = current_asset_timestamp(&mut tx, asset_id).await?;
             if let Some(asset) = fetch_asset(&mut tx, asset_id).await? {
                 let draft = ChangeDraft::new(
                     RecordKind::Asset,
                     asset_identity(&asset.id),
                     Operation::Updated,
                     Origin::User,
-                    None,
+                    based_on,
                     Some(serde_json::to_string(&asset)?),
                 );
                 let rank = self.change_recorder.record(&mut tx, draft).await?;
@@ -217,6 +240,7 @@ impl AssetCategoryRepository for SqliteAssetCategoryRepository {
             }
         }
 
+        let based_on = current_category_timestamp(&mut tx, category_id).await?;
         let deleted = sqlx::query!(
             r#"UPDATE categories SET is_deleted = 1 WHERE id = ?"#,
             category_id
@@ -230,7 +254,7 @@ impl AssetCategoryRepository for SqliteAssetCategoryRepository {
                 category_identity(category_id),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut tx, draft).await?;

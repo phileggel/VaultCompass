@@ -136,6 +136,7 @@ const makeHolding = (overrides: Partial<HoldingDetail> = {}): HoldingDetail => (
   note_threshold_price: null,
   note_threshold_direction: null,
   note_alarm_triggered: false,
+  inconsistency: null,
   period_performance: {
     ytd: null,
     one_year: null,

@@ -64,6 +64,7 @@ const makeSummary = (overrides: Partial<AccountSummary> = {}): AccountSummary =>
   total_global_value: 100_000_000,
   total_unrealized_pnl: null,
   ytd_performance_pct: null,
+  has_inconsistent_holding: false,
   ...overrides,
 });
 

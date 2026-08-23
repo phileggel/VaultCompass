@@ -1,5 +1,7 @@
 use super::error::FeeGenerationError;
 use crate::context::account::{AccountError, AccountServiceContract, FeeFrequency, FeeSchedule};
+use crate::core::logger::BACKEND;
+use async_trait::async_trait;
 use chrono::{Datelike, NaiveDate};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -33,16 +35,39 @@ fn next_period_end(freq: FeeFrequency, boundary: NaiveDate) -> Option<NaiveDate>
     period_end_containing(freq, boundary.succ_opt()?)
 }
 
+/// The sync surface `apply_due_fee_deductions` runs once before generation (SYN-060, D9):
+/// an injected trait object over the sync service — never the sibling
+/// `use_cases::portfolio_sync` orchestrator (B18's "MUST NOT import from another use
+/// case") — wired from `lib.rs`.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait LaunchSyncSurface: Send + Sync {
+    /// Runs one sync when sync is enabled and not paused; a no-op otherwise. Never fails
+    /// outward — a failed launch sync is logged and generation proceeds regardless.
+    async fn run_launch_sync(&self);
+}
+
 /// Orchestrates periodic management fee deduction across all active fee schedules
 /// (FEE-040 — lazy catch-up generation).
 pub struct FeeGenerationOrchestrator {
     account_service: Arc<dyn AccountServiceContract>,
+    launch_sync: Option<Arc<dyn LaunchSyncSurface>>,
 }
 
 impl FeeGenerationOrchestrator {
     /// Creates a new orchestrator.
     pub fn new(account_service: Arc<dyn AccountServiceContract>) -> Self {
-        Self { account_service }
+        Self {
+            account_service,
+            launch_sync: None,
+        }
+    }
+
+    /// Attaches the launch-sync surface (SYN-060, D9): when present, `apply_due_fee_deductions`
+    /// runs it once, before any generation, so generation sees the merged ledger.
+    pub fn with_launch_sync(mut self, launch_sync: Arc<dyn LaunchSyncSurface>) -> Self {
+        self.launch_sync = Some(launch_sync);
+        self
     }
 
     /// Applies all due management fee deductions across every active fee schedule
@@ -50,6 +75,10 @@ impl FeeGenerationOrchestrator {
     /// per due period — the per-period rate is `annual_rate ÷ periods_per_year`, which
     /// gives the sequential per-period reduction and the oversell guard for free.
     pub async fn apply_due_fee_deductions(&self) -> Result<(), FeeGenerationError> {
+        // SYN-060 — one sync before any generation, so generation sees the merged ledger.
+        if let Some(launch_sync) = &self.launch_sync {
+            launch_sync.run_launch_sync().await;
+        }
         let today = chrono::Local::now().date_naive();
         let schedules = self.account_service.list_active_fee_schedules().await?;
         // FEE-078 — schedules of accounts with management fees disabled are
@@ -136,6 +165,16 @@ impl FeeGenerationOrchestrator {
                         Err(AccountError::QuantityNotPositive) => {}
                         // FEE-044/047 — a backfilled deduction that would oversell: skip.
                         Err(AccountError::CascadingOversell) => {}
+                        // CFR-016/FEE-047 — the user removed this deduction on some device;
+                        // the regeneration is outranked and the period stands skipped.
+                        Err(AccountError::ApplicationWriteOutranked) => {
+                            tracing::info!(
+                                target: BACKEND,
+                                account_id = %schedule.account_id,
+                                asset_id = %schedule.asset_id,
+                                "fee generation: period skipped, the user's removal outranks the regeneration"
+                            );
+                        }
                         Err(other) => return Err(other.into()),
                     }
                 }
@@ -1082,5 +1121,269 @@ mod tests {
         let one = deterministic_deduction_id("acc-1", "asset-1", "2026-08-31");
         let other = deterministic_deduction_id("acc-2", "asset-1", "2026-08-31");
         assert_ne!(one, other);
+    }
+
+    // CFR-016 — a generated fee deduction is written by the application, never the user;
+    // its change must carry `Origin::Application`, not the transaction repository's current
+    // hardcoded `Origin::User`. This is what lets the user's deletion of a generated
+    // deduction permanently outrank a later re-generation (CFR-016's own scenario).
+    #[tokio::test]
+    async fn generated_fee_deduction_is_recorded_with_application_origin() {
+        let pool = setup_pool().await;
+        sqlx::query(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, 'desktop-device', 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 0,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let recorder: Arc<dyn crate::shared::infrastructure::change_recorder::ChangeRecorder> =
+            Arc::new(crate::context::sync::SqliteChangeRecorder::new(
+                pool.clone(),
+            ));
+        let account_svc = Arc::new(
+            AccountService::new(
+                Box::new(
+                    SqliteAccountRepository::new(pool.clone())
+                        .with_change_recorder(recorder.clone()),
+                ),
+                Box::new(SqliteHoldingRepository::new(pool.clone())),
+                Box::new(
+                    SqliteTransactionRepository::new(pool.clone())
+                        .with_change_recorder(recorder.clone()),
+                ),
+            )
+            .with_fee_schedule_repo(Box::new(
+                SqliteFeeScheduleRepository::new(pool.clone())
+                    .with_change_recorder(recorder.clone()),
+            ))
+            .with_fee_catch_up_repo(Box::new(
+                SqliteFeeCatchUpRepository::new(pool.clone()).with_change_recorder(recorder),
+            )),
+        );
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "Origin Test".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id,
+                1_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
+        uc.apply_due_fee_deductions().await.unwrap();
+
+        // The seed deposit and buy are the user's own changes; only the deductions count.
+        let origins: Vec<String> = sqlx::query_scalar(
+            "SELECT origin FROM changes
+             WHERE record_kind = 'Transaction' AND content LIKE '%\"ManagementFee\"%'",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert!(
+            !origins.is_empty(),
+            "at least one generated deduction must have been recorded"
+        );
+        assert!(
+            origins.iter().all(|origin| origin == "Application"),
+            "CFR-016: every generated deduction must carry Origin::Application, got {origins:?}"
+        );
+    }
+
+    // CFR-016/FEE-047 — a deduction the user removed is never regenerated: the recorder
+    // refuses the application's write against the user's tombstone, the repository's
+    // transaction rolls back, and generation treats the period as skipped — the run
+    // succeeds, the deduction stays gone, and the cursor still advances (FEE-043).
+    #[tokio::test]
+    async fn regeneration_over_a_user_removed_deduction_is_a_skipped_period() {
+        let pool = setup_pool().await;
+        sqlx::query(
+            r#"INSERT INTO sync_device
+               (id, device_id, device_name, folder, joined_at, paused, portfolio_created_at,
+                logical_clock, derived_key, data_format_version)
+               VALUES (1, 'desktop-device', 'Desktop', '/tmp/sync', '2026-08-22T00:00:00Z', 0,
+                       '2026-08-22T00:00:00Z', 0, X'00', 1)"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let recorder: Arc<dyn crate::shared::infrastructure::change_recorder::ChangeRecorder> =
+            Arc::new(crate::context::sync::SqliteChangeRecorder::new(
+                pool.clone(),
+            ));
+        let account_svc = Arc::new(
+            AccountService::new(
+                Box::new(
+                    SqliteAccountRepository::new(pool.clone())
+                        .with_change_recorder(recorder.clone()),
+                ),
+                Box::new(SqliteHoldingRepository::new(pool.clone())),
+                Box::new(
+                    SqliteTransactionRepository::new(pool.clone())
+                        .with_change_recorder(recorder.clone()),
+                ),
+            )
+            .with_fee_schedule_repo(Box::new(
+                SqliteFeeScheduleRepository::new(pool.clone())
+                    .with_change_recorder(recorder.clone()),
+            ))
+            .with_fee_catch_up_repo(Box::new(
+                SqliteFeeCatchUpRepository::new(pool.clone()).with_change_recorder(recorder),
+            )),
+        );
+        let asset_svc = make_asset_service(&pool);
+        let stock_id = seed_stock(&asset_svc).await;
+        let account = account_svc
+            .create(
+                "Outranked".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                UpdateFrequency::ManualMonth,
+                false,
+            )
+            .await
+            .unwrap();
+        let account = enable_management_fees(&account_svc, &account).await;
+        seed_cash(&pool, &account_svc, &account.id).await;
+        account_svc
+            .buy_holding(
+                &account.id,
+                stock_id.clone(),
+                "2024-01-01".to_string(),
+                micro(100),
+                micro(50),
+                micro(1),
+                0,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        // One completed period only: January 2024.
+        account_svc
+            .create_fee_schedule(
+                &account.id,
+                stock_id.clone(),
+                12_000_000,
+                crate::context::account::FeeFrequency::Monthly,
+                "2024-01-01".to_string(),
+                Some("2024-01-31".to_string()),
+            )
+            .await
+            .unwrap();
+        let uc = FeeGenerationOrchestrator::new(account_svc.clone());
+        uc.apply_due_fee_deductions().await.unwrap();
+        let deduction = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|t| t.transaction_type == TransactionType::ManagementFee)
+            .expect("January's deduction must have been generated");
+
+        // The user removes it, then the cursor is lost (another device's view, say).
+        account_svc
+            .cancel_transaction(&account.id, &deduction.id)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM fee_catch_up_positions WHERE account_id = ?")
+            .bind(&account.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        uc.apply_due_fee_deductions().await.expect(
+            "CFR-016/FEE-047: an outranked regeneration is a skipped period, not a failure",
+        );
+
+        let regenerated = account_svc
+            .get_all_transactions_for_account(&account.id)
+            .await
+            .unwrap()
+            .into_iter()
+            .any(|t| t.transaction_type == TransactionType::ManagementFee);
+        assert!(
+            !regenerated,
+            "CFR-016: the user's removal outranks the regeneration — the deduction stays gone"
+        );
+        let tombstones: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM tombstones WHERE record_kind = 'Transaction' AND record_identity = ?",
+        )
+        .bind(&deduction.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            tombstones, 1,
+            "the user's tombstone must survive the refused write"
+        );
+        let cursor: Option<String> = sqlx::query_scalar(
+            "SELECT last_applied_period FROM fee_catch_up_positions WHERE account_id = ?",
+        )
+        .bind(&account.id)
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            cursor.as_deref(),
+            Some("2024-01-31"),
+            "FEE-043: the cursor advances past the skipped period"
+        );
+    }
+
+    // SYN-060/D9 — apply_due_fee_deductions runs the launch sync exactly once, before any
+    // generation, when a launch-sync surface is attached.
+    #[tokio::test]
+    async fn apply_due_fee_deductions_runs_the_launch_sync_before_generation() {
+        let pool = setup_pool().await;
+        let account_svc = make_account_service(&pool);
+        let mut launch_sync = MockLaunchSyncSurface::new();
+        launch_sync
+            .expect_run_launch_sync()
+            .times(1)
+            .returning(|| ());
+        let uc =
+            FeeGenerationOrchestrator::new(account_svc).with_launch_sync(Arc::new(launch_sync));
+
+        uc.apply_due_fee_deductions()
+            .await
+            .expect("must not error even with no schedules");
+        // The MockLaunchSyncSurface panics on drop if `run_launch_sync` was not called
+        // exactly once (mockall's unmet-expectation check) — SYN-060's ordering guarantee.
     }
 }

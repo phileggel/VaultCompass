@@ -116,6 +116,17 @@ impl LogicalTimestamp {
         Self::new(value + 1)
     }
 
+    /// Reads a wire-form timestamp back (a received change's `logical_timestamp` or
+    /// `based_on`); `None` when the text is not a decimal counter.
+    pub fn from_wire(text: &str) -> Option<Self> {
+        text.parse::<u64>().ok().map(Self::new)
+    }
+
+    /// The Lamport counter this timestamp encodes; 0 when the wire form is not a counter.
+    pub fn value(&self) -> u64 {
+        self.0.parse().unwrap_or(0)
+    }
+
     /// The zero-padded 20-character wire form.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -178,6 +189,29 @@ impl Ord for Rank {
             .then_with(|| self.logical_timestamp.cmp(&other.logical_timestamp))
             .then_with(|| self.device_id.cmp(&other.device_id))
     }
+}
+
+/// A synced record as this device currently holds it (CFR-014): the rank of the change that
+/// produced it — `None` for a row that has never been ranked (D6) — and its full state,
+/// JSON-encoded exactly as the owning repository's change capture serializes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncedRecord {
+    /// The rank of the record's current state, or the NULL sentinel.
+    pub rank: Option<Rank>,
+    /// The record's full state, JSON-encoded.
+    pub content: String,
+}
+
+/// One child record an account owns (CFR-030): its kind, its cross-device identity, and the
+/// rank of its current state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncedChild {
+    /// The child's kind.
+    pub record_kind: RecordKind,
+    /// The child's canonical identity (CFR-012).
+    pub record_identity: String,
+    /// The rank of the child's current state, or the NULL sentinel.
+    pub rank: Option<Rank>,
 }
 
 /// The not-yet-recorded shape of one change (SYN Entity Definition — Change), built by a

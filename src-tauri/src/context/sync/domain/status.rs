@@ -18,7 +18,7 @@ pub struct RosterEntry {
     pub device_name: String,
     /// The data format of the application that last published from it (SYN-035).
     pub data_format_version: u32,
-    /// When its changes were last applied here; `None` if never (PR-C applies).
+    /// When its changes were last applied here; `None` if never.
     pub last_applied_at: Option<String>,
 }
 
@@ -89,7 +89,7 @@ pub struct SyncStatus {
     pub folder: Option<String>,
     /// `None` when never synced.
     pub last_sync_completed_at: Option<String>,
-    /// Every other device known from the roster (SYN-037).
+    /// Every other device whose manifest the last run read (SYN-037/063).
     pub roster: Vec<RosterEntry>,
     /// Count of held-back changes (SYN-041). Always 0 in PR-B — nothing holds a change back
     /// until PR-C's apply path exists.
@@ -126,8 +126,8 @@ impl SyncStatus {
     }
 
     /// The status of an enrolled device (SYN-063). The roster, held-back changes, notices,
-    /// and inconsistent holdings are read-side products of applying other devices' changes
-    /// and stay empty until that path exists.
+    /// and inconsistent holdings are read-side products of applying other devices' changes;
+    /// the caller fills them in.
     pub fn for_device(
         device: &SyncDevice,
         last_sync_completed_at: Option<String>,

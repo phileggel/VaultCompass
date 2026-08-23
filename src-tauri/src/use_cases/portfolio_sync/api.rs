@@ -7,6 +7,7 @@
 //! account/asset/currency bounded contexts through `PortfolioSyncOrchestrator`.
 
 use std::result::Result as StdResult;
+use std::sync::Arc;
 
 use tauri::State;
 
@@ -19,7 +20,7 @@ use super::orchestrator::PortfolioSyncOrchestrator;
 #[tauri::command]
 #[specta::specta]
 pub async fn inspect_sync_folder(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
     folder: String,
 ) -> StdResult<SyncFolderState, PortfolioSyncError> {
     uc.inspect_sync_folder(folder).await
@@ -29,7 +30,7 @@ pub async fn inspect_sync_folder(
 #[tauri::command]
 #[specta::specta]
 pub async fn enable_sync(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
     folder: String,
     passphrase: String,
     device_name: String,
@@ -41,7 +42,7 @@ pub async fn enable_sync(
 #[tauri::command]
 #[specta::specta]
 pub async fn start_sync_over(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
     folder: String,
     passphrase: String,
     device_name: String,
@@ -53,7 +54,7 @@ pub async fn start_sync_over(
 #[tauri::command]
 #[specta::specta]
 pub async fn change_sync_folder(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
     folder: String,
 ) -> StdResult<SyncStatus, PortfolioSyncError> {
     uc.change_sync_folder(folder).await
@@ -63,7 +64,7 @@ pub async fn change_sync_folder(
 #[tauri::command]
 #[specta::specta]
 pub async fn sync_now(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
 ) -> StdResult<SyncReport, PortfolioSyncError> {
     uc.sync_now().await
 }
@@ -72,7 +73,7 @@ pub async fn sync_now(
 #[tauri::command]
 #[specta::specta]
 pub async fn resume_sync(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
 ) -> StdResult<SyncReport, PortfolioSyncError> {
     uc.resume_sync().await
 }
@@ -81,7 +82,7 @@ pub async fn resume_sync(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_sync_status(
-    uc: State<'_, PortfolioSyncOrchestrator>,
+    uc: State<'_, Arc<PortfolioSyncOrchestrator>>,
 ) -> StdResult<SyncStatus, PortfolioSyncError> {
     uc.get_sync_status().await
 }

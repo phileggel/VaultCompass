@@ -4,7 +4,9 @@ use sqlx::{Pool, Sqlite, SqliteConnection};
 use std::sync::Arc;
 
 use crate::context::account::domain::{FeeCatchUpPosition, FeeCatchUpRepository};
-use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+use crate::shared::domain::{
+    ChangeDraft, LogicalTimestamp, Operation, Origin, RecordIdentity, RecordKind,
+};
 use crate::shared::infrastructure::change_recorder::{
     ChangeRecorder, NoopChangeRecorder, RankColumns,
 };
@@ -118,14 +120,21 @@ impl FeeCatchUpRepository for SqliteFeeCatchUpRepository {
             .begin()
             .await
             .context("begin upsert fee catch-up position")?;
-        let existing = sqlx::query_scalar!(
-            "SELECT last_applied_period FROM fee_catch_up_positions WHERE account_id = ? AND asset_id = ?",
+        let existing = sqlx::query!(
+            r#"SELECT last_applied_period, sync_logical_timestamp
+               FROM fee_catch_up_positions WHERE account_id = ? AND asset_id = ?"#,
             incoming.account_id,
             incoming.asset_id
         )
         .fetch_optional(&mut *tx)
         .await
         .context("lookup fee catch-up position")?;
+        // CFR-011 — the next change is based on the state this device holds.
+        let based_on = existing
+            .as_ref()
+            .and_then(|row| row.sync_logical_timestamp.as_deref())
+            .and_then(LogicalTimestamp::from_wire);
+        let existing = existing.map(|row| row.last_applied_period);
         let stored = sqlx::query_as!(
             FeeCatchUpPositionRow,
             r#"INSERT INTO fee_catch_up_positions (account_id, asset_id, last_applied_period)
@@ -147,12 +156,13 @@ impl FeeCatchUpRepository for SqliteFeeCatchUpRepository {
             Some(_) => None,
         };
         if let Some(operation) = operation {
+            // CFR-016/044 — the catch-up position is written only by the application.
             let draft = ChangeDraft::new(
                 RecordKind::FeeCatchUpPosition,
                 identity(&stored.account_id, &stored.asset_id),
                 operation,
-                Origin::User,
-                None,
+                Origin::Application,
+                based_on,
                 Some(serde_json::to_string(&stored)?),
             );
             self.record(&mut tx, &stored, draft).await?;
@@ -169,6 +179,17 @@ impl FeeCatchUpRepository for SqliteFeeCatchUpRepository {
             .begin()
             .await
             .context("begin delete fee catch-up position")?;
+        let based_on = sqlx::query_scalar!(
+            r#"SELECT sync_logical_timestamp AS "sync_logical_timestamp?: String"
+               FROM fee_catch_up_positions WHERE account_id = ? AND asset_id = ?"#,
+            account_id,
+            asset_id
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("read fee catch-up position rank")?
+        .flatten()
+        .and_then(|timestamp| LogicalTimestamp::from_wire(&timestamp));
         let deleted = sqlx::query!(
             "DELETE FROM fee_catch_up_positions WHERE account_id = ? AND asset_id = ?",
             account_id,
@@ -183,7 +204,7 @@ impl FeeCatchUpRepository for SqliteFeeCatchUpRepository {
                 identity(account_id, asset_id),
                 Operation::Removed,
                 Origin::User,
-                None,
+                based_on,
                 None,
             );
             self.change_recorder.record(&mut tx, draft).await?;
@@ -366,5 +387,32 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+    }
+
+    // CFR-016/044 — the catch-up position is written only by the application (never the
+    // user); its change must carry `Origin::Application`, not the recorder's current
+    // hardcoded `Origin::User`.
+    #[tokio::test]
+    async fn upsert_records_the_change_with_application_origin() {
+        let pool = setup_pool().await;
+        seed_sync_device(&pool).await;
+        seed_account_and_asset(&pool, "acc-1", "asset-1").await;
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let repo = SqliteFeeCatchUpRepository::new(pool.clone()).with_change_recorder(recorder);
+
+        repo.upsert(position("acc-1", "asset-1", "2026-07-31"))
+            .await
+            .unwrap();
+
+        let origin: String = sqlx::query_scalar(
+            "SELECT origin FROM changes WHERE record_kind = 'FeeCatchUpPosition'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            origin, "Application",
+            "CFR-016/044: a catch-up position is an application record, never a user one"
+        );
     }
 }

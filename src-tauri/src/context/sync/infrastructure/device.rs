@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, Sqlite, SqliteConnection};
 
 use crate::context::sync::domain::{
     ConflictNotice, HeldBackChange, SyncCursor, SyncDevice, SyncStateRepository,
@@ -215,6 +215,19 @@ impl SyncStateRepository for SqliteSyncStateRepository {
     }
 
     async fn upsert_cursor(&self, cursor: &SyncCursor) -> Result<(), SyncError> {
+        let mut conn = self
+            .pool
+            .acquire()
+            .await
+            .map_err(|error| database_error("upsert_cursor: acquire failed", error))?;
+        self.upsert_cursor_on(&mut conn, cursor).await
+    }
+
+    async fn upsert_cursor_on(
+        &self,
+        conn: &mut SqliteConnection,
+        cursor: &SyncCursor,
+    ) -> Result<(), SyncError> {
         sqlx::query!(
             r#"INSERT INTO sync_cursors (device_id, applied_through, last_applied_at)
                VALUES (?, ?, ?)
@@ -225,13 +238,26 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             cursor.applied_through,
             cursor.last_applied_at
         )
-        .execute(&self.pool)
+        .execute(conn)
         .await
         .map_err(|error| database_error("upsert_cursor: write failed", error))?;
         Ok(())
     }
 
     async fn insert_held_back(&self, change: &HeldBackChange) -> Result<(), SyncError> {
+        let mut conn = self
+            .pool
+            .acquire()
+            .await
+            .map_err(|error| database_error("insert_held_back: acquire failed", error))?;
+        self.insert_held_back_on(&mut conn, change).await
+    }
+
+    async fn insert_held_back_on(
+        &self,
+        conn: &mut SqliteConnection,
+        change: &HeldBackChange,
+    ) -> Result<(), SyncError> {
         let waiting_kind = change.waiting_kind.to_string();
         sqlx::query!(
             r#"INSERT INTO held_back_changes
@@ -245,7 +271,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             change.waiting_identity,
             change.held_since
         )
-        .execute(&self.pool)
+        .execute(conn)
         .await
         .map_err(|error| database_error("insert_held_back: write failed", error))?;
         Ok(())
@@ -265,14 +291,40 @@ impl SyncStateRepository for SqliteSyncStateRepository {
     }
 
     async fn remove_held_back(&self, id: &str) -> Result<(), SyncError> {
+        let mut conn = self
+            .pool
+            .acquire()
+            .await
+            .map_err(|error| database_error("remove_held_back: acquire failed", error))?;
+        self.remove_held_back_on(&mut conn, id).await
+    }
+
+    async fn remove_held_back_on(
+        &self,
+        conn: &mut SqliteConnection,
+        id: &str,
+    ) -> Result<(), SyncError> {
         sqlx::query!("DELETE FROM held_back_changes WHERE id = ?", id)
-            .execute(&self.pool)
+            .execute(conn)
             .await
             .map_err(|error| database_error("remove_held_back: delete failed", error))?;
         Ok(())
     }
 
     async fn insert_notice(&self, notice: &ConflictNotice) -> Result<(), SyncError> {
+        let mut conn = self
+            .pool
+            .acquire()
+            .await
+            .map_err(|error| database_error("insert_notice: acquire failed", error))?;
+        self.insert_notice_on(&mut conn, notice).await
+    }
+
+    async fn insert_notice_on(
+        &self,
+        conn: &mut SqliteConnection,
+        notice: &ConflictNotice,
+    ) -> Result<(), SyncError> {
         let kind = notice.kind.to_string();
         let record_kind = notice.record_kind.to_string();
         sqlx::query!(
@@ -289,7 +341,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             notice.other_device_name,
             notice.raised_at
         )
-        .execute(&self.pool)
+        .execute(conn)
         .await
         .map_err(|error| database_error("insert_notice: write failed", error))?;
         Ok(())

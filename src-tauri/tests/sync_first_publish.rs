@@ -87,7 +87,9 @@ async fn build_ctx(folder: &std::path::Path) -> Ctx {
         Box::new(
             SqliteCurrencyPairRepository::new(pool.clone()).with_change_recorder(recorder.clone()),
         ),
-        Box::new(SqliteCurrencyRateRepository::new(pool.clone()).with_change_recorder(recorder)),
+        Box::new(
+            SqliteCurrencyRateRepository::new(pool.clone()).with_change_recorder(recorder.clone()),
+        ),
     ));
     let state_repo = Arc::new(SqliteSyncStateRepository::new(pool.clone()));
     let folder_store = Arc::new(FsFolderStore::new(folder));
@@ -96,6 +98,7 @@ async fn build_ctx(folder: &std::path::Path) -> Ctx {
         change_log.clone(),
         state_repo.clone(),
         folder_store.clone(),
+        recorder,
     ));
     let sync_service = Arc::new(
         vault_compass_lib::context::sync::SyncService::new(

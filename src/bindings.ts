@@ -1219,6 +1219,12 @@ export type AccountError =
  */
 { code: "NameAlreadyExists" } | 
 /**
+ * The application's own write (a generated fee deduction) was refused: the user's
+ * removal of the record outranks it (CFR-016). Never user-facing — the generation
+ * path treats it as a skipped period (FEE-047).
+ */
+{ code: "ApplicationWriteOutranked" } | 
+/**
  * Application-layer translation of any infrastructure failure from an
  * account-side repository call. No `hint` payload on the wire; the full
  * diagnostic chain is preserved server-side via `tracing::error!` at the
@@ -1297,7 +1303,12 @@ total_unrealized_pnl: number | null;
  * not positive (PRF-032). A first-calendar-year account uses a year-start
  * baseline of 0 and is present.
  */
-ytd_performance_pct: number | null }
+ytd_performance_pct: number | null; 
+/**
+ * Whether any holding of this account carries a derived inconsistency (SYN-040,
+ * CFR-042) — marks the account row in the Accounts list.
+ */
+has_inconsistent_holding: boolean }
 /**
  * Use-case composite for the **archive asset** failure surface — the single
  * command `archive_asset` (OQ-6) and its full chain of rejections.
@@ -2644,7 +2655,13 @@ note_threshold_direction: ThresholdDirection | null;
  * when no note, no alarm, or no price; always false in the as-of view
  * (HNO-040).
  */
-note_alarm_triggered: boolean }
+note_alarm_triggered: boolean; 
+/**
+ * Derived from the merged (or single-device) replayed ledger; `Some` when the
+ * holding's quantity is negative (`Oversold`) or, for the Cash Holding, its balance is
+ * negative (`CashOverdrawn`, CSH-080). `None` otherwise (SYN-040, CFR-042).
+ */
+inconsistency: HoldingInconsistency | null }
 /**
  * A holding whose merged ledger breaks an invariant (CFR-042). Derived on read, never stored.
  */
@@ -3204,7 +3221,7 @@ device_name: string;
  */
 data_format_version: number; 
 /**
- * When its changes were last applied here; `None` if never (PR-C applies).
+ * When its changes were last applied here; `None` if never.
  */
 last_applied_at: string | null }
 /**
@@ -3573,7 +3590,7 @@ folder: string | null;
  */
 last_sync_completed_at: string | null; 
 /**
- * Every other device known from the roster (SYN-037).
+ * Every other device whose manifest the last run read (SYN-037/063).
  */
 roster: RosterEntry[]; 
 /**

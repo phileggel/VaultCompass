@@ -1,26 +1,100 @@
-//! One sync run — **publish-only in PR-B** (SYN-060 publish half, SYN-061, SYN-067, SYN-069).
-//! Collects this device's unpublished changes, seals one segment, rewrites the manifest, and
-//! marks the rows published. Reading other devices' areas, resolving, and applying land in
-//! PR-C — `applied_changes`, `held_back_changes`, `dropped_changes`, and `notices_raised` are
-//! always 0 on the `SyncReport` this produces.
+//! One sync run (SYN-060/061/065/067/069): `publish` seals this device's unpublished changes
+//! into one segment and rewrites its manifest; `run` publishes, then reads every other
+//! device's manifest and unapplied segments from its sync cursor, hands each change to the
+//! apply executor (`apply.rs`, driven by the resolution engine), and commits the whole apply
+//! as one SQLite transaction under the `SyncGate` with the change recorder suspended
+//! (SYN-020); `join` rebuilds a fresh installation from the folder's entire history
+//! (`join.rs`).
 
 use std::sync::Arc;
 
+use sqlx::SqliteConnection;
+
+use crate::context::sync::application::apply::{apply_change, Applied};
+use crate::context::sync::application::join::{self, JoinError};
 use crate::context::sync::domain::{
-    ChangeLogRepository, FolderStore, Manifest, Segment, SyncDevice, SyncFailure, SyncReport,
-    SyncStateRepository, SyncStatus,
+    display_name, replay_order, segment_sequence_range, Change, ChangeApplier, ChangeLogRepository,
+    ConflictNotice, FolderStore, HeldBackChange, MalformedChange, Manifest, NoticeDraft,
+    RosterEntry, Segment, SyncCursor, SyncDevice, SyncFailure, SyncReport, SyncStateRepository,
+    SyncStatus, WaitingFor,
 };
 use crate::context::sync::error::SyncError;
 use crate::context::sync::infrastructure::codec::{
-    decode_header, encode_manifest, encode_segment, header_data_format_version, DATA_FORMAT_VERSION,
+    decode_header, decode_manifest, decode_segment, encode_manifest, encode_segment,
+    header_data_format_version, DATA_FORMAT_VERSION,
 };
 use crate::context::sync::infrastructure::crypto::{verify_check, Key};
+use crate::core::logger::BACKEND;
+use crate::shared::infrastructure::change_recorder::ChangeRecorder;
 
-/// Executes a publish-only sync run against a device's own unpublished changes.
+/// Serializes a local write against an in-progress apply (SYN-064/SYN-020): the mutex
+/// `SyncRun::run`'s full apply transaction holds for its whole duration, so a local write
+/// waits for it rather than interleaving. The change recorder's `suspend()` gate (SYN-020)
+/// and this mutex are the same invariant's two halves — the run holds both.
+pub struct SyncGate {
+    mutex: tokio::sync::Mutex<()>,
+}
+
+impl Default for SyncGate {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SyncGate {
+    /// Creates an ungated `SyncGate` — nothing is held yet.
+    pub fn new() -> Self {
+        Self {
+            mutex: tokio::sync::Mutex::new(()),
+        }
+    }
+
+    /// Runs `f` while holding the gate, so a concurrent local write started after this call
+    /// begins waits until `f` completes (SYN-064).
+    pub async fn run_exclusive<F, Fut, T>(&self, f: F) -> T
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = T>,
+    {
+        let _permit = self.mutex.lock().await;
+        f().await
+    }
+}
+
+/// Executes one sync run: the publish half, the full run, or a join.
 pub struct SyncRun {
     change_log: Arc<dyn ChangeLogRepository>,
     state_repo: Arc<dyn SyncStateRepository>,
     folder_store: Arc<dyn FolderStore>,
+    change_recorder: Arc<dyn ChangeRecorder>,
+    sync_gate: Arc<SyncGate>,
+}
+
+/// One change read from another device's segment, with where it came from (SYN-033).
+struct IncomingChange {
+    origin_device_id: String,
+    sequence: i64,
+    change: Change,
+}
+
+/// What the other devices' areas yielded this run (SYN-033/034/037): the changes to apply,
+/// the cursors to advance, and the roster every readable manifest names (SYN-063).
+#[derive(Default)]
+struct Intake {
+    changes: Vec<IncomingChange>,
+    cursors: Vec<SyncCursor>,
+    roster: Vec<RosterEntry>,
+    unreadable_files: u32,
+    failures: Vec<SyncFailure>,
+}
+
+/// What the apply transaction did (SYN-062).
+#[derive(Default)]
+struct ApplyCounts {
+    applied: u32,
+    held_back: u32,
+    dropped: u32,
+    notices: u32,
 }
 
 /// What the folder header says about continuing this run (SYN-035/084).
@@ -60,6 +134,34 @@ pub(super) async fn kept_key(
         .and_then(|bytes| Key::from_bytes(bytes).ok()))
 }
 
+/// A segment's changes past `after`, in the engine's shape; `Err` when one of them is
+/// malformed — the whole segment is unreadable (SYN-034).
+fn segment_changes(segment: Segment, after: i64) -> Result<Vec<IncomingChange>, MalformedChange> {
+    let device_id = segment.device_id;
+    segment
+        .changes
+        .into_iter()
+        .filter(|change| change.sequence > after)
+        .map(|change| {
+            let sequence = change.sequence;
+            Change::from_segment_change(&device_id, change).map(|change| IncomingChange {
+                origin_device_id: device_id.clone(),
+                sequence,
+                change,
+            })
+        })
+        .collect()
+}
+
+fn count(counts: &mut ApplyCounts, applied: &Applied) {
+    match applied {
+        Applied::Applied => counts.applied += 1,
+        Applied::Ignored => {}
+        Applied::Dropped => counts.dropped += 1,
+        Applied::HeldBack(_) => counts.held_back += 1,
+    }
+}
+
 fn report(device: &SyncDevice, published_changes: u32, failures: Vec<SyncFailure>) -> SyncReport {
     let completed_at = chrono::Utc::now().to_rfc3339();
     SyncReport {
@@ -85,17 +187,412 @@ fn folder_failure(error: SyncError) -> Result<SyncFailure, SyncError> {
 }
 
 impl SyncRun {
-    /// Creates a run bound to the given change log, sync state, and folder.
+    /// Creates a run bound to the given change log, sync state, folder, and the change
+    /// recorder it suspends while applying (SYN-020).
     pub fn new(
         change_log: Arc<dyn ChangeLogRepository>,
         state_repo: Arc<dyn SyncStateRepository>,
         folder_store: Arc<dyn FolderStore>,
+        change_recorder: Arc<dyn ChangeRecorder>,
     ) -> Self {
         Self {
             change_log,
             state_repo,
             folder_store,
+            change_recorder,
+            sync_gate: Arc::new(SyncGate::new()),
         }
+    }
+
+    /// Shares the `SyncGate` a full run's apply transaction holds for its duration
+    /// (SYN-064).
+    pub fn with_sync_gate(mut self, sync_gate: Arc<SyncGate>) -> Self {
+        self.sync_gate = sync_gate;
+        self
+    }
+
+    /// Enables sync by joining the portfolio `folder` already holds (SYN-014): derives the
+    /// key from the header, checks the passphrase (SYN-015), reads every device's whole
+    /// history (`HistoryIncomplete` when any of it is missing, SYN-036), and rebuilds the
+    /// portfolio from it in one transaction — rolled back entirely on any failure
+    /// (`RebuildInterrupted`, SYN-080). Local prices, pairs, and rates are discarded first
+    /// (SYN-083). `applier` is the owning contexts' write surface (CFR-017).
+    pub async fn join(
+        &self,
+        applier: &dyn ChangeApplier,
+        folder: String,
+        passphrase: String,
+        device_name: String,
+    ) -> Result<SyncStatus, JoinError> {
+        join::join(
+            self.change_log.as_ref(),
+            self.state_repo.as_ref(),
+            self.folder_store.as_ref(),
+            self.change_recorder.as_ref(),
+            applier,
+            folder,
+            passphrase,
+            device_name,
+        )
+        .await
+    }
+
+    /// The full sync run (SYN-060/065): publishes this device's unpublished changes, reads
+    /// every other device's manifest and unapplied segments from its own sync cursor,
+    /// applies each change as the resolution engine decides, and commits the outcomes in
+    /// one SQLite transaction under the `SyncGate` — so an interrupted run leaves the
+    /// portfolio exactly as it was and the next run retries from the same cursors
+    /// (SYN-065). Held-back changes persist and are retried each run (SYN-041); a file that
+    /// cannot be read is skipped and counted (SYN-034); a newer data format anywhere keeps
+    /// publishing but stops applying (SYN-035); applying writes through `applier` and
+    /// records no change (CFR-017, SYN-020). Never rejects for the folder's state
+    /// (SYN-062).
+    pub async fn run(
+        &self,
+        device: &SyncDevice,
+        applier: &dyn ChangeApplier,
+    ) -> Result<SyncReport, SyncError> {
+        let published = self.publish(device).await?;
+        if published.failures.iter().any(|failure| {
+            matches!(
+                failure,
+                SyncFailure::PortfolioReset
+                    | SyncFailure::FolderUnavailable { .. }
+                    | SyncFailure::UpdateRequired { .. }
+            )
+        }) {
+            return Ok(published);
+        }
+        let Some(key) = kept_key(self.change_log.as_ref()).await? else {
+            return Ok(published);
+        };
+        let mut intake = match self.read_other_devices(device, &key).await {
+            Ok(intake) => intake,
+            Err(error) => {
+                let mut failures = published.failures;
+                failures.push(folder_failure(error)?);
+                return Ok(report(device, published.published_changes, failures));
+            }
+        };
+        let mut failures = published.failures;
+        failures.append(&mut intake.failures);
+        if intake.unreadable_files > 0 {
+            failures.push(SyncFailure::UnreadableFiles {
+                count: intake.unreadable_files,
+            });
+        }
+        let roster = intake.roster.clone();
+        let update_required = failures
+            .iter()
+            .any(|failure| matches!(failure, SyncFailure::UpdateRequired { .. }));
+        let counts = if update_required {
+            ApplyCounts::default()
+        } else {
+            let held_back = self.state_repo.list_held_back().await?;
+            self.sync_gate
+                .run_exclusive(|| async {
+                    // SYN-020 — applying never records a change: the recorder stays
+                    // suspended for the whole apply transaction.
+                    let _recording_suspended = self.change_recorder.suspend();
+                    self.apply_intake(device, applier, held_back, intake).await
+                })
+                .await?
+        };
+        let mut report = report(device, published.published_changes, failures);
+        report.applied_changes = counts.applied;
+        report.held_back_changes = counts.held_back;
+        report.dropped_changes = counts.dropped;
+        report.notices_raised = counts.notices;
+        report.status.roster = roster;
+        Ok(report)
+    }
+
+    /// Reads every other device's manifest and the segments past this device's cursor for
+    /// it (SYN-033/037), naming each readable manifest's device in the roster with when its
+    /// changes were last applied here (SYN-063). A manifest or segment that cannot be
+    /// decoded is skipped and counted (SYN-034); a segment this device has not yet received
+    /// in full (a gap before it) stops the read of that area until the next run; a newer
+    /// data format is reported (SYN-035). A folder failure aborts the read (`Err`).
+    async fn read_other_devices(
+        &self,
+        device: &SyncDevice,
+        key: &Key,
+    ) -> Result<Intake, SyncError> {
+        let mut intake = Intake::default();
+        for other in self.folder_store.list_device_ids().await? {
+            if other == device.device_id {
+                continue;
+            }
+            let Some(bytes) = self.folder_store.read_manifest_bytes(&other).await? else {
+                continue;
+            };
+            let manifest = match decode_manifest(key, &bytes) {
+                Ok(manifest) => manifest,
+                Err(error) => {
+                    tracing::warn!(target: BACKEND, device_id = %other, err = %error, "run: manifest skipped");
+                    intake.unreadable_files += 1;
+                    continue;
+                }
+            };
+            let cursor = self.state_repo.get_cursor(&other).await?;
+            intake.roster.push(RosterEntry {
+                device_id: other.clone(),
+                device_name: manifest.device_name.clone(),
+                data_format_version: manifest.data_format_version,
+                last_applied_at: cursor
+                    .as_ref()
+                    .and_then(|cursor| cursor.last_applied_at.clone()),
+            });
+            if manifest.data_format_version > DATA_FORMAT_VERSION {
+                intake.failures.push(SyncFailure::UpdateRequired {
+                    data_format_version: manifest.data_format_version,
+                });
+                continue;
+            }
+            let applied_through = cursor.map_or(0, |cursor| cursor.applied_through);
+            if manifest.latest_sequence <= applied_through {
+                continue;
+            }
+            let reached = self
+                .read_segments(&other, key, applied_through, &mut intake)
+                .await?;
+            if reached > applied_through {
+                let last_applied_at = Some(chrono::Utc::now().to_rfc3339());
+                if let Some(entry) = intake.roster.last_mut() {
+                    entry.last_applied_at = last_applied_at.clone();
+                }
+                intake.cursors.push(SyncCursor {
+                    device_id: other,
+                    applied_through: reached,
+                    last_applied_at,
+                });
+            }
+        }
+        Ok(intake)
+    }
+
+    /// Reads `other`'s segments past `applied_through` in sequence order, returning the
+    /// last sequence taken in.
+    async fn read_segments(
+        &self,
+        other: &str,
+        key: &Key,
+        applied_through: i64,
+        intake: &mut Intake,
+    ) -> Result<i64, SyncError> {
+        let mut names: Vec<(i64, i64, String)> = self
+            .folder_store
+            .list_segment_names(other)
+            .await?
+            .into_iter()
+            .filter_map(|name| {
+                segment_sequence_range(&name).map(|(first, last)| (first, last, name))
+            })
+            .filter(|(_, last, _)| *last > applied_through)
+            .collect();
+        names.sort();
+        let mut reached = applied_through;
+        for (first, last, name) in names {
+            if first > reached + 1 {
+                break;
+            }
+            let Some(bytes) = self.folder_store.read_segment_bytes(other, &name).await? else {
+                break;
+            };
+            let changes = decode_segment(key, &bytes)
+                .map_err(|error| error.to_string())
+                .and_then(|segment| {
+                    if segment.device_id != other {
+                        return Err("segment belongs to another device".to_string());
+                    }
+                    if segment.data_format_version > DATA_FORMAT_VERSION {
+                        intake.failures.push(SyncFailure::UpdateRequired {
+                            data_format_version: segment.data_format_version,
+                        });
+                        return Ok(vec![]);
+                    }
+                    segment_changes(segment, reached).map_err(|problem| problem.to_string())
+                });
+            let changes = match changes {
+                Ok(changes) => changes,
+                Err(reason) => {
+                    tracing::warn!(target: BACKEND, device_id = %other, name = %name, reason = %reason, "run: segment skipped");
+                    intake.unreadable_files += 1;
+                    break;
+                }
+            };
+            intake.changes.extend(changes);
+            reached = reached.max(last);
+        }
+        Ok(reached)
+    }
+
+    /// The apply transaction (SYN-065): applies what was read in replay order, then retries
+    /// every held-back change — the rows from earlier runs and the ones this run just held
+    /// back — until a pass reunites nothing more, so a parent arriving in the same run
+    /// reunites its child at once (SYN-041); persists what is still held back and the
+    /// notices raised on this device, advances the cursors and the logical clock, and
+    /// commits — or rolls everything back.
+    async fn apply_intake(
+        &self,
+        device: &SyncDevice,
+        applier: &dyn ChangeApplier,
+        held_back: Vec<HeldBackChange>,
+        mut intake: Intake,
+    ) -> Result<ApplyCounts, SyncError> {
+        intake
+            .changes
+            .sort_by(|a, b| replay_order((&a.change, a.sequence), (&b.change, b.sequence)));
+        let mut transaction = self.change_log.begin().await?;
+        let conn: &mut SqliteConnection = &mut transaction;
+        let mut counts = ApplyCounts::default();
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut highest_timestamp: i64 = 0;
+
+        let mut pending: Vec<(String, Change)> = Vec::new();
+        for held in held_back {
+            match serde_json::from_str::<Change>(&held.payload) {
+                Ok(change) => pending.push((held.id, change)),
+                Err(_) => {
+                    tracing::error!(target: BACKEND, id = %held.id, "apply: held-back payload unreadable, discarded");
+                    self.state_repo.remove_held_back_on(conn, &held.id).await?;
+                }
+            }
+        }
+
+        for incoming in &intake.changes {
+            let change = &incoming.change;
+            highest_timestamp = highest_timestamp.max(change.logical_timestamp.value() as i64);
+            let result = apply_change(
+                conn,
+                applier,
+                self.change_log.as_ref(),
+                &device.device_id,
+                change,
+            )
+            .await?;
+            if let Applied::HeldBack(waiting_for) = &result.applied {
+                let id = self.hold_back(conn, incoming, waiting_for, &now).await?;
+                pending.push((id, change.clone()));
+                continue;
+            }
+            counts.notices += self
+                .persist_notices(conn, change, result.notices, &intake.roster, &now)
+                .await?;
+            count(&mut counts, &result.applied);
+        }
+
+        loop {
+            let mut still_waiting: Vec<(String, Change)> = Vec::new();
+            let mut reunited = false;
+            for (id, change) in pending {
+                highest_timestamp = highest_timestamp.max(change.logical_timestamp.value() as i64);
+                let result = apply_change(
+                    conn,
+                    applier,
+                    self.change_log.as_ref(),
+                    &device.device_id,
+                    &change,
+                )
+                .await?;
+                if matches!(result.applied, Applied::HeldBack(_)) {
+                    still_waiting.push((id, change));
+                    continue;
+                }
+                reunited = true;
+                self.state_repo.remove_held_back_on(conn, &id).await?;
+                counts.notices += self
+                    .persist_notices(conn, &change, result.notices, &intake.roster, &now)
+                    .await?;
+                count(&mut counts, &result.applied);
+            }
+            pending = still_waiting;
+            if !reunited || pending.is_empty() {
+                break;
+            }
+        }
+        counts.held_back = pending.len() as u32;
+
+        for cursor in &intake.cursors {
+            self.state_repo.upsert_cursor_on(conn, cursor).await?;
+        }
+        self.change_log
+            .advance_logical_clock(conn, highest_timestamp)
+            .await?;
+        transaction.commit().await.map_err(|error| {
+            tracing::error!(target: BACKEND, err = ?error, "apply: commit failed");
+            SyncError::DatabaseError
+        })?;
+        Ok(counts)
+    }
+
+    /// Persists one change this run holds back (SYN-041), returning the row's id.
+    async fn hold_back(
+        &self,
+        conn: &mut SqliteConnection,
+        incoming: &IncomingChange,
+        waiting_for: &WaitingFor,
+        held_since: &str,
+    ) -> Result<String, SyncError> {
+        let change = &incoming.change;
+        let (waiting_kind, waiting_identity) = match waiting_for {
+            WaitingFor::Record { kind, identity } => (*kind, identity.clone()),
+            WaitingFor::OwnState { .. } => (change.record_kind, change.record_identity.clone()),
+        };
+        let payload = serde_json::to_string(change).map_err(|error| {
+            tracing::error!(target: BACKEND, err = %error, "apply: held-back payload not serialized");
+            SyncError::DatabaseError
+        })?;
+        let id = uuid::Uuid::new_v4().to_string();
+        self.state_repo
+            .insert_held_back_on(
+                conn,
+                &HeldBackChange {
+                    id: id.clone(),
+                    origin_device_id: incoming.origin_device_id.clone(),
+                    sequence: incoming.sequence,
+                    payload,
+                    waiting_kind,
+                    waiting_identity,
+                    held_since: held_since.to_string(),
+                },
+            )
+            .await?;
+        Ok(id)
+    }
+
+    /// Persists the notices one applied change raised on this device (SYN-066), naming the
+    /// other device by the name its manifest carries; returns how many were raised.
+    async fn persist_notices(
+        &self,
+        conn: &mut SqliteConnection,
+        change: &Change,
+        notices: Vec<NoticeDraft>,
+        roster: &[RosterEntry],
+        raised_at: &str,
+    ) -> Result<u32, SyncError> {
+        let raised = notices.len() as u32;
+        for draft in notices {
+            let other_device_name = roster
+                .iter()
+                .find(|entry| entry.device_id == draft.other_device_id)
+                .map_or_else(
+                    || draft.other_device_id.clone(),
+                    |entry| entry.device_name.clone(),
+                );
+            let notice = ConflictNotice {
+                notice_id: uuid::Uuid::new_v4().to_string(),
+                kind: draft.kind,
+                record_kind: draft.record_kind,
+                record_identity: draft.record_identity.clone(),
+                record_label: display_name(change).unwrap_or_else(|| draft.record_identity.clone()),
+                other_device_id: draft.other_device_id,
+                other_device_name,
+                raised_at: raised_at.to_string(),
+            };
+            self.state_repo.insert_notice_on(conn, &notice).await?;
+        }
+        Ok(raised)
     }
 
     /// Publishes this device's unpublished changes as one segment and rewrites its manifest
@@ -205,11 +702,16 @@ impl SyncRun {
 mod tests {
     use super::*;
     use crate::context::sync::domain::{
-        DerivationParameters, FolderHeader, MockFolderStore, MockSyncStateRepository,
+        segment_file_name, DerivationParameters, FolderHeader, MockChangeApplier, MockFolderStore,
+        MockSyncStateRepository, SegmentChange,
     };
     use crate::context::sync::infrastructure::codec::encode_header;
     use crate::context::sync::infrastructure::crypto::make_check;
-    use crate::context::sync::infrastructure::SqliteChangeLogRepository;
+    use crate::context::sync::infrastructure::{
+        SqliteChangeLogRepository, SqliteChangeRecorder, SqliteSyncStateRepository,
+    };
+    use crate::shared::domain::{ChangeDraft, Operation, Origin, RecordIdentity, RecordKind};
+    use crate::shared::infrastructure::change_recorder::NoopChangeRecorder;
     use sqlx::sqlite::SqlitePoolOptions;
     use sqlx::{Pool, Sqlite};
 
@@ -222,6 +724,7 @@ mod tests {
             Arc::new(SqliteChangeLogRepository::new(pool.clone())),
             state_repo,
             Arc::new(folder_store),
+            Arc::new(NoopChangeRecorder),
         )
     }
 
@@ -569,5 +1072,399 @@ mod tests {
             .await
             .expect("SYN-062: never rejects");
         assert!(report.failures.contains(&SyncFailure::PortfolioReset));
+    }
+
+    // -------------------------------------------------------------------------
+    // SYN-060/065 — the full apply run
+    // -------------------------------------------------------------------------
+
+    // SYN-064 — SyncGate.run_exclusive holds the mutex for the whole apply; a local write
+    // started after the run begins must wait until it completes.
+    #[tokio::test]
+    async fn sync_gate_run_exclusive_returns_the_closures_value() {
+        let gate = SyncGate::new();
+        let value = gate.run_exclusive(|| async { 42 }).await;
+        assert_eq!(
+            value, 42,
+            "SYN-064: run_exclusive must return the wrapped work's value"
+        );
+    }
+
+    /// A laptop area holding one segment `1..=1` with `change`, sealed under the kept key,
+    /// and the manifest announcing it — served by the mock folder store.
+    fn folder_with_laptop_segment(change: SegmentChange) -> MockFolderStore {
+        let key = kept_key_for_tests();
+        let manifest = encode_manifest(
+            &key,
+            &Manifest {
+                device_id: "laptop-device".into(),
+                device_name: "Laptop".into(),
+                data_format_version: DATA_FORMAT_VERSION,
+                latest_sequence: 1,
+            },
+        )
+        .expect("manifest encodes");
+        let segment = encode_segment(
+            &key,
+            &Segment {
+                device_id: "laptop-device".into(),
+                first_sequence: 1,
+                last_sequence: 1,
+                data_format_version: DATA_FORMAT_VERSION,
+                changes: vec![change],
+            },
+        )
+        .expect("segment encodes");
+        let mut folder_store = MockFolderStore::new();
+        folder_store.expect_retarget().return_const(());
+        folder_store.expect_check_available().returning(|| Ok(()));
+        folder_store
+            .expect_read_header_bytes()
+            .returning(|| Ok(Some(matching_header_bytes())));
+        folder_store
+            .expect_write_manifest()
+            .returning(|_, _| Ok(()));
+        folder_store
+            .expect_list_device_ids()
+            .returning(|| Ok(vec!["desktop-device".into(), "laptop-device".into()]));
+        folder_store
+            .expect_read_manifest_bytes()
+            .returning(move |_| Ok(Some(manifest.clone())));
+        folder_store
+            .expect_list_segment_names()
+            .returning(|_| Ok(vec![segment_file_name(1, 1)]));
+        folder_store
+            .expect_read_segment_bytes()
+            .returning(move |_, _| Ok(Some(segment.clone())));
+        folder_store
+    }
+
+    fn laptop_change(record_kind: RecordKind, identity: &str, content: &str) -> SegmentChange {
+        SegmentChange {
+            sequence: 1,
+            logical_timestamp: format!("{:020}", 7),
+            based_on: None,
+            record_kind,
+            record_identity: identity.into(),
+            operation: Operation::Created,
+            origin: Origin::User,
+            content: Some(content.into()),
+        }
+    }
+
+    // SYN-065 — a full run applies another device's segment through the applier, counts
+    // it, and advances that device's cursor in the same transaction.
+    #[tokio::test]
+    async fn full_run_applies_another_devices_segment_atomically() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let folder_store = folder_with_laptop_segment(laptop_change(
+            RecordKind::Account,
+            "account-laptop",
+            r#"{"id":"account-laptop","name":"Livret","currency":"EUR"}"#,
+        ));
+        let mut applier = MockChangeApplier::new();
+        applier.expect_live_record().returning(|_, _, _| Ok(None));
+        applier
+            .expect_clashing_name()
+            .returning(|_, _, _, _| Ok(None));
+        applier
+            .expect_write()
+            .withf(|_, change| change.record_identity == "account-laptop")
+            .times(1)
+            .returning(|_, _| Ok(()));
+        let run = run_over(&pool, Arc::clone(&state_repo), folder_store);
+
+        let report = run
+            .run(&device(), &applier)
+            .await
+            .expect("SYN-060/065: a full run must succeed and report what it did");
+        assert_eq!(report.applied_changes, 1);
+        assert_eq!(report.held_back_changes, 0);
+        assert!(report.failures.is_empty());
+        let cursor = state_repo
+            .get_cursor("laptop-device")
+            .await
+            .unwrap()
+            .expect("SYN-033: the cursor on Laptop must exist after the run");
+        assert_eq!(cursor.applied_through, 1);
+        assert_eq!(
+            report.status.roster,
+            vec![RosterEntry {
+                device_id: "laptop-device".into(),
+                device_name: "Laptop".into(),
+                data_format_version: DATA_FORMAT_VERSION,
+                last_applied_at: cursor.last_applied_at,
+            }],
+            "SYN-063: the roster names every other device the run read, with when its \
+             changes were last applied here"
+        );
+    }
+
+    // SYN-041 — a change referring to a record this device has not received (its account)
+    // is held back, not rejected nor written; the sync cursor still advances past it, and
+    // the held-back row waits for the next run.
+    #[tokio::test]
+    async fn full_run_holds_back_a_change_whose_parent_has_not_arrived() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let folder_store = folder_with_laptop_segment(laptop_change(
+            RecordKind::Transaction,
+            "tx-laptop",
+            r#"{"id":"tx-laptop","account_id":"account-unknown","asset_id":"asset-unknown"}"#,
+        ));
+        let mut applier = MockChangeApplier::new();
+        applier.expect_live_record().returning(|_, _, _| Ok(None));
+        let run = run_over(&pool, Arc::clone(&state_repo), folder_store);
+
+        let report = run
+            .run(&device(), &applier)
+            .await
+            .expect("SYN-060/065: a full run must succeed and report what it did");
+        assert_eq!(report.held_back_changes, 1);
+        assert_eq!(report.applied_changes, 0);
+        let held = state_repo.list_held_back().await.unwrap();
+        assert_eq!(held.len(), 1);
+        assert_eq!(held[0].waiting_kind, RecordKind::Account);
+        assert_eq!(held[0].waiting_identity, "account-unknown");
+        assert_eq!(
+            state_repo
+                .get_cursor("laptop-device")
+                .await
+                .unwrap()
+                .map(|cursor| cursor.applied_through),
+            Some(1),
+            "SYN-041: the cursor advances past a held-back change"
+        );
+    }
+    // SYN-034/CFR-012 — a change that declares identity A but carries record B's content is
+    // malformed: the whole segment is skipped and counted unreadable, nothing is written,
+    // and the cursor does not advance past it.
+    #[tokio::test]
+    async fn full_run_skips_a_segment_whose_change_identity_does_not_match_its_content() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let folder_store = folder_with_laptop_segment(laptop_change(
+            RecordKind::Account,
+            "account-a",
+            r#"{"id":"account-b","name":"Livret","currency":"EUR"}"#,
+        ));
+        // No expectations: any read or write through the applier fails the test.
+        let applier = MockChangeApplier::new();
+        let run = run_over(&pool, Arc::clone(&state_repo), folder_store);
+
+        let report = run
+            .run(&device(), &applier)
+            .await
+            .expect("SYN-062: never rejects for the folder's state");
+        assert_eq!(report.applied_changes, 0);
+        assert!(
+            report
+                .failures
+                .contains(&SyncFailure::UnreadableFiles { count: 1 }),
+            "SYN-034: the malformed segment must be counted unreadable: {:?}",
+            report.failures
+        );
+        assert!(
+            state_repo
+                .get_cursor("laptop-device")
+                .await
+                .unwrap()
+                .is_none(),
+            "the cursor must not advance past a skipped segment"
+        );
+    }
+
+    // SYN-020 — applying never records a change: a write that goes through the change
+    // recorder during the apply transaction is met by the suspended recorder and leaves no
+    // `changes` row for this device.
+    #[tokio::test]
+    async fn full_run_suspends_the_change_recorder_while_applying() {
+        struct RecordingApplier {
+            recorder: Arc<SqliteChangeRecorder>,
+            recorded: std::sync::Mutex<Option<Option<crate::shared::domain::Rank>>>,
+        }
+
+        #[async_trait::async_trait]
+        impl ChangeApplier for RecordingApplier {
+            async fn live_record(
+                &self,
+                _conn: &mut SqliteConnection,
+                _kind: RecordKind,
+                _identity: &str,
+            ) -> Result<Option<crate::shared::domain::SyncedRecord>, SyncError> {
+                Ok(None)
+            }
+            async fn children_of_account(
+                &self,
+                _conn: &mut SqliteConnection,
+                _account_id: &str,
+            ) -> Result<Vec<crate::shared::domain::SyncedChild>, SyncError> {
+                Ok(vec![])
+            }
+            async fn clashing_name(
+                &self,
+                _conn: &mut SqliteConnection,
+                _kind: RecordKind,
+                _identity: &str,
+                _name: &str,
+            ) -> Result<Option<crate::shared::domain::Rank>, SyncError> {
+                Ok(None)
+            }
+            async fn write(
+                &self,
+                conn: &mut SqliteConnection,
+                change: &Change,
+            ) -> Result<(), SyncError> {
+                let draft = ChangeDraft::new(
+                    change.record_kind,
+                    RecordIdentity::canonical(change.record_kind, &[&change.record_identity]),
+                    Operation::Created,
+                    Origin::User,
+                    None,
+                    change.content.clone(),
+                );
+                let rank = self
+                    .recorder
+                    .record(conn, draft)
+                    .await
+                    .map_err(|_| SyncError::DatabaseError)?;
+                *self.recorded.lock().unwrap() = Some(rank);
+                Ok(())
+            }
+            async fn discard_observations(
+                &self,
+                _conn: &mut SqliteConnection,
+            ) -> Result<(), SyncError> {
+                Ok(())
+            }
+        }
+
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let folder_store = folder_with_laptop_segment(laptop_change(
+            RecordKind::Account,
+            "account-laptop",
+            r#"{"id":"account-laptop","name":"Livret","currency":"EUR"}"#,
+        ));
+        let recorder = Arc::new(SqliteChangeRecorder::new(pool.clone()));
+        let applier = RecordingApplier {
+            recorder: Arc::clone(&recorder),
+            recorded: std::sync::Mutex::new(None),
+        };
+        let run = SyncRun::new(
+            Arc::new(SqliteChangeLogRepository::new(pool.clone())),
+            state_repo,
+            Arc::new(folder_store),
+            recorder,
+        );
+
+        let report = run.run(&device(), &applier).await.expect("run");
+        assert_eq!(report.applied_changes, 1);
+        assert_eq!(
+            *applier.recorded.lock().unwrap(),
+            Some(crate::shared::domain::Rank::NEVER),
+            "SYN-020: the recorder must be suspended for the whole apply"
+        );
+        let recorded: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM changes WHERE device_id = 'desktop-device'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            recorded, 0,
+            "SYN-020: applying leaves no changes row for this device"
+        );
+        assert!(
+            run.change_recorder.is_recording().await,
+            "the gate is released once the run completes"
+        );
+    }
+
+    // SYN-041 — a change held back by an earlier run is applied in the very run that brings
+    // what it waits for: the fresh intake is applied first, then the held-back rows are
+    // retried, so the parent's arrival reunites the child at once.
+    #[tokio::test]
+    async fn full_run_reunites_a_held_back_child_with_the_parent_arriving_in_the_same_run() {
+        let pool = make_pool().await;
+        seed_sync_device(&pool, "desktop-device").await;
+        let state_repo: Arc<dyn SyncStateRepository> =
+            Arc::new(SqliteSyncStateRepository::new(pool.clone()));
+        let held_change = Change {
+            device_id: "office-device".into(),
+            record_kind: RecordKind::Transaction,
+            record_identity: "tx-office".into(),
+            operation: Operation::Created,
+            origin: Origin::User,
+            logical_timestamp: crate::shared::domain::LogicalTimestamp::new(3),
+            based_on: None,
+            content: Some(
+                r#"{"id":"tx-office","account_id":"account-laptop","asset_id":"system-cash-eur"}"#
+                    .into(),
+            ),
+        };
+        state_repo
+            .insert_held_back(&HeldBackChange {
+                id: "held-1".into(),
+                origin_device_id: "office-device".into(),
+                sequence: 1,
+                payload: serde_json::to_string(&held_change).unwrap(),
+                waiting_kind: RecordKind::Account,
+                waiting_identity: "account-laptop".into(),
+                held_since: "2026-08-22T00:00:00Z".into(),
+            })
+            .await
+            .unwrap();
+        let folder_store = folder_with_laptop_segment(laptop_change(
+            RecordKind::Account,
+            "account-laptop",
+            r#"{"id":"account-laptop","name":"Livret","currency":"EUR"}"#,
+        ));
+        // The applier remembers what it wrote, so a later lookup finds the parent.
+        let written: Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
+            Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+        let mut applier = MockChangeApplier::new();
+        let lookup = Arc::clone(&written);
+        applier
+            .expect_live_record()
+            .returning(move |_, _, identity| {
+                Ok(lookup.lock().unwrap().contains(identity).then(|| {
+                    crate::shared::domain::SyncedRecord {
+                        rank: None,
+                        content: "{}".into(),
+                    }
+                }))
+            });
+        applier
+            .expect_clashing_name()
+            .returning(|_, _, _, _| Ok(None));
+        let writes = Arc::clone(&written);
+        applier.expect_write().times(2).returning(move |_, change| {
+            writes
+                .lock()
+                .unwrap()
+                .insert(change.record_identity.clone());
+            Ok(())
+        });
+        let run = run_over(&pool, Arc::clone(&state_repo), folder_store);
+
+        let report = run.run(&device(), &applier).await.expect("run");
+        assert_eq!(
+            report.applied_changes, 2,
+            "SYN-041: the parent and the reunited child both apply this run"
+        );
+        assert_eq!(report.held_back_changes, 0);
+        assert!(
+            state_repo.list_held_back().await.unwrap().is_empty(),
+            "the reunited change leaves the held-back table"
+        );
     }
 }

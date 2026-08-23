@@ -24,7 +24,9 @@ use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{PoisonError, RwLock};
 
-use crate::context::sync::domain::{FolderProblem, FolderStore, WriteHeaderOutcome};
+use crate::context::sync::domain::{
+    segment_file_name, FolderProblem, FolderStore, WriteHeaderOutcome,
+};
 use crate::context::sync::error::SyncError;
 use crate::core::logger::BACKEND;
 
@@ -38,12 +40,8 @@ const TEMP_MARKER: &str = ".tmp-";
 const MAX_HEADER_BYTES: u64 = 1024 * 1024;
 /// The largest manifest this build reads, in bytes (1 MiB).
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
-
-/// Zero-pads a sequence number to the 20-character width the segment file name uses (matches
-/// `LogicalTimestamp`'s wire-form width, D6/D8).
-fn segment_file_name(first_sequence: i64, last_sequence: i64) -> String {
-    format!("seg-{first_sequence:020}-{last_sequence:020}{SEGMENT_EXTENSION}")
-}
+/// The largest segment this build reads, in bytes (64 MiB).
+const MAX_SEGMENT_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Filesystem-backed `FolderStore`.
 pub struct FsFolderStore {
@@ -337,6 +335,31 @@ impl FolderStore for FsFolderStore {
                 let name = entry.file_name().to_string_lossy().to_string();
                 name.ends_with(SEGMENT_EXTENSION) && !name.contains(TEMP_MARKER)
             })
+        })
+        .await
+    }
+
+    async fn read_segment_bytes(
+        &self,
+        device_id: &str,
+        name: &str,
+    ) -> Result<Option<Vec<u8>>, SyncError> {
+        let root = self.root();
+        let device_id = device_id.to_string();
+        let name = name.to_string();
+        blocking(move || {
+            let dir = checked_device_dir(&root, &device_id)
+                .map_err(|error| unavailable(&error))?
+                .join(SEGMENTS_DIR);
+            // A segment name is a bare file name from `list_segment_names`; one carrying a
+            // path separator never leaves the segments directory.
+            if name.contains(['/', '\\']) || !name.ends_with(SEGMENT_EXTENSION) {
+                tracing::warn!(target: BACKEND, name = %name, "folder store: segment name refused");
+                return Err(SyncError::FolderUnavailable {
+                    problem: FolderProblem::IoFailure,
+                });
+            }
+            read_optional(&dir.join(&name), MAX_SEGMENT_BYTES)
         })
         .await
     }
@@ -691,6 +714,35 @@ mod tests {
             names.is_empty(),
             "a *.tmp-* file must never be listed as a finished segment"
         );
+    }
+
+    // SYN-031 — a written segment reads back by the name `list_segment_names` returns; a
+    // name that would leave the segments directory is refused.
+    #[tokio::test]
+    async fn read_segment_bytes_reads_back_a_listed_segment_and_refuses_a_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsFolderStore::new(dir.path());
+        store
+            .write_segment("desktop-device", 1, 3, b"sealed".to_vec())
+            .await
+            .unwrap();
+        let names = store.list_segment_names("desktop-device").await.unwrap();
+        let bytes = store
+            .read_segment_bytes("desktop-device", &names[0])
+            .await
+            .unwrap();
+        assert_eq!(bytes, Some(b"sealed".to_vec()));
+        assert_eq!(
+            store
+                .read_segment_bytes("desktop-device", "missing.bin")
+                .await
+                .unwrap(),
+            None
+        );
+        assert!(store
+            .read_segment_bytes("desktop-device", "../manifest.bin")
+            .await
+            .is_err());
     }
 
     // SYN-037 — the manifest is rewritten in place: a second write with a new payload replaces

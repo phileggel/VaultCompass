@@ -6,17 +6,18 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::context::sync::application::run::SyncRun;
 use crate::context::sync::domain::{
-    FolderStore, SyncDevice, SyncFailure, SyncReport, SyncStateRepository, SyncStatus,
+    FolderStore, RosterEntry, SyncDevice, SyncFailure, SyncReport, SyncStateRepository, SyncStatus,
 };
 use crate::context::sync::error::SyncError;
 use crate::core::logger::BACKEND;
 
 /// What the last run of this process left behind for `SyncStatus` (SYN-063): when it
-/// completed and what needs attention.
+/// completed, what needs attention, and the roster it read.
 #[derive(Clone)]
 struct LastRun {
     completed_at: String,
     failures: Vec<SyncFailure>,
+    roster: Vec<RosterEntry>,
 }
 
 /// Device lifecycle + status assembly for the sync bounded context.
@@ -68,6 +69,7 @@ impl SyncService {
         *self.last_run.lock().unwrap_or_else(PoisonError::into_inner) = Some(LastRun {
             completed_at: report.completed_at.clone(),
             failures: report.failures.clone(),
+            roster: report.status.roster.clone(),
         });
     }
 
@@ -84,11 +86,16 @@ impl SyncService {
 
     fn status_of(&self, device: &SyncDevice) -> SyncStatus {
         let last_run = self.last_run();
-        SyncStatus::for_device(
+        let mut status = SyncStatus::for_device(
             device,
             last_run.as_ref().map(|run| run.completed_at.clone()),
-            last_run.map(|run| run.failures).unwrap_or_default(),
-        )
+            last_run
+                .as_ref()
+                .map(|run| run.failures.clone())
+                .unwrap_or_default(),
+        );
+        status.roster = last_run.map(|run| run.roster).unwrap_or_default();
+        status
     }
 
     /// Pauses sync on this device (SYN-070). `SyncDisabled` while never enabled;
@@ -180,13 +187,20 @@ impl SyncService {
         self.state_repo.dismiss_notice(&notice_id).await
     }
 
-    /// Assembles the sync-owned half of `SyncStatus` (SYN-063). While disabled, `enabled` is
-    /// `false`, the `Option` fields are `None`, and every collection is empty.
+    /// Assembles the sync-owned half of `SyncStatus` (SYN-063): the device, the last run,
+    /// the undismissed notices (SYN-066), and the held-back changes (SYN-041). While
+    /// disabled, `enabled` is `false`, the `Option` fields are `None`, and every collection
+    /// is empty.
     pub async fn status(&self) -> Result<SyncStatus, SyncError> {
-        Ok(match self.state_repo.get_device().await? {
-            Some(device) => self.status_of(&device),
-            None => SyncStatus::disabled(),
-        })
+        let Some(device) = self.state_repo.get_device().await? else {
+            return Ok(SyncStatus::disabled());
+        };
+        let mut status = self.status_of(&device);
+        status.notices = self.state_repo.list_undismissed_notices().await?;
+        let held_back = self.state_repo.list_held_back().await?;
+        status.held_back_count = held_back.len() as u32;
+        status.oldest_held_back_since = held_back.first().map(|change| change.held_since.clone());
+        Ok(status)
     }
 }
 
@@ -419,10 +433,22 @@ mod tests {
         state_repo
             .expect_get_device()
             .returning(|| Ok(Some(active_device())));
+        state_repo
+            .expect_list_undismissed_notices()
+            .returning(|| Ok(vec![]));
+        state_repo.expect_list_held_back().returning(|| Ok(vec![]));
         let service = SyncService::new(Arc::new(state_repo), Arc::new(MockFolderStore::new()));
         let failures = vec![SyncFailure::FolderUnavailable {
             problem: crate::context::sync::domain::FolderProblem::Missing,
         }];
+        let roster = vec![RosterEntry {
+            device_id: "laptop-device".into(),
+            device_name: "Laptop".into(),
+            data_format_version: 1,
+            last_applied_at: Some("2026-08-22T09:59:00Z".into()),
+        }];
+        let mut run_status = SyncStatus::for_device(&active_device(), None, vec![]);
+        run_status.roster = roster.clone();
         service.remember_run(&SyncReport {
             published_changes: 0,
             applied_changes: 0,
@@ -431,7 +457,7 @@ mod tests {
             notices_raised: 0,
             failures: failures.clone(),
             completed_at: "2026-08-22T10:00:00Z".into(),
-            status: SyncStatus::for_device(&active_device(), None, vec![]),
+            status: run_status,
         });
 
         let status = service.status().await.unwrap();
@@ -441,5 +467,9 @@ mod tests {
             Some("2026-08-22T10:00:00Z")
         );
         assert_eq!(status.failures, failures);
+        assert_eq!(
+            status.roster, roster,
+            "SYN-063: the roster the last run read is reported"
+        );
     }
 }
