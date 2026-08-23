@@ -259,9 +259,9 @@ describe("sync", () => {
       true,
       "SYN-013/037 — the device's manifest must be published",
     );
-    const deviceAreaFiles = readdirSync(join(devicesDir, deviceDirName));
+    const segmentFiles = readdirSync(join(devicesDir, deviceDirName, "segments"));
     assert.ok(
-      deviceAreaFiles.some((name) => name.startsWith("seg-")),
+      segmentFiles.some((name) => name.startsWith("seg-")),
       "SYN-013/031 — the first segment must be published alongside the manifest",
     );
 
@@ -383,9 +383,9 @@ describe("sync", () => {
         timeoutMsg: "SYN-082 — leave_sync must remove this device's manifest from the real folder",
       },
     );
-    const deviceAreaFilesAfterLeave = readdirSync(join(devicesDir, deviceDirName));
+    const segmentFilesAfterLeave = readdirSync(join(devicesDir, deviceDirName, "segments"));
     assert.ok(
-      deviceAreaFilesAfterLeave.some((name) => name.startsWith("seg-")),
+      segmentFilesAfterLeave.some((name) => name.startsWith("seg-")),
       "SYN-037/082 — leave_sync must keep the device's segment file; its area stays in the folder",
     );
   });
