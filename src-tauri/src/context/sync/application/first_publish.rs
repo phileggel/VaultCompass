@@ -39,11 +39,6 @@ pub struct FirstPublish {
     snapshot: Arc<dyn PortfolioSnapshot>,
 }
 
-fn database_error(context: &'static str, error: sqlx::Error) -> SyncError {
-    tracing::error!(target: BACKEND, err = ?error, "{context}");
-    SyncError::DatabaseError
-}
-
 impl FirstPublish {
     /// Creates the enrolment orchestration bound to the given change log, sync state, folder,
     /// rank stamper, and portfolio snapshot.
@@ -288,7 +283,7 @@ impl FirstPublish {
         transaction
             .commit()
             .await
-            .map_err(|error| database_error("enroll: commit failed", error))
+            .map_err(|error| SyncError::database("enroll: commit failed", error))
     }
 
     /// Removes what this device wrote into the folder before the failure: its area and the
@@ -355,7 +350,7 @@ mod tests {
             .execute(conn)
             .await
             .map(|done| done.rows_affected())
-            .map_err(|error| database_error("test stamper: update failed", error))
+            .map_err(|error| SyncError::database("test stamper: update failed", error))
         }
     }
 

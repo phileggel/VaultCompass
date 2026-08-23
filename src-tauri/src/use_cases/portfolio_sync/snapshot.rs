@@ -10,7 +10,6 @@ use crate::context::asset::{AssetService, SYSTEM_CATEGORY_ID};
 use crate::context::currency::{CurrencyPair, CurrencyService};
 use crate::context::sync::{PortfolioRecord, PortfolioSnapshot, SyncError};
 use crate::core::cash::{is_cash_asset, SYSTEM_CASH_CATEGORY_ID};
-use crate::core::logger::BACKEND;
 use crate::shared::domain::{RecordIdentity, RecordKind};
 
 /// Reads the whole portfolio through the owning bounded contexts' services.
@@ -18,11 +17,6 @@ pub struct ServicePortfolioSnapshot {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
     currency_service: Arc<CurrencyService>,
-}
-
-fn database_error(context: &'static str, error: impl std::fmt::Debug) -> SyncError {
-    tracing::error!(target: BACKEND, err = ?error, "{context}");
-    SyncError::DatabaseError
 }
 
 fn record<T: serde::Serialize>(
@@ -34,7 +28,7 @@ fn record<T: serde::Serialize>(
         record_kind,
         record_identity: RecordIdentity::canonical(record_kind, key),
         content: serde_json::to_string(value)
-            .map_err(|error| database_error("snapshot: serialization failed", error))?,
+            .map_err(|error| SyncError::database("snapshot: serialization failed", error))?,
     })
 }
 
@@ -42,7 +36,7 @@ fn record<T: serde::Serialize>(
 /// read of the separately synced catch-up position (CFR-044).
 fn fee_schedule_record(schedule: &FeeSchedule) -> Result<PortfolioRecord, SyncError> {
     let mut value = serde_json::to_value(schedule)
-        .map_err(|error| database_error("snapshot: serialization failed", error))?;
+        .map_err(|error| SyncError::database("snapshot: serialization failed", error))?;
     if let Some(fields) = value.as_object_mut() {
         fields.remove("last_applied_period");
     }
@@ -77,7 +71,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
             .asset_service
             .get_all_categories()
             .await
-            .map_err(|error| database_error("snapshot: categories", error))?;
+            .map_err(|error| SyncError::database("snapshot: categories", error))?;
         for category in categories.iter().filter(|category| {
             category.id != SYSTEM_CATEGORY_ID && category.id != SYSTEM_CASH_CATEGORY_ID
         }) {
@@ -88,7 +82,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
             .asset_service
             .get_all_assets_with_archived()
             .await
-            .map_err(|error| database_error("snapshot: assets", error))?;
+            .map_err(|error| SyncError::database("snapshot: assets", error))?;
         for asset in assets.iter().filter(|asset| !is_cash_asset(&asset.id)) {
             records.push(record(RecordKind::Asset, &[&asset.id], asset)?);
         }
@@ -97,7 +91,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
             .account_service
             .get_all()
             .await
-            .map_err(|error| database_error("snapshot: accounts", error))?;
+            .map_err(|error| SyncError::database("snapshot: accounts", error))?;
         for account in &accounts {
             records.push(record(RecordKind::Account, &[&account.id], account)?);
         }
@@ -106,7 +100,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
                 .account_service
                 .get_all_transactions_for_account(&account.id)
                 .await
-                .map_err(|error| database_error("snapshot: transactions", error))?;
+                .map_err(|error| SyncError::database("snapshot: transactions", error))?;
             for transaction in &transactions {
                 records.push(record(
                     RecordKind::Transaction,
@@ -118,7 +112,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
                 .account_service
                 .list_fee_schedules_for_account(&account.id)
                 .await
-                .map_err(|error| database_error("snapshot: fee schedules", error))?;
+                .map_err(|error| SyncError::database("snapshot: fee schedules", error))?;
             for schedule in &schedules {
                 records.push(fee_schedule_record(schedule)?);
             }
@@ -126,7 +120,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
                 .account_service
                 .list_fee_catch_up_positions_for_account(&account.id)
                 .await
-                .map_err(|error| database_error("snapshot: fee catch-up positions", error))?;
+                .map_err(|error| SyncError::database("snapshot: fee catch-up positions", error))?;
             for position in &positions {
                 records.push(record(
                     RecordKind::FeeCatchUpPosition,
@@ -138,7 +132,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
                 .account_service
                 .get_holding_notes(&account.id)
                 .await
-                .map_err(|error| database_error("snapshot: holding notes", error))?;
+                .map_err(|error| SyncError::database("snapshot: holding notes", error))?;
             for note in &notes {
                 records.push(record(
                     RecordKind::HoldingNote,
@@ -153,7 +147,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
                 .asset_service
                 .get_asset_prices(&asset.id)
                 .await
-                .map_err(|error| database_error("snapshot: asset prices", error))?;
+                .map_err(|error| SyncError::database("snapshot: asset prices", error))?;
             for price in &prices {
                 records.push(record(
                     RecordKind::AssetPrice,
@@ -167,7 +161,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
             .currency_service
             .list_currency_pairs()
             .await
-            .map_err(|error| database_error("snapshot: currency pairs", error))?;
+            .map_err(|error| SyncError::database("snapshot: currency pairs", error))?;
         for summary in &pairs {
             let pair = CurrencyPair::from_storage(
                 summary.from_currency.clone(),
@@ -184,7 +178,7 @@ impl PortfolioSnapshot for ServicePortfolioSnapshot {
                 .currency_service
                 .list_currency_rates(summary.from_currency.clone(), summary.to_currency.clone())
                 .await
-                .map_err(|error| database_error("snapshot: currency rates", error))?;
+                .map_err(|error| SyncError::database("snapshot: currency rates", error))?;
             for rate in &rates {
                 records.push(record(
                     RecordKind::CurrencyRate,

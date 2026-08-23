@@ -30,6 +30,28 @@ impl From<JoinError> for PortfolioSyncError {
     }
 }
 
+/// Everything `PortfolioSyncOrchestrator` needs: the three services it reads from and
+/// writes into (ADR-004), and the sync context's own device lifecycle, first publish, run,
+/// state, and folder components.
+pub struct PortfolioSyncDependencies {
+    /// Owner of accounts, transactions, holding notes, fee schedules, and catch-up positions.
+    pub account_service: Arc<AccountService>,
+    /// Owner of assets, categories, and asset prices.
+    pub asset_service: Arc<AssetService>,
+    /// Owner of currency pairs and rates.
+    pub currency_service: Arc<CurrencyService>,
+    /// This device's sync lifecycle and status (pause, resume, rename, leave).
+    pub sync_service: Arc<SyncService>,
+    /// Enabling as the first device (SYN-013).
+    pub first_publish: Arc<FirstPublish>,
+    /// One sync run: publish, read, resolve, apply (SYN-060).
+    pub sync_run: Arc<SyncRun>,
+    /// This device's sync state: device row, cursors, held-back changes, notices.
+    pub state_repo: Arc<dyn SyncStateRepository>,
+    /// The shared folder's files.
+    pub folder_store: Arc<dyn FolderStore>,
+}
+
 /// Orchestrates the cross-BC sync commands (D3).
 pub struct PortfolioSyncOrchestrator {
     account_service: Arc<AccountService>,
@@ -44,19 +66,18 @@ pub struct PortfolioSyncOrchestrator {
 }
 
 impl PortfolioSyncOrchestrator {
-    /// Creates the orchestrator injecting every BC service it may need to read from or write
-    /// into, plus the sync BC's own device lifecycle, first-publish, and run components.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        account_service: Arc<AccountService>,
-        asset_service: Arc<AssetService>,
-        currency_service: Arc<CurrencyService>,
-        sync_service: Arc<SyncService>,
-        first_publish: Arc<FirstPublish>,
-        sync_run: Arc<SyncRun>,
-        state_repo: Arc<dyn SyncStateRepository>,
-        folder_store: Arc<dyn FolderStore>,
-    ) -> Self {
+    /// Creates the orchestrator from every component it may read from or write into.
+    pub fn new(dependencies: PortfolioSyncDependencies) -> Self {
+        let PortfolioSyncDependencies {
+            account_service,
+            asset_service,
+            currency_service,
+            sync_service,
+            first_publish,
+            sync_run,
+            state_repo,
+            folder_store,
+        } = dependencies;
         let applier = ServiceChangeApplier::new(
             Arc::clone(&account_service),
             Arc::clone(&asset_service),
@@ -292,7 +313,7 @@ mod tests {
     use crate::context::sync::{
         segment_file_name, DerivationParameters, FolderHeader, FolderProblem, Manifest,
         MockFolderStore, MockSyncStateRepository, Segment, SegmentChange,
-        SqliteChangeLogRepository, SqliteSyncStateRepository, SyncDevice,
+        SqliteChangeLogRepository, SqliteSyncStateRepository, StoredDevice, SyncDevice,
     };
     use crate::shared::domain::{Operation, Origin, RecordKind};
     use crate::use_cases::portfolio_sync::{ServicePortfolioSnapshot, ServiceRankStamper};
@@ -364,16 +385,16 @@ mod tests {
             rank_stamper,
             snapshot,
         ));
-        let orchestrator = PortfolioSyncOrchestrator::new(
-            Arc::clone(&account_service),
-            Arc::clone(&asset_service),
+        let orchestrator = PortfolioSyncOrchestrator::new(PortfolioSyncDependencies {
+            account_service: Arc::clone(&account_service),
+            asset_service: Arc::clone(&asset_service),
             currency_service,
             sync_service,
             first_publish,
             sync_run,
             state_repo,
             folder_store,
-        );
+        });
         Ctx {
             orchestrator,
             account_service,
@@ -382,15 +403,15 @@ mod tests {
     }
 
     fn device() -> SyncDevice {
-        SyncDevice::restore(
-            "desktop-device".into(),
-            "Desktop".into(),
-            "/tmp/sync".into(),
-            "2026-08-22T00:00:00Z".into(),
-            false,
-            "2026-08-22T00:00:00Z".into(),
-            1,
-        )
+        SyncDevice::restore(StoredDevice {
+            device_id: "desktop-device".into(),
+            device_name: "Desktop".into(),
+            folder: "/tmp/sync".into(),
+            joined_at: "2026-08-22T00:00:00Z".into(),
+            paused: false,
+            portfolio_created_at: "2026-08-22T00:00:00Z".into(),
+            data_format_version: 1,
+        })
     }
 
     // SYN-014 — a candidate folder already holding user data on THIS installation is flagged,

@@ -13,6 +13,26 @@ use crate::context::sync::domain::cursor::SyncCursor;
 use crate::context::sync::domain::held_back::HeldBackChange;
 use crate::context::sync::error::SyncError;
 
+/// The persisted shape of this device's membership, as the repository holds it — what
+/// `SyncDevice::restore` reconstructs from without validation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredDevice {
+    /// The stable identity of this installation (SYN-016).
+    pub device_id: String,
+    /// Its user-given name (SYN-018).
+    pub device_name: String,
+    /// The synchronised folder on this device.
+    pub folder: String,
+    /// When this device joined the shared portfolio.
+    pub joined_at: String,
+    /// Whether sync is paused on this device (SYN-070).
+    pub paused: bool,
+    /// The folder header's creation mark this device follows (SYN-084).
+    pub portfolio_created_at: String,
+    /// The data format of the application that last published from this device (SYN-035).
+    pub data_format_version: u32,
+}
+
 /// One installation participating in sync (SYN Entity Definition — SyncDevice).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SyncDevice {
@@ -64,16 +84,16 @@ impl SyncDevice {
     }
 
     /// Reconstructs a `SyncDevice` from storage, unvalidated (already validated at write time).
-    #[allow(clippy::too_many_arguments)]
-    pub fn restore(
-        device_id: String,
-        device_name: String,
-        folder: String,
-        joined_at: String,
-        paused: bool,
-        portfolio_created_at: String,
-        data_format_version: u32,
-    ) -> Self {
+    pub fn restore(stored: StoredDevice) -> Self {
+        let StoredDevice {
+            device_id,
+            device_name,
+            folder,
+            joined_at,
+            paused,
+            portfolio_created_at,
+            data_format_version,
+        } = stored;
         Self {
             device_id,
             device_name,
@@ -226,15 +246,15 @@ mod tests {
     use super::*;
 
     fn sample() -> SyncDevice {
-        SyncDevice::restore(
-            "device-1".into(),
-            "Desktop".into(),
-            "/tmp/sync".into(),
-            "2026-08-22T00:00:00Z".into(),
-            false,
-            "2026-08-22T00:00:00Z".into(),
-            1,
-        )
+        SyncDevice::restore(StoredDevice {
+            device_id: "device-1".into(),
+            device_name: "Desktop".into(),
+            folder: "/tmp/sync".into(),
+            joined_at: "2026-08-22T00:00:00Z".into(),
+            paused: false,
+            portfolio_created_at: "2026-08-22T00:00:00Z".into(),
+            data_format_version: 1,
+        })
     }
 
     // SYN-018 — new() rejects a blank device name.

@@ -103,6 +103,7 @@ impl Publisher {
     }
 
     /// How many times `publish` has fired so far — the tests' observation point.
+    #[cfg(test)]
     pub fn publish_count(&self) -> usize {
         self.publish_count.load(Ordering::SeqCst)
     }

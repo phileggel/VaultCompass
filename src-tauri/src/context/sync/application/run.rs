@@ -11,17 +11,16 @@ use std::sync::Arc;
 use sqlx::SqliteConnection;
 
 use crate::context::sync::application::apply::{apply_change, Applied};
+use crate::context::sync::application::intake::{self, IncomingChange, Intake};
 use crate::context::sync::application::join::{self, JoinError};
 use crate::context::sync::domain::{
-    display_name, replay_order, segment_sequence_range, Change, ChangeApplier, ChangeLogRepository,
-    ConflictNotice, FolderStore, HeldBackChange, MalformedChange, Manifest, NoticeDraft,
-    RosterEntry, Segment, SyncCursor, SyncDevice, SyncFailure, SyncReport, SyncStateRepository,
-    SyncStatus, WaitingFor,
+    display_name, replay_order, Change, ChangeApplier, ChangeLogRepository, ConflictNotice,
+    FolderStore, HeldBackChange, Manifest, NoticeDraft, RosterEntry, Segment, SyncDevice,
+    SyncFailure, SyncReport, SyncStateRepository, SyncStatus, WaitingFor,
 };
 use crate::context::sync::error::SyncError;
 use crate::context::sync::infrastructure::codec::{
-    decode_header, decode_manifest, decode_segment, encode_manifest, encode_segment,
-    header_data_format_version, DATA_FORMAT_VERSION,
+    decode_header, encode_manifest, encode_segment, header_data_format_version, DATA_FORMAT_VERSION,
 };
 use crate::context::sync::infrastructure::crypto::{verify_check, Key};
 use crate::core::logger::BACKEND;
@@ -70,24 +69,6 @@ pub struct SyncRun {
     sync_gate: Arc<SyncGate>,
 }
 
-/// One change read from another device's segment, with where it came from (SYN-033).
-struct IncomingChange {
-    origin_device_id: String,
-    sequence: i64,
-    change: Change,
-}
-
-/// What the other devices' areas yielded this run (SYN-033/034/037): the changes to apply,
-/// the cursors to advance, and the roster every readable manifest names (SYN-063).
-#[derive(Default)]
-struct Intake {
-    changes: Vec<IncomingChange>,
-    cursors: Vec<SyncCursor>,
-    roster: Vec<RosterEntry>,
-    unreadable_files: u32,
-    failures: Vec<SyncFailure>,
-}
-
 /// What the apply transaction did (SYN-062).
 #[derive(Default)]
 struct ApplyCounts {
@@ -132,25 +113,6 @@ pub(super) async fn kept_key(
         .kept_key_bytes()
         .await?
         .and_then(|bytes| Key::from_bytes(bytes).ok()))
-}
-
-/// A segment's changes past `after`, in the engine's shape; `Err` when one of them is
-/// malformed — the whole segment is unreadable (SYN-034).
-fn segment_changes(segment: Segment, after: i64) -> Result<Vec<IncomingChange>, MalformedChange> {
-    let device_id = segment.device_id;
-    segment
-        .changes
-        .into_iter()
-        .filter(|change| change.sequence > after)
-        .map(|change| {
-            let sequence = change.sequence;
-            Change::from_segment_change(&device_id, change).map(|change| IncomingChange {
-                origin_device_id: device_id.clone(),
-                sequence,
-                change,
-            })
-        })
-        .collect()
 }
 
 fn count(counts: &mut ApplyCounts, applied: &Applied) {
@@ -225,14 +187,18 @@ impl SyncRun {
         device_name: String,
     ) -> Result<SyncStatus, JoinError> {
         join::join(
-            self.change_log.as_ref(),
-            self.state_repo.as_ref(),
-            self.folder_store.as_ref(),
-            self.change_recorder.as_ref(),
-            applier,
-            folder,
-            passphrase,
-            device_name,
+            &join::JoinPorts {
+                change_log: self.change_log.as_ref(),
+                state_repo: self.state_repo.as_ref(),
+                folder_store: self.folder_store.as_ref(),
+                change_recorder: self.change_recorder.as_ref(),
+                applier,
+            },
+            join::JoinRequest {
+                folder,
+                passphrase,
+                device_name,
+            },
         )
         .await
     }
@@ -266,7 +232,14 @@ impl SyncRun {
         let Some(key) = kept_key(self.change_log.as_ref()).await? else {
             return Ok(published);
         };
-        let mut intake = match self.read_other_devices(device, &key).await {
+        let mut intake = match intake::read_other_devices(
+            self.folder_store.as_ref(),
+            self.state_repo.as_ref(),
+            device,
+            &key,
+        )
+        .await
+        {
             Ok(intake) => intake,
             Err(error) => {
                 let mut failures = published.failures;
@@ -305,126 +278,6 @@ impl SyncRun {
         report.notices_raised = counts.notices;
         report.status.roster = roster;
         Ok(report)
-    }
-
-    /// Reads every other device's manifest and the segments past this device's cursor for
-    /// it (SYN-033/037), naming each readable manifest's device in the roster with when its
-    /// changes were last applied here (SYN-063). A manifest or segment that cannot be
-    /// decoded is skipped and counted (SYN-034); a segment this device has not yet received
-    /// in full (a gap before it) stops the read of that area until the next run; a newer
-    /// data format is reported (SYN-035). A folder failure aborts the read (`Err`).
-    async fn read_other_devices(
-        &self,
-        device: &SyncDevice,
-        key: &Key,
-    ) -> Result<Intake, SyncError> {
-        let mut intake = Intake::default();
-        for other in self.folder_store.list_device_ids().await? {
-            if other == device.device_id {
-                continue;
-            }
-            let Some(bytes) = self.folder_store.read_manifest_bytes(&other).await? else {
-                continue;
-            };
-            let manifest = match decode_manifest(key, &bytes) {
-                Ok(manifest) => manifest,
-                Err(error) => {
-                    tracing::warn!(target: BACKEND, device_id = %other, err = %error, "run: manifest skipped");
-                    intake.unreadable_files += 1;
-                    continue;
-                }
-            };
-            let cursor = self.state_repo.get_cursor(&other).await?;
-            intake.roster.push(RosterEntry {
-                device_id: other.clone(),
-                device_name: manifest.device_name.clone(),
-                data_format_version: manifest.data_format_version,
-                last_applied_at: cursor
-                    .as_ref()
-                    .and_then(|cursor| cursor.last_applied_at.clone()),
-            });
-            if manifest.data_format_version > DATA_FORMAT_VERSION {
-                intake.failures.push(SyncFailure::UpdateRequired {
-                    data_format_version: manifest.data_format_version,
-                });
-                continue;
-            }
-            let applied_through = cursor.map_or(0, |cursor| cursor.applied_through);
-            if manifest.latest_sequence <= applied_through {
-                continue;
-            }
-            let reached = self
-                .read_segments(&other, key, applied_through, &mut intake)
-                .await?;
-            if reached > applied_through {
-                let last_applied_at = Some(chrono::Utc::now().to_rfc3339());
-                if let Some(entry) = intake.roster.last_mut() {
-                    entry.last_applied_at = last_applied_at.clone();
-                }
-                intake.cursors.push(SyncCursor {
-                    device_id: other,
-                    applied_through: reached,
-                    last_applied_at,
-                });
-            }
-        }
-        Ok(intake)
-    }
-
-    /// Reads `other`'s segments past `applied_through` in sequence order, returning the
-    /// last sequence taken in.
-    async fn read_segments(
-        &self,
-        other: &str,
-        key: &Key,
-        applied_through: i64,
-        intake: &mut Intake,
-    ) -> Result<i64, SyncError> {
-        let mut names: Vec<(i64, i64, String)> = self
-            .folder_store
-            .list_segment_names(other)
-            .await?
-            .into_iter()
-            .filter_map(|name| {
-                segment_sequence_range(&name).map(|(first, last)| (first, last, name))
-            })
-            .filter(|(_, last, _)| *last > applied_through)
-            .collect();
-        names.sort();
-        let mut reached = applied_through;
-        for (first, last, name) in names {
-            if first > reached + 1 {
-                break;
-            }
-            let Some(bytes) = self.folder_store.read_segment_bytes(other, &name).await? else {
-                break;
-            };
-            let changes = decode_segment(key, &bytes)
-                .map_err(|error| error.to_string())
-                .and_then(|segment| {
-                    if segment.device_id != other {
-                        return Err("segment belongs to another device".to_string());
-                    }
-                    if segment.data_format_version > DATA_FORMAT_VERSION {
-                        intake.failures.push(SyncFailure::UpdateRequired {
-                            data_format_version: segment.data_format_version,
-                        });
-                        return Ok(vec![]);
-                    }
-                    segment_changes(segment, reached).map_err(|problem| problem.to_string())
-                });
-            let changes = match changes {
-                Ok(changes) => changes,
-                Err(reason) => {
-                    tracing::warn!(target: BACKEND, device_id = %other, name = %name, reason = %reason, "run: segment skipped");
-                    intake.unreadable_files += 1;
-                    break;
-                }
-            };
-            intake.changes.extend(changes);
-            reached = reached.max(last);
-        }
-        Ok(reached)
     }
 
     /// The apply transaction (SYN-065): applies what was read in replay order, then retries
@@ -780,15 +633,15 @@ mod tests {
     }
 
     fn device() -> SyncDevice {
-        SyncDevice::restore(
-            "desktop-device".into(),
-            "Desktop".into(),
-            "/tmp/sync".into(),
-            "2026-08-22T00:00:00Z".into(),
-            false,
-            "2026-08-22T00:00:00Z".into(),
-            1,
-        )
+        SyncDevice::restore(crate::context::sync::StoredDevice {
+            device_id: "desktop-device".into(),
+            device_name: "Desktop".into(),
+            folder: "/tmp/sync".into(),
+            joined_at: "2026-08-22T00:00:00Z".into(),
+            paused: false,
+            portfolio_created_at: "2026-08-22T00:00:00Z".into(),
+            data_format_version: 1,
+        })
     }
 
     /// The header of the portfolio the seeded device follows: its passphrase check was made

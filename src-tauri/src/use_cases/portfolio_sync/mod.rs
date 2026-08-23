@@ -13,6 +13,6 @@ mod snapshot;
 pub use api::*;
 pub use applier::ServiceChangeApplier;
 pub use error::{PortfolioSyncError, PortfolioSyncTask};
-pub use orchestrator::PortfolioSyncOrchestrator;
+pub use orchestrator::{PortfolioSyncDependencies, PortfolioSyncOrchestrator};
 pub use rank_stamper::ServiceRankStamper;
 pub use snapshot::ServicePortfolioSnapshot;

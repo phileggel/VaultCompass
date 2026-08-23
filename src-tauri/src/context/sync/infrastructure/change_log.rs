@@ -11,7 +11,6 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -249,18 +248,6 @@ impl SqliteChangeLogRepository {
     }
 }
 
-fn database_error(context: &'static str, error: sqlx::Error) -> SyncError {
-    tracing::error!(target: BACKEND, err = ?error, "{context}");
-    SyncError::DatabaseError
-}
-
-fn parse_stored<T: FromStr>(column: &'static str, value: &str) -> Result<T, SyncError> {
-    T::from_str(value).map_err(|_| {
-        tracing::error!(target: BACKEND, column, value, "changes: unknown stored value");
-        SyncError::DatabaseError
-    })
-}
-
 #[derive(sqlx::FromRow)]
 struct ChangeRow {
     sequence: i64,
@@ -281,10 +268,10 @@ impl TryFrom<ChangeRow> for SegmentChange {
             sequence: row.sequence,
             logical_timestamp: row.logical_timestamp,
             based_on: row.based_on,
-            record_kind: parse_stored("record_kind", &row.record_kind)?,
+            record_kind: super::parse_stored("changes", "record_kind", &row.record_kind)?,
             record_identity: row.record_identity,
-            operation: parse_stored("operation", &row.operation)?,
-            origin: parse_stored("origin", &row.origin)?,
+            operation: super::parse_stored("changes", "operation", &row.operation)?,
+            origin: super::parse_stored("changes", "origin", &row.origin)?,
             content: row.content,
         })
     }
@@ -309,10 +296,10 @@ impl TryFrom<TombstoneRow> for Tombstone {
                 SyncError::DatabaseError
             })?;
         Ok(Tombstone {
-            record_kind: parse_stored("record_kind", &row.record_kind)?,
+            record_kind: super::parse_stored("changes", "record_kind", &row.record_kind)?,
             record_identity: row.record_identity,
             logical_timestamp,
-            origin: parse_stored("origin", &row.origin)?,
+            origin: super::parse_stored("changes", "origin", &row.origin)?,
             removed_by: row.removed_by,
         })
     }
@@ -336,7 +323,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .fetch_optional(conn)
         .await
-        .map_err(|error| database_error("tombstone: query failed", error))?;
+        .map_err(|error| SyncError::database("tombstone: query failed", error))?;
         row.map(Tombstone::try_from).transpose()
     }
 
@@ -363,7 +350,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("upsert_tombstone: write failed", error))?;
+        .map_err(|error| SyncError::database("upsert_tombstone: write failed", error))?;
         Ok(())
     }
 
@@ -381,7 +368,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("clear_tombstone: delete failed", error))?;
+        .map_err(|error| SyncError::database("clear_tombstone: delete failed", error))?;
         Ok(())
     }
 
@@ -396,7 +383,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("advance_logical_clock: update failed", error))?;
+        .map_err(|error| SyncError::database("advance_logical_clock: update failed", error))?;
         Ok(())
     }
 
@@ -406,7 +393,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| database_error("kept_key_bytes: query failed", error))
+        .map_err(|error| SyncError::database("kept_key_bytes: query failed", error))
     }
 
     async fn logical_clock(&self) -> Result<i64, SyncError> {
@@ -415,7 +402,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|error| database_error("logical_clock: query failed", error))
+        .map_err(|error| SyncError::database("logical_clock: query failed", error))
     }
 
     async fn list_unpublished(&self, device_id: &str) -> Result<Vec<SegmentChange>, SyncError> {
@@ -429,7 +416,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|error| database_error("list_unpublished: query failed", error))?;
+        .map_err(|error| SyncError::database("list_unpublished: query failed", error))?;
         rows.into_iter().map(SegmentChange::try_from).collect()
     }
 
@@ -447,7 +434,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|error| database_error("mark_published: update failed", error))?;
+        .map_err(|error| SyncError::database("mark_published: update failed", error))?;
         Ok(())
     }
 
@@ -459,14 +446,14 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|error| database_error("latest_published_sequence: query failed", error))
+        .map_err(|error| SyncError::database("latest_published_sequence: query failed", error))
     }
 
     async fn begin(&self) -> Result<Transaction<'static, Sqlite>, SyncError> {
         self.pool
             .begin()
             .await
-            .map_err(|error| database_error("begin: transaction not opened", error))
+            .map_err(|error| SyncError::database("begin: transaction not opened", error))
     }
 
     async fn save_enrolment(
@@ -503,7 +490,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("save_enrolment: write failed", error))?;
+        .map_err(|error| SyncError::database("save_enrolment: write failed", error))?;
         Ok(())
     }
 
@@ -518,7 +505,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("retire_earlier_changes: update failed", error))?;
+        .map_err(|error| SyncError::database("retire_earlier_changes: update failed", error))?;
         Ok(())
     }
 
@@ -533,7 +520,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .fetch_one(conn)
         .await
-        .map_err(|error| database_error("next_sequence: query failed", error))
+        .map_err(|error| SyncError::database("next_sequence: query failed", error))
     }
 
     async fn append_published_change(
@@ -562,7 +549,7 @@ impl ChangeLogRepository for SqliteChangeLogRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("append_published_change: insert failed", error))?;
+        .map_err(|error| SyncError::database("append_published_change: insert failed", error))?;
         Ok(())
     }
 }

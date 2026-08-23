@@ -6,8 +6,10 @@
 pub mod apply;
 /// Enrolling as the first device of a new shared portfolio (SYN-013/026/081).
 pub mod first_publish;
+/// The intake of one run: other devices' manifests, segments and cursors (SYN-033/034/037).
+mod intake;
 /// Joining a portfolio another device created — the full-history rebuild (SYN-014/036/080).
-pub mod join;
+mod join;
 /// Settling-interval batching, 5s / 30s cap (SYN-067).
 pub mod publisher;
 /// One sync run: publish, read, apply (SYN-060/061/065/067/069).

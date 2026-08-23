@@ -100,7 +100,8 @@ impl Change {
             .and_then(|content| serde_json::from_str(content).ok())
     }
 
-    fn content_field(&self, name: &str) -> Option<String> {
+    /// A string field of the change's content, when the content carries it.
+    pub(crate) fn content_field(&self, name: &str) -> Option<String> {
         self.content_value()?
             .get(name)?
             .as_str()

@@ -44,7 +44,8 @@ use crate::use_cases::fee_generation::{FeeGenerationOrchestrator, LaunchSyncSurf
 use crate::use_cases::global_performance::GlobalPerformanceUseCase;
 use crate::use_cases::holding_transaction::HoldingTransactionUseCase;
 use crate::use_cases::portfolio_sync::{
-    PortfolioSyncOrchestrator, ServicePortfolioSnapshot, ServiceRankStamper,
+    PortfolioSyncDependencies, PortfolioSyncOrchestrator, ServicePortfolioSnapshot,
+    ServiceRankStamper,
 };
 use crate::use_cases::rate_history_backfill::RateHistoryBackfillUseCase;
 use crate::use_cases::scheduled_fetch::{
@@ -284,16 +285,17 @@ pub fn run() {
                         Arc::clone(&currency_service),
                     )),
                 ));
-                let portfolio_sync_uc = Arc::new(PortfolioSyncOrchestrator::new(
-                    account_service.clone(),
-                    asset_service.clone(),
-                    Arc::clone(&currency_service),
-                    Arc::clone(&sync_service),
-                    first_publish,
-                    sync_run,
-                    sync_state_repo,
-                    sync_folder_store,
-                ));
+                let portfolio_sync_uc =
+                    Arc::new(PortfolioSyncOrchestrator::new(PortfolioSyncDependencies {
+                        account_service: account_service.clone(),
+                        asset_service: asset_service.clone(),
+                        currency_service: Arc::clone(&currency_service),
+                        sync_service: Arc::clone(&sync_service),
+                        first_publish,
+                        sync_run,
+                        state_repo: sync_state_repo,
+                        folder_store: sync_folder_store,
+                    }));
 
                 // FEE-040 — lazy catch-up generation across all active fee schedules,
                 // invoked by the frontend on app startup; SYN-060 — one sync runs first.

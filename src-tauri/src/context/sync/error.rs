@@ -103,6 +103,14 @@ pub enum SyncError {
     DatabaseError,
 }
 
+impl SyncError {
+    /// Logs an infrastructure failure under `context` and returns `DatabaseError`.
+    pub fn database(context: &'static str, error: impl std::fmt::Debug) -> Self {
+        tracing::error!(target: crate::core::logger::BACKEND, err = ?error, "{context}");
+        Self::DatabaseError
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

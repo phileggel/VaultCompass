@@ -11,7 +11,6 @@ use crate::context::account::AccountService;
 use crate::context::asset::AssetService;
 use crate::context::currency::CurrencyService;
 use crate::context::sync::{RankStamper, SyncError};
-use crate::core::logger::BACKEND;
 use crate::shared::domain::Rank;
 
 /// Ranks the rows that existed before sync did, through the owning bounded contexts' services.
@@ -19,11 +18,6 @@ pub struct ServiceRankStamper {
     account_service: Arc<AccountService>,
     asset_service: Arc<AssetService>,
     currency_service: Arc<CurrencyService>,
-}
-
-fn database_error(context: &'static str, error: impl std::fmt::Debug) -> SyncError {
-    tracing::error!(target: BACKEND, err = ?error, "{context}");
-    SyncError::DatabaseError
 }
 
 impl ServiceRankStamper {
@@ -52,17 +46,17 @@ impl RankStamper for ServiceRankStamper {
             .account_service
             .stamp_sync_rank(conn, rank)
             .await
-            .map_err(|error| database_error("rank stamper: account rows", error))?;
+            .map_err(|error| SyncError::database("rank stamper: account rows", error))?;
         let asset_rows = self
             .asset_service
             .stamp_sync_rank(conn, rank)
             .await
-            .map_err(|error| database_error("rank stamper: asset rows", error))?;
+            .map_err(|error| SyncError::database("rank stamper: asset rows", error))?;
         let currency_rows = self
             .currency_service
             .stamp_sync_rank(conn, rank)
             .await
-            .map_err(|error| database_error("rank stamper: currency rows", error))?;
+            .map_err(|error| SyncError::database("rank stamper: currency rows", error))?;
         Ok(account_rows + asset_rows + currency_rows)
     }
 }

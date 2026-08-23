@@ -15,3 +15,16 @@ pub mod folder_store;
 pub use change_log::{RecordedChangeHook, SqliteChangeLogRepository, SqliteChangeRecorder};
 pub use device::SqliteSyncStateRepository;
 pub use folder_store::FsFolderStore;
+
+/// Parses a stored enum column; an unknown value is logged under `table` and surfaces as
+/// `DatabaseError`.
+fn parse_stored<T: std::str::FromStr>(
+    table: &'static str,
+    column: &'static str,
+    value: &str,
+) -> Result<T, crate::context::sync::error::SyncError> {
+    T::from_str(value).map_err(|_| {
+        tracing::error!(target: crate::core::logger::BACKEND, table, column, value, "unknown stored value");
+        crate::context::sync::error::SyncError::DatabaseError
+    })
+}

@@ -1,15 +1,12 @@
 //! `SqliteSyncStateRepository` — the SQLite-backed `SyncStateRepository` (D2, PR-B): the
 //! `sync_device` singleton, `sync_cursors`, `held_back_changes`, and `conflict_notices`.
 
-use std::str::FromStr;
-
 use sqlx::{Pool, Sqlite, SqliteConnection};
 
 use crate::context::sync::domain::{
-    ConflictNotice, HeldBackChange, SyncCursor, SyncDevice, SyncStateRepository,
+    ConflictNotice, HeldBackChange, StoredDevice, SyncCursor, SyncDevice, SyncStateRepository,
 };
 use crate::context::sync::error::SyncError;
-use crate::core::logger::BACKEND;
 use crate::shared::domain::RecordKind;
 
 /// SQLite-backed `SyncStateRepository`.
@@ -22,18 +19,6 @@ impl SqliteSyncStateRepository {
     pub fn new(pool: Pool<Sqlite>) -> Self {
         Self { pool }
     }
-}
-
-fn database_error(context: &'static str, error: sqlx::Error) -> SyncError {
-    tracing::error!(target: BACKEND, err = ?error, "{context}");
-    SyncError::DatabaseError
-}
-
-fn parse_stored<T: FromStr>(column: &'static str, value: &str) -> Result<T, SyncError> {
-    T::from_str(value).map_err(|_| {
-        tracing::error!(target: BACKEND, column, value, "sync state: unknown stored value");
-        SyncError::DatabaseError
-    })
 }
 
 #[derive(sqlx::FromRow)]
@@ -49,15 +34,15 @@ struct DeviceRow {
 
 impl From<DeviceRow> for SyncDevice {
     fn from(row: DeviceRow) -> Self {
-        SyncDevice::restore(
-            row.device_id,
-            row.device_name,
-            row.folder,
-            row.joined_at,
-            row.paused != 0,
-            row.portfolio_created_at,
-            u32::try_from(row.data_format_version).unwrap_or(0),
-        )
+        SyncDevice::restore(StoredDevice {
+            device_id: row.device_id,
+            device_name: row.device_name,
+            folder: row.folder,
+            joined_at: row.joined_at,
+            paused: row.paused != 0,
+            portfolio_created_at: row.portfolio_created_at,
+            data_format_version: u32::try_from(row.data_format_version).unwrap_or(0),
+        })
     }
 }
 
@@ -98,7 +83,7 @@ impl TryFrom<HeldBackRow> for HeldBackChange {
             origin_device_id: row.origin_device_id,
             sequence: row.sequence,
             payload: row.payload,
-            waiting_kind: parse_stored("waiting_kind", &row.waiting_kind)?,
+            waiting_kind: super::parse_stored("sync state", "waiting_kind", &row.waiting_kind)?,
             waiting_identity: row.waiting_identity,
             held_since: row.held_since,
         })
@@ -123,8 +108,12 @@ impl TryFrom<NoticeRow> for ConflictNotice {
     fn try_from(row: NoticeRow) -> Result<Self, SyncError> {
         Ok(ConflictNotice {
             notice_id: row.notice_id,
-            kind: parse_stored("kind", &row.kind)?,
-            record_kind: parse_stored::<RecordKind>("record_kind", &row.record_kind)?,
+            kind: super::parse_stored("sync state", "kind", &row.kind)?,
+            record_kind: super::parse_stored::<RecordKind>(
+                "sync state",
+                "record_kind",
+                &row.record_kind,
+            )?,
             record_identity: row.record_identity,
             record_label: row.record_label,
             other_device_id: row.other_device_id,
@@ -145,7 +134,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| database_error("get_device: query failed", error))?;
+        .map_err(|error| SyncError::database("get_device: query failed", error))?;
         Ok(row.map(SyncDevice::from))
     }
 
@@ -175,16 +164,15 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|error| database_error("save_device: write failed", error))?;
+        .map_err(|error| SyncError::database("save_device: write failed", error))?;
         Ok(())
     }
 
     async fn discard_device_state(&self) -> Result<(), SyncError> {
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| database_error("discard_device_state: begin failed", error))?;
+        let mut transaction =
+            self.pool.begin().await.map_err(|error| {
+                SyncError::database("discard_device_state: begin failed", error)
+            })?;
         for statement in [
             "DELETE FROM sync_device",
             "DELETE FROM sync_cursors",
@@ -194,12 +182,14 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             sqlx::query(statement)
                 .execute(&mut *transaction)
                 .await
-                .map_err(|error| database_error("discard_device_state: delete failed", error))?;
+                .map_err(|error| {
+                    SyncError::database("discard_device_state: delete failed", error)
+                })?;
         }
         transaction
             .commit()
             .await
-            .map_err(|error| database_error("discard_device_state: commit failed", error))
+            .map_err(|error| SyncError::database("discard_device_state: commit failed", error))
     }
 
     async fn get_cursor(&self, device_id: &str) -> Result<Option<SyncCursor>, SyncError> {
@@ -210,7 +200,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| database_error("get_cursor: query failed", error))?;
+        .map_err(|error| SyncError::database("get_cursor: query failed", error))?;
         Ok(row.map(SyncCursor::from))
     }
 
@@ -219,7 +209,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             .pool
             .acquire()
             .await
-            .map_err(|error| database_error("upsert_cursor: acquire failed", error))?;
+            .map_err(|error| SyncError::database("upsert_cursor: acquire failed", error))?;
         self.upsert_cursor_on(&mut conn, cursor).await
     }
 
@@ -240,7 +230,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("upsert_cursor: write failed", error))?;
+        .map_err(|error| SyncError::database("upsert_cursor: write failed", error))?;
         Ok(())
     }
 
@@ -249,7 +239,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             .pool
             .acquire()
             .await
-            .map_err(|error| database_error("insert_held_back: acquire failed", error))?;
+            .map_err(|error| SyncError::database("insert_held_back: acquire failed", error))?;
         self.insert_held_back_on(&mut conn, change).await
     }
 
@@ -273,7 +263,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("insert_held_back: write failed", error))?;
+        .map_err(|error| SyncError::database("insert_held_back: write failed", error))?;
         Ok(())
     }
 
@@ -286,7 +276,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|error| database_error("list_held_back: query failed", error))?;
+        .map_err(|error| SyncError::database("list_held_back: query failed", error))?;
         rows.into_iter().map(HeldBackChange::try_from).collect()
     }
 
@@ -295,7 +285,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             .pool
             .acquire()
             .await
-            .map_err(|error| database_error("remove_held_back: acquire failed", error))?;
+            .map_err(|error| SyncError::database("remove_held_back: acquire failed", error))?;
         self.remove_held_back_on(&mut conn, id).await
     }
 
@@ -307,7 +297,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         sqlx::query!("DELETE FROM held_back_changes WHERE id = ?", id)
             .execute(conn)
             .await
-            .map_err(|error| database_error("remove_held_back: delete failed", error))?;
+            .map_err(|error| SyncError::database("remove_held_back: delete failed", error))?;
         Ok(())
     }
 
@@ -316,7 +306,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
             .pool
             .acquire()
             .await
-            .map_err(|error| database_error("insert_notice: acquire failed", error))?;
+            .map_err(|error| SyncError::database("insert_notice: acquire failed", error))?;
         self.insert_notice_on(&mut conn, notice).await
     }
 
@@ -343,7 +333,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .execute(conn)
         .await
-        .map_err(|error| database_error("insert_notice: write failed", error))?;
+        .map_err(|error| SyncError::database("insert_notice: write failed", error))?;
         Ok(())
     }
 
@@ -356,7 +346,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|error| database_error("list_undismissed_notices: query failed", error))?;
+        .map_err(|error| SyncError::database("list_undismissed_notices: query failed", error))?;
         rows.into_iter().map(ConflictNotice::try_from).collect()
     }
 
@@ -367,7 +357,7 @@ impl SyncStateRepository for SqliteSyncStateRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|error| database_error("dismiss_notice: update failed", error))?;
+        .map_err(|error| SyncError::database("dismiss_notice: update failed", error))?;
         if updated.rows_affected() == 0 {
             return Err(SyncError::NoticeNotFound {
                 notice_id: notice_id.to_string(),
@@ -398,15 +388,15 @@ mod tests {
     }
 
     fn sample_device() -> SyncDevice {
-        SyncDevice::restore(
-            "desktop-device".into(),
-            "Desktop".into(),
-            "/tmp/sync".into(),
-            "2026-08-22T00:00:00Z".into(),
-            false,
-            "2026-08-22T00:00:00Z".into(),
-            1,
-        )
+        SyncDevice::restore(StoredDevice {
+            device_id: "desktop-device".into(),
+            device_name: "Desktop".into(),
+            folder: "/tmp/sync".into(),
+            joined_at: "2026-08-22T00:00:00Z".into(),
+            paused: false,
+            portfolio_created_at: "2026-08-22T00:00:00Z".into(),
+            data_format_version: 1,
+        })
     }
 
     // SYN-016/052 — save then get round-trips the singleton device row.

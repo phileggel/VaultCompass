@@ -23,20 +23,6 @@ pub struct ServiceChangeApplier {
     currency_service: Arc<CurrencyService>,
 }
 
-fn database_error(context: &'static str, error: impl std::fmt::Debug) -> SyncError {
-    tracing::error!(target: BACKEND, err = ?error, "{context}");
-    SyncError::DatabaseError
-}
-
-/// A string field of a change's JSON content, when present.
-fn content_field(content: &str, field: &str) -> Option<String> {
-    serde_json::from_str::<serde_json::Value>(content)
-        .ok()?
-        .get(field)?
-        .as_str()
-        .map(str::to_string)
-}
-
 /// The currency of a system cash asset id (`system-cash-<ccy>`), when `asset_id` is one.
 fn cash_currency(asset_id: &str) -> Option<String> {
     is_cash_asset(asset_id)
@@ -69,7 +55,7 @@ impl ServiceChangeApplier {
             self.asset_service
                 .ensure_cash_asset(conn, &currency)
                 .await
-                .map_err(|error| database_error("apply: cash asset not seeded", error))?;
+                .map_err(|error| SyncError::database("apply: cash asset not seeded", error))?;
         }
         Ok(())
     }
@@ -92,17 +78,17 @@ impl ChangeApplier for ServiceChangeApplier {
                 .account_service
                 .synced_record(conn, kind, identity)
                 .await
-                .map_err(|error| database_error("apply: account record not read", error)),
+                .map_err(|error| SyncError::database("apply: account record not read", error)),
             RecordKind::Category | RecordKind::Asset | RecordKind::AssetPrice => self
                 .asset_service
                 .synced_record(conn, kind, identity)
                 .await
-                .map_err(|error| database_error("apply: asset record not read", error)),
+                .map_err(|error| SyncError::database("apply: asset record not read", error)),
             RecordKind::CurrencyPair | RecordKind::CurrencyRate => self
                 .currency_service
                 .synced_record(conn, kind, identity)
                 .await
-                .map_err(|error| database_error("apply: currency record not read", error)),
+                .map_err(|error| SyncError::database("apply: currency record not read", error)),
         }
     }
 
@@ -114,7 +100,7 @@ impl ChangeApplier for ServiceChangeApplier {
         self.account_service
             .synced_children(conn, account_id)
             .await
-            .map_err(|error| database_error("apply: account children not read", error))
+            .map_err(|error| SyncError::database("apply: account children not read", error))
     }
 
     async fn clashing_name(
@@ -129,12 +115,12 @@ impl ChangeApplier for ServiceChangeApplier {
                 .account_service
                 .clashing_account_name(conn, identity, name)
                 .await
-                .map_err(|error| database_error("apply: account names not read", error)),
+                .map_err(|error| SyncError::database("apply: account names not read", error)),
             RecordKind::Category => self
                 .asset_service
                 .clashing_category_name(conn, identity, name)
                 .await
-                .map_err(|error| database_error("apply: category names not read", error)),
+                .map_err(|error| SyncError::database("apply: category names not read", error)),
             _ => Ok(None),
         }
     }
@@ -152,17 +138,23 @@ impl ChangeApplier for ServiceChangeApplier {
                     .account_service
                     .apply_removal(conn, kind, identity)
                     .await
-                    .map_err(|error| database_error("apply: account removal not written", error)),
+                    .map_err(|error| {
+                        SyncError::database("apply: account removal not written", error)
+                    }),
                 RecordKind::Category | RecordKind::Asset | RecordKind::AssetPrice => self
                     .asset_service
                     .apply_removal(conn, kind, identity)
                     .await
-                    .map_err(|error| database_error("apply: asset removal not written", error)),
+                    .map_err(|error| {
+                        SyncError::database("apply: asset removal not written", error)
+                    }),
                 RecordKind::CurrencyPair | RecordKind::CurrencyRate => self
                     .currency_service
                     .apply_removal(conn, kind, identity)
                     .await
-                    .map_err(|error| database_error("apply: currency removal not written", error)),
+                    .map_err(|error| {
+                        SyncError::database("apply: currency removal not written", error)
+                    }),
             };
         }
         let Some(content) = change.content.as_deref() else {
@@ -172,14 +164,16 @@ impl ChangeApplier for ServiceChangeApplier {
         let rank = change.rank();
         match kind {
             RecordKind::Account => {
-                self.ensure_cash_asset(conn, content_field(content, "currency"))
+                self.ensure_cash_asset(conn, change.content_field("currency"))
                     .await?;
                 self.account_service
                     .apply_account(conn, content, rank)
                     .await
             }
             RecordKind::Transaction => {
-                let cash = content_field(content, "asset_id").and_then(|id| cash_currency(&id));
+                let cash = change
+                    .content_field("asset_id")
+                    .and_then(|id| cash_currency(&id));
                 self.ensure_cash_asset(conn, cash).await?;
                 self.account_service
                     .apply_transaction(conn, content, rank)
@@ -205,48 +199,54 @@ impl ChangeApplier for ServiceChangeApplier {
                     .asset_service
                     .apply_category(conn, content, rank)
                     .await
-                    .map_err(|error| database_error("apply: category not written", error));
+                    .map_err(|error| SyncError::database("apply: category not written", error));
             }
             RecordKind::Asset => {
                 return self
                     .asset_service
                     .apply_asset(conn, content, rank)
                     .await
-                    .map_err(|error| database_error("apply: asset not written", error));
+                    .map_err(|error| SyncError::database("apply: asset not written", error));
             }
             RecordKind::AssetPrice => {
                 return self
                     .asset_service
                     .apply_asset_price(conn, content, rank)
                     .await
-                    .map_err(|error| database_error("apply: asset price not written", error));
+                    .map_err(|error| SyncError::database("apply: asset price not written", error));
             }
             RecordKind::CurrencyPair => {
                 return self
                     .currency_service
                     .apply_currency_pair(conn, content, rank)
                     .await
-                    .map_err(|error| database_error("apply: currency pair not written", error));
+                    .map_err(|error| {
+                        SyncError::database("apply: currency pair not written", error)
+                    });
             }
             RecordKind::CurrencyRate => {
                 return self
                     .currency_service
                     .apply_currency_rate(conn, content, rank)
                     .await
-                    .map_err(|error| database_error("apply: currency rate not written", error));
+                    .map_err(|error| {
+                        SyncError::database("apply: currency rate not written", error)
+                    });
             }
         }
-        .map_err(|error| database_error("apply: account record not written", error))
+        .map_err(|error| SyncError::database("apply: account record not written", error))
     }
 
     async fn discard_observations(&self, conn: &mut SqliteConnection) -> Result<(), SyncError> {
         self.asset_service
             .discard_asset_prices(conn)
             .await
-            .map_err(|error| database_error("apply: asset prices not discarded", error))?;
+            .map_err(|error| SyncError::database("apply: asset prices not discarded", error))?;
         self.currency_service
             .discard_pairs_and_rates(conn)
             .await
-            .map_err(|error| database_error("apply: currency pairs and rates not discarded", error))
+            .map_err(|error| {
+                SyncError::database("apply: currency pairs and rates not discarded", error)
+            })
     }
 }

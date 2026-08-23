@@ -131,20 +131,41 @@ async fn read_device_history(
     Ok(())
 }
 
+/// The components a join reads and writes through (SYN-014/036/080).
+#[derive(Clone, Copy)]
+pub(super) struct JoinPorts<'a> {
+    pub change_log: &'a dyn ChangeLogRepository,
+    pub state_repo: &'a dyn SyncStateRepository,
+    pub folder_store: &'a dyn FolderStore,
+    pub change_recorder: &'a dyn ChangeRecorder,
+    pub applier: &'a dyn ChangeApplier,
+}
+
+/// What the user supplied to join (SYN-011).
+pub(super) struct JoinRequest {
+    pub folder: String,
+    pub passphrase: String,
+    pub device_name: String,
+}
+
 /// Joins the portfolio `folder` holds as a new device named `device_name`. The change
 /// recorder stays suspended for the whole rebuild — replaying the history records nothing
 /// (SYN-020).
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn join(
-    change_log: &dyn ChangeLogRepository,
-    state_repo: &dyn SyncStateRepository,
-    folder_store: &dyn FolderStore,
-    change_recorder: &dyn ChangeRecorder,
-    applier: &dyn ChangeApplier,
-    folder: String,
-    passphrase: String,
-    device_name: String,
+    ports: &JoinPorts<'_>,
+    request: JoinRequest,
 ) -> Result<SyncStatus, JoinError> {
+    let JoinPorts {
+        change_log,
+        folder_store,
+        change_recorder,
+        ..
+    } = *ports;
+    let JoinRequest {
+        folder,
+        passphrase,
+        device_name,
+    } = request;
     ensure_passphrase_length(&passphrase)?;
     ensure_device_name(&device_name)?;
     folder_store.retarget(&folder);
@@ -206,9 +227,7 @@ pub(super) async fn join(
     let mut transaction = change_log.begin().await?;
     let rebuilt = rebuild(
         &mut transaction,
-        change_log,
-        state_repo,
-        applier,
+        ports,
         &device,
         key.as_bytes(),
         logical_clock,
@@ -251,18 +270,16 @@ async fn remove_device_area(folder_store: &dyn FolderStore, device_id: &str) {
 /// The rebuild itself, on the enrolment transaction: the device row with its kept key,
 /// the discarded observations (SYN-083), every change of the history applied in order,
 /// what is held back, and the cursors at each device's latest sequence.
-#[allow(clippy::too_many_arguments)]
 async fn rebuild(
     transaction: &mut sqlx::Transaction<'static, sqlx::Sqlite>,
-    change_log: &dyn ChangeLogRepository,
-    state_repo: &dyn SyncStateRepository,
-    applier: &dyn ChangeApplier,
+    ports: &JoinPorts<'_>,
     device: &SyncDevice,
     key_bytes: &[u8],
     logical_clock: i64,
     history: &History,
 ) -> Result<(), SyncError> {
     let conn: &mut sqlx::SqliteConnection = transaction;
+    let (change_log, state_repo, applier) = (ports.change_log, ports.state_repo, ports.applier);
     change_log
         .save_enrolment(conn, device, key_bytes, logical_clock)
         .await?;

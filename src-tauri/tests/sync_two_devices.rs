@@ -27,7 +27,8 @@ use vault_compass_lib::context::sync::{
 };
 use vault_compass_lib::shared::infrastructure::change_recorder::ChangeRecorder;
 use vault_compass_lib::use_cases::portfolio_sync::{
-    PortfolioSyncOrchestrator, ServicePortfolioSnapshot, ServiceRankStamper,
+    PortfolioSyncDependencies, PortfolioSyncOrchestrator, ServicePortfolioSnapshot,
+    ServiceRankStamper,
 };
 
 async fn make_pool() -> sqlx::Pool<sqlx::Sqlite> {
@@ -123,16 +124,16 @@ async fn build_ctx(folder: &std::path::Path) -> Ctx {
         rank_stamper,
         snapshot,
     ));
-    let orchestrator = PortfolioSyncOrchestrator::new(
-        account_service.clone(),
-        asset_service.clone(),
+    let orchestrator = PortfolioSyncOrchestrator::new(PortfolioSyncDependencies {
+        account_service: account_service.clone(),
+        asset_service: asset_service.clone(),
         currency_service,
         sync_service,
         first_publish,
         sync_run,
         state_repo,
         folder_store,
-    );
+    });
     Ctx {
         orchestrator,
         account_service,

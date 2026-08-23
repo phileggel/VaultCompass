@@ -34,7 +34,7 @@ pub use applier::ChangeApplier;
 pub use change_log::ChangeLogRepository;
 pub use conflict_notice::{ConflictNotice, ConflictNoticeKind};
 pub use cursor::SyncCursor;
-pub use device::{ensure_device_name, SyncDevice, SyncStateRepository};
+pub use device::{ensure_device_name, StoredDevice, SyncDevice, SyncStateRepository};
 pub use folder::{
     segment_file_name, segment_sequence_range, DerivationParameters, FolderHeader, FolderProblem,
     FolderStore, Manifest, Segment, SegmentChange, SyncFolderState, WriteHeaderOutcome,

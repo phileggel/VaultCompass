@@ -211,27 +211,27 @@ mod tests {
     use crate::context::sync::domain::MockSyncStateRepository;
 
     fn paused_device() -> SyncDevice {
-        SyncDevice::restore(
-            "desktop-device".into(),
-            "Desktop".into(),
-            "/tmp/sync".into(),
-            "2026-08-22T00:00:00Z".into(),
-            true,
-            "2026-08-22T00:00:00Z".into(),
-            1,
-        )
+        SyncDevice::restore(crate::context::sync::StoredDevice {
+            device_id: "desktop-device".into(),
+            device_name: "Desktop".into(),
+            folder: "/tmp/sync".into(),
+            joined_at: "2026-08-22T00:00:00Z".into(),
+            paused: true,
+            portfolio_created_at: "2026-08-22T00:00:00Z".into(),
+            data_format_version: 1,
+        })
     }
 
     fn active_device() -> SyncDevice {
-        SyncDevice::restore(
-            "desktop-device".into(),
-            "Desktop".into(),
-            "/tmp/sync".into(),
-            "2026-08-22T00:00:00Z".into(),
-            false,
-            "2026-08-22T00:00:00Z".into(),
-            1,
-        )
+        SyncDevice::restore(crate::context::sync::StoredDevice {
+            device_id: "desktop-device".into(),
+            device_name: "Desktop".into(),
+            folder: "/tmp/sync".into(),
+            joined_at: "2026-08-22T00:00:00Z".into(),
+            paused: false,
+            portfolio_created_at: "2026-08-22T00:00:00Z".into(),
+            data_format_version: 1,
+        })
     }
 
     // SYN-010 — pause_sync rejects SyncDisabled while sync has never been enabled.
