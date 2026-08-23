@@ -158,6 +158,13 @@ export const useAppStore = create<AppState>((set, get) => {
         AssetUpdated: fetchAssets,
         CategoryUpdated: fetchCategories,
         AccountUpdated: fetchAccounts,
+        // SYN-064 — a bare marker: a run applied other devices' changes, so every
+        // cached slice is re-read.
+        SyncCompleted: () => {
+          fetchAssets();
+          fetchCategories();
+          fetchAccounts();
+        },
       };
 
       // Events handled locally by feature hooks (e.g. useAccountDetails) — not global store concerns

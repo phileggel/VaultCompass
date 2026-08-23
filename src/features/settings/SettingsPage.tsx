@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { ScheduledFetchSection } from "./scheduled_fetch/ScheduledFetchSection";
+import { SyncSection } from "./sync/SyncSection";
 import { type LanguageChoice, useSettings } from "./useSettings";
 
 const LANGUAGE_OPTIONS: { value: LanguageChoice; labelKey: string }[] = [
@@ -73,6 +74,8 @@ export function SettingsPage() {
       </section>
 
       <ScheduledFetchSection />
+
+      <SyncSection />
 
       <section className="flex flex-col gap-2">
         <label className="flex items-start gap-3 cursor-pointer group">

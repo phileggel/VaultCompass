@@ -337,6 +337,64 @@ describe("store — unpricedAssets dismiss / clear action (MKT-177)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// SyncCompleted — SYN-064/D10: a bare marker event; the frontend treats it as
+// a global refresh (accounts, assets, categories — the store's cached slices)
+// rather than reading a payload, since the run's outcome is re-read via
+// get_sync_status separately (SyncSection/SyncIndicator own that read).
+// ---------------------------------------------------------------------------
+
+describe("store — SyncCompleted global refresh (SYN-064)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEventListener = null;
+    useAppStore.setState({ isInitialized: false });
+  });
+
+  it("triggers a global refresh of assets, categories and accounts on SyncCompleted", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    const { assetGateway } = await import("../features/assets/gateway");
+    const { accountGateway } = await import("../features/accounts/gateway");
+    const { categoryGateway } = await import("../features/categories/gateway");
+
+    const assetCallsBefore = vi.mocked(assetGateway.getAssetsWithArchived).mock.calls.length;
+    const accountCallsBefore = vi.mocked(accountGateway.getAccounts).mock.calls.length;
+    const categoryCallsBefore = vi.mocked(categoryGateway.getCategories).mock.calls.length;
+
+    capturedEventListener?.({ payload: { type: "SyncCompleted" } });
+
+    expect(vi.mocked(assetGateway.getAssetsWithArchived).mock.calls.length).toBeGreaterThan(
+      assetCallsBefore,
+    );
+    expect(vi.mocked(accountGateway.getAccounts).mock.calls.length).toBeGreaterThan(
+      accountCallsBefore,
+    );
+    expect(vi.mocked(categoryGateway.getCategories).mock.calls.length).toBeGreaterThan(
+      categoryCallsBefore,
+    );
+
+    cleanup();
+  });
+
+  // Regression guard for the eventMap fallback: today SyncCompleted is not
+  // wired, so it falls into "unhandled event" — this must stop being true.
+  it("does not log an unhandled-event warning for SyncCompleted", async () => {
+    const cleanup = useAppStore.getState().init();
+    await vi.waitFor(() => expect(capturedEventListener).not.toBeNull());
+
+    capturedEventListener?.({ payload: { type: "SyncCompleted" } });
+
+    expect(mockDebug).not.toHaveBeenCalledWith(
+      "[store] unhandled event",
+      expect.objectContaining({ type: "SyncCompleted" }),
+    );
+
+    cleanup();
+  });
+});
+
 describe("store — price-fetch progress (MKT-180)", () => {
   beforeEach(() => {
     vi.clearAllMocks();

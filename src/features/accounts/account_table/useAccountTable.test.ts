@@ -558,3 +558,23 @@ describe("useAccountTable — sort by ytd_performance_pct (ACC-024, ACC-008)", (
     expect(result.current.sortConfig.direction).toBe("asc");
   });
 });
+
+// SYN-040 — an account carrying an inconsistent holding is marked so
+// AccountTable can render the account-level marker (#account-inconsistent-{id}).
+describe("useAccountTable — inconsistent holding marker (SYN-040)", () => {
+  const inconsistentAccounts: AccountSummary[] = [
+    makeAccount("1", "Alpha", "ManualMonth"),
+    { ...makeAccount("2", "Beta", "ManualMonth"), has_inconsistent_holding: true },
+  ];
+
+  it("carries has_inconsistent_holding through into the sorted/filtered rows", () => {
+    const { result } = renderHook(() =>
+      useAccountTable(inconsistentAccounts, "", noopDelete, noopSummary, noopAccountClick),
+    );
+
+    const byId = Object.fromEntries(
+      result.current.sortedAndFilteredAccounts.map((a) => [a.id, a.has_inconsistent_holding]),
+    );
+    expect(byId).toEqual({ "1": false, "2": true });
+  });
+});

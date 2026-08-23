@@ -9,7 +9,7 @@ use crate::context::sync::domain::{
     FolderStore, RosterEntry, SyncDevice, SyncFailure, SyncReport, SyncStateRepository, SyncStatus,
 };
 use crate::context::sync::error::SyncError;
-use crate::core::logger::BACKEND;
+use crate::core::{Event, SideEffectEventBus, BACKEND};
 
 /// What the last run of this process left behind for `SyncStatus` (SYN-063): when it
 /// completed, what needs attention, and the roster it read.
@@ -18,6 +18,7 @@ struct LastRun {
     completed_at: String,
     failures: Vec<SyncFailure>,
     roster: Vec<RosterEntry>,
+    paused: bool,
 }
 
 /// Device lifecycle + status assembly for the sync bounded context.
@@ -25,6 +26,7 @@ pub struct SyncService {
     state_repo: Arc<dyn SyncStateRepository>,
     folder_store: Arc<dyn FolderStore>,
     sync_run: Option<Arc<SyncRun>>,
+    event_bus: Option<Arc<SideEffectEventBus>>,
     last_run: Mutex<Option<LastRun>>,
 }
 
@@ -38,8 +40,15 @@ impl SyncService {
             state_repo,
             folder_store,
             sync_run: None,
+            event_bus: None,
             last_run: Mutex::new(None),
         }
+    }
+
+    /// Attaches the bus `SyncCompleted` is raised on (SYN-064).
+    pub fn with_event_bus(mut self, event_bus: Arc<SideEffectEventBus>) -> Self {
+        self.event_bus = Some(event_bus);
+        self
     }
 
     /// Attaches the publish run `leave_sync` flushes unpublished changes through (SYN-082).
@@ -65,12 +74,30 @@ impl SyncService {
     }
 
     /// Keeps what a completed run left behind for `SyncStatus` (SYN-063/069).
+    /// Keeps the run for `SyncStatus` and raises `SyncCompleted` when the run applied at
+    /// least one change or left different failures or paused state than the previous one
+    /// (SYN-064) — so a reset, a format gate, or an unavailable folder reaches the shell
+    /// without polling.
     pub fn remember_run(&self, report: &SyncReport) {
-        *self.last_run.lock().unwrap_or_else(PoisonError::into_inner) = Some(LastRun {
+        let run = LastRun {
             completed_at: report.completed_at.clone(),
             failures: report.failures.clone(),
             roster: report.status.roster.clone(),
+            paused: report.status.paused,
+        };
+        let previous = self
+            .last_run
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .replace(run);
+        let changed = previous.as_ref().is_none_or(|previous| {
+            previous.failures != report.failures || previous.paused != report.status.paused
         });
+        if report.applied_changes > 0 || changed {
+            if let Some(bus) = &self.event_bus {
+                bus.publish(Event::SyncCompleted);
+            }
+        }
     }
 
     fn last_run(&self) -> Option<LastRun> {
@@ -220,6 +247,71 @@ mod tests {
             portfolio_created_at: "2026-08-22T00:00:00Z".into(),
             data_format_version: 1,
         })
+    }
+
+    fn quiet_report(completed_at: &str) -> SyncReport {
+        SyncReport {
+            published_changes: 0,
+            applied_changes: 0,
+            held_back_changes: 0,
+            dropped_changes: 0,
+            notices_raised: 0,
+            failures: vec![],
+            completed_at: completed_at.into(),
+            status: SyncStatus::for_device(&active_device(), None, vec![]),
+        }
+    }
+
+    fn service_with_bus() -> (SyncService, Arc<SideEffectEventBus>) {
+        let bus = Arc::new(SideEffectEventBus::new());
+        let service = SyncService::new(
+            Arc::new(MockSyncStateRepository::new()),
+            Arc::new(MockFolderStore::new()),
+        )
+        .with_event_bus(Arc::clone(&bus));
+        (service, bus)
+    }
+
+    #[test]
+    fn first_remembered_run_raises_sync_completed() {
+        let (service, bus) = service_with_bus();
+        let mut rx = bus.subscribe();
+
+        service.remember_run(&quiet_report("2026-08-22T10:00:00Z"));
+
+        assert!(rx.has_changed().unwrap());
+        assert_eq!(*rx.borrow_and_update(), Event::SyncCompleted);
+    }
+
+    #[test]
+    fn a_quiet_publish_after_an_identical_run_raises_nothing() {
+        let (service, bus) = service_with_bus();
+        service.remember_run(&quiet_report("2026-08-22T10:00:00Z"));
+        let mut rx = bus.subscribe();
+        rx.borrow_and_update();
+
+        service.remember_run(&quiet_report("2026-08-22T10:00:05Z"));
+
+        assert!(!rx.has_changed().unwrap());
+    }
+
+    #[test]
+    fn applied_changes_or_new_failures_raise_sync_completed() {
+        let (service, bus) = service_with_bus();
+        service.remember_run(&quiet_report("2026-08-22T10:00:00Z"));
+        let mut rx = bus.subscribe();
+        rx.borrow_and_update();
+
+        let mut applied = quiet_report("2026-08-22T10:00:05Z");
+        applied.applied_changes = 1;
+        service.remember_run(&applied);
+        assert!(rx.has_changed().unwrap());
+        rx.borrow_and_update();
+
+        let mut failed = quiet_report("2026-08-22T10:00:10Z");
+        failed.failures = vec![SyncFailure::PortfolioReset];
+        service.remember_run(&failed);
+        assert!(rx.has_changed().unwrap());
     }
 
     fn active_device() -> SyncDevice {

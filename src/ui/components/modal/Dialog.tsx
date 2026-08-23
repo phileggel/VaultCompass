@@ -126,6 +126,7 @@ export function ConfirmationDialog({
       <Button
         variant={variant === "danger" ? "danger" : "primary"}
         id={confirmId}
+        data-testid={confirmId}
         onClick={onConfirm}
       >
         {confirmLabel}

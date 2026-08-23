@@ -195,7 +195,8 @@ pub fn run() {
                 ));
                 let sync_service = Arc::new(
                     SyncService::new(Arc::clone(&sync_state_repo), Arc::clone(&sync_folder_store))
-                        .with_run(Arc::clone(&sync_run)),
+                        .with_run(Arc::clone(&sync_run))
+                        .with_event_bus(Arc::clone(&event_bus)),
                 );
                 // SYN-067 — every recorded change restarts the settling window; a settled
                 // burst publishes once.

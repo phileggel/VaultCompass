@@ -94,6 +94,17 @@ describe("useCurrencyRatesView", () => {
     });
   });
 
+  // SYN-064 — a sync run re-fetches the pairs (applied currency pairs raise no event of their own)
+  it("re-fetches pairs on SyncCompleted", async () => {
+    const { result } = renderHook(() => useCurrencyRatesView());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    vi.mocked(gateway.getCurrencyPairs).mockClear();
+    act(() => eventCallback?.("SyncCompleted"));
+
+    await waitFor(() => expect(gateway.getCurrencyPairs).toHaveBeenCalledTimes(1));
+  });
+
   // FXR-037 — unrelated events do not trigger a re-fetch
   it("ignores unrelated events", async () => {
     const { result } = renderHook(() => useCurrencyRatesView());

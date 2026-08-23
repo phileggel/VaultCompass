@@ -1,4 +1,4 @@
-import { Calendar, ChevronRight, Edit2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, ChevronRight, Edit2, Trash2, X } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
@@ -277,6 +277,16 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
                 <td className="m3-td">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-m3-on-surface">{account.name}</span>
+                    {/* SYN-040 — the account holds an inconsistent holding after a merge */}
+                    {account.has_inconsistent_holding && (
+                      <AlertTriangle
+                        id={`account-inconsistent-${account.id}`}
+                        size={14}
+                        className="shrink-0 text-m3-error"
+                        role="img"
+                        aria-label={t("account.inconsistent_holding")}
+                      />
+                    )}
                     <ChevronRight
                       size={14}
                       className="text-m3-primary opacity-0 group-hover:opacity-100 transition-opacity"

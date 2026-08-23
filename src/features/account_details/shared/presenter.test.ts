@@ -1001,6 +1001,42 @@ describe("performanceColumnKey (ACD-054)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// toHoldingRow — SYN-040/CFR-042: derived holding inconsistency carried into
+// the row view model, with an i18n message for display (F27).
+// ---------------------------------------------------------------------------
+
+describe("toHoldingRow — inconsistency (SYN-040, CFR-042)", () => {
+  it("carries inconsistency as null and inconsistencyLabel as null when the holding is consistent", () => {
+    const row = toHoldingRow(makeHolding({ inconsistency: null }));
+    expect(row.inconsistency).toBeNull();
+    expect(row.inconsistencyLabel).toBeNull();
+  });
+
+  it("carries an Oversold inconsistency through with a formatted i18n message", () => {
+    const row = toHoldingRow(
+      makeHolding({ inconsistency: { Oversold: { quantity: -3_000_000 } } }),
+    );
+    expect(row.inconsistency).toEqual({ Oversold: { quantity: -3_000_000 } });
+    expect(row.inconsistencyLabel).toEqual({
+      key: "sync.inconsistency.oversold",
+      vars: { quantity: "-3" },
+    });
+  });
+
+  it("carries a CashOverdrawn inconsistency on the cash row through with a formatted i18n message", () => {
+    const row = toHoldingRow(
+      makeCashHolding({ inconsistency: { CashOverdrawn: { amount: -50_250_000 } } }),
+    );
+    expect(row.isCash).toBe(true);
+    expect(row.inconsistency).toEqual({ CashOverdrawn: { amount: -50_250_000 } });
+    expect(row.inconsistencyLabel).toEqual({
+      key: "sync.inconsistency.cash_overdrawn",
+      vars: { amount: "-50,25" },
+    });
+  });
+});
+
 describe("toHoldingRow — note fields (HNO-041)", () => {
   it("passes through a null note as no note and no alarm", () => {
     const row = toHoldingRow(makeHolding());

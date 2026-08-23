@@ -7,6 +7,7 @@ import type {
   DividendError,
   FreeSharesError,
   HoldingDetail,
+  HoldingInconsistency,
   HoldingPeriodPerformance,
   InterestError,
   ManagementFeeError,
@@ -19,6 +20,7 @@ import {
   microToFormattedQuantity,
 } from "@/lib/microUnits";
 import type { StoredPerfPeriod } from "@/lib/perfPeriodStorage";
+import { formatHoldingInconsistency } from "@/ui/format/holdingInconsistency";
 import type { I18nMessage } from "@/ui/format/i18n";
 import { formatStalenessLabel, type StalenessLabel } from "@/ui/format/staleness";
 import type { PriceableAsset } from "./types";
@@ -220,6 +222,10 @@ export interface HoldingRowViewModel {
   noteHasAlarm: boolean;
   /** True while the alarm's threshold is crossed — filled error-tone bell (HNO-030/041). */
   noteAlarmTriggered: boolean;
+  /** Derived after a merge: oversold quantity or overdrawn cash, or null when consistent (SYN-040, CFR-042). */
+  inconsistency: HoldingInconsistency | null;
+  /** Display message for `inconsistency`, amount formatted; null when consistent. */
+  inconsistencyLabel: I18nMessage | null;
 }
 
 /** The five windowed returns of the period selector — every period except the since-start default (ACD-054). */
@@ -465,6 +471,8 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
       noteText: null,
       noteHasAlarm: false,
       noteAlarmTriggered: false,
+      inconsistency: detail.inconsistency,
+      inconsistencyLabel: toInconsistencyLabel(detail.inconsistency),
     };
   }
   return {
@@ -517,7 +525,13 @@ export function toHoldingRow(detail: HoldingDetail, totalGlobalValue = 0): Holdi
     noteText: detail.note_text,
     noteHasAlarm: detail.note_threshold_price !== null,
     noteAlarmTriggered: detail.note_alarm_triggered,
+    inconsistency: detail.inconsistency,
+    inconsistencyLabel: toInconsistencyLabel(detail.inconsistency),
   };
+}
+
+function toInconsistencyLabel(reason: HoldingInconsistency | null): I18nMessage | null {
+  return reason === null ? null : formatHoldingInconsistency(reason);
 }
 
 export function toClosedHoldingRow(detail: ClosedHoldingDetail): ClosedHoldingRowViewModel {

@@ -255,6 +255,29 @@ describe("useAccountDetails — market price events (MKT)", () => {
     expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
   });
 
+  // SYN-064 — a sync run that applied changes (holding notes included) re-fetches the view
+  it("SYN-064 — re-fetches when SyncCompleted event is received", async () => {
+    let capturedCallback: ((type: string) => void) | null = null;
+    const { accountDetailsGateway } = await import("../gateway");
+    (accountDetailsGateway.subscribeToEvents as ReturnType<typeof vi.fn>).mockImplementation(
+      vi.fn((cb: (type: string) => void) => {
+        capturedCallback = cb;
+        return Promise.resolve(() => {});
+      }),
+    );
+    mockGetAccountDetails.mockResolvedValue({ status: "ok", data: makeResponse() });
+
+    renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    const firstCallCount = mockGetAccountDetails.mock.calls.length;
+
+    await act(async () => {
+      capturedCallback?.("SyncCompleted");
+    });
+
+    expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
+  });
+
   // MKT-181 — per-asset price events are coalesced while a bulk fetch is active;
   // the view reloads once on AssetPriceFetchCompleted.
   it("MKT-181 — skips AssetPriceUpdated during an active fetch, reloads on completion", async () => {

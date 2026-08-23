@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowDownToLine,
   ArrowUpFromLine,
   Bell,
@@ -250,6 +251,16 @@ export function HoldingRow({
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
           <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
+          {/* SYN-040 — derived after a merge; clears by itself once the ledger is valid again */}
+          {row.inconsistencyLabel !== null && (
+            <span
+              id={`holding-inconsistency-${row.assetId}`}
+              className="flex items-center gap-1 text-xs text-m3-error"
+            >
+              <AlertTriangle size={12} className="shrink-0" aria-hidden="true" />
+              {t(row.inconsistencyLabel.key, row.inconsistencyLabel.vars)}
+            </span>
+          )}
           {/* HNO-041 — pinned note: optional bell (armed / triggered) + single
               truncated line, full text as tooltip */}
           {row.noteText !== null && (

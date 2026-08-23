@@ -63,7 +63,8 @@ export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountD
   }, [fetchDetails]);
 
   // ACD-039/040/MKT-036/FXR-036/FEE-064 — re-fetch on TransactionUpdated,
-  // AssetUpdated, AssetPriceUpdated, CurrencyRateUpdated, or FeeScheduleUpdated
+  // AssetUpdated, AssetPriceUpdated, CurrencyRateUpdated, or FeeScheduleUpdated;
+  // SYN-064 — and on SyncCompleted, which also carries applied holding notes.
   useEffect(() => {
     const unlistenPromise = accountDetailsGateway.subscribeToEvents((type) => {
       // MKT-181 — while a bulk price fetch runs, per-asset AssetPriceUpdated
@@ -77,7 +78,8 @@ export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountD
         type === "AssetPriceUpdated" ||
         type === "AssetPriceFetchCompleted" ||
         type === "CurrencyRateUpdated" ||
-        type === "FeeScheduleUpdated"
+        type === "FeeScheduleUpdated" ||
+        type === "SyncCompleted"
       ) {
         fetchDetails();
       }

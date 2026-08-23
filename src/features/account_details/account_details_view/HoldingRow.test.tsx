@@ -54,6 +54,8 @@ const baseRow: HoldingRowViewModel = {
   noteText: null,
   noteHasAlarm: false,
   noteAlarmTriggered: false,
+  inconsistency: null,
+  inconsistencyLabel: null,
 };
 
 const renderInTable = (

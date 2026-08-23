@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { IconButton } from "@/ui/components/button/IconButton";
+import { SyncIndicator } from "./sync_indicator/SyncIndicator";
 import { ThemeToggle } from "./theme_toggle/ThemeToggle";
 import { useHeaderConfig } from "./useHeaderConfig";
 
@@ -38,6 +39,7 @@ export function Header() {
       <div className="flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
       </div>
+      <SyncIndicator />
       <ThemeToggle />
     </header>
   );

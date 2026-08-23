@@ -322,6 +322,7 @@ const makeHoldingDetail = (overrides: Record<string, unknown> = {}) => ({
     five_years: null,
     ten_years: null,
   },
+  inconsistency: null,
   ...overrides,
 });
 

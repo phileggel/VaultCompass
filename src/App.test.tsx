@@ -23,6 +23,25 @@ vi.mock("./bindings", () => ({
     downloadUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
     installUpdate: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
     applyDueFeeDeductions: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
+    getSyncStatus: vi.fn(() =>
+      Promise.resolve({
+        status: "ok",
+        data: {
+          enabled: false,
+          paused: false,
+          device_id: null,
+          device_name: null,
+          folder: null,
+          last_sync_completed_at: null,
+          roster: [],
+          held_back_count: 0,
+          oldest_held_back_since: null,
+          notices: [],
+          inconsistent_holdings: [],
+          failures: [],
+        },
+      }),
+    ),
   },
   events: {
     event: {
