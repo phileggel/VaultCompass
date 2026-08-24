@@ -57,6 +57,8 @@ Key skills: `/spec-writer` (draft spec), `/contract` (derive contract), `/featur
 Key recipes: `just check` (lint/format), `just check-full` (tests + build + lint), `just format` (auto-fix), `just generate-types` (regenerate Specta bindings), `just merge` (auto-rebase, fast-forward, push, delete branch), `just sync-kit` (sync to latest kit version), `just release` (full quality validation → semver bump → CHANGELOG → commit + tag + push).
 Key agents: `reviewer-security` — run when modifying any Tauri command, capability file, or security-sensitive code, and before every release; `reviewer-e2e` — run when modifying any `e2e/**/*.test.ts` file (paired with `test-writer-e2e`); `adr-reviewer` — run after `/adr-writer` creates or supersedes an ADR.
 
+**Only prescribed agents.** Launch exclusively the agents a workflow step, skill, or the feature plan names (test-writers, reviewers, spec-checker, …). Implementation and review fixes are done by the main agent directly — never a general-purpose "implementer" or "fix" agent; a fresh agent lacks the session's settled decisions and drifts. If an agent would genuinely help, ask the user first.
+
 ### Mandatory pre-read by task type
 
 Before implementing, read the relevant convention docs:
