@@ -71,8 +71,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Found by: main-agent
 - Where: src-tauri/Cargo.toml, src-tauri/tauri.conf.json
 - Context: branch `main` @ `09d622c`
-- Severity: 🔵
-- Observation: The locally-built `.deb` installs the app binary under the template name `tauri-app` (not `vault-compass`) and also packages `generate_bindings`, a dev-only helper binary, into the installer. The Windows NSIS pipeline is likely affected the same way (binary name inside the installer). Menu entries and app labels are correct; only the on-disk binary names and the extra packaged binary are off.
+- Severity: 🟡
+- Observation: The `.deb` installs the app binary under the template name `tauri-app` (not `vault-compass`) and also packages `generate_bindings`, a dev-only helper binary, into the installer. The Windows NSIS pipeline is likely affected the same way (binary name inside the installer). Menu entries and app labels are correct; only the on-disk binary names and the extra packaged binary are off. The Linux release job now publishes this bundle as an AppImage and a `.deb`, so the leftovers ship to users. Renaming the binary reaches `wdio.conf.ts` (`BINARY_NAME`), `scripts/screenshot.sh`, and the Windows installer path, and changing an installed binary name between versions is an updater upgrade question — it needs its own PR.
 
 ---
 
