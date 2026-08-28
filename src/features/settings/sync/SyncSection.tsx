@@ -27,6 +27,29 @@ export function SyncSection() {
   const formatWhen = (iso: string | null) =>
     iso === null ? t("sync.last_sync_never") : formatIsoDateTime(iso, i18n.language);
 
+  const browseForFolder = async () => {
+    const picked = await state.handleBrowseFolder();
+    if (picked !== null) {
+      setPrompt((current) => (current ? { ...current, value: picked } : current));
+    }
+  };
+
+  const promptField = (
+    <TextField
+      id="sync-prompt-value"
+      label={
+        prompt?.kind === "rename"
+          ? t("sync.rename_prompt_label")
+          : t("sync.change_folder_prompt_label")
+      }
+      value={prompt?.value ?? ""}
+      error={state.actionError ? t(state.actionError.key, state.actionError.vars) : undefined}
+      onChange={(event) =>
+        setPrompt((current) => (current ? { ...current, value: event.target.value } : current))
+      }
+    />
+  );
+
   const submitPrompt = async () => {
     if (prompt === null) return;
     setIsSubmittingPrompt(true);
@@ -306,19 +329,23 @@ export function SyncSection() {
           </div>
         }
       >
-        <TextField
-          id="sync-prompt-value"
-          label={
-            prompt?.kind === "rename"
-              ? t("sync.rename_prompt_label")
-              : t("sync.change_folder_prompt_label")
-          }
-          value={prompt?.value ?? ""}
-          error={state.actionError ? t(state.actionError.key, state.actionError.vars) : undefined}
-          onChange={(event) =>
-            setPrompt((current) => (current ? { ...current, value: event.target.value } : current))
-          }
-        />
+        {prompt?.kind === "folder" ? (
+          <div className="flex items-start gap-2">
+            <div className="flex-1">{promptField}</div>
+            <Button
+              id="sync-prompt-browse"
+              data-testid="sync-prompt-browse"
+              type="button"
+              variant="outline"
+              className="mt-6"
+              onClick={() => void browseForFolder()}
+            >
+              {t("sync.browse")}
+            </Button>
+          </div>
+        ) : (
+          promptField
+        )}
       </Dialog>
     </section>
   );

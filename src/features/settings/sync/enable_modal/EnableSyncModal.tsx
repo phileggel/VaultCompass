@@ -117,7 +117,7 @@ export function EnableSyncModal({ isOpen, onClose, onSuccess, variant }: EnableS
                   className="mt-6"
                   onClick={() => void state.handleBrowse()}
                 >
-                  {t("sync.enable_modal.browse")}
+                  {t("sync.browse")}
                 </Button>
               </div>
               <p className="text-xs text-m3-on-surface-variant">

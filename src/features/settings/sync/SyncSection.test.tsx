@@ -37,6 +37,7 @@ const makeState = (overrides: Record<string, unknown> = {}) => ({
   handleResume: vi.fn(),
   handleRename: vi.fn(),
   handleChangeFolder: vi.fn(),
+  handleBrowseFolder: vi.fn(),
   confirmingLeave: false,
   requestLeave: vi.fn(),
   cancelLeave: vi.fn(),
@@ -229,6 +230,65 @@ describe("SyncSection — enabled state (SYN-061/063/070/072/073/074/082/084)", 
     expect(handleChangeFolder).toHaveBeenCalledWith("/home/user/sync");
     await waitFor(() => expect(handleChangeFolder).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("sync-prompt-submit")).toBeInTheDocument();
+  });
+
+  it("offers Browse in the change-folder prompt (SYN-074, F25)", () => {
+    mockUseSyncSection.mockReturnValue(makeState({ enabled: true, folder: "/home/user/sync" }));
+    render(<SyncSection />);
+
+    fireEvent.click(screen.getByTestId("sync-change-folder"));
+
+    expect(screen.getByTestId("sync-prompt-browse")).toBeInTheDocument();
+  });
+
+  it("offers no Browse in the rename prompt — it takes a name, not a path (SYN-072)", () => {
+    mockUseSyncSection.mockReturnValue(makeState({ enabled: true, deviceName: "Desktop" }));
+    render(<SyncSection />);
+
+    fireEvent.click(screen.getByTestId("sync-rename"));
+
+    expect(screen.queryByTestId("sync-prompt-browse")).toBeNull();
+  });
+
+  it("puts the picked folder in the field and submits it (SYN-074)", async () => {
+    const handleBrowseFolder = vi.fn().mockResolvedValue("/media/phil/KEY/VaultCompass");
+    const handleChangeFolder = vi.fn().mockResolvedValue(true);
+    mockUseSyncSection.mockReturnValue(
+      makeState({
+        enabled: true,
+        folder: "/home/user/sync",
+        handleBrowseFolder,
+        handleChangeFolder,
+      }),
+    );
+    render(<SyncSection />);
+
+    fireEvent.click(screen.getByTestId("sync-change-folder"));
+    fireEvent.click(screen.getByTestId("sync-prompt-browse"));
+
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("/media/phil/KEY/VaultCompass")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("sync-prompt-submit"));
+
+    await waitFor(() =>
+      expect(handleChangeFolder).toHaveBeenCalledWith("/media/phil/KEY/VaultCompass"),
+    );
+  });
+
+  it("leaves the typed folder untouched when the picker is cancelled (SYN-074)", async () => {
+    const handleBrowseFolder = vi.fn().mockResolvedValue(null);
+    mockUseSyncSection.mockReturnValue(
+      makeState({ enabled: true, folder: "/home/user/sync", handleBrowseFolder }),
+    );
+    render(<SyncSection />);
+
+    fireEvent.click(screen.getByTestId("sync-change-folder"));
+    fireEvent.click(screen.getByTestId("sync-prompt-browse"));
+
+    await waitFor(() => expect(handleBrowseFolder).toHaveBeenCalled());
+    expect(screen.getByDisplayValue("/home/user/sync")).toBeInTheDocument();
   });
 
   it("opens the start-over flow (its own confirmation lives in the enable modal, SYN-071)", () => {

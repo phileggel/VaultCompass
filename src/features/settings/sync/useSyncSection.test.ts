@@ -10,6 +10,7 @@ vi.mock("../gateway", () => ({
   resumeSync: vi.fn(),
   renameSyncDevice: vi.fn(),
   changeSyncFolder: vi.fn(),
+  pickSyncFolder: vi.fn(),
   leaveSync: vi.fn(),
 }));
 
@@ -297,5 +298,33 @@ describe("useSyncSection — leave sync confirmation (SYN-071/082)", () => {
 
     expect(result.current.confirmingLeave).toBe(false);
     expect(gateway.leaveSync).not.toHaveBeenCalled();
+  });
+  it("handleBrowseFolder returns the picked path (SYN-074)", async () => {
+    vi.mocked(gateway.pickSyncFolder).mockResolvedValue("/media/phil/KEY/VaultCompass");
+
+    const { result } = renderHook(() => useSyncSection());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let picked: string | null = null;
+    await act(async () => {
+      picked = await result.current.handleBrowseFolder();
+    });
+
+    expect(picked).toBe("/media/phil/KEY/VaultCompass");
+    expect(gateway.pickSyncFolder).toHaveBeenCalledWith();
+  });
+
+  it("handleBrowseFolder passes a cancelled picker through as null (SYN-074)", async () => {
+    vi.mocked(gateway.pickSyncFolder).mockResolvedValue(null);
+
+    const { result } = renderHook(() => useSyncSection());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let picked: string | null = "unchanged";
+    await act(async () => {
+      picked = await result.current.handleBrowseFolder();
+    });
+
+    expect(picked).toBeNull();
   });
 });

@@ -13,6 +13,7 @@ import {
   getSyncStatus,
   leaveSync,
   pauseSync,
+  pickSyncFolder,
   renameSyncDevice,
   resumeSync,
   syncNow,
@@ -43,6 +44,8 @@ export interface UseSyncSectionResult {
   /** Resolve to true when the backend accepted the change; false leaves `actionError` set. */
   handleRename: (deviceName: string) => Promise<boolean>;
   handleChangeFolder: (folder: string) => Promise<boolean>;
+  /** SYN-074 — native folder picker; resolves to the chosen path, or null when cancelled. */
+  handleBrowseFolder: () => Promise<string | null>;
   confirmingLeave: boolean;
   requestLeave: () => void;
   cancelLeave: () => void;
@@ -146,6 +149,8 @@ export function useSyncSection(): UseSyncSectionResult {
     [applyStatusResult],
   );
 
+  const handleBrowseFolder = useCallback(() => pickSyncFolder(), []);
+
   const confirmLeave = useCallback(async () => {
     setActionError(null);
     const result = await leaveSync();
@@ -178,6 +183,7 @@ export function useSyncSection(): UseSyncSectionResult {
     handleResume,
     handleRename,
     handleChangeFolder,
+    handleBrowseFolder,
     confirmingLeave,
     requestLeave: () => setConfirmingLeave(true),
     cancelLeave: () => setConfirmingLeave(false),
