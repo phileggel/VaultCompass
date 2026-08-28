@@ -17,6 +17,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync-e2e` @ `78b43cd`
 - Severity: 🔵
 - Observation: Every other apply path re-raises the event a local write would (SYN-064), but holding notes and currency pairs have no local-write event at all, so their apply paths raise nothing. The frontend compensates by re-fetching the account-details and currency-rates views on the bare `SyncCompleted` marker — correct, but a view open on an unrelated page does one redundant fetch per run. A `HoldingNoteUpdated` / `CurrencyPairUpdated` pair (raised by local writes and apply alike) would make the refresh precise; its own small PR, both layers.
+- User value: Views refresh only when their own data changed — no redundant fetch on an unrelated page after each sync.
+- Done when: `HoldingNoteUpdated` and `CurrencyPairUpdated` are raised by local writes and applies alike, and the frontend subscribes to them instead of the bare `SyncCompleted` marker.
 
 ## 2026-08-23 — Local writes do not take the sync gate
 
@@ -25,6 +27,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync-resolve` @ `4d6ec37`
 - Severity: 🟡
 - Observation: SYN-064 says a local write and an in-progress apply never interleave. The apply holds `SyncGate` and runs in one SQLite write transaction with the change recorder suspended; local writes do not take the gate. SQLite's single writer serialises them at the database level and the recorder reads the logical clock under that lock, so the remaining window is a local write that computed `based_on` before an apply committed — benign for the rank order, but not the guarantee the spec states. Closing it means a `begin_write()` helper on the recorder that takes the gate before opening the transaction, applied at all 30 capture sites — its own PR.
+- User value: None observable — the remaining window is benign for merge order.
+- Done when: A `begin_write()` recorder helper takes `SyncGate` before opening the transaction at all 30 capture sites, so SYN-064 holds as written.
 
 ## 2026-08-23 — Held-back changes and conflict notices have no bound
 
@@ -33,6 +37,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync-resolve` @ `4d6ec37`
 - Severity: 🟡
 - Observation: A hostile or buggy peer could grow `held_back_changes` without bound (every run retries all of them) and `conflict_notices` never evicts. Unreachable for one user's own desktops; add caps / eviction before any multi-user or untrusted-peer scenario.
+- User value: None for a user's own devices; bounds growth caused by a buggy or hostile peer.
+- Done when: `held_back_changes` has a cap and `conflict_notices` evicts, both covered by tests.
 
 ## 2026-08-23 — Join replays a device's whole history in memory
 
@@ -41,6 +47,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync-resolve` @ `4d6ec37`
 - Severity: 🔵
 - Observation: Only the per-file 64 MiB cap bounds a join; the full history of each device is held in memory inside one transaction. Acceptable under the KISS cut (a personal portfolio's history is a few KB a month); revisit with checkpoints if history or device count grows.
+- User value: None at present history sizes.
+- Done when: Join streams or checkpoints history instead of holding every device's full history in one in-memory transaction.
 
 ## 2026-08-22 — Account-deletion cascade is no longer a single transaction
 
@@ -49,6 +57,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync-capture` @ `c7471e9`
 - Severity: 🟡
 - Observation: To record one change + tombstone per child (SYN-024, CFR-030), `AccountService::delete` now removes transactions, holding notes, fee schedules and catch-up positions through their own repositories — each atomic with its own change — before deleting the account. Previously a single `DELETE` with `ON DELETE CASCADE` did it all in one transaction. A crash mid-cascade leaves a half-deleted account (recoverable on retry, never silently diverging, since every child removal carries its change). Restoring single-transaction semantics needs a transaction spanning several repositories — the unit of work ADR-006 describes and the codebase never built (see the ADR-006 entry above). Fold the cascade into that unit of work when it lands.
+- User value: A crash midway through deleting an account cannot leave it half-deleted.
+- Done when: The cascade runs inside one unit of work spanning the child repositories.
 
 ## 2026-08-22 — ADR-006 unit of work is accepted but unimplemented
 
@@ -57,6 +67,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync` @ `a9ed932`
 - Severity: 🟡
 - Observation: `docs/adr/006-unit-of-work.md` is Accepted and `docs/uow_example.md` documents the pattern, but nothing in the codebase implements it; cross-aggregate writes open ad-hoc transactions. ADR-019 originally relied on it for change capture and was amended in place to a `ChangeRecorder` port on the live connection instead. Decide later whether to implement ADR-006 (and route the recorder through it) or supersede it; status left Accepted meanwhile.
+- User value: None directly.
+- Done when: ADR-006 is implemented and the three ad-hoc `sqlx` transactions route through it, or the ADR is superseded.
 
 ## 2026-08-22 — FEE spec carries contract vocabulary and out-of-order rules
 
@@ -65,6 +77,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/multi-device-sync` @ `a127abe`
 - Severity: 🔵
 - Observation: FEE-077 names an error variant and a method, FEE-074 names a typed field (`fee_rate_percent_micros: Option<i64>`) — contract vocabulary inside a spec ("what & why, never how"). FEE-074 also sits after FEE-078, out of numeric order. Pre-existing; only the missing scope tags on FEE-075–078 were fixed as boyscout while the file was touched for FEE-043/048. Rewording to behaviour-only text needs a judgement pass, not a mechanical edit — do it in a docs-only PR.
+- User value: None — spec hygiene.
+- Done when: FEE-074 and FEE-077 are reworded to behaviour-only text and FEE-074 is renumbered into order.
 
 ## 2026-07-25 — Linux bundle carries Tauri template leftovers
 
@@ -73,6 +87,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `main` @ `09d622c`
 - Severity: 🟡
 - Observation: The `.deb` installs the app binary under the template name `tauri-app` (not `vault-compass`) and also packages `generate_bindings`, a dev-only helper binary, into the installer. The Windows NSIS pipeline is likely affected the same way (binary name inside the installer). Menu entries and app labels are correct; only the on-disk binary names and the extra packaged binary are off. The Linux release job now publishes this bundle as an AppImage and a `.deb`, so the leftovers ship to users. Renaming the binary reaches `wdio.conf.ts` (`BINARY_NAME`), `scripts/screenshot.sh`, and the Windows installer path, and changing an installed binary name between versions is an updater upgrade question — it needs its own PR.
+- User value: The installed binary is named after the app, and no dev-only helper ships inside the package.
+- Done when: The `[[bin]]` is renamed, `generate_bindings` is excluded from the bundle, `wdio.conf.ts` and `scripts/screenshot.sh` follow, and the Windows updater upgrade path across the rename is verified.
 
 ---
 
@@ -83,6 +99,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `feat/explicit-isin-lookup` @ `30ec513`
 - Severity: 🔵
 - Observation: `docs/test_convention.md` mandates the `test_<subject>_<condition>_<expected_outcome>` naming pattern, but the codebase has organically settled on descriptive names without the `test_` prefix (e.g. `validates_ishares_sp500_isin`, `rejects_empty_string_as_wrong_length`). Only ~20% of test functions (76 of 391) carry the prefix. The reviewer surfaced 26 new tests in the ISIN-lookup feature that follow the existing local convention but diverge from the doc. Resolution direction (project-wide rename to align with the doc OR doc update to codify the de facto pattern) is a separate decision and a separate MR; either path is mechanical but spans every Rust test file in the repo.
+- User value: None — test naming convention.
+- Done when: The tests are renamed project-wide, or `docs/test_convention.md` codifies the de facto descriptive pattern.
 
 ---
 
@@ -93,6 +111,8 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Context: branch `docs/adr-asset-valuation` @ `4d706dd`
 - Severity: 🔵
 - Observation: ADR-003 carries `Status: Accepted — amended by ADR-005` and ADR-005 carries `Status: Accepted — amends ADR-003`. The kit's `adr-writer` skill permits only three status values (`Accepted`, `Accepted — supersedes ADR-{NNN}`, `Superseded by ADR-{NNN}`). The "amends / amended by" relationship — capturing "this ADR refines another without superseding it" — has no permitted encoding, so the local files use an unsanctioned vocabulary that won't pass strict reviewer checks. The kit gap (no "amends" relationship class) is the upstream cause; the local files reflect that gap. Not fixed in the ADR-asset-valuation branch because resolving it requires either an upstream kit decision (add an "amended by" vocabulary) or a deliberate local decision to convert ADR-003 → Superseded by ADR-005 (loses the "still partly valid" nuance) — both are out of scope for an in-place ADR edit.
+- User value: None — ADR vocabulary.
+- Done when: The kit permits an “amends” status, or ADR-003 and ADR-005 are converted to a permitted one.
 
 ---
 
@@ -112,6 +132,9 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
   4. **`src/lib/*Storage.ts` adapters belong in `src/infra/settings/`.** The browser-`localStorage` UI-preference adapters (`autoFetchStorage.ts`, `autoRecordPriceStorage.ts`, `lastOperationDateStorage.ts`, `closedSectionStorage.ts`) are platform adapters per F28's Store-kinds table and should move to `src/infra/settings/`. New ones keep landing in `src/lib/` to stay consistent with their siblings (a partial move would orphan one file mid-migration). Mechanical folder move + import-path update; fold into the same `lib/ → infra/` rename PR.
 
   Migration is mechanical for #1/#4 (folder move + import sites) and conventional for #2/#3 (depends on the consolidation decision). Cleanest as one or two dedicated PRs after the kit proposals land (so the project mirrors the kit-ratified spec).
+
+- User value: None — internal layout.
+- Done when: `src/lib/*Storage.ts` moves to `src/infra/settings/`, the `useTransactions` cross-feature coupling is removed, and the `account_details` / `transactions` split is formalised.
 
 ## 2026-05-09 — Migrate to gold DDD layout (per kit proposals #17–#19)
 
@@ -136,3 +159,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
      `InfrastructureError` reclassifies as application-layer (it's the typed application translation of opaque infra failures, per the DDD doc's travel rule — the NAME describes the source, the LAYER is application).
 
   Migration is mechanical (folder moves + module-path updates, ~50–100 import sites total). Cleanest as a single dedicated chore PR after the kit proposals land (so the project mirrors the kit-ratified spec).
+
+- User value: None — internal layout.
+- Done when: `service.rs` moves to `application/service.rs`, `repository/` becomes `infrastructure/`, and `core/` becomes `shared/{application,domain,infrastructure}` across every bounded context.
