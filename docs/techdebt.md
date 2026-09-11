@@ -10,6 +10,16 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
+## 2026-09-11 — Orchestrator reads CurrencyService through the Dispatcher
+
+- Found by: reviewer-arch + reviewer-backend (PMV, `.review/reviewer-arch-2026-09-11-01.md`)
+- Where: src-tauri/src/use_cases/asset_price_fetch/orchestrator.rs, src-tauri/src/use_cases/asset_price_fetch/dispatcher.rs
+- Context: branch `feat/price-fetch-result` @ `2f0c304`
+- Severity: 🟡
+- Observation: `AssetPriceFetchUseCase` needs a `CurrencyService` to build the Price Movement capture, and obtains it by calling `self.dispatcher.currency_service()` — an accessor added to `Dispatcher` solely for that purpose. The composition root at `lib.rs:320-332` already holds the same `Arc<CurrencyService>` in scope while constructing both `Dispatcher::new` and `AssetPriceFetchUseCase::new`, so the reach-through buys nothing; the constraint that produced it pins only `Dispatcher::new`'s arity, not the use case's. Adding the parameter directly touches ten call sites across `lib.rs` and three test files, which is why it did not ride the PMV branch.
+- User value: None — internal wiring; behaviour is identical either way.
+- Done when: `AssetPriceFetchUseCase::new` takes its own `Arc<CurrencyService>`, `Dispatcher::currency_service()` is gone, and the ten call sites pass the service the composition root already holds.
+
 ## 2026-08-23 — Applied holding notes and currency pairs raise no domain event
 
 - Found by: reviewer-frontend (PR-D, `.review/reviewer-frontend-2026-08-23-01.md`) + main agent

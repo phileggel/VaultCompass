@@ -106,11 +106,11 @@ async fn build_ctx() -> Ctx {
 #[tokio::test]
 async fn fetch_all_returns_no_fetchable_holdings_on_empty_db() {
     use vault_compass_lib::use_cases::asset_price_fetch::{
-        FetchAllAssetPricesError, FetchPriceTask,
+        FetchAllAssetPricesError, FetchPriceTask, FetchTrigger,
     };
 
     let ctx = build_ctx().await;
-    let result = ctx.use_case.fetch_all().await;
+    let result = ctx.use_case.fetch_all(FetchTrigger::Launch).await;
 
     assert!(
         matches!(
@@ -149,7 +149,7 @@ async fn fetch_for_account_returns_account_not_found_for_unknown_id() {
 #[tokio::test]
 async fn fetch_all_returns_fetch_already_running_while_guard_held() {
     use vault_compass_lib::use_cases::asset_price_fetch::{
-        FetchAllAssetPricesError, FetchPriceTask,
+        FetchAllAssetPricesError, FetchPriceTask, FetchTrigger,
     };
 
     let ctx = build_ctx().await;
@@ -158,7 +158,7 @@ async fn fetch_all_returns_fetch_already_running_while_guard_held() {
         .try_acquire()
         .expect("guard must be free at test start");
 
-    let result = ctx.use_case.fetch_all().await;
+    let result = ctx.use_case.fetch_all(FetchTrigger::Launch).await;
     assert!(
         matches!(
             result,
@@ -787,6 +787,7 @@ async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_p
                 ok,
                 skipped,
                 ref unpriced,
+                ..
             } = *rx.borrow()
             {
                 return (ok, skipped, unpriced.clone());
@@ -1250,6 +1251,7 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
                 ok,
                 skipped,
                 ref unpriced,
+                ..
             } = *rx.borrow()
             {
                 return (ok, skipped, unpriced.clone());

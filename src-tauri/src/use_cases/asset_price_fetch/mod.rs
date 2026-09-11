@@ -10,12 +10,18 @@ pub mod dispatcher;
 pub mod error;
 /// In-flight fetch guard (MKT-113) — RAII lease pattern.
 pub mod guard;
+/// Price Movement baseline capture (PMV-020/021) — the stateful half of the
+/// Price Movement report.
+pub mod movement_capture;
 /// Orchestrator with `fetch_all` and `fetch_for_account` methods.
 pub mod orchestrator;
 #[cfg(test)]
 mod serde_check;
+/// Which action started an all-accounts fetch (PMV-010/015).
+pub mod trigger;
 
 pub use api::*;
 pub use error::{FetchAccountAssetPricesError, FetchAllAssetPricesError, FetchPriceTask};
 pub use guard::FetchGuard;
 pub use orchestrator::AssetPriceFetchUseCase;
+pub use trigger::FetchTrigger;

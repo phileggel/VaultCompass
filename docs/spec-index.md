@@ -28,6 +28,7 @@
 | SPF     | Scheduled Price Fetch       | Daily OS-scheduled close-of-day price + FX download that runs even when the app is closed; in-app setup only                   | active   |
 | SYN     | Multi-Device Sync           | Share one portfolio across several desktops: per-device encrypted change log exchanged through a cloud folder                  | planning |
 | CFR     | Sync Conflict Resolution    | Outcome of every concurrent-change situation between devices (later-wins, parent/child, ledger invariants, fees, observations) | planning |
+| PMV     | Price Movement              | Post-fetch report: per-account value before/after a global price fetch, isolating movement attributable to prices              | planning |
 
 ---
 

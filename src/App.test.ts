@@ -26,14 +26,16 @@ describe("maybeLaunchAutoFetch — MKT-121 launch dispatch", () => {
     expect(accountGateway.fetchAllAssetPrices).not.toHaveBeenCalled();
   });
 
-  // MKT-121 / ADR-017 — auto-fetch enabled: dispatch keylessly, no key gate, no args.
-  it("dispatches the keyless fetch when auto-fetch is enabled", async () => {
+  // MKT-121 / ADR-017 — auto-fetch enabled: dispatch keylessly, no key gate.
+  // PMV-010 / PMV-015 — the launch auto-fetch states its own trigger and must never
+  // pass "Manual" — a launch fetch never reports movement.
+  it("dispatches the keyless fetch with the Launch trigger when auto-fetch is enabled", async () => {
     setAutoFetch(true);
     vi.mocked(accountGateway.fetchAllAssetPrices).mockResolvedValue({ status: "ok", data: null });
 
     await maybeLaunchAutoFetch();
 
-    expect(accountGateway.fetchAllAssetPrices).toHaveBeenCalledWith();
+    expect(accountGateway.fetchAllAssetPrices).toHaveBeenCalledWith("Launch");
   });
 
   // A dispatch error is swallowed (logged), never thrown to the caller.

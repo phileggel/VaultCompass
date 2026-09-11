@@ -2,6 +2,11 @@ use crate::context::account::{Account, AccountError, AccountServiceContract, Upd
 use crate::context::asset::{AssetClass, AssetServiceContract};
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
+use std::collections::HashMap;
+
+use crate::use_cases::shared::global_value::{
+    account_global_value, AssetValuationFacts, ValuationSnapshot,
+};
 use crate::use_cases::shared::inconsistency::holding_inconsistency;
 use crate::use_cases::shared::valuation::compute_current_ytd_pct;
 use serde::Serialize;
@@ -204,8 +209,11 @@ impl AccountSummaryUseCase {
             .date_naive()
             .format("%Y-%m-%d")
             .to_string();
-        let mut total: i64 = 0;
-        for holding in holdings.into_iter().filter(|h| h.quantity > 0) {
+
+        let mut assets = HashMap::new();
+        let mut prices = HashMap::new();
+        let mut rates = HashMap::new();
+        for holding in holdings.iter().filter(|holding| holding.quantity > 0) {
             let asset = self
                 .asset_service
                 .get_asset_by_id(&holding.asset_id)
@@ -219,37 +227,49 @@ impl AccountSummaryUseCase {
                     AccountError::DatabaseError
                 })?;
 
-            if asset.class == AssetClass::Cash {
-                total = total.saturating_add(holding.quantity);
-                continue;
+            if asset.class != AssetClass::Cash {
+                let key = (asset.currency.clone(), account.currency.clone());
+                if let std::collections::hash_map::Entry::Vacant(e) = rates.entry(key) {
+                    // FXR-041/035 — identity resolves to 1.0; a foreign pair with no
+                    // usable rate is simply absent, and contributes 0 (FXR-034).
+                    if let Some(rate) = self
+                        .currency_service
+                        .resolve_rate_micros(&asset.currency, &account.currency, &today)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: resolve_rate_micros failed");
+                            AccountError::DatabaseError
+                        })?
+                    {
+                        e.insert(rate);
+                    }
+                }
+                if let Ok(Some(latest)) =
+                    self.asset_service.get_latest_price(&holding.asset_id).await
+                {
+                    prices.insert(holding.asset_id.clone(), latest);
+                }
             }
-            // FXR-041/035 — resolve the conversion rate (identity → 1.0). A foreign
-            // pair with no usable rate contributes 0 to the Global Value (FXR-034).
-            let Some(rate) = self
-                .currency_service
-                .resolve_rate_micros(&asset.currency, &account.currency, &today)
-                .await
-                .map_err(|e| {
-                    tracing::error!(target: BACKEND, asset_id = %holding.asset_id, err = ?e, "get_account_summaries: resolve_rate_micros failed");
-                    AccountError::DatabaseError
-                })?
-            else {
-                continue;
-            };
-            if let Some(latest) = self
-                .asset_service
-                .get_latest_price(&holding.asset_id)
-                .await
-                .ok()
-                .flatten()
-            {
-                let converted_price = (latest.price as i128 * rate as i128 / 1_000_000) as i64;
-                let market_value =
-                    (holding.quantity as i128 * converted_price as i128 / 1_000_000) as i64;
-                total = total.saturating_add(market_value);
-            }
+
+            assets.insert(
+                holding.asset_id.clone(),
+                AssetValuationFacts {
+                    currency: asset.currency.clone(),
+                    class: asset.class,
+                },
+            );
         }
-        Ok(total)
+
+        let snapshot = ValuationSnapshot {
+            assets,
+            prices,
+            rates,
+        };
+        Ok(account_global_value(
+            &account.currency,
+            &holdings,
+            &snapshot,
+        ))
     }
 }
 

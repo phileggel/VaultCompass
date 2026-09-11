@@ -7,6 +7,7 @@ import {
   commands,
   events,
   type FetchAllAssetPricesError,
+  type FetchTrigger,
   type Result,
   type UpdateAccountDTO,
 } from "../../bindings";
@@ -42,8 +43,10 @@ export const accountGateway = {
     return await commands.getAccountDeletionSummary(accountId);
   },
 
-  async fetchAllAssetPrices(): Promise<Result<null, FetchAllAssetPricesError>> {
-    return commands.fetchAllAssetPrices();
+  async fetchAllAssetPrices(
+    trigger: FetchTrigger,
+  ): Promise<Result<null, FetchAllAssetPricesError>> {
+    return commands.fetchAllAssetPrices(trigger);
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

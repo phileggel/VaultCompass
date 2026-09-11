@@ -4,6 +4,7 @@ use crate::context::account::{
 use crate::context::asset::AssetServiceContract;
 use crate::context::currency::CurrencyService;
 use crate::core::logger::BACKEND;
+use crate::use_cases::shared::global_value::REFERENCE_CURRENCY;
 use crate::use_cases::shared::performance::{
     account_performance_series, annualized_yield_metric, residual_pnl, zero_cost_credit_value,
     AccountPerformanceResponse, PerformancePeriod, PeriodBridge,
@@ -19,9 +20,6 @@ use chrono::{Datelike, Local, NaiveDate};
 use std::collections::{BTreeSet, HashMap};
 use std::result::Result as StdResult;
 use std::sync::Arc;
-
-/// Fixed reference currency every cross-account figure is reported in (GPF-011).
-const REFERENCE_CURRENCY: &str = "EUR";
 
 /// Identity conversion rate in micros for reference-currency accounts.
 const IDENTITY_RATE_MICROS: i64 = 1_000_000;

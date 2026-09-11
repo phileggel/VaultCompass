@@ -20,7 +20,9 @@ import { router } from "./router";
 export async function maybeLaunchAutoFetch(): Promise<void> {
   if (!getAutoFetch()) return;
   try {
-    const result = await accountGateway.fetchAllAssetPrices();
+    // PMV-010 — the launch auto-fetch states which action started it; only a
+    // user-started Global refresh reports movement.
+    const result = await accountGateway.fetchAllAssetPrices("Launch");
     if (result.status === "error") {
       logger.warn("[App] auto-fetch dispatch returned error", { code: result.error.code });
     }

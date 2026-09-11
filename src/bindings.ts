@@ -796,11 +796,13 @@ async lookupAsset(query: string, mode: LookupMode) : Promise<Result<AssetLookupR
 /**
  * Dispatches an all-accounts auto-fetch task (MKT-122, MKT-130). Keyless (ADR-017).
  * Returns `Ok(())` immediately after successful dispatch; per-asset results
- * arrive asynchronously via `AssetPriceUpdated` events (MKT-112).
+ * arrive asynchronously via `AssetPriceUpdated` events (MKT-112). `trigger`
+ * states which action started the fetch (PMV-010/015) — only `Manual`
+ * produces a Price Movement report.
  */
-async fetchAllAssetPrices() : Promise<Result<null, FetchAllAssetPricesError>> {
+async fetchAllAssetPrices(trigger: FetchTrigger) : Promise<Result<null, FetchAllAssetPricesError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_all_asset_prices") };
+    return { status: "ok", data: await TAURI_INVOKE("fetch_all_asset_prices", { trigger }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -2243,7 +2245,7 @@ export type Event =
  * the outcome (MKT-119), plus the per-asset unpriced list so it can offer
  * manual entry (MKT-170). Distinct from the per-asset `AssetPriceUpdated`.
  */
-{ type: "AssetPriceFetchCompleted"; ok: number; skipped: number; unpriced: UnpricedAsset[] } | 
+{ type: "AssetPriceFetchCompleted"; ok: number; skipped: number; unpriced: UnpricedAsset[]; movement: PriceMovementReport | null } | 
 /**
  * A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
  */
@@ -2403,6 +2405,22 @@ export type FetchPriceTask =
  * Catch-all for unexpected runtime failures not attributable to a specific BC.
  */
 { code: "UnknownError" }
+/**
+ * PMV-015 — exactly two variants. The Scheduled fetch (SPF) owns its own
+ * sweep (`use_cases::scheduled_fetch::orchestrator`) and never reaches
+ * `Dispatcher::spawn` or publishes `AssetPriceFetchCompleted`, so it needs no
+ * third variant here.
+ */
+export type FetchTrigger = 
+/**
+ * Auto-fetch on application launch (MKT-121/122). Never reports movement.
+ */
+"Launch" | 
+/**
+ * Global refresh triggered by the user from the accounts list (MKT-130).
+ * The only trigger that produces a Price Movement report (PMV-010).
+ */
+"Manual"
 /**
  * Why a folder cannot be used (SYN-019/069). Structured so the frontend can translate it.
  */
@@ -3089,6 +3107,87 @@ export type PortfolioSyncTask =
  * An unexpected failure not attributable to a specific BC's database.
  */
 { code: "UnknownError" }
+/**
+ * PMV-020+ — what a manual Global refresh did to the portfolio's value. Both
+ * readings are computed over the same holdings, quantities and rates, so
+ * only prices differ between them (PMV-020). Both readings use the rates in
+ * force when the refresh STARTED. Produced only when `trigger == Manual`;
+ * carried in `AssetPriceFetchCompleted`.
+ */
+export type PriceMovementReport = { 
+/**
+ * One entry per account, by account name ascending (PMV-030/033).
+ */
+rows: PriceMovementRow[]; 
+/**
+ * Portfolio value before the fetch, reference-currency micros (PMV-040, GPF-011, ADR-001).
+ */
+total_before: number; 
+/**
+ * Portfolio value after the fetch, reference-currency micros (PMV-040).
+ */
+total_after: number; 
+/**
+ * The reference currency both totals are expressed in (PMV-040).
+ */
+total_currency: string; 
+/**
+ * Micro-percent movement derived from the two totals (PMV-041); absent
+ * when the earlier total is not positive (PMV-044) or the two totals are
+ * equal (PMV-045).
+ */
+total_movement_pct: number | null; 
+/**
+ * ISO date carried before the fetch (PMV-050); absent per PMV-052.
+ */
+observed_from: string | null; 
+/**
+ * ISO date this fetch produced (PMV-050); absent when the fetch produced
+ * none later than `observed_from` (PMV-051); still carried even when
+ * `observed_from` is absent (PMV-052).
+ */
+observed_to: string | null; 
+/**
+ * Whether any row's reading is incomplete (PMV-043).
+ */
+incomplete: boolean }
+/**
+ * PMV-030 — one account's share of the report. Present for every account,
+ * including those that did not move and those holding no priced asset.
+ */
+export type PriceMovementRow = { 
+/**
+ * The account this entry describes.
+ */
+account_id: string; 
+/**
+ * The account's display name.
+ */
+name: string; 
+/**
+ * The account's own currency — both values are in it (PMV-034).
+ */
+currency: string; 
+/**
+ * Account value before the fetch, account-currency micros (PMV-021).
+ */
+before: number; 
+/**
+ * Account value after the fetch, account-currency micros (PMV-022).
+ */
+after: number; 
+/**
+ * Micro-percent movement (PMV-024); absent when unmoved (PMV-031) or when
+ * `before` is not positive (PMV-025).
+ */
+movement_pct: number | null; 
+/**
+ * A holding meant to be read at its current price could not be
+ * (PMV-032): the MKT-171 skip set, or one contributing 0 for want of a
+ * usable rate (FXR-034/GPF). System cash (MKT-116) and refresh-locked
+ * holdings (MKT-151) never set it.
+ */
+incomplete: boolean }
 /**
  * Flat wire-facing error enum for `backfill_currency_rate_history`
  * (FXR-110/114).

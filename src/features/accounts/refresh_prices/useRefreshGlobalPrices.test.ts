@@ -140,7 +140,9 @@ describe("useRefreshGlobalPrices", () => {
   });
 
   // ADR-017 — keyless: the fetch dispatches directly, exactly once, no key gate.
-  it("calls accountGateway.fetchAllAssetPrices exactly once per refresh call", async () => {
+  // PMV-010 / PMV-015 — the Global refresh is the only path that reports movement,
+  // so it must state its own trigger as "Manual".
+  it("calls accountGateway.fetchAllAssetPrices exactly once per refresh call, with the Manual trigger", async () => {
     vi.mocked(gateway.accountGateway.fetchAllAssetPrices).mockResolvedValue({
       status: "ok",
       data: null,
@@ -153,6 +155,6 @@ describe("useRefreshGlobalPrices", () => {
     });
 
     expect(gateway.accountGateway.fetchAllAssetPrices).toHaveBeenCalledTimes(1);
-    expect(gateway.accountGateway.fetchAllAssetPrices).toHaveBeenCalledWith();
+    expect(gateway.accountGateway.fetchAllAssetPrices).toHaveBeenCalledWith("Manual");
   });
 });

@@ -7,6 +7,8 @@ use std::sync::Arc;
 use super::dispatcher::Dispatcher;
 use super::error::{FetchAccountAssetPricesError, FetchAllAssetPricesError, FetchPriceTask};
 use super::guard::FetchGuard;
+use super::movement_capture::PriceMovementCapture;
+use super::trigger::FetchTrigger;
 
 /// Orchestrates the asset-price fetch tasks — `fetch_all` (MKT-122 / MKT-130) and
 /// `fetch_for_account` (MKT-132 / MKT-131). Both methods share the same in-flight
@@ -41,7 +43,13 @@ impl AssetPriceFetchUseCase {
     /// (d) derive Yahoo symbols, discard non-derivable entries;
     /// (e) if empty scope → `NoFetchableHoldings` (MKT-111);
     /// (f) dispatch background task and return `Ok(())`.
-    pub async fn fetch_all(&self) -> Result<(), FetchAllAssetPricesError> {
+    ///
+    /// `trigger` states which action started this fetch (PMV-010/015): only a
+    /// `Manual` trigger produces a Price Movement report. A rejection below
+    /// (`FetchAlreadyRunning`, `NoFetchableHoldings`) returns BEFORE `spawn` is
+    /// ever reached, so no `AssetPriceFetchCompleted` is published and no
+    /// report exists either way (PMV-012).
+    pub async fn fetch_all(&self, trigger: FetchTrigger) -> Result<(), FetchAllAssetPricesError> {
         let lease = self
             .fetch_guard
             .try_acquire()
@@ -72,7 +80,20 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
+        // PMV-010/015 — only a user-started Global refresh reports movement. The
+        // capture is handed over unawaited: it runs inside the spawned task, before
+        // any price is written (still refresh start, PMV-020) and before the FX
+        // refresh that piggybacks on it (FXR-075), so this command keeps
+        // acknowledging immediately (MKT-130).
+        let movement_capture = match trigger {
+            FetchTrigger::Manual => Some(Arc::new(PriceMovementCapture::new(
+                Arc::clone(&self.account_service),
+                Arc::clone(&self.asset_service),
+                self.dispatcher.currency_service(),
+            ))),
+            FetchTrigger::Launch => None,
+        };
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, movement_capture);
         Ok(())
     }
 
@@ -121,7 +142,11 @@ impl AssetPriceFetchUseCase {
         }
 
         let fx_pairs = build_fx_pairs(fx_inputs, &currency_by_asset);
-        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease);
+        // PMV-010 — an account-scoped fetch never reports movement; `Launch` is
+        // the trigger value that never produces a report, same as the launch
+        // auto-fetch. `fetch_for_account` carries no trigger of its own on the
+        // wire (unchanged contract) — this is purely an internal `spawn` value.
+        Arc::clone(&self.dispatcher).spawn(scope, fx_pairs, lease, None);
         Ok(())
     }
 
@@ -144,7 +169,7 @@ mod tests {
     };
     use crate::context::asset::{
         AssetService, MockAssetRepository, MockPriceProvider, SqliteAssetCategoryRepository,
-        SqliteAssetPriceRepository,
+        SqliteAssetPriceRepository, SqliteAssetRepository,
     };
     use crate::context::currency::{
         CurrencyPair, CurrencyService, SqliteCurrencyPairRepository, SqliteCurrencyRateRepository,
@@ -298,6 +323,62 @@ mod tests {
         assert!(
             matches!(error, AssetError::DatabaseError),
             "repository failure must map to DatabaseError, got: {error:?}"
+        );
+    }
+
+    // PMV-012 — a refresh rejected before any asset is attempted (here,
+    // NoFetchableHoldings on an empty DB) never reaches `spawn`, so no
+    // AssetPriceFetchCompleted — or any other event — is published, and no
+    // report exists either way.
+    #[tokio::test]
+    async fn fetch_all_publishes_no_event_when_rejected_before_dispatch() {
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let account_service = Arc::new(AccountService::new(
+            Box::new(SqliteAccountRepository::new(pool.clone())),
+            Box::new(SqliteHoldingRepository::new(pool.clone())),
+            Box::new(SqliteTransactionRepository::new(pool.clone())),
+        ));
+        let asset_service = Arc::new(AssetService::new(
+            Box::new(SqliteAssetRepository::new(pool.clone())),
+            Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
+            Box::new(SqliteAssetPriceRepository::new(pool.clone())),
+        ));
+        let dispatcher = Arc::new(Dispatcher::new(
+            Arc::new(MockPriceProvider::new()),
+            Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
+            Arc::clone(&bus),
+            Arc::new(CurrencyService::new(
+                Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+                Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+            )),
+            Arc::new(|| NaiveDate::from_ymd_opt(2026, 6, 1).expect("valid date")),
+        ));
+        let use_case = AssetPriceFetchUseCase::new(
+            account_service,
+            asset_service,
+            Arc::new(FetchGuard::new()),
+            dispatcher,
+        );
+
+        let mut rx = bus.subscribe();
+        let result = use_case.fetch_all(FetchTrigger::Manual).await;
+
+        assert!(
+            matches!(
+                result,
+                Err(FetchAllAssetPricesError::Failure(
+                    FetchPriceTask::NoFetchableHoldings
+                ))
+            ),
+            "an empty DB must reject before dispatch, got: {result:?}"
+        );
+        // No event was published: `changed()` must not resolve within a short window.
+        let outcome =
+            tokio::time::timeout(std::time::Duration::from_millis(200), rx.changed()).await;
+        assert!(
+            outcome.is_err(),
+            "no AssetPriceFetchCompleted (or any other event) may be published on a pre-dispatch rejection"
         );
     }
 }

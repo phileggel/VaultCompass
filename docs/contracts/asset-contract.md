@@ -1,7 +1,7 @@
 # Contract — Asset
 
 > Domain: `asset`
-> Last updated by: `asset` spec, `market-price` spec (auto-fetch + price-refresh-lock amendments), `asset-web-lookup` spec, `archive-asset` use case, `delete-asset` use case
+> Last updated by: price-movement (PMV)
 
 > **Error model on the wire**: each command's error serializes as a flat `{ code: "VariantName", ...payload }` object. The FE matches on `code`. Per-command reachable codes are listed in the "Errors" column of each table below. Infrastructure failures surface as `{ code: "DatabaseError" }` (no payload; diagnostic chain preserved server-side via `tracing::error!`).
 >
@@ -61,10 +61,10 @@
 >
 > Both commands are keyless (ADR-017): they fetch from Yahoo Finance with no API key and no fetch-mode argument. The former `use_api_key: bool` parameter was removed when the BYOK/Stooq path was retired.
 
-| Command                      | Args                 | Return | Errors                                                                                                                                        |
-| ---------------------------- | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fetch_all_asset_prices`     | _(none)_             | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
-| `fetch_account_asset_prices` | `account_id: String` | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
+| Command                      | Args                    | Return | Errors                                                                                                                                        |
+| ---------------------------- | ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch_all_asset_prices`     | `trigger: FetchTrigger` | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
+| `fetch_account_asset_prices` | `account_id: String`    | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
 
 ### Web Lookup
 
@@ -163,6 +163,60 @@ enum AssetPriceSource { Manual, YahooFinance }
 ```
 
 ```rust
+// PMV-010 — which action started a global fetch. The frontend states what the user did
+// (a fact only it holds); the backend decides what that means — only `Manual` produces a
+// movement report. `fetch_account_asset_prices` needs no trigger: it never reports movement.
+enum FetchTrigger { Launch, Manual }
+```
+
+```rust
+// PMV-020+ — what a manual global refresh did to the portfolio's value. Both readings are
+// computed over the same holdings, quantities and rates, so only prices differ between them
+// (PMV-020). Both readings use the rates in force when the refresh STARTED — the same refresh
+// also fetches FX (FXR-075), and the later reading deliberately ignores what it obtained, so the
+// reference-currency total will briefly differ from the dashboard's freshly converted one.
+// Account values come from the application's own Global Value computation (PMV-023,
+// account-contract AccountSummary.total_global_value) — never a second valuation path. Produced only when `trigger == Manual`; carried in AssetPriceFetchCompleted.
+// Asset counts are NOT repeated here — the event's existing `ok` / `skipped` carry them.
+struct PriceMovementReport {
+    rows: Vec<PriceMovementRow>,          // one per account, by account name ascending (PMV-030/033)
+    total_before: i64,                    // portfolio value before, reference-currency micros (PMV-040, GPF-011, ADR-001)
+    total_after: i64,                     // portfolio value after, reference-currency micros (PMV-040)
+    total_currency: String,               // the reference currency both totals are in (PMV-040) — on the
+                                          // wire rather than assumed, matching AccountPerformanceResponse.currency
+    total_movement_pct: Option<i64>,      // micro-percent from the two totals (PMV-041); absent when the
+                                          // earlier total is not positive (PMV-044) or the two are equal (PMV-045)
+    observed_from: Option<String>,        // ISO date carried before the fetch (PMV-050); absent per PMV-052
+    observed_to: Option<String>,          // ISO date this fetch produced (PMV-050); absent when the fetch
+                                          // produced none LATER than observed_from (PMV-051) — note this says
+                                          // nothing about whether values moved, which PMV-060 decides.
+                                          // Independent of observed_from: when nothing was priced before
+                                          // (observed_from absent, PMV-052) a date this fetch produced is
+                                          // still carried here.
+    incomplete: bool,                     // any row incomplete (PMV-043)
+}
+
+// PMV-030 — one account's share of the report. Present for every account, including those
+// that did not move and those holding no priced asset.
+struct PriceMovementRow {
+    account_id: String,
+    name: String,
+    currency: String,                     // the account's own currency — both values are in it (PMV-034)
+    before: i64,                          // account value before, account-currency micros (PMV-021)
+    after: i64,                           // account value after, account-currency micros (PMV-022)
+    movement_pct: Option<i64>,            // micro-percent (PMV-024); absent when unmoved (PMV-031)
+                                          // or when `before` is not positive (PMV-025). `before` and `after`
+                                          // are both on the wire, so "unmoved" stays distinguishable from
+                                          // "undefined" without a discriminant.
+    incomplete: bool,                     // a holding that was MEANT to be read at its current price could
+                                          // not be (PMV-032): the MKT-171 skip set, or one contributing 0 for
+                                          // want of a usable rate (FXR-034/GPF). Deliberate exclusions never
+                                          // set it — system cash (MKT-116) and refresh-locked holdings
+                                          // (MKT-151), whose stale price is the point of the lock (MKT-158).
+}
+```
+
+```rust
 // MKT-170 — one entry per asset a fetch task could not price (the full MKT-114 skip
 // set: no-data, fetch error, symbol-underivable, upsert failure). Carried in the
 // AssetPriceFetchCompleted payload so the FE can present the manual-fill modal (MKT-172+).
@@ -182,11 +236,11 @@ struct UnpricedAsset {
 
 ## Events
 
-| Event                      | Payload                                                   | Direction                                                                                                                                                                                                                                                                                                                                                                                                              |
-| -------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AssetUpdated`             | none                                                      | published — fired after any successful asset CRUD write or archive/unarchive/delete (R18, R23), including the price-refresh lock toggle `block_asset_price_refresh` / `unblock_asset_price_refresh` (MKT-156)                                                                                                                                                                                                          |
-| `AssetPriceUpdated`        | none                                                      | published — fired after successful `record_asset_price` (MKT-026), `update_asset_price` (MKT-085), `delete_asset_price` (MKT-091), or per-asset write success during a fetch task — `fetch_all_asset_prices` / `fetch_account_asset_prices` (MKT-112). The transaction auto-record path (MKT-055/057) emits via the same `record_asset_price` call the FE issues after the transaction commits — no separate producer. |
-| `AssetPriceFetchCompleted` | `{ ok: u32, skipped: u32, unpriced: Vec<UnpricedAsset> }` | published — once per fetch task after the per-asset loop (MKT-119), for every fetch path (`fetch_all_asset_prices` / `fetch_account_asset_prices`). `ok` = assets repriced, `skipped` = assets the fetch could not price; `unpriced` carries one `UnpricedAsset` per skipped asset (MKT-170/171) so the FE can open the manual-fill modal (MKT-172). `unpriced.len() == skipped`.                                      |
+| Event                      | Payload                                                                                          | Direction                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetUpdated`             | none                                                                                             | published — fired after any successful asset CRUD write or archive/unarchive/delete (R18, R23), including the price-refresh lock toggle `block_asset_price_refresh` / `unblock_asset_price_refresh` (MKT-156)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `AssetPriceUpdated`        | none                                                                                             | published — fired after successful `record_asset_price` (MKT-026), `update_asset_price` (MKT-085), `delete_asset_price` (MKT-091), or per-asset write success during a fetch task — `fetch_all_asset_prices` / `fetch_account_asset_prices` (MKT-112). The transaction auto-record path (MKT-055/057) emits via the same `record_asset_price` call the FE issues after the transaction commits — no separate producer.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `AssetPriceFetchCompleted` | `{ ok: u32, skipped: u32, unpriced: Vec<UnpricedAsset>, movement: Option<PriceMovementReport> }` | published — once per fetch task after the per-asset loop (MKT-119), for every fetch path (`fetch_all_asset_prices` / `fetch_account_asset_prices`). `ok` = assets repriced, `skipped` = assets the fetch could not price; `unpriced` carries one `UnpricedAsset` per skipped asset (MKT-170/171) so the FE can open the manual-fill modal (MKT-172). `unpriced.len() == skipped`. `movement` is present only for a `fetch_all_asset_prices` call with `trigger == Manual` (PMV-010/011); it is absent on the launch auto-fetch and on every account-scoped fetch, and absent when the report could not be produced (PMV-014). A refresh rejected before any asset is attempted (`FetchAlreadyRunning`, `NoFetchableHoldings`) publishes **no** `AssetPriceFetchCompleted` at all, so the FE never faces an empty report (PMV-012). |
 
 ---
 
@@ -197,3 +251,4 @@ struct UnpricedAsset {
 - 2026-06-12 — Amended by `api-key-management` spec (KEY-050–054, keyless fetch mode): `fetch_all_asset_prices` and `fetch_account_asset_prices` gain a `use_api_key: bool` arg carrying the device-local Stooq fetch-mode preference. No new types or errors.
 - 2026-06-12 — Amended by `market-price` spec under ADR-017 (Yahoo Finance keyless price source): `fetch_all_asset_prices` and `fetch_account_asset_prices` drop the `use_api_key: bool` arg (BYOK retired); `AssetPriceSource` variant `Stooq` renamed to `YahooFinance`.
 - 2026-06-16 — Amended by `market-price` spec (MKT-170+, unupdated-price manual fill): new `UnpricedAsset` shared type; `AssetPriceFetchCompleted` event registered with its `{ ok, skipped, unpriced }` payload (the `unpriced` list is the new part). No new command — per-row manual fill reuses `record_asset_price`.
+- 2026-09-11 — Amended by `price-movement` spec (PMV): `fetch_all_asset_prices` gains a `trigger: FetchTrigger` arg so the backend knows which action started it (PMV-010); new `FetchTrigger`, `PriceMovementReport` and `PriceMovementRow` shared types; `AssetPriceFetchCompleted` payload gains `movement: Option<PriceMovementReport>`. No new command and no new error variant — a report that cannot be produced leaves the fetch's own outcome untouched (PMV-014). Both readings use the rates in force at refresh start, so the reference-currency total intentionally diverges from the freshly converted dashboard total (PMV-020, FXR-075).

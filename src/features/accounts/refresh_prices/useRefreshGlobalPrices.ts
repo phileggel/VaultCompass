@@ -25,7 +25,8 @@ export function useRefreshGlobalPrices(): {
   const refresh = useCallback(async () => {
     setIsPending(true);
     try {
-      const result = await accountGateway.fetchAllAssetPrices();
+      // PMV-010 — the user asked for this one, so it is the path that reports movement.
+      const result = await accountGateway.fetchAllAssetPrices("Manual");
       if (result.status === "ok") {
         showSnackbar(t("mkt.fetch_dispatched"), "info");
         return;

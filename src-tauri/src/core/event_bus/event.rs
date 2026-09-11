@@ -39,6 +39,11 @@ pub enum Event {
         skipped: u32,
         /// The skipped assets, one entry each (MKT-170/171); `len() == skipped`.
         unpriced: Vec<UnpricedAsset>,
+        /// What this refresh did to each account's value (PMV-010/011): present
+        /// only for a Global refresh (`trigger == Manual`); absent on the launch
+        /// auto-fetch, on every account-scoped fetch, and when the report could
+        /// not be produced (PMV-014).
+        movement: Option<PriceMovementReport>,
     },
     /// A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
     CurrencyRateUpdated,
@@ -74,6 +79,59 @@ pub struct UnpricedAsset {
     pub last_price_date: Option<String>,
 }
 
+/// PMV-020+ — what a manual Global refresh did to the portfolio's value. Both
+/// readings are computed over the same holdings, quantities and rates, so
+/// only prices differ between them (PMV-020). Both readings use the rates in
+/// force when the refresh STARTED. Produced only when `trigger == Manual`;
+/// carried in `AssetPriceFetchCompleted`.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, specta::Type)]
+pub struct PriceMovementReport {
+    /// One entry per account, by account name ascending (PMV-030/033).
+    pub rows: Vec<PriceMovementRow>,
+    /// Portfolio value before the fetch, reference-currency micros (PMV-040, GPF-011, ADR-001).
+    pub total_before: i64,
+    /// Portfolio value after the fetch, reference-currency micros (PMV-040).
+    pub total_after: i64,
+    /// The reference currency both totals are expressed in (PMV-040).
+    pub total_currency: String,
+    /// Micro-percent movement derived from the two totals (PMV-041); absent
+    /// when the earlier total is not positive (PMV-044) or the two totals are
+    /// equal (PMV-045).
+    pub total_movement_pct: Option<i64>,
+    /// ISO date carried before the fetch (PMV-050); absent per PMV-052.
+    pub observed_from: Option<String>,
+    /// ISO date this fetch produced (PMV-050); absent when the fetch produced
+    /// none later than `observed_from` (PMV-051); still carried even when
+    /// `observed_from` is absent (PMV-052).
+    pub observed_to: Option<String>,
+    /// Whether any row's reading is incomplete (PMV-043).
+    pub incomplete: bool,
+}
+
+/// PMV-030 — one account's share of the report. Present for every account,
+/// including those that did not move and those holding no priced asset.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, specta::Type)]
+pub struct PriceMovementRow {
+    /// The account this entry describes.
+    pub account_id: String,
+    /// The account's display name.
+    pub name: String,
+    /// The account's own currency — both values are in it (PMV-034).
+    pub currency: String,
+    /// Account value before the fetch, account-currency micros (PMV-021).
+    pub before: i64,
+    /// Account value after the fetch, account-currency micros (PMV-022).
+    pub after: i64,
+    /// Micro-percent movement (PMV-024); absent when unmoved (PMV-031) or when
+    /// `before` is not positive (PMV-025).
+    pub movement_pct: Option<i64>,
+    /// A holding meant to be read at its current price could not be
+    /// (PMV-032): the MKT-171 skip set, or one contributing 0 for want of a
+    /// usable rate (FXR-034/GPF). System cash (MKT-116) and refresh-locked
+    /// holdings (MKT-151) never set it.
+    pub incomplete: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +146,86 @@ mod tests {
             Some("SyncCompleted")
         );
         assert_eq!(value.as_object().map(|fields| fields.len()), Some(1));
+    }
+
+    fn sample_report() -> PriceMovementReport {
+        PriceMovementReport {
+            rows: vec![PriceMovementRow {
+                account_id: "acc-1".to_string(),
+                name: "Alpha".to_string(),
+                currency: "EUR".to_string(),
+                before: 100_000_000,
+                after: 100_000_000,
+                movement_pct: None,
+                incomplete: false,
+            }],
+            total_before: 100_000_000,
+            total_after: 100_000_000,
+            total_currency: "EUR".to_string(),
+            total_movement_pct: None,
+            observed_from: None,
+            observed_to: None,
+            incomplete: false,
+        }
+    }
+
+    // PMV-060 — the report states no count and no "moved" flag of its own; the
+    // wire shape carries exactly the contract's eight fields, nothing more.
+    // The frontend derives "nothing moved" from `rows` itself.
+    #[test]
+    fn price_movement_report_serializes_with_exactly_the_contract_fields() {
+        let value = serde_json::to_value(sample_report()).unwrap();
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec![
+                "incomplete",
+                "observed_from",
+                "observed_to",
+                "rows",
+                "total_after",
+                "total_before",
+                "total_currency",
+                "total_movement_pct",
+            ]
+        );
+    }
+
+    // PMV-010/011 — AssetPriceFetchCompleted carries `movement` as an absent
+    // (null) field when no report was produced (launch auto-fetch, account
+    // fetch, or a failed capture).
+    #[test]
+    fn asset_price_fetch_completed_serializes_absent_movement_as_null() {
+        let value = serde_json::to_value(Event::AssetPriceFetchCompleted {
+            ok: 1,
+            skipped: 0,
+            unpriced: vec![],
+            movement: None,
+        })
+        .unwrap();
+        assert_eq!(value.get("movement"), Some(&serde_json::Value::Null));
+    }
+
+    // PMV-010/011 — a Manual, successfully-captured report serializes as a
+    // present object under `movement`.
+    #[test]
+    fn asset_price_fetch_completed_serializes_present_movement_as_an_object() {
+        let value = serde_json::to_value(Event::AssetPriceFetchCompleted {
+            ok: 1,
+            skipped: 0,
+            unpriced: vec![],
+            movement: Some(sample_report()),
+        })
+        .unwrap();
+        assert!(
+            value.get("movement").is_some_and(|m| m.is_object()),
+            "expected movement to serialize as a present object, got: {value:?}"
+        );
     }
 }

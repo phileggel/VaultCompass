@@ -10,6 +10,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::guard::FetchGuardLease;
+use std::collections::{HashMap, HashSet};
+
+use super::movement_capture::PriceMovementCapture;
+use crate::use_cases::shared::price_movement::build_report;
 
 /// Injectable source of "today" so tests can fix the date deterministically.
 pub type Clock = Arc<dyn Fn() -> NaiveDate + Send + Sync>;
@@ -46,20 +50,44 @@ impl Dispatcher {
         }
     }
 
+    /// The frozen-rate source the Price Movement baseline resolves against
+    /// (PMV-020) — the very service this task's FX refresh (FXR-075) later
+    /// writes through, which is why the baseline captures before the loop.
+    pub fn currency_service(&self) -> Arc<CurrencyService> {
+        Arc::clone(&self.currency_service)
+    }
+
     /// Spawns a Tokio background task that fetches prices for the pre-derived
     /// `(Asset, symbol)` scope, then refreshes FX rates for `fx_pairs` plus all
     /// persisted pairs (FXR-075/076 — same task, same in-flight lease). The `lease`
     /// is moved into the task; its `Drop` releases the in-flight guard at task end,
     /// panic included (MKT-113).
+    ///
+    /// `movement_capture` is `Some` only for a user-started Global refresh
+    /// (PMV-010/015). It is taken unawaited and run at the top of the task —
+    /// before any price is written, so the "before" reading is still refresh
+    /// start (PMV-020) while the command itself acknowledges immediately
+    /// (MKT-130). The task then builds the report from that baseline and the
+    /// prices it actually wrote, and carries it on the completion event.
     pub fn spawn(
         self: Arc<Self>,
         scope: Vec<(Asset, String)>,
         fx_pairs: Vec<CurrencyPair>,
         lease: FetchGuardLease,
+        movement_capture: Option<Arc<PriceMovementCapture>>,
     ) {
         tokio::spawn(async move {
             let _lease = lease;
             let today = (self.clock)();
+            // PMV-020/021 — the "before" reading, taken before the first write.
+            let movement_baseline = match movement_capture {
+                Some(capture) => {
+                    let scope_asset_ids: HashSet<String> =
+                        scope.iter().map(|(asset, _)| asset.id.clone()).collect();
+                    capture.capture(&scope_asset_ids, today).await
+                }
+                None => None,
+            };
             // MKT-119 — tally the task outcome so the frontend can summarize it.
             let mut ok: u32 = 0;
             let mut skipped: u32 = 0;
@@ -69,6 +97,11 @@ impl Dispatcher {
                 .publish(Event::AssetPriceFetchProgress { done: 0, total });
             // MKT-170/171 — one entry per skipped asset, for the manual-fill modal.
             let mut unpriced: Vec<UnpricedAsset> = Vec::with_capacity(scope.len());
+            // PMV-022/026 — what THIS refresh wrote, and which assets it could not
+            // price (MKT-171). Accumulated here so the report never re-reads the
+            // database and so a concurrent writer cannot enter the comparison.
+            let mut fetched: HashMap<String, AssetPrice> = HashMap::new();
+            let mut unpriced_asset_ids: HashSet<String> = HashSet::new();
             for (index, (asset, symbol)) in scope.into_iter().enumerate() {
                 // Space out requests after the first to avoid a burst (see
                 // INTER_FETCH_DELAY); the provider is hit at most once per asset.
@@ -83,8 +116,10 @@ impl Dispatcher {
                             quote.price,
                             AssetPriceSource::YahooFinance,
                         );
+                        let written = record.clone();
                         if let Err(e) = self.price_repo.upsert(record).await {
                             skipped += 1;
+                            unpriced_asset_ids.insert(asset.id.clone());
                             unpriced.push(self.unpriced_entry(&asset).await);
                             tracing::warn!(
                                 target: BACKEND,
@@ -96,10 +131,12 @@ impl Dispatcher {
                             continue;
                         }
                         ok += 1;
+                        fetched.insert(asset.id.clone(), written);
                         self.event_bus.publish(Event::AssetPriceUpdated);
                     }
                     Ok(None) => {
                         skipped += 1;
+                        unpriced_asset_ids.insert(asset.id.clone());
                         unpriced.push(self.unpriced_entry(&asset).await);
                         tracing::debug!(
                             target: BACKEND,
@@ -110,6 +147,7 @@ impl Dispatcher {
                     }
                     Err(e) => {
                         skipped += 1;
+                        unpriced_asset_ids.insert(asset.id.clone());
                         unpriced.push(self.unpriced_entry(&asset).await);
                         tracing::warn!(
                             target: BACKEND,
@@ -127,13 +165,12 @@ impl Dispatcher {
                 });
             }
 
-            // MKT-119/170 — task-completion signal carrying the outcome counts and
-            // the per-asset unpriced list. The frontend surfaces a snackbar when
-            // `skipped > 0` (MKT-145) or auto-opens the manual-fill modal (MKT-172).
             self.event_bus.publish(Event::AssetPriceFetchCompleted {
                 ok,
                 skipped,
                 unpriced,
+                movement: movement_baseline
+                    .map(|baseline| build_report(baseline, &fetched, &unpriced_asset_ids)),
             });
 
             // FXR-075/076 — piggyback FX rate refresh on the same task and lease.
