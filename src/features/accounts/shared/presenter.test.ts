@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { setDisplayLocale } from "@/lib/microUnits";
 import {
   accountMutationErrorToI18n,
   fetchPriceErrorToI18n,
   formatAccountRowTotalUnrealizedPnl,
   formatAccountRowYtdPerformancePct,
+  formatPriceMovementPct,
+  formatPriceMovementValue,
+  priceMovementDateLabel,
 } from "./presenter";
 
 // F27 layer-3 presenter — covers the reachable `AccountError` codes for the
@@ -124,5 +128,101 @@ describe("formatAccountRowYtdPerformancePct", () => {
 
   it("formats zero as '+0.00%' (non-negative, treated as positive sign)", () => {
     expect(formatAccountRowYtdPerformancePct(0)).toBe("+0,00%");
+  });
+});
+
+// PMV-021/022/034/040 — formatPriceMovementValue: account- or reference-currency
+// micros → 2-decimal display string, unconverted (the currency itself is a
+// separate field the panel renders alongside it, never combined here).
+describe("formatPriceMovementValue", () => {
+  // The default display locale is "fr"; these assertions are French-format on
+  // purpose. The English case below proves the formatter follows the app
+  // language rather than hardcoding one.
+  beforeEach(() => setDisplayLocale("fr"));
+  afterEach(() => setDisplayLocale("fr"));
+
+  it("formats a positive value (micros) to 2 decimal places", () => {
+    // 1_250_000 micros = 1.25
+    expect(formatPriceMovementValue(1_250_000)).toBe("1,25");
+  });
+
+  it("formats a negative value (micros) to 2 decimal places with leading minus", () => {
+    // -3_700_000 micros = -3.70
+    expect(formatPriceMovementValue(-3_700_000)).toBe("-3,70");
+  });
+
+  it("formats zero as '0.00'", () => {
+    expect(formatPriceMovementValue(0)).toBe("0,00");
+  });
+
+  // The panel sits directly above account rows formatted by the same shared
+  // helper — a hardcoded locale here would show comma decimals beside period
+  // decimals the moment the user switches language.
+  it("follows the app display locale rather than a hardcoded one", () => {
+    setDisplayLocale("en");
+    expect(formatPriceMovementValue(1_250_000)).toBe("1.25");
+  });
+});
+
+// PMV-024/031/025/041/044/045 — formatPriceMovementPct: signed micro-percent,
+// "—" when the backend reports no proportion (unmoved PMV-031/045, or an
+// undefined earlier value PMV-025/044). The presentation never re-derives
+// whether a proportion exists — it only renders what it is given.
+describe("formatPriceMovementPct", () => {
+  beforeEach(() => setDisplayLocale("fr"));
+  afterEach(() => setDisplayLocale("fr"));
+
+  it("returns '—' when the movement is null", () => {
+    expect(formatPriceMovementPct(null)).toBe("—");
+  });
+
+  it("formats a positive micro-percent with a leading '+' sign", () => {
+    // 20_000_000 micro-percent = 20.00%
+    expect(formatPriceMovementPct(20_000_000)).toBe("+20,00%");
+  });
+
+  it("formats a negative micro-percent with a leading '-' sign", () => {
+    // -3_700_000 micro-percent = -3.70%
+    expect(formatPriceMovementPct(-3_700_000)).toBe("-3,70%");
+  });
+
+  it("follows the app display locale rather than a hardcoded one", () => {
+    setDisplayLocale("en");
+    expect(formatPriceMovementPct(20_000_000)).toBe("+20.00%");
+  });
+});
+
+// PMV-050/051/052 — priceMovementDateLabel: picks the two-date / from-only /
+// to-only / no-date i18n key from the values exactly as given. It never
+// compares or invents dates itself — that judgement belongs entirely to the
+// backend's `observed_from` / `observed_to`.
+describe("priceMovementDateLabel", () => {
+  it("both dates present -> dates_range with from/to vars", () => {
+    expect(priceMovementDateLabel("2026-09-09", "2026-09-11")).toEqual({
+      key: "pmv.dates_range",
+      vars: { from: "2026-09-09", to: "2026-09-11" },
+    });
+  });
+
+  it("only observed_to present (no prior price, PMV-052) -> dates_to_only", () => {
+    // Distinct from the from-only case: nothing was priced BEFORE this refresh,
+    // so the label must not read as "prices as of 2026-09-11, unchanged".
+    expect(priceMovementDateLabel(null, "2026-09-11")).toEqual({
+      key: "pmv.dates_to_only",
+      vars: { date: "2026-09-11" },
+    });
+  });
+
+  it("only observed_from present (no later date produced, PMV-051) -> dates_from_only", () => {
+    // Distinct from the to-only case: the portfolio already carried prices and
+    // this refresh produced nothing later.
+    expect(priceMovementDateLabel("2026-09-09", null)).toEqual({
+      key: "pmv.dates_from_only",
+      vars: { date: "2026-09-09" },
+    });
+  });
+
+  it("neither date present -> no date label", () => {
+    expect(priceMovementDateLabel(null, null)).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import {
   type AccountSummary,
   type CreateAccountDTO,
   commands,
+  type Event,
   events,
   type FetchAllAssetPricesError,
   type FetchTrigger,
@@ -52,6 +53,20 @@ export const accountGateway = {
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
     return events.event.listen((event) => {
       callback(event.payload.type);
+    });
+  },
+
+  // PMV-016 — the panel needs the whole AssetPriceFetchCompleted payload, and
+  // `subscribeToEvents` above strips every event down to its `type`. A second
+  // listener carries the payload through intact; the caller decides what a null
+  // `movement` means (PMV-010/014).
+  async subscribeToPriceFetchCompleted(
+    callback: (payload: Extract<Event, { type: "AssetPriceFetchCompleted" }>) => void,
+  ): Promise<() => void> {
+    return events.event.listen((event) => {
+      if (event.payload.type === "AssetPriceFetchCompleted") {
+        callback(event.payload);
+      }
     });
   },
 };

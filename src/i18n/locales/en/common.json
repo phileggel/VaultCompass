@@ -572,6 +572,21 @@
       "success_unblocked": "Automatic price updates re-enabled for this asset."
     }
   },
+  "pmv": {
+    "title": "What the prices did",
+    "subtitle_frozen": "Value before and after this refresh, over the same holdings — not today's live totals.",
+    "dismiss": "Dismiss",
+    "column_account": "Account",
+    "column_values": "Before and after",
+    "column_change": "Change",
+    "total": "Total",
+    "incomplete_marker": "partial",
+    "nothing_moved": "No account's value changed.",
+    "nothing_moved_incomplete": "No account's value changed, and some holdings could not be read at their current price.",
+    "dates_range": "{{from}} → {{to}}",
+    "dates_from_only": "As of {{date}} — no newer prices",
+    "dates_to_only": "Nothing priced before — now as of {{date}}"
+  },
   "whats_new": {
     "title": "What's new ({{version}})",
     "dismiss": "Got it"

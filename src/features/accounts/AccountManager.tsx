@@ -9,9 +9,13 @@ import { FAB } from "@/ui/components/fab/FAB";
 import { ManagerLayout } from "@/ui/components/layout/ManagerLayout";
 import { AccountTable } from "./account_table/AccountTable";
 import { AddAccountModal } from "./add_account/AddAccountModal";
+import { PriceMovementPanel } from "./price_movement/PriceMovementPanel";
+import { usePriceMovementReport } from "./price_movement/usePriceMovementReport";
 import { useRefreshGlobalPrices } from "./refresh_prices/useRefreshGlobalPrices";
 
 export function AccountManager() {
+  // PMV-013/016 — the report belongs to this mounted surface; navigating away discards it.
+  const priceMovement = usePriceMovementReport();
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -29,6 +33,13 @@ export function AccountManager() {
   return (
     <>
       <ManagerLayout
+        banner={
+          priceMovement.report !== null ? (
+            <div className="px-4 pb-3">
+              <PriceMovementPanel report={priceMovement.report} onDismiss={priceMovement.dismiss} />
+            </div>
+          ) : undefined
+        }
         searchId="account-search"
         searchTerm={query}
         onSearchChange={setQuery}

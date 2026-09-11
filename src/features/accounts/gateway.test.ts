@@ -6,6 +6,7 @@ import type {
   AccountError,
   AccountSummary,
   CreateAccountDTO,
+  PriceMovementReport,
   UpdateAccountDTO,
 } from "@/bindings";
 
@@ -312,5 +313,91 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
     captured.current?.({ payload: { type: "AccountUpdated" } });
     expect(callback).toHaveBeenCalledWith("AccountUpdated");
     expect(result).toBe(unlisten);
+  });
+});
+
+// ── subscribeToPriceFetchCompleted (PMV-016) ──────────────────────────────────
+// The panel-driving hook needs the FULL AssetPriceFetchCompleted payload,
+// including `movement` — the existing subscribeToEvents adapter strips every
+// event down to `payload.type`, so it cannot carry a PriceMovementReport. This
+// is a second, purpose-built listener, still going through events.event.listen
+// (F3 — gateway is the only file allowed to touch events.*).
+
+describe("accountGateway — subscribeToPriceFetchCompleted (PMV-016)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const makeReport = (): PriceMovementReport => ({
+    rows: [],
+    total_before: 0,
+    total_after: 0,
+    total_currency: "EUR",
+    total_movement_pct: null,
+    observed_from: null,
+    observed_to: null,
+    incomplete: false,
+  });
+
+  it("forwards the full AssetPriceFetchCompleted payload to the caller", async () => {
+    type Listener = (e: { payload: Record<string, unknown> }) => void;
+    const captured: { current: Listener | null } = { current: null };
+    const unlisten = vi.fn();
+    mockEventListen.mockImplementation((cb) => {
+      captured.current = cb as unknown as Listener;
+      return Promise.resolve(unlisten);
+    });
+    const callback = vi.fn();
+    const payload = {
+      type: "AssetPriceFetchCompleted",
+      ok: 3,
+      skipped: 0,
+      unpriced: [],
+      movement: makeReport(),
+    };
+
+    const result = await accountGateway.subscribeToPriceFetchCompleted(callback);
+    captured.current?.({ payload });
+
+    expect(callback).toHaveBeenCalledWith(payload);
+    expect(result).toBe(unlisten);
+  });
+
+  it("does not forward events of a different type", async () => {
+    type Listener = (e: { payload: Record<string, unknown> }) => void;
+    const captured: { current: Listener | null } = { current: null };
+    mockEventListen.mockImplementation((cb) => {
+      captured.current = cb as unknown as Listener;
+      return Promise.resolve(vi.fn());
+    });
+    const callback = vi.fn();
+
+    await accountGateway.subscribeToPriceFetchCompleted(callback);
+    captured.current?.({ payload: { type: "AccountUpdated" } });
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  // PMV-010/014 — the Launch auto-fetch and a report that could not be produced
+  // both carry `movement: null`; the gateway forwards the payload as-is, the
+  // hook decides what to do with a null movement.
+  it("forwards a payload whose movement is null unchanged", async () => {
+    type Listener = (e: { payload: Record<string, unknown> }) => void;
+    const captured: { current: Listener | null } = { current: null };
+    mockEventListen.mockImplementation((cb) => {
+      captured.current = cb as unknown as Listener;
+      return Promise.resolve(vi.fn());
+    });
+    const callback = vi.fn();
+    const payload = {
+      type: "AssetPriceFetchCompleted",
+      ok: 1,
+      skipped: 0,
+      unpriced: [],
+      movement: null,
+    };
+
+    await accountGateway.subscribeToPriceFetchCompleted(callback);
+    captured.current?.({ payload });
+
+    expect(callback).toHaveBeenCalledWith(payload);
   });
 });

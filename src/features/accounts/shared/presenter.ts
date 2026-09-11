@@ -98,3 +98,47 @@ export const FREQUENCY_ORDER: Record<UpdateFrequency, number> = {
   ManualMonth: 3,
   ManualYear: 4,
 };
+
+/**
+ * PMV-021/022/034/040 — a value in micros as a 2-decimal display string. The
+ * currency is a separate field the panel renders alongside it, never combined
+ * here: a row is in its account's currency (PMV-034), the total in the
+ * report's reference currency (PMV-040).
+ */
+export function formatPriceMovementValue(micros: number): string {
+  return microToFormatted(micros, 2);
+}
+
+/**
+ * PMV-024 — a movement as a signed percentage. `null` renders as an em dash:
+ * the backend decides whether a proportion exists at all (unmoved PMV-031/045,
+ * or a non-positive earlier value PMV-025/044), and the presentation never
+ * re-derives that judgement from the two values.
+ */
+export function formatPriceMovementPct(microPercent: number | null): string {
+  if (microPercent === null) return "—";
+  const sign = microPercent >= 0 ? "+" : "";
+  return `${sign}${microToFormatted(microPercent, 2)}%`;
+}
+
+/**
+ * PMV-050/051/052 — the i18n key labelling the two value columns, chosen from
+ * the dates exactly as given. The two single-date cases are distinct: one means
+ * the portfolio already carried prices and this refresh produced nothing later
+ * (PMV-051), the other that nothing was priced before it at all (PMV-052).
+ */
+export function priceMovementDateLabel(
+  observedFrom: string | null,
+  observedTo: string | null,
+): I18nMessage | null {
+  if (observedFrom !== null && observedTo !== null) {
+    return { key: "pmv.dates_range", vars: { from: observedFrom, to: observedTo } };
+  }
+  if (observedTo !== null) {
+    return { key: "pmv.dates_to_only", vars: { date: observedTo } };
+  }
+  if (observedFrom !== null) {
+    return { key: "pmv.dates_from_only", vars: { date: observedFrom } };
+  }
+  return null;
+}
