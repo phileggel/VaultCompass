@@ -366,4 +366,121 @@ mod tests {
             "an asset-load failure must degrade to None (PMV-014)"
         );
     }
+    // PMV-014 — a currency-service failure on the ACCOUNT -> reference-currency
+    // leg degrades to None. The account is deliberately non-EUR: an EUR account
+    // short-circuits the identity pair (FXR-011) without touching the repository,
+    // which is why the other tests in this module never reach this arm.
+    #[tokio::test]
+    async fn capture_returns_none_when_the_reference_rate_lookup_errors() {
+        let mut account_service = MockAccountServiceContract::new();
+        account_service.expect_get_all().returning(|| {
+            Ok(vec![crate::context::account::Account::restore(
+                "acc-1".to_string(),
+                "Alpha".to_string(),
+                String::new(),
+                "USD".to_string(),
+                crate::context::account::UpdateFrequency::ManualMonth,
+                false,
+            )])
+        });
+        account_service
+            .expect_get_holdings_for_account()
+            .returning(|_| Ok(vec![]));
+        let asset_service = MockAssetServiceContract::new();
+
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(|_, _, _| Err(anyhow::anyhow!("rate lookup failed")));
+        let currency_service = Arc::new(CurrencyService::new(
+            Box::new(MockCurrencyPairRepository::new()),
+            Box::new(rate_repo),
+        ));
+
+        let capture = PriceMovementCapture::new(
+            Arc::new(account_service),
+            Arc::new(asset_service),
+            currency_service,
+        );
+
+        let baseline = capture.capture(&HashSet::new(), today()).await;
+
+        assert!(
+            baseline.is_none(),
+            "a reference-rate lookup failure must degrade to None (PMV-014)"
+        );
+    }
+
+    // PMV-014 — the same on the HOLDING -> account-currency leg. A missing rate
+    // is not an error (FXR-034 degrades it to 0 and marks the row incomplete);
+    // a failing lookup is, and it must not produce a half-built report.
+    #[tokio::test]
+    async fn capture_returns_none_when_the_holding_rate_lookup_errors() {
+        let mut account_service = MockAccountServiceContract::new();
+        account_service.expect_get_all().returning(|| {
+            Ok(vec![crate::context::account::Account::restore(
+                "acc-1".to_string(),
+                "Alpha".to_string(),
+                String::new(),
+                "EUR".to_string(),
+                crate::context::account::UpdateFrequency::ManualMonth,
+                false,
+            )])
+        });
+        account_service
+            .expect_get_holdings_for_account()
+            .returning(|_| {
+                Ok(vec![crate::context::account::Holding::restore(
+                    "holding-1".to_string(),
+                    "acc-1".to_string(),
+                    "asset-1".to_string(),
+                    1_000_000,
+                    0,
+                    0,
+                    None,
+                )])
+            });
+        let mut asset_service = MockAssetServiceContract::new();
+        asset_service.expect_get_asset_by_id().returning(|_| {
+            Ok(Some(crate::context::asset::Asset::restore(
+                "asset-1".to_string(),
+                "Foreign Stock".to_string(),
+                crate::context::asset::AssetClass::Stocks,
+                crate::context::asset::AssetCategory::from_storage(
+                    "cat-1".to_string(),
+                    "Equities".to_string(),
+                ),
+                "USD".to_string(),
+                1,
+                "FGN".to_string(),
+                None,
+                false,
+                None,
+                false,
+                false,
+            )))
+        });
+
+        let mut rate_repo = MockCurrencyRateRepository::new();
+        rate_repo
+            .expect_latest_rate_on_or_before()
+            .returning(|_, _, _| Err(anyhow::anyhow!("rate lookup failed")));
+        let currency_service = Arc::new(CurrencyService::new(
+            Box::new(MockCurrencyPairRepository::new()),
+            Box::new(rate_repo),
+        ));
+
+        let capture = PriceMovementCapture::new(
+            Arc::new(account_service),
+            Arc::new(asset_service),
+            currency_service,
+        );
+
+        let baseline = capture.capture(&HashSet::new(), today()).await;
+
+        assert!(
+            baseline.is_none(),
+            "a holding-rate lookup failure must degrade to None (PMV-014)"
+        );
+    }
 }
