@@ -1,5 +1,7 @@
 # Implementation Plan — Scheduled Price Fetch (SPF)
 
+> Shipped in v0.37.0 (2026-07-25). The checklist below is the record of that walk; every box is ticked.
+
 Spec: `docs/spec/scheduled-price-fetch.md` (34 rules, SPF-010…061) · Contract: `docs/contracts/scheduled-fetch-contract.md` (`configure_scheduled_fetch`, `get_scheduled_fetch_status`)
 
 Platform decision (user, 2026-07-12): all three adapters ship — **Linux (systemd user timer) fully verified by unit + E2E tests; Windows (schtasks) and macOS (launchd) ship with unit-level verification of the generated definitions only** (no machine to verify live registration). SPF-017.
@@ -10,43 +12,43 @@ Platform decision (user, 2026-07-12): all three adapters ship — **Linux (syste
 
 **Setup**
 
-- [ ] 📖 Read spec: `docs/spec/scheduled-price-fetch.md`
-- [ ] 📖 Read contract: `docs/contracts/scheduled-fetch-contract.md`
-- [ ] 📖 Read constraining ADRs: `docs/adr/001` (i64 micros), `docs/adr/004` (use cases inject services), `docs/adr/009` (FX provider chain), `docs/adr/012` (latest-write-wins), `docs/adr/014` (refresh-lock scope exclusion), `docs/adr/017` (Yahoo keyless)
-- [ ] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/backend-patterns.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`
+- [x] 📖 Read spec: `docs/spec/scheduled-price-fetch.md`
+- [x] 📖 Read contract: `docs/contracts/scheduled-fetch-contract.md`
+- [x] 📖 Read constraining ADRs: `docs/adr/001` (i64 micros), `docs/adr/004` (use cases inject services), `docs/adr/009` (FX provider chain), `docs/adr/012` (latest-write-wins), `docs/adr/014` (refresh-lock scope exclusion), `docs/adr/017` (Yahoo keyless)
+- [x] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/backend-patterns.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`
 
 **Backend phase (PR 1)**
 
-- [ ] 🗄️ Database Migration `202607120001_create_scheduled_fetch.sql` (`just db-migrate` + `just prepare-sqlx`)
-- [ ] ✍️ Backend test stubs (`test-writer-backend` from `docs/contracts/scheduled-fetch-contract.md` — red confirmed)
-- [ ] 🏗️ Backend Implementation (minimal — make failing tests pass; no anticipation of future rules)
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-sql` + `reviewer-security` (new Tauri commands + process-spawning scheduler adapters ship in this PR) in parallel → `/review-triage` → apply Follow-ups)
-- [ ] 🔗 `just generate-types`
-- [ ] 🔧 `npx tsc --noEmit` → fix TS errors from new bindings only
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit via `/smart-commit` — suggested: `feat: daily price download runs on a schedule, even with the app closed`
-- [ ] 🔀 `/create-pr` — PR 1 (backend). After merge, branch PR 2 off updated `main`.
+- [x] 🗄️ Database Migration `202607120001_create_scheduled_fetch.sql` (`just db-migrate` + `just prepare-sqlx`)
+- [x] ✍️ Backend test stubs (`test-writer-backend` from `docs/contracts/scheduled-fetch-contract.md` — red confirmed)
+- [x] 🏗️ Backend Implementation (minimal — make failing tests pass; no anticipation of future rules)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-sql` + `reviewer-security` (new Tauri commands + process-spawning scheduler adapters ship in this PR) in parallel → `/review-triage` → apply Follow-ups)
+- [x] 🔗 `just generate-types`
+- [x] 🔧 `npx tsc --noEmit` → fix TS errors from new bindings only
+- [x] 🧹 `just format`
+- [x] 💾 Commit via `/smart-commit` — suggested: `feat: daily price download runs on a schedule, even with the app closed`
+- [x] 🔀 `/create-pr` — PR 1 (backend). After merge, branch PR 2 off updated `main`.
 
 **Frontend phase (PR 2)**
 
-- [ ] ✍️ Frontend test stubs (`test-writer-frontend` — red confirmed; `modified_functions: [SettingsPage.tsx:SettingsPage]`)
-- [ ] 💻 Frontend Implementation (minimal — make failing tests pass; no defensive code, no anticipation of future rules)
-- [ ] 📸 `/visual-proof` — ScheduledFetchSection all states, light + dark
-- [ ] 🔍 Frontend Review (`reviewer-frontend` → `/review-triage` → apply Follow-ups)
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit via `/smart-commit` — suggested: `feat: set up the daily download from the app settings`
-- [ ] _(no `/create-pr` here — PR 2 continues with closure below)_
+- [x] ✍️ Frontend test stubs (`test-writer-frontend` — red confirmed; `modified_functions: [SettingsPage.tsx:SettingsPage]`)
+- [x] 💻 Frontend Implementation (minimal — make failing tests pass; no defensive code, no anticipation of future rules)
+- [x] 📸 `/visual-proof` — ScheduledFetchSection all states, light + dark
+- [x] 🔍 Frontend Review (`reviewer-frontend` → `/review-triage` → apply Follow-ups)
+- [x] 🧹 `just format`
+- [x] 💾 Commit via `/smart-commit` — suggested: `feat: set up the daily download from the app settings`
+- [x] _(no `/create-pr` here — PR 2 continues with closure below)_
 
 **Closure (PR 2, continued)**
 
-- [ ] ✍️ E2E scenarios (`test-writer-e2e` — settings section flow; E2E runs use the no-op scheduler, see § E2E notes)
-- [ ] ▶️ `npm run test:e2e` green (17 existing + new spec)
-- [ ] 🔍 Cross-cutting Review (`reviewer-e2e` + `reviewer-infra` (justfile/scripts touched if any) + `reviewer-security` (new Tauri commands + process-spawning scheduler adapters — mandatory here) → `/review-triage`)
-- [ ] 📚 Documentation Update — `docs/todo.md` (close "(infra) — Scheduled daily automatic price download"), `ARCHITECTURE.md` (new `use_cases/scheduled_fetch/`, `shared/infrastructure/scheduler/`, headless entry), `docs/ddd-divergences.md` (use-case-owned persistence), `docs/ubiquitous-language.md` (ScheduledFetchRun, trigger time)
-- [ ] ✅ `spec-checker` [HARD GATE]
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit via `/smart-commit` — suggested: `test: cover the daily download settings end to end` (or `docs:`/`chore:` split as needed)
-- [ ] 🔀 `/create-pr` — PR 2 (frontend + E2E + closure)
+- [x] ✍️ E2E scenarios (`test-writer-e2e` — settings section flow; E2E runs use the no-op scheduler, see § E2E notes)
+- [x] ▶️ `npm run test:e2e` green (17 existing + new spec)
+- [x] 🔍 Cross-cutting Review (`reviewer-e2e` + `reviewer-infra` (justfile/scripts touched if any) + `reviewer-security` (new Tauri commands + process-spawning scheduler adapters — mandatory here) → `/review-triage`)
+- [x] 📚 Documentation Update — `docs/todo.md` (close "(infra) — Scheduled daily automatic price download"), `ARCHITECTURE.md` (new `use_cases/scheduled_fetch/`, `shared/infrastructure/scheduler/`, headless entry), `docs/ddd-divergences.md` (use-case-owned persistence), `docs/ubiquitous-language.md` (ScheduledFetchRun, trigger time)
+- [x] ✅ `spec-checker` [HARD GATE]
+- [x] 🧹 `just format`
+- [x] 💾 Commit via `/smart-commit` — suggested: `test: cover the daily download settings end to end` (or `docs:`/`chore:` split as needed)
+- [x] 🔀 `/create-pr` — PR 2 (frontend + E2E + closure)
 
 ---
 

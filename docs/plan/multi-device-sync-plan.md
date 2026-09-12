@@ -1,5 +1,7 @@
 # Implementation Plan — Multi-Device Sync (SYN + CFR)
 
+> Shipped in v0.38.0 (2026-08-23). The checklist below is the record of that walk; every box is ticked.
+
 > Specs: [`docs/spec/multi-device-sync.md`](../spec/multi-device-sync.md) (SYN, 54 rules) + [`docs/spec/sync-conflict-resolution.md`](../spec/sync-conflict-resolution.md) (CFR, 25 rules).
 > Feature owner trigram: **SYN**. **CFR** is its companion spec (outcomes only); both rule sets are covered below.
 > Contract: [`docs/contracts/sync-contract.md`](../contracts/sync-contract.md) (v3 — 11 commands, `SyncCompleted` event) + the amendments applied in [`account-contract.md`](../contracts/account-contract.md) and [`asset-contract.md`](../contracts/asset-contract.md).
@@ -17,72 +19,72 @@
 
 ### Setup (once, before PR-A)
 
-- [ ] 📖 Read specs: `docs/spec/multi-device-sync.md`, `docs/spec/sync-conflict-resolution.md`
-- [ ] 📖 Read contract: `docs/contracts/sync-contract.md` (+ the SYN/CFR amendments in `account-contract.md`, `asset-contract.md`)
-- [ ] 📖 Read constraining ADRs: `docs/adr/019-per-device-change-log-multi-device-sync.md` — **amended in place**: its unit-of-work sentence is replaced by the `ChangeRecorder` mechanism (D1); `docs/adr/006-unit-of-work.md` (**accepted but not implemented in code — stays Accepted, tracked as a tech-debt entry; see Decision D1 / H3**), `docs/adr/012-latest-write-wins-source-as-metadata.md` (CFR-050), `docs/adr/013-recompute-account-performance-on-read.md` (SYN-022 / CFR-042 derived-on-read), `docs/adr/018-lazy-catch-up-management-fee-generation.md` (SYN-060 launch ordering, CFR-044), `docs/adr/001-use-i64-for-monetary-amounts.md` (money on the wire), `docs/adr/003-cross-context-use-case-orchestration.md` + `docs/adr/004-use-cases-inject-services-not-repositories.md` (Decision D3)
-- [ ] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/backend-patterns.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/ddd-divergences.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`, `docs/e2e-rules.md`, `docs/ubiquitous-language.md` § Multi-Device Sync Concepts
-- [ ] 📖 Read the amended ADR-019 before writing any capture code — the `ChangeRecorder` sentence in its Decision paragraph is the binding mechanism (no ADR-020 is created; `/techdebt` records ADR-006's unimplemented status)
+- [x] 📖 Read specs: `docs/spec/multi-device-sync.md`, `docs/spec/sync-conflict-resolution.md`
+- [x] 📖 Read contract: `docs/contracts/sync-contract.md` (+ the SYN/CFR amendments in `account-contract.md`, `asset-contract.md`)
+- [x] 📖 Read constraining ADRs: `docs/adr/019-per-device-change-log-multi-device-sync.md` — **amended in place**: its unit-of-work sentence is replaced by the `ChangeRecorder` mechanism (D1); `docs/adr/006-unit-of-work.md` (**accepted but not implemented in code — stays Accepted, tracked as a tech-debt entry; see Decision D1 / H3**), `docs/adr/012-latest-write-wins-source-as-metadata.md` (CFR-050), `docs/adr/013-recompute-account-performance-on-read.md` (SYN-022 / CFR-042 derived-on-read), `docs/adr/018-lazy-catch-up-management-fee-generation.md` (SYN-060 launch ordering, CFR-044), `docs/adr/001-use-i64-for-monetary-amounts.md` (money on the wire), `docs/adr/003-cross-context-use-case-orchestration.md` + `docs/adr/004-use-cases-inject-services-not-repositories.md` (Decision D3)
+- [x] 📖 Read conventions: `ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/backend-patterns.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/ddd-divergences.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/frontend-visual-proof.md`, `docs/test_convention.md`, `docs/e2e-rules.md`, `docs/ubiquitous-language.md` § Multi-Device Sync Concepts
+- [x] 📖 Read the amended ADR-019 before writing any capture code — the `ChangeRecorder` sentence in its Decision paragraph is the binding mechanism (no ADR-020 is created; `/techdebt` records ADR-006's unimplemented status)
 
 ### Phase A — capture (PR-A, branch `feat/multi-device-sync-capture`)
 
-- [ ] 🗄️ Database Migration (`just migrate` + `just prepare-sqlx`) — three files, § Migrations M1–M3
-- [ ] ✍️ Backend test stubs (`test-writer-backend` — red confirmed): change-capture per write path, rank stamping, cascade tombstones, FEE-048 identity, catch-up record
-- [ ] 🏗️ Backend Implementation (minimal — only what makes the failing tests pass; no defensive code, no anticipation of PR-B/PR-C rules)
-- [ ] 🧹 `just format`
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-sql` for the migrations → save reports to `.review/` → `/review-triage` → apply Follow-ups). **Tell the reviewer what PR-A is**: a behaviour-preserving refactor, _not_ a dormant no-op — M3 moves the fee catch-up cursor out of `fee_schedules` and FEE-048 changes the identity of newly generated deductions, both on the live generation path. The change-capture side is dormant (no `sync_device` row can exist yet); the fee side is not.
-- [ ] 🔗 Type Synchronization (`just generate-types`) — no new wire types expected; run to confirm the surface is unchanged
-- [ ] ✅ `just check`
-- [ ] 💾 Commit: `refactor: capture record changes and move the fee catch-up cursor to its own record`
-- [ ] 🔀 `/create-pr` → PR-A. After merge, branch PR-B off updated `main`.
+- [x] 🗄️ Database Migration (`just migrate` + `just prepare-sqlx`) — three files, § Migrations M1–M3
+- [x] ✍️ Backend test stubs (`test-writer-backend` — red confirmed): change-capture per write path, rank stamping, cascade tombstones, FEE-048 identity, catch-up record
+- [x] 🏗️ Backend Implementation (minimal — only what makes the failing tests pass; no defensive code, no anticipation of PR-B/PR-C rules)
+- [x] 🧹 `just format`
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-sql` for the migrations → save reports to `.review/` → `/review-triage` → apply Follow-ups). **Tell the reviewer what PR-A is**: a behaviour-preserving refactor, _not_ a dormant no-op — M3 moves the fee catch-up cursor out of `fee_schedules` and FEE-048 changes the identity of newly generated deductions, both on the live generation path. The change-capture side is dormant (no `sync_device` row can exist yet); the fee side is not.
+- [x] 🔗 Type Synchronization (`just generate-types`) — no new wire types expected; run to confirm the surface is unchanged
+- [x] ✅ `just check`
+- [x] 💾 Commit: `refactor: capture record changes and move the fee catch-up cursor to its own record`
+- [x] 🔀 `/create-pr` → PR-A. After merge, branch PR-B off updated `main`.
 
 ### Phase B — sync bounded context + first device publishes (PR-B, branch `feat/multi-device-sync-bc`)
 
-- [ ] ✍️ Backend test stubs (`test-writer-backend` — red confirmed): key derivation + AEAD round-trip, header/manifest/segment codec, whole-file publish, cursors, held-back persistence, **the first-device publish path (SYN-013: header → first segment → manifest → rank stamping → rollback; SYN-026's first-segment half; SYN-081's immediately-before re-check)**, and **only the error paths PR-B implements**: `PassphraseTooShort`, `DeviceNameBlank`, `FolderUnavailable`, `UpdateRequired`, `PublishFailed`, `PortfolioCreatedElsewhere`, `AlreadyEnabled`, `SyncDisabled`, `SyncPaused`, `AlreadyPaused`, `NotPaused`, `NoticeNotFound`, `FolderHoldsOtherPortfolio`, `DatabaseError`. **Not in PR-B**: `HistoryIncomplete`, `RebuildInterrupted`, `InstallationHoldsUserData`, and `PassphraseMismatch` on the join path — those are PR-C
-- [ ] 🗄️ `just prepare-sqlx` — PR-B adds `sqlx::query!` surfaces over the M2 sync tables (`SQLX_OFFLINE=true` is the project default, so the offline data must be regenerated)
-- [ ] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of later PRs' rules. `sync_now` publishes only — no apply, no join)
-- [ ] 🧹 `just format`
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` — new crypto, new Tauri commands, capability change → `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 🔗 Type Synchronization (`just generate-types`) — adds `SyncStatus`, `SyncReport`, `SyncFolderState`, `FolderProblem`, `RosterEntry`, `ConflictNotice*`, `RecordKind`, `SyncFailure`, `InconsistentHolding`, `HoldingInconsistency`, `SyncError`, `PortfolioSyncError`
-- [ ] 🔧 Compilation fixup (TypeScript errors from new bindings only — no UI work)
-- [ ] ✅ `just check`
-- [ ] 🔐 `/dep-audit` — five new dependencies land in this PR (`argon2`, `password-hash`, `chacha20poly1305`, `zeroize`, `tauri-plugin-dialog`); run before opening the PR
-- [ ] 💾 Commit: `refactor: publish this device's portfolio into an encrypted shared folder`
-- [ ] 🔀 `/create-pr` → PR-B. After merge, branch PR-C off updated `main`.
+- [x] ✍️ Backend test stubs (`test-writer-backend` — red confirmed): key derivation + AEAD round-trip, header/manifest/segment codec, whole-file publish, cursors, held-back persistence, **the first-device publish path (SYN-013: header → first segment → manifest → rank stamping → rollback; SYN-026's first-segment half; SYN-081's immediately-before re-check)**, and **only the error paths PR-B implements**: `PassphraseTooShort`, `DeviceNameBlank`, `FolderUnavailable`, `UpdateRequired`, `PublishFailed`, `PortfolioCreatedElsewhere`, `AlreadyEnabled`, `SyncDisabled`, `SyncPaused`, `AlreadyPaused`, `NotPaused`, `NoticeNotFound`, `FolderHoldsOtherPortfolio`, `DatabaseError`. **Not in PR-B**: `HistoryIncomplete`, `RebuildInterrupted`, `InstallationHoldsUserData`, and `PassphraseMismatch` on the join path — those are PR-C
+- [x] 🗄️ `just prepare-sqlx` — PR-B adds `sqlx::query!` surfaces over the M2 sync tables (`SQLX_OFFLINE=true` is the project default, so the offline data must be regenerated)
+- [x] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of later PRs' rules. `sync_now` publishes only — no apply, no join)
+- [x] 🧹 `just format`
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` — new crypto, new Tauri commands, capability change → `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 🔗 Type Synchronization (`just generate-types`) — adds `SyncStatus`, `SyncReport`, `SyncFolderState`, `FolderProblem`, `RosterEntry`, `ConflictNotice*`, `RecordKind`, `SyncFailure`, `InconsistentHolding`, `HoldingInconsistency`, `SyncError`, `PortfolioSyncError`
+- [x] 🔧 Compilation fixup (TypeScript errors from new bindings only — no UI work)
+- [x] ✅ `just check`
+- [x] 🔐 `/dep-audit` — five new dependencies land in this PR (`argon2`, `password-hash`, `chacha20poly1305`, `zeroize`, `tauri-plugin-dialog`); run before opening the PR
+- [x] 💾 Commit: `refactor: publish this device's portfolio into an encrypted shared folder`
+- [x] 🔀 `/create-pr` → PR-B. After merge, branch PR-C off updated `main`.
 
 ### Phase C — joining, resolution + apply (PR-C, branch `feat/multi-device-sync-resolve`)
 
-- [ ] ✍️ Backend test stubs (`test-writer-backend` — red confirmed): the **25 CFR scenarios verbatim** as unit tests on `resolution.rs` + arrival-order permutations (CFR-013); the **join / rebuild** error paths PR-C introduces (`InstallationHoldsUserData`, `HistoryIncomplete`, `RebuildInterrupted`, `PassphraseMismatch` on join); the CFR-035 name-binding tests on `AccountService::update` and `AssetService::update_category`; the `PortfolioSyncError` wire-shape round-trip; plus the two-device integration test in `src-tauri/tests/`
-- [ ] 🗄️ `just prepare-sqlx` — PR-C adds `sqlx::query!` surfaces (apply entry points, tombstone/notice writes, inconsistency reads)
-- [ ] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of later PRs' rules. Resolution engine, apply executor, join/rebuild, tombstones, notices, `SyncCompleted`, launch + headless hooks)
-- [ ] 🧹 `just format`
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` — PR-C is the first place a **decrypted foreign payload is written into the local database**, so the deserialization, validation and apply boundary need a security pass → `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 🔗 Type Synchronization (`just generate-types`) — `HoldingDetail.inconsistency`, `AccountSummary.has_inconsistent_holding`
-- [ ] 🔧 Compilation fixup (TypeScript errors from new bindings only)
-- [ ] ✅ `just check`
-- [ ] 💾 Commit: `refactor: merge another device's published changes into the local portfolio`
-- [ ] 🔀 `/create-pr` → PR-C. After merge, branch PR-D off updated `main`.
+- [x] ✍️ Backend test stubs (`test-writer-backend` — red confirmed): the **25 CFR scenarios verbatim** as unit tests on `resolution.rs` + arrival-order permutations (CFR-013); the **join / rebuild** error paths PR-C introduces (`InstallationHoldsUserData`, `HistoryIncomplete`, `RebuildInterrupted`, `PassphraseMismatch` on join); the CFR-035 name-binding tests on `AccountService::update` and `AssetService::update_category`; the `PortfolioSyncError` wire-shape round-trip; plus the two-device integration test in `src-tauri/tests/`
+- [x] 🗄️ `just prepare-sqlx` — PR-C adds `sqlx::query!` surfaces (apply entry points, tombstone/notice writes, inconsistency reads)
+- [x] 🏗️ Backend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of later PRs' rules. Resolution engine, apply executor, join/rebuild, tombstones, notices, `SyncCompleted`, launch + headless hooks)
+- [x] 🧹 `just format`
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` + `reviewer-security` — PR-C is the first place a **decrypted foreign payload is written into the local database**, so the deserialization, validation and apply boundary need a security pass → `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 🔗 Type Synchronization (`just generate-types`) — `HoldingDetail.inconsistency`, `AccountSummary.has_inconsistent_holding`
+- [x] 🔧 Compilation fixup (TypeScript errors from new bindings only)
+- [x] ✅ `just check`
+- [x] 💾 Commit: `refactor: merge another device's published changes into the local portfolio`
+- [x] 🔀 `/create-pr` → PR-C. After merge, branch PR-D off updated `main`.
 
 ### Phase D — frontend (PR-D, branch `feat/multi-device-sync-fe`)
 
-- [ ] ✍️ Frontend test stubs (`test-writer-frontend` — red confirmed). Pass the contract **plus** `modified_functions: [presenter.ts:toHoldingRow, useAccountTable.ts:useAccountTable, store.ts:init]`
-- [ ] 💻 Frontend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of later rules)
-- [ ] 🧹 `just format`
-- [ ] 📸 Visual proof (`/visual-proof` — settings sync section in all five states, enable modal step 1 + step 2 (first-device and join wording), start-over confirmation, notices list, shell indicator, holding row + accounts row inconsistency markers; light **and** dark; stage screenshots before commit)
-- [ ] 🔍 Frontend Review (`reviewer-frontend` → `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] ✅ `just check`
-- [ ] 💾 Commit: `feat: share your portfolio between computers through a synced folder`
-- [ ] 🔀 `/create-pr` → PR-D. After merge, branch PR-E off updated `main`.
+- [x] ✍️ Frontend test stubs (`test-writer-frontend` — red confirmed). Pass the contract **plus** `modified_functions: [presenter.ts:toHoldingRow, useAccountTable.ts:useAccountTable, store.ts:init]`
+- [x] 💻 Frontend Implementation (minimal — implement only what makes the failing tests pass; no defensive code, no anticipation of later rules)
+- [x] 🧹 `just format`
+- [x] 📸 Visual proof (`/visual-proof` — settings sync section in all five states, enable modal step 1 + step 2 (first-device and join wording), start-over confirmation, notices list, shell indicator, holding row + accounts row inconsistency markers; light **and** dark; stage screenshots before commit)
+- [x] 🔍 Frontend Review (`reviewer-frontend` → `.review/` → `/review-triage` → apply Follow-ups)
+- [x] ✅ `just check`
+- [x] 💾 Commit: `feat: share your portfolio between computers through a synced folder`
+- [x] 🔀 `/create-pr` → PR-D. After merge, branch PR-E off updated `main`.
 
 ### Phase E — E2E + closure (PR-E, branch `feat/multi-device-sync-e2e`)
 
-- [ ] ✍️ E2E scenarios (`test-writer-e2e`) — single-device critical path only; **read Halt Artifact H1 first**
-- [ ] ▶️ Run E2E suite (`just test-e2e-headless` → green confirmed; main agent triages any failure)
-- [ ] 🔍 Cross-cutting Review (`reviewer-e2e` + `reviewer-infra` if `wdio.conf.ts` / capability / CI files changed + `reviewer-security` re-run on the final command + capability surface → `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 📚 Documentation Update — `ARCHITECTURE.md` (new `context/sync/`, new `use_cases/portfolio_sync/`, new `shared/domain/`, `SyncCompleted` event row), `docs/todo.md`, `docs/ubiquitous-language.md` (confirm no new terms), `docs/ddd-divergences.md` — **two entries**: the #12 revisit (`shared/domain/` now populated) _and_ a new entry recording the `shared/infrastructure/change_recorder.rs` port placement (the trait takes the live `&mut sqlx::SqliteConnection` because SYN-020 atomicity requires it, which is why the port sits in `infrastructure/` rather than `domain/`)
-- [ ] ✅ Spec check (`spec-checker` on **both** SYN and CFR) [HARD GATE — halt on any uncovered rule or command]
-- [ ] 🧹 `just format`
-- [ ] 💾 Commit: `test: cover portfolio sharing end to end` (docs-only follow-up, if split: `docs: record the sync module layout and port placement`)
-- [ ] 🔀 `/create-pr` → PR-E (final).
+- [x] ✍️ E2E scenarios (`test-writer-e2e`) — single-device critical path only; **read Halt Artifact H1 first**
+- [x] ▶️ Run E2E suite (`just test-e2e-headless` → green confirmed; main agent triages any failure)
+- [x] 🔍 Cross-cutting Review (`reviewer-e2e` + `reviewer-infra` if `wdio.conf.ts` / capability / CI files changed + `reviewer-security` re-run on the final command + capability surface → `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 📚 Documentation Update — `ARCHITECTURE.md` (new `context/sync/`, new `use_cases/portfolio_sync/`, new `shared/domain/`, `SyncCompleted` event row), `docs/todo.md`, `docs/ubiquitous-language.md` (confirm no new terms), `docs/ddd-divergences.md` — **two entries**: the #12 revisit (`shared/domain/` now populated) _and_ a new entry recording the `shared/infrastructure/change_recorder.rs` port placement (the trait takes the live `&mut sqlx::SqliteConnection` because SYN-020 atomicity requires it, which is why the port sits in `infrastructure/` rather than `domain/`)
+- [x] ✅ Spec check (`spec-checker` on **both** SYN and CFR) [HARD GATE — halt on any uncovered rule or command]
+- [x] 🧹 `just format`
+- [x] 💾 Commit: `test: cover portfolio sharing end to end` (docs-only follow-up, if split: `docs: record the sync module layout and port placement`)
+- [x] 🔀 `/create-pr` → PR-E (final).
 
 ---
 

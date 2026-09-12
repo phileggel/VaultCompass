@@ -1,5 +1,7 @@
 # Implementation Plan — Price Movement (PMV)
 
+> Shipped in v0.40.0 (2026-09-11). The checklist below is the record of that walk; every box is ticked.
+
 > Spec: [`docs/spec/price-movement.md`](../spec/price-movement.md) — trigram **PMV**, 31 rules, registered in [`docs/spec-index.md`](../spec-index.md) line 31 (status `planning`).
 > Contract: [`docs/contracts/asset-contract.md`](../contracts/asset-contract.md) — changelog entry **2026-09-11** (`FetchTrigger`, `PriceMovementReport`, `PriceMovementRow`, `AssetPriceFetchCompleted.movement`).
 > Branch: `feat/price-fetch-result`
@@ -10,33 +12,33 @@
 
 ## 1. Workflow TaskList
 
-- [ ] 📖 Review Architecture & Rules (`ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/backend-patterns.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/test_convention.md`, `docs/e2e-rules.md`, `docs/ubiquitous-language.md`)
-- [ ] 🗄️ Database Migration — **N/A**, no schema change (transient report)
-- [ ] ✍️ Backend test stubs (`test-writer-backend` → contract: `docs/contracts/asset-contract.md` § "Asset Price Fetch Tasks" + § Events `AssetPriceFetchCompleted` + § Shared Types `FetchTrigger` / `PriceMovementReport` / `PriceMovementRow` — all stubs written, red confirmed)
-- [ ] 🏗️ Backend Implementation (minimal — make failing tests pass, green confirmed; **no defensive code, no anticipation of future rules** — the test set defines the scope)
-- [ ] 🧹 `just format` (rustfmt + clippy --fix)
-- [ ] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` → save reports to `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 🔗 Type Synchronization (`just generate-types`)
-- [ ] ✍️ **Frontend test stubs — pass 1 (call-site only)** (`test-writer-frontend` → contract: `docs/contracts/asset-contract.md` § "Asset Price Fetch Tasks" + `modified_functions: [gateway.ts:fetchAllAssetPrices, App.tsx:maybeLaunchAutoFetch, useRefreshGlobalPrices.ts:refresh]` — red confirmed). Scope is strictly the `FetchTrigger` argument (PMV-010 / PMV-015); no panel, no report rendering.
-- [ ] 🔧 Call-site implementation (make pass-1 tests pass: `gateway.ts`, `App.tsx`, `useRefreshGlobalPrices.ts` — **no UI work**)
-- [ ] ✅ `just check` (TypeScript clean) **and** `npm run test:coverage` (the gate `quality.yml` actually runs on every PR — `just check` skips tests by design)
-- [ ] 💾 Commit: backend layer via `/smart-commit` — suggested title: `feat: report what a price refresh did to each account's value`
-- [ ] 🔀 `/create-pr` — **PR #1 (backend + call sites)** per the PR Plan. After merge, branch PR #2 off updated `main`.
-- [ ] ✍️ **Frontend test stubs — pass 2 (report surface)** (`test-writer-frontend` → contract + `modified_functions: [AccountManager.tsx:AccountManager]` — red confirmed)
-- [ ] 💻 Frontend Implementation (minimal — make failing tests pass, green confirmed; **no defensive code, no anticipation of future rules**)
-- [ ] 🧹 `just format`
-- [ ] 📸 Visual proof (`/visual-proof` — `PriceMovementPanel` in every state × light/dark, plus `AccountManager` as the consuming surface; stage screenshots before commit)
-- [ ] 🔍 Frontend Review (`reviewer-frontend` → save report to `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 💾 Commit: frontend layer via `/smart-commit` — suggested title: `feat: show the price movement panel after a manual refresh`
-- [ ] ✍️ E2E scenarios (`test-writer-e2e` — one deterministic scenario, see §2.4)
-- [ ] ▶️ Run E2E suite (`just test-e2e-headless` → green confirmed; main agent triages any failure). **Local E2E is known-broken on this machine (L-011)** — CI main-push E2E is the gate.
-- [ ] 🔍 E2E Review (`reviewer-e2e` → save report to `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 💾 Commit: E2E tests via `/smart-commit` — suggested title: `test: cover the price movement panel end to end`
-- [ ] 🔍 Cross-cutting Review (`reviewer-arch` — `.rs` modified; `reviewer-sql` — **skip, no migration**; `reviewer-infra` — **skip unless** a config/script/workflow file is touched; `reviewer-security` — **run**, `fetch_all_asset_prices` is a Tauri command whose signature changes → save reports to `.review/` → `/review-triage` → apply Follow-ups)
-- [ ] 📚 Documentation Update (`ARCHITECTURE.md` — new `use_cases/shared/global_value.rs`, `use_cases/shared/price_movement.rs`, `use_cases/asset_price_fetch/movement_capture.rs`, and the `features/accounts/price_movement/` sub-feature; `docs/spec-index.md` — flip PMV `planning` → shipped status; `docs/todo.md` — close any related entry)
-- [ ] ✅ Spec check (`spec-checker` against `docs/spec/price-movement.md`)
-- [ ] 💾 Commit: tests & docs via `/smart-commit` — suggested title: `docs: record the price movement report in the architecture map`
-- [ ] 🔀 `/create-pr` — **PR #2 (frontend + E2E + closure)** per the PR Plan
+- [x] 📖 Review Architecture & Rules (`ARCHITECTURE.md`, `docs/backend-rules.md`, `docs/ddd-reference.md`, `docs/error-model.md`, `docs/backend-patterns.md`, `docs/frontend-rules.md`, `docs/i18n-rules.md`, `docs/test_convention.md`, `docs/e2e-rules.md`, `docs/ubiquitous-language.md`)
+- [x] 🗄️ Database Migration — **N/A**, no schema change (transient report)
+- [x] ✍️ Backend test stubs (`test-writer-backend` → contract: `docs/contracts/asset-contract.md` § "Asset Price Fetch Tasks" + § Events `AssetPriceFetchCompleted` + § Shared Types `FetchTrigger` / `PriceMovementReport` / `PriceMovementRow` — all stubs written, red confirmed)
+- [x] 🏗️ Backend Implementation (minimal — make failing tests pass, green confirmed; **no defensive code, no anticipation of future rules** — the test set defines the scope)
+- [x] 🧹 `just format` (rustfmt + clippy --fix)
+- [x] 🔍 Backend Review (`reviewer-backend` + `reviewer-arch` → save reports to `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 🔗 Type Synchronization (`just generate-types`)
+- [x] ✍️ **Frontend test stubs — pass 1 (call-site only)** (`test-writer-frontend` → contract: `docs/contracts/asset-contract.md` § "Asset Price Fetch Tasks" + `modified_functions: [gateway.ts:fetchAllAssetPrices, App.tsx:maybeLaunchAutoFetch, useRefreshGlobalPrices.ts:refresh]` — red confirmed). Scope is strictly the `FetchTrigger` argument (PMV-010 / PMV-015); no panel, no report rendering.
+- [x] 🔧 Call-site implementation (make pass-1 tests pass: `gateway.ts`, `App.tsx`, `useRefreshGlobalPrices.ts` — **no UI work**)
+- [x] ✅ `just check` (TypeScript clean) **and** `npm run test:coverage` (the gate `quality.yml` actually runs on every PR — `just check` skips tests by design)
+- [x] 💾 Commit: backend layer via `/smart-commit` — suggested title: `feat: report what a price refresh did to each account's value`
+- [x] 🔀 `/create-pr` — **PR #1 (backend + call sites)** per the PR Plan. After merge, branch PR #2 off updated `main`.
+- [x] ✍️ **Frontend test stubs — pass 2 (report surface)** (`test-writer-frontend` → contract + `modified_functions: [AccountManager.tsx:AccountManager]` — red confirmed)
+- [x] 💻 Frontend Implementation (minimal — make failing tests pass, green confirmed; **no defensive code, no anticipation of future rules**)
+- [x] 🧹 `just format`
+- [x] 📸 Visual proof (`/visual-proof` — `PriceMovementPanel` in every state × light/dark, plus `AccountManager` as the consuming surface; stage screenshots before commit)
+- [x] 🔍 Frontend Review (`reviewer-frontend` → save report to `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 💾 Commit: frontend layer via `/smart-commit` — suggested title: `feat: show the price movement panel after a manual refresh`
+- [x] ✍️ E2E scenarios (`test-writer-e2e` — one deterministic scenario, see §2.4)
+- [x] ▶️ Run E2E suite (`just test-e2e-headless` → green confirmed; main agent triages any failure). **Local E2E is known-broken on this machine (L-011)** — CI main-push E2E is the gate.
+- [x] 🔍 E2E Review (`reviewer-e2e` → save report to `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 💾 Commit: E2E tests via `/smart-commit` — suggested title: `test: cover the price movement panel end to end`
+- [x] 🔍 Cross-cutting Review (`reviewer-arch` — `.rs` modified; `reviewer-sql` — **skip, no migration**; `reviewer-infra` — **skip unless** a config/script/workflow file is touched; `reviewer-security` — **run**, `fetch_all_asset_prices` is a Tauri command whose signature changes → save reports to `.review/` → `/review-triage` → apply Follow-ups)
+- [x] 📚 Documentation Update (`ARCHITECTURE.md` — new `use_cases/shared/global_value.rs`, `use_cases/shared/price_movement.rs`, `use_cases/asset_price_fetch/movement_capture.rs`, and the `features/accounts/price_movement/` sub-feature; `docs/spec-index.md` — flip PMV `planning` → shipped status; `docs/todo.md` — close any related entry)
+- [x] ✅ Spec check (`spec-checker` against `docs/spec/price-movement.md`)
+- [x] 💾 Commit: tests & docs via `/smart-commit` — suggested title: `docs: record the price movement report in the architecture map`
+- [x] 🔀 `/create-pr` — **PR #2 (frontend + E2E + closure)** per the PR Plan
 
 ---
 

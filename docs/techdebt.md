@@ -60,16 +60,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None directly.
 - Done when: ADR-006 is implemented and the three ad-hoc `sqlx` transactions route through it, or the ADR is superseded.
 
-## 2026-08-22 — FEE spec carries contract vocabulary and out-of-order rules
-
-- Found by: spec-reviewer (round 3 of the SYN/CFR review, `.review/spec-reviewer-2026-08-22-03.md`)
-- Where: docs/spec/management-fee-deduction.md (FEE-074, FEE-077)
-- Context: branch `feat/multi-device-sync` @ `a127abe`
-- Severity: 🔵
-- Observation: FEE-077 names an error variant and a method, FEE-074 names a typed field (`fee_rate_percent_micros: Option<i64>`) — contract vocabulary inside a spec ("what & why, never how"). FEE-074 also sits after FEE-078, out of numeric order. Pre-existing; only the missing scope tags on FEE-075–078 were fixed as boyscout while the file was touched for FEE-043/048. Rewording to behaviour-only text needs a judgement pass, not a mechanical edit — do it in a docs-only PR.
-- User value: None — spec hygiene.
-- Done when: FEE-074 and FEE-077 are reworded to behaviour-only text and FEE-074 is renumbered into order.
-
 ## 2026-07-25 — Linux bundle carries Tauri template leftovers
 
 - Found by: main-agent
@@ -79,18 +69,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: The `.deb` installs the app binary under the template name `tauri-app` (not `vault-compass`) and also packages `generate_bindings`, a dev-only helper binary, into the installer. The Windows NSIS pipeline is likely affected the same way (binary name inside the installer). Menu entries and app labels are correct; only the on-disk binary names and the extra packaged binary are off. The Linux release job now publishes this bundle as an AppImage and a `.deb`, so the leftovers ship to users. Renaming the binary reaches `wdio.conf.ts` (`BINARY_NAME`), `scripts/screenshot.sh`, and the Windows installer path, and changing an installed binary name between versions is an updater upgrade question — it needs its own PR.
 - User value: The installed binary is named after the app, and no dev-only helper ships inside the package.
 - Done when: The `[[bin]]` is renamed, `generate_bindings` is excluded from the bundle, `wdio.conf.ts` and `scripts/screenshot.sh` follow, and the Windows updater upgrade path across the rename is verified.
-
----
-
-## 2026-05-24 — Rust test functions missing `test_` prefix project-wide
-
-- Found by: reviewer-backend (during ISIN-lookup-split review)
-- Where: src-tauri/src/ (project-wide — 315 of 391 test functions use descriptive naming without the `test_` prefix)
-- Context: branch `feat/explicit-isin-lookup` @ `30ec513`
-- Severity: 🔵
-- Observation: `docs/test_convention.md` mandates the `test_<subject>_<condition>_<expected_outcome>` naming pattern, but the codebase has organically settled on descriptive names without the `test_` prefix (e.g. `validates_ishares_sp500_isin`, `rejects_empty_string_as_wrong_length`). Only ~20% of test functions (76 of 391) carry the prefix. The reviewer surfaced 26 new tests in the ISIN-lookup feature that follow the existing local convention but diverge from the doc. Resolution direction (project-wide rename to align with the doc OR doc update to codify the de facto pattern) is a separate decision and a separate MR; either path is mechanical but spans every Rust test file in the repo.
-- User value: None — test naming convention.
-- Done when: The tests are renamed project-wide, or `docs/test_convention.md` codifies the de facto descriptive pattern.
 
 ---
 

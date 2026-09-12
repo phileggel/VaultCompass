@@ -202,6 +202,18 @@ Read this when:
 
 ---
 
+## 17. Test functions carry descriptive names, not a `test_` prefix
+
+**Pattern**: The kit's test convention and its reviewer lane expect Rust test functions to start with `test_`.
+
+**Practice**: Tests are named for the behaviour they pin — `missing_header_reports_the_volume_unmounted_and_does_not_pause`, `apply_removal_of_a_pair_publishes_only_currency_pair_updated` — with the rule ID in a comment above. 315 of 391 test functions had this shape when it was recorded (2026-05-24), and every test written since does.
+
+**Trade**: `#[test]` already marks the function; a `test_` prefix repeats it and pushes the behaviour out of view in `cargo test` output. A reviewer finding of "missing `test_` prefix" is rejected on sight.
+
+**When to revisit**: If the kit codifies descriptive naming, drop this entry; if it ever hard-fails on the prefix, rename project-wide in one chore.
+
+---
+
 ## What we follow strictly (not divergences)
 
 For reference, the patterns this codebase enforces tightly:

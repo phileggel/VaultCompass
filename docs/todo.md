@@ -64,12 +64,12 @@ Status (2026-04-27): `specta rc.23` available, `tauri-specta` still blocked at `
 **User value:** None — dependency currency.
 **Done when:** `tauri-specta` releases without the `specta =2.0.0-rc.22` pin and the project builds on `specta` rc.23 + `specta-typescript` 0.0.10.
 
-## (deps) — Accepted risk: WebdriverIO 9 transitive advisories (deepmerge-ts, extract-zip, expect-webdriverio)
+## (deps) — Accepted risk: WebdriverIO 9 transitive advisories (extract-zip)
 
-`npm audit` flags 13 high advisories rooted in `deepmerge-ts < 8` (stack exhaustion on recursive graphs), `extract-zip` (symlink traversal, no fixed version published) and `expect-webdriverio`, all reached only through `@wdio/*` 9.31.2 — the latest release still pins them, and npm's only "fix" is a downgrade to WebdriverIO 7. The packages are E2E test tooling in `devDependencies`: nothing from them enters the application bundle or the Tauri binary. Re-run `npm audit` at each release and drop this entry once WebdriverIO picks up `deepmerge-ts` 8 and a patched `extract-zip`.
+`npm audit` reports 14 advisories (2 low, 12 high), all in `devDependencies`. The twelve highs share one root: `extract-zip`, affected in every published version and reached only through `@puppeteer/browsers 2.13.2`, which WebdriverIO 9.31 pins for downloading browser binaries the suite never uses (it drives the Tauri binary through tauri-driver). npm's only proposed fix is a downgrade to WebdriverIO 8.14.6. The two lows are mocha's bundled `diff`. The `deepmerge-ts` and `js-yaml` advisories were cleared by the in-range bump of 2026-09-12 (`ff986f1`). Nothing from these packages enters the application bundle or the Tauri binary, and CI's `npm audit --omit=dev` gate is green. Re-run `npm audit` at each release.
 
 **User value:** None — devDependency advisories; nothing from them enters the shipped bundle.
-**Done when:** WebdriverIO ships `deepmerge-ts` 8 and a patched `extract-zip`, `npm audit` is clean, and this entry is deleted.
+**Done when:** `@puppeteer/browsers` ships a patched `extract-zip` (or WebdriverIO drops it), `npm audit` is clean, and this entry is deleted.
 
 ## (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
