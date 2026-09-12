@@ -458,27 +458,31 @@ struct UpdateFeeScheduleDTO {
 
 ### Published
 
-| Event                | Payload | Rule                               |
-| -------------------- | ------- | ---------------------------------- |
-| `AccountUpdated`     | —       | ACC-022                            |
-| `TransactionUpdated` | —       | TRX-037, DIV-026, FSD-026, FEE-026 |
-| `FeeScheduleUpdated` | —       | FEE-064                            |
+| Event                | Payload | Rule                                     |
+| -------------------- | ------- | ---------------------------------------- |
+| `AccountUpdated`     | —       | ACC-022                                  |
+| `TransactionUpdated` | —       | TRX-037, DIV-026, FSD-026, FEE-026       |
+| `FeeScheduleUpdated` | —       | FEE-064                                  |
+| `HoldingNoteUpdated` | —       | HNO-020, HNO-021, SYN-064 (applied note) |
 
 ### Subscribed (frontend re-fetch triggers)
 
-| Event                 | Payload | Rule                               |
-| --------------------- | ------- | ---------------------------------- |
-| `AccountUpdated`      | —       | ACC-021, PRF-060                   |
-| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060, FEE-026 |
-| `AssetUpdated`        | —       | ACD-040                            |
-| `AssetPriceUpdated`   | —       | MKT-036, PRF-060                   |
-| `CurrencyRateUpdated` | —       | FXR-037                            |
-| `FeeScheduleUpdated`  | —       | FEE-064 (Account Details re-fetch) |
+| Event                 | Payload | Rule                                                                        |
+| --------------------- | ------- | --------------------------------------------------------------------------- |
+| `AccountUpdated`      | —       | ACC-021, PRF-060                                                            |
+| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060, FEE-026                                          |
+| `AssetUpdated`        | —       | ACD-040                                                                     |
+| `AssetPriceUpdated`   | —       | MKT-036, PRF-060                                                            |
+| `CurrencyRateUpdated` | —       | FXR-037                                                                     |
+| `FeeScheduleUpdated`  | —       | FEE-064 (Account Details re-fetch)                                          |
+| `HoldingNoteUpdated`  | —       | HNO-043 (Account Details re-fetch)                                          |
+| `CurrencyPairUpdated` | —       | FXR-056 (Account Details re-fetch — a removed pair takes its rates with it) |
 
 ---
 
 ## Changelog
 
+- 2026-09-12 — `HoldingNoteUpdated` event (HNO-043): published by note upsert / delete and by `apply_holding_note` (SYN-064); Account Details subscribes to it instead of the bare `SyncCompleted` marker
 - 2026-08-22 — Amended by `multi-device-sync` + `sync-conflict-resolution` specs: `HoldingDetail.inconsistency` and `AccountSummary.has_inconsistent_holding` (derived, SYN-040 / CFR-042); `FeeSchedule.last_applied_period` documented as the derived read of the synced catch-up record (CFR-044); `apply_due_fee_deductions` runs the launch sync first (SYN-060); `Account.name` / `update_account.NameAlreadyExists` bind the name being set (CFR-035).
 - 2026-05-29 — Added by `account-performance` spec: `get_account_performance` (+ `AccountPerformanceResponse`, `PerformancePeriod`, `PerformanceMetric` types; PRF-060 re-uses existing subscribed events)
 - 2026-05-31 — Added by `cash-dividend` spec: `record_dividend` (+ `DividendDTO`); `TransactionType::Dividend` variant; `HoldingDetail.dividends_received` + `.total_return_pct`; `AccountDetailsResponse.total_dividends_received`; edit/delete reuse `correct_transaction`/`cancel_transaction` (DIV-040/041)

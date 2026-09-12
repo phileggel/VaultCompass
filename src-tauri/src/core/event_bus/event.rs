@@ -47,6 +47,12 @@ pub enum Event {
     },
     /// A currency rate was recorded, updated, or deleted (FXR-026/052/053/074).
     CurrencyRateUpdated,
+    /// A currency pair was declared or removed — by this device (FXR-054) or applied from
+    /// another one (SYN-064).
+    CurrencyPairUpdated,
+    /// A holding note was written or deleted — by this device (HNO-020/021) or applied from
+    /// another one (SYN-064).
+    HoldingNoteUpdated,
     /// A fee schedule was created, updated, paused, reactivated, or deleted (FEE-064).
     FeeScheduleUpdated,
     /// A sync run completed — automatic, launch, `sync_now`, or `resume_sync` — that applied

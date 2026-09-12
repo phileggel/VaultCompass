@@ -94,14 +94,17 @@ describe("useCurrencyRatesView", () => {
     });
   });
 
-  // SYN-064 — a sync run re-fetches the pairs (applied currency pairs raise no event of their own)
-  it("re-fetches pairs on SyncCompleted", async () => {
+  // FXR-054/SYN-064 — a pair declared here or applied from another device announces
+  // itself; the bare sync marker no longer drives this view.
+  it("re-fetches pairs on CurrencyPairUpdated, not on SyncCompleted", async () => {
     const { result } = renderHook(() => useCurrencyRatesView());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     vi.mocked(gateway.getCurrencyPairs).mockClear();
     act(() => eventCallback?.("SyncCompleted"));
+    expect(gateway.getCurrencyPairs).not.toHaveBeenCalled();
 
+    act(() => eventCallback?.("CurrencyPairUpdated"));
     await waitFor(() => expect(gateway.getCurrencyPairs).toHaveBeenCalledTimes(1));
   });
 

@@ -30,16 +30,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — internal wiring; behaviour is identical either way.
 - Done when: `AssetPriceFetchUseCase::new` takes its own `Arc<CurrencyService>`, `Dispatcher::currency_service()` is gone, and the ten call sites pass the service the composition root already holds.
 
-## 2026-08-23 — Applied holding notes and currency pairs raise no domain event
-
-- Found by: reviewer-frontend (PR-D, `.review/reviewer-frontend-2026-08-23-01.md`) + main agent
-- Where: src-tauri/src/context/account/service.rs (`apply_holding_note`), src-tauri/src/context/currency/application/service.rs (`apply_currency_pair`)
-- Context: branch `feat/multi-device-sync-e2e` @ `78b43cd`
-- Severity: 🔵
-- Observation: Every other apply path re-raises the event a local write would (SYN-064), but holding notes and currency pairs have no local-write event at all, so their apply paths raise nothing. The frontend compensates by re-fetching the account-details and currency-rates views on the bare `SyncCompleted` marker — correct, but a view open on an unrelated page does one redundant fetch per run. A `HoldingNoteUpdated` / `CurrencyPairUpdated` pair (raised by local writes and apply alike) would make the refresh precise; its own small PR, both layers.
-- User value: Views refresh only when their own data changed — no redundant fetch on an unrelated page after each sync.
-- Done when: `HoldingNoteUpdated` and `CurrencyPairUpdated` are raised by local writes and applies alike, and the frontend subscribes to them instead of the bare `SyncCompleted` marker.
-
 ## 2026-08-23 — Local writes do not take the sync gate
 
 - Found by: reviewer-security + reviewer-backend (PR-C, `.review/reviewer-security-2026-08-23-01.md`)
@@ -202,3 +192,33 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: When a removable volume's drive letter is reused by a different stick that happens to carry a `VaultCompass` folder, the header decodes but its passphrase check fails — exactly what a genuine "started over elsewhere" (SYN-071) looks like from the header alone. Both write a fresh header with a new creation mark, so the two cases are indistinguishable by content; the device reports `PortfolioReset` (SYN-084) where "this is another portfolio" would be the honest message. `FolderHoldsOtherPortfolio` exists as the enable-path error but nothing in the run can justify raising it.
 - User value: The reset message would not fire for a stick that merely took the same drive letter.
 - Done when: A sync run can tell a reset of its own portfolio from another portfolio's folder — by something other than the header's content — and reports `FolderHoldsOtherPortfolio` for the latter.
+
+## 2026-09-12 — Event subscriptions compare against untyped strings
+
+- Found by: reviewer-arch (T2, `.review/reviewer-arch-2026-09-12-02.md`)
+- Where: `subscribeToEvents` in src/features/account_details/gateway.ts, src/features/currency/gateway.ts and three sibling gateways
+- Context: branch `chore/next-2026-09` @ `6e211b2`
+- Severity: 🔵
+- Observation: Every gateway's `subscribeToEvents(callback: (type: string) => void)` widens the generated `Event["type"]` discriminant to `string` before the hooks compare it, so a mistyped event name in a hook (`"HoldingNoteUpdate"`) compiles and silently never matches. The union that would catch it already exists in `src/bindings.ts`.
+- User value: None — a view that stops refreshing after a typo would be caught by tests, not by the compiler.
+- Done when: the gateways pass the callback `Event["type"]` and every hook's comparison is checked against the generated union.
+
+## 2026-09-12 — Ubiquitous-language Domain Events table lags the event enum
+
+- Found by: reviewer-arch (T2)
+- Where: docs/ubiquitous-language.md § Domain Events; src/lib/store.ts `locallyHandledEvents`
+- Context: branch `chore/next-2026-09` @ `6e211b2`
+- Severity: 🔵
+- Observation: The table omits `FeeScheduleUpdated`, `AssetPriceFetchProgress` and `SyncCompleted`, all of which the enum carries; and `AssetPriceUpdated` (MKT-037) is handled by its own views yet is absent from the store's locally-handled allowlist, so each publish logs an "unhandled event" debug line. The two events added today are registered in both places; the older gaps are untouched.
+- User value: None — documentation and a debug-log nuisance.
+- Done when: every `Event` variant has a row in the table, and the allowlist names every event the global store deliberately ignores.
+
+## 2026-09-12 — Applied writes announce themselves before the apply transaction commits
+
+- Found by: reviewer-backend (T2, `.review/reviewer-backend-2026-09-12-02.md`)
+- Where: src-tauri/src/context/sync/application/run.rs (`apply_intake`, one transaction for the whole apply); every `apply_*` service method that publishes
+- Context: branch `chore/next-2026-09` @ `6e211b2`
+- Severity: 🟡
+- Observation: `apply_fee_schedule`, `apply_currency_rate`, `apply_holding_note`, `apply_currency_pair` and both `apply_removal`s publish their event from inside the sync apply transaction, which commits once at the end of the batch. A subscriber that re-fetches on the event reads the pre-transaction snapshot (SQLite readers on another connection never see uncommitted rows), and if a later item in the same batch fails and rolls the transaction back, the event announced a write that never happened. The subscriber's next refresh corrects it; the pattern predates this branch.
+- User value: None observable today — a view may refresh one moment too early after a sync and show the state from before the apply until the next event.
+- Done when: the apply path collects the events its writes would raise and publishes them after `commit()`, so every announcement describes a committed state.

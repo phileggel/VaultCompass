@@ -2251,6 +2251,16 @@ export type Event =
  */
 { type: "CurrencyRateUpdated" } | 
 /**
+ * A currency pair was declared or removed — by this device (FXR-054) or applied from
+ * another one (SYN-064).
+ */
+{ type: "CurrencyPairUpdated" } | 
+/**
+ * A holding note was written or deleted — by this device (HNO-020/021) or applied from
+ * another one (SYN-064).
+ */
+{ type: "HoldingNoteUpdated" } | 
+/**
  * A fee schedule was created, updated, paused, reactivated, or deleted (FEE-064).
  */
 { type: "FeeScheduleUpdated" } | 

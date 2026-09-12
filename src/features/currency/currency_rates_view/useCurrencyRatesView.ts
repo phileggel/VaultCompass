@@ -71,11 +71,11 @@ export function useCurrencyRatesView(): UseCurrencyRatesViewResult {
     void fetchPairs();
   }, [fetchPairs]);
 
-  // FXR-026/037 — re-fetch when a rate is recorded/updated/deleted elsewhere;
-  // SYN-064 — and after a sync run, which also carries applied currency pairs.
+  // FXR-026/037/054 — re-fetch when a rate or a pair is recorded/updated/deleted,
+  // here or applied from another device (SYN-064).
   useEffect(() => {
     const unlistenPromise = subscribeToEvents((type) => {
-      if (type === "CurrencyRateUpdated" || type === "SyncCompleted") {
+      if (type === "CurrencyRateUpdated" || type === "CurrencyPairUpdated") {
         void fetchPairs();
         setSelectedPair((current) => {
           if (current) void fetchRates(current.fromCurrency, current.toCurrency);

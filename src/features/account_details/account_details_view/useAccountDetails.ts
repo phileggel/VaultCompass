@@ -62,9 +62,12 @@ export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountD
     fetchDetails();
   }, [fetchDetails]);
 
-  // ACD-039/040/MKT-036/FXR-036/FEE-064 — re-fetch on TransactionUpdated,
-  // AssetUpdated, AssetPriceUpdated, CurrencyRateUpdated, or FeeScheduleUpdated;
-  // SYN-064 — and on SyncCompleted, which also carries applied holding notes.
+  // ACD-039/040/MKT-036/FXR-036/FEE-064/HNO-020 — re-fetch on AccountUpdated (the
+  // header renders the account's own name), TransactionUpdated, AssetUpdated,
+  // AssetPriceUpdated, CurrencyRateUpdated, CurrencyPairUpdated (a removed pair
+  // takes its rates with it), FeeScheduleUpdated, or HoldingNoteUpdated. Each is
+  // raised by local writes and applied changes alike (SYN-064), so no broader sync
+  // marker is needed.
   useEffect(() => {
     const unlistenPromise = accountDetailsGateway.subscribeToEvents((type) => {
       // MKT-181 — while a bulk price fetch runs, per-asset AssetPriceUpdated
@@ -73,13 +76,15 @@ export function useAccountDetails(accountId: string, asOfDate = ""): UseAccountD
         return;
       }
       if (
+        type === "AccountUpdated" ||
         type === "TransactionUpdated" ||
         type === "AssetUpdated" ||
         type === "AssetPriceUpdated" ||
         type === "AssetPriceFetchCompleted" ||
         type === "CurrencyRateUpdated" ||
+        type === "CurrencyPairUpdated" ||
         type === "FeeScheduleUpdated" ||
-        type === "SyncCompleted"
+        type === "HoldingNoteUpdated"
       ) {
         fetchDetails();
       }

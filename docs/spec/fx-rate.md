@@ -139,6 +139,8 @@ This feature does not add fields to `HoldingDetail`; it changes the **conditions
 
 **FXR-055 — Declare-pair form behaviour (frontend)**: The "Add pair" form requires both `from_currency` and `to_currency` to be chosen; the submit action is disabled while either is empty or while the two are equal (the identity-pair guard, FXR-011). On backend rejection (invalid code, identity pair) the form stays open with an inline error and the user can correct and resubmit, consistent with FXR-029. Declaring a pair that already exists succeeds idempotently (FXR-054): no error is shown and no duplicate row appears — the view simply shows the existing pair (selecting it) so the user can proceed to add a rate.
 
+**FXR-056 — CurrencyPairUpdated event registration (frontend + backend)**: `CurrencyPairUpdated` is added to the event-bus enum, published by the `currency` bounded context whenever a pair is declared on this device (FXR-054) and whenever a pair from another device is applied or removed (SYN-064). The Currency Rates view re-fetches its pair list on receipt, so an applied pair is reflected without a broader sync signal. The global store treats it as a locally-handled event (no global re-fetch). `ARCHITECTURE.md` registers it in the event-bus table.
+
 ### Auto-Fetch from External Provider (070–089)
 
 **FXR-070 — Provider chain (backend)**: Fetching a pair's current rate follows the ADR-009 chain: **Frankfurter** primary → **ECB XML feed** fallback (when Frankfurter is unreachable) → on total External failure, no row is written and the pair falls back to its last cached rate (FXR-035) or to Manual entry. No keyed or market-spot provider is ever consulted (ADR-009 rejected Yahoo/Stooq spot rates and BYOK providers).

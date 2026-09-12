@@ -255,8 +255,33 @@ describe("useAccountDetails — market price events (MKT)", () => {
     expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
   });
 
-  // SYN-064 — a sync run that applied changes (holding notes included) re-fetches the view
-  it("SYN-064 — re-fetches when SyncCompleted event is received", async () => {
+  // ACC-021/SYN-064 — the header renders the account's name, so a rename — local or
+  // applied from another device — re-fetches the view.
+  it("re-fetches when AccountUpdated is received", async () => {
+    let capturedCallback: ((type: string) => void) | null = null;
+    const { accountDetailsGateway } = await import("../gateway");
+    (accountDetailsGateway.subscribeToEvents as ReturnType<typeof vi.fn>).mockImplementation(
+      vi.fn((cb: (type: string) => void) => {
+        capturedCallback = cb;
+        return Promise.resolve(() => {});
+      }),
+    );
+    mockGetAccountDetails.mockResolvedValue({ status: "ok", data: makeResponse() });
+
+    renderHook(() => useAccountDetails("account-1"));
+    await act(async () => {});
+    const firstCallCount = mockGetAccountDetails.mock.calls.length;
+
+    await act(async () => {
+      capturedCallback?.("AccountUpdated");
+    });
+
+    expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
+  });
+
+  // HNO-020/SYN-064 — a note written here or applied from another device announces
+  // itself; the bare sync marker no longer drives this view.
+  it("HNO-020/SYN-064 — re-fetches on HoldingNoteUpdated, not on SyncCompleted", async () => {
     let capturedCallback: ((type: string) => void) | null = null;
     const { accountDetailsGateway } = await import("../gateway");
     (accountDetailsGateway.subscribeToEvents as ReturnType<typeof vi.fn>).mockImplementation(
@@ -274,8 +299,19 @@ describe("useAccountDetails — market price events (MKT)", () => {
     await act(async () => {
       capturedCallback?.("SyncCompleted");
     });
+    expect(mockGetAccountDetails.mock.calls.length).toBe(firstCallCount);
 
+    await act(async () => {
+      capturedCallback?.("HoldingNoteUpdated");
+    });
     expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(firstCallCount);
+
+    // FXR-056 — a pair removed elsewhere takes its rates with it; the valuation must follow.
+    const afterNote = mockGetAccountDetails.mock.calls.length;
+    await act(async () => {
+      capturedCallback?.("CurrencyPairUpdated");
+    });
+    expect(mockGetAccountDetails.mock.calls.length).toBeGreaterThan(afterNote);
   });
 
   // MKT-181 — per-asset price events are coalesced while a bulk fetch is active;

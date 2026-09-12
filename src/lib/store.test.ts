@@ -122,6 +122,25 @@ describe("store — locallyHandledEvents (FXR-037)", () => {
     cleanup();
   });
 
+  // HNO-043 / FXR-056 — the two events raised by note and pair writes are handled by their
+  // own views; the global store must neither re-fetch nor log them as unhandled.
+  it.each([
+    "HoldingNoteUpdated",
+    "CurrencyPairUpdated",
+  ])("%s is listed as locally handled (no debug log emitted)", async (type) => {
+    const cleanup = useAppStore.getState().init();
+    await new Promise((r) => setTimeout(r, 0));
+
+    capturedEventListener?.({ payload: { type } });
+
+    expect(mockDebug).not.toHaveBeenCalledWith(
+      "[store] unhandled event",
+      expect.objectContaining({ type }),
+    );
+
+    cleanup();
+  });
+
   // Sanity: AssetUpdated still triggers fetchAssets (regression guard)
   it("AssetUpdated still triggers fetchAssets (regression guard for FXR-037 scope)", async () => {
     const cleanup = useAppStore.getState().init();

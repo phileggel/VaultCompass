@@ -206,6 +206,8 @@ Where a currency rate came from: `Manual` (entered by the user), or `Frankfurter
 | `AssetPriceUpdated`        | Asset BC               | An AssetPrice record was created, updated, or deleted                                                                                                        | confirmed |
 | `AssetPriceFetchCompleted` | Asset price fetch task | A fetch task finished; carries `ok` / `skipped` counts plus the list of assets it could not price so the UI can summarize the outcome and offer manual entry | confirmed |
 | `CurrencyRateUpdated`      | Currency BC            | A currency rate was recorded, updated, or deleted                                                                                                            | confirmed |
+| `CurrencyPairUpdated`      | Currency BC            | A currency pair was declared here or applied / removed from another device                                                                                   |
+| `HoldingNoteUpdated`       | Account BC             | A holding note was written or deleted here or applied from another device                                                                                    |
 
 ---
 

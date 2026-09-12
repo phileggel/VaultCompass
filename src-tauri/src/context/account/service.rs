@@ -1152,6 +1152,7 @@ impl AccountService {
             tracing::error!(target: BACKEND, err = ?e, "upsert_holding_note: persist failed");
             AccountError::DatabaseError
         })?;
+        self.emit_holding_note_updated();
         Ok(note)
     }
 
@@ -1170,7 +1171,9 @@ impl AccountService {
             .map_err(|e| {
                 tracing::error!(target: BACKEND, err = ?e, "delete_holding_note: delete failed");
                 AccountError::DatabaseError
-            })
+            })?;
+        self.emit_holding_note_updated();
+        Ok(())
     }
 
     /// Returns all holding notes of one account (HNO-040).
@@ -1300,7 +1303,9 @@ impl AccountService {
         self.account_repo
             .apply_holding_note(conn, &note, &rank)
             .await
-            .map_err(|e| applied_write_error("apply_holding_note", e))
+            .map_err(|e| applied_write_error("apply_holding_note", e))?;
+        self.emit_holding_note_updated();
+        Ok(())
     }
 
     /// Applies an incoming fee schedule verbatim (CFR-017) — a user record (CFR-016), so an
@@ -1375,6 +1380,7 @@ impl AccountService {
                     .remove_holding_note(conn, account_id, asset_id)
                     .await
                     .map_err(|e| applied_write_error("apply_removal", e))?;
+                self.emit_holding_note_updated();
             }
             RecordKind::FeeSchedule => {
                 let (account_id, asset_id) = holding_keys(identity)?;
@@ -1437,6 +1443,12 @@ impl AccountService {
     fn emit_fee_schedule_updated(&self) {
         if let Some(bus) = &self.event_bus {
             bus.publish(Event::FeeScheduleUpdated);
+        }
+    }
+
+    fn emit_holding_note_updated(&self) {
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::HoldingNoteUpdated);
         }
     }
 }
@@ -5293,6 +5305,141 @@ mod tests {
         svc.delete_holding_note(&account.id, &asset_id)
             .await
             .expect("deleting a non-existent note must be a no-op success");
+    }
+
+    // HNO-020 — writing a note announces it, so an open view refreshes on the note's own
+    // signal rather than on a broader one.
+    #[tokio::test]
+    async fn hno_020_upsert_holding_note_publishes_holding_note_updated() {
+        use std::time::Duration;
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let (svc, asset_id) = setup(&pool).await;
+        let svc = svc.with_event_bus(Arc::clone(&bus));
+        let account = make_account_with_held_asset(&pool, &svc, &asset_id).await;
+
+        // Subscribe AFTER setup — `changed()` fires only on the next publish.
+        let mut rx = bus.subscribe();
+        svc.upsert_holding_note(&account.id, asset_id, "watch".to_string(), None, None)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("HoldingNoteUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::HoldingNoteUpdated);
+    }
+
+    // HNO-021 — deleting a note announces it the same way.
+    #[tokio::test]
+    async fn hno_021_delete_holding_note_publishes_holding_note_updated() {
+        use std::time::Duration;
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let (svc, asset_id) = setup(&pool).await;
+        let svc = svc.with_event_bus(Arc::clone(&bus));
+        let account = make_account_with_held_asset(&pool, &svc, &asset_id).await;
+        svc.upsert_holding_note(
+            &account.id,
+            asset_id.clone(),
+            "watch".to_string(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let mut rx = bus.subscribe();
+        svc.delete_holding_note(&account.id, &asset_id)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("HoldingNoteUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::HoldingNoteUpdated);
+    }
+
+    // SYN-064 — a note applied from another device announces itself exactly like a local
+    // write, so the open account view refreshes on the note's own signal.
+    #[tokio::test]
+    async fn syn_064_apply_holding_note_publishes_holding_note_updated() {
+        use std::time::Duration;
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let (svc, asset_id) = setup(&pool).await;
+        let svc = svc.with_event_bus(Arc::clone(&bus));
+        let account = make_account_with_held_asset(&pool, &svc, &asset_id).await;
+        let incoming = HoldingNote::new(
+            account.id.clone(),
+            asset_id.clone(),
+            "from the laptop".to_string(),
+            None,
+            None,
+        )
+        .unwrap();
+        let content = serde_json::to_string(&incoming).unwrap();
+
+        // Subscribe AFTER setup — `changed()` fires only on the next publish.
+        let mut rx = bus.subscribe();
+        let mut conn = pool.acquire().await.unwrap();
+        svc.apply_holding_note(&mut conn, &content, incoming_rank("laptop", 100))
+            .await
+            .expect("CFR-017: applying an incoming note must succeed");
+        drop(conn);
+
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("HoldingNoteUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::HoldingNoteUpdated);
+        let notes = svc.get_holding_notes(&account.id).await.unwrap();
+        assert_eq!(notes.len(), 1, "the applied note is on the account");
+        assert_eq!(notes[0].text, "from the laptop");
+    }
+
+    // SYN-064 — a note deleted on another device announces itself on arrival, so the open
+    // account view drops it instead of showing it until something else refreshes.
+    #[tokio::test]
+    async fn syn_064_apply_removal_of_a_note_publishes_holding_note_updated() {
+        use std::time::Duration;
+        let pool = make_pool().await;
+        let bus = Arc::new(SideEffectEventBus::new());
+        let (svc, asset_id) = setup(&pool).await;
+        let svc = svc.with_event_bus(Arc::clone(&bus));
+        let account = make_account_with_held_asset(&pool, &svc, &asset_id).await;
+        svc.upsert_holding_note(
+            &account.id,
+            asset_id.clone(),
+            "gone soon".to_string(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(svc.get_holding_notes(&account.id).await.unwrap().len(), 1);
+
+        // Subscribe AFTER setup — `changed()` fires only on the next publish.
+        let mut rx = bus.subscribe();
+        let mut conn = pool.acquire().await.unwrap();
+        svc.apply_removal(
+            &mut conn,
+            RecordKind::HoldingNote,
+            &format!("{}:{}", account.id, asset_id),
+        )
+        .await
+        .expect("CFR-017: applying a note removal must succeed");
+        drop(conn);
+
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("HoldingNoteUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::HoldingNoteUpdated);
+        assert!(
+            svc.get_holding_notes(&account.id).await.unwrap().is_empty(),
+            "the applied removal took the note with it"
+        );
     }
 
     // HNO-011 — the cash line cannot carry a note

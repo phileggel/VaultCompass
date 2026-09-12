@@ -79,6 +79,13 @@ impl CurrencyService {
         }
     }
 
+    /// Publishes `CurrencyPairUpdated` when an event bus is attached (FXR-054, SYN-064).
+    fn notify_pair_updated(&self) {
+        if let Some(bus) = &self.event_bus {
+            bus.publish(Event::CurrencyPairUpdated);
+        }
+    }
+
     /// Idempotently declares a currency pair (FXR-054).
     /// Returns the existing pair if it is already present; creates it otherwise.
     pub async fn declare_currency_pair(
@@ -87,10 +94,12 @@ impl CurrencyService {
         to_currency: String,
     ) -> StdResult<CurrencyPair, CurrencyError> {
         let pair = CurrencyPair::new(from_currency, to_currency)?;
-        self.pair_repo.upsert_pair(pair).await.map_err(|e| {
+        let pair = self.pair_repo.upsert_pair(pair).await.map_err(|e| {
             tracing::error!(target: BACKEND, err = ?e, "declare_currency_pair: repository failure");
             CurrencyError::DatabaseError
-        })
+        })?;
+        self.notify_pair_updated();
+        Ok(pair)
     }
 
     /// Stamps `rank` on every currency-owned synced row that has never been ranked (CFR-014,
@@ -140,7 +149,9 @@ impl CurrencyService {
         self.pair_repo
             .apply_pair(conn, &pair, &rank)
             .await
-            .map_err(|e| applied_write_error("apply_currency_pair", e))
+            .map_err(|e| applied_write_error("apply_currency_pair", e))?;
+        self.notify_pair_updated();
+        Ok(())
     }
 
     /// Applies an incoming currency rate verbatim (CFR-017): the observation merge rule
@@ -172,7 +183,10 @@ impl CurrencyService {
             .remove_synced(conn, kind, identity)
             .await
             .map_err(|e| applied_write_error("apply_removal", e))?;
-        self.notify_rate_updated();
+        match kind {
+            RecordKind::CurrencyPair => self.notify_pair_updated(),
+            _ => self.notify_rate_updated(),
+        }
         Ok(())
     }
 
@@ -2310,6 +2324,127 @@ mod tests {
         )
         .await
         .expect("CFR-017: applying an incoming currency pair must succeed");
+    }
+
+    // FXR-054 — declaring a pair announces it, so a view listing pairs can refresh
+    // precisely instead of on the bare SyncCompleted marker.
+    #[tokio::test]
+    async fn declare_currency_pair_publishes_currency_pair_updated() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_upsert_pair().returning(Ok);
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_service(pair_repo, MockCurrencyRateRepository::new())
+            .with_event_bus(Arc::clone(&bus));
+
+        svc.declare_currency_pair("USD".to_string(), "EUR".to_string())
+            .await
+            .expect("FXR-054: declaring a valid pair succeeds");
+
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.changed())
+            .await
+            .expect("CurrencyPairUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::CurrencyPairUpdated);
+    }
+
+    // FXR-054 — a rejected pair announces nothing: the bus never fires.
+    #[tokio::test]
+    async fn declare_currency_pair_publishes_nothing_when_rejected() {
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_service(
+            MockCurrencyPairRepository::new(),
+            MockCurrencyRateRepository::new(),
+        )
+        .with_event_bus(Arc::clone(&bus));
+
+        svc.declare_currency_pair("EUR".to_string(), "EUR".to_string())
+            .await
+            .expect_err("FXR-054: an identity pair is rejected");
+
+        // 50 ms on purpose: this waits for a notice that must never come.
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), rx.changed())
+                .await
+                .is_err(),
+            "a rejected declaration must not announce a pair"
+        );
+    }
+
+    // SYN-064 — an applied pair announces itself exactly like a local declaration.
+    #[tokio::test]
+    async fn apply_currency_pair_publishes_currency_pair_updated() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_apply_pair().returning(|_, _, _| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_service(pair_repo, MockCurrencyRateRepository::new())
+            .with_event_bus(Arc::clone(&bus));
+
+        svc.apply_currency_pair(
+            &mut *apply_conn().await,
+            r#"{"from_currency":"USD","to_currency":"EUR"}"#,
+            incoming_rank("laptop", 100),
+        )
+        .await
+        .expect("CFR-017: applying an incoming currency pair must succeed");
+
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.changed())
+            .await
+            .expect("CurrencyPairUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::CurrencyPairUpdated);
+    }
+
+    // SYN-064 — removing a pair announces the pair and only the pair: the bus keeps one
+    // latest value, so a second notice would replace the first for every subscriber.
+    #[tokio::test]
+    async fn apply_removal_of_a_pair_publishes_only_currency_pair_updated() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_remove_synced().returning(|_, _, _| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_service(pair_repo, MockCurrencyRateRepository::new())
+            .with_event_bus(Arc::clone(&bus));
+
+        svc.apply_removal(
+            &mut *apply_conn().await,
+            RecordKind::CurrencyPair,
+            "USD|EUR",
+        )
+        .await
+        .expect("CFR-017: applying a pair removal must succeed");
+
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.changed())
+            .await
+            .expect("CurrencyPairUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::CurrencyPairUpdated);
+    }
+
+    #[tokio::test]
+    async fn apply_removal_of_a_rate_publishes_only_currency_rate_updated() {
+        let mut pair_repo = MockCurrencyPairRepository::new();
+        pair_repo.expect_remove_synced().returning(|_, _, _| Ok(()));
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let svc = make_service(pair_repo, MockCurrencyRateRepository::new())
+            .with_event_bus(Arc::clone(&bus));
+
+        svc.apply_removal(
+            &mut *apply_conn().await,
+            RecordKind::CurrencyRate,
+            "USD|EUR|2026-08-21",
+        )
+        .await
+        .expect("CFR-017: applying a rate removal must succeed");
+
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.changed())
+            .await
+            .expect("CurrencyRateUpdated not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::CurrencyRateUpdated);
     }
 
     // CFR-050 — apply_currency_rate writes the observation the engine decided prevails; the

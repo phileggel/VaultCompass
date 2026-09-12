@@ -90,12 +90,14 @@ struct CurrencyPairSummary {
 | Event                 | Payload | Rule                                                                                                                                                    |
 | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CurrencyRateUpdated` | —       | FXR-026 (record), FXR-052 (edit), FXR-053 (delete), FXR-074 (fetch) — bare signal, discriminant `"CurrencyRateUpdated"`, published by the `currency` BC |
+| `CurrencyPairUpdated` | —       | FXR-054 (declare), SYN-064 (applied pair, applied pair removal) — bare signal, discriminant `"CurrencyPairUpdated"`, published by the `currency` BC     |
 
 ### Subscribed (frontend re-fetch triggers)
 
 | Event                 | Payload | Rule                                                                                                                                                                     |
 | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `CurrencyRateUpdated` | —       | FXR-036 — Currency Rates view re-fetches; **also** consumed by the `account` domain's `account_details` / `account_performance` views (cross-contract wiring, see Notes) |
+| `CurrencyPairUpdated` | —       | FXR-056 — Currency Rates view re-fetches its pair list                                                                                                                   |
 
 ---
 
@@ -110,5 +112,6 @@ struct CurrencyPairSummary {
 
 ## Changelog
 
+- 2026-09-12 — `CurrencyPairUpdated` event (FXR-056): published by `declare_currency_pair`, `apply_currency_pair` and an applied pair removal (SYN-064); the Currency Rates view subscribes to it instead of the bare `SyncCompleted` marker
 - 2026-07-14 — Added by `fx-rate` spec (FXR-110–114): `backfill_currency_rate_history` (historical dated-series download); `CurrencyError` gains `ProviderUnreachable`
 - 2026-06-01 — Added by `fx-rate` spec (FXR): `declare_currency_pair`, `record_currency_rate`, `update_currency_rate`, `delete_currency_rate`, `get_currency_pairs`, `get_currency_rates`; types `CurrencyPair`, `CurrencyRate`, `CurrencyRateSource`, `CurrencyPairSummary`; event `CurrencyRateUpdated`. First contract for the new `currency` bounded context. Valuation effect (FXR-030–042) and provider fetch (FXR-070–083) introduce **no** command — they ride existing `account`/`asset` surfaces internally (see Notes).
