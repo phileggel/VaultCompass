@@ -7,6 +7,10 @@ on:
   push:
     branches: [main]
     paths-ignore: ["**/*.md", "docs/**"]
+  # Run on demand against any branch — useful before merging a change to the
+  # test tooling itself. GitHub only offers this once the trigger is on the
+  # default branch, so it cannot gate the commit that introduces it.
+  workflow_dispatch:
 
 concurrency:
   group: e2e-${{ github.ref }}

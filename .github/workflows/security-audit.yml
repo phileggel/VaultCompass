@@ -52,14 +52,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
-        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk
+        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk.
+        # The tool itself is pinned too, so a cargo-audit release cannot change
+        # how .cargo/audit.toml is resolved between one run and the next.
         uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff
         with:
-          tool: cargo-audit
+          tool: cargo-audit@0.22.2
 
       - name: Run cargo audit
         shell: bash
         working-directory: src-tauri
-        # --ignore RUSTSEC-2023-0071: rsa Marvin Attack — accepted risk (sqlx-mysql transitive,
-        # sqlite-only project, no fix available).
-        run: cargo audit --ignore RUSTSEC-2023-0071
+        # Accepted advisories live in src-tauri/.cargo/audit.toml, which
+        # cargo-audit reads on its own — so this run and a local one agree.
+        run: cargo audit
