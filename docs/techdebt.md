@@ -170,3 +170,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: `apply_fee_schedule`, `apply_currency_rate`, `apply_holding_note`, `apply_currency_pair` and both `apply_removal`s publish their event from inside the sync apply transaction, which commits once at the end of the batch. A subscriber that re-fetches on the event reads the pre-transaction snapshot (SQLite readers on another connection never see uncommitted rows), and if a later item in the same batch fails and rolls the transaction back, the event announced a write that never happened. The subscriber's next refresh corrects it; the pattern predates this branch.
 - User value: None observable today — a view may refresh one moment too early after a sync and show the state from before the apply until the next event.
 - Done when: the apply path collects the events its writes would raise and publishes them after `commit()`, so every announcement describes a committed state.
+
+## 2026-09-12 — The opener plugin is registered and permitted but never called
+
+- Found by: reviewer-security (v0.41.1 release sweep, `.review/reviewer-security-2026-09-12-02.md`)
+- Where: src-tauri/capabilities/default.json (`opener:default`), src-tauri/src/lib.rs (`tauri_plugin_opener::init()`), src-tauri/Cargo.toml (`tauri-plugin-opener`), package.json (`@tauri-apps/plugin-opener`)
+- Context: branch `docs/opener-permission-techdebt` @ `d790791`
+- Severity: 🟡
+- Observation: Nothing in `src/` or `src-tauri/src/` calls the opener plugin — no `openUrl`, `openPath`, or `app.opener()` anywhere — yet the capability grants `opener:default` to the webview, the plugin is initialised at startup, and both the crate and the npm package ship in the bundle. A permission with no consumer is attack surface that buys nothing.
+- User value: None — a slightly smaller bundle and permission set.
+- Done when: the plugin registration, the `opener:default` grant and both dependency declarations are removed together, or a real caller appears and the permission is narrowed to what it uses.
