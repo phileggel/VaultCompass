@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { UnpricedPricesModal } from "@/features/unpriced_prices/UnpricedPricesModal";
 import { logger } from "@/lib/logger";
-import { useAppStore } from "@/lib/store";
+import { selectUnpricedModalOpen, useAppStore } from "@/lib/store";
 
 /**
  * Shell-level mount for the unupdated-prices modal (MKT-172). Watches the
@@ -10,6 +10,7 @@ import { useAppStore } from "@/lib/store";
  * is non-empty. Dismissing or resolving every row clears the slice (MKT-177).
  */
 export function UnpricedPricesModalMount() {
+  const isOpen = useAppStore(selectUnpricedModalOpen);
   const unpricedAssets = useAppStore((state) => state.unpricedAssets);
   const clearUnpricedAssets = useAppStore((state) => state.clearUnpricedAssets);
 
@@ -17,7 +18,7 @@ export function UnpricedPricesModalMount() {
     logger.info("[UnpricedPricesModalMount] mounted");
   }, []);
 
-  if (unpricedAssets.length === 0) return null;
+  if (!isOpen) return null;
 
   return <UnpricedPricesModal assets={unpricedAssets} onClose={clearUnpricedAssets} />;
 }

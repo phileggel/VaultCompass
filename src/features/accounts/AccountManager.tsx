@@ -3,7 +3,7 @@ import { TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
-import { useAppStore } from "@/lib/store";
+import { selectUnpricedModalOpen, useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { FAB } from "@/ui/components/fab/FAB";
@@ -21,7 +21,7 @@ export function AccountManager() {
   // manual-fill modal (MKT-172). That modal asks the user for something; this
   // dialog only tells them something, so it waits its turn rather than
   // stacking over it.
-  const isUnpricedModalOpen = useAppStore((state) => state.unpricedAssets.length > 0);
+  const isUnpricedModalOpen = useAppStore(selectUnpricedModalOpen);
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

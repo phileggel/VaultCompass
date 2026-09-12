@@ -69,6 +69,13 @@ interface AppState {
   init: () => () => void;
 }
 
+/**
+ * MKT-172 / PMV-018 — whether the manual-fill modal holds the screen. The one
+ * definition its shell mount and every other reader consume.
+ */
+export const selectUnpricedModalOpen = (state: AppState): boolean =>
+  state.unpricedAssets.length > 0;
+
 export const useAppStore = create<AppState>((set, get) => {
   return {
     appName: "VaultCompass",

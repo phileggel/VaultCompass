@@ -19,11 +19,17 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
 
-// PMV-018 — the manager reads only the unupdated-prices slice, to know whether
-// that modal (MKT-172) currently holds the screen.
-vi.mock("@/lib/store", () => ({
-  useAppStore: (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),
-}));
+// PMV-018 — the manager asks the store's own selector whether the unupdated-prices
+// modal (MKT-172) holds the screen; the selector is the real one, only the state is faked.
+// Loading the real module is safe because src/test-setup.ts mocks @tauri-apps/api/core,
+// which every top-level import of store.ts bottoms out in.
+vi.mock("@/lib/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/store")>();
+  return {
+    selectUnpricedModalOpen: actual.selectUnpricedModalOpen,
+    useAppStore: (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),
+  };
+});
 
 // Stub the children so the manager renders in isolation (no gateway, no Tauri).
 vi.mock("./account_table/AccountTable", () => ({
