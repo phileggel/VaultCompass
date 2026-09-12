@@ -20,16 +20,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None directly — both are confidence in existing behaviour, not behaviour changes.
 - Done when: the hook test asserts the discard across a remount with a disposal-honouring fake, and `screenshots/` carries the Undated state in light and dark.
 
-## 2026-09-11 — Orchestrator reads CurrencyService through the Dispatcher
-
-- Found by: reviewer-arch + reviewer-backend (PMV, `.review/reviewer-arch-2026-09-11-01.md`)
-- Where: src-tauri/src/use_cases/asset_price_fetch/orchestrator.rs, src-tauri/src/use_cases/asset_price_fetch/dispatcher.rs
-- Context: branch `feat/price-fetch-result` @ `2f0c304`
-- Severity: 🟡
-- Observation: `AssetPriceFetchUseCase` needs a `CurrencyService` to build the Price Movement capture, and obtains it by calling `self.dispatcher.currency_service()` — an accessor added to `Dispatcher` solely for that purpose. The composition root at `lib.rs:320-332` already holds the same `Arc<CurrencyService>` in scope while constructing both `Dispatcher::new` and `AssetPriceFetchUseCase::new`, so the reach-through buys nothing; the constraint that produced it pins only `Dispatcher::new`'s arity, not the use case's. Adding the parameter directly touches ten call sites across `lib.rs` and three test files, which is why it did not ride the PMV branch.
-- User value: None — internal wiring; behaviour is identical either way.
-- Done when: `AssetPriceFetchUseCase::new` takes its own `Arc<CurrencyService>`, `Dispatcher::currency_service()` is gone, and the ten call sites pass the service the composition root already holds.
-
 ## 2026-08-23 — Local writes do not take the sync gate
 
 - Found by: reviewer-security + reviewer-backend (PR-C, `.review/reviewer-security-2026-08-23-01.md`)
@@ -173,16 +163,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — internal layout.
 - Done when: `service.rs` moves to `application/service.rs`, `repository/` becomes `infrastructure/`, and `core/` becomes `shared/{application,domain,infrastructure}` across every bounded context.
 
-## 2026-09-11 — Unpriced-modal visibility computed in two places
-
-- Found by: reviewer-frontend
-- Where: src/features/accounts/AccountManager.tsx:24
-- Context: branch `refactor/pmv-dialog` @ `c932de6`
-- Severity: 🟡
-- Observation: Whether the unupdated-prices modal (MKT-172) is on screen is derived independently in two features from the same store slice — `features/shell/UnpricedPricesModalMount.tsx` returns null on `unpricedAssets.length === 0`, and `features/accounts/AccountManager.tsx` gates the Price Movement dialog on `unpricedAssets.length > 0` (PMV-018). The shell owns the modal's visibility, but nothing ties the second reader to it: if the modal ever opens or closes on a further condition, the accounts list keeps answering the old question and the report can stack over a modal that is still up. Every other `useAppStore` call site in the codebase reads a slice its own feature owns; this is the first that reads another feature's gating condition.
-- User value: None on its own — it protects a correct behaviour from drifting later.
-- Done when: the modal's on-screen predicate has one definition that both the shell mount and any other reader consume.
-
 ## 2026-09-12 — A different portfolio's folder reads as a reset
 
 - Found by: manual (closing the empty-sync-folder todo)
@@ -222,3 +202,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: `apply_fee_schedule`, `apply_currency_rate`, `apply_holding_note`, `apply_currency_pair` and both `apply_removal`s publish their event from inside the sync apply transaction, which commits once at the end of the batch. A subscriber that re-fetches on the event reads the pre-transaction snapshot (SQLite readers on another connection never see uncommitted rows), and if a later item in the same batch fails and rolls the transaction back, the event announced a write that never happened. The subscriber's next refresh corrects it; the pattern predates this branch.
 - User value: None observable today — a view may refresh one moment too early after a sync and show the state from before the apply until the next event.
 - Done when: the apply path collects the events its writes would raise and publishes them after `commit()`, so every announcement describes a committed state.
+
+## 2026-09-11 — Unpriced-modal visibility computed in two places
+
+- Found by: reviewer-frontend
+- Where: src/features/accounts/AccountManager.tsx:24
+- Context: branch `refactor/pmv-dialog` @ `c932de6`
+- Severity: 🟡
+- Observation: Whether the unupdated-prices modal (MKT-172) is on screen is derived independently in two features from the same store slice — `features/shell/UnpricedPricesModalMount.tsx` returns null on `unpricedAssets.length === 0`, and `features/accounts/AccountManager.tsx` gates the Price Movement dialog on `unpricedAssets.length > 0` (PMV-018). The shell owns the modal's visibility, but nothing ties the second reader to it: if the modal ever opens or closes on a further condition, the accounts list keeps answering the old question and the report can stack over a modal that is still up. Every other `useAppStore` call site in the codebase reads a slice its own feature owns; this is the first that reads another feature's gating condition.
+- User value: None on its own — it protects a correct behaviour from drifting later.
+- Done when: the modal's on-screen predicate has one definition that both the shell mount and any other reader consume.

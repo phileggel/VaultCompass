@@ -152,14 +152,15 @@ where
         .await
         .expect("seed holding");
 
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         provider(asset.id.clone()),
         Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
         Arc::clone(&bus),
-        Arc::new(CurrencyService::new(
-            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -167,6 +168,7 @@ where
         asset_service,
         Arc::new(FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     Ctx {

@@ -329,6 +329,7 @@ pub fn run() {
                     asset_service.clone(),
                     Arc::clone(&fetch_guard),
                     Arc::clone(&dispatcher),
+                    Arc::clone(&currency_service),
                 ));
                 app_handle.manage(asset_price_fetch_uc);
                 app_handle.manage(Arc::clone(&fetch_guard));

@@ -50,13 +50,6 @@ impl Dispatcher {
         }
     }
 
-    /// The frozen-rate source the Price Movement baseline resolves against
-    /// (PMV-020) — the very service this task's FX refresh (FXR-075) later
-    /// writes through, which is why the baseline captures before the loop.
-    pub fn currency_service(&self) -> Arc<CurrencyService> {
-        Arc::clone(&self.currency_service)
-    }
-
     /// Spawns a Tokio background task that fetches prices for the pre-derived
     /// `(Asset, symbol)` scope, then refreshes FX rates for `fx_pairs` plus all
     /// persisted pairs (FXR-075/076 — same task, same in-flight lease). The `lease`

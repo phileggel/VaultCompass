@@ -1,5 +1,6 @@
 use crate::context::account::{AccountError, AccountServiceContract};
 use crate::context::asset::{Asset, AssetError, AssetServiceContract};
+use crate::context::currency::CurrencyService;
 use crate::use_cases::shared::scope::build_fx_pairs;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -18,6 +19,10 @@ pub struct AssetPriceFetchUseCase {
     asset_service: Arc<dyn AssetServiceContract>,
     fetch_guard: Arc<FetchGuard>,
     dispatcher: Arc<Dispatcher>,
+    /// The frozen-rate source the Price Movement baseline resolves against
+    /// (PMV-020) — the same service the task's FX refresh (FXR-075) later
+    /// writes through, which is why the baseline captures before the loop.
+    currency_service: Arc<CurrencyService>,
 }
 
 impl AssetPriceFetchUseCase {
@@ -27,12 +32,14 @@ impl AssetPriceFetchUseCase {
         asset_service: Arc<dyn AssetServiceContract>,
         fetch_guard: Arc<FetchGuard>,
         dispatcher: Arc<Dispatcher>,
+        currency_service: Arc<CurrencyService>,
     ) -> Self {
         Self {
             account_service,
             asset_service,
             fetch_guard,
             dispatcher,
+            currency_service,
         }
     }
 
@@ -89,7 +96,7 @@ impl AssetPriceFetchUseCase {
             FetchTrigger::Manual => Some(Arc::new(PriceMovementCapture::new(
                 Arc::clone(&self.account_service),
                 Arc::clone(&self.asset_service),
-                self.dispatcher.currency_service(),
+                Arc::clone(&self.currency_service),
             ))),
             FetchTrigger::Launch => None,
         };
@@ -210,14 +217,15 @@ mod tests {
             Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
             Box::new(SqliteAssetPriceRepository::new(pool.clone())),
         ));
+        let currency_service = Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        ));
         let dispatcher = Arc::new(Dispatcher::new(
             Arc::new(MockPriceProvider::new()),
             Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
             Arc::clone(&bus),
-            Arc::new(CurrencyService::new(
-                Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-                Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-            )),
+            Arc::clone(&currency_service),
             Arc::new(|| NaiveDate::from_ymd_opt(2026, 6, 1).expect("valid date")),
         ));
         AssetPriceFetchUseCase::new(
@@ -225,6 +233,7 @@ mod tests {
             asset_service,
             Arc::new(FetchGuard::new()),
             dispatcher,
+            currency_service,
         )
     }
 
@@ -344,14 +353,15 @@ mod tests {
             Box::new(SqliteAssetCategoryRepository::new(pool.clone())),
             Box::new(SqliteAssetPriceRepository::new(pool.clone())),
         ));
+        let currency_service = Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        ));
         let dispatcher = Arc::new(Dispatcher::new(
             Arc::new(MockPriceProvider::new()),
             Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
             Arc::clone(&bus),
-            Arc::new(CurrencyService::new(
-                Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-                Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-            )),
+            Arc::clone(&currency_service),
             Arc::new(|| NaiveDate::from_ymd_opt(2026, 6, 1).expect("valid date")),
         ));
         let use_case = AssetPriceFetchUseCase::new(
@@ -359,6 +369,7 @@ mod tests {
             asset_service,
             Arc::new(FetchGuard::new()),
             dispatcher,
+            currency_service,
         );
 
         let mut rx = bus.subscribe();

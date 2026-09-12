@@ -76,14 +76,15 @@ async fn build_ctx() -> Ctx {
         let price_repo: Arc<dyn vault_compass_lib::context::asset::AssetPriceRepository> =
             Arc::new(SqliteAssetPriceRepository::new(pool.clone()));
 
+        let currency_service = Arc::new(CurrencyService::new(
+            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+        ));
         let dispatcher = Arc::new(Dispatcher::new(
             Arc::new(NoOpProvider),
             price_repo,
             Arc::clone(&bus),
-            Arc::new(CurrencyService::new(
-                Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-                Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-            )),
+            Arc::clone(&currency_service),
             Arc::new(|| chrono::Local::now().date_naive()),
         ));
 
@@ -92,6 +93,7 @@ async fn build_ctx() -> Ctx {
             asset_service.clone(),
             Arc::clone(&fetch_guard),
             dispatcher,
+            currency_service,
         )
     };
 
@@ -264,14 +266,15 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
     });
     let price_repo: Arc<dyn AssetPriceRepository> =
         Arc::new(SqliteAssetPriceRepository::new(pool.clone()));
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         provider,
         price_repo,
         Arc::clone(&bus),
-        Arc::new(CurrencyService::new(
-            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -279,6 +282,7 @@ async fn fetch_for_account_passes_exchange_qualified_symbol_to_provider() {
         asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     use_case
@@ -388,14 +392,15 @@ async fn fetch_for_account_skips_locked_asset() {
 
     let price_repo: Arc<dyn AssetPriceRepository> =
         Arc::new(SqliteAssetPriceRepository::new(pool.clone()));
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(NoOpProvider),
         price_repo,
         Arc::clone(&bus),
-        Arc::new(CurrencyService::new(
-            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -403,6 +408,7 @@ async fn fetch_for_account_skips_locked_asset() {
         asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     let result = use_case.fetch_for_account(&account.id).await;
@@ -503,14 +509,15 @@ async fn fetch_for_account_includes_unblocked_asset() {
 
     let price_repo: Arc<dyn AssetPriceRepository> =
         Arc::new(SqliteAssetPriceRepository::new(pool.clone()));
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(NoOpProvider),
         price_repo,
         Arc::clone(&bus),
-        Arc::new(CurrencyService::new(
-            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -518,6 +525,7 @@ async fn fetch_for_account_includes_unblocked_asset() {
         asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     // Scope is non-empty (asset unblocked) → dispatch succeeds, not NoFetchableHoldings.
@@ -601,14 +609,15 @@ async fn fetch_publishes_completion_event_with_counts() {
         .await
         .expect("seed holding");
 
+    let currency_service = Arc::new(CurrencyService::new(
+        Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
+        Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(OkProvider),
         Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
         Arc::clone(&bus),
-        Arc::new(CurrencyService::new(
-            Box::new(SqliteCurrencyPairRepository::new(pool.clone())),
-            Box::new(SqliteCurrencyRateRepository::new(pool.clone())),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = AssetPriceFetchUseCase::new(
@@ -616,6 +625,7 @@ async fn fetch_publishes_completion_event_with_counts() {
         asset_service.clone(),
         Arc::new(FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     let mut rx = bus.subscribe();
@@ -746,22 +756,19 @@ async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_p
         .await
         .expect("seed holding");
 
+    let currency_service = Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(pool.clone()),
+        ),
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(pool.clone()),
+        ),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(NoDataProvider),
         Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
         Arc::clone(&bus),
-        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
-                    pool.clone(),
-                ),
-            ),
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
-                    pool.clone(),
-                ),
-            ),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
@@ -769,6 +776,7 @@ async fn fetch_completion_event_unpriced_list_contains_skipped_asset_with_last_p
         asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     let mut rx = bus.subscribe();
@@ -915,22 +923,19 @@ async fn fetch_completion_unpriced_entry_has_none_last_price_when_never_priced()
         .await
         .expect("seed holding");
 
+    let currency_service = Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(pool.clone()),
+        ),
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(pool.clone()),
+        ),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(NoDataProvider),
         Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
         Arc::clone(&bus),
-        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
-                    pool.clone(),
-                ),
-            ),
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
-                    pool.clone(),
-                ),
-            ),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
@@ -938,6 +943,7 @@ async fn fetch_completion_unpriced_entry_has_none_last_price_when_never_priced()
         asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     let mut rx = bus.subscribe();
@@ -1052,22 +1058,19 @@ async fn fetch_completion_unpriced_list_excludes_successfully_fetched_asset() {
         .await
         .expect("seed holding");
 
+    let currency_service = Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(pool.clone()),
+        ),
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(pool.clone()),
+        ),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(OkProvider),
         Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
         Arc::clone(&bus),
-        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
-                    pool.clone(),
-                ),
-            ),
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
-                    pool.clone(),
-                ),
-            ),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
@@ -1075,6 +1078,7 @@ async fn fetch_completion_unpriced_list_excludes_successfully_fetched_asset() {
         asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     let mut rx = bus.subscribe();
@@ -1211,22 +1215,19 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
             .expect("seed holding");
     }
 
+    let currency_service = Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(pool.clone()),
+        ),
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(pool.clone()),
+        ),
+    ));
     let dispatcher = Arc::new(Dispatcher::new(
         Arc::new(ErrForSymbolProvider { err_symbol: "AERR" }),
         Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
         Arc::clone(&bus),
-        Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
-                    pool.clone(),
-                ),
-            ),
-            Box::new(
-                vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
-                    pool.clone(),
-                ),
-            ),
-        )),
+        Arc::clone(&currency_service),
         Arc::new(|| chrono::Local::now().date_naive()),
     ));
     let use_case = vault_compass_lib::use_cases::asset_price_fetch::AssetPriceFetchUseCase::new(
@@ -1234,6 +1235,7 @@ async fn fetch_completion_unpriced_len_equals_skipped_count_in_mixed_outcome() {
         asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     let mut rx = bus.subscribe();
@@ -1368,23 +1370,20 @@ async fn fetch_completion_locked_asset_absent_from_unpriced_list() {
         .await
         .expect("seed holding");
 
+    let currency_service = Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(pool.clone()),
+        ),
+        Box::new(
+            vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(pool.clone()),
+        ),
+    ));
     let dispatcher = Arc::new(
         vault_compass_lib::use_cases::asset_price_fetch::dispatcher::Dispatcher::new(
             Arc::new(NoDataProvider),
             Arc::new(SqliteAssetPriceRepository::new(pool.clone())),
             Arc::clone(&bus),
-            Arc::new(vault_compass_lib::context::currency::CurrencyService::new(
-                Box::new(
-                    vault_compass_lib::context::currency::SqliteCurrencyPairRepository::new(
-                        pool.clone(),
-                    ),
-                ),
-                Box::new(
-                    vault_compass_lib::context::currency::SqliteCurrencyRateRepository::new(
-                        pool.clone(),
-                    ),
-                ),
-            )),
+            Arc::clone(&currency_service),
             Arc::new(|| chrono::Local::now().date_naive()),
         ),
     );
@@ -1393,6 +1392,7 @@ async fn fetch_completion_locked_asset_absent_from_unpriced_list() {
         asset_service.clone(),
         Arc::new(vault_compass_lib::use_cases::asset_price_fetch::FetchGuard::new()),
         dispatcher,
+        currency_service,
     );
 
     // The locked asset is excluded from scope upstream: the task is rejected with
