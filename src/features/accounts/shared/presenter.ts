@@ -101,7 +101,7 @@ export const FREQUENCY_ORDER: Record<UpdateFrequency, number> = {
 
 /**
  * PMV-021/022/034/040 — a value in micros as a 2-decimal display string. The
- * currency is a separate field the panel renders alongside it, never combined
+ * currency is a separate field the dialog renders alongside it, never combined
  * here: a row is in its account's currency (PMV-034), the total in the
  * report's reference currency (PMV-040).
  */

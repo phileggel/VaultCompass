@@ -182,3 +182,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 - User value: None — internal layout.
 - Done when: `service.rs` moves to `application/service.rs`, `repository/` becomes `infrastructure/`, and `core/` becomes `shared/{application,domain,infrastructure}` across every bounded context.
+
+## 2026-09-11 — Unpriced-modal visibility computed in two places
+
+- Found by: reviewer-frontend
+- Where: src/features/accounts/AccountManager.tsx:24
+- Context: branch `refactor/pmv-dialog` @ `c932de6`
+- Severity: 🟡
+- Observation: Whether the unupdated-prices modal (MKT-172) is on screen is derived independently in two features from the same store slice — `features/shell/UnpricedPricesModalMount.tsx` returns null on `unpricedAssets.length === 0`, and `features/accounts/AccountManager.tsx` gates the Price Movement dialog on `unpricedAssets.length > 0` (PMV-018). The shell owns the modal's visibility, but nothing ties the second reader to it: if the modal ever opens or closes on a further condition, the accounts list keeps answering the old question and the report can stack over a modal that is still up. Every other `useAppStore` call site in the codebase reads a slice its own feature owns; this is the first that reads another feature's gating condition.
+- User value: None on its own — it protects a correct behaviour from drifting later.
+- Done when: the modal's on-screen predicate has one definition that both the shell mount and any other reader consume.

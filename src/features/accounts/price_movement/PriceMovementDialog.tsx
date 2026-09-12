@@ -1,14 +1,16 @@
-import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { PriceMovementReport } from "@/bindings";
+import { Button } from "@/ui/components/button/Button";
+import { Dialog } from "@/ui/components/modal/Dialog";
 import {
   formatPriceMovementPct,
   formatPriceMovementValue,
   priceMovementDateLabel,
 } from "../shared/presenter";
 
-interface PriceMovementPanelProps {
+interface PriceMovementDialogProps {
   report: PriceMovementReport;
+  isOpen: boolean;
   onDismiss: () => void;
 }
 
@@ -24,48 +26,58 @@ function movementColour(microPercent: number | null): string {
 
 /**
  * PMV-013/017/030–034/043/050–052/060 — what the last Global refresh did to each
- * account's value, as a dismissible panel above the accounts list.
+ * account's value, as a dialog the user reads once and closes.
  *
- * Deliberately not a modal: it never blocks, so the unupdated-prices modal
- * (MKT-172) behaves exactly as it did before. Every judgement it displays was
+ * It waits for the unupdated-prices modal rather than stacking over it
+ * (PMV-018); the caller owns that ordering.
+ */
+export function PriceMovementDialog({ report, isOpen, onDismiss }: PriceMovementDialogProps) {
+  const { t } = useTranslation();
+
+  return (
+    <Dialog
+      id="price-movement-dialog"
+      isOpen={isOpen}
+      onClose={onDismiss}
+      title={t("pmv.title")}
+      maxWidth="max-w-2xl"
+      actions={
+        <Button id="price-movement-dismiss" variant="tonal" onClick={onDismiss}>
+          {t("pmv.dismiss")}
+        </Button>
+      }
+    >
+      <PriceMovementReportBody report={report} />
+    </Dialog>
+  );
+}
+
+/**
+ * The report itself, free of the dialog chrome. Every judgement it displays was
  * made by the backend — whether a proportion exists, the row order, what counts
  * as incomplete — so this renders and never derives.
+ *
+ * Separate from the chrome so the report can be rendered and asserted without
+ * the dialog's overlay machinery — which is also what lets the visual preview
+ * put four states on one page, where four `fixed inset-0` dialogs could not
+ * (`docs/frontend-visual-proof.md`).
  */
-export function PriceMovementPanel({ report, onDismiss }: PriceMovementPanelProps) {
+export function PriceMovementReportBody({ report }: { report: PriceMovementReport }) {
   const { t } = useTranslation();
   const dateLabel = priceMovementDateLabel(report.observed_from, report.observed_to);
   // PMV-060 — decided by the values alone, never by the dates.
   const nothingMoved = report.rows.every((row) => row.before === row.after);
 
   return (
-    <section
-      id="price-movement-panel"
-      className="flex flex-col gap-3 rounded-[20px] bg-m3-surface-container-lowest p-5 shadow-elevation-2"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-headline text-base font-medium text-m3-on-surface">
-            {t("pmv.title")}
-          </h3>
-          <p className="mt-0.5 text-xs text-m3-on-surface-variant">{t("pmv.subtitle_frozen")}</p>
-        </div>
-        <button
-          id="price-movement-dismiss"
-          type="button"
-          onClick={onDismiss}
-          aria-label={t("pmv.dismiss")}
-          className="-mr-2 -mt-2 rounded-full p-2 text-m3-on-surface-variant transition-colors hover:bg-m3-on-surface/5"
-        >
-          <X size={18} />
-        </button>
-      </div>
+    <>
+      <p className="text-xs text-m3-on-surface-variant">{t("pmv.subtitle_frozen")}</p>
 
       {nothingMoved ? (
-        <p className="text-sm text-m3-on-surface">
+        <p className="mt-4 text-sm text-m3-on-surface">
           {report.incomplete ? t("pmv.nothing_moved_incomplete") : t("pmv.nothing_moved")}
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-m3-surface-variant text-xs text-m3-on-surface-variant">
@@ -129,6 +141,6 @@ export function PriceMovementPanel({ report, onDismiss }: PriceMovementPanelProp
           </table>
         </div>
       )}
-    </section>
+    </>
   );
 }

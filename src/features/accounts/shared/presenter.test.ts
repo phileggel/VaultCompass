@@ -133,7 +133,7 @@ describe("formatAccountRowYtdPerformancePct", () => {
 
 // PMV-021/022/034/040 — formatPriceMovementValue: account- or reference-currency
 // micros → 2-decimal display string, unconverted (the currency itself is a
-// separate field the panel renders alongside it, never combined here).
+// separate field the dialog renders alongside it, never combined here).
 describe("formatPriceMovementValue", () => {
   // The default display locale is "fr"; these assertions are French-format on
   // purpose. The English case below proves the formatter follows the app
@@ -155,9 +155,9 @@ describe("formatPriceMovementValue", () => {
     expect(formatPriceMovementValue(0)).toBe("0,00");
   });
 
-  // The panel sits directly above account rows formatted by the same shared
-  // helper — a hardcoded locale here would show comma decimals beside period
-  // decimals the moment the user switches language.
+  // The dialog opens over account rows formatted by the same shared helper —
+  // a hardcoded locale here would show comma decimals beside period decimals
+  // the moment the user switches language.
   it("follows the app display locale rather than a hardcoded one", () => {
     setDisplayLocale("en");
     expect(formatPriceMovementValue(1_250_000)).toBe("1.25");

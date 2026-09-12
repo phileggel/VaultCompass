@@ -8,8 +8,6 @@ interface ManagerLayoutProps {
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
   searchExtra?: ReactNode;
-  /** Rendered between the header and the table, full width. Never scrolls with the table. */
-  banner?: ReactNode;
   table: ReactNode;
 
   // Right panel (action form) — optional
@@ -25,7 +23,6 @@ export function ManagerLayout({
   onSearchChange,
   searchPlaceholder,
   searchExtra,
-  banner,
   table,
   sidePanelTitle,
   sidePanelIcon,
@@ -45,7 +42,6 @@ export function ManagerLayout({
           searchPlaceholder={searchPlaceholder}
           searchExtra={searchExtra}
         />
-        {banner}
         <div className="flex-1 overflow-auto">{table}</div>
       </div>
 

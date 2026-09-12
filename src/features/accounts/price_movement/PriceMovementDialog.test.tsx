@@ -1,7 +1,7 @@
 import { configure, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PriceMovementReport, PriceMovementRow } from "@/bindings";
-import { PriceMovementPanel } from "./PriceMovementPanel";
+import { PriceMovementDialog } from "./PriceMovementDialog";
 
 // F25 — stable ids are the selector surface; resolve getByTestId against `id`.
 configure({ testIdAttribute: "id" });
@@ -41,30 +41,39 @@ const makeReport = (overrides: Partial<PriceMovementReport> = {}): PriceMovement
   ...overrides,
 });
 
-describe("PriceMovementPanel", () => {
+describe("PriceMovementDialog", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // PMV-013 — a dismissible panel, never a modal: no dialog role, no scrim.
-  it("renders as a plain panel, not a modal", () => {
-    render(<PriceMovementPanel report={makeReport()} onDismiss={vi.fn()} />);
+  // PMV-013 — the report is its own dialog surface, read once and closed.
+  it("renders as a dialog", () => {
+    render(<PriceMovementDialog report={makeReport()} isOpen onDismiss={vi.fn()} />);
 
-    expect(screen.getByTestId("price-movement-panel")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByTestId("price-movement-dialog")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  // PMV-018 — the caller closes the dialog while the unupdated-prices modal
+  // (MKT-172) holds the screen; nothing of the report is on the page meanwhile.
+  it("renders nothing while closed", () => {
+    render(<PriceMovementDialog report={makeReport()} isOpen={false} onDismiss={vi.fn()} />);
+
+    expect(screen.queryByTestId("price-movement-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("pmv.subtitle_frozen")).not.toBeInTheDocument();
   });
 
   // PMV-017 — figures are framed as a dated before/after of THIS refresh, not
   // the account's current value shown a few rows below.
   it("states the figures are a frozen comparison of this refresh", () => {
-    render(<PriceMovementPanel report={makeReport()} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={makeReport()} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.getByText("pmv.subtitle_frozen")).toBeInTheDocument();
   });
 
-  // PMV-061 — dismiss calls the caller-supplied handler; the panel owns no
+  // PMV-061 — dismiss calls the caller-supplied handler; the dialog owns no
   // persistence of its own.
   it("calls onDismiss when the dismiss control is clicked", () => {
     const onDismiss = vi.fn();
-    render(<PriceMovementPanel report={makeReport()} onDismiss={onDismiss} />);
+    render(<PriceMovementDialog report={makeReport()} isOpen onDismiss={onDismiss} />);
 
     fireEvent.click(screen.getByTestId("price-movement-dismiss"));
 
@@ -84,7 +93,7 @@ describe("PriceMovementPanel", () => {
       ],
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.getByText("pmv.nothing_moved")).toBeInTheDocument();
     expect(screen.queryByTestId("price-movement-row-acc-1")).not.toBeInTheDocument();
@@ -106,7 +115,7 @@ describe("PriceMovementPanel", () => {
       incomplete: true,
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.getByText("pmv.nothing_moved_incomplete")).toBeInTheDocument();
     expect(screen.queryByText("pmv.nothing_moved")).not.toBeInTheDocument();
@@ -127,7 +136,7 @@ describe("PriceMovementPanel", () => {
       ],
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.getByTestId("price-movement-row-acc-1")).toBeInTheDocument();
     expect(screen.getByTestId("price-movement-row-acc-2")).toBeInTheDocument();
@@ -147,7 +156,7 @@ describe("PriceMovementPanel", () => {
       ],
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const row = within(screen.getByTestId("price-movement-row-acc-2"));
     expect(row.getByText("—")).toBeInTheDocument();
@@ -167,7 +176,7 @@ describe("PriceMovementPanel", () => {
       ],
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const row = within(screen.getByTestId("price-movement-row-acc-1"));
     expect(row.getByText("+20,00%")).toBeInTheDocument();
@@ -180,7 +189,7 @@ describe("PriceMovementPanel", () => {
       incomplete: true,
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const row = within(screen.getByTestId("price-movement-row-acc-1"));
     expect(row.getByText("pmv.incomplete_marker")).toBeInTheDocument();
@@ -190,7 +199,7 @@ describe("PriceMovementPanel", () => {
 
   // PMV-043 — a complete report marks neither the rows nor the total.
   it("does not mark a complete row or the complete total", () => {
-    render(<PriceMovementPanel report={makeReport()} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={makeReport()} isOpen onDismiss={vi.fn()} />);
 
     const row = within(screen.getByTestId("price-movement-row-acc-1"));
     expect(row.queryByText("pmv.incomplete_marker")).not.toBeInTheDocument();
@@ -218,7 +227,7 @@ describe("PriceMovementPanel", () => {
       ],
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const ids = screen.getAllByTestId(/^price-movement-row-/).map((el) => el.id);
     expect(ids).toEqual(["price-movement-row-acc-z", "price-movement-row-acc-a"]);
@@ -232,7 +241,7 @@ describe("PriceMovementPanel", () => {
       ],
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const row = within(screen.getByTestId("price-movement-row-acc-1"));
     expect(row.getByText("100,00 USD")).toBeInTheDocument();
@@ -250,7 +259,7 @@ describe("PriceMovementPanel", () => {
       total_movement_pct: 10_000_000,
     });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const total = within(screen.getByTestId("price-movement-total"));
     expect(total.getByText("200,00 EUR")).toBeInTheDocument();
@@ -262,7 +271,7 @@ describe("PriceMovementPanel", () => {
   it("labels the value columns with both observation dates when both are present", () => {
     const report = makeReport({ observed_from: "2026-09-09", observed_to: "2026-09-11" });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(
       screen.getByText('pmv.dates_range {"from":"2026-09-09","to":"2026-09-11"}'),
@@ -273,7 +282,7 @@ describe("PriceMovementPanel", () => {
   it("labels the value columns with the single date when only observed_to is present", () => {
     const report = makeReport({ observed_from: null, observed_to: "2026-09-11" });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.getByText('pmv.dates_to_only {"date":"2026-09-11"}')).toBeInTheDocument();
   });
@@ -282,7 +291,7 @@ describe("PriceMovementPanel", () => {
   it("labels the value columns with the single date when only observed_from is present", () => {
     const report = makeReport({ observed_from: "2026-09-09", observed_to: null });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.getByText('pmv.dates_from_only {"date":"2026-09-09"}')).toBeInTheDocument();
   });
@@ -291,7 +300,7 @@ describe("PriceMovementPanel", () => {
   it("renders no date label when neither observation date is present", () => {
     const report = makeReport({ observed_from: null, observed_to: null });
 
-    render(<PriceMovementPanel report={report} onDismiss={vi.fn()} />);
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     expect(screen.queryByText(/pmv\.dates_/)).not.toBeInTheDocument();
   });

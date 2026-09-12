@@ -57,7 +57,7 @@ One account's share of the report.
 
 **PMV-012 — A refresh that never ran reports nothing (backend)**: When the refresh is rejected before any asset is attempted — another fetch is already running (MKT-113), or the scope holds no fetchable asset (MKT-111) — the fetch never reaches the completion it would report on, so no report exists and the existing rejection feedback applies unchanged.
 
-**PMV-013 — The report is presented without interrupting the user (frontend)**: The report appears on the accounts list — the surface carrying the Global refresh action — as a dismissible panel that does not block the rest of the application. It never takes over the screen, so it neither displaces nor queues behind the unupdated-prices modal (MKT-172), which continues to behave exactly as it does today.
+**PMV-013 — The report is presented as a surface of its own (frontend)**: The report appears on the accounts list — the surface carrying the Global refresh action — as a dialog the user reads and closes, presented over the account rows rather than docked among them. It reports on a refresh that has already finished, so it asks nothing of the user beyond closing it.
 
 **PMV-014 — Reporting never changes what the fetch does (backend)**: Prices are recorded exactly as they would be without this feature. If the report cannot be produced, the fetch still succeeds and the user receives the pre-existing completion feedback.
 
@@ -65,7 +65,9 @@ One account's share of the report.
 
 **PMV-016 — The report belongs to the surface that asked for it (frontend)**: The report is presented only if the user is still on the accounts list when the refresh completes. A Global refresh is acknowledged immediately and runs on under a progress indicator visible elsewhere (MKT-180), so the user may have navigated away; in that case no report is presented and none is kept for their return. Running another Global refresh produces a fresh one.
 
-**PMV-017 — The report states that its figures are a frozen comparison (frontend)**: The panel sits above account rows showing live values, and its own figures deliberately differ from them (PMV-020, PMV-023). The report therefore presents its two readings as a dated before-and-after of this refresh, never as the account's current value, so the two sets of numbers are not read as disagreeing.
+**PMV-017 — The report states that its figures are a frozen comparison (frontend)**: The report opens over account rows showing live values, and its own figures deliberately differ from them (PMV-020, PMV-023). The report therefore presents its two readings as a dated before-and-after of this refresh, never as the account's current value, so the two sets of numbers are not read as disagreeing.
+
+**PMV-018 — The report waits for a refresh that still needs the user (frontend)**: The same refresh may leave assets unpriced, which opens the unupdated-prices modal (MKT-172) to ask the user for those prices. The report is presented only once that modal has closed. The modal asks the user for something and the report only tells them something, so the report never covers it, and the modal's own behaviour is unchanged. The report is not discarded while it waits — it is presented in full when the modal clears, subject to PMV-016.
 
 ### The comparison (020–029)
 
@@ -143,10 +145,11 @@ One account's share of the report.
 [Report produced: per-account entries + portfolio total + the observation dates]
         │
         ▼
-[Panel appears on the accounts list — user reads it and dismisses it]
+[Report dialog opens on the accounts list — user reads it and closes it]
         │                              (only if the user is still there — PMV-016)
         │
-        └── skipped assets? the unupdated-prices modal (MKT-172) behaves as it does today
+        └── skipped assets? the unupdated-prices modal (MKT-172) comes first;
+                            the report opens once it is closed (PMV-018)
 ```
 
 ---
@@ -159,7 +162,7 @@ None of its own. The report appears on the accounts list when a Global refresh t
 
 ### Main Component
 
-A dismissible panel on the accounts list — not a modal, and never blocking. A table of accounts — name, earlier value, later value, movement — closed by a portfolio total row. The two observation dates label the two value columns, so the comparison reads as "9 Sep → 11 Sep" without repeating the dates on every entry.
+A dialog on the accounts list, closed by the user and never shown again. A table of accounts — name, earlier value, later value, movement — closed by a portfolio total row. The two observation dates label the two value columns, so the comparison reads as "9 Sep → 11 Sep" without repeating the dates on every entry.
 
 ### States
 
@@ -173,9 +176,9 @@ A dismissible panel on the accounts list — not a modal, and never blocking. A 
 
 1. The user runs a Global refresh from the accounts list.
 2. The refresh runs as it does today, with its existing progress feedback.
-3. On completion the panel appears, listing every account with its two values and its movement.
-4. If the refresh skipped assets, the unupdated-prices modal behaves exactly as it does today, independently of the panel.
-5. The user reads the panel and dismisses it.
+3. If the refresh skipped assets, the unupdated-prices modal opens first and behaves exactly as it does today.
+4. The report opens once nothing else is asking for the user, listing every account with its two values and its movement.
+5. The user reads the report and closes it.
 
 ---
 

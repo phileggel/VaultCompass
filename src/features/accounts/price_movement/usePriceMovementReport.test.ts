@@ -75,7 +75,7 @@ describe("usePriceMovementReport", () => {
   });
 
   // PMV-010/014 — the Launch auto-fetch (and any report that couldn't be
-  // produced) publishes `movement: null`; the panel must never appear for it.
+  // produced) publishes `movement: null`; the dialog must never appear for it.
   it("ignores a completed payload whose movement is null", async () => {
     let captured!: (payload: CompletedPayload) => void;
     vi.mocked(gateway.accountGateway.subscribeToPriceFetchCompleted).mockImplementation(

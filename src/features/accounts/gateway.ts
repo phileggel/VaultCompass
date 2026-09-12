@@ -56,7 +56,7 @@ export const accountGateway = {
     });
   },
 
-  // PMV-016 — the panel needs the whole AssetPriceFetchCompleted payload, and
+  // PMV-016 — the dialog needs the whole AssetPriceFetchCompleted payload, and
   // `subscribeToEvents` above strips every event down to its `type`. A second
   // listener carries the payload through intact; the caller decides what a null
   // `movement` means (PMV-010/014).

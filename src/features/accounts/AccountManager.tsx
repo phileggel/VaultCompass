@@ -3,19 +3,25 @@ import { TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
+import { useAppStore } from "@/lib/store";
 import { Button } from "@/ui/components/button/Button";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { FAB } from "@/ui/components/fab/FAB";
 import { ManagerLayout } from "@/ui/components/layout/ManagerLayout";
 import { AccountTable } from "./account_table/AccountTable";
 import { AddAccountModal } from "./add_account/AddAccountModal";
-import { PriceMovementPanel } from "./price_movement/PriceMovementPanel";
+import { PriceMovementDialog } from "./price_movement/PriceMovementDialog";
 import { usePriceMovementReport } from "./price_movement/usePriceMovementReport";
 import { useRefreshGlobalPrices } from "./refresh_prices/useRefreshGlobalPrices";
 
 export function AccountManager() {
   // PMV-013/016 — the report belongs to this mounted surface; navigating away discards it.
   const priceMovement = usePriceMovementReport();
+  // PMV-018 — the same refresh can leave assets unpriced, which auto-opens the
+  // manual-fill modal (MKT-172). That modal asks the user for something; this
+  // dialog only tells them something, so it waits its turn rather than
+  // stacking over it.
+  const isUnpricedModalOpen = useAppStore((state) => state.unpricedAssets.length > 0);
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -33,13 +39,6 @@ export function AccountManager() {
   return (
     <>
       <ManagerLayout
-        banner={
-          priceMovement.report !== null ? (
-            <div className="px-4 pb-3">
-              <PriceMovementPanel report={priceMovement.report} onDismiss={priceMovement.dismiss} />
-            </div>
-          ) : undefined
-        }
         searchId="account-search"
         searchTerm={query}
         onSearchChange={setQuery}
@@ -78,6 +77,13 @@ export function AccountManager() {
         label={t("account.fab_label")}
       />
       <AddAccountModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+      {priceMovement.report !== null && (
+        <PriceMovementDialog
+          report={priceMovement.report}
+          isOpen={!isUnpricedModalOpen}
+          onDismiss={priceMovement.dismiss}
+        />
+      )}
     </>
   );
 }

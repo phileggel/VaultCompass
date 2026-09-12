@@ -317,7 +317,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
 });
 
 // ── subscribeToPriceFetchCompleted (PMV-016) ──────────────────────────────────
-// The panel-driving hook needs the FULL AssetPriceFetchCompleted payload,
+// The dialog-driving hook needs the FULL AssetPriceFetchCompleted payload,
 // including `movement` — the existing subscribeToEvents adapter strips every
 // event down to `payload.type`, so it cannot carry a PriceMovementReport. This
 // is a second, purpose-built listener, still going through events.event.listen
