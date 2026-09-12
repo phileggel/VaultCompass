@@ -1,5 +1,7 @@
 # Plan — `next` batch, September 2026
 
+> Shipped in v0.41.1 (2026-09-12) — commits `6c2fcd4..3dc8232`, eight in all, one per task. T6 was attempted and reverted: `specta-typescript` 0.0.12 refuses unannotated 64-bit integers, which under ADR-001 makes the bump a wire-surface annotation sweep; `docs/todo.md` carries the finding. Everything else landed as written.
+
 > Source: `tmp/whats-next-2026-09-12-01.md`. Small todo and techdebt items only — no new feature, no spec of its own. One branch (`chore/next-2026-09`), **one commit per task**, Workflow B per task (reviewers for the touched layer → `/review-triage` → `/smart-commit`), `just merge` at the end, then `just release` once the main-push E2E is green.
 
 ## Tasks — in execution order
