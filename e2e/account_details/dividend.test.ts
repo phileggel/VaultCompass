@@ -32,6 +32,7 @@ import {
   navigateToAccounts,
 } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory, seedDividend } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -101,6 +102,7 @@ describe("dividend", () => {
     // 75 EUR — locale formats as "75,00" (fr-FR) or "75.00" (en-US).
     const dividendsCell = await $(`#holding-dividends-received-${astId}`);
     await dividendsCell.waitForExist({ timeout: 8000 });
+    await captureScreen("account-details-dividend");
     const dividendsCellText = await dividendsCell.getText();
     assert.ok(
       dividendsCellText.includes("75,00") || dividendsCellText.includes("75.00"),

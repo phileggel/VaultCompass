@@ -93,6 +93,7 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToSettings } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -230,6 +231,7 @@ describe("sync", () => {
     await modal.waitForExist({ timeout: 20000, reverse: true });
     const statusBlock = await $("#sync-status");
     await statusBlock.waitForExist({ timeout: 10000 });
+    await captureScreen("sync-settings");
 
     // -----------------------------------------------------------------
     // Step 5 — The one thing only a real run can prove: the backend wrote

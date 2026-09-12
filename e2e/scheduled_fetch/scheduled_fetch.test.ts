@@ -67,6 +67,7 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToSettings } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 
 // ---------------------------------------------------------------------------
 // Fixed values (E2E rule E9 — a native <input type="time"> has no date/
@@ -147,6 +148,7 @@ describe("scheduled_fetch", () => {
       timeout: 8000,
       timeoutMsg: 'SPF-052 — fresh-install status line must read "No download yet."',
     });
+    await captureScreen("scheduled-fetch-settings");
 
     // -----------------------------------------------------------------
     // Step 5 — Change the trigger time (SPF-019 well-formed HH:MM value

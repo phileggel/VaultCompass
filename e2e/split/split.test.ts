@@ -32,6 +32,7 @@ import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,7 @@ describe("split", () => {
       timeout: 8000,
       timeoutMsg: "Average price must halve to 50.00 after the 2:1 split (SPL-020)",
     });
+    await captureScreen("account-details-split");
 
     // -------------------------------------------------------------------
     // Step 6 — Journal rendering (SPL-060): open the per-asset transaction

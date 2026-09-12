@@ -28,6 +28,8 @@ dist-ssr
 .screenshots
 # Auto-generated E2E failure screenshots (captured by wdio.conf.ts afterTest hook)
 screenshots/e2e-failures/
+# Real-app captures taken by e2e/helpers/screenshot.ts (uploaded as a CI artifact)
+screenshots/e2e/
 tmp/
 coverage/
 # Reviewer reports (local triage artifacts, consumed by /review-triage)

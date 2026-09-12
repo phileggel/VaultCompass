@@ -56,6 +56,7 @@ import assert from "node:assert";
 import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
+import { captureScreen } from "../helpers/screenshot";
 import {
   seedAccount,
   seedAsset,
@@ -116,6 +117,7 @@ describe("MKT auto-fetch", () => {
           'Expected snackbar to contain "No holdings" (mkt.fetch_no_holdings) after clicking Refresh prices on a cash-only account',
       },
     );
+    await captureScreen("account-details-refresh");
   });
 
   // -------------------------------------------------------------------------

@@ -44,6 +44,7 @@ import { $ } from "@wdio/globals";
 import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedCurrencyRate } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -139,6 +140,7 @@ describe("currency_rates", () => {
     // id="pair-row-USD-EUR" is required — see selector inventory below.
     const pairRow = await $(`#pair-row-${PAIR_FROM}-${PAIR_TO}`);
     await pairRow.waitForExist({ timeout: 10000 });
+    await captureScreen("currency-pairs");
   });
 
   // -------------------------------------------------------------------------

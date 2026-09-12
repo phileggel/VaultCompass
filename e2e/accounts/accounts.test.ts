@@ -13,6 +13,7 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -82,6 +83,7 @@ describe("accounts", () => {
 
     const accountRow = await findAccountRow(ACCOUNT_NAME);
     await accountRow.waitForExist({ timeout: 10000 });
+    await captureScreen("accounts-list");
     assert.ok(
       await accountRow.isExisting(),
       `Account "${ACCOUNT_NAME}" must appear in list after creation`,

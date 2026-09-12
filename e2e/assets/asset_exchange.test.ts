@@ -27,6 +27,7 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAssets } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAsset, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -107,6 +108,7 @@ describe("asset_exchange", () => {
 
     const editExchangePicker = await $("#edit-asset-exchange-picker");
     await editExchangePicker.waitForExist({ timeout: 5000 });
+    await captureScreen("asset-edit-modal");
     const persistedCode = await editExchangePicker.getValue();
     assert.strictEqual(
       persistedCode,

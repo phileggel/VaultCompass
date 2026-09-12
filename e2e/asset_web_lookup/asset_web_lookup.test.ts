@@ -14,6 +14,7 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAssets } from "../helpers/navigation";
+import { captureScreen } from "../helpers/screenshot";
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -39,6 +40,7 @@ describe("asset_web_lookup", () => {
     // Use the stable id selector — text-based selectors are unreliable in WebKitGTK.
     const searchInput = await $("#web-lookup-isin-input");
     await searchInput.waitForExist({ timeout: 8000 });
+    await captureScreen("asset-web-lookup");
     assert.ok(await searchInput.isExisting(), "ISIN input must be present");
 
     // The "Fill manually" button must be visible immediately.

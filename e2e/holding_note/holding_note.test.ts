@@ -33,6 +33,7 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue, setReactTextareaValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedAssetPrice, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -136,6 +137,7 @@ describe("holding_note", () => {
 
     const bell = await $(`#holding-note-bell-${astId}`);
     await bell.waitForExist({ timeout: 8000 });
+    await captureScreen("holding-note-alarm");
 
     // -------------------------------------------------------------------
     // Step 6 — Reopen the modal; the stored note marks edit mode, so the

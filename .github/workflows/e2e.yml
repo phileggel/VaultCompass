@@ -1,15 +1,19 @@
 name: E2E
 
 on:
-  # E2E runs on push to main only — same cadence as backend coverage.
-  # PRs skip the ~20-min Tauri build; regressions surface within minutes
-  # of merge (cleaner main vs faster PR cycles trade-off).
+  # Every pull request and every push to main run the full suite. The ~20-min
+  # Tauri build is the price of merging on green: nothing reaches main that the
+  # real app has not passed. Pull requests carry no path filter on purpose: a
+  # filtered-out run leaves a required check "Expected" forever and the PR can
+  # never merge, so doc-only PRs pay for the run too. Pushes to main keep the
+  # filter — nothing gates on them.
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths-ignore: ["**/*.md", "docs/**"]
   # Run on demand against any branch — useful before merging a change to the
-  # test tooling itself. GitHub only offers this once the trigger is on the
-  # default branch, so it cannot gate the commit that introduces it.
+  # test tooling itself.
   workflow_dispatch:
 
 concurrency:
@@ -23,6 +27,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      # The screenshot comment below is posted on the pull request.
+      pull-requests: write
 
     env:
       # SQLX_OFFLINE also set in src-tauri/.cargo/config.toml [env]; declaring
@@ -82,6 +88,20 @@ jobs:
         shell: bash
         run: npm run test:e2e:ci
 
+      - name: Upload real-app screenshots
+        # e2e/helpers/screenshot.ts captures each spec's screen in both themes.
+        # Uploaded pass or fail: on a failure the captures taken before the
+        # failing step are still the best picture of what the app showed. A
+        # cancelled run (superseded by a newer push) uploads nothing.
+        if: ${{ !cancelled() }}
+        id: upload-screens
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: e2e-screenshots
+          path: screenshots/e2e/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload E2E failure screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -90,3 +110,44 @@ jobs:
           path: screenshots/e2e-failures/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Link the screenshots from the pull request
+        # One sticky comment per PR (found by its marker, edited on re-runs)
+        # listing every captured screen and linking the artifact. Artifacts
+        # cannot be embedded inline, so the comment is an index, not a gallery.
+        # Best-effort: a fork or Dependabot PR runs with a read-only token and
+        # the comment is refused; that must never turn a green suite red.
+        # Skipped on a cancelled run so a superseded run cannot overwrite the
+        # comment the newer run is about to post.
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_URL: ${{ steps.upload-screens.outputs.artifact-url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- e2e-screenshots -->'
+          LIST=""
+          for png in screenshots/e2e/*-light.png; do
+            [[ -e "$png" ]] || continue
+            screen=$(basename "$png" -light.png)
+            LIST+="- \`${screen}\`"$'\n'
+          done
+          if [[ -n "$LIST" ]]; then
+            COUNT=$(printf '%s' "$LIST" | grep -c '^-')
+            BODY=$(printf '%s\n## E2E screenshots — %s\n\n%s screens captured in light and dark by the real app ([download](%s), [run](%s)):\n\n%s' \
+              "$MARKER" "$JOB_STATUS" "$COUNT" "${ARTIFACT_URL:-$RUN_URL}" "$RUN_URL" "$LIST")
+          else
+            BODY=$(printf '%s\n## E2E screenshots — %s\n\nNo screen was captured ([run](%s)).\n' "$MARKER" "$JOB_STATUS" "$RUN_URL")
+          fi
+          EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -n 1)
+          if [[ -n "$EXISTING" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" -f body="$BODY" > /dev/null
+          else
+            gh pr comment "$PR_NUMBER" --body "$BODY"
+          fi

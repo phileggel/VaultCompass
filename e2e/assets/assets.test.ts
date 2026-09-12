@@ -13,6 +13,7 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAssets } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAsset, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,7 @@ describe("assets", () => {
     // Use XPath for reliable text matching — WebdriverIO `*=` selector is flaky in WebKit.
     const assetCell = await $(`//td[normalize-space(text())="${ASSET_NAME}"]`);
     await assetCell.waitForExist({ timeout: 10000 });
+    await captureScreen("assets-list");
     assert.ok(
       await assetCell.isExisting(),
       `Asset "${ASSET_NAME}" must appear in table after creation`,

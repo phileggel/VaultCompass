@@ -45,6 +45,7 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedDeposit } from "../helpers/seed";
 
 // Fixed past dates (E2E rule E9 — never today's date).
@@ -113,6 +114,7 @@ describe("account_performance", () => {
     // PRF-037: in month view the YTD column header must be visible.
     const ytdCol = await $("#account-performance-col-ytd");
     await ytdCol.waitForExist({ timeout: 8000 });
+    await captureScreen("account-performance");
     assert.ok(await ytdCol.isExisting(), "YTD column must be present in month view (PRF-037)");
 
     // Switch to year view via the toggle button (id="account-performance-view-toggle-year").

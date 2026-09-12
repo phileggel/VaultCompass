@@ -41,6 +41,7 @@ import {
   navigateToAccounts,
 } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -175,6 +176,7 @@ describe("free_shares", () => {
       },
       { timeout: 8000, timeoutMsg: "TXL must list the free-shares row (FSD-050)" },
     );
+    await captureScreen("free-shares-transactions");
     assert.ok(freeSharesRowId, "Free-shares row must exist in the TXL (FSD-050)");
 
     // FSD-050 — quantity cell shows the 5 distributed shares; the unit-price and

@@ -51,6 +51,7 @@ import {
   navigateToAccounts,
 } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -149,6 +150,7 @@ describe("management_fee", () => {
       timeout: 8000,
       timeoutMsg: "Holding quantity must drop to 9 after recording a 10% management fee (FEE-022)",
     });
+    await captureScreen("account-details-management-fee");
   });
 
   // -------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -82,6 +83,7 @@ describe("buy_sell", () => {
     // Holding row (Buy button) must still be present after buying more.
     const buyBtnAfter = await $(`#action-buy-${astId}`);
     await buyBtnAfter.waitForExist({ timeout: 8000 });
+    await captureScreen("account-details-holdings");
     assert.ok(
       await buyBtnAfter.isExisting(),
       "Holding row with Buy button must remain after buy transaction (TRX-010)",

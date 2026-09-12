@@ -23,6 +23,7 @@ import { isoToDisplayDate } from "../helpers/date";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedDeposit } from "../helpers/seed";
 
 const CASH_DEPOSIT_ACTION = "#action-record-deposit-system-cash-eur";
@@ -61,6 +62,7 @@ describe("cash", () => {
     await withdrawBtn.waitForExist({ timeout: 8000 });
     // waitForEnabled(reverse) polls until the disabled attribute has hydrated.
     await withdrawBtn.waitForEnabled({ timeout: 5000, reverse: true });
+    await captureScreen("account-details-cash");
     assert.strictEqual(
       await withdrawBtn.isEnabled(),
       false,

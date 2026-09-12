@@ -54,6 +54,7 @@ import { $, browser } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccountDetails, navigateToAccounts } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -174,6 +175,7 @@ describe("manual_price_fill", () => {
     // -----------------------------------------------------------------------
 
     await $(`#unpriced-price-input-${astId1}`).waitForExist({ timeout: 5_000 });
+    await captureScreen("unpriced-prices-modal");
     await setReactInputValue(`unpriced-price-input-${astId1}`, "42.50");
 
     const confirmBtn1 = await $(`#unpriced-confirm-${astId1}`);

@@ -63,6 +63,7 @@ import assert from "node:assert";
 import { $ } from "@wdio/globals";
 import { dismissLeftoverModal } from "../helpers/modal";
 import { navigateToAccounts, navigateToAssets } from "../helpers/navigation";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -183,6 +184,7 @@ describe("price_movement", () => {
     // -----------------------------------------------------------------------
     // Step 4 — PMV-061: dismiss the report; it is gone for good.
     // -----------------------------------------------------------------------
+    await captureScreen("price-movement-dialog");
     const dismissBtn = await $("#price-movement-dismiss");
     await dismissBtn.waitForExist({ timeout: 5_000 });
     await dismissBtn.click();

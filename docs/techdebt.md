@@ -180,3 +180,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: Nothing in `src/` or `src-tauri/src/` calls the opener plugin — no `openUrl`, `openPath`, or `app.opener()` anywhere — yet the capability grants `opener:default` to the webview, the plugin is initialised at startup, and both the crate and the npm package ship in the bundle. A permission with no consumer is attack surface that buys nothing.
 - User value: None — a slightly smaller bundle and permission set.
 - Done when: the plugin registration, the `opener:default` grant and both dependency declarations are removed together, or a real caller appears and the permission is narrowed to what it uses.
+
+## 2026-09-12 — Three E2E specs select by text or duplicate a shared helper
+
+- Found by: reviewer-e2e (`.review/reviewer-e2e-2026-09-12-01.md`, pre-existing section)
+- Where: e2e/accounts/accounts.test.ts:23 (local `navigateToAccounts` next to the shared one in e2e/helpers/navigation.ts), e2e/asset_web_lookup/asset_web_lookup.test.ts:47 (`button[aria-label="Fill manually"]`), e2e/assets/assets.test.ts:79 and :102 (XPath on `normalize-space(text())`)
+- Context: branch `ci/e2e-on-pull-requests` @ `2088878`
+- Severity: 🔵
+- Observation: Two specs locate elements by their English label or cell text rather than a stable id (E4), which ties them to the forced `en_US` locale and to copy that the i18n files own; one spec carries its own copy of a navigation helper the shared module already provides, so a change to the accounts route has two places to drift.
+- User value: None — suite robustness.
+- Done when: the three sites select by `id` (adding the ids on the frontend elements in the same commit) and the local helper is replaced by the shared import.

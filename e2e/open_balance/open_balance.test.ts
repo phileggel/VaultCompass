@@ -23,6 +23,7 @@ import {
   navigateToAccounts,
 } from "../helpers/navigation";
 import { setReactInputValue } from "../helpers/react";
+import { captureScreen } from "../helpers/screenshot";
 import { seedAccount, seedAsset, seedBuy, seedCategory } from "../helpers/seed";
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,7 @@ describe("open_balance", () => {
 
     const form = await $("form#ob-form");
     await form.waitForExist({ timeout: 8000 });
+    await captureScreen("open-balance-form");
     assert.ok(
       await form.isExisting(),
       "form#ob-form must be present after selecting Add → open balance (DIV-012)",
