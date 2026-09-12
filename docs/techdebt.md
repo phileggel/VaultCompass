@@ -192,3 +192,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: Whether the unupdated-prices modal (MKT-172) is on screen is derived independently in two features from the same store slice — `features/shell/UnpricedPricesModalMount.tsx` returns null on `unpricedAssets.length === 0`, and `features/accounts/AccountManager.tsx` gates the Price Movement dialog on `unpricedAssets.length > 0` (PMV-018). The shell owns the modal's visibility, but nothing ties the second reader to it: if the modal ever opens or closes on a further condition, the accounts list keeps answering the old question and the report can stack over a modal that is still up. Every other `useAppStore` call site in the codebase reads a slice its own feature owns; this is the first that reads another feature's gating condition.
 - User value: None on its own — it protects a correct behaviour from drifting later.
 - Done when: the modal's on-screen predicate has one definition that both the shell mount and any other reader consume.
+
+## 2026-09-12 — A different portfolio's folder reads as a reset
+
+- Found by: manual (closing the empty-sync-folder todo)
+- Where: src-tauri/src/context/sync/application/run.rs (`header_gate`)
+- Context: branch `chore/next-2026-09` @ `6c2fcd4`
+- Severity: 🔵
+- Observation: When a removable volume's drive letter is reused by a different stick that happens to carry a `VaultCompass` folder, the header decodes but its passphrase check fails — exactly what a genuine "started over elsewhere" (SYN-071) looks like from the header alone. Both write a fresh header with a new creation mark, so the two cases are indistinguishable by content; the device reports `PortfolioReset` (SYN-084) where "this is another portfolio" would be the honest message. `FolderHoldsOtherPortfolio` exists as the enable-path error but nothing in the run can justify raising it.
+- User value: The reset message would not fire for a stick that merely took the same drive letter.
+- Done when: A sync run can tell a reset of its own portfolio from another portfolio's folder — by something other than the header's content — and reports `FolderHoldsOtherPortfolio` for the latter.

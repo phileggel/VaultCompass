@@ -319,7 +319,7 @@
       "Missing": "The folder does not exist.",
       "NotADirectory": "This path is not a folder.",
       "PermissionDenied": "The folder cannot be read or written.",
-      "Unmounted": "The folder's drive is not mounted.",
+      "Unmounted": "The folder's drive is not mounted. Reconnect it, then sync again or resume.",
       "OutOfSpace": "The drive has no space left.",
       "IoFailure": "The folder could not be accessed."
     },

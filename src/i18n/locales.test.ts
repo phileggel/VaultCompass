@@ -49,8 +49,16 @@ describe("i18n locales — sync.* key parity (fr/en)", () => {
 // through i18next's interpolate-then-nest order, in both locales.
 describe("i18n locales — folder problem nesting", () => {
   it.each([
-    ["en", en, "The shared folder is unavailable: The folder's drive is not mounted."],
-    ["fr", fr, "Le dossier partagé est indisponible : Le disque du dossier n'est pas monté."],
+    [
+      "en",
+      en,
+      "The shared folder is unavailable: The folder's drive is not mounted. Reconnect it, then sync again or resume.",
+    ],
+    [
+      "fr",
+      fr,
+      "Le dossier partagé est indisponible : Le disque du dossier n'est pas monté. Reconnectez-le, puis relancez la synchronisation ou reprenez.",
+    ],
   ])("resolves sync.errors.FolderUnavailable in %s", async (lng, resources, expected) => {
     const instance = i18next.createInstance();
     await instance.init({

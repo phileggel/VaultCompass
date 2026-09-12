@@ -4,25 +4,6 @@
 <!-- Ordered by user value: entries that change what the user experiences first, -->
 <!-- entries with no direct user value after the separator. -->
 
-## (backend) — An empty sync folder is read as a portfolio reset, not as an unavailable volume
-
-`FsFolderStore::check_available()` verifies only that the path exists, is a directory, and is readable — it never checks that `vaultcompass-sync.json` is present. So a folder that exists but is empty passes the availability gate, `read_header_bytes()` returns `None`, `header_gate(None, _)` returns `HeaderGate::Reset`, and `SyncRun::pause_for_reset()` pauses the device and reports `PortfolioReset` — "the portfolio was reset elsewhere; this device must rejoin from a fresh installation". Nothing is lost (no publish happens under the old key, and the local database is untouched) and plugging the volume back in then pressing Resume recovers it, but the message tells the user to rejoin from scratch, which would destroy their local data if followed literally.
-
-Removable media is where an empty-but-present folder actually occurs, and the two platforms fail differently:
-
-- **Linux, desktop auto-mount** — `/media/<user>/<LABEL>` is removed by udisks on unmount, so the path 404s: `ErrorKind::NotFound` → `FolderProblem::Missing` → correctly reported as unavailable. A yank without unmounting gives I/O errors → `IoFailure` → also correct. Safe by accident of how udisks cleans up.
-- **Linux, hand-made mount point** — an `fstab` entry or a manually created `/mnt/...` directory persists as an empty writable folder when nothing is mounted. Hits the false reset.
-- **Windows, bare drive letter (`E:\VaultCompass`)** — with no media in the drive the OS returns `ERROR_NOT_READY`, which Rust does not map to a named `ErrorKind`, so `classify()`'s catch-all gives `IoFailure` → correctly unavailable. If the letter exists but the folder does not, `NotFound` → `Missing`. Both safe.
-- **Windows, volume mounted into an empty NTFS folder** (`C:\Mounts\Key`) — the folder remains, empty, when the volume is detached. Same false reset as the Linux fstab case, and more likely on Windows because mounting into a folder is an offered option in Disk Management.
-- **Windows, drive-letter reuse** — removable letters are reassigned by insertion order, so a different stick can take `E:`. If that volume happens to carry a `VaultCompass` folder, the header decodes but its passphrase check fails, which also lands on `HeaderGate::Reset` rather than a "this is a different portfolio" message. `FolderHoldsOtherPortfolio` already exists as an error for the enable path and is the honest classification here.
-
-Proposal: distinguish "we previously had a header here and now the folder is empty" from a genuine remote reset. A device that has already joined a portfolio knows the folder should carry a header; finding none is far more likely to be a detached volume than a start-over. Options: have `check_available()` require the header for an already-enrolled device (report `Unmounted`, the variant that exists and is currently never produced), or gate `pause_for_reset()` on having actually read a header whose check failed. Pair it with guidance in the reset message — try Resume with the volume attached before rejoining.
-
-Also worth surfacing in the UI: recommend the auto-mount path on Linux and a bare drive letter on Windows over a persistent mount-point folder, since those degrade correctly.
-
-**User value:** A detached USB key or drive no longer tells the user their portfolio was reset and that they must reinstall.
-**Done when:** An enrolled device finding no header in an existing folder reports it unavailable, a different portfolio's folder reports `FolderHoldsOtherPortfolio`, and both are covered by tests.
-
 ## (frontend) — Give multi-device sync its own view and rework its UI
 
 Sync ships as one `SyncSection` inside the settings page (`src/features/settings/sync/`, ~12 KB of TSX). That section now carries the whole feature: the status block (enabled/paused, device name, folder, last sync), the roster of other computers, held-back counts, failures, conflict notices, inconsistent holdings, six actions (Sync now, Pause, Rename, Change folder, Leave, Start over), two modals, and a single-field prompt shared between rename and change-folder. It has outgrown a settings section.

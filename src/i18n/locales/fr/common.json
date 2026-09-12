@@ -319,7 +319,7 @@
       "Missing": "Le dossier n'existe pas.",
       "NotADirectory": "Ce chemin n'est pas un dossier.",
       "PermissionDenied": "Le dossier ne peut être ni lu ni écrit.",
-      "Unmounted": "Le disque du dossier n'est pas monté.",
+      "Unmounted": "Le disque du dossier n'est pas monté. Reconnectez-le, puis relancez la synchronisation ou reprenez.",
       "OutOfSpace": "Le disque n'a plus d'espace libre.",
       "IoFailure": "Le dossier n'a pas pu être ouvert."
     },

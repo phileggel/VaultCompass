@@ -15,8 +15,8 @@ use crate::context::sync::application::intake::{self, IncomingChange, Intake};
 use crate::context::sync::application::join::{self, JoinError};
 use crate::context::sync::domain::{
     display_name, replay_order, Change, ChangeApplier, ChangeLogRepository, ConflictNotice,
-    FolderStore, HeldBackChange, Manifest, NoticeDraft, RosterEntry, Segment, SyncDevice,
-    SyncFailure, SyncReport, SyncStateRepository, SyncStatus, WaitingFor,
+    FolderProblem, FolderStore, HeldBackChange, Manifest, NoticeDraft, RosterEntry, Segment,
+    SyncDevice, SyncFailure, SyncReport, SyncStateRepository, SyncStatus, WaitingFor,
 };
 use crate::context::sync::error::SyncError;
 use crate::context::sync::infrastructure::codec::{
@@ -84,14 +84,18 @@ enum HeaderGate {
     Proceed,
     /// The header was written in a newer data format: publish anyway, and say so.
     UpdateRequired(u32),
-    /// No header, or one whose passphrase check no longer matches the kept key: the
-    /// portfolio was started over elsewhere.
+    /// No header at all. An enrolled device follows a header (SYN-084), so a reachable
+    /// folder without one is a mount point whose volume is gone, not a portfolio that was
+    /// started over (SYN-069).
+    Absent,
+    /// A header whose passphrase check no longer matches the kept key: the portfolio was
+    /// started over elsewhere.
     Reset,
 }
 
 fn header_gate(header_bytes: Option<&[u8]>, key: &Key) -> HeaderGate {
     let Some(bytes) = header_bytes else {
-        return HeaderGate::Reset;
+        return HeaderGate::Absent;
     };
     if let Some(version) =
         header_data_format_version(bytes).filter(|version| *version > DATA_FORMAT_VERSION)
@@ -475,6 +479,15 @@ impl SyncRun {
                 failures.push(SyncFailure::UpdateRequired {
                     data_format_version,
                 });
+            }
+            HeaderGate::Absent => {
+                return Ok(report(
+                    device,
+                    0,
+                    vec![SyncFailure::FolderUnavailable {
+                        problem: FolderProblem::Unmounted,
+                    }],
+                ));
             }
             HeaderGate::Reset => return self.pause_for_reset(device).await,
         }
@@ -904,14 +917,16 @@ mod tests {
         );
     }
 
-    // SYN-084 — a folder with no header at all is a reset too.
+    // SYN-069/084 — a reachable folder with no header is a detached volume, not a reset:
+    // the run reports it unavailable, the device stays as it was, and nothing is published.
+    // `state_repo` carries no `save_device` expectation on purpose — pausing would panic.
     #[tokio::test]
-    async fn missing_header_reports_portfolio_reset() {
+    async fn missing_header_reports_the_volume_unmounted_and_does_not_pause() {
         let pool = make_pool().await;
         seed_sync_device(&pool, "desktop-device").await;
+        seed_unpublished_change(&pool, "desktop-device", 1).await;
 
-        let mut state_repo = MockSyncStateRepository::new();
-        state_repo.expect_save_device().returning(|_| Ok(()));
+        let state_repo = MockSyncStateRepository::new();
         let mut folder_store = MockFolderStore::new();
         folder_store.expect_retarget().return_const(());
         folder_store.expect_check_available().returning(|| Ok(()));
@@ -924,7 +939,27 @@ mod tests {
             .publish(&device())
             .await
             .expect("SYN-062: never rejects");
-        assert!(report.failures.contains(&SyncFailure::PortfolioReset));
+        assert!(
+            report.failures.contains(&SyncFailure::FolderUnavailable {
+                problem: FolderProblem::Unmounted
+            }),
+            "SYN-069: an empty folder is an unmounted volume: {:?}",
+            report.failures
+        );
+        assert!(
+            !report.failures.contains(&SyncFailure::PortfolioReset),
+            "SYN-084: an absent header is never read as a reset"
+        );
+
+        let published_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM changes WHERE published = 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            published_count, 0,
+            "SYN-069: the change waits for the volume to come back"
+        );
     }
 
     // -------------------------------------------------------------------------
