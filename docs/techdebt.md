@@ -10,16 +10,6 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-09-11 — Two deferred PMV test-coverage items
-
-- Found by: spec-checker (PMV gate, re-verification pass)
-- Where: src/features/accounts/price_movement/usePriceMovementReport.test.ts, screenshots/
-- Context: branch `feat/price-fetch-result` @ `9aeb0da`
-- Severity: 🔵
-- Observation: Two gaps the PMV gate judged non-blocking and did not hold the feature on. (1) Nothing proves TanStack Router actually unmounts `AccountManager` on navigation, so the E2E cannot distinguish "unmounted and discarded" from "dismissed and stayed dismissed" — the residual is framework behaviour rather than project logic, and the three existing hook tests cover the half the hook owns. A gateway fake that honours `dispose()` would close it in Vitest (mount → unmount → fire the event → remount → assert `report === null`) without a second live E2E refresh. (2) `/visual-proof` captured four of the five UX-Draft states; the **Undated** state (both observation dates absent) has its own render branch and its own copy string (`pmv.column_values`) that nobody has looked at.
-- User value: None directly — both are confidence in existing behaviour, not behaviour changes.
-- Done when: the hook test asserts the discard across a remount with a disposal-honouring fake, and `screenshots/` carries the Undated state in light and dark.
-
 ## 2026-08-23 — Local writes do not take the sync gate
 
 - Found by: reviewer-security + reviewer-backend (PR-C, `.review/reviewer-security-2026-08-23-01.md`)

@@ -148,6 +148,41 @@ describe("usePriceMovementReport", () => {
 
     await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
   });
+
+  // PMV-016 — the report belongs to the mounted surface. With a fake that honours
+  // `dispose()`, a report published between an unmount and the next mount reaches
+  // nobody, and the new mount starts empty — yet still receives what is published
+  // after it. The positive half (the fresh report lands) proves the fake delivers.
+  it("does not carry a report published while unmounted into a later mount", async () => {
+    const listeners = new Set<(payload: CompletedPayload) => void>();
+    vi.mocked(gateway.accountGateway.subscribeToPriceFetchCompleted).mockImplementation(
+      async (cb) => {
+        listeners.add(cb);
+        return () => {
+          listeners.delete(cb);
+        };
+      },
+    );
+    const publish = (report: PriceMovementReport) => {
+      for (const listener of [...listeners]) listener(makePayload(report));
+    };
+
+    const first = renderHook(() => usePriceMovementReport());
+    await waitFor(() => expect(listeners.size).toBe(1));
+    first.unmount();
+    await waitFor(() => expect(listeners.size).toBe(0));
+
+    act(() => publish(makeReport({ total_after: 1_200_000 })));
+
+    const second = renderHook(() => usePriceMovementReport());
+    await waitFor(() => expect(listeners.size).toBe(1));
+    expect(second.result.current.report).toBeNull();
+
+    const fresh = makeReport({ total_after: 1_300_000 });
+    act(() => publish(fresh));
+    expect(second.result.current.report).toEqual(fresh);
+  });
+
   // PMV-016 — the race the `cancelled` flag exists for: the component unmounts
   // BEFORE the subscribe promise resolves. Without the flag the listener arrives
   // after cleanup has run and is never disposed, so a report could still land on
