@@ -113,6 +113,9 @@ jobs:
         run: python3 scripts/check.py --frontend --skip-tests
       - name: Tests with coverage (instrumented)
         run: npm run test:coverage
+      - name: Coverage gate — feature code
+        # Hard floor on the lines that carry behaviour (coverage-gates.json).
+        run: python3 scripts/coverage-gate.py --frontend
       - name: Upload to Codecov
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
         with:
@@ -171,6 +174,10 @@ jobs:
       - name: Coverage with tarpaulin
         working-directory: src-tauri
         run: cargo tarpaulin --out Lcov --output-dir ../coverage/backend --lib --tests --exclude-files "build.rs" --exclude-files "dev/generate_bindings.rs"
+      - name: Coverage gate — logic code
+        # Hard floor on domain, application, service and use-case lines
+        # (coverage-gates.json); wire adapters and repositories do not count.
+        run: python3 scripts/coverage-gate.py --backend
       - name: Upload to Codecov
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
         with:

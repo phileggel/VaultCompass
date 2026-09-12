@@ -50,6 +50,14 @@ test-e2e-headless:
 # Run unit tests only (excludes E2E and coverage; see test-e2e and coverage-fe/coverage-be)
 test-unit: test test-rust
 
+# Check the coverage reports against the floors in coverage-gates.json (run coverage-fe / coverage-be first); pass --frontend or --backend for one layer
+coverage-gate *ARGS:
+    python3 scripts/coverage-gate.py {{ARGS}}
+
+# The merge gate, locally: lint + type-check + build on both layers, then both test suites with coverage and the coverage floors
+harness: && coverage-fe coverage-be coverage-gate
+    python3 scripts/check.py --skip-tests
+
 # Resource-capped check-full: runs the full quality suite in a memory-throttled, low-priority
 # cgroup so heavy builds stay responsive on low-RAM machines (requires a systemd user session)
 check-safe:
