@@ -9,7 +9,8 @@ proceed cleanly (rebase conflict, divergent push, dirty tree, etc.).
 The merge guard: the branch must be the head of an open pull request whose
 every check run is green, and every check named in `required-checks.json`
 must be among them. When the rebase moved the commits (the target advanced),
-the rebased branch is pushed and the merge stops until CI has run on it.
+the rebased branch is pushed and the merge stops until CI has run on it, unless
+the target moved only by record files (todo, techdebt, lessons, plans, ADRs).
 """
 
 from __future__ import annotations
@@ -113,6 +114,31 @@ def _check_runs(sha: str) -> dict[str, tuple[str, str]]:
     return {name: (status, conclusion) for name, (_, status, conclusion) in latest.items()}
 
 
+# The record files: what closure commits and queue edits move. None is read by
+# a check or a reviewer, so a move of `main` made only of them cannot change what
+# the checks proved. Everything else — code, workflows, convention docs, prompts —
+# re-runs the checks.
+RECORD_FILES = {"docs/todo.md", "docs/techdebt.md", "docs/lessons.md"}
+RECORD_DIRS = ("docs/plan/", "docs/adr/")
+
+
+def _record_files_only(files: list[str]) -> bool:
+    return bool(files) and all(
+        f in RECORD_FILES or (f.endswith(".md") and f.startswith(RECORD_DIRS)) for f in files
+    )
+
+
+def _target_moved_by_record_files_only(before: str, target: str) -> bool:
+    """True when every file `target` gained since `before` branched off is a record file."""
+    base = git("merge-base", before, target, check=False)
+    if base.returncode != 0:
+        fail(f"Could not find the merge base of {before[:7]} and {target}.", (base.stderr or "").strip())
+    diff = git("diff", "--name-only", base.stdout.strip(), target, check=False)
+    if diff.returncode != 0:
+        fail(f"Could not list what {target} gained since {before[:7]}.", (diff.stderr or "").strip())
+    return _record_files_only([f for f in diff.stdout.splitlines() if f])
+
+
 def ensure_checks_green(branch: str, target: str, before: str, after: str) -> None:
     """Refuse the merge unless CI is green on exactly the commits about to land."""
     number, head = _open_pull_request(branch, target)
@@ -123,12 +149,21 @@ def ensure_checks_green(branch: str, target: str, before: str, after: str) -> No
                 f"Local {branch} ({after[:7]}) is not the head of PR #{number} ({head[:7]}) and the push failed.",
                 (push.stderr or "").strip(),
             )
-        why = "the rebase moved the commits" if before == head else "the local branch was ahead of the pull request"
-        fail(
-            f"{branch} pushed as {after[:7]} — {why}.",
-            f"CI runs on it now: gh pr checks {number} --watch",
-            "Re-run `just merge` when every check is green.",
-        )
+        # The checks are then read on `head`, which the push above left without
+        # a ref: GitHub keeps a commit's check runs regardless (verified on
+        # PR #121's pre-rebase head, 14 runs answered after the force push).
+        if before == head and _target_moved_by_record_files_only(before, target):
+            print(
+                f"{BLUE}ℹ {target} moved by record files only since the checks ran; the checks of {head[:7]} stand.{NC}",
+                file=sys.stderr,
+            )
+        else:
+            why = "the rebase moved the commits" if before == head else "the local branch was ahead of the pull request"
+            fail(
+                f"{branch} pushed as {after[:7]} — {why}.",
+                f"CI runs on it now: gh pr checks {number} --watch",
+                "Re-run `just merge` when every check is green.",
+            )
     runs = _check_runs(head)
     missing = [name for name in _required_checks() if name not in runs]
     not_green = sorted(
@@ -143,7 +178,8 @@ def ensure_checks_green(branch: str, target: str, before: str, after: str) -> No
             *(f"  {line}" for line in not_green),
             f"Watch: gh pr checks {number} --watch — then re-run `just merge`.",
         )
-    print(f"{GREEN}✓ PR #{number}: every check green on {head[:7]}.{NC}", file=sys.stderr)
+    landing = "" if after == head else f", merging {after[:7]}"
+    print(f"{GREEN}✓ PR #{number}: every check green on {head[:7]}{landing}.{NC}", file=sys.stderr)
 
 
 def main() -> int:
