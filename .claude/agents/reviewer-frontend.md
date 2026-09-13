@@ -245,6 +245,8 @@ Out of scope: page-level / shell-level singletons (one instance per route).
 
 ## Output format
 
+> Concise: one line per finding — location, claim, fix. No restating the diff, no narrative of how it was found, no alternatives the reader did not ask for. Pre-existing notes are one line each.
+
 Lead with a one-line headline summary:
 
 ```

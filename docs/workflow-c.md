@@ -57,12 +57,13 @@ Four human touchpoints. Everything else is either the agent's job or a machine g
 5. **Self-check** — `just harness`: architecture rules, lint, type-check, build, both
    suites with coverage, the coverage floors.
 6. **Self-review** — run the reviewer agents that match the diff (§ 7); apply the
-   triage policy; run them again until no 🔴 remains.
+   triage policy; run them again until no 🔴 remains. CI runs them again on every
+   push as the enforced record.
 7. **Evidence** — `/visual-proof` for every changed component; the E2E run in CI
    captures the real app and links the screenshots from the pull request.
-8. **PR** — opened for the record, not for approval. Body: the entry, each Done when
-   clause with the test that proves it, the triage table, techdebt filed, screenshots.
-   The commit title is the changelog line.
+8. **PR** — opened for the record, not for approval. Body under 20 lines: the entry,
+   each Done when clause with the test that proves it, findings that changed
+   something, techdebt filed, screenshots. The commit title is the changelog line.
 9. **Merge** when every required check is green: `just merge`. Never before.
 10. **Closure** in the same PR: entry marked `merged, unreleased`; techdebt updated;
     `ARCHITECTURE.md` if a module appeared; the spec if a rule changed.
@@ -98,10 +99,11 @@ deleted in the closure commit; the visual proofs are the record.
 | Coverage floors          | `scripts/coverage-gate.py`, Quality            | frontend features < 80 %, backend logic < floor (`coverage-gates.json`, ratchets to 90 %)                                                                     |
 | Golden portfolio         | `src-tauri/tests/golden_portfolio.rs`, Quality | any drift in a pinned figure (`tests/golden/expected.json`); a change that moves one names it in its entry's Done when and regenerates with `GOLDEN_UPDATE=1` |
 | E2E on the real app      | `.github/workflows/e2e.yml`, every PR          | any failure; screenshots linked                                                                                                                               |
+| Reviewer prompts         | `.github/workflows/review.yml`, every PR       | any 🔴 in a lane the diff touches; the report is a sticky PR comment; fails closed without the `CLAUDE_CODE_OAUTH_TOKEN` subscription secret                  |
 | Commit hygiene           | Quality `pr-checks`                            | title > 72, wrong type, trailer                                                                                                                               |
 | Security audit           | `security-audit.yml`                           | new advisory                                                                                                                                                  |
 
-Planned additions (build order in the plan): reviewer prompts as CI checks, visual
+Planned additions (build order in the plan): visual
 regression, the merge guard, the mutation sweep.
 
 ## 6. The right way to code
@@ -120,14 +122,18 @@ regression, the merge guard, the mutation sweep.
 
 ## 7. Reviewers and the triage policy
 
-Reviewers run on the diff before the PR: `reviewer-backend` and `reviewer-arch` for
+Reviewers run locally on the diff before the PR, until no 🔴 remains, and CI runs them
+again on every push (`.github/workflows/review.yml`, one check per lane the diff
+touches; the report is a sticky comment on the PR and any 🔴 fails the check). The
+lanes: `reviewer-backend` and `reviewer-arch` for
 `.rs`, `reviewer-frontend` and `reviewer-arch` for `.ts`/`.tsx`, `reviewer-sql` for
 migrations, `reviewer-infra` for scripts, hooks, config and workflows,
 `reviewer-security` for commands, capabilities and secret handling, `reviewer-e2e` for
 `e2e/**`, `spec-reviewer` / `contract-reviewer` / `adr-reviewer` when those documents
 change, `spec-checker` before closing an entry that carries spec rules.
 
-Every finding is graded and the outcome recorded in the PR body:
+Every finding, local or from a lane's CI comment, is graded and the outcome recorded
+in the PR body:
 
 | Grade        | Action                                                            |
 | ------------ | ----------------------------------------------------------------- |

@@ -119,7 +119,8 @@ Skip silently any file or directory below that does not exist in the project (v4
 - `src-tauri/capabilities/*.json` — Tauri 2 ACL capability files (security boundary, file format only — usage is `reviewer-security`)
 - `src-tauri/Cargo.toml` — Rust dependencies and build configuration
 - `package.json` — Node.js dependencies and scripts
-- `scripts/*.sh`, `scripts/*.bat`, `scripts/*.py` — internal quality (safety, robustness, portability) AND CI reference correctness
+- `scripts/*.sh`, `scripts/*.bat`, `scripts/*.py`, `scripts/*.mjs` — internal quality (safety, robustness, portability) AND CI reference correctness
+- `coverage-gates.json`, `arch-allowlist.json` — the harness floors and the frozen architecture debt (a lowered floor or a grown allowlist is a finding)
 - `.githooks/*` — internal quality AND hook wiring/CI consistency
 - `justfile` — Command runner recipes (task aliases for scripts and dev commands)
 
@@ -374,6 +375,8 @@ On a release sweep (Step 7), propose 2–5 prioritised improvements grouped by t
 ---
 
 ## Output format
+
+> Concise: one line per finding — location, claim, fix. No restating the diff, no narrative of how it was found, no alternatives the reader did not ask for. Pre-existing notes are one line each.
 
 Lead with a one-line headline summary:
 

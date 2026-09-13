@@ -58,7 +58,7 @@ Launch the reviewer agents that match the diff (`docs/workflow-c.md` § 7) in on
 batch. Grade every finding with `/review-triage`'s axes and apply the policy: (a) fix,
 (b) `TD-NNN` entry, (c) one-off inline comment, (c) pattern → edit the reviewer prompt,
 `[DECISION]` → open question on the entry. Re-run the reviewers until no 🔴 remains.
-No question to the human.
+No question to the human. CI runs the same reviewers on every push (Step 8).
 
 ## Step 7 — Evidence
 
@@ -68,11 +68,17 @@ for `feat`/`fix`), body ≤ 2 lines with the ref.
 
 ## Step 8 — Pull request and merge
 
-- Commit, push, `gh pr create`. Body: the entry ref and title, each Done when clause
-  with the test that proves it, the triage table, techdebt filed, the visual proofs.
+- Commit, push, `gh pr create`. Body under 20 lines: the entry ref and title, each
+  Done when clause with the test that proves it, findings that changed something,
+  techdebt filed, the visual proofs. Nothing else.
 - Watch the checks with a `Monitor` on
   `gh api repos/{owner}/{repo}/commits/<sha>/check-runs` (one line per completed
   run, exit when all are completed) until every run completes.
+- A red `reviewer-<lane>` check: read its sticky comment on the PR (`gh api
+repos/{owner}/{repo}/issues/<n>/comments`), grade every finding with
+  `/review-triage`'s axes and apply the policy — (a) fix, (b) `TD-NNN` entry, (c)
+  one-off inline comment, (c) pattern → edit the reviewer prompt, `[DECISION]` → open
+  question on the entry — then record the table in the PR body, push, and watch again.
 - One E2E failure that passes on re-run: file the flake as `TD-NNN` with the failure
   screenshot and continue. Any other red: fix, push, watch again. The same gate red
   three times: open question on the entry, leave the PR open, stop.

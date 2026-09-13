@@ -67,7 +67,7 @@ If invoked with no migration files in the branch diff, halt with the refusal in 
 
 Run `bash scripts/branch.sh files --migrations`. If the result is empty, halt — output the no-migrations refusal and stop.
 
-The project's SQLx convention pins migrations to `migrations/` at the repo root. Projects using a different layout must override this agent's discovery in a local fork, not rely on a runtime branch.
+Migrations live under `src-tauri/migrations/` (`bash scripts/branch.sh files --migrations` also accepts a root-level `migrations/`).
 
 Filter out deleted paths: confirm each candidate exists with `Glob` before adding it to the review set. Deletes are out of scope — once a migration has shipped, deleting it is itself a discipline failure surfaced at PR review, not by this agent.
 
@@ -174,6 +174,8 @@ Key violations:
 ---
 
 ## Output format
+
+> Concise: one line per finding — location, claim, fix. No restating the diff, no narrative of how it was found, no alternatives the reader did not ask for. Pre-existing notes are one line each.
 
 Lead with a one-line headline summary:
 
