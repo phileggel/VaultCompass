@@ -90,18 +90,19 @@ deleted in the closure commit; the visual proofs are the record.
 
 `just harness` locally; the same set as required checks on every pull request:
 
-| Check                    | Where                                 | Gate                                                                                      |
-| ------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Lint, format, type-check | `scripts/check.py`, Quality           | any error                                                                                 |
-| Architecture rules A1–A8 | `scripts/arch-check.py`, Quality      | any violation; frozen debt may only shrink (`arch-allowlist.json`)                        |
-| Unit and integration     | Vitest, cargo test, Quality           | any failure                                                                               |
-| Coverage floors          | `scripts/coverage-gate.py`, Quality   | frontend features < 80 %, backend logic < floor (`coverage-gates.json`, ratchets to 90 %) |
-| E2E on the real app      | `.github/workflows/e2e.yml`, every PR | any failure; screenshots linked                                                           |
-| Commit hygiene           | Quality `pr-checks`                   | title > 72, wrong type, trailer                                                           |
-| Security audit           | `security-audit.yml`                  | new advisory                                                                              |
+| Check                    | Where                                          | Gate                                                                                                                                                          |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint, format, type-check | `scripts/check.py`, Quality                    | any error                                                                                                                                                     |
+| Architecture rules A1–A8 | `scripts/arch-check.py`, Quality               | any violation; frozen debt may only shrink (`arch-allowlist.json`)                                                                                            |
+| Unit and integration     | Vitest, cargo test, Quality                    | any failure                                                                                                                                                   |
+| Coverage floors          | `scripts/coverage-gate.py`, Quality            | frontend features < 80 %, backend logic < floor (`coverage-gates.json`, ratchets to 90 %)                                                                     |
+| Golden portfolio         | `src-tauri/tests/golden_portfolio.rs`, Quality | any drift in a pinned figure (`tests/golden/expected.json`); a change that moves one names it in its entry's Done when and regenerates with `GOLDEN_UPDATE=1` |
+| E2E on the real app      | `.github/workflows/e2e.yml`, every PR          | any failure; screenshots linked                                                                                                                               |
+| Commit hygiene           | Quality `pr-checks`                            | title > 72, wrong type, trailer                                                                                                                               |
+| Security audit           | `security-audit.yml`                           | new advisory                                                                                                                                                  |
 
-Planned additions (build order in the plan): golden portfolio figures, reviewer
-prompts as CI checks, visual regression, the merge guard, the mutation sweep.
+Planned additions (build order in the plan): reviewer prompts as CI checks, visual
+regression, the merge guard, the mutation sweep.
 
 ## 6. The right way to code
 

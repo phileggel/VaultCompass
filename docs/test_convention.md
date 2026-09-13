@@ -2,13 +2,14 @@
 
 ## Overview
 
-| Tier                    | What                         | Location                                                     | Mocks?                        |
-| ----------------------- | ---------------------------- | ------------------------------------------------------------ | ----------------------------- |
-| Frontend                | Component and hook behavior  | colocated `*.test.ts(x)` next to the file                    | Gateway mocked                |
-| BE Tier 1 — Unit        | Service / orchestrator logic | inline `#[cfg(test)] mod tests` in the same `.rs` file       | All deps mocked (mockall)     |
-| BE Tier 2 — Repository  | SQL queries and persistence  | inline `#[cfg(test)] mod tests` in the repository `.rs` file | None — real in-memory SQLite  |
-| BE Tier 3 — Integration | Spec-driven end-to-end flows | `src-tauri/tests/` (separate binary)                         | None — real services + SQLite |
-| Tier 4 — E2E            | WebDriver UI flows           | `e2e-rules.md` (ephemeral DB, B36)                           | None                          |
+| Tier                    | What                                | Location                                                             | Mocks?                        |
+| ----------------------- | ----------------------------------- | -------------------------------------------------------------------- | ----------------------------- |
+| Frontend                | Component and hook behavior         | colocated `*.test.ts(x)` next to the file                            | Gateway mocked                |
+| BE Tier 1 — Unit        | Service / orchestrator logic        | inline `#[cfg(test)] mod tests` in the same `.rs` file               | All deps mocked (mockall)     |
+| BE Tier 2 — Repository  | SQL queries and persistence         | inline `#[cfg(test)] mod tests` in the repository `.rs` file         | None — real in-memory SQLite  |
+| BE Tier 3 — Integration | Spec-driven end-to-end flows        | `src-tauri/tests/` (separate binary)                                 | None — real services + SQLite |
+| BE Golden               | Pinned figures of a fixed portfolio | `src-tauri/tests/golden_portfolio.rs` + `tests/golden/expected.json` | None — real services + SQLite |
+| Tier 4 — E2E            | WebDriver UI flows                  | `e2e-rules.md` (ephemeral DB, B36)                                   | None                          |
 
 Run checks before committing:
 

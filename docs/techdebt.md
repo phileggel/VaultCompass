@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-019) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-020) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -222,3 +222,13 @@ Remove an entry once it has been resolved.
 - Observation: E1–E4 ask every interactive element for a stable id, and the E2E suite selects by id, yet 119 of the 317 `Button` / `IconButton` / `TextField` / `DateField` / `CalcField` / `FAB` tags rendered by feature code have none. The architecture check freezes today's count per file and refuses any growth; the count can only go down. The 18 sibling-feature imports the same check freezes belong to the FE gold layout migration entry above; the 8 `Math.` uses are display rounding and the documented split preview (SPL-061) and need no action.
 - User value: None — every control becomes addressable by tests and assistive tech.
 - Done when: `missing_ids` in arch-allowlist.json is empty.
+
+## 2026-09-13 — TD-019 — The assets spec's before-each hook can hit a stale element
+
+- Found by: manual (PR #111 E2E attempt 1, run 34746573443; the PR touched no app code)
+- Where: e2e/assets/assets.test.ts (`beforeEach`), e2e/helpers/modal.ts (`dismissLeftoverModal`), e2e/helpers/navigation.ts (`navigateToAssets`)
+- Context: branch `test/golden-portfolio` @ `361ece6`
+- Severity: 🟡
+- Observation: The hook failed with `stale element reference` while creating a node handle for an `element` call — an element located by one step had been replaced by a re-render before the next step used it. It is the second distinct once-only E2E failure in two days (TD-016 is the first); both sit in setup or navigation code shared by many specs, so each has many chances to fire per run. With E2E as a required check, every such failure costs a re-run before a green PR can merge.
+- User value: None — suite reliability.
+- Done when: the hook re-locates elements after each navigation step instead of reusing handles across renders, or the shared helpers wait for the route to settle before returning; a month of pull-request runs shows no before-each failure.
