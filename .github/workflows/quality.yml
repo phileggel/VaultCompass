@@ -140,8 +140,9 @@ jobs:
   backend:
     name: Backend — quality + coverage
     runs-on: ubuntu-latest
-    # 40: a Cargo.lock change misses the Rust cache and the cold tarpaulin
-    # build pushes the job past 30 (bit PR #94; warm-cache baseline is ~21).
+    # 40: a Cargo.lock change misses the Rust cache and a cold instrumented
+    # build is the slow path (bit PR #94 under tarpaulin); the warm baseline
+    # with llvm-cov is measured in TD-020's closure.
     timeout-minutes: 40
     env:
       CARGO_INCREMENTAL: "0"
@@ -160,16 +161,18 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          # llvm-tools-preview: the profiler runtime and llvm-profdata/llvm-cov
+          # that cargo llvm-cov drives.
+          components: rustfmt, clippy, llvm-tools-preview
       - name: Cache Rust
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2.9.1
         with:
           workspaces: src-tauri
           prefix-key: linux-rust
       - name: Install sqlx-cli
-        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk.
+        # Pinned to full SHA — mutable tags are a supply-chain risk.
         # sqlx-cli version matches `sqlx` in Cargo.lock (0.8.6).
-        uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff
+        uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff  # v2.79.6
         with:
           tool: sqlx-cli@0.8.6
       - name: Setup sqlx-check DB
@@ -178,15 +181,23 @@ jobs:
           mkdir -p .local
           sqlx database setup
       - name: Quality checks
-        run: python3 scripts/check.py --backend
-      - name: Install cargo-tarpaulin
-        # Pinned to full SHA for v2.75.30 — mutable tags are a supply-chain risk
-        uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff
+        # --skip-tests: the suite runs once, under llvm-cov, two steps below.
+        run: python3 scripts/check.py --backend --skip-tests
+      - name: Install cargo-llvm-cov
+        # Pinned to full SHA — mutable tags are a supply-chain risk.
+        uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff  # v2.79.6
         with:
-          tool: cargo-tarpaulin
-      - name: Coverage with tarpaulin
-        working-directory: src-tauri
-        run: cargo tarpaulin --out Lcov --output-dir ../coverage/backend --lib --tests --exclude-files "build.rs" --exclude-files "dev/generate_bindings.rs"
+          tool: cargo-llvm-cov@0.8.7
+      - name: Coverage with llvm-cov
+        # Same report path and flags as `just coverage-be`: the binaries are
+        # instrumented at compile time and the suite runs as usual, so the run
+        # costs the tests' own time once the build is warm (TD-020).
+        # Inline `#[cfg(test)]` modules are then stripped from the report so a
+        # file's own tests never count as covered logic.
+        run: |
+          mkdir -p coverage/backend
+          (cd src-tauri && cargo llvm-cov --lib --tests --lcov --output-path ../coverage/backend/lcov.info --ignore-filename-regex '(^|/)build\.rs$|dev/generate_bindings\.rs$|/src-tauri/tests/')
+          python3 scripts/coverage-strip-tests.py coverage/backend/lcov.info
       - name: Coverage gate — logic code
         # Hard floor on domain, application, service and use-case lines
         # (coverage-gates.json); wire adapters and repositories do not count.

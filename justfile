@@ -33,9 +33,10 @@ test-rust:
 coverage-fe:
     npm run test:coverage
 
-# Run backend tests with coverage (output: coverage/backend/lcov.info + tarpaulin-report.html); requires: cargo install cargo-tarpaulin
+# Run backend tests with coverage (output: coverage/backend/lcov.info); requires: cargo install cargo-llvm-cov + rustup component add llvm-tools-preview
 coverage-be:
-    cd src-tauri && cargo tarpaulin --out Lcov Html --output-dir ../coverage/backend --lib --tests --exclude-files "build.rs" --exclude-files "dev/generate_bindings.rs"
+    mkdir -p coverage/backend && cd src-tauri && cargo llvm-cov --lib --tests --lcov --output-path ../coverage/backend/lcov.info --ignore-filename-regex '(^|/)build\.rs$|dev/generate_bindings\.rs$|/src-tauri/tests/'
+    python3 scripts/coverage-strip-tests.py coverage/backend/lcov.info
 
 # Run E2E tests against the built binary (opens a window)
 test-e2e:

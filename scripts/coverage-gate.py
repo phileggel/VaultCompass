@@ -29,7 +29,7 @@ ROOT_SEGMENTS = ("src-tauri", "src")
 def relative_path(raw: str) -> str:
     """Map an lcov SF path to a repo-relative one.
 
-    Vitest writes `src/...`; tarpaulin writes absolute paths. The path is cut
+    Vitest writes `src/...`; llvm-cov writes absolute paths. The path is cut
     at its first `src-tauri` or `src` segment (whole segments, so `src-tauri`
     is never mistaken for `src`), which makes the globs in the config match on
     any machine.

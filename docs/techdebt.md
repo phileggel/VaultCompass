@@ -242,6 +242,7 @@ Remove an entry once it has been resolved.
 - Observation: tarpaulin rebuilds the whole crate instrumented on every run and cannot reuse the normal build cache, so the backend job is the slowest gate by a wide margin: the frontend job ends in two minutes, E2E in ten, the coverage floor waits for tarpaulin. `cargo llvm-cov` produces the same lcov report from a standard build that the Rust cache already holds, and was the plan's original choice for the coverage gate.
 - User value: None — a pull request merges twenty minutes sooner.
 - Done when: the backend job produces `coverage/backend/lcov.info` through `cargo llvm-cov` (locally and in CI), `scripts/coverage-gate.py` reads it unchanged, the floor in `coverage-gates.json` is re-measured on the new tool, and the job's median duration on `main` is under ten minutes.
+- Status: llvm-cov landed (recipe, CI step, `scripts/coverage-strip-tests.py` so inline test modules do not count); measured 88.77 % of 11 381 logic lines locally (7 min cold, 4 min warm, with CI's compiler flags), floor kept at 85.5 %. Remove this entry once the job's median on `main` reads under ten minutes.
 
 ## 2026-09-13 — TD-021 — Action pins labelled with the wrong tag in four workflows
 
