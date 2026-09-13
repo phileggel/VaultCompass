@@ -47,11 +47,12 @@ run_check() {
     fi
 }
 
-MD_FILES=$(printf '%s\n' "$STAGED" | grep -E '\.md$' | grep -v '^$' || true)
+# Only Markdown that still exists: a deleted file has nothing to format.
+MD_FILES=$(printf '%s\n' "$STAGED" | grep -E '\.md$' | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done || true)
 if [ -n "$MD_FILES" ]; then
     if ! command -v npx >/dev/null 2>&1; then
         echo -e "${YELLOW}⚠  npx not found — Markdown not checked.${NC}"
-    elif printf '%s\n' "$MD_FILES" | xargs -d '\n' npx prettier --check >/dev/null 2>&1; then
+    elif printf '%s\n' "$MD_FILES" | tr '\n' '\0' | xargs -0 npx prettier --check >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Prettier: Markdown formatted.${NC}"
     else
         echo -e "${RED}❌ Prettier failed on staged Markdown. Run: just format${NC}"
