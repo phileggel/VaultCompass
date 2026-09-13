@@ -30,6 +30,7 @@ export async function captureScreen(name: string): Promise<void> {
 
   try {
     await setMotion(false);
+    await parkPointer();
     for (const scheme of ["light", "dark"] as const) {
       await setDark(scheme === "dark");
       await waitForRepaint();
@@ -56,6 +57,23 @@ async function setMotion(enabled: boolean): Promise<void> {
       "*, *::before, *::after { transition: none !important; animation: none !important; }";
     document.head.appendChild(style);
   }, enabled);
+}
+
+// The pointer rests wherever the last click left it, so a control under it
+// paints its hover colour in one run and not in the next (a 48 px button is
+// 0.45 % of the screen, over the regression threshold). It is parked in the
+// top-left corner before the capture. Pointer actions are optional for a
+// WebDriver implementation; when the driver refuses them the capture goes on
+// as before and the run log says so.
+async function parkPointer(): Promise<void> {
+  try {
+    await browser
+      .action("pointer", { parameters: { pointerType: "mouse" } })
+      .move({ x: 0, y: 0, origin: "viewport" })
+      .perform();
+  } catch (error) {
+    console.warn(`captureScreen: pointer not parked (${String(error)})`);
+  }
 }
 
 async function setDark(dark: boolean): Promise<void> {
