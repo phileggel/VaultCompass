@@ -51,7 +51,7 @@ The report (`PriceMovementDialog`) gives each account its value before, its valu
 The holding row's price cell says how old the price is with a full sentence — `Mis à jour il y a 2 j` / `Updated 2d ago` (`mkt.staleness_days_ago`) and `Mis à jour aujourd'hui` / `Updated today` (`mkt.staleness_today`). In a dense row the words add nothing the position does not already say; the age alone reads faster: `2 j` / `2d`. Copy-only — the formatter and the tests key on the i18n identifiers, not the words. The label only has a today and an N-days form; there is no hours form to keep.
 
 **User value:** The price age reads at a glance as `2 j` instead of a sentence, in a row already short of width.
-**Done when:** Both languages' `mkt.staleness_days_ago` and `mkt.staleness_today` carry the age alone, the same-day wording and the FX label question are decided, and the holding-row screenshot is recaptured.
+**Done when:** Both languages' `mkt.staleness_days_ago` and `mkt.staleness_today` carry the age alone, the same-day wording and the FX label question are decided, and the holding-row screenshot is recaptured. — merged, unreleased (PR #124).
 **Design:** validated (in chat, 2026-09-13)
 **Open questions:**
 
