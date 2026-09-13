@@ -10,6 +10,8 @@ examine_globs = [
 ]
 exclude_globs = ["**/api.rs", "**/mod.rs"]
 # The suite opens SQLite databases and takes ~40 s per mutant in CI; a mutant
-# that runs five minutes is a hang. The multiplier serves runs with a baseline.
-timeout = 300
+# that runs five minutes is a hang. The multiplier serves runs with a baseline;
+# the minimum is the floor of the auto-set timeout. (`timeout` is not a config
+# key: the sweep of 2026-09-14 failed to parse it before running a mutant.)
+minimum_test_timeout = 300
 timeout_multiplier = 3.0
