@@ -21,3 +21,4 @@
 | [ADR-017](017-yahoo-finance-keyless-price-source.md)         | Yahoo Finance is the Sole Keyless Price Source; BYOK Retired      | Accepted — supersedes ADR-011, ADR-016 |
 | [ADR-018](018-lazy-catch-up-management-fee-generation.md)    | Lazy Catch-Up Generation for Recurring Management Fees            | Accepted                               |
 | [ADR-019](019-per-device-change-log-multi-device-sync.md)    | Per-Device Change Log for Multi-Device Sync                       | Accepted                               |
+| [ADR-020](020-drop-the-claude-kit.md)                        | Drop the claude-kit and Own the Tooling                           | Accepted                               |

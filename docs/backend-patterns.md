@@ -8,7 +8,7 @@ Read this when:
 - A reviewer flags a structural choice (struct layout, file split, helper placement) — verify the existing pattern, then either follow it or propose an amendment here.
 - Onboarding to a new module — skim once to internalise the conventions before reading any specific file.
 
-> ⚠️ This file is **project-owned**. The kit never overwrites it on `just sync-kit`. If a pattern below ever lands in the kit's generic recipes, drop it here and link to the kit doc.
+> This file holds the project's own idioms, next to the generic rules in `backend-rules.md`. A pattern that stops being specific to this project moves into the rules file.
 
 ---
 

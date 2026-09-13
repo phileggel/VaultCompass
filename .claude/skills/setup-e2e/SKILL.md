@@ -21,7 +21,7 @@ without any further infrastructure work.
 
 - **Before the first E2E test** — once per project, to stand up the WebDriver infrastructure `test-writer-e2e` depends on
 - **When `wdio.conf.ts` is missing or the suite won't start** — safe to re-run; every step skips work already done
-- **In Workflow A Phase 4** — the `/start` template calls it before `test-writer-e2e` if E2E isn't set up yet
+- **Before the first E2E scenario** — run it once if E2E isn't set up yet
 
 Not for writing or running tests — that's `test-writer-e2e` and `npm run test:e2e`. This skill only provisions the infrastructure.
 

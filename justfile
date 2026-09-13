@@ -1,8 +1,6 @@
 # Portfolio Manager — Command Runner
 # Install just: https://github.com/casey/just
 
-import "common.just"
-
 # List all available commands
 default:
     @just --list
@@ -95,3 +93,72 @@ reset-db:
 # Run pending database migrations. Override `URL=...` to target a different DB.
 db-migrate URL="sqlite:.local/dev_check.sqlite":
     cd src-tauri && DATABASE_URL={{URL}} sqlx migrate run
+
+# ---- shared recipes ----------------------------------------------------
+# Run fast quality check (lint/format only, no tests)
+check:
+    @[ -f scripts/check.py ] || { echo "❌ scripts/check.py not found — restore it from git history"; exit 1; }
+    python3 scripts/check.py --fast
+
+# Run full quality check (tests + build + lint)
+check-full:
+    @[ -f scripts/check.py ] || { echo "❌ scripts/check.py not found — restore it from git history"; exit 1; }
+    python3 scripts/check.py
+
+# Release new version (interactive)
+release *ARGS:
+    @[ -f scripts/release.py ] || { echo "❌ scripts/release.py not found — restore it from git history"; exit 1; }
+    python3 scripts/release.py {{ARGS}}
+
+# ⚠️  Destructive: removes stale remote-tracking branches
+clean-branches:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git fetch --prune
+    # Portable equivalent of `xargs -r` (which is GNU-only — BSD/macOS
+    # xargs runs the command once with no arguments instead of skipping).
+    stale=$(git branch -vv | grep ': gone]' | awk '{print $1}')
+    [ -n "$stale" ] && echo "$stale" | xargs git branch -D || true
+
+# Count lines of code per language (cloc)
+stat:
+    cloc . --vcs=git
+
+# Refuses with a specific diagnostic + recovery command if FF is not safe
+# (squash/rebase merge on GitHub, divergence, dirty tree, etc.).
+# Rebase, fast-forward merge the current branch into main, push, delete the branch
+merge:
+    @[ -f scripts/merge.py ] || { echo "❌ scripts/merge.py not found — restore it from git history"; exit 1; }
+    python3 scripts/merge.py
+
+# Prerequisites: sqlx must be on $PATH and DATABASE_URL must be set
+# Run pending database migrations
+migrate:
+    @if [ -d src-tauri ]; then cd src-tauri && sqlx migrate run; else echo "ℹ skipping migrate (no src-tauri/)"; fi
+
+# SQLX_OFFLINE=false forces online mode so `prepare` hits the dev DB even
+# though .cargo/config.toml sets SQLX_OFFLINE=true globally.
+# Regenerate the SQLx offline query cache (run after schema or query changes)
+prepare-sqlx:
+    @if [ -d src-tauri ]; then cd src-tauri && SQLX_OFFLINE=false DATABASE_URL="sqlite:.local/dev_check.sqlite" cargo sqlx prepare -- --tests; else echo "ℹ skipping prepare-sqlx (no src-tauri/)"; fi
+
+# The markdown fixer runs prettier with the same args as check.py's
+# _PRETTIER_DOCS_CMD (`--write` mirroring its `--check`), so `just format`
+# always satisfies `just check`.
+# Auto-fix formatting and linting on both layers
+format:
+    @if [ -d src-tauri ]; then cd src-tauri && cargo fmt; else echo "ℹ skipping cargo fmt (no src-tauri/)"; fi
+    @if [ -d src-tauri ]; then cd src-tauri && cargo clippy --fix --allow-dirty --quiet; else echo "ℹ skipping clippy (no src-tauri/)"; fi
+    @if [ -f package.json ]; then npm run format:fix; else echo "ℹ skipping format:fix (no package.json)"; fi
+    @if [ -f package.json ]; then npx prettier --write "**/*.md" --ignore-path .gitignore; else echo "ℹ skipping prettier docs (no package.json)"; fi
+
+# ⚠️  Destructive: deletes local database and recreates schema
+clean-db:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d src-tauri ]; then
+        echo "ℹ skipping clean-db (no src-tauri/)"
+        exit 0
+    fi
+    rm -rf src-tauri/.local/*
+    cd src-tauri && sqlx database setup

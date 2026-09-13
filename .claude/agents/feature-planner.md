@@ -1,6 +1,6 @@
 ---
 name: feature-planner
-description: Translates a validated spec into an implementation plan (docs/plan/{feature}-plan.md) mapping TRIGRAM-NNN rules to DDD layers and the kit workflow. Use after spec-reviewer and contract-reviewer approve. Output is gated by plan-reviewer before any test-writer runs. Not for spec or contract authoring — use `/spec-writer` or `/contract` instead.
+description: Translates a validated spec into an implementation plan (docs/plan/{feature}-plan.md) mapping TRIGRAM-NNN rules to DDD layers and the delivery workflow. Use after spec-reviewer and contract-reviewer approve. Output is gated by plan-reviewer before any test-writer runs. Not for spec or contract authoring — use `/spec-writer` or `/contract` instead.
 tools: Read, Write, Grep, Glob, Bash, AskUserQuestion
 model: opus
 ---
@@ -75,7 +75,7 @@ For each TRIGRAM-NNN rule, identify concrete tasks:
 - Map which layer(s) are affected.
 - **ADR Application**: Explicitly mention ADR constraints in the tasks (e.g., "Implement amount using i64 as per ADR-001").
 - Define dependencies (e.g., Backend logic -> `just generate-types` -> Frontend gateway).
-- **Commit phases**: identify thematic boundaries where a `/smart-commit` is appropriate. Suggest a conventional commit title for each (e.g., `feat(asset): implement pricing backend`).
+- **Commit phases**: identify thematic boundaries where a commit is appropriate. Suggest a conventional commit title for each (e.g., `feat(asset): implement pricing backend`).
 - **Schema changes**: identify rules that imply a database schema change (new entity, new field, new status column, new FK). For each, note the expected migration filename (`{timestamp}_create_{table}.sql` or `{timestamp}_add_{column}_to_{table}.sql`) and infer the columns from the domain rules. Flag that `just prepare-sqlx` must be run after migrating.
 
 ### Step 5 — Modified-function coverage
@@ -120,24 +120,24 @@ A synthetic checklist for mandatory quality and process steps:
 - [ ] 🔗 Type Synchronization (`just generate-types`) — if backend rules present
 - [ ] 🔧 Compilation fixup (TypeScript errors from new bindings only — no UI work) — if backend rules present
 - [ ] ✅ `just check` — TypeScript clean
-- [ ] 💾 Commit: backend layer via `/smart-commit` (suggested title from plan)
-- [ ] 🔀 `/create-pr` — if the PR Plan slices BE into its own PR; otherwise continue. After merge, branch the next phase off updated `main`.
+- [ ] 💾 Commit: backend layer (suggested title from plan)
+- [ ] 🔀 Open the PR — if the PR Plan slices BE into its own PR; otherwise continue. After merge, branch the next phase off updated `main`.
 - [ ] ✍️ Frontend test stubs (`test-writer-frontend` — all stubs written, red confirmed; pass `modified_functions` list if any `[unit-test-needed]` rules are present) — if frontend rules present
 - [ ] 💻 Frontend Implementation (minimal — make failing tests pass, green confirmed)
 - [ ] 🧹 `just format`
 - [ ] 📸 Visual proof (`/visual-proof` — capture final state; stage screenshots before commit) — if frontend rules present
 - [ ] 🔍 Frontend Review (`reviewer-frontend` → save report to .review/ → `/review-triage` → apply Follow-ups) — if .ts/.tsx modified
-- [ ] 💾 Commit: frontend layer via `/smart-commit` (suggested title from plan)
-- [ ] 🔀 `/create-pr` — if the PR Plan slices FE into its own PR; otherwise continue. After merge, branch the next phase off updated `main`.
+- [ ] 💾 Commit: frontend layer (suggested title from plan)
+- [ ] 🔀 Open the PR — if the PR Plan slices FE into its own PR; otherwise continue. After merge, branch the next phase off updated `main`.
 - [ ] ✍️ E2E scenarios (`test-writer-e2e` — produces pyramid-friendly scenarios; run `/setup-e2e` first if not done) — if E2E coverage applies to this feature
 - [ ] ▶️ Run E2E suite (`npm run test:e2e` → green confirmed; main agent triages any failure) — if E2E coverage applies to this feature
 - [ ] 🔍 E2E Review (`reviewer-e2e` → save report to .review/ → `/review-triage` → apply Follow-ups) — if E2E coverage applies to this feature
-- [ ] 💾 Commit: E2E tests via `/smart-commit` (suggested title from plan)
+- [ ] 💾 Commit: E2E tests (suggested title from plan)
 - [ ] 🔍 Cross-cutting Review (`reviewer-arch` if `.rs` modified in this branch + `reviewer-sql` if migrations + `reviewer-infra` if any config, script, hook, or workflow file changed + `reviewer-security` if Tauri command, capability, or security-sensitive file modified → save reports to .review/ → `/review-triage` → apply Follow-ups)
 - [ ] 📚 Documentation Update (`docs/todo.md` — close shipped entries; `ARCHITECTURE.md` only if a new module/path or layer pattern was introduced)
 - [ ] ✅ Spec check (`spec-checker`)
-- [ ] 💾 Commit: tests & docs via `/smart-commit` (suggested title from plan)
-- [ ] 🔀 `/create-pr` — final PR per the PR Plan (or merge directly: `git checkout main && git merge --no-ff feat/{name}`)
+- [ ] 💾 Commit: tests & docs (suggested title from plan)
+- [ ] 🔀 Open the final PR per the PR Plan; merge on green with `just merge`
 
 ### 2. Detailed Implementation Plan
 
@@ -164,7 +164,7 @@ Captures the answer from Step 6. Format:
   - **Dependency**: what must be merged first (e.g. "rebase off main after PR #1 merges")
   - **Branch suffix** (suggestion): `feat/{name}-be`, `feat/{name}-fe`, `feat/{name}-e2e` for multi-PR strategies; `feat/{name}` for single-PR
 
-`/start` reads this section to decide where to emit `/create-pr` checkpoints in the working context.
+The agent reads this section to decide where the PR boundaries fall.
 
 ---
 
@@ -174,6 +174,6 @@ Captures the answer from Step 6. Format:
 2. **Synchronization**: Include `just generate-types` as a mandatory step between Backend and Frontend tasks — Specta regenerates `src/bindings.ts` from the Tauri command surface.
 3. **No Code Implementation**: Your output is a plan describing _what_ to do and _where_, not the actual code.
 4. **Task Tracking**: Ensure the main agent can progressively update the checkboxes in this file during the implementation phase.
-5. **Commit Checkpoints**: Every plan must include at least one commit checkpoint per thematic phase (backend, frontend, E2E tests, tests & docs). Each checkpoint provides only a suggested conventional commit title — the `/smart-commit` skill handles the rest.
+5. **Commit Checkpoints**: Every plan must include at least one commit checkpoint per thematic phase (backend, frontend, E2E tests, tests & docs). Each checkpoint provides only a suggested conventional commit title — the commit hook validates the format.
 6. **Minimal implementation**: implementation tasks must state "implement only what makes failing tests pass — no defensive code, no anticipation of future rules." `test-writer-backend` and `test-writer-frontend` define the scope; the implementation must not exceed it.
 7. **Next gate**: After writing the plan, tell the user that `plan-reviewer` is the mandatory next step before any test-writer subagent runs. Do not invoke it yourself; the orchestrating agent runs it.

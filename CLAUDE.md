@@ -27,7 +27,7 @@ Questions that only the human can answer are written into the entry's `**Open qu
 ## ⚠️ Core Rules
 
 1. **Authority follows the entry.** While running a queued entry (`/next-todo`), a `TD-NNN` the human queued, or a phase the human said "go" to, the agent branches, commits, pushes, opens the PR and runs `just merge` on green without asking. In an open-ended chat, ask once for the task, not per step. Always: never push to `main` directly, never force-push, never bypass a hook, never cut a release, never touch the live portfolio database (`~/.local/share/com.phileggel.vault-compass/` is read-only reference data).
-2. **Always use `just`**: never run native commands (`cargo build`, `npm install`, `sqlx migrate`) when a recipe exists in `justfile` or `common.just`.
+2. **Always use `just`**: never run native commands (`cargo build`, `npm install`, `sqlx migrate`) when a recipe exists in the `justfile`.
 3. **Every change goes through the harness**: branch → PR → every check green → `just merge`. Docs-only changes too. The entry's Done when is the plan; there is no separate plan-approval gate. Anything the user sees changing goes through the design gate first (`/design-proposal`).
 
 ## 🎯 Per-task Discipline

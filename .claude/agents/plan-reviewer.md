@@ -131,7 +131,7 @@ Compare the plan's Workflow TaskList against the canonical template emitted by `
 
 - 🔴 No `PR Plan` section, or the section has no `Strategy` (`1 PR` / `2 PRs` / `3 PRs`)
 - 🔴 The strategy is `2 PRs` or `3 PRs` but per-PR `Title`, `Scope`, and `Branch suffix` are missing for any planned PR
-- 🟡 The `Estimate` line is missing (per-layer file count + LOC) — `/start` cannot validate the pre-selection
+- 🟡 The `Estimate` line is missing (per-layer file count + LOC) — the PR pre-selection cannot be validated
 - 🟡 The strategy is `1 PR` but the estimate exceeds the threshold (~20 files OR ~500 LOC in either layer) without an explicit coupling justification
 
 ### H — Minimal-implementation discipline
@@ -170,7 +170,7 @@ Compare the plan's Workflow TaskList against the canonical template emitted by `
 🔴 `test-writer-backend` appears after `Backend Implementation` — test-first order broken.
 
 ### G — PR Plan completeness
-🟡 Estimate line missing — `/start` cannot validate the 1 PR pre-selection.
+🟡 Estimate line missing — the 1 PR pre-selection cannot be validated.
 
 ### H — Minimal-implementation discipline
 🔴 Backend task "implement PaymentService" lists `cancel_payment` and `refund_payment` — no spec

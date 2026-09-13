@@ -71,23 +71,6 @@ Intermittent — a restart can appear to "fix" it.
 
 ---
 
-## L-004 — `just sync-kit` ships a tab-indented `visual-proof-capture.mjs` that fails the project's biome
-
-**First observed**: 2026-06-06 (sync to claude-kit v4.18.0)
-**Resolved by**: `just format` after every sync (the kit-sync workflow already includes this step)
-
-**Symptom** — Immediately after `just sync-kit`, `just check` / the pre-commit hook fails with a single biome **error** (amid unrelated pre-existing warnings):
-
-> `× Some errors were emitted` — a formatter diff on `scripts/visual-proof-capture.mjs` (`- → await·…` tab vs `+ ··await·…` two spaces).
-
-**Trigger** — Syncing a kit version whose `scripts/visual-proof-capture.mjs` is tab-indented, into this project whose `biome.json` sets `formatter.indentStyle: "space"` and includes `scripts/**`.
-
-**Root cause** — The kit ships that `.mjs` with tab indentation, but the downstream biome config (which the kit also ships the convention for) mandates spaces. biome scans `scripts/*.mjs`, so the synced file is flagged. The change is **purely cosmetic** — reformatting to spaces reverts the file exactly to the prior version, so the fix is net-zero in the commit.
-
-**Mitigation** — Run `just format` after `just sync-kit` (already a step in the kit-update workflow); it reformats the file to spaces and `just check` goes green. Self-healing but **recurs every sync** until the kit ships the file space-indented (or adds a biome override for `scripts/`). Don't burn time re-diagnosing — if biome errors on that one `.mjs` right after a sync, just run `just format`.
-
----
-
 ## L-005 — Stooq escalated the anti-bot gate to a JavaScript proof-of-work challenge (User-Agent no longer enough)
 
 **First observed**: 2026-06-06 (prod, GH #73)

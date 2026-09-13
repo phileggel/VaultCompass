@@ -1,5 +1,0 @@
-sync-kit version="main":
-    ./scripts/sync-config.sh {{version}}
-
-default:
-    @just --list

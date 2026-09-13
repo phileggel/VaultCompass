@@ -35,7 +35,7 @@ VaultCompass is a single-user Tauri 2 desktop app. React 19 + TypeScript on the 
 | Open items                                                              | [`docs/todo.md`](docs/todo.md)                                                                                       |
 | Roadmap                                                                 | [`docs/roadmap.md`](docs/roadmap.md)                                                                                 |
 | Design system tokens                                                    | [`docs/design-system.md`](docs/design-system.md), [`docs/theme.md`](docs/theme.md)                                   |
-| Kit-managed tools                                                       | [`.claude/kit-tools.md`](.claude/kit-tools.md)                                                                       |
+| How work moves (Workflow C)                                             | [`docs/workflow-c.md`](docs/workflow-c.md)                                                                           |
 
 For "what does use case X do?" → read `src-tauri/src/use_cases/{name}/mod.rs` (module doc) and its spec at `docs/spec/`.
 For "what does feature X do?" → read `src/features/{name}/` and its spec.
