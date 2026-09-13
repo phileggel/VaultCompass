@@ -17,7 +17,7 @@
 <!-- The human's queue: references (#NNN or TD-NNN) in the order to work them. The agent -->
 <!-- takes the first ready one, never edits this list, and stops when it is empty. -->
 
-Nothing queued.
+- #004
 
 ## #001 — (frontend) — Keep the asset column in view while scrolling the holdings table sideways
 
@@ -55,8 +55,8 @@ The holding row's price cell says how old the price is with a full sentence — 
 **Design:** none
 **Open questions:**
 
-- [ ] Same-day wording once the prefix is gone: `aujourd'hui` / `today`, or `0 j` / `0d` to line up with the others?
-- [ ] Shorten the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) the same way?
+- [x] Same-day wording once the prefix is gone: `aujourd'hui` / `today`, or `0 j` / `0d` to line up with the others? → `0 j` / `0d`.
+- [x] Shorten the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) the same way? → yes, the same way.
 
 ## #005 — (frontend) — Move the holding row's actions next to the asset name, on two rows
 
