@@ -210,3 +210,13 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - Observation: 86.18 % of the 6,744 lines in domain, application, service and use-case code are covered; the gate's floor is 85.5 % and its target 90 %, about 260 more covered lines. Two files carry almost no test at all because they talk to the network or run the app headless; the other six are orchestration paths with untested branches. The floor in `coverage-gates.json` is a ratchet — raise it in the same change that lifts coverage, never lower it.
 - User value: None — a harness that catches logic regressions in these paths.
 - Done when: the backend floor in `coverage-gates.json` reads 90.0 and the gate passes on `main`.
+
+## 2026-09-13 — 119 interactive components in feature code carry no id
+
+- Found by: manual (`python3 scripts/arch-check.py`, rule A6, first run)
+- Where: 35 files under src/features/ listed in arch-allowlist.json `missing_ids`; mostly Cancel and secondary buttons in modals, the price-history and update-banner actions, and the design-system dev page
+- Context: branch `ci/arch-check` @ `280882f`
+- Severity: 🔵
+- Observation: E1–E4 ask every interactive element for a stable id, and the E2E suite selects by id, yet 119 of the 317 `Button` / `IconButton` / `TextField` / `DateField` / `CalcField` / `FAB` tags rendered by feature code have none. The architecture check freezes today's count per file and refuses any growth; the count can only go down. The 18 sibling-feature imports the same check freezes belong to the FE gold layout migration entry above; the 8 `Math.` uses are display rounding and the documented split preview (SPL-061) and need no action.
+- User value: None — every control becomes addressable by tests and assistive tech.
+- Done when: `missing_ids` in arch-allowlist.json is empty.

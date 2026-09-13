@@ -95,6 +95,19 @@ jobs:
             exit 1
           fi
 
+  architecture:
+    name: Architecture — mechanical rules
+    # scripts/arch-check.py: gateway-only bindings, no sibling-feature or
+    # cross-context imports, typed wire errors, ui/ components with stable
+    # ids, no derivation or literal text in feature code. Frozen debt lives
+    # in arch-allowlist.json and may only shrink.
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Architecture check
+        run: python3 scripts/arch-check.py
+
   frontend:
     name: Frontend — quality + coverage
     runs-on: ubuntu-latest

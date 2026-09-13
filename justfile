@@ -54,8 +54,12 @@ test-unit: test test-rust
 coverage-gate *ARGS:
     python3 scripts/coverage-gate.py {{ARGS}}
 
-# The merge gate, locally: lint + type-check + build on both layers, then both test suites with coverage and the coverage floors
-harness: && coverage-fe coverage-be coverage-gate
+# Check the mechanical architecture rules (scripts/arch-check.py); pass --write-allowlist to shrink arch-allowlist.json to today's state
+arch-check *ARGS:
+    python3 scripts/arch-check.py {{ARGS}}
+
+# The merge gate, locally: architecture rules, lint + type-check + build on both layers, then both test suites with coverage and the coverage floors
+harness: arch-check && coverage-fe coverage-be coverage-gate
     python3 scripts/check.py --skip-tests
 
 # Resource-capped check-full: runs the full quality suite in a memory-throttled, low-priority
