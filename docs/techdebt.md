@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-020) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-021) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -232,3 +232,13 @@ Remove an entry once it has been resolved.
 - Observation: The hook failed with `stale element reference` while creating a node handle for an `element` call — an element located by one step had been replaced by a re-render before the next step used it. It is the second distinct once-only E2E failure in two days (TD-016 is the first); both sit in setup or navigation code shared by many specs, so each has many chances to fire per run. With E2E as a required check, every such failure costs a re-run before a green PR can merge.
 - User value: None — suite reliability.
 - Done when: the hook re-locates elements after each navigation step instead of reusing handles across renders, or the shared helpers wait for the route to settle before returning; a month of pull-request runs shows no before-each failure.
+
+## 2026-09-13 — TD-020 — The backend coverage job takes half an hour on every pull request
+
+- Found by: manual (four consecutive Quality runs on `main` timed between 24 and 33 minutes in the tarpaulin step)
+- Where: .github/workflows/quality.yml (`Coverage with tarpaulin`), justfile (`coverage-be`)
+- Context: branch `ci/reviewers` @ `e06cb48`
+- Severity: 🟡
+- Observation: tarpaulin rebuilds the whole crate instrumented on every run and cannot reuse the normal build cache, so the backend job is the slowest gate by a wide margin: the frontend job ends in two minutes, E2E in ten, the coverage floor waits for tarpaulin. `cargo llvm-cov` produces the same lcov report from a standard build that the Rust cache already holds, and was the plan's original choice for the coverage gate.
+- User value: None — a pull request merges twenty minutes sooner.
+- Done when: the backend job produces `coverage/backend/lcov.info` through `cargo llvm-cov` (locally and in CI), `scripts/coverage-gate.py` reads it unchanged, the floor in `coverage-gates.json` is re-measured on the new tool, and the job's median duration on `main` is under ten minutes.

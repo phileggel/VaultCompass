@@ -162,3 +162,11 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Symptom** — Write commands invoked from E2E (`execute/async` seeds, a form submit) never resolved locally: WebDriver script timeouts, a modal stuck in its submitting state. Backend probes showed the command completing in milliseconds; read-only specs passed. It looked like a regression in the freshly merged feature, and an hour went into instrumenting it.
 
 **Mitigation** — (1) When CI is green on the same commit, first run one E2E spec from a known-green release tag in a `git worktree` on the same machine; if it fails the same way, the environment is the variable (here: the local WebKitGTK/driver stack losing IPC responses under load) and the bisect is pointless. (2) Kill stale drivers with `pkill -x <name>`, never `pkill -f <pattern>` — the pattern matches the shell running the command and kills it (exit 144), silently skipping everything after it. (3) Gate the merge on the CI E2E run (the suite runs on the main push) and fix forward if it reddens.
+
+## L-012 — Every gating workflow needs a manual trigger, because GitHub silently drops pull-request events
+
+**First observed**: 2026-09-13 (PR #112 opened during a GitHub 502 window got no runs at all; PR #113 lost the events for two consecutive pushes and a close/reopen while the status page read "all systems operational")
+
+**Symptom** — A pull request whose head commit has zero check runs: no queued job, no failed job, nothing in the run list for that commit. The branch tip and the PR head agree, so nothing is wrong on the repository's side. With checks as the merge gate, the PR is stuck until something fires them.
+
+**Mitigation** — (1) Give every workflow a required check depends on a `workflow_dispatch` entry, with an input for the pull request number when the workflow posts to the PR, and a base-branch fallback for expressions that read the pull-request context. (2) Fire the missing runs with `gh workflow run <name> --ref <branch>` and watch the branch tip's check runs through `gh api …/commits/<sha>/check-runs`; a closed-and-reopened PR is not a reliable re-trigger. (3) Remember the dispatch entry only becomes usable once the workflow file carrying it is on the default branch — a new gating workflow must land with it from its first version.
