@@ -89,7 +89,9 @@ deleted in the closure commit; the visual proofs are the record.
 
 ## 5. The harness
 
-`just harness` locally; the same set as required checks on every pull request:
+`just harness` locally; the same set as required checks on every pull request. The
+git hooks run only the fast checks for the scope a commit or push touches
+(`scripts/changed-scope.sh`); a Markdown-only change costs Prettier and nothing else.
 
 | Check                    | Where                                          | Gate                                                                                                                                                          |
 | ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |

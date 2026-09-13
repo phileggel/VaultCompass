@@ -12,7 +12,7 @@ After cloning, activate the git hooks:
 git config core.hooksPath .githooks
 ```
 
-They block direct commits to `main`, validate the conventional-commit format, reject `Co-Authored-By` lines, run the fast checks before every commit and the full suite before every push.
+They block direct commits to `main`, validate the conventional-commit format, reject `Co-Authored-By` lines, and run the fast checks scoped to what the commit or push touches (`scripts/changed-scope.sh`: Markdown-only gets Prettier, frontend-only skips cargo, backend-only skips the web toolchain). Tests, coverage, E2E and the build are CI's job on the pull request.
 
 ## 🧭 Who decides what
 

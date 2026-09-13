@@ -2,11 +2,14 @@
 set -euo pipefail
 
 # Pre-commit hook
-# Runs quality checks (FAST MODE: lint/format only)
-# Blocks commit on failure
+# Blocks direct commits to main, then runs the fast checks for the scope the
+# staged files actually touch (scripts/changed-scope.sh): Markdown-only
+# commits get prettier on those files, frontend-only commits skip cargo,
+# backend-only commits skip the web toolchain. The full suite is CI's job.
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 CHECK_SCRIPT="$PROJECT_ROOT/scripts/check.py"
+SCOPE_SCRIPT="$PROJECT_ROOT/scripts/changed-scope.sh"
 
 # Colors (respect NO_COLOR=1)
 if [ -n "${NO_COLOR:-}" ]; then
@@ -19,7 +22,6 @@ else
     NC='\033[0m'
 fi
 
-# Block direct commits to main
 CURRENT_BRANCH=$(git branch --show-current)
 if [ "$CURRENT_BRANCH" = "main" ]; then
     echo -e "${RED}❌ Direct commits to main are not allowed.${NC}"
@@ -28,18 +30,49 @@ if [ "$CURRENT_BRANCH" = "main" ]; then
     exit 1
 fi
 
-echo -e "${BLUE}🔍 Pre-commit checks running (Fast Mode)...${NC}"
-
-if [ ! -f "$CHECK_SCRIPT" ]; then
-    echo -e "${YELLOW}⚠  $CHECK_SCRIPT not found. Skipping full validation.${NC}"
+if [ ! -f "$CHECK_SCRIPT" ] || [ ! -f "$SCOPE_SCRIPT" ]; then
+    echo -e "${YELLOW}⚠  scripts/check.py or scripts/changed-scope.sh missing. Skipping validation.${NC}"
     exit 0
 fi
 
-# Fast mode: skip expensive checks (tests, full formatting)
-if python3 "$CHECK_SCRIPT" --fast; then
-    echo -e "${GREEN}✨ Fast checks passed. Commit allowed.${NC}"
-    exit 0
-else
-    echo -e "${RED}❌ Quality checks failed. Commit blocked.${NC}"
-    exit 1
+STAGED=$(git diff --cached --name-only --diff-filter=ACMRD)
+SCOPE=$(printf '%s\n' "$STAGED" | bash "$SCOPE_SCRIPT")
+
+run_check() {
+    if python3 "$CHECK_SCRIPT" "$@"; then
+        echo -e "${GREEN}✨ Checks passed. Commit allowed.${NC}"
+    else
+        echo -e "${RED}❌ Quality checks failed. Commit blocked.${NC}"
+        exit 1
+    fi
+}
+
+MD_FILES=$(printf '%s\n' "$STAGED" | grep -E '\.md$' | grep -v '^$' || true)
+if [ -n "$MD_FILES" ]; then
+    if ! command -v npx >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠  npx not found — Markdown not checked.${NC}"
+    elif printf '%s\n' "$MD_FILES" | xargs -d '\n' npx prettier --check >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Prettier: Markdown formatted.${NC}"
+    else
+        echo -e "${RED}❌ Prettier failed on staged Markdown. Run: just format${NC}"
+        exit 1
+    fi
 fi
+
+case "$SCOPE" in
+    none|docs)
+        echo -e "${BLUE}🔍 Pre-commit: no code check applies to the staged files.${NC}"
+        ;;
+    frontend)
+        echo -e "${BLUE}🔍 Pre-commit: frontend fast checks.${NC}"
+        run_check --fast --frontend
+        ;;
+    backend)
+        echo -e "${BLUE}🔍 Pre-commit: backend fast checks.${NC}"
+        run_check --fast --backend
+        ;;
+    both)
+        echo -e "${BLUE}🔍 Pre-commit: fast checks on both layers.${NC}"
+        run_check --fast
+        ;;
+esac

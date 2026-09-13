@@ -18,9 +18,15 @@ This directory contains git hooks that enforce code quality standards.
 
 ### pre-commit
 
-- **Purpose:** Prevent commits that fail quality checks
-- **Runs:** `python3 ./scripts/check.py --fast` (lint/format only)
-- **Action:** Rejects commit if any linting or formatting checks fail
+- **Purpose:** Prevent commits that fail the fast checks for the scope they touch
+- **Runs:** `npx prettier --check` on any staged Markdown, then `scripts/changed-scope.sh` on the staged files: frontend → `check.py --fast --frontend`; backend → `check.py --fast --backend`; both → `check.py --fast`; nothing a local check covers → nothing more
+- **Action:** Rejects commit if any check for that scope fails
+
+### pre-push
+
+- **Purpose:** Catch what a commit slipped past, at the same cost model
+- **Runs:** the same scoping over the commits being pushed (per ref, against the remote tip or the merge base with `main` for a new branch); delete-only pushes skip it
+- **Action:** Rejects the push if a check for that scope fails. Tests, coverage, E2E and the build run in CI on the pull request, not here
 
 ## Setup Instructions
 
@@ -66,7 +72,7 @@ When you run `git commit`:
    - Message invalid? → Commit rejected ❌
    - Message valid? → Continue to next hook
 
-2. **pre-commit hook runs** → `python3 ./scripts/check.py --fast` (lint, format)
+2. **pre-commit hook runs** → the fast checks for the staged scope (`scripts/changed-scope.sh`)
    - Any checks fail? → Commit rejected ❌
    - All checks pass? → Commit succeeds ✅
 
