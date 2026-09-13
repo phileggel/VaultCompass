@@ -39,7 +39,8 @@ Next, has a Done when, has no open question, and its Design is `none` or `valida
 ### `docs/techdebt.md` — AI-owned
 
 Every entry gets a stable `TD-NNN` reference so the human can put it in Next like any
-todo. The agent files there: reviewer findings it did not fix, smells met on the way,
+todo (heading `## YYYY-MM-DD — TD-NNN — title`: the date stays first so the current
+collector keeps parsing the file until phase 5 replaces it). The agent files there: reviewer findings it did not fix, smells met on the way,
 proposals for new work, surviving mutants, coverage holes. The human reads it and
 promotes what they want by queuing the reference.
 

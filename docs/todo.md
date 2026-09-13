@@ -1,11 +1,23 @@
 # TODO
 
-<!-- Add new tech debt and backlog items here. Format: ## #NNN — (domain) — Short title -->
+<!-- Add new backlog items here. Format: ## #NNN — (domain) — Short title -->
 <!-- #NNN is a permanent reference: never renumbered, never reused. A new entry takes the -->
 <!-- next free number wherever it is placed. Next free: #018. -->
-<!-- Every entry ends with a **User value:** line and a **Done when:** line. -->
+<!-- Every entry ends with four lines: **User value:**, **Done when:**, **Design:** and -->
+<!-- **Open questions:**. Design is `none` until the agent proposes one (it does so before -->
+<!-- touching anything the user sees), then `proposed (screenshots/design/NNN-*.png)`, then -->
+<!-- `validated` once the human has looked. Open questions are `none` or a `- [ ]` list; an -->
+<!-- entry with an open question is not ready. Either side may add a question; the human -->
+<!-- answers by editing the entry. -->
 <!-- Ordered by user value: entries that change what the user experiences first, -->
 <!-- entries with no direct user value after the separator. -->
+
+## Next
+
+<!-- The human's queue: references (#NNN or TD-NNN) in the order to work them. The agent -->
+<!-- takes the first ready one, never edits this list, and stops when it is empty. -->
+
+Nothing queued.
 
 ## #001 — (frontend) — Keep the asset column in view while scrolling the holdings table sideways
 
@@ -13,6 +25,8 @@ The account view's holdings table (`AccountDetailsView`) has grown past the wind
 
 **User value:** The asset name stays on screen while reading the columns to its right, so a row can be read end to end without scrolling back.
 **Done when:** The Asset column of the active and closed holdings tables stays pinned at the left edge while the table scrolls horizontally, in light and dark mode, with the row background behind it so scrolled columns do not show through; screenshots committed.
+**Design:** none
+**Open questions:** none
 
 ## #002 — (frontend) — Put each observation date above its own value column in the price movement report
 
@@ -20,6 +34,8 @@ The report dialog (`PriceMovementDialog`, PMV-050) labels its two value columns 
 
 **User value:** Each value column is read under its own date, so before and after are never confused.
 **Done when:** Each value column of the report carries its own date header (or the plain label when that side has none), PMV-050–052 describe the per-column presentation, the Vitest cases for the four date states assert the per-column headers, and the four screenshots are recaptured.
+**Design:** none
+**Open questions:** none
 
 ## #003 — (fullstack) — Show the amount each account moved in the price movement report
 
@@ -27,15 +43,20 @@ The report (`PriceMovementDialog`) gives each account its value before, its valu
 
 **User value:** The report states how much each account gained or lost, not only by what proportion.
 **Done when:** `PriceMovementRow` and the report's total carry the signed movement amount from the backend, a PMV rule states it (per entry in account currency, total in the reference currency, absent when unmoved), the dialog shows it in a column beside the percentage with the gain/loss polarity, the Rust builder and the dialog tests cover moved / unmoved / total, and the screenshots are recaptured.
+**Design:** none
+**Open questions:** none
 
 ## #004 — (frontend) — Shorten the price-age label on the holding row to the age alone
 
 The holding row's price cell says how old the price is with a full sentence — `Mis à jour il y a 2 j` / `Updated 2d ago` (`mkt.staleness_days_ago`) and `Mis à jour aujourd'hui` / `Updated today` (`mkt.staleness_today`). In a dense row the words add nothing the position does not already say; the age alone reads faster: `2 j` / `2d`. Copy-only — the formatter and the tests key on the i18n identifiers, not the words. The label only has a today and an N-days form; there is no hours form to keep.
 
-Two points to settle when picked up: what the same-day case reads once the prefix is gone (`aujourd'hui` / `today`, or a `0 j` / `0d` that lines up with the others), and whether the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) is shortened the same way for consistency.
-
 **User value:** The price age reads at a glance as `2 j` instead of a sentence, in a row already short of width.
 **Done when:** Both languages' `mkt.staleness_days_ago` and `mkt.staleness_today` carry the age alone, the same-day wording and the FX label question are decided, and the holding-row screenshot is recaptured.
+**Design:** none
+**Open questions:**
+
+- [ ] Same-day wording once the prefix is gone: `aujourd'hui` / `today`, or `0 j` / `0d` to line up with the others?
+- [ ] Shorten the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) the same way?
 
 ## #005 — (frontend) — Move the holding row's actions next to the asset name, on two rows
 
@@ -43,13 +64,19 @@ The holding row's actions — buy, sell, split, note, fee, price history, transa
 
 **User value:** A holding's actions are reachable without scrolling right, next to the name they apply to.
 **Done when:** The Actions column is the second column of the active and closed holdings tables, its buttons lay out on two rows, the header and row cells keep their ids, the Vitest row tests still pass unchanged, and the holding-row screenshots are recaptured in both themes.
+**Design:** none
+**Open questions:** none
 
 ## #006 — (frontend) — Use one icon for "open the transactions" on the account header and the holding row
 
-The account header's journal button (`account-details-journal`, `ScrollText`) opens the account's transaction journal; the holding row's loupe (`action-view-transactions-{assetId}`, `Search`) opens the same kind of list for one asset. Same action at two scopes, two unrelated icons — and a loupe says "search", which neither does. One icon, the same on both. Recommendation: `ScrollText`, the ledger, on both — it names what opens, and it is where the loupe is heading anyway once the per-asset page folds into the journal (see the TXL-merge entry below). Confirm the pick when this is scheduled.
+The account header's journal button (`account-details-journal`, `ScrollText`) opens the account's transaction journal; the holding row's loupe (`action-view-transactions-{assetId}`, `Search`) opens the same kind of list for one asset. Same action at two scopes, two unrelated icons — and a loupe says "search", which neither does. One icon, the same on both. Recommendation: `ScrollText`, the ledger, on both — it names what opens, and it is where the loupe is heading anyway once the per-asset page folds into the journal (see the TXL-merge entry below).
 
 **User value:** The same picture means the same thing everywhere: a transaction list, for the account or for one holding.
 **Done when:** Both buttons render the same icon, their ids and labels are unchanged, and the header and holding-row screenshots are recaptured.
+**Design:** none
+**Open questions:**
+
+- [ ] The shared icon: `ScrollText` (recommended, it names what opens), or another?
 
 ## #007 — (fullstack) — Show a total row on the accounts list
 
@@ -57,6 +84,8 @@ The accounts list (`AccountTable`) shows each account's Global Value and Unreali
 
 **User value:** The accounts list answers "what is it all worth" without opening the performance page.
 **Done when:** The backend returns the portfolio's total Global Value and total Unrealized P&L in the reference currency, flagged partial when any account could not be converted; an ACC (or GPF) rule states it; the list shows a total row with both figures, the currency, and the partial marker; the Rust computation and the table rendering are tested; screenshots recaptured.
+**Design:** none
+**Open questions:** none
 
 ## #008 — (fullstack) — Backfill one asset's price history over the period an account held it
 
@@ -66,6 +95,8 @@ The provider must not be hammered: the daily-close series comes from the ranged 
 
 **User value:** One click gives a holding its full price history for the time the account held it, so past valuations and performance stop showing gaps.
 **Done when:** A holding-row action backfills the asset's missing daily closes over the held period through one ranged request per asset (chunked only when the provider caps the window), leaves existing prices untouched, reports written and skipped counts (or that nothing was missing), degrades every failure to feedback with no partial surprise, respects the refresh lock, is specified as MKT rules with a contract entry, and is covered by a Rust integration test on a seeded gap and an E2E scenario on an unresolvable ticker.
+**Design:** none
+**Open questions:** none
 
 ## #009 — (fullstack) — A per-account analysis view: target price, horizon and reasoning on each holding
 
@@ -75,6 +106,8 @@ Model: a `HoldingAnalysis` entity keyed by (account, asset) in the account bound
 
 **User value:** A working sheet per account where each holding carries the user's target, horizon and reasoning next to its live figures, kept in sync across devices like everything else.
 **Done when:** The view lists active holdings with their computed figures and the three editable analysis fields plus distance to target; the entity syncs (captured, applied, tombstoned, announced) with CFR outcomes stated; the trigram is registered and every rule is covered by tests; screenshots and an E2E scenario are committed.
+**Design:** none
+**Open questions:** none
 
 ## #010 — (frontend) — Give multi-device sync its own view and rework its UI
 
@@ -93,6 +126,8 @@ Carry-over risk: `e2e/sync/sync.test.ts` selects on `sync-*` stable ids througho
 
 **User value:** Sync health is readable at a glance, destructive actions sit apart from routine ones, and a refused join states how to fix it.
 **Done when:** Sync lives at `/sync` with a link from settings, actions are grouped by consequence, rename and change-folder have separate dialogs, `InstallationHoldsUserData` names the remedy, and `e2e/sync/sync.test.ts` passes on the new ids.
+**Design:** none
+**Open questions:** none
 
 ## #011 — (fullstack) — Monitored assets, price bars, and indicator primitives
 
@@ -100,6 +135,8 @@ Prerequisite work for the private advice module — design in [`advice-module-de
 
 **User value:** The user reads technical indicators (SMA, EMA, MACD, ATR, RSI, Bollinger, Donchian, drawdown) for the assets they mark as monitored.
 **Done when:** The `monitored` flag and `asset_daily_bars` ship with the ranged fetch, the indicator functions are unit-tested, and the panel renders readings for a monitored asset.
+**Design:** none
+**Open questions:** none
 
 ## #012 — (fullstack) — Explain suppressed lifetime performance metrics instead of a bare "—"
 
@@ -107,6 +144,8 @@ When the since-inception % and annualized-yield columns are suppressed by the Di
 
 **User value:** When lifetime performance shows “—”, the user learns why and which transaction to correct.
 **Done when:** The response carries a degradation reason, suppressed cells show a persistent hint naming the cause, and an opening balance submitted with Total Cost 0 warns inline.
+**Design:** none
+**Open questions:** none
 
 ## #013 — (frontend) — Merge TXL per-asset page into the account journal (deferred)
 
@@ -116,6 +155,8 @@ Must carry over before deleting TXL: (1) add-transaction CTA + `AddTransactionMo
 
 **User value:** One transaction view instead of two near-identical ones; the holdings loupe opens the journal filtered to that asset.
 **Done when:** The loupe navigates to `/accounts/$accountId/journal?asset=…`, the TXL page/hook/route are deleted, add-transaction prefill and the `pendingTransactionAssetId` deep link work from the journal, and the `txl-*` specs are rewritten.
+**Design:** none
+**Open questions:** none
 
 ---
 
@@ -127,6 +168,8 @@ The multi-device sync E2E covers the single-device critical path only (plan § H
 
 **User value:** None directly — test infrastructure.
 **Done when:** A wdio multi-remote config and `e2e/helpers/second_device.ts` launch a second binary on its own data directory, and a join scenario (SYN-014/036) passes through the UI.
+**Design:** none
+**Open questions:** none
 
 ## #015 — (deps) — Upgrade specta / tauri-specta / specta-typescript past rc.22
 
@@ -134,6 +177,8 @@ Pinned at `specta 2.0.0-rc.22`, `tauri-specta 2.0.0-rc.21`, `specta-typescript 0
 
 **User value:** None — dependency currency.
 **Done when:** every wire-visible 64-bit integer carries the `Number` override (or a shared newtype does), `just generate-types` produces a bindings diff that is cosmetic only, and the three crates sit on a current release together.
+**Design:** none
+**Open questions:** none
 
 ## #016 — (deps) — Accepted risk: WebdriverIO 9 transitive advisories (extract-zip)
 
@@ -141,6 +186,8 @@ Pinned at `specta 2.0.0-rc.22`, `tauri-specta 2.0.0-rc.21`, `specta-typescript 0
 
 **User value:** None — devDependency advisories; nothing from them enters the shipped bundle.
 **Done when:** `@puppeteer/browsers` ships a patched `extract-zip` (or WebdriverIO drops it), `npm audit` is clean, and this entry is deleted.
+**Design:** none
+**Open questions:** none
 
 ## #017 — (deps) — Accepted risk: RUSTSEC-2023-0071 (rsa Marvin Attack)
 
@@ -148,3 +195,5 @@ Pinned at `specta 2.0.0-rc.22`, `tauri-specta 2.0.0-rc.21`, `specta-typescript 0
 
 **User value:** None — the vulnerable RSA path is unreachable in a SQLite-only build.
 **Done when:** sqlx stops compiling `sqlx-mysql` for sqlite-only builds or `rsa` publishes a fix, `cargo audit` is clean, and this entry is deleted.
+**Design:** none
+**Open questions:** none

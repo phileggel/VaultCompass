@@ -4,13 +4,15 @@ Observations of code smells, brittle patterns, or pre-existing issues surfaced
 during work that don't warrant immediate action. Format produced by the kit's
 `/techdebt` skill — see `.claude/kit-tools.md`.
 
-Entries are observations, not commitments. Triaged by `/whats-next` alongside
-`docs/todo.md`. Remove an entry once it has been resolved or moved to
-`docs/todo.md` for active work.
+Entries are observations, not commitments, and this file is the agent's: it
+files here what it notices and what it did not fix. Each entry carries a
+permanent `TD-NNN` reference (never renumbered, never reused; next free:
+TD-019) so the human can queue it in `docs/todo.md` § Next like any todo.
+Remove an entry once it has been resolved.
 
 ---
 
-## 2026-08-23 — Local writes do not take the sync gate
+## 2026-08-23 — TD-001 — Local writes do not take the sync gate
 
 - Found by: reviewer-security + reviewer-backend (PR-C, `.review/reviewer-security-2026-08-23-01.md`)
 - Where: src-tauri/src/context/sync/application/run.rs (`SyncGate`), every synced repository write
@@ -20,7 +22,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None observable — the remaining window is benign for merge order.
 - Done when: A `begin_write()` recorder helper takes `SyncGate` before opening the transaction at all 30 capture sites, so SYN-064 holds as written.
 
-## 2026-08-23 — Held-back changes and conflict notices have no bound
+## 2026-08-23 — TD-002 — Held-back changes and conflict notices have no bound
 
 - Found by: reviewer-security (PR-C)
 - Where: src-tauri/src/context/sync/application/run.rs (`apply_intake`), `held_back_changes`, `conflict_notices`
@@ -30,7 +32,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None for a user's own devices; bounds growth caused by a buggy or hostile peer.
 - Done when: `held_back_changes` has a cap and `conflict_notices` evicts, both covered by tests.
 
-## 2026-08-23 — Join replays a device's whole history in memory
+## 2026-08-23 — TD-003 — Join replays a device's whole history in memory
 
 - Found by: reviewer-security (PR-C)
 - Where: src-tauri/src/context/sync/application/join.rs
@@ -40,7 +42,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None at present history sizes.
 - Done when: Join streams or checkpoints history instead of holding every device's full history in one in-memory transaction.
 
-## 2026-08-22 — Account-deletion cascade is no longer a single transaction
+## 2026-08-22 — TD-004 — Account-deletion cascade is no longer a single transaction
 
 - Found by: reviewer-backend (PR-A change capture, `.review/reviewer-backend-2026-08-22-01.md`)
 - Where: src-tauri/src/context/account/service.rs (`delete` / `remove_children`)
@@ -50,7 +52,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: A crash midway through deleting an account cannot leave it half-deleted.
 - Done when: The cascade runs inside one unit of work spanning the child repositories.
 
-## 2026-08-22 — ADR-006 unit of work is accepted but unimplemented
+## 2026-08-22 — TD-005 — ADR-006 unit of work is accepted but unimplemented
 
 - Found by: feature-planner (multi-device sync plan, D1) — confirmed by plan-reviewer and by grep
 - Where: src-tauri/src/ (no `UnitOfWork` / `TransactionManager` / `uow` anywhere; three raw `sqlx` transactions at `context/account/repository/account.rs:268`, `context/asset/repository/category.rs:109`, `context/asset/repository/asset_price.rs:128`)
@@ -60,7 +62,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None directly.
 - Done when: ADR-006 is implemented and the three ad-hoc `sqlx` transactions route through it, or the ADR is superseded.
 
-## 2026-07-25 — Linux bundle carries Tauri template leftovers
+## 2026-07-25 — TD-006 — Linux bundle carries Tauri template leftovers
 
 - Found by: main-agent
 - Where: src-tauri/Cargo.toml, src-tauri/tauri.conf.json
@@ -72,7 +74,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-16 — ADR status vocabulary lacks an "amends" relationship
+## 2026-05-16 — TD-007 — ADR status vocabulary lacks an "amends" relationship
 
 - Found by: adr-reviewer (during review of ADRs 008/009/010/011)
 - Where: docs/adr/003-cross-context-use-case-orchestration.md, docs/adr/005-account-details-inject-transaction-service.md, docs/adr/README.md
@@ -84,7 +86,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 
 ---
 
-## 2026-05-10 — Migrate to FE gold layout (per kit proposals #21–#23)
+## 2026-05-10 — TD-008 — Migrate to FE gold layout (per kit proposals #21–#23)
 
 - Found by: manual (post-FE-architecture delta scan)
 - Where: src/ (top-level structure + features/account_details cross-imports)
@@ -104,7 +106,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — internal layout.
 - Done when: `src/lib/*Storage.ts` moves to `src/infra/settings/`, the `useTransactions` cross-feature coupling is removed, and the `account_details` / `transactions` split is formalised.
 
-## 2026-05-09 — Migrate to gold DDD layout (per kit proposals #17–#19)
+## 2026-05-09 — TD-009 — Migrate to gold DDD layout (per kit proposals #17–#19)
 
 - Found by: manual (post-PR-#12 design discussion)
 - Where: src-tauri/src/ (top-level structure)
@@ -131,7 +133,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — internal layout.
 - Done when: `service.rs` moves to `application/service.rs`, `repository/` becomes `infrastructure/`, and `core/` becomes `shared/{application,domain,infrastructure}` across every bounded context.
 
-## 2026-09-12 — A different portfolio's folder reads as a reset
+## 2026-09-12 — TD-010 — A different portfolio's folder reads as a reset
 
 - Found by: manual (closing the empty-sync-folder todo)
 - Where: src-tauri/src/context/sync/application/run.rs (`header_gate`)
@@ -141,7 +143,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: The reset message would not fire for a stick that merely took the same drive letter.
 - Done when: A sync run can tell a reset of its own portfolio from another portfolio's folder — by something other than the header's content — and reports `FolderHoldsOtherPortfolio` for the latter.
 
-## 2026-09-12 — Event subscriptions compare against untyped strings
+## 2026-09-12 — TD-011 — Event subscriptions compare against untyped strings
 
 - Found by: reviewer-arch (T2, `.review/reviewer-arch-2026-09-12-02.md`)
 - Where: `subscribeToEvents` in src/features/account_details/gateway.ts, src/features/currency/gateway.ts and three sibling gateways
@@ -151,7 +153,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — a view that stops refreshing after a typo would be caught by tests, not by the compiler.
 - Done when: the gateways pass the callback `Event["type"]` and every hook's comparison is checked against the generated union.
 
-## 2026-09-12 — Ubiquitous-language Domain Events table lags the event enum
+## 2026-09-12 — TD-012 — Ubiquitous-language Domain Events table lags the event enum
 
 - Found by: reviewer-arch (T2)
 - Where: docs/ubiquitous-language.md § Domain Events; src/lib/store.ts `locallyHandledEvents`
@@ -161,7 +163,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — documentation and a debug-log nuisance.
 - Done when: every `Event` variant has a row in the table, and the allowlist names every event the global store deliberately ignores.
 
-## 2026-09-12 — Applied writes announce themselves before the apply transaction commits
+## 2026-09-12 — TD-013 — Applied writes announce themselves before the apply transaction commits
 
 - Found by: reviewer-backend (T2, `.review/reviewer-backend-2026-09-12-02.md`)
 - Where: src-tauri/src/context/sync/application/run.rs (`apply_intake`, one transaction for the whole apply); every `apply_*` service method that publishes
@@ -171,7 +173,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None observable today — a view may refresh one moment too early after a sync and show the state from before the apply until the next event.
 - Done when: the apply path collects the events its writes would raise and publishes them after `commit()`, so every announcement describes a committed state.
 
-## 2026-09-12 — The opener plugin is registered and permitted but never called
+## 2026-09-12 — TD-014 — The opener plugin is registered and permitted but never called
 
 - Found by: reviewer-security (v0.41.1 release sweep, `.review/reviewer-security-2026-09-12-02.md`)
 - Where: src-tauri/capabilities/default.json (`opener:default`), src-tauri/src/lib.rs (`tauri_plugin_opener::init()`), src-tauri/Cargo.toml (`tauri-plugin-opener`), package.json (`@tauri-apps/plugin-opener`)
@@ -181,7 +183,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — a slightly smaller bundle and permission set.
 - Done when: the plugin registration, the `opener:default` grant and both dependency declarations are removed together, or a real caller appears and the permission is narrowed to what it uses.
 
-## 2026-09-12 — Three E2E specs select by text or duplicate a shared helper
+## 2026-09-12 — TD-015 — Three E2E specs select by text or duplicate a shared helper
 
 - Found by: reviewer-e2e (`.review/reviewer-e2e-2026-09-12-01.md`, pre-existing section)
 - Where: e2e/accounts/accounts.test.ts:23 (local `navigateToAccounts` next to the shared one in e2e/helpers/navigation.ts), e2e/asset_web_lookup/asset_web_lookup.test.ts:47 (`button[aria-label="Fill manually"]`), e2e/assets/assets.test.ts:79 and :102 (XPath on `normalize-space(text())`)
@@ -191,7 +193,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — suite robustness.
 - Done when: the three sites select by `id` (adding the ids on the frontend elements in the same commit) and the local helper is replaced by the shared import.
 
-## 2026-09-12 — A controlled-input value can be lost once in the E2E buy flow
+## 2026-09-12 — TD-016 — A controlled-input value can be lost once in the E2E buy flow
 
 - Found by: manual (first pull-request E2E run, PR #106 attempt 1, run 34717977006)
 - Where: e2e/account_details/buy_sell.test.ts (TRX-010), e2e/helpers/react.ts (`setReactInputValue`), src/ui/components/field/CalcField.tsx
@@ -201,7 +203,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — suite reliability.
 - Done when: the loss is reproduced (or its trigger understood) and either the helper waits for the field to report the value back before returning, or the field's handling is changed so a dispatched `input` event can never be dropped; TRX-010 no longer needs a re-run to pass.
 
-## 2026-09-12 — Backend logic coverage sits at 86 % against the 90 % target
+## 2026-09-12 — TD-017 — Backend logic coverage sits at 86 % against the 90 % target
 
 - Found by: manual (`python3 scripts/coverage-gate.py --backend` on the tarpaulin report of `6ac326c`)
 - Where: src-tauri/src/use_cases/update_checker/service.rs (0 % of 75 lines), src-tauri/src/use_cases/scheduled_fetch/headless.rs (3 % of 73), src-tauri/src/use_cases/asset_web_lookup/orchestrator.rs (38 % of 108), src-tauri/src/use_cases/portfolio_sync/applier.rs (66 % of 119), src-tauri/src/context/sync/application/join.rs (72 % of 148), src-tauri/src/use_cases/holding_transaction/orchestrator.rs (78 % of 231), src-tauri/src/context/account/service.rs (83 % of 737), src-tauri/src/context/asset/service.rs (83 % of 391)
@@ -211,7 +213,7 @@ Entries are observations, not commitments. Triaged by `/whats-next` alongside
 - User value: None — a harness that catches logic regressions in these paths.
 - Done when: the backend floor in `coverage-gates.json` reads 90.0 and the gate passes on `main`.
 
-## 2026-09-13 — 119 interactive components in feature code carry no id
+## 2026-09-13 — TD-018 — 119 interactive components in feature code carry no id
 
 - Found by: manual (`python3 scripts/arch-check.py`, rule A6, first run)
 - Where: 35 files under src/features/ listed in arch-allowlist.json `missing_ids`; mostly Cancel and secondary buttons in modals, the price-history and update-banner actions, and the design-system dev page
