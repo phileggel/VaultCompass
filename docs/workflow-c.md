@@ -64,7 +64,7 @@ Four human touchpoints. Everything else is either the agent's job or a machine g
 8. **PR** — opened for the record, not for approval. Body under 20 lines: the entry,
    each Done when clause with the test that proves it, findings that changed
    something, techdebt filed, screenshots. The commit title is the changelog line.
-9. **Merge** when every required check is green: `just merge`. Never before.
+9. **Merge**: `just merge`, which refuses until every check on the pull request is green.
 10. **Closure** in the same PR: entry marked `merged, unreleased`; techdebt updated;
     `ARCHITECTURE.md` if a module appeared; the spec if a rule changed.
 11. **Next** entry, or stop (§ 8).
@@ -93,20 +93,24 @@ deleted in the closure commit; the visual proofs are the record.
 git hooks run only the fast checks for the scope a commit or push touches
 (`scripts/changed-scope.sh`); a Markdown-only change costs Prettier and nothing else.
 
-| Check                    | Where                                          | Gate                                                                                                                                                          |
-| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Lint, format, type-check | `scripts/check.py`, Quality                    | any error                                                                                                                                                     |
-| Architecture rules A1–A8 | `scripts/arch-check.py`, Quality               | any violation; frozen debt may only shrink (`arch-allowlist.json`)                                                                                            |
-| Unit and integration     | Vitest, cargo test, Quality                    | any failure                                                                                                                                                   |
-| Coverage floors          | `scripts/coverage-gate.py`, Quality            | frontend features < 80 %, backend logic < floor (`coverage-gates.json`, ratchets to 90 %)                                                                     |
-| Golden portfolio         | `src-tauri/tests/golden_portfolio.rs`, Quality | any drift in a pinned figure (`tests/golden/expected.json`); a change that moves one names it in its entry's Done when and regenerates with `GOLDEN_UPDATE=1` |
-| E2E on the real app      | `.github/workflows/e2e.yml`, every PR          | any failure; screenshots linked                                                                                                                               |
-| Reviewer prompts         | `.github/workflows/review.yml`, every PR       | any 🔴 in a lane the diff touches; the report is a sticky PR comment; fails closed without the `CLAUDE_CODE_OAUTH_TOKEN` subscription secret                  |
-| Visual regression        | `.github/workflows/e2e.yml`, every PR          | a screen differing from main's last green run beyond 0.3 % of pixels while the PR touched no frontend file; expected differences are listed in the PR comment |
-| Commit hygiene           | Quality `pr-checks`                            | title > 72, wrong type, trailer                                                                                                                               |
-| Security audit           | `security-audit.yml`                           | new advisory                                                                                                                                                  |
+| Check                    | Where                                          | Gate                                                                                                                                                                                                               |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Lint, format, type-check | `scripts/check.py`, Quality                    | any error                                                                                                                                                                                                          |
+| Architecture rules A1–A8 | `scripts/arch-check.py`, Quality               | any violation; frozen debt may only shrink (`arch-allowlist.json`)                                                                                                                                                 |
+| Unit and integration     | Vitest, cargo test, Quality                    | any failure                                                                                                                                                                                                        |
+| Coverage floors          | `scripts/coverage-gate.py`, Quality            | frontend features < 80 %, backend logic < floor (`coverage-gates.json`, ratchets to 90 %)                                                                                                                          |
+| Golden portfolio         | `src-tauri/tests/golden_portfolio.rs`, Quality | any drift in a pinned figure (`tests/golden/expected.json`); a change that moves one names it in its entry's Done when and regenerates with `GOLDEN_UPDATE=1`                                                      |
+| E2E on the real app      | `.github/workflows/e2e.yml`, every PR          | any failure; screenshots linked                                                                                                                                                                                    |
+| Reviewer prompts         | `.github/workflows/review.yml`, every PR       | any 🔴 in a lane the diff touches; the report is a sticky PR comment; fails closed without the `CLAUDE_CODE_OAUTH_TOKEN` subscription secret                                                                       |
+| Visual regression        | `.github/workflows/e2e.yml`, every PR          | a screen differing from main's last green run beyond 0.3 % of pixels while the PR touched no frontend file; expected differences are listed in the PR comment                                                      |
+| Commit hygiene           | Quality `pr-checks`                            | title > 72, wrong type, trailer                                                                                                                                                                                    |
+| Merge guard              | `scripts/merge.py`, `required-checks.json`     | `just merge` refuses unless the branch is the head of an open pull request with every check green and every required check present; a rebase that moves the commits pushes them and stops until CI has run on them |
+| Security audit           | `security-audit.yml`                           | new advisory                                                                                                                                                                                                       |
 
-Planned additions (build order in the plan): the merge guard, the mutation sweep.
+The `main-protection` ruleset lists the same checks; the owner's laptop bypasses it for
+`just release`, so the guard in `just merge` is the enforced gate.
+
+Planned addition (build order in the plan): the mutation sweep.
 
 ## 6. The right way to code
 

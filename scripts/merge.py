@@ -6,13 +6,16 @@ FF-merge into the target, push, and delete the feature branch both locally
 and on origin. Fails fast with a clear recovery hint at any step that can't
 proceed cleanly (rebase conflict, divergent push, dirty tree, etc.).
 
-If your project needs a different merge policy (e.g. preserve merge commits,
-no rebase), override the `merge` recipe in the downstream justfile.
+The merge guard: the branch must be the head of an open pull request whose
+every check run is green, and every check named in `required-checks.json`
+must be among them. When the rebase moved the commits (the target advanced),
+the rebased branch is pushed and the merge stops until CI has run on it.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -47,6 +50,100 @@ def _rebase_in_progress() -> bool:
     """True if a rebase was started but not yet finished or aborted."""
     gdir = _git_dir()
     return (gdir / "rebase-merge").is_dir() or (gdir / "rebase-apply").is_dir()
+
+
+def gh(*args: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["gh", *args], capture_output=True, text=True, check=False, timeout=60
+        )
+    except FileNotFoundError:
+        fail("gh is not installed — the merge guard cannot read the checks.")
+    except subprocess.TimeoutExpired:
+        fail(f"gh {args[0]} {args[1]} did not answer within 60 s — is GitHub reachable?")
+
+
+PASSING = {"success", "skipped", "neutral"}
+
+
+def _required_checks() -> list[str]:
+    path = Path(git("rev-parse", "--show-toplevel").stdout.strip()) / "required-checks.json"
+    try:
+        return list(json.loads(path.read_text(encoding="utf-8"))["checks"])
+    except (OSError, ValueError, KeyError) as exc:
+        fail(f"Could not read {path.name}: {exc}")
+
+
+def _open_pull_request(branch: str, target: str) -> tuple[int, str]:
+    """Number and head sha of the open pull request from `branch` into `target`."""
+    result = gh(
+        "pr", "list", "--head", branch, "--base", target, "--state", "open",
+        "--json", "number,headRefOid", "--limit", "1",
+    )
+    if result.returncode != 0:
+        fail("Could not list pull requests.", (result.stderr or "").strip())
+    prs = json.loads(result.stdout or "[]")
+    if not prs:
+        fail(
+            f"No open pull request from {branch} into {target}.",
+            "Every change goes through the harness — open one and let it run:",
+            f"  git push -u origin {branch} && gh pr create --fill",
+        )
+    return int(prs[0]["number"]), str(prs[0]["headRefOid"])
+
+
+def _check_runs(sha: str) -> dict[str, tuple[str, str]]:
+    """Latest check run per name on `sha`: name -> (status, conclusion).
+
+    A re-run creates a new run with the same name and a higher id; the
+    highest id wins whatever order the API lists them in.
+    """
+    result = gh(
+        "api", f"repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?filter=latest",
+        "--paginate",
+        "--jq", '.check_runs[] | [.id, .name, .status, (.conclusion // "")] | @tsv',
+    )
+    if result.returncode != 0:
+        fail(f"Could not read the check runs of {sha[:7]}.", (result.stderr or "").strip())
+    latest: dict[str, tuple[int, str, str]] = {}
+    for line in result.stdout.splitlines():
+        run_id, name, status, conclusion = (line.split("\t") + ["", "", ""])[:4]
+        if name not in latest or int(run_id) > latest[name][0]:
+            latest[name] = (int(run_id), status, conclusion)
+    return {name: (status, conclusion) for name, (_, status, conclusion) in latest.items()}
+
+
+def ensure_checks_green(branch: str, target: str, before: str, after: str) -> None:
+    """Refuse the merge unless CI is green on exactly the commits about to land."""
+    number, head = _open_pull_request(branch, target)
+    if after != head:
+        push = git("push", "--force-with-lease", "origin", branch, check=False)
+        if push.returncode != 0:
+            fail(
+                f"Local {branch} ({after[:7]}) is not the head of PR #{number} ({head[:7]}) and the push failed.",
+                (push.stderr or "").strip(),
+            )
+        why = "the rebase moved the commits" if before == head else "the local branch was ahead of the pull request"
+        fail(
+            f"{branch} pushed as {after[:7]} — {why}.",
+            f"CI runs on it now: gh pr checks {number} --watch",
+            "Re-run `just merge` when every check is green.",
+        )
+    runs = _check_runs(head)
+    missing = [name for name in _required_checks() if name not in runs]
+    not_green = sorted(
+        f"{name}: {status if status != 'completed' else conclusion}"
+        for name, (status, conclusion) in runs.items()
+        if status != "completed" or conclusion not in PASSING
+    )
+    if missing or not_green:
+        fail(
+            f"PR #{number} is not green on {head[:7]}.",
+            *(f"  missing: {name}" for name in missing),
+            *(f"  {line}" for line in not_green),
+            f"Watch: gh pr checks {number} --watch — then re-run `just merge`.",
+        )
+    print(f"{GREEN}✓ PR #{number}: every check green on {head[:7]}.{NC}", file=sys.stderr)
 
 
 def main() -> int:
@@ -184,6 +281,7 @@ def main() -> int:
             f"detail: {detail}",
             "Inspect: git status",
         )
+    before = git("rev-parse", branch).stdout.strip()
     result = git("rebase", target, check=False)
     if result.returncode != 0:
         abort_result = git("rebase", "--abort", check=False)
@@ -205,6 +303,9 @@ def main() -> int:
                 "  # ...fix conflicting files, then git add + git rebase --continue",
                 "  just merge              # finishes the merge",
             )
+
+    # Step 2b — the merge guard: green checks on exactly these commits.
+    ensure_checks_green(branch, target, before, git("rev-parse", branch).stdout.strip())
 
     # Step 3 — fast-forward merge target onto the rebased branch.
     # After step 2 this is guaranteed to FF; we still pass --ff-only for safety.

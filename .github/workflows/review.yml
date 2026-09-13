@@ -25,7 +25,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   lanes:
@@ -58,7 +57,7 @@ jobs:
           sql=$(has '^src-tauri/migrations/')
           # reviewer-infra FP (PR #113): the .mjs and the two gate files are in
           # the agent's own `## Files in scope` list.
-          infra=$(has '^(scripts/[^/]*\.(sh|bat|py|mjs)$|\.githooks/|\.github/workflows/.*\.ya?ml$|justfile$|package\.json$|src-tauri/Cargo\.toml$|src-tauri/tauri\.conf\.json$|src-tauri/capabilities/.*\.json$|coverage-gates\.json$|arch-allowlist\.json$)')
+          infra=$(has '^(scripts/[^/]*\.(sh|bat|py|mjs)$|\.githooks/|\.github/workflows/.*\.ya?ml$|justfile$|package\.json$|src-tauri/Cargo\.toml$|src-tauri/tauri\.conf\.json$|src-tauri/capabilities/.*\.json$|coverage-gates\.json$|arch-allowlist\.json$|required-checks\.json$)')
           security=$(has '^(src-tauri/src/.*/api\.rs$|src-tauri/capabilities/|src-tauri/src/core/specta_builder\.rs$|src-tauri/src/context/sync/)')
           e2e=$(has '^e2e/.*\.test\.ts$')
           arch=false
@@ -74,6 +73,11 @@ jobs:
     needs: lanes
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      # The report is a sticky comment on the pull request; the lanes job
+      # only reads the diff.
+      pull-requests: write
     env:
       # Where the pinned action writes the session's execution log (verified
       # against v1 @ 9cdae7f; re-check when the pin moves).

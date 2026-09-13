@@ -121,6 +121,7 @@ Skip silently any file or directory below that does not exist in the project (v4
 - `package.json` — Node.js dependencies and scripts
 - `scripts/*.sh`, `scripts/*.bat`, `scripts/*.py`, `scripts/*.mjs` — internal quality (safety, robustness, portability) AND CI reference correctness
 - `coverage-gates.json`, `arch-allowlist.json` — the harness floors and the frozen architecture debt (a lowered floor or a grown allowlist is a finding)
+- `required-checks.json` — the checks `just merge` demands on a pull request (a removed name is a finding)
 - `.githooks/*` — internal quality AND hook wiring/CI consistency
 - `justfile` — Command runner recipes (task aliases for scripts and dev commands)
 
