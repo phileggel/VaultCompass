@@ -102,11 +102,11 @@ git hooks run only the fast checks for the scope a commit or push touches
 | Golden portfolio         | `src-tauri/tests/golden_portfolio.rs`, Quality | any drift in a pinned figure (`tests/golden/expected.json`); a change that moves one names it in its entry's Done when and regenerates with `GOLDEN_UPDATE=1` |
 | E2E on the real app      | `.github/workflows/e2e.yml`, every PR          | any failure; screenshots linked                                                                                                                               |
 | Reviewer prompts         | `.github/workflows/review.yml`, every PR       | any 🔴 in a lane the diff touches; the report is a sticky PR comment; fails closed without the `CLAUDE_CODE_OAUTH_TOKEN` subscription secret                  |
+| Visual regression        | `.github/workflows/e2e.yml`, every PR          | a screen differing from main's last green run beyond 0.3 % of pixels while the PR touched no frontend file; expected differences are listed in the PR comment |
 | Commit hygiene           | Quality `pr-checks`                            | title > 72, wrong type, trailer                                                                                                                               |
 | Security audit           | `security-audit.yml`                           | new advisory                                                                                                                                                  |
 
-Planned additions (build order in the plan): visual
-regression, the merge guard, the mutation sweep.
+Planned additions (build order in the plan): the merge guard, the mutation sweep.
 
 ## 6. The right way to code
 

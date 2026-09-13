@@ -29,6 +29,8 @@ jobs:
       contents: read
       # The screenshot comment below is posted on the pull request.
       pull-requests: write
+      # The visual comparison downloads main's screenshot artifact.
+      actions: read
 
     env:
       # SQLX_OFFLINE also set in src-tauri/.cargo/config.toml [env]; declaring
@@ -50,7 +52,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
-            webkit2gtk-driver xvfb libdbus-1-dev
+            webkit2gtk-driver xvfb libdbus-1-dev imagemagick
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
@@ -102,6 +104,76 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Compare the screens with main
+        # Visual regression: every capture is compared with the same screen
+        # from main's latest green run (its e2e-screenshots artifact). A
+        # difference above the threshold is a regression when the pull request
+        # touched no frontend file; when it did, the change is expected and
+        # only listed. Small text differences (a price age, a date) stay under
+        # the threshold; layout and theme breakage do not. No baseline (no
+        # green main run with an artifact) skips the comparison with a note.
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        id: visual
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          THRESHOLD_PCT: "0.3"
+        run: |
+          set -euo pipefail
+          mkdir -p screenshots/e2e-diff
+          # The checkout is shallow, so the PR's file list comes from the API.
+          touched=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' | grep -E '^(src/|public/|index\.html$)|\.(css|tsx)$' || true)
+          if [[ -n "$touched" ]]; then frontend=true; else frontend=false; fi
+          run_id=$(gh run list --workflow E2E --branch "$BASE" --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)
+          if [[ -z "$run_id" ]] || ! gh run download "$run_id" -n e2e-screenshots -D baseline; then
+            echo "verdict=no-baseline" >> "$GITHUB_OUTPUT"
+            echo "No green main run with screenshots — comparison skipped."
+            exit 0
+          fi
+          changed=""
+          for png in screenshots/e2e/*.png; do
+            [[ -e "$png" ]] || continue
+            name=$(basename "$png")
+            base="baseline/$name"
+            [[ -e "$base" ]] || { echo "new screen: $name"; continue; }
+            total=$(identify -format '%[fx:w*h]' "$png")
+            # AE = count of pixels that differ beyond the fuzz; compare exits 1 when any do.
+            ae=$(compare -metric AE -fuzz 3% "$base" "$png" "screenshots/e2e-diff/$name" 2>&1 >/dev/null || true)
+            # AE is a count, possibly in scientific notation; anything else
+            # (sizes differ, unreadable file) counts as a full change.
+            [[ "$ae" =~ ^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$ ]] || ae=$total
+            pct=$(awk -v a="${ae:-0}" -v t="$total" 'BEGIN { printf "%.3f", (t > 0 ? 100 * a / t : 0) }')
+            if awk -v p="$pct" -v th="$THRESHOLD_PCT" 'BEGIN { exit !(p > th) }'; then
+              changed+="- \`${name%.png}\` (${pct}% of pixels)"$'\n'
+            else
+              rm -f "screenshots/e2e-diff/$name"
+            fi
+          done
+          delim="CHANGED_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+          {
+            echo "changed<<$delim"
+            printf '%s' "$changed"
+            echo "$delim"
+          } >> "$GITHUB_OUTPUT"
+          if [[ -z "$changed" ]]; then
+            echo "verdict=same" >> "$GITHUB_OUTPUT"; echo "No screen differs from main beyond ${THRESHOLD_PCT}%."
+          elif [[ "$frontend" == true ]]; then
+            echo "verdict=expected" >> "$GITHUB_OUTPUT"; echo "Screens differ and the PR touches frontend code:"; printf '%s' "$changed"
+          else
+            echo "verdict=regression" >> "$GITHUB_OUTPUT"; echo "::error::Screens differ from main but the PR touches no frontend file:"; printf '%s' "$changed"
+          fi
+
+      - name: Upload the visual diffs
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: e2e-visual-diff
+          path: screenshots/e2e-diff/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload E2E failure screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -128,9 +200,18 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ARTIFACT_URL: ${{ steps.upload-screens.outputs.artifact-url }}
           JOB_STATUS: ${{ job.status }}
+          VISUAL_VERDICT: ${{ steps.visual.outputs.verdict }}
+          VISUAL_CHANGED: ${{ steps.visual.outputs.changed }}
         run: |
           set -euo pipefail
           MARKER='<!-- e2e-screenshots -->'
+          case "${VISUAL_VERDICT:-}" in
+            same) VISUAL=$'\n\nNo screen differs from main.' ;;
+            expected) VISUAL=$'\n\nScreens that differ from main (frontend code changed, see the e2e-visual-diff artifact):\n\n'"$VISUAL_CHANGED" ;;
+            regression) VISUAL=$'\n\n**Visual regression** — screens differ from main although no frontend file changed (see the e2e-visual-diff artifact):\n\n'"$VISUAL_CHANGED" ;;
+            no-baseline) VISUAL=$'\n\nNo main baseline yet; comparison skipped.' ;;
+            *) VISUAL="" ;;
+          esac
           LIST=""
           for png in screenshots/e2e/*-light.png; do
             [[ -e "$png" ]] || continue
@@ -139,8 +220,8 @@ jobs:
           done
           if [[ -n "$LIST" ]]; then
             COUNT=$(printf '%s' "$LIST" | grep -c '^-')
-            BODY=$(printf '%s\n## E2E screenshots — %s\n\n%s screens captured in light and dark by the real app ([download](%s), [run](%s)):\n\n%s' \
-              "$MARKER" "$JOB_STATUS" "$COUNT" "${ARTIFACT_URL:-$RUN_URL}" "$RUN_URL" "$LIST")
+            BODY=$(printf '%s\n## E2E screenshots — %s\n\n%s screens captured in light and dark by the real app ([download](%s), [run](%s)):\n\n%s%s' \
+              "$MARKER" "$JOB_STATUS" "$COUNT" "${ARTIFACT_URL:-$RUN_URL}" "$RUN_URL" "$LIST" "$VISUAL")
           else
             BODY=$(printf '%s\n## E2E screenshots — %s\n\nNo screen was captured ([run](%s)).\n' "$MARKER" "$JOB_STATUS" "$RUN_URL")
           fi
@@ -151,3 +232,10 @@ jobs:
           else
             gh pr comment "$PR_NUMBER" --body "$BODY"
           fi
+
+      - name: Fail on a visual regression
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.visual.outputs.verdict == 'regression' }}
+        shell: bash
+        run: |
+          echo "::error::Visual regression — see the e2e-visual-diff artifact and the PR comment."
+          exit 1
