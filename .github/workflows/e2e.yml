@@ -109,8 +109,9 @@ jobs:
         # from main's latest green run (its e2e-screenshots artifact). A
         # difference above the threshold is a regression when the pull request
         # touched no frontend file; when it did, the change is expected and
-        # only listed. Small text differences (a price age, a date) stay under
-        # the threshold; layout and theme breakage do not. No baseline (no
+        # only listed (a change to the capture helper counts as frontend for
+        # this purpose). Small text differences (a price age, a date) stay
+        # under the threshold; layout and theme breakage do not. No baseline (no
         # green main run with an artifact) skips the comparison with a note.
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         id: visual
@@ -124,7 +125,7 @@ jobs:
           set -euo pipefail
           mkdir -p screenshots/e2e-diff
           # The checkout is shallow, so the PR's file list comes from the API.
-          touched=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' | grep -E '^(src/|public/|index\.html$)|\.(css|tsx)$' || true)
+          touched=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' | grep -E '^(src/|public/|index\.html$|e2e/helpers/screenshot\.ts$)|\.(css|tsx)$' || true)
           if [[ -n "$touched" ]]; then frontend=true; else frontend=false; fi
           run_id=$(gh run list --workflow E2E --branch "$BASE" --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)
           if [[ -z "$run_id" ]] || ! gh run download "$run_id" -n e2e-screenshots -D baseline; then
