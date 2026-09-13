@@ -10,7 +10,7 @@ The merge guard: the branch must be the head of an open pull request whose
 every check run is green, and every check named in `required-checks.json`
 must be among them. When the rebase moved the commits (the target advanced),
 the rebased branch is pushed and the merge stops until CI has run on it, unless
-the target moved only by record files (todo, techdebt, lessons, plans, ADRs).
+the rebase changed record files only (todo, techdebt, lessons, plans, ADRs).
 """
 
 from __future__ import annotations
@@ -128,14 +128,16 @@ def _record_files_only(files: list[str]) -> bool:
     )
 
 
-def _target_moved_by_record_files_only(before: str, target: str) -> bool:
-    """True when every file `target` gained since `before` branched off is a record file."""
-    base = git("merge-base", before, target, check=False)
-    if base.returncode != 0:
-        fail(f"Could not find the merge base of {before[:7]} and {target}.", (base.stderr or "").strip())
-    diff = git("diff", "--name-only", base.stdout.strip(), target, check=False)
+def _rebase_changed_record_files_only(before: str, after: str) -> bool:
+    """True when the tree the checks ran on and the tree about to land differ by record files only.
+
+    Comparing the two trees, not the target's history, means a branch stacked
+    on commits that have since merged is not sent for a re-run: what CI tested
+    is what lands.
+    """
+    diff = git("diff", "--name-only", before, after, check=False)
     if diff.returncode != 0:
-        fail(f"Could not list what {target} gained since {before[:7]}.", (diff.stderr or "").strip())
+        fail(f"Could not compare {before[:7]} with {after[:7]}.", (diff.stderr or "").strip())
     return _record_files_only([f for f in diff.stdout.splitlines() if f])
 
 
@@ -152,9 +154,9 @@ def ensure_checks_green(branch: str, target: str, before: str, after: str) -> No
         # The checks are then read on `head`, which the push above left without
         # a ref: GitHub keeps a commit's check runs regardless (verified on
         # PR #121's pre-rebase head, 14 runs answered after the force push).
-        if before == head and _target_moved_by_record_files_only(before, target):
+        if before == head and _rebase_changed_record_files_only(before, after):
             print(
-                f"{BLUE}ℹ {target} moved by record files only since the checks ran; the checks of {head[:7]} stand.{NC}",
+                f"{BLUE}ℹ The rebase changed record files only; the checks of {head[:7]} stand.{NC}",
                 file=sys.stderr,
             )
         else:
