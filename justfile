@@ -57,9 +57,9 @@ coverage-gate *ARGS:
 arch-check *ARGS:
     python3 scripts/arch-check.py {{ARGS}}
 
-# The merge gate, locally: architecture rules, lint + type-check + build on both layers, then both test suites with coverage and the coverage floors
-harness: arch-check && coverage-fe coverage-be coverage-gate
-    python3 scripts/check.py --skip-tests
+# The merge gate, locally, scoped to what moved (scripts/harness.sh): architecture rules always; lint + build, tests with coverage and the floor only for the layers the diff touches
+harness:
+    bash scripts/harness.sh
 
 # Resource-capped check-full: runs the full quality suite in a memory-throttled, low-priority
 # cgroup so heavy builds stay responsive on low-RAM machines (requires a systemd user session)
