@@ -91,6 +91,7 @@ Why: a 60-file mixed-layer PR sprawls across concerns; per-layer PRs keep each d
 ## 🛠 Commands
 
 - Dev: `./scripts/start-app.sh`
+- Loop: `just next-todo` — one ready entry of `docs/todo.md` § Next, headless (`docs/workflow-c.md` § 9)
 - Tests: `just test` (frontend) | `just test-rust` (backend) | `just test-unit` (both)
 - E2E tests: `just test-e2e` (local) | `just test-e2e-headless` (Linux headless). CI runs the suite on every pull request and every push to `main`; the local run on this machine is known-broken (`docs/lessons.md` L-011), so CI is the gate.
 - Security audit: `/security-review` (IPC, capabilities, SQL injection, hardcoded secrets) — Claude Code built-in, run before release alongside `/dep-audit`

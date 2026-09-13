@@ -131,6 +131,11 @@ merge:
     @[ -f scripts/merge.py ] || { echo "❌ scripts/merge.py not found — restore it from git history"; exit 1; }
     python3 scripts/merge.py
 
+# Run one ready entry of docs/todo.md § Next headless (docs/workflow-c.md § 9)
+next-todo:
+    @[ -f scripts/next-todo.sh ] || { echo "❌ scripts/next-todo.sh not found — restore it from git history"; exit 1; }
+    bash scripts/next-todo.sh
+
 # Prerequisites: sqlx must be on $PATH and DATABASE_URL must be set
 # Run pending database migrations
 migrate:

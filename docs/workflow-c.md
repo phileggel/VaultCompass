@@ -165,7 +165,23 @@ treated as a new open question on the entry.
 ## 9. Where the loop runs
 
 The chat session is for writing entries together, design conversations and answering
-open questions. The loop runs headless, one entry per run (`/next-todo`), from a
-scheduled job; state lives in git and the two files, so there is no session to resume.
-Until the scheduled runner exists, a human types `/next-todo` in a session and the
-same rules apply.
+open questions. The loop runs headless, one entry per run, never asks, and keeps its
+state in git and the two files.
+
+- **Cloud routine** `next-todo` on claude.ai/code, created disabled: weekdays at 05:37
+  UTC, the repository's environment, the `/next-todo` prompt. E2E and screenshots
+  come from CI, so the sandbox needs no display. The human switches it on.
+- **Laptop**: `just next-todo` (`scripts/next-todo.sh`): one run at a time, a clean
+  and fresh `main`, a non-empty Next queue, three hours of wall clock
+  (`NEXT_TODO_BUDGET`), the log under `logs/next-todo/`. It runs
+  `claude -p "/next-todo" --permission-mode acceptEdits`: nobody answers a prompt in a
+  print-mode run, so a command outside the allow list in `.claude/settings.json` is
+  denied and the run fails instead of waiting. The allow list scopes the flow, it is
+  not a sandbox; the deny list refuses the usual spellings of the absolute rules (push
+  to `main`, force push, hook bypass, release, tag, `gh pr merge`, editing the list
+  itself) as a reminder, not a proof. What is enforced is the harness and the merge
+  guard. The run shares the plan's session limit with any open session. A crontab
+  line: `37 7 * * 1-5 cd ~/project/VaultCompass && just next-todo`.
+
+Until a runner is switched on, a human types `/next-todo` in a session and the same
+rules apply.
