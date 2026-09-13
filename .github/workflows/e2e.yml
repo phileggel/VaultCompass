@@ -125,10 +125,11 @@ jobs:
           set -euo pipefail
           mkdir -p screenshots/e2e-diff
           # The checkout is shallow, so the PR's file list comes from the API.
-          touched=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' | grep -E '^(src/|public/|index\.html$|e2e/helpers/screenshot\.ts$)|\.(css|tsx)$' || true)
+          files=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename')
+          touched=$(grep -E '^(src/|public/|index\.html$|e2e/helpers/screenshot\.ts$)|\.(css|tsx)$' <<<"$files" || true)
           if [[ -n "$touched" ]]; then frontend=true; else frontend=false; fi
           run_id=$(gh run list --workflow E2E --branch "$BASE" --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)
-          if [[ -z "$run_id" ]] || ! gh run download "$run_id" -n e2e-screenshots -D baseline; then
+          if [[ -z "$run_id" || "$run_id" == "null" ]] || ! gh run download "$run_id" -n e2e-screenshots -D baseline; then
             echo "verdict=no-baseline" >> "$GITHUB_OUTPUT"
             echo "No green main run with screenshots — comparison skipped."
             exit 0
