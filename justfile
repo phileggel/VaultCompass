@@ -131,6 +131,10 @@ merge:
     @[ -f scripts/merge.py ] || { echo "❌ scripts/merge.py not found — restore it from git history"; exit 1; }
     python3 scripts/merge.py
 
+# Mutation sweep of the logic code, in place (requires: cargo install cargo-mutants; scope in src-tauri/.cargo/mutants.toml; args pass through, e.g. `-f src/use_cases/fee_generation`; a killed run leaves a mutated file — `git checkout -- src-tauri/src`)
+mutants *ARGS:
+    cd src-tauri && cargo mutants --in-place {{ARGS}}
+
 # Run one ready entry of docs/todo.md § Next headless (docs/workflow-c.md § 9)
 next-todo:
     @[ -f scripts/next-todo.sh ] || { echo "❌ scripts/next-todo.sh not found — restore it from git history"; exit 1; }

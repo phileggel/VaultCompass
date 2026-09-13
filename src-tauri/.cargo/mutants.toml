@@ -1,0 +1,13 @@
+# cargo-mutants scope: the code that carries logic, the same set the coverage
+# gate measures (coverage-gates.json). Wire adapters, repositories and module
+# files are not mutated.
+examine_globs = [
+  "src/context/*/domain/**",
+  "src/context/*/application/**",
+  "src/context/*/service.rs",
+  "src/use_cases/**",
+  "src/shared/domain/**",
+]
+exclude_globs = ["**/api.rs", "**/mod.rs"]
+# The suite opens SQLite databases; give a mutant three times the baseline.
+timeout_multiplier = 3.0

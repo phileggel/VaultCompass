@@ -45,3 +45,5 @@ env/
 venv/
 ENV/
 .venv
+# cargo-mutants output (just mutants)
+mutants.out/

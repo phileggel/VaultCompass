@@ -106,11 +106,10 @@ git hooks run only the fast checks for the scope a commit or push touches
 | Commit hygiene           | Quality `pr-checks`                            | title > 72, wrong type, trailer                                                                                                                                                                                    |
 | Merge guard              | `scripts/merge.py`, `required-checks.json`     | `just merge` refuses unless the branch is the head of an open pull request with every check green and every required check present; a rebase that moves the commits pushes them and stops until CI has run on them |
 | Security audit           | `security-audit.yml`                           | new advisory                                                                                                                                                                                                       |
+| Mutation sweep           | `.github/workflows/mutants.yml`, monthly       | none; cargo-mutants on the logic code (`src-tauri/.cargo/mutants.toml`), survivors listed in the sticky issue "Mutation sweep — surviving mutants" in the techdebt entry format, `mutants.out` kept 90 days        |
 
 The `main-protection` ruleset lists the same checks; the owner's laptop bypasses it for
 `just release`, so the guard in `just merge` is the enforced gate.
-
-Planned addition (build order in the plan): the mutation sweep.
 
 ## 6. The right way to code
 

@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-021) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-022) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -242,3 +242,11 @@ Remove an entry once it has been resolved.
 - Observation: tarpaulin rebuilds the whole crate instrumented on every run and cannot reuse the normal build cache, so the backend job is the slowest gate by a wide margin: the frontend job ends in two minutes, E2E in ten, the coverage floor waits for tarpaulin. `cargo llvm-cov` produces the same lcov report from a standard build that the Rust cache already holds, and was the plan's original choice for the coverage gate.
 - User value: None — a pull request merges twenty minutes sooner.
 - Done when: the backend job produces `coverage/backend/lcov.info` through `cargo llvm-cov` (locally and in CI), `scripts/coverage-gate.py` reads it unchanged, the floor in `coverage-gates.json` is re-measured on the new tool, and the job's median duration on `main` is under ten minutes.
+
+## 2026-09-13 — TD-021 — Action pins labelled with the wrong tag in four workflows
+
+- Found by: reviewer-infra (phase 12 review, `.review/reviewer-infra-2026-09-13-10.md`)
+- Where: `.github/workflows/quality.yml`, `e2e.yml`, `review.yml`, `security-audit.yml` — `Swatinem/rust-cache@e18b4977…` (labelled v2.9.1; the tag peels to `c1937114…`) and `taiki-e/install-action@f48d2f8b…` (labelled v2.75.30; it is v2.79.6)
+- Context: branch `ci/mutation-sweep` @ `5f29843`
+- Severity: 🔵
+- Observation: the commits are real upstream commits, so nothing is compromised, but a reader trusting the comment audits the wrong release notes. `mutants.yml` carries the correct pins; the four older files still carry the labels. Verified with `git ls-remote --tags` on 2026-09-13.

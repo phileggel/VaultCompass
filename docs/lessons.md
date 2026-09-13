@@ -170,3 +170,11 @@ The frontend shows no error — the per-asset failure is silently skipped (MKT-1
 **Symptom** — A pull request whose head commit has zero check runs: no queued job, no failed job, nothing in the run list for that commit. The branch tip and the PR head agree, so nothing is wrong on the repository's side. With checks as the merge gate, the PR is stuck until something fires them.
 
 **Mitigation** — (1) Give every workflow a required check depends on a `workflow_dispatch` entry, with an input for the pull request number when the workflow posts to the PR, and a base-branch fallback for expressions that read the pull-request context. (2) Fire the missing runs with `gh workflow run <name> --ref <branch>` and watch the branch tip's check runs through `gh api …/commits/<sha>/check-runs`; a closed-and-reopened PR is not a reliable re-trigger. (3) Remember the dispatch entry only becomes usable once the workflow file carrying it is on the default branch — a new gating workflow must land with it from its first version.
+
+## L-013 — An in-place mutation run that dies leaves a mutated source file behind
+
+**First observed**: 2026-09-13 (a local `cargo mutants --in-place` timing run was killed by the OS for memory on a 6 GB laptop; `git status` then showed one changed line in a service file nobody had edited)
+
+**Symptom** — After a mutation-testing run that did not end on its own (killed, out of memory, Ctrl-C), a source file carries a one-line change that reads like a bug: a flipped comparison, a returned default, a deleted call. The tool restores files only when it finishes a mutant.
+
+**Mitigation** — (1) Treat in-place mutation as a CI job, not a laptop task: it needs the memory of a full build plus the suite, repeatedly. (2) After any run that did not finish, `git status` before every other git command; `git checkout -- <tree>` restores the file. Never stash, commit or switch branches while such a run is alive. (3) A run that must stay local uses the copying mode, which leaves the working tree untouched.
