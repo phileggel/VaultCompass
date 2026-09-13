@@ -60,7 +60,7 @@ jobs:
           # the agent's own `## Files in scope` list.
           infra=$(has '^(scripts/[^/]*\.(sh|bat|py|mjs)$|\.githooks/|\.github/workflows/.*\.ya?ml$|justfile$|package\.json$|src-tauri/Cargo\.toml$|src-tauri/tauri\.conf\.json$|src-tauri/capabilities/.*\.json$|coverage-gates\.json$|arch-allowlist\.json$)')
           security=$(has '^(src-tauri/src/.*/api\.rs$|src-tauri/capabilities/|src-tauri/src/core/specta_builder\.rs$|src-tauri/src/context/sync/)')
-          e2e=$(has '^e2e/')
+          e2e=$(has '^e2e/.*\.test\.ts$')
           arch=false
           if [[ "$backend" == true || "$frontend" == true ]]; then arch=true; fi
           lanes=$(jq -cn --argjson b "$backend" --argjson f "$frontend" --argjson s "$sql" --argjson i "$infra" \
