@@ -13,11 +13,16 @@ rules are `docs/workflow-c.md`; this file is the checklist.
 
 - `git status --short` is empty and the branch is `main`, fresh (`git pull --ff-only`).
   Otherwise stop and report; never work on a dirty tree.
-- Read `docs/todo.md` § Next. Take references in order; for each, load the entry
+- With an argument (`/next-todo #NNN` or `/next-todo TD-NNN`): that entry, and the
+  human is in the chat — **chat mode**. Without one: read `docs/todo.md` § Next and
+  take references in order — **headless mode**, nobody to ask. Load the entry
   (`## #NNN` in `docs/todo.md`, or `## … — TD-NNN — …` in `docs/techdebt.md`).
-- **Ready** = has a `**Done when:**`, `**Open questions:** none`, and `**Design:**` is
-  `none` or `validated`. Skip entries that are not ready; if none is ready, print
-  which questions block which entries and stop.
+- **Ready** = has a `**Done when:**`, `**Open questions:** none` (or every box ticked
+  with its answer written after it), and `**Design:**` is `none` or `validated`.
+  Headless: skip entries that are not ready; if none is ready, print which questions
+  block which entries and stop. Chat: ask the open questions together, once, before
+  anything else; write the answers into the entry (they land in the same PR as the
+  change), then continue.
 
 ## Step 1 — Branch and task list
 
@@ -28,8 +33,13 @@ rules are `docs/workflow-c.md`; this file is the checklist.
 
 If the entry changes what the user sees (a new screen, a moved or added control, a
 changed layout or wording pattern) and `Design` is `none`: run `/design-proposal NNN`,
-which commits the mocks and flips the line to `proposed (…)`. Merge that docs change
-through a PR, then go back to Step 0 for the next ready entry. Do not implement.
+which renders the mocks and flips the line to `proposed (…)`.
+
+- Headless: commit the mocks, merge that docs change through a PR, then go back to
+  Step 0 for the next ready entry. Do not implement.
+- Chat: show the mocks in the conversation and ask. On a yes, set the line to
+  `validated` and continue; the mocks and the line land in the same PR as the change.
+  On a no, write what the human wants as an open question, commit, stop.
 
 ## Step 3 — Acceptance first
 

@@ -22,7 +22,7 @@ Four human touchpoints, everything else is the agent's job behind the harness (`
 - The **agent** owns `docs/techdebt.md`, does the task end to end and merges on green. No pull request is validated by a human.
 - The **harness** (`just harness` locally, required checks in CI) proves the code: lint, types, build, both test suites, coverage floors, architecture rules, E2E on the real app.
 
-Questions that only the human can answer are written into the entry's `**Open questions:**` line, never asked in chat while an entry runs. In a chat conversation with the human (designing, planning, discussing), ask as you would with a colleague: state assumptions, name what is unclear.
+In a headless run, questions that only the human can answer are written into the entry's `**Open questions:**` line, never asked. In a chat run (`/next-todo #NNN`), the open questions are asked together, once, before anything starts, and a design is validated by a yes in the conversation; the answers are written into the entry either way. In a chat conversation with the human (designing, planning, discussing), ask as you would with a colleague: state assumptions, name what is unclear.
 
 ## ⚠️ Core Rules
 

@@ -42,12 +42,16 @@ Four human touchpoints. Everything else is either the agent's job or a machine g
 
 ## 3. The loop — one run, one entry
 
-1. **Pick** the first ready entry in Next. Branch `c/NNN-slug` (or `c/td-NNN-slug`)
-   off fresh `main`.
+1. **Pick** — headless: the first ready entry in Next. In chat: the entry the human
+   names (`/next-todo #NNN`); the sentence is the queue, and open questions are asked
+   together, once, before anything starts, their answers written into the entry.
+   Branch `c/NNN-slug` (or `c/td-NNN-slug`) off fresh `main`.
 2. **Design gate** — if the entry changes what the user sees (a new screen, a moved or
-   added control, a changed layout or wording pattern): produce the proposal (§ 4), set
-   `Design: proposed (screenshots/design/NNN-*.png)`, merge that as a docs change, and
-   **move on to the next ready entry**. The human validates by editing the line.
+   added control, a changed layout or wording pattern): produce the proposal (§ 4).
+   Headless: set `Design: proposed (screenshots/design/NNN-*.png)`, merge that as a
+   docs change, and **move on to the next ready entry**; the human validates by editing
+   the line. In chat: show the mocks, ask, and on a yes set the line to `validated`
+   and continue in the same run.
 3. **Acceptance first** — turn Done when into failing tests: Rust for logic, Vitest for
    rendering, E2E for what a user does. Test names carry `#NNN` (or the `TRIGRAM-NNN`
    rule when the domain has a spec; the agent writes the rule from Done when in the
@@ -84,7 +88,8 @@ target state, built with the real components and tokens, under
 written to the design folder instead of the proof folder.
 
 The human validates by editing the entry's `Design` line to `validated`, or writes an
-open question. Nothing else is needed. Once the work ships, the proposal images are
+open question; in a chat run, a yes in the conversation is the validation and the
+agent writes the line. Nothing else is needed. Once the work ships, the proposal images are
 deleted in the closure commit; the visual proofs are the record.
 
 ## 5. The harness
