@@ -84,7 +84,9 @@ publishes. Entries flip to `Shipped in vX.Y.Z`.
 Before any UI change the agent commits, under `screenshots/design/NNN-{state}-{light|dark}.png`,
 rendered mocks of the target state built with the real components and tokens (the
 visual-proof preview pipeline already renders components outside the app; the mock is
-a preview of the proposed component tree with sample data). One image per changed
+a preview of the proposed component tree with sample data). The `/design-proposal NNN` skill
+drives it through the same pipeline as `/visual-proof`, with `VP_OUT_DIR` pointing at
+the design folder. One image per changed
 state, both themes, plus a five-line `screenshots/design/NNN.md`: what moves, what is
 added, what is removed, what stays the same.
 
@@ -168,20 +170,20 @@ in git; no compaction, no resume checkpoints.
 
 Each phase is one PR under today's rules until the loop exists.
 
-| #   | Phase                                                                                 | Files                                                                                                 |
-| --- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 1   | E2E on PRs + screenshot helper + PR image comment                                     | `.github/workflows/e2e.yml`, `e2e/helpers/screenshot.ts`, one capture per critical spec               |
-| 2   | Coverage thresholds as hard gates                                                     | `.github/workflows/quality.yml`, `vitest.config.ts`, `justfile` (`harness` recipe)                    |
-| 3   | Architecture lints                                                                    | `scripts/arch-check.py`, wired in Quality and `just harness`                                          |
-| 4   | Todo/techdebt file shapes: Next queue, Design and Open-questions lines, `TD-NNN` refs | `docs/todo.md`, `docs/techdebt.md`                                                                    |
-| 5   | Workflow doc + CLAUDE.md rewrite + `/next-todo` skill + design-proposal recipe        | `docs/workflow-c.md`, `CLAUDE.md`, `.claude/skills/next-todo/SKILL.md`, `scripts/design-proposal.mjs` |
-| 6   | Freeze the kit (ADR + deletions)                                                      | `.claude/kit-*`, `scripts/sync-config.sh`, `common.just`, `docs/adr/`                                 |
-| 7   | Golden portfolio fixture                                                              | `src-tauri/tests/golden_portfolio.rs`, `src-tauri/tests/golden/`                                      |
-| 8   | Reviewer checks in CI                                                                 | `.github/workflows/review.yml`                                                                        |
-| 9   | Visual regression                                                                     | `scripts/visual-proof-compare.mjs`, Quality                                                           |
-| 10  | Merge guard + branch protection                                                       | `scripts/merge.py` wrapper, repo settings                                                             |
-| 11  | Scheduled runner                                                                      | cloud routine or `scripts/next-todo.sh` + cron                                                        |
-| 12  | Mutation sweep                                                                        | `.github/workflows/mutants.yml`                                                                       |
+| #   | Phase                                                                                 | Files                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | E2E on PRs + screenshot helper + PR image comment                                     | `.github/workflows/e2e.yml`, `e2e/helpers/screenshot.ts`, one capture per critical spec                                                                               |
+| 2   | Coverage thresholds as hard gates                                                     | `.github/workflows/quality.yml`, `vitest.config.ts`, `justfile` (`harness` recipe)                                                                                    |
+| 3   | Architecture lints                                                                    | `scripts/arch-check.py`, wired in Quality and `just harness`                                                                                                          |
+| 4   | Todo/techdebt file shapes: Next queue, Design and Open-questions lines, `TD-NNN` refs | `docs/todo.md`, `docs/techdebt.md`                                                                                                                                    |
+| 5   | Workflow doc + CLAUDE.md rewrite + `/next-todo` skill + design-proposal recipe        | `docs/workflow-c.md`, `CLAUDE.md`, `.claude/skills/next-todo/SKILL.md`, `.claude/skills/design-proposal/SKILL.md`, `VP_OUT_DIR` in `scripts/visual-proof-capture.mjs` |
+| 6   | Freeze the kit (ADR + deletions)                                                      | `.claude/kit-*`, `scripts/sync-config.sh`, `common.just`, `docs/adr/`                                                                                                 |
+| 7   | Golden portfolio fixture                                                              | `src-tauri/tests/golden_portfolio.rs`, `src-tauri/tests/golden/`                                                                                                      |
+| 8   | Reviewer checks in CI                                                                 | `.github/workflows/review.yml`                                                                                                                                        |
+| 9   | Visual regression                                                                     | `scripts/visual-proof-compare.mjs`, Quality                                                                                                                           |
+| 10  | Merge guard + branch protection                                                       | `scripts/merge.py` wrapper, repo settings                                                                                                                             |
+| 11  | Scheduled runner                                                                      | cloud routine or `scripts/next-todo.sh` + cron                                                                                                                        |
+| 12  | Mutation sweep                                                                        | `.github/workflows/mutants.yml`                                                                                                                                       |
 
 First unattended run: after phase 5, on a copy-only entry (#004 or #006), the human
 watching once. Phases 7–10 are what make merging money logic unattended acceptable;
