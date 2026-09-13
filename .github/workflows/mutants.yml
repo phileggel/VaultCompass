@@ -65,11 +65,13 @@ jobs:
         # Scope and timeouts come from .cargo/mutants.toml. The baseline is
         # skipped: main is already green. Exit 2 = missed mutants, 3 = timeouts:
         # findings, not failures. Exit 4 = the unmutated suite fails, so the
-        # shard proved nothing and fails; anything else is a broken run.
+        # shard proved nothing and fails; anything else is a broken run. The
+        # runner's bash has -e, so the exit code is caught on the same line.
+        # Measured on the first run: ~40 s per mutant, ~2 h per shard of 175.
         run: |
-          set -uo pipefail
-          cargo mutants --in-place --baseline=skip --shard "${{ matrix.shard }}/${{ strategy.job-total }}" --output ..
-          status=$?
+          set -u
+          status=0
+          cargo mutants --in-place --baseline=skip --shard "${{ matrix.shard }}/${{ strategy.job-total }}" --output .. || status=$?
           case "$status" in 0|2|3) exit 0 ;; *) exit "$status" ;; esac
       - name: Upload the shard's mutants.out
         if: ${{ !cancelled() }}

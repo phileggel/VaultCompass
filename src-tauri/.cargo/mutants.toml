@@ -9,5 +9,7 @@ examine_globs = [
   "src/shared/domain/**",
 ]
 exclude_globs = ["**/api.rs", "**/mod.rs"]
-# The suite opens SQLite databases; give a mutant three times the baseline.
+# The suite opens SQLite databases and takes ~40 s per mutant in CI; a mutant
+# that runs five minutes is a hang. The multiplier serves runs with a baseline.
+timeout = 300
 timeout_multiplier = 3.0
