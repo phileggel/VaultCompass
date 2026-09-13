@@ -52,11 +52,11 @@ The holding row's price cell says how old the price is with a full sentence — 
 
 **User value:** The price age reads at a glance as `2 j` instead of a sentence, in a row already short of width.
 **Done when:** Both languages' `mkt.staleness_days_ago` and `mkt.staleness_today` carry the age alone, the same-day wording and the FX label question are decided, and the holding-row screenshot is recaptured.
-**Design:** none
+**Design:** validated (in chat, 2026-09-13)
 **Open questions:**
 
-- [ ] Same-day wording once the prefix is gone: `aujourd'hui` / `today`, or `0 j` / `0d` to line up with the others?
-- [ ] Shorten the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) the same way?
+- [x] Same-day wording once the prefix is gone: `aujourd'hui` / `today`, or `0 j` / `0d` to line up with the others? → `0 j` / `0d`.
+- [x] Shorten the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) the same way? → yes, the same way.
 
 ## #005 — (frontend) — Move the holding row's actions next to the asset name, on two rows
 

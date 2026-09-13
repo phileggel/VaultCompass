@@ -559,8 +559,8 @@
     "fetch_progress_label": "Actualisation des cours… ({{done}}/{{total}})",
     "source_manual": "Manuel",
     "source_yahoo": "Yahoo Finance",
-    "staleness_today": "Mis à jour aujourd'hui",
-    "staleness_days_ago": "Mis à jour il y a {{days}} j",
+    "staleness_today": "0 j",
+    "staleness_days_ago": "{{days}} j",
     "price_state": {
       "missing_ticker": "Ticker manquant",
       "no_price_available": "Pas de prix disponible"
@@ -789,8 +789,8 @@
     "rate_recorded": "Taux enregistré.",
     "rate_updated": "Taux mis à jour.",
     "rate_deleted": "Taux supprimé.",
-    "rate_staleness_today": "Taux du jour",
-    "rate_staleness_days_old": "Taux datant de {{days}} j",
+    "rate_staleness_today": "0 j",
+    "rate_staleness_days_old": "{{days}} j",
     "source_manual": "Manuel",
     "source_frankfurter": "Frankfurter",
     "source_ecb": "BCE",

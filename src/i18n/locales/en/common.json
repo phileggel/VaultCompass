@@ -559,8 +559,8 @@
     "fetch_progress_label": "Refreshing market prices… ({{done}}/{{total}})",
     "source_manual": "Manual",
     "source_yahoo": "Yahoo Finance",
-    "staleness_today": "Updated today",
-    "staleness_days_ago": "Updated {{days}}d ago",
+    "staleness_today": "0d",
+    "staleness_days_ago": "{{days}}d",
     "price_state": {
       "missing_ticker": "Missing ticker",
       "no_price_available": "No price available"
@@ -789,8 +789,8 @@
     "rate_recorded": "Rate recorded.",
     "rate_updated": "Rate updated.",
     "rate_deleted": "Rate deleted.",
-    "rate_staleness_today": "Rate as of today",
-    "rate_staleness_days_old": "Rate {{days}}d old",
+    "rate_staleness_today": "0d",
+    "rate_staleness_days_old": "{{days}}d",
     "source_manual": "Manual",
     "source_frankfurter": "Frankfurter",
     "source_ecb": "ECB",

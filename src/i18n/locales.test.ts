@@ -70,3 +70,17 @@ describe("i18n locales — folder problem nesting", () => {
     expect(instance.t("sync.errors.FolderUnavailable", { problem: "Unmounted" })).toBe(expected);
   });
 });
+
+// #004 — the price-age and FX-rate-age labels on the holding row carry the age
+// alone; the same day reads as zero days so every row lines up.
+describe("i18n locales — staleness labels carry the age alone (#004)", () => {
+  it.each([
+    ["en", en, "0d", "{{days}}d"],
+    ["fr", fr, "0 j", "{{days}} j"],
+  ])("%s: price and FX-rate age", (_lang, locale, today, daysAgo) => {
+    expect(locale.mkt.staleness_today).toBe(today);
+    expect(locale.mkt.staleness_days_ago).toBe(daysAgo);
+    expect(locale.currency.rate_staleness_today).toBe(today);
+    expect(locale.currency.rate_staleness_days_old).toBe(daysAgo);
+  });
+});
