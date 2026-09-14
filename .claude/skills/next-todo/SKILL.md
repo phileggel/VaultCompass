@@ -24,7 +24,10 @@ rules are `docs/workflow-c.md`; this file is the checklist.
   anything else; write the answers into the entry (they land in the same PR as the
   change), then continue.
 
-## Step 1 — Branch and task list
+## Step 1 — Opening brief, branch and task list
+
+- The opening brief first (CLAUDE.md § Opening and closing a piece of work): Task,
+  Scope, Design, Touching. Chat: the first message. Headless: the top of the PR body.
 
 - `git checkout -b c/NNN-<slug>` (or `c/td-NNN-<slug>`).
 - `TaskCreate` one task per step below; mark each `in_progress` / `completed` as you go.
@@ -99,8 +102,9 @@ repos/{owner}/{repo}/issues/<n>/comments`), grade every finding with
 On the same branch before the merge, or as a follow-up docs PR if forgotten: the
 entry's `Done when` line gains `merged, unreleased (PR #NN)`; techdebt entries the
 work resolved are removed; `ARCHITECTURE.md` if a module appeared; design proposal
-images deleted. Then report in one message: entry, PR, what the tests prove, what was
-filed as techdebt, what remains open.
+images deleted. Then the closing brief (CLAUDE.md § Opening and closing a piece of
+work): what changed for the user, what the project accumulated; the PR number and what
+remains open on the entry.
 
 ## Rules
 

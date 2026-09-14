@@ -43,6 +43,22 @@ Each task ships under these constraints (in priority order):
 5. **Challenge reviewer returns** — every reviewer finding is graded on `/review-triage`'s axes and the outcome recorded in the PR body (`docs/workflow-c.md` § 7): (a) **actionable in scope** → fix now; (b) **actionable but bigger** → `TD-NNN` in `docs/techdebt.md`; (c) **false positive** → one-off: inline `// <reviewer> FP: <reason> — see PR #NN`; pattern: edit the reviewer prompt in the same PR. A `[DECISION]` critical becomes an open question on the entry. "Pre-existing" alone never decides the grade; it only routes through the boyscout test.
 6. **PR size target ≤1000 LOC** — insertions + deletions. Not a hard cap; split when a PR crosses it OR tells two stories. The "two stories" check overrides the number.
 
+## 🧾 Opening and closing a piece of work
+
+**Opening brief** — four lines before the first edit, so the shape is fixed while nothing is at stake and the human can stop it being the wrong shape. In a chat run it is the first message; in a headless run it opens the PR body.
+
+    **Task**     — the entry (`#NNN` / `TD-NNN`) or the request, in one line
+    **Scope**    — the commit type and the layers (backend / frontend / E2E / docs / CI)
+    **Design**   — none, validated, or needed (then the mocks come before anything else)
+    **Touching** — the paths, so the reviewer lanes are known before the diff exists
+
+**Closing brief** — the last message of a piece of work (and the PR body's first lines). Two parts, in this order, nothing else; what is still owed goes on the entry or in `docs/techdebt.md`, not here. A mistake is worth a sentence only where it left something undone.
+
+1. **What changed for whoever reads this next.** For `feat` / `fix`: what a **user** notices, or "nothing — internal". For everything else: what can now be **done or trusted** that could not be before. "The backend job answers in 8 minutes" is an answer; "switched to llvm-cov" names the artefact, not what it buys.
+2. **What the project accumulated.** For logic work: the tests added and the coverage or golden figure that moved, or "none". For harness work: the guarantee and **what it is worth** — a check that cannot fail has bought nothing, so say how you know it can, which usually means having watched it go red.
+
+A part with nothing in it gets one line.
+
 ---
 
 ## 🔄 Workflows
