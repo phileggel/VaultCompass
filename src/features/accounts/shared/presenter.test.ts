@@ -6,9 +6,9 @@ import {
   formatAccountRowTotalUnrealizedPnl,
   formatAccountRowYtdPerformancePct,
   formatPriceMovementAmount,
+  formatPriceMovementDate,
   formatPriceMovementPct,
   formatPriceMovementValue,
-  priceMovementDateLabel,
 } from "./presenter";
 
 // F27 layer-3 presenter — covers the reachable `AccountError` codes for the
@@ -212,37 +212,15 @@ describe("formatPriceMovementAmount", () => {
   });
 });
 
-// PMV-050/051/052 — priceMovementDateLabel: picks the two-date / from-only /
-// to-only / no-date i18n key from the values exactly as given. It never
-// compares or invents dates itself — that judgement belongs entirely to the
-// backend's `observed_from` / `observed_to`.
-describe("priceMovementDateLabel", () => {
-  it("both dates present -> dates_range with from/to vars", () => {
-    expect(priceMovementDateLabel("2026-09-09", "2026-09-11")).toEqual({
-      key: "pmv.dates_range",
-      vars: { from: "2026-09-09", to: "2026-09-11" },
-    });
+// PMV-053 — formatPriceMovementDate: a value column's observation date in
+// the display locale, "—" when that side of the report carries no date.
+describe("formatPriceMovementDate", () => {
+  it("returns '—' when the column carries no date", () => {
+    expect(formatPriceMovementDate(null, "fr")).toBe("—");
   });
 
-  it("only observed_to present (no prior price, PMV-052) -> dates_to_only", () => {
-    // Distinct from the from-only case: nothing was priced BEFORE this refresh,
-    // so the label must not read as "prices as of 2026-09-11, unchanged".
-    expect(priceMovementDateLabel(null, "2026-09-11")).toEqual({
-      key: "pmv.dates_to_only",
-      vars: { date: "2026-09-11" },
-    });
-  });
-
-  it("only observed_from present (no later date produced, PMV-051) -> dates_from_only", () => {
-    // Distinct from the to-only case: the portfolio already carried prices and
-    // this refresh produced nothing later.
-    expect(priceMovementDateLabel("2026-09-09", null)).toEqual({
-      key: "pmv.dates_from_only",
-      vars: { date: "2026-09-09" },
-    });
-  });
-
-  it("neither date present -> no date label", () => {
-    expect(priceMovementDateLabel(null, null)).toBeNull();
+  it("formats the date in the given locale", () => {
+    expect(formatPriceMovementDate("2026-09-09", "fr")).toBe("09/09/2026");
+    expect(formatPriceMovementDate("2026-09-11", "en")).toBe("9/11/2026");
   });
 });

@@ -369,41 +369,45 @@ describe("PriceMovementDialog", () => {
     expect(total.getByText("+10,00%")).toBeInTheDocument();
   });
 
-  // PMV-050 — both observation dates present: the value columns are labelled with both.
-  it("labels the value columns with both observation dates when both are present", () => {
+  // PMV-050/053 — each value column is headed by its name and its own date, in the
+  // display locale; no spanning header over the two.
+  it("heads each value column with its own localized date when both are present", () => {
     const report = makeReport({ observed_from: "2026-09-09", observed_to: "2026-09-11" });
 
     render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
-    expect(
-      screen.getByText('pmv.dates_range {"from":"2026-09-09","to":"2026-09-11"}'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_before {"date":"9/9/2026"}')).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_after {"date":"9/11/2026"}')).toBeInTheDocument();
+    expect(screen.queryByText(/pmv\.dates_/)).not.toBeInTheDocument();
   });
 
-  // PMV-052 — no prior price: only the date this refresh produced is stated.
-  it("labels the value columns with the single date when only observed_to is present", () => {
+  // PMV-052/053 — nothing priced before: the earlier column carries a dash, the later its date.
+  it("heads the earlier column with a dash when only observed_to is present", () => {
     const report = makeReport({ observed_from: null, observed_to: "2026-09-11" });
 
     render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
-    expect(screen.getByText('pmv.dates_to_only {"date":"2026-09-11"}')).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_before {"date":"—"}')).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_after {"date":"9/11/2026"}')).toBeInTheDocument();
   });
 
-  // PMV-051 — the refresh produced no later date: only the earlier date is stated.
-  it("labels the value columns with the single date when only observed_from is present", () => {
+  // PMV-051/053 — no later date: the later column carries a dash, never a repeated date.
+  it("heads the later column with a dash when only observed_from is present", () => {
     const report = makeReport({ observed_from: "2026-09-09", observed_to: null });
 
     render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
-    expect(screen.getByText('pmv.dates_from_only {"date":"2026-09-09"}')).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_before {"date":"9/9/2026"}')).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_after {"date":"—"}')).toBeInTheDocument();
   });
 
-  // PMV-052 — neither date carried: no date label on the value columns at all.
-  it("renders no date label when neither observation date is present", () => {
+  // PMV-052/053 — neither date carried: both value columns show their name with a dash.
+  it("heads both value columns with a dash when neither date is present", () => {
     const report = makeReport({ observed_from: null, observed_to: null });
 
     render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
-    expect(screen.queryByText(/pmv\.dates_/)).not.toBeInTheDocument();
+    expect(screen.getByText('pmv.column_before {"date":"—"}')).toBeInTheDocument();
+    expect(screen.getByText('pmv.column_after {"date":"—"}')).toBeInTheDocument();
   });
 });

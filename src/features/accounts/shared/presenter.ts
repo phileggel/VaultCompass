@@ -5,6 +5,7 @@ import type {
   UpdateFrequency,
 } from "@/bindings";
 import { microToFormatted } from "@/lib/microUnits";
+import { formatIsoDateNumeric } from "@/ui/format/date";
 import type { I18nMessage, SnackbarMessage } from "@/ui/format/i18n";
 
 /**
@@ -133,23 +134,10 @@ export function formatPriceMovementAmount(micros: number | null, currency: strin
 }
 
 /**
- * PMV-050/051/052 — the i18n key labelling the two value columns, chosen from
- * the dates exactly as given. The two single-date cases are distinct: one means
- * the portfolio already carried prices and this refresh produced nothing later
- * (PMV-051), the other that nothing was priced before it at all (PMV-052).
+ * PMV-053 — a value column's observation date in the display locale, or
+ * an em dash when that side of the report carries no date. The dates are used
+ * exactly as the backend gave them; nothing is compared or derived here.
  */
-export function priceMovementDateLabel(
-  observedFrom: string | null,
-  observedTo: string | null,
-): I18nMessage | null {
-  if (observedFrom !== null && observedTo !== null) {
-    return { key: "pmv.dates_range", vars: { from: observedFrom, to: observedTo } };
-  }
-  if (observedTo !== null) {
-    return { key: "pmv.dates_to_only", vars: { date: observedTo } };
-  }
-  if (observedFrom !== null) {
-    return { key: "pmv.dates_from_only", vars: { date: observedFrom } };
-  }
-  return null;
+export function formatPriceMovementDate(isoDate: string | null, locale: string): string {
+  return isoDate === null ? "—" : formatIsoDateNumeric(isoDate, locale);
 }

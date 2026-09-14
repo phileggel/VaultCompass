@@ -4,9 +4,9 @@ import { Button } from "@/ui/components/button/Button";
 import { Dialog } from "@/ui/components/modal/Dialog";
 import {
   formatPriceMovementAmount,
+  formatPriceMovementDate,
   formatPriceMovementPct,
   formatPriceMovementValue,
-  priceMovementDateLabel,
 } from "../shared/presenter";
 
 interface PriceMovementDialogProps {
@@ -65,8 +65,7 @@ export function PriceMovementDialog({ report, isOpen, onDismiss }: PriceMovement
  * (`docs/frontend-visual-proof.md`).
  */
 export function PriceMovementReportBody({ report }: { report: PriceMovementReport }) {
-  const { t } = useTranslation();
-  const dateLabel = priceMovementDateLabel(report.observed_from, report.observed_to);
+  const { t, i18n } = useTranslation();
   // PMV-060 — decided by the values alone, never by the dates.
   const nothingMoved = report.rows.every((row) => row.before === row.after);
 
@@ -84,8 +83,15 @@ export function PriceMovementReportBody({ report }: { report: PriceMovementRepor
             <thead>
               <tr className="border-b border-m3-surface-variant text-xs text-m3-on-surface-variant">
                 <th className="py-2 text-left font-medium">{t("pmv.column_account")}</th>
-                <th className="py-2 text-right font-medium" colSpan={2}>
-                  {dateLabel === null ? t("pmv.column_values") : t(dateLabel.key, dateLabel.vars)}
+                <th className="py-2 text-right font-medium tabular-nums">
+                  {t("pmv.column_before", {
+                    date: formatPriceMovementDate(report.observed_from, i18n.language),
+                  })}
+                </th>
+                <th className="py-2 pl-4 text-right font-medium tabular-nums">
+                  {t("pmv.column_after", {
+                    date: formatPriceMovementDate(report.observed_to, i18n.language),
+                  })}
                 </th>
                 <th className="py-2 pl-4 text-right font-medium">{t("pmv.column_amount")}</th>
                 <th className="py-2 pl-4 text-right font-medium">{t("pmv.column_change")}</th>

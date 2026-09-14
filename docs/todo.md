@@ -28,15 +28,6 @@ The account view's holdings table (`AccountDetailsView`) has grown past the wind
 **Design:** none
 **Open questions:** none
 
-## #002 — (frontend) — Put each observation date above its own value column in the price movement report
-
-The report dialog (`PriceMovementDialog`, PMV-050) labels its two value columns with one spanning header — `2026-09-09 → 2026-09-11` — so the reader has to work out which date belongs to which column. The dates should sit where the values are: the earlier date over the "before" column, the later date over the "after" column. The single-date cases keep their meaning per column: PMV-051 (no newer date) leaves the "after" header with the plain label, PMV-052 (nothing priced before) leaves the "before" header with it, and a fully undated report shows the plain labels on both.
-
-**User value:** Each value column is read under its own date, so before and after are never confused.
-**Done when:** Each value column of the report carries its own date header (or the plain label when that side has none), PMV-050–052 describe the per-column presentation, the Vitest cases for the four date states assert the per-column headers, and the four screenshots are recaptured.
-**Design:** none
-**Open questions:** none
-
 ## #003 — (fullstack) — Show the amount each account moved in the price movement report
 
 The report (`PriceMovementDialog`) gives each account its value before, its value after and the change as a percentage (PMV-024); the amount itself — after minus before, in the account's own currency — is missing, and it is the figure most people look for first. The total row has the same gap in the reference currency. The backend computes and carries it (the dialog renders, never derives — PMV-023's "one valuation" rule), and an unmoved entry shows no amount, as it already shows no percentage (PMV-031).

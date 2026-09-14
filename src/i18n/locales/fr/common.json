@@ -577,16 +577,14 @@
     "subtitle_frozen": "Valeur avant et après cette actualisation, à portefeuille constant — pas les totaux du jour.",
     "dismiss": "Fermer",
     "column_account": "Compte",
-    "column_values": "Avant et après",
+    "column_before": "Avant ({{date}})",
+    "column_after": "Après ({{date}})",
     "column_amount": "Montant",
     "column_change": "Variation",
     "total": "Total",
     "incomplete_marker": "partiel",
     "nothing_moved": "Aucune valeur de compte n'a changé.",
-    "nothing_moved_incomplete": "Aucune valeur de compte n'a changé, et certaines lignes n'ont pas pu être lues à leur cours actuel.",
-    "dates_range": "{{from}} → {{to}}",
-    "dates_from_only": "Au {{date}} — aucun cours plus récent",
-    "dates_to_only": "Rien de valorisé avant — maintenant au {{date}}"
+    "nothing_moved_incomplete": "Aucune valeur de compte n'a changé, et certaines lignes n'ont pas pu être lues à leur cours actuel."
   },
   "whats_new": {
     "title": "Nouveautés ({{version}})",

@@ -127,6 +127,8 @@ One account's share of the report.
 
 **PMV-052 — A portfolio with no prior price states no earlier date (frontend + backend)**: When no holding in scope carried any recorded price before the refresh, the report carries no earlier observation date. If that refresh then produced dated prices, the later date is still stated — the comparison reads as running from nothing priced to that date. Only when the refresh produced no dated price either does the report carry no date at all.
 
+**PMV-053 — Each value column states its own date (frontend)**: When the report shows its table, each value column is headed by its own name and the date of its side, in the date format of the application language: the earlier date over the earlier value, the later date over the later value. A side for which the report carries no date (PMV-051, PMV-052) states its name and no date, never the other side's date.
+
 ### Outcomes with nothing to show (060–069)
 
 **PMV-060 — A refresh that moved nothing reports that plainly (frontend + backend)**: When no account's value changed between the two readings, the report says so in plain words rather than presenting a table of identical figures. This is decided by the values, never by the dates. When such a refresh also left entries incomplete (PMV-032), the report still says that some holdings could not be read at their current price, so "nothing moved" is never mistaken for "nothing was tried". It states no count of its own: the number of assets the fetch could not price is the completion signal's own skipped count (MKT-119), a different population from PMV-032's incompleteness, and the two are never presented as if they were the same number.
@@ -170,14 +172,15 @@ None of its own. The report appears on the accounts list when a Global refresh t
 
 ### Main Component
 
-A dialog on the accounts list, closed by the user and never shown again. A table of accounts — name, earlier value, later value, movement amount, proportion — closed by a portfolio total row. The two observation dates label the two value columns, so the comparison reads as "9 Sep → 11 Sep" without repeating the dates on every entry.
+A dialog on the accounts list, closed by the user and never shown again. A table of accounts — name, earlier value, later value, movement amount, proportion — closed by a portfolio total row. Each value column is headed by its name and its own observation date, with a dash where that side has no date (PMV-053): "Before (09/09/2026)", "After (15/09/2026)" in French, so the dates are not repeated on every entry.
 
 ### States
 
 - **Nothing moved**: no table; a plain statement that no account's value changed, and — when any entry is incomplete — that some holdings could not be read at their current price (PMV-060).
 - **Moved**: the table, with unmoved accounts present but showing no movement figure, and an account without a positive earlier value showing its movement amount but no proportion.
 - **Partially complete**: the table, with the affected entries and the total marked as incomplete. No count of its own (PMV-060); the fetch's own skipped count reaches the user through the existing completion feedback (MKT-119/145).
-- **Undated**: the table without date labels on the value columns (PMV-052).
+- **One side dated**: the dated column shows its date, the other its name with a dash (PMV-051, PMV-052).
+- **Undated**: both value columns show their name with a dash (PMV-052).
 - **Error**: no state of its own — a failure to produce the report leaves the pre-existing completion feedback in place (PMV-014).
 
 ### User Flow
