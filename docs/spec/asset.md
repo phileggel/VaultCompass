@@ -4,7 +4,7 @@
 
 An asset represents a financial instrument or resource owned by the user: stock, ETF, bond, real estate, cryptocurrency, etc. Each asset belongs to a user category (e.g. "European Stocks", "Real Estate") and carries an ISO 4217 currency which is the security's quotation currency. Asset management is the foundation of the rest of the application: an account (`Account`) groups assets via operations (`Operation`); the performance dashboard relies on assets to compute portfolio value.
 
-This spec covers asset creation, modification, and archival, both backend and frontend. CRUD rules for `AssetCategory` are in `docs/category.md`. Asset prices (`AssetPrice`) are handled in `docs/operation.md`.
+This spec covers asset creation, modification, and archival, both backend and frontend. CRUD rules for `AssetCategory` are in `docs/spec/category.md`. Asset prices (`AssetPrice`) are handled in `docs/spec/market-price.md`.
 
 > Note: `reference` alone is not sufficient to uniquely identify an instrument at the pricing scale (the same ticker can exist on multiple exchanges with different currencies). The pricing deduplication key will be defined in a dedicated spec.
 

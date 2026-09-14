@@ -1,7 +1,7 @@
 /**
  * E2E tests — Opening Balance (open_holding)
  *
- * Contract: docs/contracts/record_transaction-contract.md (open_holding command)
+ * Contract: docs/contracts/account-contract.md (open_holding command)
  * Spec rules covered:
  *   TRX-055 — modal accessible from the Account Details header "Add" menu (DIV-012, #add-menu-open-balance)
  *   TRX-042 — form exposes date, quantity, total-cost only (no fees/exchange-rate/unit-price)

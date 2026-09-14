@@ -1,8 +1,8 @@
 /**
  * E2E tests — Asset Web Lookup (lookup_asset)
  *
- * Contract: docs/contracts/asset_web_lookup-contract.md
- * Spec:     docs/spec/web-asset-lookup.md
+ * Contract: docs/contracts/asset-contract.md
+ * Spec:     docs/spec/asset-web-lookup.md
  *
  * Network-independent tests (WEB-010, WEB-040) run in any environment.
  *

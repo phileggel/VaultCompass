@@ -1,7 +1,7 @@
 /**
  * E2E tests — Buy + Sell transaction flow
  *
- * Contract: docs/contracts/record_transaction-contract.md
+ * Contract: docs/contracts/account-contract.md
  * Spec rules covered:
  *   TRX-010 — buy holding → holding appears in account details
  *   TRX-020 — sell holding → quantity decremented in holding row
