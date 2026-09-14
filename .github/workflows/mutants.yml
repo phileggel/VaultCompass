@@ -62,16 +62,24 @@ jobs:
       - name: Run the shard
         working-directory: src-tauri
         shell: bash
-        # Scope and timeouts come from .cargo/mutants.toml. The baseline is
-        # skipped: main is already green. Exit 2 = missed mutants, 3 = timeouts:
-        # findings, not failures. Exit 4 = the unmutated suite fails, so the
-        # shard proved nothing and fails; anything else is a broken run. The
-        # runner's bash has -e, so the exit code is caught on the same line.
-        # Measured on the first run: ~40 s per mutant, ~2 h per shard of 175.
+        # Scope and timeouts come from .cargo/mutants.toml. Exit 2 = missed
+        # mutants, 3 = timeouts: findings, not failures. Exit 4 = the unmutated
+        # suite fails, so the shard proved nothing and fails; anything else is
+        # a broken run. The runner's bash has -e, so the exit code is caught on
+        # the same line. Measured: ~40 s per mutant, 2–3.5 h per shard of 175.
+        #
+        # The test binaries run under an 8 GB address-space cap (cargo's runner
+        # hook): a mutant that allocates without end then dies as a caught
+        # failure instead of taking the runner down (the sweep of 2026-09-14
+        # lost shard 5 twice to `year += 1` → `year -= 1` in a month loop).
+        # The baseline runs on every shard so a cap that broke the suite would
+        # fail the shard loudly rather than make every mutant look caught.
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=8589934592
         run: |
           set -u
           status=0
-          cargo mutants --in-place --baseline=skip --shard "${{ matrix.shard }}/${{ strategy.job-total }}" --output .. || status=$?
+          cargo mutants --in-place --shard "${{ matrix.shard }}/${{ strategy.job-total }}" --output .. || status=$?
           case "$status" in 0|2|3) exit 0 ;; *) exit "$status" ;; esac
       - name: Upload the shard's mutants.out
         if: ${{ !cancelled() }}
