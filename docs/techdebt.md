@@ -233,17 +233,6 @@ Remove an entry once it has been resolved.
 - User value: None — suite reliability.
 - Done when: the hook re-locates elements after each navigation step instead of reusing handles across renders, or the shared helpers wait for the route to settle before returning; a month of pull-request runs shows no before-each failure.
 
-## 2026-09-13 — TD-020 — The backend coverage job takes half an hour on every pull request
-
-- Found by: manual (four consecutive Quality runs on `main` timed between 24 and 33 minutes in the tarpaulin step)
-- Where: .github/workflows/quality.yml (`Coverage with tarpaulin`), justfile (`coverage-be`)
-- Context: branch `ci/reviewers` @ `e06cb48`
-- Severity: 🟡
-- Observation: tarpaulin rebuilds the whole crate instrumented on every run and cannot reuse the normal build cache, so the backend job is the slowest gate by a wide margin: the frontend job ends in two minutes, E2E in ten, the coverage floor waits for tarpaulin. `cargo llvm-cov` produces the same lcov report from a standard build that the Rust cache already holds, and was the plan's original choice for the coverage gate.
-- User value: None — a pull request merges twenty minutes sooner.
-- Done when: the backend job produces `coverage/backend/lcov.info` through `cargo llvm-cov` (locally and in CI), `scripts/coverage-gate.py` reads it unchanged, the floor in `coverage-gates.json` is re-measured on the new tool, and the job's median duration on `main` is under ten minutes.
-- Status: llvm-cov landed (recipe, CI step, `scripts/coverage-strip-tests.py` so inline test modules do not count); measured 88.77 % of 11 381 logic lines locally (7 min cold, 4 min warm, with CI's compiler flags), floor kept at 85.5 %. Remove this entry once the job's median on `main` reads under ten minutes.
-
 ## 2026-09-13 — TD-021 — Action pins labelled with the wrong tag in four workflows
 
 - Found by: reviewer-infra (phase 12 review, `.review/reviewer-infra-2026-09-13-10.md`)
