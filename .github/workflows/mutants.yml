@@ -128,7 +128,9 @@ jobs:
               echo
               echo "### Missed (a change in the logic no test notices)"
               echo
-              merged missed.txt | sed 's/^/- /' | head -150
+              # awk reads all its input: a `head` here would close the pipe
+              # under pipefail and kill the step before the issue is written.
+              merged missed.txt | awk 'NR <= 150 { print "- " $0 }'
               [[ "$missed" -gt 150 ]] && echo "- … $((missed - 150)) more in the artifacts"
               echo
               echo "### Ready to file in \`docs/techdebt.md\`"
