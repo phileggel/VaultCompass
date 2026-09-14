@@ -49,6 +49,17 @@ describe("ClosedHoldingRow", () => {
     expect(screen.getByText("170.00")).toBeInTheDocument();
   });
 
+  // #006 — the closed row's view-transactions button carries a stable id and the
+  // ledger icon the open rows and the header's journal button use.
+  it("shows the ledger icon on its view-transactions button, under a stable id", () => {
+    renderInTable(baseRow);
+    const button = document.querySelector("#action-view-closed-transactions-asset-1");
+    expect(button).toBeInTheDocument();
+    expect(button?.getAttribute("aria-label")).toBe("transaction.list_title");
+    expect(button?.querySelector("svg.lucide-scroll-text")).toBeInTheDocument();
+    expect(button?.querySelector("svg.lucide-search")).toBeNull();
+  });
+
   it("renders the lastSoldDate via formatIsoDate threaded with i18n.language", () => {
     // With language "en-US", "2024-01-15" formats to a string containing "2024" and "15".
     // The raw ISO string must NOT appear (formatIsoDate transforms it).

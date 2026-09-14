@@ -76,7 +76,6 @@
   "missing_ids": {
     "src/features/about/about_modal/AboutModal.tsx": 1,
     "src/features/account_details/account_details_view/AccountDetailsView.tsx": 1,
-    "src/features/account_details/account_details_view/ClosedHoldingRow.tsx": 1,
     "src/features/account_details/buy_transaction/BuyTransactionModal.tsx": 2,
     "src/features/account_details/deposit_transaction/DepositTransactionModal.tsx": 2,
     "src/features/account_details/dividend_transaction/DividendTransactionModal.tsx": 1,

@@ -396,6 +396,22 @@ describe("HoldingRow — read-only as-of view", () => {
     navigateMock.mockClear();
   });
 
+  // #006 — the view-transactions button shows the ledger the header's journal
+  // button uses, on a holding row and on the cash row alike.
+  it.each([
+    ["holding", baseRow],
+    ["cash", { ...baseRow, assetId: "system-cash-eur", assetReference: "EUR", isCash: true }],
+  ])("shows the ledger icon on the %s row's view-transactions button", (_kind, row) => {
+    renderInTable(row as HoldingRowViewModel);
+    const button = document.querySelector(
+      `#action-view-transactions-${(row as HoldingRowViewModel).assetId}`,
+    );
+    expect(button).toBeInTheDocument();
+    expect(button?.getAttribute("aria-label")).toBe("transaction.list_title");
+    expect(button?.querySelector("svg.lucide-scroll-text")).toBeInTheDocument();
+    expect(button?.querySelector("svg.lucide-search")).toBeNull();
+  });
+
   it("hides Buy/Sell/price-history mutating actions but keeps view-transactions", () => {
     renderInTable(baseRow, true);
     expect(document.querySelector("#action-buy-asset-1")).toBeNull();

@@ -72,11 +72,11 @@ The holding row's actions — buy, sell, split, note, fee, price history, transa
 The account header's journal button (`account-details-journal`, `ScrollText`) opens the account's transaction journal; the holding row's loupe (`action-view-transactions-{assetId}`, `Search`) opens the same kind of list for one asset. Same action at two scopes, two unrelated icons — and a loupe says "search", which neither does. One icon, the same on both. Recommendation: `ScrollText`, the ledger, on both — it names what opens, and it is where the loupe is heading anyway once the per-asset page folds into the journal (see the TXL-merge entry below).
 
 **User value:** The same picture means the same thing everywhere: a transaction list, for the account or for one holding.
-**Done when:** Both buttons render the same icon, their ids and labels are unchanged, and the header and holding-row screenshots are recaptured.
-**Design:** none
+**Done when:** Both buttons render the same icon, their ids and labels are unchanged, and the header and holding-row screenshots are recaptured. — merged, unreleased (PR #134).
+**Design:** validated (in chat, 2026-09-14)
 **Open questions:**
 
-- [ ] The shared icon: `ScrollText` (recommended, it names what opens), or another?
+- [x] The shared icon: `ScrollText` (recommended, it names what opens), or another? → `ScrollText`.
 
 ## #007 — (fullstack) — Show a total row on the accounts list
 

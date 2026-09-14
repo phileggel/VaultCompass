@@ -12,7 +12,7 @@ import {
   Percent,
   Plus,
   Scissors,
-  Search,
+  ScrollText,
   StickyNote,
 } from "lucide-react";
 import { type KeyboardEvent, useCallback } from "react";
@@ -216,7 +216,7 @@ export function HoldingRow({
             )}
             {/* CSH-110 — view the cash transaction history (deposits/withdrawals) */}
             <IconButton
-              icon={<Search size={16} />}
+              icon={<ScrollText size={16} />}
               size="sm"
               id={`action-view-transactions-${row.assetId}`}
               aria-label={t("transaction.list_title")}
@@ -516,7 +516,7 @@ export function HoldingRow({
             </>
           )}
           <IconButton
-            icon={<Search size={16} />}
+            icon={<ScrollText size={16} />}
             size="sm"
             id={`action-view-transactions-${row.assetId}`}
             aria-label={t("transaction.list_title")}

@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "@/ui/components/button/IconButton";
@@ -47,8 +47,9 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
       {/* ACD-049 — inspect action only; Buy/Sell omitted for closed positions */}
       <td className="m3-td">
         <IconButton
-          icon={<Search size={16} />}
+          icon={<ScrollText size={16} />}
           size="sm"
+          id={`action-view-closed-transactions-${row.assetId}`}
           aria-label={t("transaction.list_title")}
           onClick={handleViewTransactions}
         />
