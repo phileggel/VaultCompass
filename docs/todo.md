@@ -42,7 +42,7 @@ The report dialog (`PriceMovementDialog`, PMV-050) labels its two value columns 
 The report (`PriceMovementDialog`) gives each account its value before, its value after and the change as a percentage (PMV-024); the amount itself — after minus before, in the account's own currency — is missing, and it is the figure most people look for first. The total row has the same gap in the reference currency. The backend computes and carries it (the dialog renders, never derives — PMV-023's "one valuation" rule), and an unmoved entry shows no amount, as it already shows no percentage (PMV-031).
 
 **User value:** The report states how much each account gained or lost, not only by what proportion.
-**Done when:** `PriceMovementRow` and the report's total carry the signed movement amount from the backend, a PMV rule states it (per entry in account currency, total in the reference currency, absent when unmoved), the dialog shows it in a column beside the percentage with the gain/loss polarity, the Rust builder and the dialog tests cover moved / unmoved / total, and the screenshots are recaptured.
+**Done when:** `PriceMovementRow` and the report's total carry the signed movement amount from the backend, a PMV rule states it (per entry in account currency, total in the reference currency, absent when unmoved), the dialog shows it in a column beside the percentage with the gain/loss polarity, the Rust builder and the dialog tests cover moved / unmoved / total, and the screenshots are recaptured. — merged, unreleased (PR #136).
 **Design:** validated (in chat, 2026-09-14)
 **Open questions:** none
 
