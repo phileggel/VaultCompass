@@ -28,15 +28,6 @@ The account view's holdings table (`AccountDetailsView`) has grown past the wind
 **Design:** none
 **Open questions:** none
 
-## #005 — (frontend) — Move the holding row's actions next to the asset name, on two rows
-
-The holding row's actions — buy, sell, split, note, fee, price history, transactions, deposit / withdrawal on the cash line, the refresh lock, up to twelve `action-*-{assetId}` buttons — sit in the twelfth and last column, past a horizontal scroll on most windows. They belong beside the thing they act on: the Actions column moves to second place, right after Asset, and its buttons wrap onto two rows so the column stays narrow. Every button keeps its stable id, so the E2E suite is untouched by the move. With the Asset column becoming sticky (see the sticky-column entry above), Asset and Actions together form the pinned left edge.
-
-**User value:** A holding's actions are reachable without scrolling right, next to the name they apply to.
-**Done when:** The Actions column is the second column of the active and closed holdings tables, its buttons lay out on two rows, the header and row cells keep their ids, the Vitest row tests still pass unchanged, and the holding-row screenshots are recaptured in both themes.
-**Design:** none
-**Open questions:** none
-
 ## #007 — (fullstack) — Show a total row on the accounts list
 
 The accounts list (`AccountTable`) shows each account's Global Value and Unrealized P&L in the account's own currency and stops there: no line says what the portfolio is worth. A total needs one currency, so it is the backend's to compute — every account converted to the reference currency (EUR, GPF-011) with the same rate resolution the performance page and the price-movement total already use, and the same degradation when a rate is missing (FXR-034): that account contributes zero and the total is marked partial, as PMV-042/043 do. The list renders the figure; it never sums mixed currencies itself. The YTD column has no meaningful sum and stays blank on the total row — the portfolio-level figure lives on the performance page.

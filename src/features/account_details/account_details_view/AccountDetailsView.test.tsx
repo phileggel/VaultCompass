@@ -259,6 +259,27 @@ describe("AccountDetailsView — add-transaction FAB (ACD-035/036)", () => {
   });
 });
 
+// #005 — Actions is the first column of both holdings tables, before Asset.
+describe("AccountDetailsView — column order (#005)", () => {
+  it("heads the active and closed tables with Actions, then Asset", () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ hasClosedHoldings: true }));
+    render(<AccountDetailsView />);
+    const toggle = document.querySelector("#account-closed-positions-toggle");
+    expect(toggle).toBeInTheDocument();
+    if (toggle?.getAttribute("aria-expanded") === "false") fireEvent.click(toggle);
+
+    const tables = document.querySelectorAll("table");
+    expect(tables).toHaveLength(2);
+    for (const table of tables) {
+      const headers = [...table.querySelectorAll("thead th")].map((th) => th.textContent);
+      expect(headers.slice(0, 2)).toEqual([
+        "transaction.column_actions",
+        "account_details.column_asset",
+      ]);
+    }
+  });
+});
+
 describe("AccountDetailsView — read-only as-of view", () => {
   beforeEach(() => {
     vi.clearAllMocks();

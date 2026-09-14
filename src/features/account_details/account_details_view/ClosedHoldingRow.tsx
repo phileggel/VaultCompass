@@ -26,6 +26,18 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
 
   return (
     <tr className="m3-tr opacity-70">
+      {/* ACD-049 / #005 — inspect action only, first; Buy/Sell omitted for closed positions */}
+      <td className="m3-td">
+        <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
+          <IconButton
+            icon={<ScrollText size={16} />}
+            size="sm"
+            id={`action-view-closed-transactions-${row.assetId}`}
+            aria-label={t("transaction.list_title")}
+            onClick={handleViewTransactions}
+          />
+        </div>
+      </td>
       <td className="m3-td">
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
@@ -43,16 +55,6 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
       </td>
       <td className="m3-td text-right text-m3-on-surface-variant">
         {formatIsoDateNumeric(row.lastSoldDate, i18n.language)}
-      </td>
-      {/* ACD-049 — inspect action only; Buy/Sell omitted for closed positions */}
-      <td className="m3-td">
-        <IconButton
-          icon={<ScrollText size={16} />}
-          size="sm"
-          id={`action-view-closed-transactions-${row.assetId}`}
-          aria-label={t("transaction.list_title")}
-          onClick={handleViewTransactions}
-        />
       </td>
     </tr>
   );

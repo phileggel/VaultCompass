@@ -317,6 +317,7 @@ export function AccountDetailsView() {
                 <table className="w-full border-collapse">
                   <thead className="sticky top-0 bg-m3-surface-container z-10">
                     <tr>
+                      <th className="m3-th">{t("transaction.column_actions")}</th>
                       <th className="m3-th">{t("account_details.column_asset")}</th>
                       <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
                       <th className="m3-th text-right">{t("account_details.column_avg_price")}</th>
@@ -358,7 +359,6 @@ export function AccountDetailsView() {
                           {t("account_details.column_management_fees")}
                         </th>
                       )}
-                      <th className="m3-th">{t("transaction.column_actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -425,6 +425,7 @@ export function AccountDetailsView() {
                     <table className="w-full border-collapse">
                       <thead className="sticky top-0 bg-m3-surface-container z-10">
                         <tr>
+                          <th className="m3-th">{t("transaction.column_actions")}</th>
                           <th className="m3-th">{t("account_details.column_asset")}</th>
                           {/* ACD-049 — P&L and last sold date */}
                           <th className="m3-th text-right">
@@ -440,7 +441,6 @@ export function AccountDetailsView() {
                           <th className="m3-th text-right">
                             {t("account_details.column_last_sold_date")}
                           </th>
-                          <th className="m3-th">{t("transaction.column_actions")}</th>
                         </tr>
                       </thead>
                       <tbody>

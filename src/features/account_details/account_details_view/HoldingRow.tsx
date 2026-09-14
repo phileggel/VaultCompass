@@ -168,30 +168,9 @@ export function HoldingRow({
   if (row.isCash) {
     return (
       <tr className="m3-tr">
+        {/* #005 — actions first, filling two rows */}
         <td className="m3-td">
-          <div className="flex flex-col">
-            <span className="font-medium text-m3-on-surface">{row.assetName}</span>
-            <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
-          </div>
-        </td>
-        <td className="m3-td text-right tabular-nums font-medium">{row.quantity}</td>
-        <td className="m3-td" />
-        <td className="m3-td" />
-        <td className="m3-td" />
-        <td className="m3-td" />
-        {/* ACD-052 — cash weight % of the account's Global Value */}
-        <td id={`holding-weight-pct-${row.assetId}`} className="m3-td text-right tabular-nums">
-          {row.weightPct}
-        </td>
-        <td className="m3-td" />
-        <td className="m3-td" />
-        {/* DIV-072 — dividends / total-return columns are blank for the cash row */}
-        <td className="m3-td" />
-        <td className="m3-td" />
-        {/* FEE-052 — management fees column is blank for the cash row (FEE-076: absent when disabled) */}
-        {showManagementFees && <td className="m3-td" />}
-        <td className="m3-td">
-          <div className="flex items-center gap-1">
+          <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
             {/* As-of view is read-only: Deposit/Withdraw are hidden (CSH-091). */}
             {!readOnly && (
               <>
@@ -224,6 +203,28 @@ export function HoldingRow({
             />
           </div>
         </td>
+        <td className="m3-td">
+          <div className="flex flex-col">
+            <span className="font-medium text-m3-on-surface">{row.assetName}</span>
+            <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
+          </div>
+        </td>
+        <td className="m3-td text-right tabular-nums font-medium">{row.quantity}</td>
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td" />
+        <td className="m3-td" />
+        {/* ACD-052 — cash weight % of the account's Global Value */}
+        <td id={`holding-weight-pct-${row.assetId}`} className="m3-td text-right tabular-nums">
+          {row.weightPct}
+        </td>
+        <td className="m3-td" />
+        <td className="m3-td" />
+        {/* DIV-072 — dividends / total-return columns are blank for the cash row */}
+        <td className="m3-td" />
+        <td className="m3-td" />
+        {/* FEE-052 — management fees column is blank for the cash row (FEE-076: absent when disabled) */}
+        {showManagementFees && <td className="m3-td" />}
       </tr>
     );
   }
@@ -247,6 +248,94 @@ export function HoldingRow({
       onDoubleClick={readOnly ? undefined : handleOpenAssetDetail}
       onKeyDown={readOnly ? undefined : handleRowKeyDown}
     >
+      {/* #005 — actions first, filling two rows */}
+      <td className="m3-td">
+        <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
+          {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}
+          {!readOnly && (
+            <>
+              {/* TRX-041 — Buy modal from holding row */}
+              <IconButton
+                icon={<Plus size={16} />}
+                variant="success"
+                size="sm"
+                id={`action-buy-${row.assetId}`}
+                aria-label={t("transaction.action_buy")}
+                onClick={handleBuy}
+              />
+              {/* SEL-010 — Sell button; disabled when asset is archived (SEL-037) */}
+              <IconButton
+                icon={<Minus size={16} />}
+                variant="error"
+                size="sm"
+                id={`action-sell-${row.assetId}`}
+                aria-label={t("transaction.action_sell")}
+                onClick={handleSell}
+                disabled={isArchived}
+              />
+              {/* SPL-061 — Split action (non-cash active rows; hidden for archived assets) */}
+              {onSplit && !isArchived && (
+                <IconButton
+                  icon={<Scissors size={16} />}
+                  size="sm"
+                  id={`action-split-${row.assetId}`}
+                  aria-label={t("transaction.action_split")}
+                  onClick={handleSplit}
+                />
+              )}
+              {/* HNO-042 — Note action (non-cash active rows; hidden for archived assets) */}
+              {onNote && !isArchived && (
+                <IconButton
+                  icon={<StickyNote size={16} />}
+                  size="sm"
+                  id={`action-note-${row.assetId}`}
+                  aria-label={t("account_details.action_note")}
+                  onClick={handleNote}
+                />
+              )}
+              {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}
+              {row.canEnterPrice && (
+                <IconButton
+                  icon={<History size={16} />}
+                  size="sm"
+                  id={`action-price-history-${row.assetId}`}
+                  aria-label={t("account_details.action_price_history")}
+                  onClick={handlePriceHistory}
+                />
+              )}
+              {/* MKT-153 — Lock toggle: blocks/allows automated price fetches (ADR-014) */}
+              {onTogglePriceRefreshLock && (
+                <IconButton
+                  icon={isPriceRefreshBlocked ? <Lock size={16} /> : <LockOpen size={16} />}
+                  size="sm"
+                  id={`action-toggle-price-refresh-${row.assetId}`}
+                  aria-label={t(
+                    isPriceRefreshBlocked ? "mkt.lock.action_unblock" : "mkt.lock.action_block",
+                  )}
+                  onClick={handleTogglePriceRefreshLock}
+                />
+              )}
+              {/* FEE-011 — manage the recurring management-fee schedule for this holding */}
+              {onManageFee && (
+                <IconButton
+                  icon={<Percent size={16} />}
+                  size="sm"
+                  id={`action-manage-fee-${row.assetId}`}
+                  aria-label={t("account_details.action_manage_fee")}
+                  onClick={handleManageFee}
+                />
+              )}
+            </>
+          )}
+          <IconButton
+            icon={<ScrollText size={16} />}
+            size="sm"
+            id={`action-view-transactions-${row.assetId}`}
+            aria-label={t("transaction.list_title")}
+            onClick={handleViewTransactions}
+          />
+        </div>
+      </td>
       <td className="m3-td">
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
@@ -437,93 +526,6 @@ export function HoldingRow({
           )}
         </td>
       )}
-      <td className="m3-td">
-        <div className="flex items-center gap-1">
-          {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}
-          {!readOnly && (
-            <>
-              {/* TRX-041 — Buy modal from holding row */}
-              <IconButton
-                icon={<Plus size={16} />}
-                variant="success"
-                size="sm"
-                id={`action-buy-${row.assetId}`}
-                aria-label={t("transaction.action_buy")}
-                onClick={handleBuy}
-              />
-              {/* SEL-010 — Sell button; disabled when asset is archived (SEL-037) */}
-              <IconButton
-                icon={<Minus size={16} />}
-                variant="error"
-                size="sm"
-                id={`action-sell-${row.assetId}`}
-                aria-label={t("transaction.action_sell")}
-                onClick={handleSell}
-                disabled={isArchived}
-              />
-              {/* SPL-061 — Split action (non-cash active rows; hidden for archived assets) */}
-              {onSplit && !isArchived && (
-                <IconButton
-                  icon={<Scissors size={16} />}
-                  size="sm"
-                  id={`action-split-${row.assetId}`}
-                  aria-label={t("transaction.action_split")}
-                  onClick={handleSplit}
-                />
-              )}
-              {/* HNO-042 — Note action (non-cash active rows; hidden for archived assets) */}
-              {onNote && !isArchived && (
-                <IconButton
-                  icon={<StickyNote size={16} />}
-                  size="sm"
-                  id={`action-note-${row.assetId}`}
-                  aria-label={t("account_details.action_note")}
-                  onClick={handleNote}
-                />
-              )}
-              {/* MKT-070 — Price history button (active holdings only); add-price lives inside */}
-              {row.canEnterPrice && (
-                <IconButton
-                  icon={<History size={16} />}
-                  size="sm"
-                  id={`action-price-history-${row.assetId}`}
-                  aria-label={t("account_details.action_price_history")}
-                  onClick={handlePriceHistory}
-                />
-              )}
-              {/* MKT-153 — Lock toggle: blocks/allows automated price fetches (ADR-014) */}
-              {onTogglePriceRefreshLock && (
-                <IconButton
-                  icon={isPriceRefreshBlocked ? <Lock size={16} /> : <LockOpen size={16} />}
-                  size="sm"
-                  id={`action-toggle-price-refresh-${row.assetId}`}
-                  aria-label={t(
-                    isPriceRefreshBlocked ? "mkt.lock.action_unblock" : "mkt.lock.action_block",
-                  )}
-                  onClick={handleTogglePriceRefreshLock}
-                />
-              )}
-              {/* FEE-011 — manage the recurring management-fee schedule for this holding */}
-              {onManageFee && (
-                <IconButton
-                  icon={<Percent size={16} />}
-                  size="sm"
-                  id={`action-manage-fee-${row.assetId}`}
-                  aria-label={t("account_details.action_manage_fee")}
-                  onClick={handleManageFee}
-                />
-              )}
-            </>
-          )}
-          <IconButton
-            icon={<ScrollText size={16} />}
-            size="sm"
-            id={`action-view-transactions-${row.assetId}`}
-            aria-label={t("transaction.list_title")}
-            onClick={handleViewTransactions}
-          />
-        </div>
-      </td>
     </tr>
   );
 }

@@ -68,4 +68,16 @@ describe("ClosedHoldingRow", () => {
     const dateCell = screen.getByText(/2024/);
     expect(dateCell.textContent).toContain("15");
   });
+
+  // #005 — the closed line's view-transactions action comes first, before the asset.
+  it("#005 puts the action in the first cell, before the asset", () => {
+    renderInTable(baseRow);
+    const actionsCell = document.querySelector("tr > td:first-child");
+    const assetCell = document.querySelector("tr > td:nth-child(2)");
+    expect(
+      actionsCell?.querySelector("#action-view-closed-transactions-asset-1"),
+    ).toBeInTheDocument();
+    expect(assetCell).toHaveTextContent("Apple Inc");
+    expect(actionsCell?.firstElementChild).toHaveClass("grid-rows-2", "grid-flow-col");
+  });
 });

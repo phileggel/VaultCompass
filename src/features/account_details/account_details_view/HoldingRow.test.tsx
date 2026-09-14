@@ -868,4 +868,27 @@ describe("HoldingRow — split action (SPL-061)", () => {
     renderWithSplit(cashRow, vi.fn());
     expect(document.querySelector("#action-split-system-cash-eur")).toBeNull();
   });
+
+  // #005 — the actions come first on the asset line, before the asset name, and
+  // their buttons fill two rows.
+  it("#005 puts the asset line's actions in the first cell, before the asset, on two rows", () => {
+    renderInTable(baseRow);
+    const actionsCell = document.querySelector("tr > td:first-child");
+    const assetCell = document.querySelector("tr > td:nth-child(2)");
+    expect(actionsCell?.querySelector("#action-buy-asset-1")).toBeInTheDocument();
+    expect(actionsCell?.querySelector("#action-view-transactions-asset-1")).toBeInTheDocument();
+    expect(assetCell).toHaveTextContent("Apple Inc");
+    expect(actionsCell?.firstElementChild).toHaveClass("grid-rows-2", "grid-flow-col");
+  });
+
+  // #005 — the cash line follows the same order: deposit, withdrawal and history first.
+  it("#005 puts the cash line's actions in the first cell, before the asset, on two rows", () => {
+    renderInTable({ ...baseRow, isCash: true, assetName: "Cash", assetReference: "EUR" });
+    const actionsCell = document.querySelector("tr > td:first-child");
+    const assetCell = document.querySelector("tr > td:nth-child(2)");
+    expect(actionsCell?.querySelector("#action-record-deposit-asset-1")).toBeInTheDocument();
+    expect(actionsCell?.querySelector("#action-view-transactions-asset-1")).toBeInTheDocument();
+    expect(assetCell).toHaveTextContent("Cash");
+    expect(actionsCell?.firstElementChild).toHaveClass("grid-rows-2", "grid-flow-col");
+  });
 });
