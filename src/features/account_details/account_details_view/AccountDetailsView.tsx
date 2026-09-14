@@ -35,6 +35,7 @@ import { OpenBalanceModal } from "../open_balance/OpenBalanceModal";
 import { PriceHistoryModal } from "../price_history/PriceHistoryModal";
 import { useRefreshAccountPrices } from "../refresh_prices/useRefreshAccountPrices";
 import { SellTransactionModal } from "../sell_transaction/SellTransactionModal";
+import { PINNED_ACTIONS_HEADER, PINNED_ASSET_HEADER } from "../shared/pinnedColumns";
 import { performanceColumnKey } from "../shared/presenter";
 import { SplitModal } from "../split_transaction/SplitModal";
 import { WithdrawalTransactionModal } from "../withdrawal_transaction/WithdrawalTransactionModal";
@@ -313,12 +314,16 @@ export function AccountDetailsView() {
             <div className="flex flex-col">
               {/* CSH-095 — active holdings table; the Cash row is always present
                   (even at €0), so this table always renders. */}
-              <div className="m3-table-container">
+              <div className="w-max min-w-full bg-m3-surface-container-low">
                 <table className="w-full border-collapse">
-                  <thead className="sticky top-0 bg-m3-surface-container z-10">
+                  <thead className="sticky top-0 bg-m3-surface-container z-20">
                     <tr>
-                      <th className="m3-th">{t("transaction.column_actions")}</th>
-                      <th className="m3-th">{t("account_details.column_asset")}</th>
+                      <th className={`m3-th ${PINNED_ACTIONS_HEADER}`}>
+                        {t("transaction.column_actions")}
+                      </th>
+                      <th className={`m3-th ${PINNED_ASSET_HEADER}`}>
+                        {t("account_details.column_asset")}
+                      </th>
                       <th className="m3-th text-right">{t("account_details.column_quantity")}</th>
                       <th className="m3-th text-right">{t("account_details.column_avg_price")}</th>
                       {/* SEL-042 — Realized P&L column */}
@@ -403,30 +408,37 @@ export function AccountDetailsView() {
 
               {/* ACD-048 — Closed positions section (collapsible) */}
               {view.hasClosedHoldings && (
-                <div className="mt-2">
+                <div className="mt-2 w-max min-w-full">
                   <button
                     type="button"
                     id="account-closed-positions-toggle"
                     aria-expanded={closedSectionOpen}
                     onClick={toggleClosedSection}
-                    className="w-full flex items-center gap-2 px-6 py-3 bg-m3-surface-container-high text-left hover:bg-m3-surface-container-highest"
+                    className="w-full flex items-center px-6 py-3 bg-m3-surface-container-high text-left hover:bg-m3-surface-container-highest"
                   >
-                    <ChevronDown
-                      size={16}
-                      className={`text-m3-on-surface-variant transition-transform ${
-                        closedSectionOpen ? "" : "-rotate-90"
-                      }`}
-                    />
-                    <h3 className="text-sm font-semibold text-m3-on-surface-variant uppercase tracking-wide">
-                      {t("account_details.closed_positions_header")}
-                    </h3>
+                    {/* #001 — the label stays in view while the tables scroll sideways */}
+                    <span className="sticky left-6 flex items-center gap-2">
+                      <ChevronDown
+                        size={16}
+                        className={`text-m3-on-surface-variant transition-transform ${
+                          closedSectionOpen ? "" : "-rotate-90"
+                        }`}
+                      />
+                      <h3 className="text-sm font-semibold text-m3-on-surface-variant uppercase tracking-wide">
+                        {t("account_details.closed_positions_header")}
+                      </h3>
+                    </span>
                   </button>
                   {closedSectionOpen && (
                     <table className="w-full border-collapse">
-                      <thead className="sticky top-0 bg-m3-surface-container z-10">
+                      <thead className="sticky top-0 bg-m3-surface-container z-20">
                         <tr>
-                          <th className="m3-th">{t("transaction.column_actions")}</th>
-                          <th className="m3-th">{t("account_details.column_asset")}</th>
+                          <th className={`m3-th ${PINNED_ACTIONS_HEADER}`}>
+                            {t("transaction.column_actions")}
+                          </th>
+                          <th className={`m3-th ${PINNED_ASSET_HEADER}`}>
+                            {t("account_details.column_asset")}
+                          </th>
                           {/* ACD-049 — P&L and last sold date */}
                           <th className="m3-th text-right">
                             {t("account_details.column_realized_pnl")}

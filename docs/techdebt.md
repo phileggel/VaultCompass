@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-024) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-025) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -251,3 +251,13 @@ Remove an entry once it has been resolved.
 - Observation: `docs/e2e-rules.md` asks every selector to be a stable `id`; these specs still find controls by an accessible label (which changes with the locale and the wording), by role, or by the form a submit button belongs to, because the elements carry no id of their own.
 - User value: None — E2E specs that survive a wording or locale change.
 - Done when: every selector in those five specs is an `id`, the controls they target carry one, and `reviewer-e2e` passes on them.
+
+## 2026-09-14 — TD-024 — Nothing in the harness checks that pinned columns stay put while scrolling
+
+- Found by: reviewer-frontend (F18, class-only assertions on #001)
+- Where: `src/features/account_details/account_details_view/{HoldingRow,ClosedHoldingRow,AccountDetailsView}.test.tsx` (pinned-column tests), `e2e/account_details/` (no scrolling scenario)
+- Context: branch `c/001-sticky-actions-asset`
+- Severity: 🔵
+- Observation: the holdings tables pin Actions and Asset with sticky positioning inside the view's content area, but jsdom has no layout, so the Vitest tests can only assert the classes; the behaviour itself — pinned cells and the header staying put while columns scroll, row backgrounds spanning the table — was measured once in a browser and is not re-checked by any suite, so a wrapper change that breaks the scroll set-up would pass the harness.
+- User value: None — a harness that notices when the pinned columns stop holding.
+- Done when: an E2E scenario scrolls the account view's content area sideways on a window narrower than the holdings table (precondition: it overflows) and asserts that a holding's action button stays in place while a plain column moves, and that the header stays at the top after scrolling down.

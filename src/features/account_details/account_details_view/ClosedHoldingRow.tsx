@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { formatIsoDateNumeric } from "@/ui/format/date";
 import { PnlCell } from "../shared/PnlCell";
+import { PINNED_ACTIONS_CELL, PINNED_ASSET_CELL } from "../shared/pinnedColumns";
 import type { ClosedHoldingRowViewModel } from "../shared/presenter";
 
 type ClosedHoldingRowProps = {
@@ -25,9 +26,9 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
   }, [navigate, accountId, row.assetId]);
 
   return (
-    <tr className="m3-tr opacity-70">
+    <tr className="group m3-tr opacity-70">
       {/* ACD-049 / #005 — inspect action only, first; Buy/Sell omitted for closed positions */}
-      <td className="m3-td">
+      <td className={`m3-td ${PINNED_ACTIONS_CELL}`}>
         <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
           <IconButton
             icon={<ScrollText size={16} />}
@@ -38,7 +39,7 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
           />
         </div>
       </td>
-      <td className="m3-td">
+      <td className={`m3-td ${PINNED_ASSET_CELL}`}>
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
           <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>

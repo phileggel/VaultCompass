@@ -19,15 +19,6 @@
 
 Nothing queued.
 
-## #001 — (frontend) — Keep the asset column in view while scrolling the holdings table sideways
-
-The account view's holdings table (`AccountDetailsView`) has grown past the window width — quantity, average price, price, value, P&L, performance, fees, In/Out — and scrolls horizontally inside its `overflow-auto` container. The header row already sticks to the top; the first column (Asset) does not stick to the left, so once the user scrolls right to read the outer columns they lose which line they are reading. Same shape for the closed-positions table beneath it.
-
-**User value:** The asset name stays on screen while reading the columns to its right, so a row can be read end to end without scrolling back.
-**Done when:** The Asset column of the active and closed holdings tables stays pinned at the left edge while the table scrolls horizontally, in light and dark mode, with the row background behind it so scrolled columns do not show through; screenshots committed.
-**Design:** none
-**Open questions:** none
-
 ## #007 — (fullstack) — Show a total row on the accounts list
 
 The accounts list (`AccountTable`) shows each account's Global Value and Unrealized P&L in the account's own currency and stops there: no line says what the portfolio is worth. A total needs one currency, so it is the backend's to compute — every account converted to the reference currency (EUR, GPF-011) with the same rate resolution the performance page and the price-movement total already use, and the same degradation when a rate is missing (FXR-034): that account contributes zero and the total is marked partial, as PMV-042/043 do. The list renders the figure; it never sums mixed currencies itself. The YTD column has no meaningful sum and stays blank on the total row — the portfolio-level figure lives on the performance page.

@@ -22,6 +22,7 @@ import type { StoredPerfPeriod } from "@/lib/perfPeriodStorage";
 import { IconButton } from "@/ui/components/button/IconButton";
 import { useCachedAccounts, useCachedAssets } from "../gateway";
 import { PnlCell } from "../shared/PnlCell";
+import { PINNED_ACTIONS_CELL, PINNED_ASSET_CELL } from "../shared/pinnedColumns";
 import { type HoldingRowViewModel, selectPerformanceCell } from "../shared/presenter";
 import type { ModalTarget, SellTarget } from "../shared/types";
 
@@ -167,9 +168,9 @@ export function HoldingRow({
   // CSH-091 — cash row variant: no Buy/Sell/Inspect, only Deposit/Withdraw.
   if (row.isCash) {
     return (
-      <tr className="m3-tr">
+      <tr className="group m3-tr">
         {/* #005 — actions first, filling two rows */}
-        <td className="m3-td">
+        <td className={`m3-td ${PINNED_ACTIONS_CELL}`}>
           <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
             {/* As-of view is read-only: Deposit/Withdraw are hidden (CSH-091). */}
             {!readOnly && (
@@ -203,7 +204,7 @@ export function HoldingRow({
             />
           </div>
         </td>
-        <td className="m3-td">
+        <td className={`m3-td ${PINNED_ASSET_CELL}`}>
           <div className="flex flex-col">
             <span className="font-medium text-m3-on-surface">{row.assetName}</span>
             <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>
@@ -235,7 +236,7 @@ export function HoldingRow({
 
   return (
     <tr
-      className="m3-tr"
+      className="group m3-tr"
       id={`holding-row-${row.assetId}`}
       // Archived rows can't be edited (handleOpenAssetDetail no-ops), so they stay
       // out of the tab order rather than becoming an unlabeled keyboard dead-end.
@@ -249,7 +250,7 @@ export function HoldingRow({
       onKeyDown={readOnly ? undefined : handleRowKeyDown}
     >
       {/* #005 — actions first, filling two rows */}
-      <td className="m3-td">
+      <td className={`m3-td ${PINNED_ACTIONS_CELL}`}>
         <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
           {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}
           {!readOnly && (
@@ -336,7 +337,7 @@ export function HoldingRow({
           />
         </div>
       </td>
-      <td className="m3-td">
+      <td className={`m3-td ${PINNED_ASSET_CELL}`}>
         <div className="flex flex-col">
           <span className="font-medium text-m3-on-surface">{row.assetName}</span>
           <span className="text-xs text-m3-on-surface-variant">{row.assetReference}</span>

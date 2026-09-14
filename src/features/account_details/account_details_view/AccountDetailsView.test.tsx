@@ -280,6 +280,55 @@ describe("AccountDetailsView — column order (#005)", () => {
   });
 });
 
+// #001 — jsdom has no layout: these assert the pinning classes, not the scrolling itself (TD-024).
+// #001 — Actions and Asset stay pinned while the tables scroll sideways, and both
+// tables scroll in the view's one content area, so the header sticks and a single
+// horizontal scrollbar stays in view.
+describe("AccountDetailsView — pinned columns (#001)", () => {
+  const renderWithClosedOpen = () => {
+    mockUseAccountDetailsView.mockReturnValue(makeView({ hasClosedHoldings: true }));
+    render(<AccountDetailsView />);
+    const toggle = document.querySelector("#account-closed-positions-toggle");
+    expect(toggle).toBeInTheDocument();
+    if (toggle?.getAttribute("aria-expanded") === "false") fireEvent.click(toggle);
+    const tables = document.querySelectorAll("table");
+    expect(tables).toHaveLength(2);
+    return { toggle, tables };
+  };
+
+  it("pins the Actions and Asset headers of both tables, and nothing after them", () => {
+    const { tables } = renderWithClosedOpen();
+    for (const table of tables) {
+      const headers = table.querySelectorAll("thead th");
+      expect(headers[0]).toHaveClass("sticky", "left-0");
+      expect(headers[1]).toHaveClass("sticky", "left-[188px]");
+      expect(headers[2]).not.toHaveClass("left-0");
+      // Above the pinned body cells (z-10), which scroll up under the header.
+      expect(table.querySelector("thead")).toHaveClass("z-20");
+    }
+  });
+
+  it("scrolls both tables in the one content area rather than a box of their own", () => {
+    const { tables } = renderWithClosedOpen();
+    expect(tables[0]?.parentElement).not.toHaveClass("m3-table-container");
+    const scrollers = [...tables].map((table) => table.closest(".overflow-auto"));
+    expect(scrollers[0]).not.toBeNull();
+    expect(scrollers[0]).toBe(scrollers[1]);
+    // Each table's wrapper grows to its own table, so row backgrounds span the whole
+    // scrolled width without stretching the other table.
+    for (const table of tables) {
+      expect(table.parentElement).toHaveClass("w-max", "min-w-full");
+    }
+    expect(tables[0]?.parentElement?.parentElement).not.toHaveClass("w-max");
+  });
+
+  it("keeps the closed-positions label in view while the tables scroll sideways", () => {
+    const { toggle } = renderWithClosedOpen();
+    expect(toggle?.textContent).toContain("account_details.closed_positions_header");
+    expect(toggle?.firstElementChild).toHaveClass("sticky", "left-6");
+  });
+});
+
 describe("AccountDetailsView — read-only as-of view", () => {
   beforeEach(() => {
     vi.clearAllMocks();

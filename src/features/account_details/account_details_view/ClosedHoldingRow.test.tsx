@@ -80,4 +80,18 @@ describe("ClosedHoldingRow", () => {
     expect(assetCell).toHaveTextContent("Apple Inc");
     expect(actionsCell?.firstElementChild).toHaveClass("grid-rows-2", "grid-flow-col");
   });
+
+  // #001 — jsdom has no layout: these assert the pinning classes, not the scrolling itself (TD-024).
+  // #001 — the closed line pins its action and asset cells like the open lines.
+  it("#001 pins the action and asset cells", () => {
+    renderInTable(baseRow);
+    const actionsCell = document.querySelector("tr > td:first-child");
+    const assetCell = document.querySelector("tr > td:nth-child(2)");
+    expect(
+      actionsCell?.querySelector("#action-view-closed-transactions-asset-1"),
+    ).toBeInTheDocument();
+    expect(actionsCell).toHaveClass("sticky", "left-0", "bg-m3-surface-container-low");
+    expect(assetCell).toHaveClass("sticky", "left-[188px]", "bg-m3-surface-container-low");
+    expect(document.querySelector("tr > td:nth-child(3)")).not.toHaveClass("sticky");
+  });
 });

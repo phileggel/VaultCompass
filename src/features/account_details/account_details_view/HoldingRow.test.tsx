@@ -891,4 +891,27 @@ describe("HoldingRow — split action (SPL-061)", () => {
     expect(assetCell).toHaveTextContent("Cash");
     expect(actionsCell?.firstElementChild).toHaveClass("grid-rows-2", "grid-flow-col");
   });
+
+  // #001 — jsdom has no layout: these assert the pinning classes, not the scrolling itself (TD-024).
+  // #001 — the actions and the asset stay pinned at the left edge while the table
+  // scrolls sideways, on an opaque background; the columns after them scroll.
+  it("#001 pins the asset line's actions and asset cells on an opaque background", () => {
+    renderInTable(baseRow);
+    const actionsCell = document.querySelector("tr > td:first-child");
+    const assetCell = document.querySelector("tr > td:nth-child(2)");
+    expect(actionsCell?.querySelector("#action-buy-asset-1")).toBeInTheDocument();
+    expect(actionsCell).toHaveClass("sticky", "left-0", "bg-m3-surface-container-low");
+    expect(assetCell).toHaveClass("sticky", "left-[188px]", "bg-m3-surface-container-low");
+    expect(document.querySelector("tr > td:nth-child(3)")).not.toHaveClass("sticky");
+  });
+
+  it("#001 pins the cash line's actions and asset cells", () => {
+    renderInTable({ ...baseRow, isCash: true, assetName: "Cash", assetReference: "EUR" });
+    const actionsCell = document.querySelector("tr > td:first-child");
+    const assetCell = document.querySelector("tr > td:nth-child(2)");
+    expect(actionsCell?.querySelector("#action-record-deposit-asset-1")).toBeInTheDocument();
+    expect(actionsCell).toHaveClass("sticky", "left-0");
+    expect(assetCell).toHaveClass("sticky", "left-[188px]");
+    expect(document.querySelector("tr > td:nth-child(3)")).not.toHaveClass("sticky");
+  });
 });
