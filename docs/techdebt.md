@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-022) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-023) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -241,3 +241,13 @@ Remove an entry once it has been resolved.
 - Context: branch `ci/mutation-sweep` @ `5f29843`
 - Severity: 🔵
 - Observation: the commits are real upstream commits, so nothing is compromised, but a reader trusting the comment audits the wrong release notes. `mutants.yml` carries the correct pins; the four older files still carry the labels. Verified with `git ls-remote --tags` on 2026-09-13.
+
+## 2026-09-14 — TD-022 — Shipped work never leaves the todo list or the plan folder
+
+- Found by: manual (noticed by the human; confirmed against `docs/workflow-c.md` § 2–3 and `scripts/release.py`)
+- Where: `docs/todo.md` (#003, #004, #006 marked `merged, unreleased`; no entry has ever read `Shipped in`), `scripts/release.py` (no step touches the todo list or the plans), `docs/plan/` (multi-device-sync, price-movement, scheduled-price-fetch and workflow-c plans, all shipped or merged), `docs/workflow-c.md` § 2–3 (the flip to `Shipped in vX.Y.Z` is written but performed by nothing, and the agent never removes entries), the headers of `e2e/account_details/manual_price_fill.test.ts`, `e2e/account_details/auto_fetch.test.ts`, `e2e/sync/sync.test.ts` and `e2e/accounts/price_movement.test.ts` (they cite plan files, two already deleted by hand), `.claude/RESUME.md` (an August checkpoint)
+- Context: branch `main` @ `32025ed`
+- Severity: 🔵
+- Observation: the lifecycle stops at `merged, unreleased`: a release writes the changelog but neither flips nor removes the entries it shipped, and no rule says when a plan is deleted, so finished entries and plans pile up in the files read to pick the next piece of work. Plans deleted by hand in the past left E2E headers pointing at files that no longer exist.
+- User value: None — the backlog and the plan folder show only work still to do.
+- Done when: shipped entries and their plan files leave the repository at a defined moment written in `docs/workflow-c.md` (the release, or its closure), no file points at a deleted plan, and `.claude/RESUME.md` is gone.
