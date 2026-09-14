@@ -28,27 +28,6 @@ The account view's holdings table (`AccountDetailsView`) has grown past the wind
 **Design:** none
 **Open questions:** none
 
-## #003 — (fullstack) — Show the amount each account moved in the price movement report
-
-The report (`PriceMovementDialog`) gives each account its value before, its value after and the change as a percentage (PMV-024); the amount itself — after minus before, in the account's own currency — is missing, and it is the figure most people look for first. The total row has the same gap in the reference currency. The backend computes and carries it (the dialog renders, never derives — PMV-023's "one valuation" rule), and an unmoved entry shows no amount, as it already shows no percentage (PMV-031).
-
-**User value:** The report states how much each account gained or lost, not only by what proportion.
-**Done when:** `PriceMovementRow` and the report's total carry the signed movement amount from the backend, a PMV rule states it (per entry in account currency, total in the reference currency, absent when unmoved), the dialog shows it in a column beside the percentage with the gain/loss polarity, the Rust builder and the dialog tests cover moved / unmoved / total, and the screenshots are recaptured. — merged, unreleased (PR #136).
-**Design:** validated (in chat, 2026-09-14)
-**Open questions:** none
-
-## #004 — (frontend) — Shorten the price-age label on the holding row to the age alone
-
-The holding row's price cell says how old the price is with a full sentence — `Mis à jour il y a 2 j` / `Updated 2d ago` (`mkt.staleness_days_ago`) and `Mis à jour aujourd'hui` / `Updated today` (`mkt.staleness_today`). In a dense row the words add nothing the position does not already say; the age alone reads faster: `2 j` / `2d`. Copy-only — the formatter and the tests key on the i18n identifiers, not the words. The label only has a today and an N-days form; there is no hours form to keep.
-
-**User value:** The price age reads at a glance as `2 j` instead of a sentence, in a row already short of width.
-**Done when:** Both languages' `mkt.staleness_days_ago` and `mkt.staleness_today` carry the age alone, the same-day wording and the FX label question are decided, and the holding-row screenshot is recaptured. — merged, unreleased (PR #124).
-**Design:** validated (in chat, 2026-09-13)
-**Open questions:**
-
-- [x] Same-day wording once the prefix is gone: `aujourd'hui` / `today`, or `0 j` / `0d` to line up with the others? → `0 j` / `0d`.
-- [x] Shorten the FX counterpart on the same row (`currency.rate_staleness_*`, "Rate as of today", FXR-090) the same way? → yes, the same way.
-
 ## #005 — (frontend) — Move the holding row's actions next to the asset name, on two rows
 
 The holding row's actions — buy, sell, split, note, fee, price history, transactions, deposit / withdrawal on the cash line, the refresh lock, up to twelve `action-*-{assetId}` buttons — sit in the twelfth and last column, past a horizontal scroll on most windows. They belong beside the thing they act on: the Actions column moves to second place, right after Asset, and its buttons wrap onto two rows so the column stays narrow. Every button keeps its stable id, so the E2E suite is untouched by the move. With the Asset column becoming sticky (see the sticky-column entry above), Asset and Actions together form the pinned left edge.
@@ -57,17 +36,6 @@ The holding row's actions — buy, sell, split, note, fee, price history, transa
 **Done when:** The Actions column is the second column of the active and closed holdings tables, its buttons lay out on two rows, the header and row cells keep their ids, the Vitest row tests still pass unchanged, and the holding-row screenshots are recaptured in both themes.
 **Design:** none
 **Open questions:** none
-
-## #006 — (frontend) — Use one icon for "open the transactions" on the account header and the holding row
-
-The account header's journal button (`account-details-journal`, `ScrollText`) opens the account's transaction journal; the holding row's loupe (`action-view-transactions-{assetId}`, `Search`) opens the same kind of list for one asset. Same action at two scopes, two unrelated icons — and a loupe says "search", which neither does. One icon, the same on both. Recommendation: `ScrollText`, the ledger, on both — it names what opens, and it is where the loupe is heading anyway once the per-asset page folds into the journal (see the TXL-merge entry below).
-
-**User value:** The same picture means the same thing everywhere: a transaction list, for the account or for one holding.
-**Done when:** Both buttons render the same icon, their ids and labels are unchanged, and the header and holding-row screenshots are recaptured. — merged, unreleased (PR #134).
-**Design:** validated (in chat, 2026-09-14)
-**Open questions:**
-
-- [x] The shared icon: `ScrollText` (recommended, it names what opens), or another? → `ScrollText`.
 
 ## #007 — (fullstack) — Show a total row on the accounts list
 

@@ -52,7 +52,7 @@ Each task ships under these constraints (in priority order):
     **Design**   — none, validated, or needed (then the mocks come before anything else)
     **Touching** — the paths, so the reviewer lanes are known before the diff exists
 
-**Closing brief** — the last message of a piece of work (and the PR body's first lines). Two parts, in this order, nothing else; what is still owed goes on the entry or in `docs/techdebt.md`, not here. A mistake is worth a sentence only where it left something undone.
+**Closing brief** — the last message of a piece of work (and the PR body's first lines). Two parts, in this order, nothing else; what is still owed goes in `docs/techdebt.md` (or, before the merge, an open question on the entry), not here. A mistake is worth a sentence only where it left something undone.
 
 1. **What changed for whoever reads this next.** For `feat` / `fix`: what a **user** notices, or "nothing — internal". For everything else: what can now be **done or trusted** that could not be before. "The backend job answers in 8 minutes" is an answer; "switched to llvm-cov" names the artefact, not what it buys.
 2. **What the project accumulated.** For logic work: the tests added and the coverage or golden figure that moved, or "none". For harness work: the guarantee and **what it is worth** — a check that cannot fail has bought nothing, so say how you know it can, which usually means having watched it go red.

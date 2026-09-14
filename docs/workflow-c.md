@@ -1,8 +1,7 @@
 # Workflow C — the human sets expectations, the harness holds the line
 
 The operating manual for how work moves from `docs/todo.md` to a release. Decided
-on 2026-09-12 (`docs/plan/workflow-c-plan.md`); this document is the rule set,
-the plan is the history.
+on 2026-09-12; this document is the rule set, the git history records how it was built.
 
 ## 1. Who owns what
 
@@ -29,8 +28,8 @@ Four human touchpoints. Everything else is either the agent's job or a machine g
 - **Ready** means: queued, has a Done when, `Open questions: none`, and `Design` is
   `none` (no proposal needed yet) or `validated`.
 - The agent writes to this file in three places only: it flips `Design` to
-  `proposed (…)`, it adds open questions, and it marks an entry `merged, unreleased`
-  then `Shipped in vX.Y.Z`. It never creates, removes or reorders entries.
+  `proposed (…)`, it adds open questions, and it removes an entry in the closure commit
+  of the pull request that merges it. It never creates or reorders entries.
 
 ### `docs/techdebt.md` — agent-owned
 
@@ -69,14 +68,15 @@ Four human touchpoints. Everything else is either the agent's job or a machine g
    each Done when clause with the test that proves it, findings that changed
    something, techdebt filed, screenshots. The commit title is the changelog line.
 9. **Merge**: `just merge`, which refuses until every check on the pull request is green.
-10. **Closure** in the same PR: entry marked `merged, unreleased`; techdebt updated;
+10. **Closure** in the same PR: the entry removed from `docs/todo.md`, and its plan
+    when this pull request is the plan's last; techdebt updated;
     `ARCHITECTURE.md` if a module appeared; the spec if a rule changed.
 11. **Next** entry, or stop (§ 8).
 
 **Release** — the human runs `just release -y` when they choose. It re-runs the full
 harness on `main`, computes the version from the merged titles, writes the changelog,
-tags and pushes; CI builds and leaves the draft; the human publishes it. Entries flip
-from `merged, unreleased` to `Shipped in vX.Y.Z`.
+tags and pushes; CI builds and leaves the draft; the human publishes it. The
+changelog and the git history are the record of what shipped.
 
 ## 4. Design proposal
 

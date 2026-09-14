@@ -5,7 +5,6 @@
  * Contract: docs/contracts/asset-contract.md § "Asset Price Fetch Tasks",
  *           § Shared Types PriceMovementReport / PriceMovementRow,
  *           § Events AssetPriceFetchCompleted
- * Plan:     docs/plan/price-movement-plan.md §2.4
  *
  * Spec rules exercised by this file:
  *   PMV-010/015 — a Global refresh (trigger="Manual") is the only fetch path

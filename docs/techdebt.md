@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-023) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-024) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -242,13 +242,12 @@ Remove an entry once it has been resolved.
 - Severity: 🔵
 - Observation: the commits are real upstream commits, so nothing is compromised, but a reader trusting the comment audits the wrong release notes. `mutants.yml` carries the correct pins; the four older files still carry the labels. Verified with `git ls-remote --tags` on 2026-09-13.
 
-## 2026-09-14 — TD-022 — Shipped work never leaves the todo list or the plan folder
+## 2026-09-14 — TD-023 — E2E specs still locate controls by label, role or form attribute
 
-- Found by: manual (noticed by the human; confirmed against `docs/workflow-c.md` § 2–3 and `scripts/release.py`)
-- Where: `docs/todo.md` (#003, #004, #006 marked `merged, unreleased`; no entry has ever read `Shipped in`), `scripts/release.py` (no step touches the todo list or the plans), `docs/plan/` (multi-device-sync, price-movement, scheduled-price-fetch and workflow-c plans, all shipped or merged), `docs/workflow-c.md` § 2–3 (the flip to `Shipped in vX.Y.Z` is written but performed by nothing, and the agent never removes entries), the headers of `e2e/account_details/manual_price_fill.test.ts`, `e2e/account_details/auto_fetch.test.ts`, `e2e/sync/sync.test.ts` and `e2e/accounts/price_movement.test.ts` (they cite plan files, two already deleted by hand), `.claude/RESUME.md` (an August checkpoint)
-- Context: branch `main` @ `32025ed`
+- Found by: manual (selector count while fixing dangling references in the E2E headers)
+- Where: `e2e/asset_web_lookup/asset_web_lookup.test.ts` (`button[aria-label="Add asset"]`, `"Back"`, `"Fill manually"`), `e2e/account_details/manual_price_fill.test.ts` and `e2e/account_details/auto_fetch.test.ts` (`[role="dialog"]`, `[role="status"]`, `body`), `e2e/open_balance/open_balance.test.ts` and `e2e/account_details/buy_sell.test.ts` (`button[type="submit"][form="…"]`)
+- Context: branch `main` @ `482527b`
 - Severity: 🔵
-- Observation: the lifecycle stops at `merged, unreleased`: a release writes the changelog but neither flips nor removes the entries it shipped, and no rule says when a plan is deleted, so finished entries and plans pile up in the files read to pick the next piece of work. Plans deleted by hand in the past left E2E headers pointing at files that no longer exist.
-- User value: None — the backlog and the plan folder show only work still to do.
-- Decision (human, 2026-09-14): a todo entry is removed when its branch merges, not at release; the git history and the changelog keep the trail.
-- Done when: the closure commit of the merging pull request removes the entry, and the closure of a plan's last pull request deletes the plan; `docs/workflow-c.md` § 2–3 and `/next-todo` Step 9 say so, with the `merged, unreleased` / `Shipped in` flip gone; #003, #004, #006 and the four shipped plans are removed; no file points at a deleted plan; `.claude/RESUME.md` is gone.
+- Observation: `docs/e2e-rules.md` asks every selector to be a stable `id`; these specs still find controls by an accessible label (which changes with the locale and the wording), by role, or by the form a submit button belongs to, because the elements carry no id of their own.
+- User value: None — E2E specs that survive a wording or locale change.
+- Done when: every selector in those five specs is an `id`, the controls they target carry one, and `reviewer-e2e` passes on them.

@@ -4,7 +4,6 @@
  * Spec:     docs/spec/market-price.md (MKT-170–179)
  * Contract: docs/contracts/asset-contract.md § "Asset Price Fetch Tasks",
  *           § "Asset Prices", § UnpricedAsset
- * Plan:     docs/plan/manual-price-fill-plan.md
  *
  * Spec rules exercised by this file:
  *   MKT-170/171 — completion signal carries the unpriced list

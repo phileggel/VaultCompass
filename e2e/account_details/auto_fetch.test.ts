@@ -2,7 +2,6 @@
  * E2E tests — MKT auto-fetch surface (PR 3 of 3: E2E + closure)
  *
  * Contract: docs/contracts/asset-contract.md § "Asset Price Fetch Tasks"
- * Plan:     docs/plan/market-price-auto-fetch-plan.md § E2E
  *
  * Spec rules covered:
  *   MKT-111 + MKT-131 — AccountDetailsView "Refresh prices" on cash-only account → NoFetchableHoldings snackbar

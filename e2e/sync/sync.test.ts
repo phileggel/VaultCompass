@@ -4,7 +4,6 @@
  * Spec:     docs/spec/multi-device-sync.md
  * Contract: docs/contracts/sync-contract.md § enable_sync / sync_now / pause_sync /
  *           resume_sync / rename_sync_device / leave_sync / get_sync_status
- * Plan:     docs/plan/multi-device-sync-plan.md § Halt Artifact H1
  *
  * Spec rules covered by this file:
  *   SYN-010 — opt-in: disabled state offers "Enable sync"; enabling shows the status block
