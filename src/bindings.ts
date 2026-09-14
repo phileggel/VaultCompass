@@ -3148,6 +3148,11 @@ total_currency: string;
  */
 total_movement_pct: number | null; 
 /**
+ * Signed movement in reference-currency micros, `total_after - total_before`
+ * (PMV-027); absent when the two totals are equal.
+ */
+total_movement_amount: number | null; 
+/**
  * ISO date carried before the fetch (PMV-050); absent per PMV-052.
  */
 observed_from: string | null; 
@@ -3191,6 +3196,11 @@ after: number;
  * `before` is not positive (PMV-025).
  */
 movement_pct: number | null; 
+/**
+ * Signed movement in account-currency micros, `after - before` (PMV-027);
+ * absent when unmoved, present even when `before` is not positive.
+ */
+movement_amount: number | null; 
 /**
  * A holding meant to be read at its current price could not be
  * (PMV-032): the MKT-171 skip set, or one contributing 0 for want of a

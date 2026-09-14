@@ -578,6 +578,7 @@
     "dismiss": "Dismiss",
     "column_account": "Account",
     "column_values": "Before and after",
+    "column_amount": "Amount",
     "column_change": "Change",
     "total": "Total",
     "incomplete_marker": "partial",

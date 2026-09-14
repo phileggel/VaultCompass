@@ -578,6 +578,7 @@
     "dismiss": "Fermer",
     "column_account": "Compte",
     "column_values": "Avant et après",
+    "column_amount": "Montant",
     "column_change": "Variation",
     "total": "Total",
     "incomplete_marker": "partiel",

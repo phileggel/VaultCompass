@@ -74,6 +74,7 @@ mod tests {
                 total_after: 0,
                 total_currency: "EUR".to_string(),
                 total_movement_pct: None,
+                total_movement_amount: None,
                 observed_from: None,
                 observed_to: None,
                 incomplete: false,

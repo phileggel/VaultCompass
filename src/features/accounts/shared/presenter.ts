@@ -122,6 +122,17 @@ export function formatPriceMovementPct(microPercent: number | null): string {
 }
 
 /**
+ * PMV-027/046 — a movement as a signed amount in the currency it is expressed in.
+ * `null` renders as an em dash: the backend reports no amount when the two
+ * values are equal (PMV-031/045).
+ */
+export function formatPriceMovementAmount(micros: number | null, currency: string): string {
+  if (micros === null) return "—";
+  const sign = micros >= 0 ? "+" : "";
+  return `${sign}${microToFormatted(micros, 2)} ${currency}`;
+}
+
+/**
  * PMV-050/051/052 — the i18n key labelling the two value columns, chosen from
  * the dates exactly as given. The two single-date cases are distinct: one means
  * the portfolio already carried prices and this refresh produced nothing later

@@ -25,6 +25,7 @@ const makeRow = (overrides: Partial<PriceMovementRow> = {}): PriceMovementRow =>
   before: 100_000_000,
   after: 120_000_000,
   movement_pct: 20_000_000,
+  movement_amount: 20_000_000,
   incomplete: false,
   ...overrides,
 });
@@ -35,6 +36,7 @@ const makeReport = (overrides: Partial<PriceMovementReport> = {}): PriceMovement
   total_after: 120_000_000,
   total_currency: "EUR",
   total_movement_pct: 20_000_000,
+  total_movement_amount: 20_000_000,
   observed_from: "2026-09-09",
   observed_to: "2026-09-11",
   incomplete: false,
@@ -89,6 +91,7 @@ describe("PriceMovementDialog", () => {
           before: 100_000_000,
           after: 100_000_000,
           movement_pct: null,
+          movement_amount: null,
         }),
       ],
     });
@@ -109,6 +112,7 @@ describe("PriceMovementDialog", () => {
           before: 100_000_000,
           after: 100_000_000,
           movement_pct: null,
+          movement_amount: null,
           incomplete: true,
         }),
       ],
@@ -132,6 +136,7 @@ describe("PriceMovementDialog", () => {
           before: 50_000_000,
           after: 50_000_000,
           movement_pct: null,
+          movement_amount: null,
         }),
       ],
     });
@@ -142,8 +147,9 @@ describe("PriceMovementDialog", () => {
     expect(screen.getByTestId("price-movement-row-acc-2")).toBeInTheDocument();
   });
 
-  // PMV-031 — an unmoved account renders no movement figure, never "0.00%".
-  it("renders '—' for an unmoved account instead of a zero percentage", () => {
+  // PMV-031 — an unmoved account renders no movement figure and no amount,
+  // never "0.00%" or a zero amount.
+  it("renders '—' for an unmoved account instead of a zero percentage or amount", () => {
     const report = makeReport({
       rows: [
         makeRow({ account_id: "acc-1", before: 100_000_000, after: 120_000_000 }),
@@ -152,6 +158,7 @@ describe("PriceMovementDialog", () => {
           before: 50_000_000,
           after: 50_000_000,
           movement_pct: null,
+          movement_amount: null,
         }),
       ],
     });
@@ -159,8 +166,10 @@ describe("PriceMovementDialog", () => {
     render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
 
     const row = within(screen.getByTestId("price-movement-row-acc-2"));
-    expect(row.getByText("—")).toBeInTheDocument();
+    expect(row.getAllByText("50,00 EUR")).toHaveLength(2);
+    expect(row.getAllByText("—")).toHaveLength(2);
     expect(row.queryByText("0,00%")).not.toBeInTheDocument();
+    expect(row.queryByText("+0,00 EUR")).not.toBeInTheDocument();
   });
 
   // PMV-024 — a moved account carries its computed percentage.
@@ -180,6 +189,99 @@ describe("PriceMovementDialog", () => {
 
     const row = within(screen.getByTestId("price-movement-row-acc-1"));
     expect(row.getByText("+20,00%")).toBeInTheDocument();
+  });
+
+  // PMV-027/028 — a moved account's amount: signed, in the account's own currency, in
+  // its own column, with the gain or loss polarity.
+  it("renders each moved account's signed amount in its own currency with its polarity", () => {
+    const report = makeReport({
+      rows: [
+        makeRow({
+          account_id: "acc-1",
+          currency: "USD",
+          before: 100_000_000,
+          after: 105_000_000,
+          movement_amount: 5_000_000,
+          movement_pct: 5_000_000,
+        }),
+        makeRow({
+          account_id: "acc-2",
+          before: 100_000_000,
+          after: 80_000_000,
+          movement_amount: -20_000_000,
+          movement_pct: -20_000_000,
+        }),
+      ],
+    });
+
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
+
+    expect(screen.getByText("pmv.column_amount")).toBeInTheDocument();
+    const gain = within(screen.getByTestId("price-movement-row-acc-1")).getByText("+5,00 USD");
+    expect(gain).toHaveClass("text-m3-gain");
+    const loss = within(screen.getByTestId("price-movement-row-acc-2")).getByText("-20,00 EUR");
+    expect(loss).toHaveClass("text-m3-loss");
+  });
+
+  // PMV-027/028 — the amount keeps its own polarity where the report withholds the
+  // proportion (no positive earlier value, PMV-025).
+  it("renders the amount with its polarity when the report withholds the proportion", () => {
+    const report = makeReport({
+      rows: [
+        makeRow({
+          account_id: "acc-1",
+          before: 0,
+          after: 30_000_000,
+          movement_amount: 30_000_000,
+          movement_pct: null,
+        }),
+      ],
+    });
+
+    render(<PriceMovementDialog report={report} isOpen onDismiss={vi.fn()} />);
+
+    const row = within(screen.getByTestId("price-movement-row-acc-1"));
+    expect(row.getByText("+30,00 EUR")).toHaveClass("text-m3-gain");
+    expect(row.getByText("—")).toBeInTheDocument();
+  });
+
+  // PMV-045/046 — the total carries its own amount in the reference currency, and
+  // none when the two totals are equal.
+  it("renders the total's amount in total_currency, or '—' when the totals are equal", () => {
+    const { unmount } = render(
+      <PriceMovementDialog
+        report={makeReport({
+          rows: [makeRow({ currency: "USD" })],
+          total_before: 200_000_000,
+          total_after: 150_000_000,
+          total_currency: "EUR",
+          total_movement_amount: -50_000_000,
+          total_movement_pct: -25_000_000,
+        })}
+        isOpen
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    const moved = within(screen.getByTestId("price-movement-total"));
+    expect(moved.getByText("-50,00 EUR")).toHaveClass("text-m3-loss");
+    unmount();
+
+    render(
+      <PriceMovementDialog
+        report={makeReport({
+          total_before: 200_000_000,
+          total_after: 200_000_000,
+          total_movement_amount: null,
+          total_movement_pct: null,
+        })}
+        isOpen
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    const unmoved = within(screen.getByTestId("price-movement-total"));
+    expect(unmoved.getAllByText("—")).toHaveLength(2);
   });
 
   // PMV-032/043 — an incomplete row and the incomplete total are both marked.

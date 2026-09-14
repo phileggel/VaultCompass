@@ -332,6 +332,7 @@ describe("accountGateway — subscribeToPriceFetchCompleted (PMV-016)", () => {
     total_after: 0,
     total_currency: "EUR",
     total_movement_pct: null,
+    total_movement_amount: null,
     observed_from: null,
     observed_to: null,
     incomplete: false,

@@ -43,7 +43,7 @@ The report (`PriceMovementDialog`) gives each account its value before, its valu
 
 **User value:** The report states how much each account gained or lost, not only by what proportion.
 **Done when:** `PriceMovementRow` and the report's total carry the signed movement amount from the backend, a PMV rule states it (per entry in account currency, total in the reference currency, absent when unmoved), the dialog shows it in a column beside the percentage with the gain/loss polarity, the Rust builder and the dialog tests cover moved / unmoved / total, and the screenshots are recaptured.
-**Design:** none
+**Design:** validated (in chat, 2026-09-14)
 **Open questions:** none
 
 ## #004 — (frontend) — Shorten the price-age label on the holding row to the age alone

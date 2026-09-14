@@ -21,6 +21,7 @@ const makeReport = (overrides: Partial<PriceMovementReport> = {}): PriceMovement
   total_after: 1_100_000,
   total_currency: "EUR",
   total_movement_pct: 10_000_000,
+  total_movement_amount: 100_000,
   observed_from: "2026-09-09",
   observed_to: "2026-09-11",
   incomplete: false,

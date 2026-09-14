@@ -186,6 +186,9 @@ struct PriceMovementReport {
                                           // wire rather than assumed, matching AccountPerformanceResponse.currency
     total_movement_pct: Option<i64>,      // micro-percent from the two totals (PMV-041); absent when the
                                           // earlier total is not positive (PMV-044) or the two are equal (PMV-045)
+    total_movement_amount: Option<i64>,   // total_after − total_before, reference-currency micros (PMV-046);
+                                          // absent when the two are equal, present even when
+                                          // total_before is not positive (PMV-044)
     observed_from: Option<String>,        // ISO date carried before the fetch (PMV-050); absent per PMV-052
     observed_to: Option<String>,          // ISO date this fetch produced (PMV-050); absent when the fetch
                                           // produced none LATER than observed_from (PMV-051) — note this says
@@ -208,6 +211,8 @@ struct PriceMovementRow {
                                           // or when `before` is not positive (PMV-025). `before` and `after`
                                           // are both on the wire, so "unmoved" stays distinguishable from
                                           // "undefined" without a discriminant.
+    movement_amount: Option<i64>,         // after − before, account-currency micros (PMV-027); absent when
+                                          // unmoved, present even when `before` is not positive
     incomplete: bool,                     // a holding that was MEANT to be read at its current price could
                                           // not be (PMV-032): the MKT-171 skip set, or one contributing 0 for
                                           // want of a usable rate (FXR-034/GPF). Deliberate exclusions never
@@ -252,3 +257,4 @@ struct UnpricedAsset {
 - 2026-06-12 — Amended by `market-price` spec under ADR-017 (Yahoo Finance keyless price source): `fetch_all_asset_prices` and `fetch_account_asset_prices` drop the `use_api_key: bool` arg (BYOK retired); `AssetPriceSource` variant `Stooq` renamed to `YahooFinance`.
 - 2026-06-16 — Amended by `market-price` spec (MKT-170+, unupdated-price manual fill): new `UnpricedAsset` shared type; `AssetPriceFetchCompleted` event registered with its `{ ok, skipped, unpriced }` payload (the `unpriced` list is the new part). No new command — per-row manual fill reuses `record_asset_price`.
 - 2026-09-11 — Amended by `price-movement` spec (PMV): `fetch_all_asset_prices` gains a `trigger: FetchTrigger` arg so the backend knows which action started it (PMV-010); new `FetchTrigger`, `PriceMovementReport` and `PriceMovementRow` shared types; `AssetPriceFetchCompleted` payload gains `movement: Option<PriceMovementReport>`. No new command and no new error variant — a report that cannot be produced leaves the fetch's own outcome untouched (PMV-014). Both readings use the rates in force at refresh start, so the reference-currency total intentionally diverges from the freshly converted dashboard total (PMV-020, FXR-075).
+- 2026-09-14 — Amended by `price-movement` spec (PMV-027, PMV-028, PMV-046): `PriceMovementRow.movement_amount` and `PriceMovementReport.total_movement_amount` carry the signed amount moved. No new command, type or error.

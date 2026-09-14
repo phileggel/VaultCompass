@@ -104,6 +104,10 @@ pub struct PriceMovementReport {
     /// when the earlier total is not positive (PMV-044) or the two totals are
     /// equal (PMV-045).
     pub total_movement_pct: Option<i64>,
+    /// Signed movement in reference-currency micros, `total_after - total_before`
+    /// (PMV-046); absent when the two totals are equal (PMV-045), present even when
+    /// `total_before` is not positive (PMV-044).
+    pub total_movement_amount: Option<i64>,
     /// ISO date carried before the fetch (PMV-050); absent per PMV-052.
     pub observed_from: Option<String>,
     /// ISO date this fetch produced (PMV-050); absent when the fetch produced
@@ -131,6 +135,9 @@ pub struct PriceMovementRow {
     /// Micro-percent movement (PMV-024); absent when unmoved (PMV-031) or when
     /// `before` is not positive (PMV-025).
     pub movement_pct: Option<i64>,
+    /// Signed movement in account-currency micros, `after - before` (PMV-027);
+    /// absent when unmoved, present even when `before` is not positive.
+    pub movement_amount: Option<i64>,
     /// A holding meant to be read at its current price could not be
     /// (PMV-032): the MKT-171 skip set, or one contributing 0 for want of a
     /// usable rate (FXR-034/GPF). System cash (MKT-116) and refresh-locked
@@ -163,12 +170,14 @@ mod tests {
                 before: 100_000_000,
                 after: 100_000_000,
                 movement_pct: None,
+                movement_amount: None,
                 incomplete: false,
             }],
             total_before: 100_000_000,
             total_after: 100_000_000,
             total_currency: "EUR".to_string(),
             total_movement_pct: None,
+            total_movement_amount: None,
             observed_from: None,
             observed_to: None,
             incomplete: false,
@@ -176,7 +185,7 @@ mod tests {
     }
 
     // PMV-060 — the report states no count and no "moved" flag of its own; the
-    // wire shape carries exactly the contract's eight fields, nothing more.
+    // wire shape carries exactly the contract's nine fields, nothing more.
     // The frontend derives "nothing moved" from `rows` itself.
     #[test]
     fn price_movement_report_serializes_with_exactly_the_contract_fields() {
@@ -198,6 +207,7 @@ mod tests {
                 "total_after",
                 "total_before",
                 "total_currency",
+                "total_movement_amount",
                 "total_movement_pct",
             ]
         );

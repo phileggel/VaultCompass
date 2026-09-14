@@ -119,6 +119,7 @@ pub fn build_report(
             before,
             after,
             movement_pct: movement_pct(before, after),
+            movement_amount: movement_amount(before, after),
             incomplete,
         });
     }
@@ -138,6 +139,7 @@ pub fn build_report(
     let incomplete = rows.iter().any(|row| row.incomplete);
     PriceMovementReport {
         total_movement_pct: movement_pct(total_before, total_after),
+        total_movement_amount: movement_amount(total_before, total_after),
         rows,
         total_before,
         total_after,
@@ -160,6 +162,12 @@ fn movement_pct(before: i64, after: i64) -> Option<i64> {
         return None;
     }
     Some(((after as i128 - before as i128) * 100_000_000 / before as i128) as i64)
+}
+
+/// PMV-027/046 — movement as a signed amount in the currency of the two values. Absent
+/// when they are equal (PMV-031/045); a non-positive earlier value still has one.
+fn movement_amount(before: i64, after: i64) -> Option<i64> {
+    (after != before).then(|| after.saturating_sub(before))
 }
 
 #[cfg(test)]
@@ -696,6 +704,129 @@ mod tests {
         assert_eq!(report.rows[0].before, 100_000_000);
         assert_eq!(report.rows[0].after, 100_000_000);
         assert_eq!(report.rows[0].movement_pct, None);
+    }
+
+    // ── PMV-027 / PMV-046 — movement as an amount ─────────────────────────────────────
+
+    fn cash_snapshot() -> ValuationSnapshot {
+        let mut snapshot = empty_snapshot();
+        snapshot.assets.insert(
+            "system-cash-eur".to_string(),
+            AssetValuationFacts {
+                currency: "EUR".to_string(),
+                class: AssetClass::Cash,
+            },
+        );
+        snapshot
+            .rates
+            .insert(("EUR".to_string(), "EUR".to_string()), 1_000_000);
+        snapshot
+    }
+
+    // PMV-027/046 — each entry carries after minus before, signed, in its own
+    // currency; the total carries the difference of the two totals.
+    #[test]
+    fn movement_amount_is_the_signed_difference_per_entry_and_for_the_total() {
+        let baseline = PriceMovementBaseline {
+            accounts: vec![
+                account("acc-1", "Alpha", "EUR"),
+                account("acc-2", "Beta", "EUR"),
+            ],
+            holdings_by_account: HashMap::from([
+                (
+                    "acc-1".to_string(),
+                    vec![holding("system-cash-eur", 150_000_000)],
+                ),
+                (
+                    "acc-2".to_string(),
+                    vec![holding("system-cash-eur", 50_000_000)],
+                ),
+            ]),
+            snapshot: cash_snapshot(),
+            before_by_account: HashMap::from([
+                ("acc-1".to_string(), 100_000_000),
+                ("acc-2".to_string(), 200_000_000),
+            ]),
+            observed_from: None,
+            rate_missing_accounts: HashSet::new(),
+        };
+
+        let report = build_report(baseline, &HashMap::new(), &HashSet::new());
+
+        let amount_of = |id: &str| {
+            report
+                .rows
+                .iter()
+                .find(|row| row.account_id == id)
+                .unwrap()
+                .movement_amount
+        };
+        assert_eq!(amount_of("acc-1"), Some(50_000_000));
+        assert_eq!(amount_of("acc-2"), Some(-150_000_000));
+        assert_eq!(report.total_movement_amount, Some(-100_000_000));
+    }
+
+    // PMV-027 — the amount needs no positive earlier value: it is carried where
+    // PMV-025 withholds the proportion.
+    #[test]
+    fn movement_amount_is_carried_when_the_earlier_value_is_not_positive() {
+        let baseline = PriceMovementBaseline {
+            accounts: vec![account("acc-1", "Negative", "EUR")],
+            holdings_by_account: HashMap::from([("acc-1".to_string(), vec![])]),
+            snapshot: cash_snapshot(),
+            before_by_account: HashMap::from([("acc-1".to_string(), -100)]),
+            observed_from: None,
+            rate_missing_accounts: HashSet::new(),
+        };
+
+        let report = build_report(baseline, &HashMap::new(), &HashSet::new());
+
+        assert_eq!(report.rows[0].movement_pct, None);
+        assert_eq!(report.rows[0].movement_amount, Some(100));
+        assert_eq!(report.total_movement_amount, Some(100));
+    }
+
+    // PMV-031/045 — equal values carry no amount: an unmoved entry, and a total whose
+    // entries moved in opposite directions that cancel out.
+    #[test]
+    fn movement_amount_is_absent_for_an_unmoved_entry_and_an_unmoved_total() {
+        let baseline = PriceMovementBaseline {
+            accounts: vec![
+                account("acc-1", "Alpha", "EUR"),
+                account("acc-2", "Beta", "EUR"),
+                account("acc-3", "Gamma", "EUR"),
+            ],
+            holdings_by_account: HashMap::from([
+                (
+                    "acc-1".to_string(),
+                    vec![holding("system-cash-eur", 150_000_000)],
+                ),
+                (
+                    "acc-2".to_string(),
+                    vec![holding("system-cash-eur", 50_000_000)],
+                ),
+                (
+                    "acc-3".to_string(),
+                    vec![holding("system-cash-eur", 100_000_000)],
+                ),
+            ]),
+            snapshot: cash_snapshot(),
+            before_by_account: HashMap::from([
+                ("acc-1".to_string(), 100_000_000),
+                ("acc-2".to_string(), 100_000_000),
+                ("acc-3".to_string(), 100_000_000),
+            ]),
+            observed_from: None,
+            rate_missing_accounts: HashSet::new(),
+        };
+
+        let report = build_report(baseline, &HashMap::new(), &HashSet::new());
+
+        let amounts: Vec<Option<i64>> = report.rows.iter().map(|row| row.movement_amount).collect();
+        assert_eq!(amounts, vec![Some(50_000_000), Some(-50_000_000), None]);
+        assert_eq!(report.total_before, 300_000_000);
+        assert_eq!(report.total_after, 300_000_000);
+        assert_eq!(report.total_movement_amount, None);
     }
 
     // ── PMV-030 / PMV-033 / PMV-034 — population, order, currency ──────────

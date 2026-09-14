@@ -5,6 +5,7 @@ import {
   fetchPriceErrorToI18n,
   formatAccountRowTotalUnrealizedPnl,
   formatAccountRowYtdPerformancePct,
+  formatPriceMovementAmount,
   formatPriceMovementPct,
   formatPriceMovementValue,
   priceMovementDateLabel,
@@ -189,6 +190,25 @@ describe("formatPriceMovementPct", () => {
   it("follows the app display locale rather than a hardcoded one", () => {
     setDisplayLocale("en");
     expect(formatPriceMovementPct(20_000_000)).toBe("+20.00%");
+  });
+});
+
+// PMV-027/046 — formatPriceMovementAmount: a signed amount with its currency, "—"
+// when the backend reports no amount (unmoved PMV-031/045).
+describe("formatPriceMovementAmount", () => {
+  beforeEach(() => setDisplayLocale("fr"));
+  afterEach(() => setDisplayLocale("fr"));
+
+  it("returns '—' when the amount is null", () => {
+    expect(formatPriceMovementAmount(null, "EUR")).toBe("—");
+  });
+
+  it("formats a gain with a leading '+' sign and the currency", () => {
+    expect(formatPriceMovementAmount(857_500_000, "EUR")).toBe("+857,50 EUR");
+  });
+
+  it("formats a loss with a leading '-' sign and the currency", () => {
+    expect(formatPriceMovementAmount(-20_000_000, "USD")).toBe("-20,00 USD");
   });
 });
 

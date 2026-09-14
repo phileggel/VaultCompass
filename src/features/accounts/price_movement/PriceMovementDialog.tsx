@@ -3,6 +3,7 @@ import type { PriceMovementReport } from "@/bindings";
 import { Button } from "@/ui/components/button/Button";
 import { Dialog } from "@/ui/components/modal/Dialog";
 import {
+  formatPriceMovementAmount,
   formatPriceMovementPct,
   formatPriceMovementValue,
   priceMovementDateLabel,
@@ -15,17 +16,18 @@ interface PriceMovementDialogProps {
 }
 
 /**
- * PMV-024 — the project's financial polarity: gain and loss carry their own
- * intent tokens rather than overloading success/error (see `PnlCell`). A null
- * movement is neither, so it stays neutral.
+ * PMV-028 — the project's financial polarity for a signed movement, whether
+ * a percentage or an amount: gain and loss carry their own intent tokens rather
+ * than overloading success/error (see `PnlCell`). A null movement is neither, so
+ * it stays neutral.
  */
-function movementColour(microPercent: number | null): string {
-  if (microPercent === null || microPercent === 0) return "text-m3-on-surface-variant";
-  return microPercent > 0 ? "text-m3-gain" : "text-m3-loss";
+function movementColour(signedMovement: number | null): string {
+  if (signedMovement === null || signedMovement === 0) return "text-m3-on-surface-variant";
+  return signedMovement > 0 ? "text-m3-gain" : "text-m3-loss";
 }
 
 /**
- * PMV-013/017/030–034/043/050–052/060 — what the last Global refresh did to each
+ * PMV-013/017/027/028/030–034/043/046/050–052/060 — what the last Global refresh did to each
  * account's value, as a dialog the user reads once and closes.
  *
  * It waits for the unupdated-prices modal rather than stacking over it
@@ -85,7 +87,8 @@ export function PriceMovementReportBody({ report }: { report: PriceMovementRepor
                 <th className="py-2 text-right font-medium" colSpan={2}>
                   {dateLabel === null ? t("pmv.column_values") : t(dateLabel.key, dateLabel.vars)}
                 </th>
-                <th className="py-2 text-right font-medium">{t("pmv.column_change")}</th>
+                <th className="py-2 pl-4 text-right font-medium">{t("pmv.column_amount")}</th>
+                <th className="py-2 pl-4 text-right font-medium">{t("pmv.column_change")}</th>
               </tr>
             </thead>
             <tbody>
@@ -106,11 +109,16 @@ export function PriceMovementReportBody({ report }: { report: PriceMovementRepor
                   <td className="py-2.5 text-right tabular-nums text-m3-on-surface-variant">
                     {`${formatPriceMovementValue(row.before)} ${row.currency}`}
                   </td>
-                  <td className="py-2.5 text-right font-medium tabular-nums text-m3-on-surface">
+                  <td className="py-2.5 pl-4 text-right font-medium tabular-nums text-m3-on-surface">
                     {`${formatPriceMovementValue(row.after)} ${row.currency}`}
                   </td>
                   <td
-                    className={`py-2.5 text-right font-medium tabular-nums ${movementColour(row.movement_pct)}`}
+                    className={`py-2.5 pl-4 text-right font-medium tabular-nums ${movementColour(row.movement_amount)}`}
+                  >
+                    {formatPriceMovementAmount(row.movement_amount, row.currency)}
+                  </td>
+                  <td
+                    className={`py-2.5 pl-4 text-right font-medium tabular-nums ${movementColour(row.movement_pct)}`}
                   >
                     {formatPriceMovementPct(row.movement_pct)}
                   </td>
@@ -128,11 +136,16 @@ export function PriceMovementReportBody({ report }: { report: PriceMovementRepor
                 <td className="py-2.5 text-right tabular-nums text-m3-on-surface-variant">
                   {`${formatPriceMovementValue(report.total_before)} ${report.total_currency}`}
                 </td>
-                <td className="py-2.5 text-right font-semibold tabular-nums text-m3-on-surface">
+                <td className="py-2.5 pl-4 text-right font-semibold tabular-nums text-m3-on-surface">
                   {`${formatPriceMovementValue(report.total_after)} ${report.total_currency}`}
                 </td>
                 <td
-                  className={`py-2.5 text-right font-semibold tabular-nums ${movementColour(report.total_movement_pct)}`}
+                  className={`py-2.5 pl-4 text-right font-semibold tabular-nums ${movementColour(report.total_movement_amount)}`}
+                >
+                  {formatPriceMovementAmount(report.total_movement_amount, report.total_currency)}
+                </td>
+                <td
+                  className={`py-2.5 pl-4 text-right font-semibold tabular-nums ${movementColour(report.total_movement_pct)}`}
                 >
                   {formatPriceMovementPct(report.total_movement_pct)}
                 </td>

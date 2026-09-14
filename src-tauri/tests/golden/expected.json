@@ -950,6 +950,7 @@
         "before": 7898737960,
         "currency": "USD",
         "incomplete": false,
+        "movement_amount": -148604200,
         "movement_pct": -1881366,
         "name": "Growth USD"
       },
@@ -958,6 +959,7 @@
         "before": 24136700000,
         "currency": "EUR",
         "incomplete": false,
+        "movement_amount": 133200000,
         "movement_pct": 551856,
         "name": "Main EUR"
       }
@@ -965,6 +967,7 @@
     "total_after": 31477524396,
     "total_before": 31482526302,
     "total_currency": "EUR",
+    "total_movement_amount": -5001906,
     "total_movement_pct": -15887
   }
 }

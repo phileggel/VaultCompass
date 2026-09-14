@@ -16,16 +16,17 @@ This is a **feature spec** spanning the `account`, `asset` and `currency` bounde
 
 The outcome of one Global refresh, expressed as what the fetch did to the portfolio's value. It is produced when the fetch finishes, presented once, and discarded — nothing about it is persisted. It is a transient value object, like `AssetLookupResult`.
 
-| Field                | Business meaning                                                                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `rows`               | One entry per account, in the report's own order (PMV-033).                                                                                                              |
-| `total_before`       | The portfolio's value before the fetch, in the reference currency.                                                                                                       |
-| `total_after`        | The portfolio's value after the fetch, in the reference currency.                                                                                                        |
-| `total_currency`     | The reference currency both totals are expressed in.                                                                                                                     |
-| `total_movement_pct` | The portfolio's movement as a proportion of `total_before`; absent when undefined (PMV-044).                                                                             |
-| `observed_from`      | The observation date the portfolio carried before this fetch; absent when nothing was priced before (PMV-052).                                                           |
-| `observed_to`        | The observation date this fetch produced; absent only when it produced none later than `observed_from` — carried even when `observed_from` is absent (PMV-051, PMV-052). |
-| `incomplete`         | Whether any entry's reading is incomplete (PMV-043).                                                                                                                     |
+| Field                   | Business meaning                                                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `rows`                  | One entry per account, in the report's own order (PMV-033).                                                                                                              |
+| `total_before`          | The portfolio's value before the fetch, in the reference currency.                                                                                                       |
+| `total_after`           | The portfolio's value after the fetch, in the reference currency.                                                                                                        |
+| `total_currency`        | The cross-account reference currency the totals and the portfolio movement amount are expressed in.                                                                      |
+| `total_movement_pct`    | The portfolio's movement as a proportion of `total_before`; absent when undefined or unmoved (PMV-044, PMV-045).                                                         |
+| `total_movement_amount` | The portfolio's movement as an amount in the cross-account reference currency, `total_after` minus `total_before`; absent when unmoved (PMV-045, PMV-046).               |
+| `observed_from`         | The observation date the portfolio carried before this fetch; absent when nothing was priced before (PMV-052).                                                           |
+| `observed_to`           | The observation date this fetch produced; absent only when it produced none later than `observed_from` — carried even when `observed_from` is absent (PMV-051, PMV-052). |
+| `incomplete`            | Whether any entry's reading is incomplete (PMV-043).                                                                                                                     |
 
 > Asset counts are not carried here — the completion signal's own updated / skipped counts (MKT-119) already state them for the same scope.
 
@@ -33,15 +34,16 @@ The outcome of one Global refresh, expressed as what the fetch did to the portfo
 
 One account's share of the report.
 
-| Field          | Business meaning                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| `account_id`   | Which account this entry describes.                                                              |
-| `name`         | The account's display name.                                                                      |
-| `currency`     | The account's own currency — the currency both of this entry's values are expressed in.          |
-| `before`       | The account's value before the fetch.                                                            |
-| `after`        | The account's value after the fetch.                                                             |
-| `movement_pct` | The movement as a proportion of `before`; absent when undefined or unmoved (PMV-025, PMV-031).   |
-| `incomplete`   | Whether at least one of the account's holdings could not be read at its current price (PMV-032). |
+| Field             | Business meaning                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `account_id`      | Which account this entry describes.                                                                                  |
+| `name`            | The account's display name.                                                                                          |
+| `currency`        | The account's own currency — the currency this entry's values and amount are expressed in.                           |
+| `before`          | The account's value before the fetch.                                                                                |
+| `after`           | The account's value after the fetch.                                                                                 |
+| `movement_pct`    | The movement as a proportion of `before`; absent when undefined or unmoved (PMV-025, PMV-031).                       |
+| `movement_amount` | The movement as an amount in the account's currency, `after` minus `before`; absent when unmoved (PMV-027, PMV-031). |
+| `incomplete`      | Whether at least one of the account's holdings could not be read at its current price (PMV-032).                     |
 
 ---
 
@@ -81,21 +83,25 @@ One account's share of the report.
 
 **PMV-024 — Movement is expressed as a proportion of the earlier value (frontend + backend)**: An entry's movement is the change from its earlier value to its later value, relative to the earlier value. The application decides whether a proportion exists; the presentation only renders it.
 
-**PMV-025 — Movement is undefined without a positive earlier value (backend)**: When an account's earlier value is zero or negative, no proportion is reported for it; its two values are still shown.
+**PMV-025 — The proportion is undefined without a positive earlier value (backend)**: When an account's earlier value is zero or negative, no proportion is reported for it; its two values are still shown.
 
 **PMV-026 — Only this refresh's prices are compared (backend)**: A price written while the refresh runs by anything other than this refresh — a Scheduled fetch, which may run concurrently (SPF-023), a manual entry, or another device's changes arriving through sync — is excluded from the later reading. The report describes what this refresh did, never what merely happened during it.
+
+**PMV-027 — An entry's movement is also stated as an amount (frontend + backend)**: An entry's movement is also reported as the amount its value changed: the later value minus the earlier value, signed, in the account's own currency (PMV-034). The amount needs no positive earlier value, so it is reported even where PMV-025 withholds the proportion. The application computes the amount; the presentation only renders it.
+
+**PMV-028 — A movement is presented as a gain or a loss by its sign (frontend)**: Every movement figure the report carries, an entry's or the total's, amount or proportion, is presented as a gain when positive and as a loss when negative. A figure the report does not carry, or that is zero, is presented as neither.
 
 ### Per-account entries (030–039)
 
 **PMV-030 — Every account is listed (backend)**: The report carries one entry per account, including accounts whose value did not move and accounts holding no priced asset. The user can therefore tell "did not move" apart from "was not looked at".
 
-**PMV-031 — An unmoved account carries no proportion (frontend + backend)**: When an account's two values are equal, no proportion is reported for it, and the entry is presented without a movement figure rather than as a zero movement. Both values are still carried, so an unmoved entry stays distinguishable from one whose movement is undefined (PMV-025).
+**PMV-031 — An unmoved account carries no movement figure (frontend + backend)**: When an account's two values are equal, neither a proportion nor an amount is reported for it, and the entry is presented without movement figures rather than as a zero movement. Both values are still carried, so an unmoved entry stays distinguishable from one whose proportion is undefined (PMV-025).
 
 **PMV-032 — An incomplete reading is marked (frontend + backend)**: An entry is marked incomplete when at least one of the account's holdings could not be read at its current price _although it was meant to be_. Two conditions do so, and whether the holding has ever had a price recorded never changes the answer: the fetch attempted the holding and could not price it (the full skip set of MKT-171, which includes a holding whose ticker cannot be resolved), or the holding contributes zero to both readings because no usable rate exists (FXR-034). Two conditions do not, because in each the holding was never going to move and the user knows it: a system cash holding, which the fetch never has in scope (MKT-116), and a holding whose automatic refresh the user locked, whose stale price is the point of the lock (MKT-151, MKT-158) — flagging it would raise a marker on every refresh for as long as the lock stands, teaching the user to ignore the one marker that matters. An incomplete entry's movement understates what the prices actually did.
 
 **PMV-033 — Entries are ordered by account name (backend)**: The report lists accounts by name in ascending order — the accounts list's own default (ACC-007) — rather than following the user's current table sort, so the report reads the same way every time.
 
-**PMV-034 — Each entry is expressed in its account's own currency (frontend + backend)**: An entry's two values are stated in the currency of the account they describe, never converted.
+**PMV-034 — Each entry is expressed in its account's own currency (frontend + backend)**: An entry's values and its movement amount are stated in the currency of the account they describe, never converted.
 
 ### Portfolio total (040–049)
 
@@ -107,9 +113,11 @@ One account's share of the report.
 
 **PMV-043 — An incomplete total is marked (frontend + backend)**: When any entry's reading is incomplete (PMV-032), the portfolio total is marked incomplete too.
 
-**PMV-044 — The portfolio movement is undefined without a positive earlier total (backend)**: When the earlier total is zero or negative — an empty portfolio, or every account unconvertible — no portfolio proportion is reported; both totals are still shown. This mirrors PMV-025 at portfolio level.
+**PMV-044 — The portfolio proportion is undefined without a positive earlier total (backend)**: When the earlier total is zero or negative — an empty portfolio, or every account unconvertible — no portfolio proportion is reported; both totals are still shown. This mirrors PMV-025 at portfolio level.
 
-**PMV-045 — An unmoved portfolio total carries no proportion (backend)**: When the two totals are equal, no portfolio proportion is reported, even though individual accounts may have moved in opposite directions that cancel out. This mirrors PMV-031 at portfolio level; the per-account entries still carry their own movements.
+**PMV-045 — An unmoved portfolio total carries no movement figure (frontend + backend)**: When the two totals are equal, neither a portfolio proportion nor a portfolio amount is reported, even though individual accounts may have moved in opposite directions that cancel out, and the total is presented without movement figures rather than as a zero movement. This mirrors PMV-031 at portfolio level; the per-account entries still carry their own movements.
+
+**PMV-046 — The portfolio movement is also stated as an amount (frontend + backend)**: The portfolio total also carries its movement as an amount: the later total minus the earlier total, signed, in the cross-account reference currency, taken from the two totals like the proportion (PMV-041). It needs no positive earlier total, so it is reported even where PMV-044 withholds the portfolio proportion. The application computes the amount; the presentation only renders it.
 
 ### Observation dates (050–059)
 
@@ -162,12 +170,12 @@ None of its own. The report appears on the accounts list when a Global refresh t
 
 ### Main Component
 
-A dialog on the accounts list, closed by the user and never shown again. A table of accounts — name, earlier value, later value, movement — closed by a portfolio total row. The two observation dates label the two value columns, so the comparison reads as "9 Sep → 11 Sep" without repeating the dates on every entry.
+A dialog on the accounts list, closed by the user and never shown again. A table of accounts — name, earlier value, later value, movement amount, proportion — closed by a portfolio total row. The two observation dates label the two value columns, so the comparison reads as "9 Sep → 11 Sep" without repeating the dates on every entry.
 
 ### States
 
 - **Nothing moved**: no table; a plain statement that no account's value changed, and — when any entry is incomplete — that some holdings could not be read at their current price (PMV-060).
-- **Moved**: the table, with unmoved accounts present but showing no movement figure.
+- **Moved**: the table, with unmoved accounts present but showing no movement figure, and an account without a positive earlier value showing its movement amount but no proportion.
 - **Partially complete**: the table, with the affected entries and the total marked as incomplete. No count of its own (PMV-060); the fetch's own skipped count reaches the user through the existing completion feedback (MKT-119/145).
 - **Undated**: the table without date labels on the value columns (PMV-052).
 - **Error**: no state of its own — a failure to produce the report leaves the pre-existing completion feedback in place (PMV-014).
