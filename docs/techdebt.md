@@ -250,4 +250,5 @@ Remove an entry once it has been resolved.
 - Severity: 🔵
 - Observation: the lifecycle stops at `merged, unreleased`: a release writes the changelog but neither flips nor removes the entries it shipped, and no rule says when a plan is deleted, so finished entries and plans pile up in the files read to pick the next piece of work. Plans deleted by hand in the past left E2E headers pointing at files that no longer exist.
 - User value: None — the backlog and the plan folder show only work still to do.
-- Done when: shipped entries and their plan files leave the repository at a defined moment written in `docs/workflow-c.md` (the release, or its closure), no file points at a deleted plan, and `.claude/RESUME.md` is gone.
+- Decision (human, 2026-09-14): a todo entry is removed when its branch merges, not at release; the git history and the changelog keep the trail.
+- Done when: the closure commit of the merging pull request removes the entry, and the closure of a plan's last pull request deletes the plan; `docs/workflow-c.md` § 2–3 and `/next-todo` Step 9 say so, with the `merged, unreleased` / `Shipped in` flip gone; #003, #004, #006 and the four shipped plans are removed; no file points at a deleted plan; `.claude/RESUME.md` is gone.
