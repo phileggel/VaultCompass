@@ -332,29 +332,24 @@ pub(crate) fn year_periods(earliest_date: NaiveDate, today: NaiveDate) -> Vec<Ye
 /// the first transaction through the current month, oldest first. `build_monthly`
 /// and `period_end_dates` both derive their dates from this so they cannot drift.
 pub(crate) fn month_periods(earliest_date: NaiveDate, today: NaiveDate) -> Vec<MonthPeriod> {
-    let (mut year, mut month) = (earliest_date.year(), earliest_date.month());
-    let mut periods = Vec::new();
-    loop {
-        let last_day = last_day_of_month(year, month);
-        periods.push(MonthPeriod {
-            year,
-            month,
-            period_start: first_day_of_month(year, month),
-            period_end: if last_day > today { today } else { last_day },
-            year_start: first_day_of_year(year),
-            year_start_baseline: last_day_of_year(year - 1),
-        });
-        if year == today.year() && month == today.month() {
-            break;
-        }
-        if month == 12 {
-            year += 1;
-            month = 1;
-        } else {
-            month += 1;
-        }
-    }
-    periods
+    // A bounded range of month indices: a first date after today yields no
+    // period, and no arithmetic slip can turn the walk into an endless loop.
+    let first_month = earliest_date.year() * 12 + earliest_date.month0() as i32;
+    let last_month = today.year() * 12 + today.month0() as i32;
+    (first_month..=last_month)
+        .map(|index| {
+            let (year, month) = (index.div_euclid(12), index.rem_euclid(12) as u32 + 1);
+            let last_day = last_day_of_month(year, month);
+            MonthPeriod {
+                year,
+                month,
+                period_start: first_day_of_month(year, month),
+                period_end: if last_day > today { today } else { last_day },
+                year_start: first_day_of_year(year),
+                year_start_baseline: last_day_of_year(year - 1),
+            }
+        })
+        .collect()
 }
 
 /// Enumerates every period-end date the valuation loop visits, collected from the
@@ -1064,6 +1059,41 @@ mod tests {
                 period.period_end
             );
         }
+    }
+
+    // The month walk is a bounded range: a first date in a month after today's
+    // yields no period at all, and the span from the first month to today's is
+    // exact, ending on today.
+    #[test]
+    fn month_periods_are_a_bounded_range_ending_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 9, 14).expect("valid date");
+        let next_month = NaiveDate::from_ymd_opt(2026, 10, 1).expect("valid date");
+        assert!(month_periods(next_month, today).is_empty());
+
+        let earliest = NaiveDate::from_ymd_opt(2025, 11, 20).expect("valid date");
+        let periods = month_periods(earliest, today);
+        let months: Vec<(i32, u32)> = periods.iter().map(|p| (p.year, p.month)).collect();
+        assert_eq!(
+            months,
+            vec![
+                (2025, 11),
+                (2025, 12),
+                (2026, 1),
+                (2026, 2),
+                (2026, 3),
+                (2026, 4),
+                (2026, 5),
+                (2026, 6),
+                (2026, 7),
+                (2026, 8),
+                (2026, 9),
+            ]
+        );
+        assert_eq!(
+            periods[0].period_start,
+            NaiveDate::from_ymd_opt(2025, 11, 1).expect("valid date")
+        );
+        assert_eq!(periods.last().map(|p| p.period_end), Some(today));
     }
 
     // PRF-032 — a negative Dietz denominator (weighted outflows exceeding the
