@@ -153,7 +153,11 @@ jobs:
               echo '```'
             fi
           } > body.md
-          number=$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --jq --arg t "$TITLE" '.[] | select(.title == $t and (.pull_request | not)) | .number' | head -1)
+          # gh's --jq takes no --arg, so the title goes to a real jq as data;
+          # `[...][0]` picks the first match inside jq, where a `| head` would
+          # close the pipe under pipefail.
+          number=$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" \
+            | jq -r --arg t "$TITLE" '[.[] | select(.title == $t and (.pull_request | not)) | .number][0] // empty')
           if [[ -n "$number" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/${number}" -F body=@body.md --jq '.html_url'
           else
