@@ -7,7 +7,7 @@ during work that don't warrant immediate action. Format produced by the
 Entries are observations, not commitments, and this file is the agent's: it
 files here what it notices and what it did not fix. Each entry carries a
 permanent `TD-NNN` reference (never renumbered, never reused; next free:
-TD-025) so the human can queue it in `docs/todo.md` § Next like any todo.
+TD-027) so the human can queue it in `docs/todo.md` § Next like any todo.
 Remove an entry once it has been resolved.
 
 ---
@@ -261,3 +261,23 @@ Remove an entry once it has been resolved.
 - Observation: the holdings tables pin Actions and Asset with sticky positioning inside the view's content area, but jsdom has no layout, so the Vitest tests can only assert the classes; the behaviour itself — pinned cells and the header staying put while columns scroll, row backgrounds spanning the table — was measured once in a browser and is not re-checked by any suite, so a wrapper change that breaks the scroll set-up would pass the harness.
 - User value: None — a harness that notices when the pinned columns stop holding.
 - Done when: an E2E scenario scrolls the account view's content area sideways on a window narrower than the holdings table (precondition: it overflows) and asserts that a holding's action button stays in place while a plain column moves, and that the header stays at the top after scrolling down.
+
+## 2026-09-14 — TD-025 — "Reference currency" names two different things in the vocabulary
+
+- Found by: spec-reviewer (ACC-027–033 review on #007)
+- Where: `docs/ubiquitous-language.md` (Cash Holding, Dividends received, Management fees — "the account's reference currency"), `docs/spec/global-performance.md` GPF-011 and the ACC / PMV totals ("the reference currency", EUR); the same table is also "Accounts table" (ACC-021/023/026), "accounts list" (PMV-013/016, SYN-040) and "account table" (ACC-008/030–033)
+- Context: branch `c/007-accounts-total-row`
+- Severity: 🔵
+- Observation: the vocabulary uses "the account's reference currency" for an account's own currency, while GPF-011, the price movement total and the accounts-list portfolio total use "the reference currency" for the fixed EUR every cross-account figure is reported in; the two meanings share one phrase, and neither "cross-account reference currency" nor "portfolio total" has an entry of its own.
+- User value: None — one word per concept in the specs and the code.
+- Done when: the vocabulary names the account's own currency and the cross-account reference currency with distinct, confirmed terms, and has a confirmed "portfolio total" entry, each validated by the human.
+
+## 2026-09-14 — TD-026 — Nothing follows an account currency's rate to the reference currency
+
+- Found by: spec-reviewer (ACC-027/028 second pass on #007)
+- Where: `docs/spec/fx-rate.md` FXR-013 / FXR-071 (only asset → account pairs are followed), `docs/spec/global-performance.md` GPF-020, `docs/spec/account.md` ACC-027/028, `src-tauri/src/use_cases/account_summary/orchestrator.rs` (portfolio total)
+- Context: branch `c/007-accounts-total-row`
+- Severity: 🟡
+- Observation: rates are fetched and followed for the pairs an asset needs to reach its account's currency, but no rule follows the pair from an account's currency to the cross-account reference currency; a USD account holding only USD assets therefore never gets a USD → EUR rate unless the user declares the pair, and the accounts-list portfolio total stays marked partial for it (the global performance view has the same dependency).
+- User value: the portfolio total and the global performance figures count every account without the user having to declare a pair first.
+- Done when: an account whose currency differs from the reference currency has its pair followed like an asset pair (or the application asks the user to declare it), stated as an FXR rule, and a USD-only account with a fetched rate no longer leaves the total incomplete.

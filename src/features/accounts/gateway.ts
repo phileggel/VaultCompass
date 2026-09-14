@@ -2,7 +2,7 @@ import {
   type Account,
   type AccountDeletionSummary,
   type AccountError,
-  type AccountSummary,
+  type AccountSummaries,
   type CreateAccountDTO,
   commands,
   type Event,
@@ -22,7 +22,7 @@ export const accountGateway = {
     return await commands.getAccounts();
   },
 
-  async getAccountSummaries(): Promise<Result<AccountSummary[], AccountError>> {
+  async getAccountSummaries(): Promise<Result<AccountSummaries, AccountError>> {
     return await commands.getAccountSummaries();
   },
 

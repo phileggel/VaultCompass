@@ -725,9 +725,10 @@ async getAccountDetails(accountId: string, asOfDate: string | null) : Promise<Re
 }
 },
 /**
- * Returns one `AccountSummary` per non-deleted account (ACC-021).
+ * Returns one `AccountSummary` per non-deleted account and their portfolio total
+ * in the reference currency (ACC-021, ACC-027).
  */
-async getAccountSummaries() : Promise<Result<AccountSummary[], AccountError>> {
+async getAccountSummaries() : Promise<Result<AccountSummaries, AccountError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_account_summaries") };
 } catch (e) {
@@ -1261,6 +1262,19 @@ yearly: PerformancePeriod[];
  * Empty when month_view_available is false (PRF-013, PRF-015).
  */
 monthly: PerformancePeriod[] }
+/**
+ * Response of `get_account_summaries` (ACC-021, ACC-027): the rows and their
+ * portfolio total, read together so the list and its total never disagree.
+ */
+export type AccountSummaries = { 
+/**
+ * One row per non-deleted account.
+ */
+summaries: AccountSummary[]; 
+/**
+ * The portfolio total over those rows.
+ */
+total: PortfolioTotal }
 /**
  * Row returned by `get_account_summaries` (ACC-021). Pairs each `Account` with its
  * computed `total_global_value` so the Accounts list can render the value column
@@ -3118,6 +3132,30 @@ export type PortfolioSyncTask =
  */
 { code: "UnknownError" }
 /**
+ * ACC-027/028 — the portfolio total over every account, in the reference currency.
+ */
+export type PortfolioTotal = { 
+/**
+ * Σ every account's Global Value, converted at the read date's rate, in
+ * reference-currency micros (ADR-001).
+ */
+total_global_value: number; 
+/**
+ * Σ every account's Unrealized P&L, converted the same way; `None` when no
+ * account carries one.
+ */
+total_unrealized_pnl: number | null; 
+/**
+ * The reference currency both figures are expressed in (GPF-011).
+ */
+currency: string; 
+/**
+ * An account whose currency has no usable rate to the reference currency
+ * (FXR-034) held a non-zero Global Value or Unrealized P&L, which the total
+ * therefore leaves out (ACC-028).
+ */
+incomplete: boolean }
+/**
  * PMV-020+ — what a manual Global refresh did to the portfolio's value. Both
  * readings are computed over the same holdings, quantities and rates, so
  * only prices differ between them (PMV-020). Both readings use the rates in
@@ -3149,7 +3187,8 @@ total_currency: string;
 total_movement_pct: number | null; 
 /**
  * Signed movement in reference-currency micros, `total_after - total_before`
- * (PMV-027); absent when the two totals are equal.
+ * (PMV-046); absent when the two totals are equal (PMV-045), present even when
+ * `total_before` is not positive (PMV-044).
  */
 total_movement_amount: number | null; 
 /**

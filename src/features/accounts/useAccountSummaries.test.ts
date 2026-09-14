@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountSummary } from "@/bindings";
+import type { AccountSummary, PortfolioTotal } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useAccountSummaries } from "./useAccountSummaries";
 
@@ -41,12 +41,20 @@ describe("useAccountSummaries", () => {
   // ACC-021 — happy path: gateway returns list → summaries state populated, isLoading cleared
   it("populates summaries from gateway result on mount", async () => {
     const summaries = [makeSummary(), makeSummary({ id: "acc-2", name: "Side" })];
-    mockGetAccountSummaries.mockResolvedValue({ status: "ok", data: summaries });
+    const total: PortfolioTotal = {
+      total_global_value: 200_000_000,
+      total_unrealized_pnl: null,
+      currency: "EUR",
+      incomplete: false,
+    };
+    mockGetAccountSummaries.mockResolvedValue({ status: "ok", data: { summaries, total } });
 
     const { result } = renderHook(() => useAccountSummaries());
     await act(async () => {});
 
     expect(result.current.summaries).toEqual(summaries);
+    // ACC-027 — the backend's portfolio total is exposed as given, never recomputed.
+    expect(result.current.portfolioTotal).toEqual(total);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBeNull();
   });
@@ -64,6 +72,7 @@ describe("useAccountSummaries", () => {
     expect(result.current.error).toEqual({ key: "error.DatabaseError" });
     expect(result.current.isLoading).toBe(false);
     expect(result.current.summaries).toEqual([]);
+    expect(result.current.portfolioTotal).toBeNull();
   });
 
   // Throw path — gateway rejection falls back to UNKNOWN_ERROR
@@ -87,7 +96,18 @@ describe("useAccountSummaries", () => {
       capturedCallback = cb;
       return Promise.resolve(() => {});
     });
-    mockGetAccountSummaries.mockResolvedValue({ status: "ok", data: [] });
+    mockGetAccountSummaries.mockResolvedValue({
+      status: "ok",
+      data: {
+        summaries: [],
+        total: {
+          total_global_value: 0,
+          total_unrealized_pnl: null,
+          currency: "EUR",
+          incomplete: false,
+        },
+      },
+    });
 
     renderHook(() => useAccountSummaries());
     await act(async () => {});
@@ -100,6 +120,40 @@ describe("useAccountSummaries", () => {
     expect(mockGetAccountSummaries.mock.calls.length).toBeGreaterThan(beforeCount);
   });
 
+  // ACC-033 — a rate or pair change moves the converted values and the total.
+  it.each([
+    "CurrencyRateUpdated",
+    "CurrencyPairUpdated",
+  ])("re-fetches summaries when %s arrives", async (eventType) => {
+    let capturedCallback: ((type: string) => void) | null = null;
+    mockSubscribeToEvents.mockImplementation((cb: (type: string) => void) => {
+      capturedCallback = cb;
+      return Promise.resolve(() => {});
+    });
+    mockGetAccountSummaries.mockResolvedValue({
+      status: "ok",
+      data: {
+        summaries: [],
+        total: {
+          total_global_value: 0,
+          total_unrealized_pnl: null,
+          currency: "EUR",
+          incomplete: false,
+        },
+      },
+    });
+
+    renderHook(() => useAccountSummaries());
+    await act(async () => {});
+    const beforeCount = mockGetAccountSummaries.mock.calls.length;
+
+    await act(async () => {
+      capturedCallback?.(eventType);
+    });
+
+    expect(mockGetAccountSummaries.mock.calls.length).toBeGreaterThan(beforeCount);
+  });
+
   // Unrelated events do NOT trigger a re-fetch (cheap noise filter)
   it("ignores unrelated event types", async () => {
     let capturedCallback: ((type: string) => void) | null = null;
@@ -107,7 +161,18 @@ describe("useAccountSummaries", () => {
       capturedCallback = cb;
       return Promise.resolve(() => {});
     });
-    mockGetAccountSummaries.mockResolvedValue({ status: "ok", data: [] });
+    mockGetAccountSummaries.mockResolvedValue({
+      status: "ok",
+      data: {
+        summaries: [],
+        total: {
+          total_global_value: 0,
+          total_unrealized_pnl: null,
+          currency: "EUR",
+          incomplete: false,
+        },
+      },
+    });
 
     renderHook(() => useAccountSummaries());
     await act(async () => {});
@@ -133,7 +198,18 @@ describe("useAccountSummaries — bulk-fetch coalescing (MKT-181)", () => {
       capturedCallback = cb;
       return Promise.resolve(() => {});
     });
-    mockGetAccountSummaries.mockResolvedValue({ status: "ok", data: [makeSummary()] });
+    mockGetAccountSummaries.mockResolvedValue({
+      status: "ok",
+      data: {
+        summaries: [makeSummary()],
+        total: {
+          total_global_value: 0,
+          total_unrealized_pnl: null,
+          currency: "EUR",
+          incomplete: false,
+        },
+      },
+    });
 
     useAppStore.setState({ priceFetch: { active: true, done: 1, total: 3 } });
     renderHook(() => useAccountSummaries());

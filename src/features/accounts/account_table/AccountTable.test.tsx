@@ -1,7 +1,8 @@
 import { configure, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Account, AccountSummary } from "@/bindings";
+import type { Account, AccountSummary, PortfolioTotal } from "@/bindings";
 import { useAppStore } from "@/lib/store";
+import { formatAccountRowTotalUnrealizedPnl } from "../shared/presenter";
 import { AccountTable } from "./AccountTable";
 
 // New metric cells use stable `id` attributes (F25, consistent with the existing
@@ -21,10 +22,12 @@ const mockSummaries = vi.fn<() => AccountSummary[]>();
 const mockIsLoading = vi.fn<() => boolean>(() => false);
 const mockError = vi.fn<() => unknown>(() => null);
 const mockRefetch = vi.fn();
+const mockTotal = vi.fn<() => PortfolioTotal | null>(() => null);
 
 vi.mock("../useAccountSummaries", () => ({
   useAccountSummaries: () => ({
     summaries: mockSummaries(),
+    portfolioTotal: mockTotal(),
     isLoading: mockIsLoading(),
     error: mockError(),
     refetch: mockRefetch,
@@ -293,5 +296,90 @@ describe("AccountTable — YTD Performance column (ACC-024)", () => {
 
     fireEvent.click(screen.getByText("account.column_ytd_performance"));
     expect(header.getAttribute("aria-sort")).toBe("descending");
+  });
+});
+
+const makeTotal = (overrides: Partial<PortfolioTotal> = {}): PortfolioTotal => ({
+  total_global_value: 109_510_400_000,
+  total_unrealized_pnl: 4_857_600_000,
+  currency: "EUR",
+  incomplete: false,
+  ...overrides,
+});
+
+describe("AccountTable — portfolio total row (ACC-027–032)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsLoading.mockReturnValue(false);
+    mockError.mockReturnValue(null);
+    mockSummaries.mockReturnValue([makeSummary()]);
+    mockTotal.mockReturnValue(makeTotal());
+  });
+
+  it("closes the list with the portfolio total in the reference currency, YTD left blank", () => {
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    const total = screen.getByTestId("account-portfolio-total");
+    expect(within(total).getByText("account.total")).toBeInTheDocument();
+    const value = screen.getByTestId("account-portfolio-total-value");
+    expect(value).toHaveTextContent("109,510.40");
+    expect(value).toHaveTextContent("EUR");
+    expect(screen.getByTestId("account-portfolio-total-unrealized-pnl")).toHaveTextContent(
+      formatAccountRowTotalUnrealizedPnl(4_857_600_000),
+    );
+    expect(within(total).queryByText(/%/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("account-portfolio-total-incomplete")).not.toBeInTheDocument();
+  });
+
+  it("marks the total incomplete when an unconvertible account hides a figure", () => {
+    mockTotal.mockReturnValue(makeTotal({ incomplete: true }));
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+
+    expect(screen.getByTestId("account-portfolio-total-incomplete")).toHaveTextContent(
+      "account.total_incomplete",
+    );
+  });
+
+  it("hides the total row while a search filter is active", () => {
+    render(<AccountTable searchTerm="Main" onAccountClick={vi.fn()} />);
+
+    expect(screen.getByTestId("account-row-acc-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("account-portfolio-total")).not.toBeInTheDocument();
+  });
+
+  it("renders no total row while loading, on a load error, or without accounts", () => {
+    mockIsLoading.mockReturnValue(true);
+    const loading = render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.queryByTestId("account-portfolio-total")).not.toBeInTheDocument();
+    loading.unmount();
+
+    mockIsLoading.mockReturnValue(false);
+    mockError.mockReturnValue({ key: "error.Unknown" });
+    const failed = render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.queryByTestId("account-portfolio-total")).not.toBeInTheDocument();
+    failed.unmount();
+
+    mockError.mockReturnValue(null);
+    mockSummaries.mockReturnValue([]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    expect(screen.queryByTestId("account-portfolio-total")).not.toBeInTheDocument();
+  });
+
+  it("keeps the total row below the accounts, outside the sortable rows", () => {
+    mockSummaries.mockReturnValue([
+      makeSummary({ id: "a", name: "Big", total_global_value: 9_000_000_000 }),
+      makeSummary({ id: "b", name: "Small", total_global_value: 1_000_000 }),
+    ]);
+    render(<AccountTable searchTerm="" onAccountClick={vi.fn()} />);
+    const valueHeader = () => screen.getByText("account.column_global_value");
+    // ACC-031 — last in both sort directions, and never a focusable account row.
+    for (const direction of ["ascending", "descending"]) {
+      fireEvent.click(valueHeader());
+      expect(valueHeader().closest("th")?.getAttribute("aria-sort")).toBe(direction);
+      const total = screen.getByTestId("account-portfolio-total");
+      expect(total.closest("tfoot")).not.toBeNull();
+      expect(total.closest("tbody")).toBeNull();
+      expect(total).not.toHaveAttribute("tabindex");
+    }
   });
 });

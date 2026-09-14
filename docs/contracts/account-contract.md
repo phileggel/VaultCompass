@@ -35,9 +35,9 @@
 > `get_account_summaries` is implemented in `use_cases/account_summary/` — it reads from both the
 > account and asset BCs (price lookups for each account's holdings) but mutates neither.
 
-| Command                 | Args | Return                | Errors                                                                              |
-| ----------------------- | ---- | --------------------- | ----------------------------------------------------------------------------------- |
-| `get_account_summaries` | —    | `Vec<AccountSummary>` | `DatabaseError`; price lookup failures silently contribute 0 to the value (MKT-031) |
+| Command                 | Args | Return             | Errors                                                                              |
+| ----------------------- | ---- | ------------------ | ----------------------------------------------------------------------------------- |
+| `get_account_summaries` | —    | `AccountSummaries` | `DatabaseError`; price lookup failures silently contribute 0 to the value (MKT-031) |
 
 ### Account Performance
 
@@ -369,6 +369,20 @@ struct AccountSummary {
     ytd_performance_pct: Option<i64>,          // micro-percent: year-to-date net-of-flows performance since Jan 1, reusing PRF-034 (ACC-024); first-year accounts use an inception baseline (present, not None); None only when the Simple-Dietz denominator is 0 (PRF-032)
     has_inconsistent_holding: bool,            // derived on read; true when any holding of the account carries an inconsistency (SYN-040, CFR-042)
 }
+
+// Response of get_account_summaries (ACC-021, ACC-027)
+struct AccountSummaries {
+    summaries: Vec<AccountSummary>,
+    total: PortfolioTotal,
+}
+
+// Portfolio total over every account (ACC-027/028/029)
+struct PortfolioTotal {
+    total_global_value: i64,                   // micros, reference currency: Σ account Global Value converted at the read date's rate
+    total_unrealized_pnl: Option<i64>,         // micros, reference currency: Σ account Unrealized P&L converted; None when no convertible account carries one (ACC-029)
+    currency: String,                          // the reference currency (GPF-011)
+    incomplete: bool,                          // an account with no usable rate to the reference currency (FXR-034) held a non-zero Global Value or Unrealized P&L, which the total leaves out (ACC-028)
+}
 ```
 
 ```rust
@@ -467,16 +481,16 @@ struct UpdateFeeScheduleDTO {
 
 ### Subscribed (frontend re-fetch triggers)
 
-| Event                 | Payload | Rule                                                                        |
-| --------------------- | ------- | --------------------------------------------------------------------------- |
-| `AccountUpdated`      | —       | ACC-021, PRF-060                                                            |
-| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060, FEE-026                                          |
-| `AssetUpdated`        | —       | ACD-040                                                                     |
-| `AssetPriceUpdated`   | —       | MKT-036, PRF-060                                                            |
-| `CurrencyRateUpdated` | —       | FXR-037                                                                     |
-| `FeeScheduleUpdated`  | —       | FEE-064 (Account Details re-fetch)                                          |
-| `HoldingNoteUpdated`  | —       | HNO-043 (Account Details re-fetch)                                          |
-| `CurrencyPairUpdated` | —       | FXR-056 (Account Details re-fetch — a removed pair takes its rates with it) |
+| Event                 | Payload | Rule                                                                                 |
+| --------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `AccountUpdated`      | —       | ACC-021, PRF-060                                                                     |
+| `TransactionUpdated`  | —       | ACD-039, ACC-021, PRF-060, FEE-026                                                   |
+| `AssetUpdated`        | —       | ACD-040                                                                              |
+| `AssetPriceUpdated`   | —       | MKT-036, PRF-060                                                                     |
+| `CurrencyRateUpdated` | —       | FXR-037, ACC-033                                                                     |
+| `FeeScheduleUpdated`  | —       | FEE-064 (Account Details re-fetch)                                                   |
+| `HoldingNoteUpdated`  | —       | HNO-043 (Account Details re-fetch)                                                   |
+| `CurrencyPairUpdated` | —       | FXR-056 (Account Details re-fetch — a removed pair takes its rates with it), ACC-033 |
 
 ---
 
@@ -493,3 +507,4 @@ struct UpdateFeeScheduleDTO {
 - 2026-06-30 — Added by `management-fee-deduction` spec: `record_management_fee`, `create_fee_schedule`, `update_fee_schedule`, `delete_fee_schedule`, `get_fee_schedule`, `apply_due_fee_deductions` (+ `ManagementFeeDTO`, `FeeFrequency`, `FeeSchedule`, `CreateFeeScheduleDTO`, `UpdateFeeScheduleDTO`); `TransactionType::ManagementFee` variant; `HoldingDetail.management_fees` + `AccountDetailsResponse.total_management_fees`; `FeeScheduleUpdated` event (published + Account Details subscribes); FEE-063 cross-ref on `correct_transaction`'s `CascadingOversell`; edit/delete of a deduction reuse `correct_transaction`/`cancel_transaction`.
 - 2026-07-04 — Added by `interest-credit` spec: `record_interest` (+ `RecordInterestDTO`, `InterestError`); `TransactionType::Interest` variant + its zero-cost `Transaction` packing (INT-024); the Cash Asset as a valid target (INT-023); `AccountError::InterestAmountInvalid`; INT-040/041 cross-refs — edit/delete reuse `correct_transaction`/`cancel_transaction`. Same session: `add_account`/`update_account` DTOs gain `management_fees_enabled` (FEE-075) and `get_account_details` gains `HoldingDetail.market_value` + `fee_rate_percent_micros` and `AccountDetailsResponse.total_net_cash_input` (ACD-052/053, FEE-074).
 - 2026-07-05 — Input-column refresh: `get_account_details` gains `as_of_date: Option<String>` (as-of read-only view) and `get_account_performance` gains `asset_id: Option<String>` (position-scoped series, PRF-080) — both shipped earlier, now reflected in the tables above. No new command.
+- 2026-09-14 — Amended by `account` spec (ACC-027/028): `get_account_summaries` returns `AccountSummaries` — the rows plus a `PortfolioTotal` in the reference currency, flagged incomplete when an account with no usable rate held a non-zero figure; the accounts list re-fetches on `CurrencyRateUpdated` and `CurrencyPairUpdated` (ACC-033). No new command or error.

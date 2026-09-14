@@ -5,7 +5,7 @@ use crate::core::logger::BACKEND;
 use std::collections::HashMap;
 
 use crate::use_cases::shared::global_value::{
-    account_global_value, AssetValuationFacts, ValuationSnapshot,
+    account_global_value, AssetValuationFacts, ValuationSnapshot, REFERENCE_CURRENCY,
 };
 use crate::use_cases::shared::inconsistency::holding_inconsistency;
 use crate::use_cases::shared::valuation::compute_current_ytd_pct;
@@ -49,6 +49,33 @@ pub struct AccountSummary {
     pub has_inconsistent_holding: bool,
 }
 
+/// ACC-027/028 — the portfolio total over every account, in the reference currency.
+#[derive(Debug, Serialize, Clone, Type)]
+pub struct PortfolioTotal {
+    /// Σ every account's Global Value, converted at the read date's rate, in
+    /// reference-currency micros (ADR-001).
+    pub total_global_value: i64,
+    /// Σ every account's Unrealized P&L, converted the same way; `None` when no
+    /// account carries one.
+    pub total_unrealized_pnl: Option<i64>,
+    /// The reference currency both figures are expressed in (GPF-011).
+    pub currency: String,
+    /// An account whose currency has no usable rate to the reference currency
+    /// (FXR-034) held a non-zero Global Value or Unrealized P&L, which the total
+    /// therefore leaves out (ACC-028).
+    pub incomplete: bool,
+}
+
+/// Response of `get_account_summaries` (ACC-021, ACC-027): the rows and their
+/// portfolio total, read together so the list and its total never disagree.
+#[derive(Debug, Serialize, Clone, Type)]
+pub struct AccountSummaries {
+    /// One row per non-deleted account.
+    pub summaries: Vec<AccountSummary>,
+    /// The portfolio total over those rows.
+    pub total: PortfolioTotal,
+}
+
 /// Orchestrates a cross-context read of account + asset data to build the
 /// Accounts-list view (ACC-021, ADR-003).
 pub struct AccountSummaryUseCase {
@@ -73,7 +100,7 @@ impl AccountSummaryUseCase {
     }
 
     /// Builds a summary row for every non-deleted account.
-    pub async fn get_account_summaries(&self) -> StdResult<Vec<AccountSummary>, AccountError> {
+    pub async fn get_account_summaries(&self) -> StdResult<AccountSummaries, AccountError> {
         let accounts = self.account_service.get_all().await?;
         let mut summaries = Vec::with_capacity(accounts.len());
         let today = chrono::Local::now().date_naive();
@@ -116,7 +143,27 @@ impl AccountSummaryUseCase {
                 has_inconsistent_holding,
             });
         }
-        Ok(summaries)
+        // ACC-027/028 — the portfolio total in the reference currency, each account
+        // converted at the read date's rate; a currency with no usable rate counts
+        // as zero (FXR-034).
+        let as_of = today.format("%Y-%m-%d").to_string();
+        let mut rates: HashMap<String, Option<i64>> = HashMap::new();
+        for summary in &summaries {
+            if rates.contains_key(&summary.currency) {
+                continue;
+            }
+            let rate = self
+                .currency_service
+                .resolve_rate_micros(&summary.currency, REFERENCE_CURRENCY, &as_of)
+                .await
+                .map_err(|e| {
+                    tracing::error!(target: BACKEND, currency = %summary.currency, err = ?e, "get_account_summaries: resolve_rate_micros failed (portfolio total)");
+                    AccountError::DatabaseError
+                })?;
+            rates.insert(summary.currency.clone(), rate);
+        }
+        let total = portfolio_total(&summaries, &rates);
+        Ok(AccountSummaries { summaries, total })
     }
 
     /// ACC-023 / MKT-040 — account-wide unrealized P&L in account currency: the
@@ -273,6 +320,47 @@ impl AccountSummaryUseCase {
     }
 }
 
+/// ACC-027/028/029 — sums every account's Global Value and Unrealized P&L in the
+/// reference currency. `rate_to_reference` maps an account currency to its rate
+/// micros, `None` when no usable rate exists: that account contributes zero, and
+/// the total is incomplete when that zero hides a non-zero figure.
+pub(crate) fn portfolio_total(
+    summaries: &[AccountSummary],
+    rate_to_reference: &HashMap<String, Option<i64>>,
+) -> PortfolioTotal {
+    let convert = |amount: i64, rate: i64| (amount as i128 * rate as i128 / 1_000_000) as i64;
+    let mut total_global_value: i64 = 0;
+    let mut total_unrealized_pnl: Option<i64> = None;
+    let mut incomplete = false;
+    for summary in summaries {
+        let Some(rate) = rate_to_reference.get(&summary.currency).copied().flatten() else {
+            // ACC-028 — the unconvertible account counts as zero; it leaves the total
+            // incomplete only when that zero hides a figure.
+            if summary.total_global_value != 0
+                || summary.total_unrealized_pnl.is_some_and(|pnl| pnl != 0)
+            {
+                incomplete = true;
+            }
+            continue;
+        };
+        total_global_value =
+            total_global_value.saturating_add(convert(summary.total_global_value, rate));
+        if let Some(pnl) = summary.total_unrealized_pnl {
+            total_unrealized_pnl = Some(
+                total_unrealized_pnl
+                    .unwrap_or(0)
+                    .saturating_add(convert(pnl, rate)),
+            );
+        }
+    }
+    PortfolioTotal {
+        total_global_value,
+        total_unrealized_pnl,
+        currency: REFERENCE_CURRENCY.to_string(),
+        incomplete,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,7 +422,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, account.id);
         assert_eq!(summaries[0].total_global_value, 0);
@@ -412,7 +500,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 2);
 
         let row_a = summaries.iter().find(|s| s.id == acc_a.id).unwrap();
@@ -477,7 +565,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries[0].total_global_value, 0);
     }
 
@@ -531,7 +619,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries[0].total_global_value, 0);
     }
 
@@ -643,7 +731,7 @@ mod tests {
 
         let currency_svc = make_currency_service_with_fixed_rate(1_080_000);
         let uc = AccountSummaryUseCase::new(account_svc, asset_svc, currency_svc);
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
 
         // converted_price = (110_000_000 * 1_080_000) / 1_000_000 = 118_800_000
         // market_value = (1_000_000 * 118_800_000) / 1_000_000 = 118_800_000
@@ -719,7 +807,7 @@ mod tests {
         ));
 
         let uc = AccountSummaryUseCase::new(account_svc, asset_svc, currency_svc);
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
 
         // 2 units × 110 EUR = 220 EUR = 220_000_000 micros (same as before FXR lift)
         assert_eq!(summaries[0].total_global_value, 220_000_000);
@@ -779,7 +867,7 @@ mod tests {
 
         let currency_svc = make_currency_service_with_no_rate();
         let uc = AccountSummaryUseCase::new(account_svc, asset_svc, currency_svc);
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
 
         assert_eq!(
             summaries[0].total_global_value, 0,
@@ -842,7 +930,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(
             summaries[0].total_global_value, 0,
             "closed holdings (quantity = 0) must not contribute"
@@ -913,7 +1001,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         // (120 − 100) × 1 unit = 20 EUR = 20_000_000 micros
         assert_eq!(
@@ -945,7 +1033,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         assert!(
             summaries[0].total_unrealized_pnl.is_none(),
@@ -1005,7 +1093,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         assert!(
             summaries[0].total_unrealized_pnl.is_none(),
@@ -1057,7 +1145,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         assert!(
             summaries[0].ytd_performance_pct.is_some(),
@@ -1125,7 +1213,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         assert!(
             summaries[0].ytd_performance_pct.is_some(),
@@ -1193,7 +1281,7 @@ mod tests {
         // AccountSummary path
         let summary_uc =
             AccountSummaryUseCase::new(account_svc.clone(), asset_svc.clone(), make_no_rate_svc());
-        let summaries = summary_uc.get_account_summaries().await.unwrap();
+        let summaries = summary_uc.get_account_summaries().await.unwrap().summaries;
         let summary_ytd = summaries
             .iter()
             .find(|s| s.id == account.id)
@@ -1248,7 +1336,7 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert_eq!(summaries.len(), 1);
         assert!(
             summaries[0].ytd_performance_pct.is_none(),
@@ -1294,10 +1382,158 @@ mod tests {
             asset_svc,
             make_currency_service_with_no_rate(),
         );
-        let summaries = uc.get_account_summaries().await.unwrap();
+        let summaries = uc.get_account_summaries().await.unwrap().summaries;
         assert!(
             summaries[0].has_inconsistent_holding,
             "CFR-042/SYN-040: an overdrawn cash holding must set has_inconsistent_holding"
         );
+    }
+
+    // ── ACC-027 / ACC-028 — portfolio total ─────────────────────────────────
+
+    fn summary(currency: &str, global_value: i64, unrealized_pnl: Option<i64>) -> AccountSummary {
+        AccountSummary {
+            id: format!("acc-{currency}-{global_value}"),
+            name: "Account".to_string(),
+            currency: currency.to_string(),
+            update_frequency: UpdateFrequency::ManualMonth,
+            total_global_value: global_value,
+            total_unrealized_pnl: unrealized_pnl,
+            ytd_performance_pct: None,
+            has_inconsistent_holding: false,
+        }
+    }
+
+    // ACC-027 — every account's value and P&L converted to the reference currency.
+    #[test]
+    fn portfolio_total_converts_every_account_to_the_reference_currency() {
+        let summaries = vec![
+            summary("EUR", 100_000_000, Some(10_000_000)),
+            summary("USD", 200_000_000, Some(-20_000_000)),
+        ];
+        let rates = HashMap::from([
+            ("EUR".to_string(), Some(1_000_000)),
+            ("USD".to_string(), Some(900_000)),
+        ]);
+
+        let total = portfolio_total(&summaries, &rates);
+
+        assert_eq!(total.total_global_value, 280_000_000);
+        assert_eq!(total.total_unrealized_pnl, Some(-8_000_000));
+        assert_eq!(total.currency, "EUR");
+        assert!(!total.incomplete);
+    }
+
+    // ACC-028 — an account with no usable rate contributes zero and, holding a figure, marks the total incomplete.
+    #[test]
+    fn portfolio_total_leaves_out_an_unconvertible_account_and_is_incomplete() {
+        let summaries = vec![
+            summary("EUR", 100_000_000, Some(10_000_000)),
+            summary("GBP", 500_000_000, Some(50_000_000)),
+        ];
+        let rates = HashMap::from([
+            ("EUR".to_string(), Some(1_000_000)),
+            ("GBP".to_string(), None),
+        ]);
+
+        let total = portfolio_total(&summaries, &rates);
+
+        assert_eq!(total.total_global_value, 100_000_000);
+        assert_eq!(total.total_unrealized_pnl, Some(10_000_000));
+        assert!(total.incomplete);
+    }
+
+    // ACC-029 — the total P&L is absent when no account carries one.
+    #[test]
+    fn portfolio_total_unrealized_pnl_is_absent_when_no_account_carries_one() {
+        let summaries = vec![
+            summary("EUR", 100_000_000, None),
+            summary("USD", 50_000_000, None),
+        ];
+        let rates = HashMap::from([
+            ("EUR".to_string(), Some(1_000_000)),
+            ("USD".to_string(), Some(900_000)),
+        ]);
+
+        let total = portfolio_total(&summaries, &rates);
+
+        assert_eq!(total.total_global_value, 145_000_000);
+        assert_eq!(total.total_unrealized_pnl, None);
+        assert!(!total.incomplete);
+    }
+
+    // ACC-027 — no account: a zero, complete total with no P&L.
+    #[test]
+    fn portfolio_total_of_no_account_is_zero_and_complete() {
+        let total = portfolio_total(&[], &HashMap::new());
+
+        assert_eq!(total.total_global_value, 0);
+        assert_eq!(total.total_unrealized_pnl, None);
+        assert_eq!(total.currency, "EUR");
+        assert!(!total.incomplete);
+    }
+
+    // ACC-027/028 — the response carries the total built from its rows: a EUR
+    // account counts at identity, and an empty foreign account with no usable rate
+    // hides no figure, so the total stays complete.
+    #[tokio::test]
+    async fn summaries_carry_a_portfolio_total_complete_despite_an_empty_unconvertible_account() {
+        let pool = make_pool().await;
+        let (account_svc, asset_svc) = setup(&pool).await;
+        for (name, currency) in [("Main", "EUR"), ("US", "USD")] {
+            account_svc
+                .create(
+                    name.to_string(),
+                    String::new(),
+                    currency.to_string(),
+                    UpdateFrequency::ManualMonth,
+                    false,
+                )
+                .await
+                .unwrap();
+        }
+        let uc = AccountSummaryUseCase::new(
+            account_svc,
+            asset_svc,
+            make_currency_service_with_no_rate(),
+        );
+
+        let response = uc.get_account_summaries().await.unwrap();
+
+        assert_eq!(response.summaries.len(), 2);
+        assert_eq!(response.total.currency, "EUR");
+        assert_eq!(response.total.total_global_value, 0);
+        assert!(
+            !response.total.incomplete,
+            "an empty USD account with no rate to EUR hides no figure"
+        );
+    }
+
+    // ACC-028 — an unconvertible account leaves the total incomplete only when its
+    // zero hides a figure: an empty one does not; one carrying a P&L does.
+    #[test]
+    fn portfolio_total_is_incomplete_only_when_an_unconvertible_account_hides_a_figure() {
+        let rates = HashMap::from([
+            ("EUR".to_string(), Some(1_000_000)),
+            ("USD".to_string(), None),
+        ]);
+
+        let with_empty = portfolio_total(
+            &[summary("EUR", 100_000_000, None), summary("USD", 0, None)],
+            &rates,
+        );
+        assert!(!with_empty.incomplete);
+        assert_eq!(with_empty.total_global_value, 100_000_000);
+
+        // ACC-029 — the only P&L sits in the unconvertible account: absent and incomplete.
+        let with_hidden_pnl = portfolio_total(
+            &[
+                summary("EUR", 100_000_000, None),
+                summary("USD", 0, Some(-5_000_000)),
+            ],
+            &rates,
+        );
+        assert!(with_hidden_pnl.incomplete);
+        assert_eq!(with_hidden_pnl.total_unrealized_pnl, None);
     }
 }

@@ -113,6 +113,8 @@
     "column_global_value": "Valeur globale",
     "column_unrealized_pnl": "P&L latent",
     "column_ytd_performance": "Perf. YTD",
+    "total": "Total",
+    "total_incomplete": "partiel",
     "column_actions": "Actions",
     "loading": "Chargement des comptes...",
     "empty": "Aucun compte. Créez votre premier compte avec le bouton +.",

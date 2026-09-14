@@ -28,7 +28,13 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
   // ACC-021 — list-page data comes from get_account_summaries (enriched with
   // total_global_value); mutations (delete + delete-summary) remain on the bare
   // useAccounts hook since they don't need the per-account value.
-  const { summaries, isLoading: loading, error: fetchError, refetch } = useAccountSummaries();
+  const {
+    summaries,
+    portfolioTotal,
+    isLoading: loading,
+    error: fetchError,
+    refetch,
+  } = useAccountSummaries();
   const { deleteAccount, getAccountDeletionSummary } = useAccounts();
 
   useEffect(() => {
@@ -66,6 +72,14 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
     getAccountDeletionSummary,
     onAccountClick,
   );
+
+  // ACC-032 — the portfolio total shows only while every account is listed.
+  const showPortfolioTotal =
+    !loading &&
+    !isEmpty &&
+    !fetchError &&
+    searchTerm.trim().length === 0 &&
+    portfolioTotal !== null;
 
   return (
     <div className="m3-table-container flex-1">
@@ -373,6 +387,55 @@ export function AccountTable({ searchTerm, onAccountClick }: AccountTableProps) 
             ))
           )}
         </tbody>
+        {/* ACC-030/031 — the portfolio total closes the list, outside the sortable rows */}
+        {showPortfolioTotal && portfolioTotal && (
+          <tfoot>
+            <tr
+              id="account-portfolio-total"
+              className="border-t-2 border-m3-outline/20 bg-m3-surface-container"
+            >
+              <td className="m3-td" colSpan={3}>
+                <span className="font-semibold text-m3-on-surface">{t("account.total")}</span>
+                {/* ACC-028 — an unconvertible account hides a figure from the total */}
+                {portfolioTotal.incomplete && (
+                  <span
+                    id="account-portfolio-total-incomplete"
+                    className="ml-2 text-xs text-m3-on-surface-variant"
+                  >
+                    {t("account.total_incomplete")}
+                  </span>
+                )}
+              </td>
+              <td id="account-portfolio-total-value" className="m3-td text-right tabular-nums">
+                <span className="font-semibold text-m3-on-surface">
+                  {microToFormatted(portfolioTotal.total_global_value, 2)}
+                </span>
+                <span className="ml-1 text-xs text-m3-on-surface-variant">
+                  {portfolioTotal.currency}
+                </span>
+              </td>
+              <td
+                id="account-portfolio-total-unrealized-pnl"
+                className="m3-td text-right tabular-nums"
+              >
+                <span
+                  className={`font-semibold ${
+                    portfolioTotal.total_unrealized_pnl == null ||
+                    portfolioTotal.total_unrealized_pnl === 0
+                      ? "text-m3-on-surface-variant"
+                      : portfolioTotal.total_unrealized_pnl < 0
+                        ? "text-m3-loss"
+                        : "text-m3-gain"
+                  }`}
+                >
+                  {formatAccountRowTotalUnrealizedPnl(portfolioTotal.total_unrealized_pnl)}
+                </span>
+              </td>
+              <td className="m3-td" />
+              <td className="m3-td" />
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       <EditAccountModal isOpen={!!editData} onClose={handleEditClose} account={editData} />

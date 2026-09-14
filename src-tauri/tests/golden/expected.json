@@ -1,22 +1,30 @@
 {
-  "account_summaries": [
-    {
+  "account_summaries": {
+    "summaries": [
+      {
+        "currency": "EUR",
+        "has_inconsistent_holding": false,
+        "name": "Main EUR",
+        "total_global_value": 24136700000,
+        "total_unrealized_pnl": 3774200040,
+        "update_frequency": "Automatic"
+      },
+      {
+        "currency": "USD",
+        "has_inconsistent_holding": false,
+        "name": "Growth USD",
+        "total_global_value": 7898737960,
+        "total_unrealized_pnl": -45838882,
+        "update_frequency": "ManualMonth"
+      }
+    ],
+    "total": {
       "currency": "EUR",
-      "has_inconsistent_holding": false,
-      "name": "Main EUR",
-      "total_global_value": 24136700000,
-      "total_unrealized_pnl": 3774200040,
-      "update_frequency": "Automatic"
-    },
-    {
-      "currency": "USD",
-      "has_inconsistent_holding": false,
-      "name": "Growth USD",
-      "total_global_value": 7898737960,
-      "total_unrealized_pnl": -45838882,
-      "update_frequency": "ManualMonth"
+      "incomplete": false,
+      "total_global_value": 31482526302,
+      "total_unrealized_pnl": 3731569880
     }
-  ],
+  },
   "details_growth_usd_as_of_2025-12-31": {
     "account_name": "Growth USD",
     "closed_holdings": [],

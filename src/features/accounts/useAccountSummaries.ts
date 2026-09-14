@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AccountSummary } from "@/bindings";
+import type { AccountSummary, PortfolioTotal } from "@/bindings";
 import { logger } from "@/lib/logger";
 import { useAppStore } from "@/lib/store";
 import type { I18nMessage } from "@/ui/format/i18n";
@@ -10,6 +10,8 @@ const UNKNOWN_ERROR: I18nMessage = { key: "error.Unknown" };
 
 interface UseAccountSummariesResult {
   summaries: AccountSummary[];
+  /** ACC-027 — the backend's portfolio total; null until the first successful read. */
+  portfolioTotal: PortfolioTotal | null;
   isLoading: boolean;
   error: I18nMessage | null;
   refetch: () => Promise<void>;
@@ -21,6 +23,7 @@ interface UseAccountSummariesResult {
  */
 export function useAccountSummaries(): UseAccountSummariesResult {
   const [summaries, setSummaries] = useState<AccountSummary[]>([]);
+  const [portfolioTotal, setPortfolioTotal] = useState<PortfolioTotal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<I18nMessage | null>(null);
 
@@ -30,7 +33,8 @@ export function useAccountSummaries(): UseAccountSummariesResult {
     try {
       const result = await accountGateway.getAccountSummaries();
       if (result.status === "ok") {
-        setSummaries(result.data);
+        setSummaries(result.data.summaries);
+        setPortfolioTotal(result.data.total);
       } else {
         logger.error("[useAccountSummaries] fetch failed", { error: result.error });
         setError(accountMutationErrorToI18n(result.error));
@@ -50,7 +54,9 @@ export function useAccountSummaries(): UseAccountSummariesResult {
   // Re-fetch on events that can change account values: AccountUpdated covers
   // CRUD + transaction-driven holding changes (TRX-037); AssetPriceUpdated
   // covers value drift from manual price entries + auto-fetch (MKT-036);
-  // AssetUpdated covers asset currency changes that flip the same-currency filter.
+  // AssetUpdated covers asset currency changes that flip the same-currency filter;
+  // CurrencyRateUpdated / CurrencyPairUpdated move the converted values and the
+  // portfolio total (ACC-033).
   useEffect(() => {
     const unlistenPromise = accountGateway.subscribeToEvents((type) => {
       // MKT-181 — coalesce per-asset events while a bulk price fetch runs.
@@ -60,6 +66,8 @@ export function useAccountSummaries(): UseAccountSummariesResult {
       if (
         type === "AccountUpdated" ||
         type === "AssetUpdated" ||
+        type === "CurrencyRateUpdated" ||
+        type === "CurrencyPairUpdated" ||
         type === "AssetPriceUpdated" ||
         type === "AssetPriceFetchCompleted" ||
         type === "TransactionUpdated"
@@ -72,5 +80,5 @@ export function useAccountSummaries(): UseAccountSummariesResult {
     };
   }, [fetchSummaries]);
 
-  return { summaries, isLoading, error, refetch: fetchSummaries };
+  return { summaries, portfolioTotal, isLoading, error, refetch: fetchSummaries };
 }

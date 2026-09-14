@@ -267,7 +267,7 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
 
   // ── getAccountSummaries (ACC-021) ────────────────────────────────────────────
 
-  it("getAccountSummaries returns the enriched list on success", async () => {
+  it("getAccountSummaries returns the enriched list and the portfolio total on success", async () => {
     const summaries: AccountSummary[] = [
       {
         id: "acc-1",
@@ -280,9 +280,18 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
         has_inconsistent_holding: false,
       },
     ];
-    mockInvoke.mockResolvedValue(summaries);
+    const response = {
+      summaries,
+      total: {
+        total_global_value: 470_000_000,
+        total_unrealized_pnl: null,
+        currency: "EUR",
+        incomplete: false,
+      },
+    };
+    mockInvoke.mockResolvedValue(response);
     const result = await accountGateway.getAccountSummaries();
-    expect(result).toEqual({ status: "ok", data: summaries });
+    expect(result).toEqual({ status: "ok", data: response });
     expect(mockInvoke).toHaveBeenCalledWith("get_account_summaries");
   });
 

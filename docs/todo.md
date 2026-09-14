@@ -19,15 +19,6 @@
 
 Nothing queued.
 
-## #007 — (fullstack) — Show a total row on the accounts list
-
-The accounts list (`AccountTable`) shows each account's Global Value and Unrealized P&L in the account's own currency and stops there: no line says what the portfolio is worth. A total needs one currency, so it is the backend's to compute — every account converted to the reference currency (EUR, GPF-011) with the same rate resolution the performance page and the price-movement total already use, and the same degradation when a rate is missing (FXR-034): that account contributes zero and the total is marked partial, as PMV-042/043 do. The list renders the figure; it never sums mixed currencies itself. The YTD column has no meaningful sum and stays blank on the total row — the portfolio-level figure lives on the performance page.
-
-**User value:** The accounts list answers "what is it all worth" without opening the performance page.
-**Done when:** The backend returns the portfolio's total Global Value and total Unrealized P&L in the reference currency, flagged partial when any account could not be converted; an ACC (or GPF) rule states it; the list shows a total row with both figures, the currency, and the partial marker; the Rust computation and the table rendering are tested; screenshots recaptured.
-**Design:** none
-**Open questions:** none
-
 ## #008 — (fullstack) — Backfill one asset's price history over the period an account held it
 
 An account's history and as-of views value a holding at the price recorded for each date; assets bought before the scheduled download existed, or held while it was off, have gaps, and today the only way to fill them is by hand, one price at a time. Add a holding-row action that fills them: for that account and asset, every trading day from the first date the account held the asset to the last (today while still held) that has no recorded price gets its daily close. Dates that already carry a price are left exactly as they are — never overwritten, whatever their source — so a run over a complete history is a no-op that says so. Failure is a reported outcome, never a crash: an unresolvable ticker, a locked asset (MKT-151), or an unreachable provider ends the action with a snackbar and nothing written.
