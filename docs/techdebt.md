@@ -211,6 +211,7 @@ Remove an entry once it has been resolved.
 - Severity: 🟡
 - Observation: 86.18 % of the 6,744 lines in domain, application, service and use-case code are covered; the gate's floor is 85.5 % and its target 90 %, about 260 more covered lines. Two files carry almost no test at all because they talk to the network or run the app headless; the other six are orchestration paths with untested branches. The floor in `coverage-gates.json` is a ratchet — raise it in the same change that lifts coverage, never lower it.
 - User value: None — a harness that catches logic regressions in these paths.
+- Mutation survivors: the 2026-09-14 sweep (issue #137) found 301 logic changes no test notices — `context/account/domain/account.rs` 52, `use_cases/shared/valuation.rs` 33, `context/sync/domain/resolution.rs` 24, `use_cases/global_performance/orchestrator.rs` 21; each names an assertion that is missing or too weak.
 - Done when: the backend floor in `coverage-gates.json` reads 90.0 and the gate passes on `main`.
 
 ## 2026-09-13 — TD-018 — 119 interactive components in feature code carry no id
