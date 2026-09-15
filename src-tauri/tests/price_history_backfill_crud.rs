@@ -63,7 +63,7 @@ impl PriceProvider for ScriptedProvider {
         _symbol: &str,
         from: &str,
         to: &str,
-    ) -> anyhow::Result<Vec<DatedClose>> {
+    ) -> anyhow::Result<Option<Vec<DatedClose>>> {
         self.requested_windows
             .lock()
             .expect("windows lock")
@@ -71,12 +71,13 @@ impl PriceProvider for ScriptedProvider {
         if self.unreachable_from.is_some_and(|start| from >= start) {
             anyhow::bail!("provider unreachable");
         }
-        Ok(self
-            .closes
-            .iter()
-            .filter(|close| close.date.as_str() >= from && close.date.as_str() <= to)
-            .cloned()
-            .collect())
+        Ok(Some(
+            self.closes
+                .iter()
+                .filter(|close| close.date.as_str() >= from && close.date.as_str() <= to)
+                .cloned()
+                .collect(),
+        ))
     }
 }
 
@@ -263,6 +264,43 @@ async fn backfill_over_a_complete_history_writes_nothing() {
 
     assert_eq!(second.written, 0);
     assert_eq!(second.already_priced, 2);
+}
+
+/// MKT-196 — a held period covering only a weekend: the provider knows the
+/// symbol but serves no close, so the backfill succeeds with nothing recorded
+/// instead of reporting an unresolvable ticker.
+#[tokio::test]
+async fn backfill_over_a_weekend_only_period_succeeds_with_nothing_to_fill() {
+    let ctx = build_ctx(
+        "2024-06-29",
+        "2024-07-01",
+        ScriptedProvider::serving(vec![close("2024-06-28", 10_000_000)]),
+    )
+    .await;
+
+    let outcome = ctx
+        .use_case
+        .backfill(&ctx.account_id, &ctx.asset_id)
+        .await
+        .expect("a period without a trading day is not a rejection");
+
+    assert_eq!(outcome.written, 0);
+    assert_eq!(outcome.already_priced, 0);
+    assert_eq!(
+        ctx.provider
+            .requested_windows
+            .lock()
+            .expect("windows lock")
+            .as_slice(),
+        [("2024-06-29".to_string(), "2024-06-30".to_string())],
+        "precondition: the weekend was requested"
+    );
+    let prices = ctx
+        .asset_service
+        .get_asset_prices(&ctx.asset_id)
+        .await
+        .expect("prices");
+    assert!(prices.is_empty(), "nothing may be recorded, got {prices:?}");
 }
 
 /// MKT-191/193 — a held period longer than a year is requested in consecutive

@@ -12,8 +12,8 @@ pub enum PriceHistoryBackfillTask {
     /// Automated price fetches are blocked for the asset (MKT-151).
     #[error("Automatic price updates are blocked for this asset")]
     PriceRefreshBlocked,
-    /// No provider symbol can be derived, or the provider has no daily close over
-    /// the held period (MKT-196).
+    /// No provider symbol can be derived, the provider reports the symbol unknown,
+    /// or it serves no close over a held period of 7 days or more (MKT-196).
     #[error("No price history found for this asset's ticker")]
     TickerNotResolved,
     /// A daily-close request failed; nothing was recorded (MKT-195).

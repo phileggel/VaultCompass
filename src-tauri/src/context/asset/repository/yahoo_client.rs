@@ -64,7 +64,7 @@ impl PriceProvider for ReqwestYahooClient {
         symbol: &str,
         from: &str,
         to: &str,
-    ) -> anyhow::Result<Vec<DatedClose>> {
+    ) -> anyhow::Result<Option<Vec<DatedClose>>> {
         let period1 = utc_day_start_epoch_seconds(from)?;
         // period2 is the end of `to` (23:59:59 UTC) so the range is inclusive.
         let period2 = utc_day_start_epoch_seconds(to)? + SECONDS_PER_DAY - 1;
@@ -202,24 +202,25 @@ fn normalize_minor_unit(price: f64, currency: Option<&str>) -> f64 {
 /// Parses the daily-close series from a Yahoo chart JSON body covering a date
 /// range (SPF-030/031).
 ///
-/// - `Ok(closes)` — one [`DatedClose`] per completed trading day in the response
-///   (MKT-125 sub-unit normalization applied); non-trading days are simply
-///   absent from `timestamp[]`/`close[]` (SPF-032), not represented at all.
-/// - `Ok(empty)` — unknown/delisted symbol (`chart.error` present, MKT-114).
+/// - `Ok(Some(closes))` — the symbol is known: one [`DatedClose`] per completed
+///   trading day in the response (MKT-125 sub-unit normalization applied);
+///   non-trading days are simply absent from `timestamp[]`/`close[]` (SPF-032),
+///   so a window without a trading day yields an empty series (MKT-196).
+/// - `Ok(None)` — unknown/delisted symbol (`chart.error` present, MKT-114, MKT-196).
 /// - `Err(_)` — malformed JSON.
-fn parse_daily_closes(body: &str) -> Result<Vec<DatedClose>> {
+fn parse_daily_closes(body: &str) -> Result<Option<Vec<DatedClose>>> {
     let envelope: ChartEnvelope =
         serde_json::from_str(body).context("Yahoo chart JSON parse failed")?;
     // Unknown / delisted symbol — Yahoo populates `error` and nulls `result` (MKT-114).
     if envelope.chart.error.is_some() {
-        return Ok(Vec::new());
+        return Ok(None);
     }
     let Some(result) = envelope
         .chart
         .result
         .and_then(|mut results| results.drain(..).next())
     else {
-        return Ok(Vec::new());
+        return Ok(Some(Vec::new()));
     };
     // Dates are the exchange-local calendar day via gmtoffset, UTC when absent
     // (same convention as `parse_quote`, MKT-117).
@@ -254,7 +255,7 @@ fn parse_daily_closes(body: &str) -> Result<Vec<DatedClose>> {
             price: (price * MICROS_PER_UNIT).round() as i64,
         });
     }
-    Ok(daily_closes)
+    Ok(Some(daily_closes))
 }
 
 /// Epoch seconds at 00:00:00 UTC on the given ISO `yyyy-mm-dd` date.
@@ -335,7 +336,10 @@ mod tests {
     #[test]
     fn empty_bar_series_yields_no_daily_closes() {
         let body = r#"{"chart":{"result":[{"meta":{"currency":"EUR","symbol":"0P0001RJOO.F","gmtoffset":7200},"indicators":{"quote":[{}],"adjclose":[{}]}}],"error":null}}"#;
-        assert!(parse_daily_closes(body).unwrap().is_empty());
+        assert!(parse_daily_closes(body)
+            .unwrap()
+            .expect("known symbol")
+            .is_empty());
     }
 
     // A timestamp without gmtoffset still yields a date (offset defaults to 0/UTC).
@@ -371,7 +375,7 @@ mod tests {
             "timestamp":[1781121600,1781208000,1781294400],
             "indicators":{"quote":[{"close":[290.0,291.0,292.0]}]}
         }],"error":null}}"#;
-        let closes = parse_daily_closes(body).unwrap();
+        let closes = parse_daily_closes(body).unwrap().expect("known symbol");
         assert_eq!(closes.len(), 3, "one DatedClose per trading day");
         assert_eq!(closes[0].price, 290_000_000);
         assert_eq!(closes[2].price, 292_000_000);
@@ -386,7 +390,7 @@ mod tests {
             "timestamp":[1781121600,1781208000,1781294400],
             "indicators":{"quote":[{"close":[290.0,null,292.0]}]}
         }],"error":null}}"#;
-        let closes = parse_daily_closes(body).unwrap();
+        let closes = parse_daily_closes(body).unwrap().expect("known symbol");
         assert_eq!(
             closes.len(),
             2,
@@ -404,7 +408,7 @@ mod tests {
             "timestamp":[1780948800,1781121600,1781208000],
             "indicators":{"quote":[{"close":[290.0,292.5,null]}]}
         }],"error":null}}"#;
-        let closes = parse_daily_closes(body).unwrap();
+        let closes = parse_daily_closes(body).unwrap().expect("known symbol");
         assert_eq!(
             closes.len(),
             2,
@@ -423,7 +427,7 @@ mod tests {
             "timestamp":[1781121600,1781208000,1781294400,1781380800],
             "indicators":{"quote":[{"close":[290.0,0.0,-5.0,null]}]}
         }],"error":null}}"#;
-        let closes = parse_daily_closes(body).unwrap();
+        let closes = parse_daily_closes(body).unwrap().expect("known symbol");
         assert_eq!(closes.len(), 1, "zero and negative closes must be skipped");
         assert_eq!(closes[0].price, 290_000_000);
     }
@@ -436,17 +440,26 @@ mod tests {
             "timestamp":[1781121600],
             "indicators":{"quote":[{"close":[115.75]}]}
         }],"error":null}}"#;
-        let closes = parse_daily_closes(body).unwrap();
+        let closes = parse_daily_closes(body).unwrap().expect("known symbol");
         assert_eq!(closes.len(), 1);
         // 115.75 GBp = 1.1575 GBP → 1_157_500 micros.
         assert_eq!(closes[0].price, 1_157_500);
     }
 
-    // MKT-114 — an unknown symbol (chart.error present) is a quiet skip (empty vec).
+    // MKT-114 / MKT-196 — an unknown symbol (chart.error present) is reported as
+    // unknown, not as an empty series.
     #[test]
-    fn daily_close_series_unknown_symbol_returns_empty() {
+    fn daily_close_series_unknown_symbol_returns_none() {
         let body = r#"{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}"#;
-        assert_eq!(parse_daily_closes(body).unwrap(), Vec::new());
+        assert_eq!(parse_daily_closes(body).unwrap(), None);
+    }
+
+    // MKT-196 — a known symbol over a window without a trading day (a weekend)
+    // carries no timestamp and an empty bar series: a known, empty series.
+    #[test]
+    fn daily_close_series_for_a_window_without_a_trading_day_is_known_and_empty() {
+        let body = r#"{"chart":{"result":[{"meta":{"currency":"USD","symbol":"AAPL","gmtoffset":-14400},"indicators":{"quote":[{}],"adjclose":[{}]}}],"error":null}}"#;
+        assert_eq!(parse_daily_closes(body).unwrap(), Some(Vec::new()));
     }
 
     // Malformed JSON is an Err.
@@ -464,7 +477,7 @@ mod tests {
             "timestamp":[1780948800,1781121600],
             "indicators":{"quote":[{"close":[290.0,292.0]}]}
         }],"error":null}}"#;
-        let closes = parse_daily_closes(body).unwrap();
+        let closes = parse_daily_closes(body).unwrap().expect("known symbol");
         assert_eq!(closes[0].date, "2026-06-08");
         assert_eq!(closes[1].date, "2026-06-10");
     }

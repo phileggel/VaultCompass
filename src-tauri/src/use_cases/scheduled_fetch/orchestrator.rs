@@ -332,7 +332,7 @@ impl ScheduledFetchOrchestrator {
                     .fetch_daily_closes(symbol, &from, &to)
                     .await
                 {
-                    Ok(closes) if !closes.is_empty() => {
+                    Ok(Some(closes)) if !closes.is_empty() => {
                         match self
                             .asset_service
                             .record_daily_closes(&asset.id, closes)

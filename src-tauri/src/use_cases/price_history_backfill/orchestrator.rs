@@ -88,7 +88,16 @@ impl PriceHistoryBackfillUseCase {
             .ok_or(PriceHistoryBackfillTask::TickerNotResolved)?;
         let closes = self.fetch_closes(&symbol, from, to).await?;
         if closes.is_empty() {
-            return Err(PriceHistoryBackfillTask::TickerNotResolved.into());
+            // MKT-196 — a period of a week or more always holds a trading day, so a
+            // known symbol without any close there has no history with the provider.
+            const TRADING_WEEK_DAYS: i64 = 7;
+            if (to - from).num_days() + 1 >= TRADING_WEEK_DAYS {
+                return Err(PriceHistoryBackfillTask::TickerNotResolved.into());
+            }
+            return Ok(PriceHistoryBackfillOutcome {
+                written: 0,
+                already_priced: 0,
+            });
         }
 
         Ok(self
@@ -142,7 +151,8 @@ impl PriceHistoryBackfillUseCase {
 
     /// Requests the daily closes of `[from, to]` window by window (MKT-193) and
     /// returns them in date order, one per date inside the period. Any failed
-    /// request rejects the whole backfill (MKT-195).
+    /// request rejects the whole backfill (MKT-195); a symbol the provider reports
+    /// unknown rejects it as an unresolvable ticker (MKT-196).
     async fn fetch_closes(
         &self,
         symbol: &str,
@@ -159,6 +169,10 @@ impl PriceHistoryBackfillUseCase {
                     tracing::warn!(target: BACKEND, symbol = %symbol, from = %window_from, to = %window_to, err = ?error, "price history backfill: daily-close request failed");
                     PriceHistoryBackfillTask::ProviderUnreachable
                 })?;
+            // MKT-196 — an unknown symbol is unknown for every window: stop here.
+            let Some(served) = served else {
+                return Err(PriceHistoryBackfillTask::TickerNotResolved.into());
+            };
             closes.extend(served);
         }
         let (from, to) = (from.to_string(), to.to_string());
@@ -492,15 +506,15 @@ mod tests {
         );
     }
 
-    // MKT-196 — a provider serving no close over the whole period is rejected as
-    // an unresolvable ticker, and nothing is recorded.
+    // MKT-196 — a symbol the provider reports unknown is rejected as an
+    // unresolvable ticker, and nothing is recorded.
     #[tokio::test]
-    async fn backfill_rejects_a_ticker_the_provider_serves_nothing_for() {
+    async fn backfill_rejects_a_symbol_the_provider_reports_unknown() {
         let mut price_provider = MockPriceProvider::new();
         price_provider
             .expect_fetch_daily_closes()
             .times(1)
-            .returning(|_, _, _| Ok(vec![]));
+            .returning(|_, _, _| Ok(None));
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
         asset_service.expect_record_missing_daily_closes().times(0);
 
@@ -522,6 +536,67 @@ mod tests {
         );
     }
 
+    // MKT-196 — a known symbol served no close over a held period of a week or more
+    // has no history with the provider: rejected as an unresolvable ticker.
+    #[tokio::test]
+    async fn backfill_rejects_a_known_symbol_without_any_close_over_a_week() {
+        let mut price_provider = MockPriceProvider::new();
+        price_provider
+            .expect_fetch_daily_closes()
+            .times(1)
+            .returning(|_, _, _| Ok(Some(vec![])));
+        let mut asset_service = asset_service_serving(make_asset("AI", false, false));
+        asset_service.expect_record_missing_daily_closes().times(0);
+
+        let error = make_use_case(
+            account_holding(vec![make_transaction(ASSET, "2024-06-20")], 1_000_000),
+            asset_service,
+            price_provider,
+        )
+        .backfill(ACCOUNT, ASSET)
+        .await
+        .unwrap_err();
+
+        assert!(
+            matches!(
+                error,
+                PriceHistoryBackfillError::Task(PriceHistoryBackfillTask::TickerNotResolved)
+            ),
+            "got: {error:?}"
+        );
+    }
+
+    // MKT-196 — a known symbol served no close over a held period shorter than a
+    // week (a weekend) is not a rejection: nothing is recorded and both counts are
+    // zero.
+    #[tokio::test]
+    async fn backfill_of_a_period_without_a_close_succeeds_with_nothing_to_fill() {
+        let mut price_provider = MockPriceProvider::new();
+        price_provider
+            .expect_fetch_daily_closes()
+            .times(1)
+            .returning(|_, _, _| Ok(Some(vec![])));
+        let mut asset_service = asset_service_serving(make_asset("AI", false, false));
+        asset_service.expect_record_missing_daily_closes().times(0);
+
+        let outcome = make_use_case(
+            account_holding(vec![make_transaction(ASSET, "2024-06-29")], 1_000_000),
+            asset_service,
+            price_provider,
+        )
+        .backfill(ACCOUNT, ASSET)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            outcome,
+            PriceHistoryBackfillOutcome {
+                written: 0,
+                already_priced: 0
+            }
+        );
+    }
+
     // MKT-191 — an active holding is backfilled from its earliest transaction
     // through yesterday, never today.
     #[tokio::test]
@@ -531,7 +606,7 @@ mod tests {
             .expect_fetch_daily_closes()
             .withf(|symbol, from, to| symbol == "AI" && from == "2024-02-01" && to == "2024-06-29")
             .times(1)
-            .returning(|_, _, _| Ok(vec![close("2024-02-02")]));
+            .returning(|_, _, _| Ok(Some(vec![close("2024-02-02")])));
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
         asset_service
             .expect_record_missing_daily_closes()
@@ -565,7 +640,7 @@ mod tests {
             .expect_fetch_daily_closes()
             .withf(|_, from, to| from == "2024-01-10" && to == "2024-03-05")
             .times(1)
-            .returning(|_, _, _| Ok(vec![close("2024-01-11")]));
+            .returning(|_, _, _| Ok(Some(vec![close("2024-01-11")])));
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
         asset_service
             .expect_record_missing_daily_closes()
@@ -598,7 +673,7 @@ mod tests {
             .expect_fetch_daily_closes()
             .withf(|_, from, to| from == "2024-06-10" && to == "2024-06-29")
             .times(1)
-            .returning(|_, _, _| Ok(vec![close("2024-06-11")]));
+            .returning(|_, _, _| Ok(Some(vec![close("2024-06-11")])));
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
         asset_service
             .expect_record_missing_daily_closes()
@@ -657,12 +732,12 @@ mod tests {
         price_provider
             .expect_fetch_daily_closes()
             .returning(|_, _, _| {
-                Ok(vec![
+                Ok(Some(vec![
                     close("2024-06-01"),
                     close("2024-04-30"),
                     close("2024-05-02"),
                     close("2024-05-02"),
-                ])
+                ]))
             });
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
         asset_service
@@ -746,7 +821,7 @@ mod tests {
         let mut price_provider = MockPriceProvider::new();
         price_provider
             .expect_fetch_daily_closes()
-            .returning(|_, _, _| Ok(vec![close("2024-05-02")]));
+            .returning(|_, _, _| Ok(Some(vec![close("2024-05-02")])));
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
         asset_service
             .expect_record_missing_daily_closes()

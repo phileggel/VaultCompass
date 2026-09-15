@@ -128,9 +128,15 @@ pub trait PriceProvider: Send + Sync {
 
     /// Fetches the daily-close series for `symbol` covering `[from, to]`
     /// inclusive (ISO dates), for the scheduled-fetch backfill window
-    /// (SPF-030/031). Non-trading days (weekends, holidays) are simply absent
-    /// from the result (SPF-032) — not an error. `Err(_)` is a per-asset skip
-    /// at the call site (SPF-041), same as `fetch_price`.
+    /// (SPF-030/031) and the price history backfill (MKT-193). Non-trading days
+    /// (weekends, holidays) are simply absent from the series (SPF-032) — not an
+    /// error.
+    ///
+    /// - `Ok(Some(closes))` — the provider knows the symbol; the series may be
+    ///   empty when the window holds no trading day (MKT-196).
+    /// - `Ok(None)` — the provider does not know the symbol (MKT-196).
+    /// - `Err(_)` — transport or parse failure: a per-asset skip in the scheduled
+    ///   fetch (SPF-041), a rejection in the price history backfill (MKT-195).
     ///
     /// Defaulted so existing single-purpose fakes (e.g. integration-test
     /// providers exercising only `fetch_price`) do not need to implement a
@@ -140,7 +146,7 @@ pub trait PriceProvider: Send + Sync {
         symbol: &str,
         from: &str,
         to: &str,
-    ) -> anyhow::Result<Vec<DatedClose>> {
+    ) -> anyhow::Result<Option<Vec<DatedClose>>> {
         let _ = (from, to);
         Err(anyhow::anyhow!(
             "daily close series not supported by this provider for symbol: {symbol}"
