@@ -207,6 +207,7 @@ Remove an entry once it has been resolved.
 ## 2026-09-13 — TD-019 — The assets spec's before-each hook can hit a stale element
 
 - Found by: manual (PR #111 E2E attempt 1, run 34746573443; the PR touched no app code)
+- Seen again: `main` push run 35009125319 attempt 1 (2026-09-15, after PR #151, which touched no E2E or assets code) — same `before each` hook, same stale node handle on an `element` call; attempt 2 green.
 - Where: e2e/assets/assets.test.ts (`beforeEach`), e2e/helpers/modal.ts (`dismissLeftoverModal`), e2e/helpers/navigation.ts (`navigateToAssets`)
 - Context: branch `test/golden-portfolio` @ `361ece6`
 - Severity: 🟡
