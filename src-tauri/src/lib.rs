@@ -47,6 +47,7 @@ use crate::use_cases::portfolio_sync::{
     PortfolioSyncDependencies, PortfolioSyncOrchestrator, ServicePortfolioSnapshot,
     ServiceRankStamper,
 };
+use crate::use_cases::price_history_backfill::PriceHistoryBackfillUseCase;
 use crate::use_cases::rate_history_backfill::RateHistoryBackfillUseCase;
 use crate::use_cases::scheduled_fetch::{
     ScheduledFetchOrchestrator, SqliteScheduledFetchRepository,
@@ -357,6 +358,14 @@ pub fn run() {
                 app_handle.manage(Arc::new(RateHistoryBackfillUseCase::new(
                     account_service.clone(),
                     Arc::clone(&currency_service),
+                )));
+
+                // MKT-190 — price history backfill of one holding.
+                app_handle.manage(Arc::new(PriceHistoryBackfillUseCase::new(
+                    account_service.clone(),
+                    asset_service.clone(),
+                    Arc::clone(&price_provider),
+                    Arc::new(|| chrono::Local::now().date_naive()),
                 )));
 
                 app_handle.manage(portfolio_sync_uc);

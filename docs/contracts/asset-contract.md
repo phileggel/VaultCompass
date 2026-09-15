@@ -1,7 +1,7 @@
 # Contract — Asset
 
 > Domain: `asset`
-> Last updated by: price-movement (PMV)
+> Last updated by: market-price (MKT-190–199)
 
 > **Error model on the wire**: each command's error serializes as a flat `{ code: "VariantName", ...payload }` object. The FE matches on `code`. Per-command reachable codes are listed in the "Errors" column of each table below. Infrastructure failures surface as `{ code: "DatabaseError" }` (no payload; diagnostic chain preserved server-side via `tracing::error!`).
 >
@@ -65,6 +65,14 @@
 | ---------------------------- | ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fetch_all_asset_prices`     | `trigger: FetchTrigger` | `()`   | `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError`                                             |
 | `fetch_account_asset_prices` | `account_id: String`    | `()`   | `AccountNotFound { account_id }` (MKT-132), `FetchAlreadyRunning` (MKT-113), `NoFetchableHoldings` (MKT-111), `DatabaseError`, `UnknownError` |
+
+### Price History Backfill
+
+> `backfill_holding_price_history` is implemented in `use_cases/price_history_backfill/`. It fills the dates of one holding's held period (MKT-191) that carry no recorded price with the provider's daily closes, and never overwrites a recorded price (MKT-192). Every window is fetched before anything is written, so a provider failure writes nothing (MKT-195).
+
+| Command                          | Args                                   | Return                        | Errors                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------- | -------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `backfill_holding_price_history` | `account_id: String, asset_id: String` | `PriceHistoryBackfillOutcome` | `AccountNotFound { account_id }` (MKT-196), `AssetNotFound { id }` (MKT-196), `CashAssetNotEditable` (MKT-116/196), `Archived` (AST-006), `AssetNeverHeld` (MKT-196 — no transaction on the asset; a closed holding is accepted), `PriceRefreshBlocked` (MKT-151/196), `TickerNotResolved` (MKT-110/196 — no symbol, or no close over the held period), `ProviderUnreachable` (MKT-195), `DatabaseError` (MKT-195) |
 
 ### Web Lookup
 
@@ -159,7 +167,8 @@ enum AssetPriceSource { Manual, YahooFinance }
 //               auto-record follow-up (MKT-050+), price-history edit (MKT-083+);
 //               set by record_asset_price / update_asset_price per MKT-101.
 // YahooFinance: fetch-task write (fetch_all_asset_prices, fetch_account_asset_prices)
-//               per MKT-102.
+//               per MKT-102, and price history backfill write
+//               (backfill_holding_price_history) per MKT-192.
 ```
 
 ```rust
@@ -237,6 +246,14 @@ struct UnpricedAsset {
 }
 ```
 
+```rust
+// MKT-194 — what a price history backfill recorded over the held period.
+struct PriceHistoryBackfillOutcome {
+    written: u32,                     // closes recorded on dates that had no price (MKT-192)
+    already_priced: u32,              // closes the provider served for dates that already had one
+}
+```
+
 ---
 
 ## Events
@@ -244,7 +261,7 @@ struct UnpricedAsset {
 | Event                      | Payload                                                                                          | Direction                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `AssetUpdated`             | none                                                                                             | published — fired after any successful asset CRUD write or archive/unarchive/delete (R18, R23), including the price-refresh lock toggle `block_asset_price_refresh` / `unblock_asset_price_refresh` (MKT-156)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `AssetPriceUpdated`        | none                                                                                             | published — fired after successful `record_asset_price` (MKT-026), `update_asset_price` (MKT-085), `delete_asset_price` (MKT-091), or per-asset write success during a fetch task — `fetch_all_asset_prices` / `fetch_account_asset_prices` (MKT-112). The transaction auto-record path (MKT-055/057) emits via the same `record_asset_price` call the FE issues after the transaction commits — no separate producer.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `AssetPriceUpdated`        | none                                                                                             | published — fired after successful `record_asset_price` (MKT-026), `update_asset_price` (MKT-085), `delete_asset_price` (MKT-091), or per-asset write success during a fetch task — `fetch_all_asset_prices` / `fetch_account_asset_prices` (MKT-112), or once by `backfill_holding_price_history` when it recorded at least one close (MKT-194). The transaction auto-record path (MKT-055/057) emits via the same `record_asset_price` call the FE issues after the transaction commits — no separate producer.                                                                                                                                                                                                                                                                                                                  |
 | `AssetPriceFetchCompleted` | `{ ok: u32, skipped: u32, unpriced: Vec<UnpricedAsset>, movement: Option<PriceMovementReport> }` | published — once per fetch task after the per-asset loop (MKT-119), for every fetch path (`fetch_all_asset_prices` / `fetch_account_asset_prices`). `ok` = assets repriced, `skipped` = assets the fetch could not price; `unpriced` carries one `UnpricedAsset` per skipped asset (MKT-170/171) so the FE can open the manual-fill modal (MKT-172). `unpriced.len() == skipped`. `movement` is present only for a `fetch_all_asset_prices` call with `trigger == Manual` (PMV-010/011); it is absent on the launch auto-fetch and on every account-scoped fetch, and absent when the report could not be produced (PMV-014). A refresh rejected before any asset is attempted (`FetchAlreadyRunning`, `NoFetchableHoldings`) publishes **no** `AssetPriceFetchCompleted` at all, so the FE never faces an empty report (PMV-012). |
 
 ---
@@ -258,3 +275,4 @@ struct UnpricedAsset {
 - 2026-06-16 — Amended by `market-price` spec (MKT-170+, unupdated-price manual fill): new `UnpricedAsset` shared type; `AssetPriceFetchCompleted` event registered with its `{ ok, skipped, unpriced }` payload (the `unpriced` list is the new part). No new command — per-row manual fill reuses `record_asset_price`.
 - 2026-09-11 — Amended by `price-movement` spec (PMV): `fetch_all_asset_prices` gains a `trigger: FetchTrigger` arg so the backend knows which action started it (PMV-010); new `FetchTrigger`, `PriceMovementReport` and `PriceMovementRow` shared types; `AssetPriceFetchCompleted` payload gains `movement: Option<PriceMovementReport>`. No new command and no new error variant — a report that cannot be produced leaves the fetch's own outcome untouched (PMV-014). Both readings use the rates in force at refresh start, so the reference-currency total intentionally diverges from the freshly converted dashboard total (PMV-020, FXR-075).
 - 2026-09-14 — Amended by `price-movement` spec (PMV-027, PMV-028, PMV-046): `PriceMovementRow.movement_amount` and `PriceMovementReport.total_movement_amount` carry the signed amount moved. No new command, type or error.
+- 2026-09-15 — Amended by `market-price` spec (MKT-190–199): new `backfill_holding_price_history` command and `PriceHistoryBackfillOutcome` shared type; not subject to the fetch in-flight guard (MKT-199); `AssetPriceUpdated` also published by a backfill that recorded at least one close.

@@ -349,6 +349,70 @@ describe("HoldingRow — price-refresh lock toggle", () => {
   });
 });
 
+describe("HoldingRow — price history backfill (MKT-190)", () => {
+  const renderWithBackfill = ({
+    row = baseRow,
+    onBackfillPriceHistory,
+    isBackfillingPriceHistory,
+    readOnly,
+  }: {
+    row?: HoldingRowViewModel;
+    onBackfillPriceHistory?: (assetId: string) => void;
+    isBackfillingPriceHistory?: boolean;
+    readOnly?: boolean;
+  }) =>
+    render(
+      <table>
+        <tbody>
+          <HoldingRow
+            row={row}
+            accountId="account-1"
+            onBuy={vi.fn()}
+            onSell={vi.fn()}
+            onPriceHistory={vi.fn()}
+            onBackfillPriceHistory={onBackfillPriceHistory}
+            isBackfillingPriceHistory={isBackfillingPriceHistory}
+            readOnly={readOnly}
+          />
+        </tbody>
+      </table>,
+    );
+
+  beforeEach(() => {
+    useAppStore.setState({ assets: [], accounts: [] });
+    navigateMock.mockClear();
+  });
+
+  it("calls the handler with the asset id from the button placed right after Price history", () => {
+    const onBackfill = vi.fn();
+    renderWithBackfill({ onBackfillPriceHistory: onBackfill });
+    const button = document.querySelector("#action-backfill-price-history-asset-1");
+    expect(button).toBeInTheDocument();
+    expect(button?.getAttribute("aria-label")).toBe("mkt.backfill.action");
+    expect(button?.previousElementSibling?.id).toBe("action-price-history-asset-1");
+    fireEvent.click(button as Element);
+    expect(onBackfill).toHaveBeenCalledWith("asset-1");
+  });
+
+  it("disables the button while the backfill runs", () => {
+    renderWithBackfill({ onBackfillPriceHistory: vi.fn(), isBackfillingPriceHistory: true });
+    expect(document.querySelector("#action-backfill-price-history-asset-1")).toBeDisabled();
+  });
+
+  it("renders no button on the cash row", () => {
+    renderWithBackfill({
+      row: { ...baseRow, isCash: true, assetName: "Cash", assetReference: "EUR" },
+      onBackfillPriceHistory: vi.fn(),
+    });
+    expect(document.querySelector("#action-backfill-price-history-asset-1")).toBeNull();
+  });
+
+  it("renders no button in the read-only as-of view", () => {
+    renderWithBackfill({ onBackfillPriceHistory: vi.fn(), readOnly: true });
+    expect(document.querySelector("#action-backfill-price-history-asset-1")).toBeNull();
+  });
+});
+
 describe("HoldingRow — dividend columns (DIV-072)", () => {
   beforeEach(() => {
     useAppStore.setState({ assets: [], accounts: [] });
@@ -901,7 +965,7 @@ describe("HoldingRow — split action (SPL-061)", () => {
     const assetCell = document.querySelector("tr > td:nth-child(2)");
     expect(actionsCell?.querySelector("#action-buy-asset-1")).toBeInTheDocument();
     expect(actionsCell).toHaveClass("sticky", "left-0", "bg-m3-surface-container-low");
-    expect(assetCell).toHaveClass("sticky", "left-[188px]", "bg-m3-surface-container-low");
+    expect(assetCell).toHaveClass("sticky", "left-[224px]", "bg-m3-surface-container-low");
     expect(document.querySelector("tr > td:nth-child(3)")).not.toHaveClass("sticky");
   });
 
@@ -911,7 +975,7 @@ describe("HoldingRow — split action (SPL-061)", () => {
     const assetCell = document.querySelector("tr > td:nth-child(2)");
     expect(actionsCell?.querySelector("#action-record-deposit-asset-1")).toBeInTheDocument();
     expect(actionsCell).toHaveClass("sticky", "left-0");
-    expect(assetCell).toHaveClass("sticky", "left-[188px]");
+    expect(assetCell).toHaveClass("sticky", "left-[224px]");
     expect(document.querySelector("tr > td:nth-child(3)")).not.toHaveClass("sticky");
   });
 });

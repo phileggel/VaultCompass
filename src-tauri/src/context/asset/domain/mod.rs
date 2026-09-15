@@ -17,7 +17,8 @@ pub mod yahoo_symbol;
 
 pub use asset::*;
 pub use asset_price::{
-    AssetPrice, AssetPriceRepository, AssetPriceSource, DatedClose, PriceProvider, Quote,
+    AssetPrice, AssetPriceRepository, AssetPriceSource, DatedClose, PriceHistoryBackfillOutcome,
+    PriceProvider, Quote,
 };
 pub use category::*;
 pub use exchange::Exchange;

@@ -30,6 +30,8 @@ pub mod global_performance;
 pub mod holding_transaction;
 /// Portfolio Sync: cross-context orchestration for the seven cross-BC sync commands (SYN + CFR, D3).
 pub mod portfolio_sync;
+/// Price history backfill of one holding over the period the account held it (MKT-190–199).
+pub mod price_history_backfill;
 /// Historical exchange-rate backfill for every persisted pair (FXR-110–114).
 pub mod rate_history_backfill;
 /// Scheduled Price Fetch: daily download of closing prices and exchange rates, even while the app is closed (SPF spec).

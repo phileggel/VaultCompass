@@ -14,7 +14,12 @@ import { useAppStore } from "@/lib/store";
 import { useSnackbar } from "@/ui/components/snackbar/snackbarStore";
 import { formatIsoDateNumeric } from "@/ui/format/date";
 import { accountDetailsGateway, useCachedAssets } from "../gateway";
-import { priceRefreshLockErrorToI18n, toPriceableAssets } from "../shared/presenter";
+import {
+  priceHistoryBackfillErrorToI18n,
+  priceHistoryBackfillOutcomeToMessage,
+  priceRefreshLockErrorToI18n,
+  toPriceableAssets,
+} from "../shared/presenter";
 import type { HoldingNoteTarget, ModalTarget, SellTarget, SplitTarget } from "../shared/types";
 import { useAccountDetails } from "./useAccountDetails";
 
@@ -319,6 +324,32 @@ export function useAccountDetailsView(accountId: string) {
     [fetchAssets, showSnackbar, t, isAsOf],
   );
 
+  // MKT-190/197 — fill a holding's price history over the held period, then report
+  // the outcome. Several holdings may run at once; each row reads its own flag.
+  const [backfillingAssetIds, setBackfillingAssetIds] = useState<string[]>([]);
+  const handleBackfillPriceHistory = useCallback(
+    async (assetId: string) => {
+      if (isAsOf) return;
+      setBackfillingAssetIds((running) => [...running, assetId]);
+      try {
+        const res = await accountDetailsGateway.backfillHoldingPriceHistory(accountId, assetId);
+        if (res.status === "ok") {
+          const message = priceHistoryBackfillOutcomeToMessage(res.data);
+          showSnackbar(t(message.key, message.vars), message.variant);
+        } else {
+          const msg = priceHistoryBackfillErrorToI18n(res.error);
+          showSnackbar(t(msg.key, msg.vars), "error");
+        }
+      } catch (e) {
+        logger.error("Failed to backfill price history", { error: e, assetId });
+        showSnackbar(t("error.Unknown"), "error");
+      } finally {
+        setBackfillingAssetIds((running) => running.filter((id) => id !== assetId));
+      }
+    },
+    [accountId, isAsOf, showSnackbar, t],
+  );
+
   // ---------------------------------------------------------------------------
   // Derived flags
   // ---------------------------------------------------------------------------
@@ -451,5 +482,7 @@ export function useAccountDetailsView(accountId: string) {
     handleHoldingNoteClose,
     handleHoldingNoteSuccess,
     handleTogglePriceRefreshLock,
+    backfillingAssetIds,
+    handleBackfillPriceHistory,
   };
 }

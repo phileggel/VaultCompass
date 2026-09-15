@@ -127,6 +127,8 @@ const makeView = (overrides: Record<string, unknown> = {}) => ({
   handleFeeScheduleClose: vi.fn(),
   handleFeeScheduleSuccess: vi.fn(),
   handleTogglePriceRefreshLock: vi.fn(),
+  handleBackfillPriceHistory: vi.fn(),
+  backfillingAssetIds: [],
   ...overrides,
 });
 
@@ -301,7 +303,7 @@ describe("AccountDetailsView — pinned columns (#001)", () => {
     for (const table of tables) {
       const headers = table.querySelectorAll("thead th");
       expect(headers[0]).toHaveClass("sticky", "left-0");
-      expect(headers[1]).toHaveClass("sticky", "left-[188px]");
+      expect(headers[1]).toHaveClass("sticky", "left-[224px]");
       expect(headers[2]).not.toHaveClass("left-0");
       // Above the pinned body cells (z-10), which scroll up under the header.
       expect(table.querySelector("thead")).toHaveClass("z-20");

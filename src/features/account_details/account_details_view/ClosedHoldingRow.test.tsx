@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ClosedHoldingRowViewModel } from "../shared/presenter";
 import { ClosedHoldingRow } from "./ClosedHoldingRow";
@@ -27,11 +27,17 @@ const baseRow: ClosedHoldingRowViewModel = {
   lastSoldDate: "2024-01-15",
 };
 
-const renderInTable = (row: ClosedHoldingRowViewModel) =>
+const renderInTable = (
+  row: ClosedHoldingRowViewModel,
+  backfill: {
+    onBackfillPriceHistory?: (assetId: string) => void;
+    isBackfillingPriceHistory?: boolean;
+  } = {},
+) =>
   render(
     <table>
       <tbody>
-        <ClosedHoldingRow row={row} accountId="account-1" />
+        <ClosedHoldingRow row={row} accountId="account-1" {...backfill} />
       </tbody>
     </table>,
   );
@@ -91,7 +97,30 @@ describe("ClosedHoldingRow", () => {
       actionsCell?.querySelector("#action-view-closed-transactions-asset-1"),
     ).toBeInTheDocument();
     expect(actionsCell).toHaveClass("sticky", "left-0", "bg-m3-surface-container-low");
-    expect(assetCell).toHaveClass("sticky", "left-[188px]", "bg-m3-surface-container-low");
+    expect(assetCell).toHaveClass("sticky", "left-[224px]", "bg-m3-surface-container-low");
     expect(document.querySelector("tr > td:nth-child(3)")).not.toHaveClass("sticky");
+  });
+});
+
+describe("ClosedHoldingRow — price history backfill (MKT-190)", () => {
+  it("calls the handler with the asset id from its stable-id button, after the transactions button", () => {
+    const onBackfill = vi.fn();
+    renderInTable(baseRow, { onBackfillPriceHistory: onBackfill });
+    const button = document.querySelector("#action-backfill-closed-price-history-asset-1");
+    expect(button).toBeInTheDocument();
+    expect(button?.getAttribute("aria-label")).toBe("mkt.backfill.action");
+    expect(button?.previousElementSibling?.id).toBe("action-view-closed-transactions-asset-1");
+    fireEvent.click(button as Element);
+    expect(onBackfill).toHaveBeenCalledWith("asset-1");
+  });
+
+  it("disables the button while the backfill runs", () => {
+    renderInTable(baseRow, { onBackfillPriceHistory: vi.fn(), isBackfillingPriceHistory: true });
+    expect(document.querySelector("#action-backfill-closed-price-history-asset-1")).toBeDisabled();
+  });
+
+  it("renders no button without a handler (read-only as-of view)", () => {
+    renderInTable(baseRow);
+    expect(document.querySelector("#action-backfill-closed-price-history-asset-1")).toBeNull();
   });
 });

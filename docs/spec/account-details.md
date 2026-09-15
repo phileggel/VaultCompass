@@ -172,7 +172,7 @@ UPDATE holdings SET
 
 **ACD-048 — Closed positions table columns (frontend)**: The closed positions table displays three columns: Asset (name + ticker), Realized P&L, Last sold date. Quantity, average price, and cost basis columns are omitted — they carry no meaning for a position with `quantity = 0`.
 
-**ACD-049 — Closed positions row actions (frontend)**: Each closed position row exposes only the inspect action (magnifier icon, per ACD-042) to navigate to the transaction history for that asset. Buy (+) and Sell (−) action buttons are not shown for closed positions.
+**ACD-049 — Closed positions row actions (frontend)**: Each closed position row exposes two actions: the inspect action (per ACD-042) to navigate to the transaction history for that asset, and the price history backfill action (MKT-190). Buy (+) and Sell (−) action buttons are not shown for closed positions.
 
 **ACD-050 — "All positions closed" state scope (frontend)**: The "All positions closed" empty-state message (ACD-034) applies to the active holdings area only. When `closed_holdings` is non-empty, the closed positions section is still rendered below — the page is not considered empty.
 
@@ -222,7 +222,7 @@ UPDATE holdings SET
 - **Closed Positions Section** (rendered only when `closed_holdings` non-empty, per ACD-047):
   - Section heading "Closed positions"
   - Table columns: Asset (Name + Ticker), Realized P&L, Last sold date
-  - Actions: Inspect only (per ACD-049)
+  - Actions: Inspect, Fill missing price history (per ACD-049)
 
 ### States
 

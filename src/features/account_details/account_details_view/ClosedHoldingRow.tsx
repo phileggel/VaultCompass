@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ScrollText } from "lucide-react";
+import { CalendarSync, ScrollText } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "@/ui/components/button/IconButton";
@@ -11,9 +11,18 @@ import type { ClosedHoldingRowViewModel } from "../shared/presenter";
 type ClosedHoldingRowProps = {
   row: ClosedHoldingRowViewModel;
   accountId: string;
+  /** MKT-190 — fill the price history of the held period; absent in the as-of view. */
+  onBackfillPriceHistory?: (assetId: string) => void;
+  /** MKT-190 — true while this holding's backfill runs. */
+  isBackfillingPriceHistory?: boolean;
 };
 
-export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
+export function ClosedHoldingRow({
+  row,
+  accountId,
+  onBackfillPriceHistory,
+  isBackfillingPriceHistory = false,
+}: ClosedHoldingRowProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
@@ -25,9 +34,13 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
     });
   }, [navigate, accountId, row.assetId]);
 
+  const handleBackfillPriceHistory = useCallback(() => {
+    onBackfillPriceHistory?.(row.assetId);
+  }, [onBackfillPriceHistory, row.assetId]);
+
   return (
     <tr className="group m3-tr opacity-70">
-      {/* ACD-049 / #005 — inspect action only, first; Buy/Sell omitted for closed positions */}
+      {/* ACD-049 / #005 — actions first; Buy/Sell omitted for closed positions */}
       <td className={`m3-td ${PINNED_ACTIONS_CELL}`}>
         <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
           <IconButton
@@ -37,6 +50,18 @@ export function ClosedHoldingRow({ row, accountId }: ClosedHoldingRowProps) {
             aria-label={t("transaction.list_title")}
             onClick={handleViewTransactions}
           />
+          {/* MKT-190 — fill the price history of the period the position was held */}
+          {onBackfillPriceHistory && (
+            <IconButton
+              icon={<CalendarSync size={16} />}
+              size="sm"
+              id={`action-backfill-closed-price-history-${row.assetId}`}
+              aria-label={t("mkt.backfill.action")}
+              onClick={handleBackfillPriceHistory}
+              disabled={isBackfillingPriceHistory}
+              className={isBackfillingPriceHistory ? "animate-pulse" : ""}
+            />
+          )}
         </div>
       </td>
       <td className={`m3-td ${PINNED_ASSET_CELL}`}>

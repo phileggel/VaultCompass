@@ -378,6 +378,8 @@ export function AccountDetailsView() {
                         onDeposit={view.handleDepositOpen}
                         onWithdraw={view.handleWithdrawalOpen}
                         onTogglePriceRefreshLock={view.handleTogglePriceRefreshLock}
+                        onBackfillPriceHistory={view.handleBackfillPriceHistory}
+                        isBackfillingPriceHistory={view.backfillingAssetIds.includes(row.assetId)}
                         onManageFee={
                           view.managementFeesEnabled ? view.handleFeeScheduleOpen : undefined
                         }
@@ -457,7 +459,17 @@ export function AccountDetailsView() {
                       </thead>
                       <tbody>
                         {view.closedHoldings.map((row) => (
-                          <ClosedHoldingRow key={row.assetId} row={row} accountId={accountId} />
+                          <ClosedHoldingRow
+                            key={row.assetId}
+                            row={row}
+                            accountId={accountId}
+                            onBackfillPriceHistory={
+                              view.isAsOf ? undefined : view.handleBackfillPriceHistory
+                            }
+                            isBackfillingPriceHistory={view.backfillingAssetIds.includes(
+                              row.assetId,
+                            )}
+                          />
                         ))}
                       </tbody>
                     </table>

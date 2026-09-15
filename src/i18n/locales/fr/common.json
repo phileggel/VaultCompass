@@ -572,6 +572,17 @@
       "action_unblock": "Réactiver les mises à jour automatiques pour cet actif",
       "success_blocked": "Mises à jour automatiques bloquées pour cet actif.",
       "success_unblocked": "Mises à jour automatiques réactivées pour cet actif."
+    },
+    "backfill": {
+      "action": "Compléter l'historique des prix",
+      "success": "{{written}} prix ajoutés · {{already_priced}} jours en avaient déjà un",
+      "nothing_missing": "Rien à compléter : le fournisseur n'a aucun prix pour les jours encore sans prix",
+      "error": {
+        "AssetNeverHeld": "Ce compte n'a jamais détenu cet actif",
+        "PriceRefreshBlocked": "Les mises à jour automatiques des prix sont bloquées pour cet actif",
+        "TickerNotResolved": "Aucun historique de prix trouvé pour cet actif — vérifiez son ticker",
+        "ProviderUnreachable": "Le fournisseur de prix est injoignable — rien n'a été enregistré"
+      }
     }
   },
   "pmv": {

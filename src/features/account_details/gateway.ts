@@ -19,6 +19,8 @@ import type {
   ManagementFeeError,
   OpenHoldingDTO,
   OpenHoldingError,
+  PriceHistoryBackfillError,
+  PriceHistoryBackfillOutcome,
   RecordInterestDTO,
   RecordSplitDTO,
   Result,
@@ -168,6 +170,14 @@ export const accountDetailsGateway = {
 
   async unblockAssetPriceRefresh(assetId: string): Promise<Result<null, AssetError>> {
     return commands.unblockAssetPriceRefresh(assetId);
+  },
+
+  // MKT-190 — fill the holding's price history over the period the account held it.
+  async backfillHoldingPriceHistory(
+    accountId: string,
+    assetId: string,
+  ): Promise<Result<PriceHistoryBackfillOutcome, PriceHistoryBackfillError>> {
+    return commands.backfillHoldingPriceHistory(accountId, assetId);
   },
 
   async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {

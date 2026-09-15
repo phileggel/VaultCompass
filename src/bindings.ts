@@ -906,6 +906,19 @@ async backfillCurrencyRateHistory() : Promise<Result<number, RateHistoryBackfill
 }
 },
 /**
+ * Fills the price history of one holding over the held period, on the dates that
+ * carry no price (MKT-190–199). Returns the closes written and the ones whose
+ * date already had a price.
+ */
+async backfillHoldingPriceHistory(accountId: string, assetId: string) : Promise<Result<PriceHistoryBackfillOutcome, PriceHistoryBackfillError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("backfill_holding_price_history", { accountId, assetId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Tauri command allowing the frontend to emit structured log entries
  * into the backend tracing system (visible in app logs and collect-logs output).
  */
@@ -3155,6 +3168,59 @@ currency: string;
  * therefore leaves out (ACC-028).
  */
 incomplete: boolean }
+/**
+ * Use-case composite for `backfill_holding_price_history`: the account and asset
+ * context rejections propagated verbatim, plus the use case's own guards.
+ */
+export type PriceHistoryBackfillError = 
+/**
+ * Account context rejection (`AccountNotFound`, `DatabaseError`).
+ */
+AccountError | 
+/**
+ * Asset context rejection (`AssetNotFound`, `CashAssetNotEditable`, `Archived`,
+ * `DatabaseError`).
+ */
+AssetError | 
+/**
+ * Use-case guard (`AssetNeverHeld`, `PriceRefreshBlocked`, `TickerNotResolved`,
+ * `ProviderUnreachable`).
+ */
+PriceHistoryBackfillTask
+/**
+ * What a price history backfill recorded over the held period (MKT-194).
+ */
+export type PriceHistoryBackfillOutcome = { 
+/**
+ * Closes recorded on dates that carried no price (MKT-192).
+ */
+written: number; 
+/**
+ * Closes left aside because their date already carried a price.
+ */
+already_priced: number }
+/**
+ * Rejections owned by the price history backfill use case (MKT-195/196) — the
+ * guards neither the account nor the asset context raises.
+ */
+export type PriceHistoryBackfillTask = 
+/**
+ * The account has no transaction on the asset (MKT-191/196).
+ */
+{ code: "AssetNeverHeld" } | 
+/**
+ * Automated price fetches are blocked for the asset (MKT-151).
+ */
+{ code: "PriceRefreshBlocked" } | 
+/**
+ * No provider symbol can be derived, or the provider has no daily close over
+ * the held period (MKT-196).
+ */
+{ code: "TickerNotResolved" } | 
+/**
+ * A daily-close request failed; nothing was recorded (MKT-195).
+ */
+{ code: "ProviderUnreachable" }
 /**
  * PMV-020+ — what a manual Global refresh did to the portfolio's value. Both
  * readings are computed over the same holdings, quantities and rates, so

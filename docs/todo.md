@@ -19,17 +19,6 @@
 
 Nothing queued.
 
-## #008 — (fullstack) — Backfill one asset's price history over the period an account held it
-
-An account's history and as-of views value a holding at the price recorded for each date; assets bought before the scheduled download existed, or held while it was off, have gaps, and today the only way to fill them is by hand, one price at a time. Add a holding-row action that fills them: for that account and asset, every trading day from the first date the account held the asset to the last (today while still held) that has no recorded price gets its daily close. Dates that already carry a price are left exactly as they are — never overwritten, whatever their source — so a run over a complete history is a no-op that says so. Failure is a reported outcome, never a crash: an unresolvable ticker, a locked asset (MKT-151), or an unreachable provider ends the action with a snackbar and nothing written.
-
-The provider must not be hammered: the daily-close series comes from the ranged request the scheduled download already uses (SPF-030/031, one `period1…period2` call per asset), never one request per date, with the window split into a few large ranges if the provider caps a single one. Shape and precedent: `backfill_currency_rate_history` (FXR-110–114) for exchange rates — same use-case layout, same "written / skipped" feedback.
-
-**User value:** One click gives a holding its full price history for the time the account held it, so past valuations and performance stop showing gaps.
-**Done when:** A holding-row action backfills the asset's missing daily closes over the held period through one ranged request per asset (chunked only when the provider caps the window), leaves existing prices untouched, reports written and skipped counts (or that nothing was missing), degrades every failure to feedback with no partial surprise, respects the refresh lock, is specified as MKT rules with a contract entry, and is covered by a Rust integration test on a seeded gap and an E2E scenario on an unresolvable ticker.
-**Design:** none
-**Open questions:** none
-
 ## #009 — (fullstack) — A per-account analysis view: target price, horizon and reasoning on each holding
 
 Now that prices and rates arrive on their own, what is missing is a place to think. A new view, opened from the account header, lists the account's active holdings with the figures the holdings table already computes — quantity, current value, YTD performance — and adds three fields that are the user's own judgement, edited inline per row: a target price (in the asset's currency), a horizon (short / medium / long term), and free text. This is not the holding note (HNO): the note carries an alarm the application acts on; this carries an opinion the application only stores. One derived figure belongs in the row: how far the current price stands from the target, computed by the backend.

@@ -35,6 +35,7 @@ vi.mock("../gateway", () => ({
   accountDetailsGateway: {
     blockAssetPriceRefresh: (...args: unknown[]) => mockBlock(...args),
     unblockAssetPriceRefresh: (...args: unknown[]) => mockUnblock(...args),
+    backfillHoldingPriceHistory: (...args: unknown[]) => mockBackfill(...args),
     getAccountDetails: (...args: unknown[]) => mockGetAccountDetails(...args),
     subscribeToEvents: vi.fn(() => Promise.resolve(() => {})),
   },
@@ -42,6 +43,88 @@ vi.mock("../gateway", () => ({
   // real store so the setState-driven tests still drive it.
   useCachedAssets: () => useAppStore((state) => state.assets),
 }));
+
+const mockBackfill = vi.fn();
+
+describe("useAccountDetailsView — price history backfill (MKT-190/197)", () => {
+  beforeEach(() => {
+    mockBackfill.mockReset();
+    mockShowSnackbar.mockReset();
+    useAppStore.setState({
+      assets: [],
+      accounts: [{ id: "acc-1", name: "Main", currency: "USD" }] as never,
+      fetchAssets: mockFetchAssets,
+    } as never);
+  });
+
+  it("calls the command with the account and asset ids and reports the counts", async () => {
+    mockBackfill.mockResolvedValue({ status: "ok", data: { written: 12, already_priced: 3 } });
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+
+    await act(async () => {
+      await result.current.handleBackfillPriceHistory("asset-1");
+    });
+
+    expect(mockBackfill).toHaveBeenCalledWith("acc-1", "asset-1");
+    expect(mockShowSnackbar).toHaveBeenCalledWith("mkt.backfill.success", "success");
+  });
+
+  it("reports that nothing was missing as information", async () => {
+    mockBackfill.mockResolvedValue({ status: "ok", data: { written: 0, already_priced: 40 } });
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+
+    await act(async () => {
+      await result.current.handleBackfillPriceHistory("asset-1");
+    });
+
+    expect(mockShowSnackbar).toHaveBeenCalledWith("mkt.backfill.nothing_missing", "info");
+  });
+
+  it("reports a rejection through the error presenter", async () => {
+    mockBackfill.mockResolvedValue({ status: "error", error: { code: "TickerNotResolved" } });
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+
+    await act(async () => {
+      await result.current.handleBackfillPriceHistory("asset-1");
+    });
+
+    expect(mockShowSnackbar).toHaveBeenCalledWith("mkt.backfill.error.TickerNotResolved", "error");
+  });
+
+  it("marks the asset as running until the command settles", async () => {
+    let settle!: (value: unknown) => void;
+    mockBackfill.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.handleBackfillPriceHistory("asset-1");
+    });
+    expect(result.current.backfillingAssetIds).toEqual(["asset-1"]);
+
+    await act(async () => {
+      settle({ status: "ok", data: { written: 1, already_priced: 0 } });
+      await pending;
+    });
+    expect(result.current.backfillingAssetIds).toEqual([]);
+  });
+
+  it("surfaces a generic error snackbar and clears the running state when the gateway throws", async () => {
+    mockBackfill.mockRejectedValue(new Error("ipc broken"));
+    const { result } = renderHook(() => useAccountDetailsView("acc-1"));
+
+    await act(async () => {
+      await result.current.handleBackfillPriceHistory("asset-1");
+    });
+
+    expect(mockShowSnackbar).toHaveBeenCalledWith("error.Unknown", "error");
+    expect(result.current.backfillingAssetIds).toEqual([]);
+  });
+});
 
 describe("useAccountDetailsView — price-refresh lock toggle (MKT-156/157)", () => {
   beforeEach(() => {

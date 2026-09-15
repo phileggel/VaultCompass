@@ -17,6 +17,8 @@ import {
   interestErrorToI18n,
   managementFeeErrorToI18n,
   performanceColumnKey,
+  priceHistoryBackfillErrorToI18n,
+  priceHistoryBackfillOutcomeToMessage,
   priceRefreshLockErrorToI18n,
   selectPerformanceCell,
   toAccountSummary,
@@ -1084,5 +1086,56 @@ describe("toHoldingRow — note fields (HNO-041)", () => {
     expect(row.noteText).toBeNull();
     expect(row.noteHasAlarm).toBe(false);
     expect(row.noteAlarmTriggered).toBe(false);
+  });
+});
+
+// MKT-197 — the backfill outcome and its rejections, as snackbar messages.
+describe("priceHistoryBackfillOutcomeToMessage (MKT-197)", () => {
+  it("states both counts as a success when at least one close was written", () => {
+    expect(priceHistoryBackfillOutcomeToMessage({ written: 12, already_priced: 3 })).toEqual({
+      key: "mkt.backfill.success",
+      vars: { written: 12, already_priced: 3 },
+      variant: "success",
+    });
+  });
+
+  it("states that nothing was left to fill as information when no close was written", () => {
+    expect(priceHistoryBackfillOutcomeToMessage({ written: 0, already_priced: 40 })).toEqual({
+      key: "mkt.backfill.nothing_missing",
+      variant: "info",
+    });
+  });
+});
+
+describe("priceHistoryBackfillErrorToI18n (MKT-196)", () => {
+  it.each([
+    "AssetNeverHeld",
+    "PriceRefreshBlocked",
+    "TickerNotResolved",
+    "ProviderUnreachable",
+  ] as const)("%s maps to its backfill-specific key", (code) => {
+    expect(priceHistoryBackfillErrorToI18n({ code })).toEqual({
+      key: `mkt.backfill.error.${code}`,
+    });
+  });
+
+  it("AccountNotFound (carries account_id payload) maps to its flat key", () => {
+    expect(
+      priceHistoryBackfillErrorToI18n({ code: "AccountNotFound", account_id: "acc-1" }),
+    ).toEqual({ key: "error.AccountNotFound" });
+  });
+
+  it("AssetNotFound (carries id payload) maps to its flat key", () => {
+    expect(priceHistoryBackfillErrorToI18n({ code: "AssetNotFound", id: "asset-1" })).toEqual({
+      key: "error.AssetNotFound",
+    });
+  });
+
+  it.each([
+    "CashAssetNotEditable",
+    "Archived",
+    "DatabaseError",
+  ] as const)("%s maps to its flat error key", (code) => {
+    expect(priceHistoryBackfillErrorToI18n({ code })).toEqual({ key: `error.${code}` });
   });
 });

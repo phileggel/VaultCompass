@@ -75,7 +75,7 @@ impl AssetPrice {
 pub enum AssetPriceSource {
     /// User-driven write: manual entry or price-history edit (MKT-101).
     Manual,
-    /// Auto-fetched from Yahoo Finance (MKT-102).
+    /// Fetched from Yahoo Finance by a fetch task or a price history backfill (MKT-102).
     YahooFinance,
 }
 
@@ -98,6 +98,15 @@ pub struct DatedClose {
     pub date: String,
     /// Closing price per unit in the asset's native currency (i64 micros, ADR-001).
     pub price: i64,
+}
+
+/// What a price history backfill recorded over the held period (MKT-194).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct PriceHistoryBackfillOutcome {
+    /// Closes recorded on dates that carried no price (MKT-192).
+    pub written: u32,
+    /// Closes left aside because their date already carried a price.
+    pub already_priced: u32,
 }
 
 /// External price-data provider trait (MKT-110, ADR-017).

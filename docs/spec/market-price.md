@@ -6,7 +6,7 @@ The Market Price feature allows users to record the current market value of a fi
 
 A price is recorded per asset (not per holding) and is timestamped: multiple entries can accumulate over time, one per date per asset. The Account Details view uses the most recently dated price to display the current value, unrealized gain/loss, and performance percentage for each active holding.
 
-This spec is a **feature spec** spanning two domains: price recording belongs to the `asset` bounded context; display of current price and derived values extends the `use_cases/account_details/` use case. See `docs/spec/account-details.md` for the baseline Account Details behaviour that this spec extends.
+This spec is a **feature spec** spanning two domains: price recording belongs to the `asset` bounded context; display of current price and derived values extends the `use_cases/account_details/` use case; the price history backfill (MKT-190+) reads the account's transactions through its own cross-context use case, `use_cases/price_history_backfill/`. See `docs/spec/account-details.md` for the baseline Account Details behaviour that this spec extends.
 
 By default, recording a buy or sell transaction does **not** automatically create a price record. `Transaction.unit_price` is the price transacted at (a cost-basis input); `AssetPrice.price` is the current market value of the asset. Conflating them by default would show cost as current price, making unrealized P&L meaningless. As an explicit opt-in (see MKT-050+), the user can choose — globally or per transaction — to also persist the transacted unit price as the asset's market price for the transaction date.
 
@@ -27,7 +27,7 @@ Represents a manually recorded market price for a financial asset on a specific 
 | `price`    | Market price per unit in the asset's native currency (i64 micros, ADR-001).                                                                                                                                                                                                                                                   |
 | `source`   | Provenance of this price record (see MKT-100 for variants). `Manual` for user-entered values (including those auto-recorded from a transaction's `record_price=true` flag); a provider name (e.g. `YahooFinance`) for auto-fetched values. Metadata for traceability; does not influence read/write precedence (per ADR-012). |
 
-> The combination `(asset_id, date)` is unique: only one price per asset per day. Recording a second price for the same `(asset_id, date)` pair overwrites the first (MKT-025), regardless of source (per ADR-012). Correction by re-recording remains valid. Standalone edit and delete of individual entries are also supported via the price history view (MKT-070+).
+> The combination `(asset_id, date)` is unique: only one price per asset per day. Recording a second price for the same `(asset_id, date)` pair overwrites the first (MKT-025), regardless of source (per ADR-012) — except in a price history backfill, which fills only dates without a price (MKT-192). Correction by re-recording remains valid. Standalone edit and delete of individual entries are also supported via the price history view (MKT-070+).
 
 ### HoldingDetail (extended)
 
@@ -215,13 +215,13 @@ This section extends the buy/sell transaction flow defined in `docs/spec/financi
 
 ### Source field on AssetPrice (100–109)
 
-These rules apply to all paths that write `AssetPrice` (manual entry MKT-020+, transaction auto-record MKT-050+, and auto-fetch — see "Auto-Fetch from External Provider").
+These rules apply to all paths that write `AssetPrice` (manual entry MKT-020+, transaction auto-record MKT-050+, auto-fetch — see "Auto-Fetch from External Provider" — and the price history backfill MKT-190+).
 
 **MKT-100 — `AssetPriceSource` enum (backend)**: `AssetPrice.source` is of type `AssetPriceSource`, with variants `Manual | YahooFinance`. Exposed on the frontend wire surface. (Per ADR-017 the provider is keyless Yahoo Finance; the former `Stooq` / `Finnhub` variants are removed.)
 
 **MKT-101 — `source: Manual` on user-driven paths (backend)**: Every user-driven write sets `source = Manual` — both `record_asset_price` (manual entry MKT-020+, transaction auto-record MKT-050+) and `update_asset_price` (price-history edit MKT-083, MKT-084). An auto-fetched row edited via the price-history flow therefore becomes `Manual`. The frontend never passes a source value.
 
-**MKT-102 — `source: YahooFinance` on fetched paths (backend)**: Every write produced by a fetch path (launch MKT-122, global refresh MKT-130, account refresh MKT-132) sets `source = YahooFinance`.
+**MKT-102 — `source: YahooFinance` on fetched paths (backend)**: Every write produced by a fetch path (launch MKT-122, global refresh MKT-130, account refresh MKT-132) or by a price history backfill (MKT-192) sets `source = YahooFinance`.
 
 ### Auto-Fetch from External Provider (110–149)
 
@@ -275,7 +275,7 @@ The launch auto-fetch (MKT-121) shows no dispatch snackbar; its outcome is silen
 
 **MKT-122 — Auto-fetch start (backend)**: The auto-fetch task scope is all active holdings across all accounts (subject to MKT-111, MKT-116). Auto-fetch is acknowledged synchronously; per-asset results are signaled via `AssetPriceUpdated` (MKT-112).
 
-**MKT-125 — Sub-unit (pence) quotes normalized to the major ISO unit (backend)**: Applies to every fetch-write path (launch MKT-122, global refresh MKT-130, account refresh MKT-132). Some venues quote in a currency's minor unit — Yahoo reports London (LSE) prices in `GBp` (pence), Johannesburg in `ZAc` (cents), Tel Aviv in `ILA` (agorot). When the provider's quoted currency is one of the recognised minor-unit codes (`GBp`, `ZAc`, `ILA`), the adapter divides the price by 100 and persists it under the corresponding major ISO currency (`GBp → GBP`, `ZAc → ZAR`, `ILA → ILS`). Any currency code **not** in that recognised minor-unit set — including every major ISO code — is treated as already major and stored unchanged (no division). A minor-unit code is never persisted as a currency. (Known limitation: a minor-unit code outside the recognised set would be stored unscaled; the recognised set is widened if such a venue surfaces.)
+**MKT-125 — Sub-unit (pence) quotes normalized to the major ISO unit (backend)**: Applies to every fetch-write path (launch MKT-122, global refresh MKT-130, account refresh MKT-132) and to the price history backfill (MKT-192). Some venues quote in a currency's minor unit — Yahoo reports London (LSE) prices in `GBp` (pence), Johannesburg in `ZAc` (cents), Tel Aviv in `ILA` (agorot). When the provider's quoted currency is one of the recognised minor-unit codes (`GBp`, `ZAc`, `ILA`), the adapter divides the price by 100 and persists it under the corresponding major ISO currency (`GBp → GBP`, `ZAc → ZAR`, `ILA → ILS`). Any currency code **not** in that recognised minor-unit set — including every major ISO code — is treated as already major and stored unchanged (no division). A minor-unit code is never persisted as a currency. (Known limitation: a minor-unit code outside the recognised set would be stored unscaled; the recognised set is widened if such a venue surfaces.)
 
 #### Manual refresh (130–134)
 
@@ -348,6 +348,30 @@ This section lets the user hand-enter prices for the assets a fetch task could n
 **MKT-180 — Fetch progress in the shell (backend + frontend)**: The fetch task publishes `AssetPriceFetchProgress { done, total }` — once at task start (`done = 0`, `total` = scope size) and once after each attempted asset, successful or skipped (`done` = attempts so far). The frontend tracks the in-flight state in the global store and renders a thin determinate progress bar in the shell, below the header and visible on every page, while a fetch is active. `AssetPriceFetchCompleted` (MKT-119) clears the state and hides the bar.
 
 **MKT-181 — Coalesced view refresh during a bulk fetch (frontend)**: While a fetch task is in flight (per the MKT-180 store state), the views that re-fetch on `AssetPriceUpdated` (MKT-036 — account details, account performance, account summaries) suppress those per-asset re-fetches and reload once on `AssetPriceFetchCompleted`. Outside an active fetch, single `AssetPriceUpdated` events (manual price entry, manual-fill modal per MKT-179) keep triggering an immediate re-fetch.
+
+### Price History Backfill (190–199)
+
+This section fills a holding's price history in one action. Account history, as-of views and performance value a holding at the price recorded for each date; an asset bought before the scheduled fetch existed, or held while it was off, has dates with no price. A price history backfill asks the provider for the daily closes of the held period and records them on the dates that carry no price.
+
+**MKT-190 — Price history backfill action (frontend)**: A "Fill missing price history" action is available on each active, non-cash holding row in Account Details, placed with the Price history action (MKT-070), and on each closed position row (ACD-049). It is not shown on the system cash row nor in the read-only as-of view. It stays visible on a refresh-locked holding and on a closed position of an archived asset: the rejection (MKT-196) is the feedback.
+
+**MKT-191 — Held period (backend)**: A price history backfill covers the held period: from the date of the account's earliest transaction on the asset through today while the holding is active, or through the date of its latest transaction on the asset once the holding is closed. Every transaction type on the asset counts toward both bounds, and a gap between selling out and buying back lies inside the period and is filled like any other date. The period never extends past today's local date; a trading day still in progress has no close yet and produces no price (SPF-033).
+
+**MKT-192 — Recorded prices are never overwritten (backend)**: A price history backfill records a daily close only on a date that carries no `AssetPrice` for the asset; a date that already carries one keeps it unchanged, whatever its source (MKT-100), so a backfill over a complete history writes nothing. This is the one write path exempt from latest-write-wins (ADR-012 decision 1, MKT-025): the user asks to fill gaps, not to refresh what exists, unlike the rate backfill (FXR-113). The promise holds on the device that runs the backfill; when a multi-device merge brings another write for the same date, CFR-050 decides as for any record. Recorded closes carry `source = YahooFinance` (MKT-102) with the sub-unit normalization of every fetch (MKT-125).
+
+**MKT-193 — Ranged requests (backend)**: The daily closes come from the provider's ranged daily-close request (SPF-030/031), never from one request per date. The held period is split into consecutive windows of at most 365 days — the application's cap on the range of a single request — one request each.
+
+**MKT-194 — Outcome (backend)**: A successful price history backfill returns two counts: `written`, the closes recorded on dates that had no price, and `already_priced`, the closes the provider served for dates that already had one. When `written` is at least one, `AssetPriceUpdated` is published once (MKT-026), so the views re-fetch (MKT-036).
+
+**MKT-195 — Failures (backend)**: Every window is requested before anything is recorded; when any request fails (network, HTTP or parse error), the price history backfill is rejected with a provider-unreachable error and records nothing. A storage failure while recording rejects it with a database error, keeps the closes already recorded and publishes no `AssetPriceUpdated`; running the price history backfill again records the rest, since a priced date is never rewritten (MKT-192).
+
+**MKT-196 — Rejections (backend)**: A price history backfill is rejected before any request, recording nothing, when the account is unknown, the asset is unknown, the asset is the system Cash Asset (MKT-116), the asset is archived (AST-006), the account has no transaction on the asset, the asset is refresh-locked (MKT-151 — the lock keeps the provider away from the asset), or no provider symbol can be derived (MKT-110) — the last as an unresolvable ticker. After the requests, it is rejected as an unresolvable ticker, recording nothing, when the provider returns no daily close at all over the held period; this includes the provider's answer for an unknown symbol and a held period with no completed trading day yet.
+
+**MKT-197 — Feedback (frontend)**: When the price history backfill succeeds with `written` at least one, a success snackbar states both counts; with `written` at zero, an info snackbar states that the provider has no price for the dates still without one. A rejection shows an error snackbar naming its cause.
+
+**MKT-198 — Pending state (frontend)**: While a price history backfill runs for a holding, that holding's price history backfill action is disabled and shows a pending state; every other action stays usable, and several holdings may run at once.
+
+**MKT-199 — Independent of fetch tasks (backend)**: A price history backfill is not subject to the fetch in-flight guard (MKT-113) and may run while a fetch task or a scheduled fetch (SPF-023) runs. A date a fetch priced before the backfill read the recorded dates keeps the fetch's price (MKT-192); a fetch that writes the date afterwards overwrites the backfilled close (MKT-025).
 
 ---
 
@@ -520,6 +544,26 @@ Unupdated-prices modal (one row per unpriced asset)
     → all rows resolved → modal closes                                  (MKT-177)
     → user dismisses modal → remaining rows treated as skipped          (MKT-177)
     → Account Details / dashboard re-fetch on AssetPriceUpdated          (MKT-179, MKT-036)
+```
+
+### Workflow — Price history backfill (MKT-190+)
+
+```
+Account Details (active non-cash holding row, or closed holding row)
+    → "Fill missing price history" button                                (MKT-190)
+    → that row's action disabled, pending state                          (MKT-198)
+    → backend: backfill_holding_price_history(account_id, asset_id)
+        reject: unknown account / asset, system cash, archived,
+                refresh-locked, never held, no derivable symbol          (MKT-196)
+        held period = earliest transaction on the asset
+                      → today (active) or latest transaction (closed)    (MKT-191)
+        request each window of ≤ 365 days                                (MKT-193)
+            any request fails → reject, nothing recorded                 (MKT-195)
+        no close at all over the period → reject as unresolvable ticker  (MKT-196)
+        record closes on dates without a price; count the others         (MKT-192, MKT-194)
+        written ≥ 1 → publish AssetPriceUpdated once                     (MKT-194)
+    → snackbar: both counts / nothing to fill / rejection cause          (MKT-197)
+    → Account Details re-fetches on AssetPriceUpdated                    (MKT-036)
 ```
 
 ---
@@ -768,6 +812,26 @@ A modal dialog listing the unpriced assets, one per row. Each row is a self-cont
 3. The user knows today's price for two of them; they type each value and confirm the row. Each confirm records a `Manual` price dated today and the row disappears.
 4. The third is an illiquid asset with no figure to hand; the user skips it. The row disappears.
 5. With all rows resolved, the modal closes. Account Details and the dashboard already reflect the two new prices (reactive via `AssetPriceUpdated`).
+
+### UX Draft — Price history backfill (MKT-190+)
+
+#### Entry Point
+
+A "Fill missing price history" icon button in the actions of each active, non-cash holding row, directly under Price history, and of each closed holding row, after the transactions button (MKT-190). The pinned Actions column is five buttons wide to fit it. Not shown on the cash row nor in the as-of view.
+
+#### States
+
+- **Idle**: the button is enabled.
+- **Pending** (MKT-198): the button is disabled and pulses; the other rows stay usable.
+- **Written** (MKT-197): success snackbar with both counts ("412 prices added · 38 days already had one").
+- **Nothing to fill** (MKT-197): info snackbar.
+- **Rejected** (MKT-195, MKT-196): error snackbar naming the cause — never held, locked, ticker not resolved, provider unreachable, or the shared messages for an unknown account or asset, the system cash asset, an archived asset and a database error.
+
+#### User Flow
+
+1. The user opens an account whose history shows gaps for a fund bought in 2021, before the scheduled fetch existed.
+2. They click the fill button on the fund's row; it pulses while the closes download.
+3. A snackbar reads "412 prices added · 38 days already had one"; the history and as-of views now value the fund on every trading day since 2021.
 
 ---
 

@@ -5,6 +5,7 @@ import {
   ArrowUpFromLine,
   Bell,
   BellRing,
+  CalendarSync,
   History,
   Lock,
   LockOpen,
@@ -38,6 +39,10 @@ type HoldingRowProps = {
   onWithdraw?: () => void;
   /** MKT-153/156 — toggle the asset's price-refresh lock. */
   onTogglePriceRefreshLock?: (assetId: string, currentlyBlocked: boolean) => void;
+  /** MKT-190 — fill the asset's price history over the period the account held it. */
+  onBackfillPriceHistory?: (assetId: string) => void;
+  /** MKT-190 — true while this holding's backfill runs. */
+  isBackfillingPriceHistory?: boolean;
   /** FEE-011 — open the recurring fee-schedule modal for this holding. */
   onManageFee?: (assetId: string, assetName: string) => void;
   /** SPL-061 — open the stock-split modal for this holding. */
@@ -61,6 +66,8 @@ export function HoldingRow({
   onDeposit,
   onWithdraw,
   onTogglePriceRefreshLock,
+  onBackfillPriceHistory,
+  isBackfillingPriceHistory = false,
   onManageFee,
   onSplit,
   onNote,
@@ -124,6 +131,10 @@ export function HoldingRow({
   const handlePriceHistory = useCallback(() => {
     onPriceHistory(row.assetId);
   }, [onPriceHistory, row.assetId]);
+
+  const handleBackfillPriceHistory = useCallback(() => {
+    onBackfillPriceHistory?.(row.assetId);
+  }, [onBackfillPriceHistory, row.assetId]);
 
   const handleManageFee = useCallback(() => {
     onManageFee?.(row.assetId, row.assetName);
@@ -252,7 +263,7 @@ export function HoldingRow({
       {/* #005 — actions first, filling two rows */}
       <td className={`m3-td ${PINNED_ACTIONS_CELL}`}>
         <div className="grid grid-flow-col grid-rows-2 gap-1 justify-start">
-          {/* As-of view is read-only: Buy/Sell/price-history/lock are hidden. */}
+          {/* As-of view is read-only: Buy/Sell/price-history/backfill/lock are hidden. */}
           {!readOnly && (
             <>
               {/* TRX-041 — Buy modal from holding row */}
@@ -302,6 +313,18 @@ export function HoldingRow({
                   id={`action-price-history-${row.assetId}`}
                   aria-label={t("account_details.action_price_history")}
                   onClick={handlePriceHistory}
+                />
+              )}
+              {/* MKT-190 — fill the price history of the period the account held the asset */}
+              {onBackfillPriceHistory && (
+                <IconButton
+                  icon={<CalendarSync size={16} />}
+                  size="sm"
+                  id={`action-backfill-price-history-${row.assetId}`}
+                  aria-label={t("mkt.backfill.action")}
+                  onClick={handleBackfillPriceHistory}
+                  disabled={isBackfillingPriceHistory}
+                  className={isBackfillingPriceHistory ? "animate-pulse" : ""}
                 />
               )}
               {/* MKT-153 — Lock toggle: blocks/allows automated price fetches (ADR-014) */}

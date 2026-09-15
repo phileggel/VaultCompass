@@ -434,6 +434,28 @@ describe("accountDetailsGateway — recordWithdrawal (CSH-032)", () => {
   });
 });
 
+describe("accountDetailsGateway — backfillHoldingPriceHistory (MKT-190)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("invokes backfill_holding_price_history with the account and asset ids and returns the counts", async () => {
+    mockInvoke.mockResolvedValue({ written: 12, already_priced: 3 });
+    const result = await accountDetailsGateway.backfillHoldingPriceHistory("account-1", "asset-1");
+    expect(mockInvoke).toHaveBeenCalledWith("backfill_holding_price_history", {
+      accountId: "account-1",
+      assetId: "asset-1",
+    });
+    expect(result).toEqual({ status: "ok", data: { written: 12, already_priced: 3 } });
+  });
+
+  it("surfaces a typed error", async () => {
+    mockInvoke.mockRejectedValue({ code: "TickerNotResolved" });
+    const result = await accountDetailsGateway.backfillHoldingPriceHistory("account-1", "asset-1");
+    expect(result).toEqual({ status: "error", error: { code: "TickerNotResolved" } });
+  });
+});
+
 describe("accountDetailsGateway — recordFreeShares (FSD-022)", () => {
   beforeEach(() => {
     vi.clearAllMocks();

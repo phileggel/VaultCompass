@@ -11,6 +11,8 @@ import type {
   HoldingPeriodPerformance,
   InterestError,
   ManagementFeeError,
+  PriceHistoryBackfillError,
+  PriceHistoryBackfillOutcome,
   SplitError,
 } from "@/bindings";
 import { isCashAsset } from "@/lib/cashAsset";
@@ -65,6 +67,42 @@ export function priceRefreshLockErrorToI18n(err: AssetError): I18nMessage {
     default:
       return { key: "error.Unknown" };
   }
+}
+
+/**
+ * MKT-196 — Maps the `backfill_holding_price_history` rejections to i18n keys: the
+ * backfill's own causes under `mkt.backfill.error`, the shared ones under `error`.
+ */
+export function priceHistoryBackfillErrorToI18n(err: PriceHistoryBackfillError): I18nMessage {
+  switch (err.code) {
+    case "AssetNeverHeld":
+    case "PriceRefreshBlocked":
+    case "TickerNotResolved":
+    case "ProviderUnreachable":
+      return { key: `mkt.backfill.error.${err.code}` };
+    case "AccountNotFound":
+    case "AssetNotFound":
+    case "CashAssetNotEditable":
+    case "Archived":
+    case "DatabaseError":
+      return { key: `error.${err.code}` };
+    default:
+      return { key: "error.Unknown" };
+  }
+}
+
+/** MKT-197 — the snackbar message for a backfill that succeeded. */
+export function priceHistoryBackfillOutcomeToMessage(
+  outcome: PriceHistoryBackfillOutcome,
+): I18nMessage & { variant: "success" | "info" } {
+  if (outcome.written === 0) {
+    return { key: "mkt.backfill.nothing_missing", variant: "info" };
+  }
+  return {
+    key: "mkt.backfill.success",
+    vars: { written: outcome.written, already_priced: outcome.already_priced },
+    variant: "success",
+  };
 }
 
 /**

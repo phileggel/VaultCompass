@@ -1,6 +1,6 @@
 use super::domain::{
     Asset, AssetCategory, AssetCategoryRepository, AssetClass, AssetPrice, AssetPriceRepository,
-    AssetPriceSource, AssetRepository, DatedClose, SYSTEM_CATEGORY_ID,
+    AssetPriceSource, AssetRepository, DatedClose, PriceHistoryBackfillOutcome, SYSTEM_CATEGORY_ID,
 };
 use super::error::AssetError;
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use sqlx::SqliteConnection;
+use std::collections::HashSet;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
@@ -560,6 +561,48 @@ impl AssetService {
         Ok(written)
     }
 
+    /// Records the closes of a price history backfill on the dates that carry no
+    /// price for `asset_id`, leaving every recorded price unchanged whatever its
+    /// source (MKT-192), stamped `source = YahooFinance` (MKT-102). Publishes one
+    /// `AssetPriceUpdated` when at least one close was written (MKT-194).
+    pub async fn record_missing_daily_closes(
+        &self,
+        asset_id: &str,
+        closes: Vec<DatedClose>,
+    ) -> StdResult<PriceHistoryBackfillOutcome, AssetError> {
+        let recorded = self.price_repo.get_all_for_asset(asset_id).await.map_err(|e| {
+            tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "record_missing_daily_closes: price listing failure");
+            AssetError::DatabaseError
+        })?;
+        let mut priced_dates: HashSet<String> =
+            recorded.into_iter().map(|price| price.date).collect();
+        let mut fill = PriceHistoryBackfillOutcome {
+            written: 0,
+            already_priced: 0,
+        };
+        for close in closes {
+            if !priced_dates.insert(close.date.clone()) {
+                fill.already_priced += 1;
+                continue;
+            }
+            let record = AssetPrice::restore(
+                asset_id.to_string(),
+                close.date,
+                close.price,
+                AssetPriceSource::YahooFinance,
+            );
+            self.price_repo.upsert(record).await.map_err(|e| {
+                tracing::error!(target: BACKEND, asset_id = %asset_id, err = ?e, "record_missing_daily_closes: upsert failure");
+                AssetError::DatabaseError
+            })?;
+            fill.written += 1;
+        }
+        if let Some(bus) = self.event_bus.as_ref().filter(|_| fill.written > 0) {
+            bus.publish(Event::AssetPriceUpdated);
+        }
+        Ok(fill)
+    }
+
     // -------------------------------------------------------------------------
     // Apply entry points (CFR-017) — merge executor writes; no entry guards run
     // -------------------------------------------------------------------------
@@ -757,6 +800,12 @@ pub trait AssetServiceContract: Send + Sync {
         asset_id: &str,
         closes: Vec<DatedClose>,
     ) -> StdResult<u32, AssetError>;
+    /// Records backfill closes on the dates without a price, publishing once (MKT-192/194).
+    async fn record_missing_daily_closes(
+        &self,
+        asset_id: &str,
+        closes: Vec<DatedClose>,
+    ) -> StdResult<PriceHistoryBackfillOutcome, AssetError>;
 }
 
 #[async_trait]
@@ -791,6 +840,14 @@ impl AssetServiceContract for AssetService {
         closes: Vec<DatedClose>,
     ) -> StdResult<u32, AssetError> {
         AssetService::record_daily_closes(self, asset_id, closes).await
+    }
+
+    async fn record_missing_daily_closes(
+        &self,
+        asset_id: &str,
+        closes: Vec<DatedClose>,
+    ) -> StdResult<PriceHistoryBackfillOutcome, AssetError> {
+        AssetService::record_missing_daily_closes(self, asset_id, closes).await
     }
 }
 
@@ -2713,6 +2770,151 @@ mod tests {
             )
             .await
             .unwrap_err();
+        assert!(matches!(err, AssetError::DatabaseError), "got: {err:?}");
+    }
+
+    fn backfill_close(date: &str) -> DatedClose {
+        DatedClose {
+            date: date.to_string(),
+            price: 100_000_000,
+        }
+    }
+
+    // MKT-192/194 — only the dates with no recorded price are written, whatever the
+    // recorded price's source; the others are counted as skipped.
+    #[tokio::test]
+    async fn record_missing_daily_closes_writes_only_the_dates_without_a_price() {
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset().times(1).return_once(|_| {
+            Ok(vec![AssetPrice::restore(
+                "asset-id".to_string(),
+                "2026-06-09".to_string(),
+                50_000_000,
+                AssetPriceSource::Manual,
+            )])
+        });
+        pr.expect_upsert()
+            .withf(|p| {
+                p.asset_id == "asset-id"
+                    && p.source == AssetPriceSource::YahooFinance
+                    && (p.date == "2026-06-08" || p.date == "2026-06-10")
+            })
+            .times(2)
+            .returning(|_| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+
+        let fill = svc
+            .record_missing_daily_closes(
+                "asset-id",
+                vec![
+                    backfill_close("2026-06-08"),
+                    backfill_close("2026-06-09"),
+                    backfill_close("2026-06-10"),
+                ],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            fill,
+            PriceHistoryBackfillOutcome {
+                written: 2,
+                already_priced: 1
+            }
+        );
+    }
+
+    // MKT-194 — a backfill that wrote at least one close publishes AssetPriceUpdated.
+    #[tokio::test]
+    async fn record_missing_daily_closes_publishes_when_a_close_was_written() {
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset().return_once(|_| Ok(vec![]));
+        pr.expect_upsert().times(1).returning(|_| Ok(()));
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        )
+        .with_event_bus(bus);
+
+        svc.record_missing_daily_closes("asset-id", vec![backfill_close("2026-06-08")])
+            .await
+            .unwrap();
+
+        tokio::time::timeout(Duration::from_millis(200), rx.changed())
+            .await
+            .expect("event not received within 200ms")
+            .expect("watch sender dropped before event fired");
+        assert_eq!(*rx.borrow(), Event::AssetPriceUpdated);
+    }
+
+    // MKT-194 — a backfill that wrote nothing publishes nothing. The test above
+    // proves the same bus wiring does deliver the event when a close is written.
+    #[tokio::test]
+    async fn record_missing_daily_closes_publishes_nothing_when_every_date_had_a_price() {
+        let bus = Arc::new(SideEffectEventBus::new());
+        let mut rx = bus.subscribe();
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset().return_once(|_| {
+            Ok(vec![AssetPrice::restore(
+                "asset-id".to_string(),
+                "2026-06-08".to_string(),
+                50_000_000,
+                AssetPriceSource::YahooFinance,
+            )])
+        });
+        pr.expect_upsert().times(0);
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        )
+        .with_event_bus(bus);
+
+        let fill = svc
+            .record_missing_daily_closes("asset-id", vec![backfill_close("2026-06-08")])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            fill,
+            PriceHistoryBackfillOutcome {
+                written: 0,
+                already_priced: 1
+            }
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), rx.changed())
+                .await
+                .is_err(),
+            "no event may be published when nothing was written"
+        );
+    }
+
+    // A price listing failure surfaces as DatabaseError before any write.
+    #[tokio::test]
+    async fn record_missing_daily_closes_surfaces_a_listing_failure() {
+        let mut pr = MockAssetPriceRepository::new();
+        pr.expect_get_all_for_asset()
+            .return_once(|_| Err(SimulatedDbError.into()));
+        pr.expect_upsert().times(0);
+        let svc = make_svc(
+            MockAssetRepository::new(),
+            MockAssetCategoryRepository::new(),
+            pr,
+        );
+
+        let err = svc
+            .record_missing_daily_closes("asset-id", vec![backfill_close("2026-06-08")])
+            .await
+            .unwrap_err();
+
         assert!(matches!(err, AssetError::DatabaseError), "got: {err:?}");
     }
 

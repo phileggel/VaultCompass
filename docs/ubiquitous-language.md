@@ -303,6 +303,12 @@ The local wall-clock time of day the scheduled fetch runs (default 22:15). A tri
 
 > Status: confirmed
 
+### Price history backfill
+
+The action the user starts on a holding to fill its price history from the account's first transaction on the asset through today (active holding) or its last transaction (closed holding), recording a daily close only on dates that carry no price. Unlike the scheduled fetch's Backfill, it is not limited to 30 days and never overwrites a recorded price.
+
+> Status: confirmed
+
 ### Backfill
 
 Recording every missed trading-day close since the last successful scheduled fetch, up to 30 days back. Older gaps are left untouched.
@@ -311,7 +317,7 @@ Recording every missed trading-day close since the last successful scheduled fet
 
 ### External provider
 
-A third-party HTTP service that returns current asset prices. Currently Yahoo Finance — keyless, no credential required (ADR-017). "provider" in prose means an External provider.
+A third-party HTTP service that returns current asset prices and their daily-close history. Currently Yahoo Finance — keyless, no credential required (ADR-017). "provider" in prose means an External provider.
 
 > Status: confirmed
 

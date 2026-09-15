@@ -281,3 +281,23 @@ Remove an entry once it has been resolved.
 - Observation: rates are fetched and followed for the pairs an asset needs to reach its account's currency, but no rule follows the pair from an account's currency to the cross-account reference currency; a USD account holding only USD assets therefore never gets a USD → EUR rate unless the user declares the pair, and the accounts-list portfolio total stays marked partial for it (the global performance view has the same dependency).
 - User value: the portfolio total and the global performance figures count every account without the user having to declare a pair first.
 - Done when: an account whose currency differs from the reference currency has its pair followed like an asset pair (or the application asks the user to declare it), stated as an FXR rule, and a USD-only account with a fetched rate no longer leaves the total incomplete.
+
+## 2026-09-15 — TD-027 — ADR-012 does not record the price history backfill's fill-only exception
+
+- Found by: spec-reviewer (MKT-190–199 second pass on #008)
+- Where: `docs/adr/012-latest-write-wins-source-as-metadata.md` (decision 1), `docs/spec/market-price.md` MKT-192
+- Context: branch `c/008-price-history-backfill`
+- Severity: 🔵
+- Observation: ADR-012 decision 1 says every price write upserts unconditionally; MKT-192 exempts the price history backfill, which writes only dates without a price. The spec names the exception and the ADR does not, so a reader of the ADR alone misses it; the ADR status vocabulary has no "amended by" form yet (TD-007).
+- User value: None — the decision record matches the rules.
+- Done when: ADR-012, or an ADR that supersedes it, names the fill-only exception, and adr-reviewer passes it.
+
+## 2026-09-15 — TD-028 — An unknown ticker and a period with no close yet share one rejection
+
+- Found by: spec-reviewer (MKT-196 second pass on #008)
+- Where: `src-tauri/src/context/asset/repository/yahoo_client.rs` (`parse_daily_closes` returns an empty series for both), `src-tauri/src/use_cases/price_history_backfill/orchestrator.rs` (`TickerNotResolved`)
+- Context: branch `c/008-price-history-backfill`
+- Severity: 🔵
+- Observation: the provider adapter turns Yahoo's unknown-symbol answer and a window without a bar into the same empty series, so a price history backfill on a holding bought today reports "No price history found for this asset — check its ticker" although the ticker is fine; MKT-196 states the shared outcome on purpose.
+- User value: a holding bought today gets "nothing to fill yet" instead of a misleading ticker warning.
+- Done when: the daily-close request tells an unknown symbol from an empty window, and a held period with no completed trading day ends with the nothing-to-fill feedback.
