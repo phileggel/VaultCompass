@@ -326,6 +326,7 @@ export function useAccountDetailsView(accountId: string) {
 
   // MKT-190/197 — fill a holding's price history over the held period, then report
   // the outcome. Several holdings may run at once; each row reads its own flag.
+  // reviewer-frontend FP: no data.retry() — the backfill publishes AssetPriceUpdated when it writes, and useAccountDetails re-fetches on it (MKT-194, MKT-036) — see PR #145
   const [backfillingAssetIds, setBackfillingAssetIds] = useState<string[]>([]);
   const handleBackfillPriceHistory = useCallback(
     async (assetId: string) => {
