@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.0] - 2026-09-15
+
+### Added
+
+- fill a holding's missing price history in one click
+- show the portfolio's total value in euros on the accounts list
+- keep a holding's actions and name in view while scrolling sideways
+- put a holding's actions at the start of its row, on two rows
+- put each date above its own column in the price movement report
+- show the amount each account moved in the price movement report
+- show the same ledger icon wherever a transaction list opens
+- show only the age of a price or rate on the holding row
+
+### Fixed
+
+- close a TLS security advisory in the app's secure connections
+- no ticker warning when a holding's period has no trading day
+- fill a holding's price history up to yesterday, never today
+
 ## [0.41.1] - 2026-09-12
 
 ### Fixed
