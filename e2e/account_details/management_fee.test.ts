@@ -174,8 +174,10 @@ describe("management_fee", () => {
     //   Direct button click (not a <tr> click) — WebDriver can target the
     //   button element by its stable id (E4) without the td:first-child workaround.
     // -------------------------------------------------------------------
+    //   waitForClickable, not waitForExist: the previous scenario's success
+    //   snackbar can still cover the row's second line of actions for its 4 s.
     const manageFeeBtn = await $(`#action-manage-fee-${astId}`);
-    await manageFeeBtn.waitForExist({ timeout: 10000 });
+    await manageFeeBtn.waitForClickable({ timeout: 10000 });
     await manageFeeBtn.click();
 
     // -------------------------------------------------------------------
