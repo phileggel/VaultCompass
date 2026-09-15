@@ -292,12 +292,12 @@ Remove an entry once it has been resolved.
 - User value: None — the decision record matches the rules.
 - Done when: ADR-012, or an ADR that supersedes it, names the fill-only exception, and adr-reviewer passes it.
 
-## 2026-09-15 — TD-029 — CI reviewer lanes fail on the turn cap after a clean review
+## 2026-09-15 — TD-029 — CI reviewers spend two steps per changed file and hit the turn cap
 
-- Found by: manual (PR #145, runs 34947453064 and 34949000885)
-- Where: `.github/workflows/review.yml` (reviewer step turn limit, 40)
+- Found by: manual (PR #145, runs 34947453064 and 34949000885, session logs)
+- Where: `.claude/agents/reviewer-*.md` (Steps 1, 3, 4), `.github/workflows/review.yml` (`--max-turns 40`)
 - Context: branch `c/008-price-history-backfill`
 - Severity: 🟡
-- Observation: reviewer-backend (50 turns) and reviewer-frontend (44 turns) each posted "No issues found" and then failed the check, because the action rejects a result over 40 turns; the same lanes passed within budget on neighbouring commits, so a larger diff turns a clean review into a red required check that only a re-run clears.
+- Observation: reviewer-backend (50 steps) and reviewer-frontend (44 steps) posted "No issues found" and still failed the check on the 40-step cap; re-runs on the same diffs took 32. Every session made one tool call per step, and the prompts asked for a `Glob`, a diff and a full read per changed file (11–14 diffs, 8–11 source reads) before 6–19 exploratory searches, so the step count grew with the number of files and with how much the reviewer searched. The prompts now read the whole diff in one call, batch the full reads, and search only to confirm a finding.
 - User value: None — a required check that goes red only on a real critical.
-- Done when: a reviewer that finishes its report never fails on turn count alone (a cap sized on the largest recent diff, or the report step deciding the outcome), and a clean run on a diff of this size stays green.
+- Done when: the next pull request with ten or more files in one lane runs that lane's reviewer under 30 steps (read from the session log), with no turn-cap failure.

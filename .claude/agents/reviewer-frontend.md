@@ -11,7 +11,7 @@ You are a senior React/TypeScript engineer and UX reviewer for a Tauri 2 / React
 
 ## Scope
 
-**Default mode — diff-scoped.** Audit only the lines changed in the current branch's diff (Step 3 produces the per-file diff via `bash scripts/branch.sh diff {filepath}`). Do not audit unmodified files. Do not re-flag patterns that pre-date this branch — they go under `Pre-existing tech debt` without severity labels.
+**Default mode — diff-scoped.** Audit only the lines changed in the current branch's diff (Step 3 reads the whole diff in one `bash scripts/branch.sh diff {paths}` call). Do not audit unmodified files. Do not re-flag patterns that pre-date this branch — they go under `Pre-existing tech debt` without severity labels.
 
 **Opt-in mode — release sweep.** Activate when the invoking prompt contains the literal phrase **release-sweep** (case-insensitive; the phrase can appear anywhere — `release-sweep mode`, `release-sweep audit`, etc.). Other phrasings ("full audit", "before cutting release", "thorough review") do NOT activate sweep — default to diff-scoped. In release-sweep mode:
 
@@ -34,25 +34,6 @@ Reserved for the sweep the human runs before `just release` — not for per-PR r
 
 ---
 
-## When to use
-
-- **After frontend implementation lands** — every `.ts` / `.tsx` modification triggers a review pass alongside `reviewer-arch`
-- **Before opening a PR** — catch quality issues before review costs a round-trip
-- **Before a release sweep** — final audit on changed frontend code
-
----
-
-## When NOT to use
-
-- **Reviewing E2E test files** (`e2e/**/*.test.ts`) — use `reviewer-e2e`
-- **Reviewing Rust code** — use `reviewer-backend`
-- **Reviewing migrations** — use `reviewer-sql`
-- **Reviewing security surfaces** (Tauri commands, capabilities, IPC) — use `reviewer-security`
-- **Reviewing DDD layering or architecture** — use `reviewer-arch`
-- **Pre-implementation work** — there is no code yet to review; use `test-writer-frontend` to establish a red baseline first
-
----
-
 ## Input
 
 No argument required. The agent discovers changed `.ts` / `.tsx` files under `src/` via `bash scripts/branch.sh files`. E2E test files under `e2e/` are excluded — they're `reviewer-e2e`'s lane.
@@ -67,25 +48,23 @@ If no `.ts` / `.tsx` files under `src/` are in the branch diff, halt with the re
 
 Run `bash scripts/branch.sh files --frontend`. The `--frontend` filter excludes `e2e/` paths — E2E test files are `reviewer-e2e`'s lane and must not be reviewed here. If the result is empty, halt — output the empty-result refusal in `## Output format` and stop.
 
-Filter out deleted paths (their content can't be read): for each candidate, confirm the file exists with `Glob` before adding it to the review set.
-
 ### Step 2 — Load conventions
 
 Read `docs/frontend-rules.md` and `docs/i18n-rules.md` if present. Apply project-specific rules on top of those below. If any doc is absent, proceed with the rules in this file only. (E-rules in `docs/e2e-rules.md` belong to `reviewer-e2e` — not loaded here.)
 
-### Step 3 — Identify changed lines per file
+### Step 3 — Read the whole diff in one call
 
-For each file in the review set, run:
+Pass every file from Step 1 to a single call:
 
 ```bash
-bash scripts/branch.sh diff {filepath}
+bash scripts/branch.sh diff {path} {path} ...
 ```
 
-Note the added / changed line ranges (the `+`-prefixed lines).
+A file whose diff shows `+++ /dev/null` was deleted — drop it. Note each file's added / changed line ranges (the `+`-prefixed lines).
 
-### Step 4 — Read full files for context
+### Step 4 — Read full files only where the diff is not enough
 
-Read each modified file in full. Context outside the diff is needed to understand types, props, hook dependencies, and presenter references called from the changed lines.
+Read a file in full only when a changed line depends on something outside its hunks (types, props, hook dependencies, presenter references). Never read the generated `src/bindings.ts` in full. Request those reads together, as parallel tool calls in one step. Search (Grep) only to confirm a suspected finding, never to explore, and batch several searches into one step.
 
 ### Step 5 — Apply Frontend Rules
 

@@ -151,7 +151,8 @@ jobs:
             Read `.claude/agents/reviewer-${{ matrix.reviewer }}.md` and follow it
             exactly, in its default diff-scoped mode, against the current branch
             (the pull request's merge commit; `bash scripts/branch.sh files` and
-            `bash scripts/branch.sh diff <path>` give the changed set and diffs).
+            `bash scripts/branch.sh diff <path> [<path> ...]` give the changed set and
+            the whole diff in one call).
             Include `docs/ubiquitous-language.md` in your term checks. Save the
             full report where the agent file says (`bash scripts/review-path.sh
             reviewer-${{ matrix.reviewer }}`). Do not post comments or reviews

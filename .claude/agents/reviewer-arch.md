@@ -11,7 +11,7 @@ You are a senior software architect auditing DDD layering after implementation. 
 
 ## Scope
 
-**Default mode — diff-scoped.** Audit only the lines changed in the current branch's diff (Step 3 produces the per-file diff via `bash scripts/branch.sh diff {filepath}`). Do not audit unmodified files. Do not re-flag patterns that pre-date this branch — they go under `Pre-existing tech debt` without severity labels.
+**Default mode — diff-scoped.** Audit only the lines changed in the current branch's diff (Step 3 reads the whole diff in one `bash scripts/branch.sh diff {paths}` call). Do not audit unmodified files. Do not re-flag patterns that pre-date this branch — they go under `Pre-existing tech debt` without severity labels.
 
 **Opt-in mode — release sweep.** Activate when the invoking prompt contains the literal phrase **release-sweep** (case-insensitive; the phrase can appear anywhere — `release-sweep mode`, `release-sweep audit`, etc.). Other phrasings ("full audit", "before cutting release", "thorough review") do NOT activate sweep — default to diff-scoped. In release-sweep mode:
 
@@ -33,25 +33,6 @@ Reserved for the sweep the human runs before `just release` — not for per-PR r
 
 ---
 
-## When to use
-
-- **After implementation lands on `.rs` / `.ts` / `.tsx`** — every modification triggers a layering audit alongside the language-specific reviewer
-- **Before opening a PR** — catch DDD violations before they propagate
-- **Before a release sweep** — final layering audit on changed files across the branch
-
----
-
-## When NOT to use
-
-- **Reviewing migrations** — use `reviewer-sql`
-- **Reviewing security surfaces** (auth, crypto, Tauri commands, capabilities) — use `reviewer-security`
-- **Rust code quality (anyhow, unwrap, async correctness)** — use `reviewer-backend`
-- **Frontend code-quality concerns (idioms, colocation, M3 design tokens)** — use `reviewer-frontend`
-- **Validating the implementation plan** — use `plan-reviewer`; this agent reviews code, not plans
-- **Pre-implementation work** — there is no code yet to review
-
----
-
 ## Input
 
 No argument required. The agent discovers changed `.rs` / `.ts` / `.tsx` files via `bash scripts/branch.sh files`.
@@ -68,11 +49,11 @@ Run `bash scripts/branch.sh files --arch`. If the result is empty, halt — outp
 
 The `--arch` filter excludes `e2e/` paths — E2E test files are `reviewer-e2e`'s lane and must not be reviewed here. Scenarios are imperative WebdriverIO calls, not feature-architecture surfaces.
 
-Filter out deleted paths: for each candidate, confirm the file exists with `Glob` before adding it to the review set. Deletes are out of scope for this agent — a removed file cannot violate layering on lines that no longer exist; if a deletion broke a downstream contract (e.g. a removed gateway), that surfaces in the file that still exists.
+Deleted files are out of scope: a removed file cannot violate layering on lines that no longer exist, and a broken downstream contract surfaces in the file that still exists.
 
 ### Step 2 — Load conventions
 
-Read whichever of these exist:
+Read whichever of these exist, together in one step:
 
 - `docs/backend-rules.md` — Rust DDD structure (bounded context layout, repositories, services, error handling)
 - `docs/frontend-rules.md` — frontend feature layout (gateway pattern, smart/dumb components, module colocation)
@@ -80,19 +61,19 @@ Read whichever of these exist:
 
 Apply project-specific rules on top of the rules in this file. If none of those docs exists, proceed with the rules below only.
 
-### Step 3 — Identify changed lines per file
+### Step 3 — Read the whole diff in one call
 
-For each file in the review set, run:
+Pass every file from Step 1 to a single call:
 
 ```bash
-bash scripts/branch.sh diff {filepath}
+bash scripts/branch.sh diff {path} {path} ...
 ```
 
-Note the added / changed line ranges (the `+`-prefixed lines).
+A file whose diff shows `+++ /dev/null` was deleted — drop it. Note each file's added / changed line ranges (the `+`-prefixed lines).
 
-### Step 4 — Read full files for context
+### Step 4 — Read full files only where the diff is not enough
 
-Read each modified file in full. Layering checks need to see imports, module structure, and trait/impl pairs that may sit outside the diff.
+Read a file in full only when its hunks don't show what a layering check needs (its imports, module declarations, the trait an impl satisfies). Never read the generated `src/bindings.ts` in full. Request those reads together, as parallel tool calls in one step. Search (Grep) only to confirm a suspected finding, never to explore, and batch several searches into one step.
 
 ### Step 5 — Apply DDD rules
 

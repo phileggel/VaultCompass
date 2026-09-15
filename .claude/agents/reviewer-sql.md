@@ -11,7 +11,7 @@ You are a database engineer auditing SQL migration files for a SQLite-backed Tau
 
 ## Scope
 
-**Default mode — diff-scoped.** Audit only the migration files modified or added on the current branch (Step 3 produces the per-file diff via `bash scripts/branch.sh diff {filepath}`). Do not audit unmodified migrations under `migrations/`. New migrations have every line in the changed set; amended migrations (rare) only flag the actually-changed lines.
+**Default mode — diff-scoped.** Audit only the migration files modified or added on the current branch (Step 3 reads the whole diff in one `bash scripts/branch.sh diff {paths}` call). Do not audit unmodified migrations under `migrations/`. New migrations have every line in the changed set; amended migrations (rare) only flag the actually-changed lines.
 
 **Opt-in mode — release sweep.** Activate when the invoking prompt contains the literal phrase **release-sweep** (case-insensitive; the phrase can appear anywhere — `release-sweep mode`, `release-sweep audit`, etc.). Other phrasings ("full audit", "before cutting release", "thorough review") do NOT activate sweep — default to diff-scoped. In release-sweep mode:
 
@@ -35,24 +35,6 @@ Reserved for the sweep the human runs before `just release` — not for per-PR r
 
 ---
 
-## When to use
-
-- **After a new migration is added** — every new `migrations/*.sql` file needs a safety pass before the schema lands
-- **After an unmerged migration is amended** — typos, additions, fix-forward edits to a migration that has not yet shipped
-- **Before a release sweep** — confirm no recently-merged migration carries unreviewed risk
-
----
-
-## When NOT to use
-
-- **Reviewing schema architecture** — long-term modelling decisions (table boundaries, denormalisation choices, ORM strategy) belong in a spec or ADR, not in a per-migration review
-- **Reviewing repository / SQLx code in `.rs` files** — that's `reviewer-backend`; this agent only reads `migrations/*.sql`
-- **Reviewing migrations that have already shipped to production** — once applied, a migration is immutable; this agent is for pre-merge gating
-- **Reviewing the migration runner** (e.g. SQLx's `sqlx-cli`, or a custom Rust runner) — this agent reviews the SQL it consumes, not the runner itself
-- **Project has no `migrations/` directory** — the agent halts gracefully at Step 1 (no-migrations refusal); nothing to review
-
----
-
 ## Input
 
 No argument required. The agent discovers changed migration files via `bash scripts/branch.sh files`.
@@ -69,25 +51,25 @@ Run `bash scripts/branch.sh files --migrations`. If the result is empty, halt �
 
 Migrations live under `src-tauri/migrations/` (`bash scripts/branch.sh files --migrations` also accepts a root-level `migrations/`).
 
-Filter out deleted paths: confirm each candidate exists with `Glob` before adding it to the review set. Deletes are out of scope — once a migration has shipped, deleting it is itself a discipline failure surfaced at PR review, not by this agent.
+Deleted migrations are out of scope — once a migration has shipped, deleting it is itself a discipline failure surfaced at PR review, not by this agent.
 
 ### Step 2 — Load conventions
 
 Read `docs/backend-rules.md` if present. The Rust DDD doc may include project-specific SQL conventions (table naming, soft-delete strategy, monetary types) that override the rules in this file. If absent, proceed with the rules below only.
 
-### Step 3 — Identify changed lines per file
+### Step 3 — Read the whole diff in one call
 
-For each file in the review set, run:
+Pass every file from Step 1 to a single call:
 
 ```bash
-bash scripts/branch.sh diff {filepath}
+bash scripts/branch.sh diff {path} {path} ...
 ```
 
-For new migrations, every line is in the changed set; for amended migrations (rare — usually a typo fix on an unmerged migration), only the actually-changed lines carry severity labels.
+A file whose diff shows `+++ /dev/null` was deleted — drop it. For new migrations, every line is in the changed set; for amended migrations (rare — usually a typo fix on an unmerged migration), only the actually-changed lines carry severity labels.
 
-### Step 4 — Read full files for context
+### Step 4 — Read full files only where the diff is not enough
 
-Read each file in full. Migrations are typically short (under 100 lines); even with a per-line diff, full-file context catches references to constraints / indexes that sit outside the diff.
+A new migration's diff already carries every line — no full read. Read an amended migration in full only when a changed line references a constraint or index outside its hunks; request several such reads together, as parallel tool calls in one step. Search (Grep) only to confirm a suspected finding, never to explore.
 
 ### Step 5 — Apply SQL Migration Rules
 
