@@ -301,3 +301,13 @@ Remove an entry once it has been resolved.
 - Observation: the provider adapter turns Yahoo's unknown-symbol answer and a window without a bar into the same empty series, so a price history backfill on a holding bought today reports "No price history found for this asset — check its ticker" although the ticker is fine; MKT-196 states the shared outcome on purpose.
 - User value: a holding bought today gets "nothing to fill yet" instead of a misleading ticker warning.
 - Done when: the daily-close request tells an unknown symbol from an empty window, and a held period with no completed trading day ends with the nothing-to-fill feedback.
+
+## 2026-09-15 — TD-029 — CI reviewer lanes fail on the turn cap after a clean review
+
+- Found by: manual (PR #145, runs 34947453064 and 34949000885)
+- Where: `.github/workflows/review.yml` (reviewer step turn limit, 40)
+- Context: branch `c/008-price-history-backfill`
+- Severity: 🟡
+- Observation: reviewer-backend (50 turns) and reviewer-frontend (44 turns) each posted "No issues found" and then failed the check, because the action rejects a result over 40 turns; the same lanes passed within budget on neighbouring commits, so a larger diff turns a clean review into a red required check that only a re-run clears.
+- User value: None — a required check that goes red only on a real critical.
+- Done when: a reviewer that finishes its report never fails on turn count alone (a cap sized on the largest recent diff, or the report step deciding the outcome), and a clean run on a diff of this size stays green.
