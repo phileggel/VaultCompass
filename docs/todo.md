@@ -68,21 +68,18 @@ When the since-inception % and annualized-yield columns are suppressed by the Di
 **Design:** none
 **Open questions:** none
 
-## #018 — (fullstack) — Enter a management fee as a fixed amount, not only a percentage
+## #018 — (fullstack) — Record a one-off fee by the quantity the holding should end at
 
-Every management fee today is a percentage. A Fee Schedule carries an `annual_rate` (FEE-030/032) and each period removes `floor(quantity × annual_rate ÷ periods_per_year)` shares (FEE-041); the one-off form takes a percentage of the holding (FEE-020/022, interview Q3). Some holdings charge a fixed sum per month or per year instead, which the user must convert to a percentage by hand — and that percentage stops matching the charge as soon as the holding's value moves.
+Recurring fee schedules stay percentage-based (FEE-030/041) — that is right for the automatic deductions. The one-off fee form, though, only takes a percentage of the holding (FEE-020/022, interview Q3), so aligning a holding with the real position means computing the percentage by hand: holding 25.000 shares that should be 24.500 means typing 2%, and any rounding leaves the quantity slightly off.
 
-Proposal: a schedule's charge is either a percentage (today) or a fixed amount per period. The Fee Schedule is synced user data (CFR-043/044), so the new field takes a migration and the sync record change; generation stays the lazy catch-up of ADR-018. Route through `/spec-writer` for the new FEE rules once the questions below are answered.
+Proposal: the one-off form offers a second input mode — the **resulting quantity** as of the fee's date. The form shows the removed quantity it implies (25.000 → 24.500 shows −0.500), and the backend records exactly that removal, with no percentage conversion or floor rounding. Everything else stays FEE-022/023/027: cost basis unchanged, average price concentrated, no cash, rejected if it would oversell a later sell. The resulting quantity must be at least 0 and below the holding's quantity as of that date. Amend the FEE rules through `/spec-writer`; the one-off deduction is already synced, so only its input changes, not the record.
 
-**User value:** A holding charged a fixed sum each month or year records exactly that sum, without a hand-computed percentage that drifts with the holding's value.
-**Done when:** A fee schedule accepts a fixed amount per period as an alternative to a percentage, generation charges exactly that amount each completed period, the choice syncs across devices, the new FEE rules are covered by tests, and screenshots of the changed fee form are committed.
+**User value:** A holding can be aligned with the real position in one step — type the quantity it should hold and see what that removes — instead of a hand-computed percentage that rounds off target.
+**Done when:** The one-off fee form accepts a resulting quantity as an alternative to a percentage, shows the implied removal before submit, and records exactly that removal; the amended FEE rules are covered by tests; screenshots of the changed form are committed.
 **Design:** none
 **Open questions:**
 
-- [ ] How is a fixed amount paid — by removing shares worth that amount at the period's price (like today's fees, no cash moves), or by debiting the account's cash?
-- [ ] If paid in shares: which price converts the amount, and what happens to a period with no known price on or before its boundary — skip it (as FEE-047 skips an oversell) or wait for a price?
-- [ ] In which currency is the amount entered — the asset's or the account's?
-- [ ] Does the one-off fee form get the fixed-amount option too, or only recurring schedules?
+- [ ] A quantity-aligned deduction corrects the position rather than paying a charge: should it still count in the holding's and account's Management Fees figure (FEE-052/053) like any one-off fee, or be kept out of it?
 
 ## #013 — (frontend) — Merge TXL per-asset page into the account journal (deferred)
 
