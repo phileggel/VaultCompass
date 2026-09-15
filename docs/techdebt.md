@@ -298,9 +298,9 @@ Remove an entry once it has been resolved.
 - Where: `src-tauri/src/context/asset/repository/yahoo_client.rs` (`parse_daily_closes` returns an empty series for both), `src-tauri/src/use_cases/price_history_backfill/orchestrator.rs` (`TickerNotResolved`)
 - Context: branch `c/008-price-history-backfill`
 - Severity: 🔵
-- Observation: the provider adapter turns Yahoo's unknown-symbol answer and a window without a bar into the same empty series, so a price history backfill on a holding bought today reports "No price history found for this asset — check its ticker" although the ticker is fine; MKT-196 states the shared outcome on purpose.
-- User value: a holding bought today gets "nothing to fill yet" instead of a misleading ticker warning.
-- Done when: the daily-close request tells an unknown symbol from an empty window, and a held period with no completed trading day ends with the nothing-to-fill feedback.
+- Observation: the provider adapter turns Yahoo's unknown-symbol answer and a window without a bar into the same empty series, so a price history backfill whose held period covers only a weekend or a market holiday reports "No price history found for this asset — check its ticker" although the ticker is fine; MKT-196 states the shared outcome on purpose.
+- User value: a held period without a trading day gets "nothing to fill yet" instead of a misleading ticker warning.
+- Done when: the daily-close request tells an unknown symbol from an empty window, and a held period with no trading day ends with the nothing-to-fill feedback.
 
 ## 2026-09-15 — TD-029 — CI reviewer lanes fail on the turn cap after a clean review
 

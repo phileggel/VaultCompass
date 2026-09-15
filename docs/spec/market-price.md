@@ -355,7 +355,7 @@ This section fills a holding's price history in one action. Account history, as-
 
 **MKT-190 — Price history backfill action (frontend)**: A "Fill missing price history" action is available on each active, non-cash holding row in Account Details, placed with the Price history action (MKT-070), and on each closed position row (ACD-049). It is not shown on the system cash row nor in the read-only as-of view. It stays visible on a refresh-locked holding and on a closed position of an archived asset: the rejection (MKT-196) is the feedback.
 
-**MKT-191 — Held period (backend)**: A price history backfill covers the held period: from the date of the account's earliest transaction on the asset through today while the holding is active, or through the date of its latest transaction on the asset once the holding is closed. Every transaction type on the asset counts toward both bounds, and a gap between selling out and buying back lies inside the period and is filled like any other date. The period never extends past today's local date; a trading day still in progress has no close yet and produces no price (SPF-033).
+**MKT-191 — Held period (backend)**: A price history backfill covers the held period: from the date of the account's earliest transaction on the asset through yesterday while the holding is active, or through the date of its latest transaction on the asset once the holding is closed — never later than yesterday (the day before today's local date); today's date is left to the fetch tasks and the scheduled fetch. A provider close for a session still in progress is not a close and is not recorded (SPF-033). Every transaction type on the asset counts toward both bounds, and a gap between selling out and buying back lies inside the period and is filled like any other date. A held period that would start after yesterday (a holding opened today) is empty: once the rejections that need no provider symbol have passed (MKT-196), the backfill requests nothing, records nothing and succeeds with both counts at zero (MKT-194).
 
 **MKT-192 — Recorded prices are never overwritten (backend)**: A price history backfill records a daily close only on a date that carries no `AssetPrice` for the asset; a date that already carries one keeps it unchanged, whatever its source (MKT-100), so a backfill over a complete history writes nothing. This is the one write path exempt from latest-write-wins (ADR-012 decision 1, MKT-025): the user asks to fill gaps, not to refresh what exists, unlike the rate backfill (FXR-113). The promise holds on the device that runs the backfill; when a multi-device merge brings another write for the same date, CFR-050 decides as for any record. Recorded closes carry `source = YahooFinance` (MKT-102) with the sub-unit normalization of every fetch (MKT-125).
 
@@ -365,9 +365,9 @@ This section fills a holding's price history in one action. Account history, as-
 
 **MKT-195 — Failures (backend)**: Every window is requested before anything is recorded; when any request fails (network, HTTP or parse error), the price history backfill is rejected with a provider-unreachable error and records nothing. A storage failure while recording rejects it with a database error, keeps the closes already recorded and publishes no `AssetPriceUpdated`; running the price history backfill again records the rest, since a priced date is never rewritten (MKT-192).
 
-**MKT-196 — Rejections (backend)**: A price history backfill is rejected before any request, recording nothing, when the account is unknown, the asset is unknown, the asset is the system Cash Asset (MKT-116), the asset is archived (AST-006), the account has no transaction on the asset, the asset is refresh-locked (MKT-151 — the lock keeps the provider away from the asset), or no provider symbol can be derived (MKT-110) — the last as an unresolvable ticker. After the requests, it is rejected as an unresolvable ticker, recording nothing, when the provider returns no daily close at all over the held period; this includes the provider's answer for an unknown symbol and a held period with no completed trading day yet.
+**MKT-196 — Rejections (backend)**: A price history backfill is rejected before any request, recording nothing, when the account is unknown, the asset is unknown, the asset is the system Cash Asset (MKT-116), the asset is archived (AST-006), the account has no transaction on the asset, the asset is refresh-locked (MKT-151 — the lock keeps the provider away from the asset), or no provider symbol can be derived (MKT-110) — the last as an unresolvable ticker. After the requests, it is rejected as an unresolvable ticker, recording nothing, when the provider returns no daily close at all over the held period; this includes the provider's answer for an unknown symbol and a held period without a trading day, such as one covering only a weekend.
 
-**MKT-197 — Feedback (frontend)**: When the price history backfill succeeds with `written` at least one, a success snackbar states both counts; with `written` at zero, an info snackbar states that the provider has no price for the dates still without one. A rejection shows an error snackbar naming its cause.
+**MKT-197 — Feedback (frontend)**: When the price history backfill succeeds with `written` at least one, a success snackbar states both counts; with `written` at zero — an empty held period included (MKT-191) — an info snackbar states that there is no missing price to fill. A rejection shows an error snackbar naming its cause.
 
 **MKT-198 — Pending state (frontend)**: While a price history backfill runs for a holding, that holding's price history backfill action is disabled and shows a pending state; every other action stays usable, and several holdings may run at once.
 
@@ -556,7 +556,8 @@ Account Details (active non-cash holding row, or closed holding row)
         reject: unknown account / asset, system cash, archived,
                 refresh-locked, never held, no derivable symbol          (MKT-196)
         held period = earliest transaction on the asset
-                      → today (active) or latest transaction (closed)    (MKT-191)
+                      → yesterday (active) | latest transaction ≤ yesterday (closed)  (MKT-191)
+            period starts after yesterday → succeed, both counts zero    (MKT-191)
         request each window of ≤ 365 days                                (MKT-193)
             any request fails → reject, nothing recorded                 (MKT-195)
         no close at all over the period → reject as unresolvable ticker  (MKT-196)
@@ -831,7 +832,7 @@ A "Fill missing price history" icon button in the actions of each active, non-ca
 
 1. The user opens an account whose history shows gaps for a fund bought in 2021, before the scheduled fetch existed.
 2. They click the fill button on the fund's row; it pulses while the closes download.
-3. A snackbar reads "412 prices added · 38 days already had one"; the history and as-of views now value the fund on every trading day since 2021.
+3. A snackbar reads "412 prices added · 38 days already had one"; the history and as-of views now value the fund on every trading day since 2021, up to yesterday.
 
 ---
 

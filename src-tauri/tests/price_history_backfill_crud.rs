@@ -176,7 +176,8 @@ async fn build_ctx(opened_on: &str, today: &str, provider: ScriptedProvider) -> 
 
 /// MKT-191/192/194 — over a held period where one day was already priced by hand,
 /// the provider's closes land on the missing days only; the manual price stays as
-/// it was and is counted as skipped.
+/// it was and is counted as already priced; the close the provider serves for
+/// today is never recorded.
 #[tokio::test]
 async fn backfill_records_only_the_days_without_a_price() {
     let ctx = build_ctx(
@@ -201,14 +202,22 @@ async fn backfill_records_only_the_days_without_a_price() {
         .await
         .expect("the backfill succeeds");
 
-    assert_eq!(outcome.written, 3);
+    assert_eq!(outcome.written, 2);
     assert_eq!(outcome.already_priced, 1);
     let prices = ctx
         .asset_service
         .get_asset_prices(&ctx.asset_id)
         .await
         .expect("prices");
-    assert_eq!(prices.len(), 4, "one price per trading day of the period");
+    assert_eq!(
+        prices.len(),
+        3,
+        "one price per trading day through yesterday"
+    );
+    assert!(
+        prices.iter().all(|price| price.date != "2024-01-05"),
+        "the provider serves a close for today (2024-01-05) and it must not be recorded"
+    );
     let manual = prices
         .iter()
         .find(|price| price.date == "2024-01-03")
@@ -224,7 +233,7 @@ async fn backfill_records_only_the_days_without_a_price() {
 }
 
 /// MKT-192 — a second backfill over a history the first one completed writes
-/// nothing and counts every served close as skipped.
+/// nothing and counts every served close as already priced.
 #[tokio::test]
 async fn backfill_over_a_complete_history_writes_nothing() {
     let ctx = build_ctx(
@@ -256,8 +265,8 @@ async fn backfill_over_a_complete_history_writes_nothing() {
     assert_eq!(second.already_priced, 2);
 }
 
-/// MKT-193 — a held period longer than a year is requested in consecutive windows
-/// of at most 365 days that start on the first held day and end today.
+/// MKT-191/193 — a held period longer than a year is requested in consecutive
+/// windows of at most 365 days that start on the first held day and end yesterday.
 #[tokio::test]
 async fn backfill_requests_a_long_period_in_consecutive_windows() {
     let ctx = build_ctx(
@@ -288,7 +297,7 @@ async fn backfill_requests_a_long_period_in_consecutive_windows() {
         "two and a half years need at least three windows, got {windows:?}"
     );
     assert_eq!(windows.first().map(|w| w.0.as_str()), Some("2022-01-01"));
-    assert_eq!(windows.last().map(|w| w.1.as_str()), Some("2024-06-30"));
+    assert_eq!(windows.last().map(|w| w.1.as_str()), Some("2024-06-29"));
     for (from, to) in &windows {
         assert!(
             (date(to) - date(from)).num_days() < 365,

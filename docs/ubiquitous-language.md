@@ -305,7 +305,7 @@ The local wall-clock time of day the scheduled fetch runs (default 22:15). A tri
 
 ### Price history backfill
 
-The action the user starts on a holding to fill its price history from the account's first transaction on the asset through today (active holding) or its last transaction (closed holding), recording a daily close only on dates that carry no price. Unlike the scheduled fetch's Backfill, it is not limited to 30 days and never overwrites a recorded price.
+The action the user starts on a holding to fill its price history from the account's earliest transaction on the asset through yesterday (active holding) or its latest transaction (closed holding), never including today, recording a daily close only on dates that carry no price. Unlike the scheduled fetch's Backfill, it is not limited to 30 days and never overwrites a recorded price.
 
 > Status: confirmed
 

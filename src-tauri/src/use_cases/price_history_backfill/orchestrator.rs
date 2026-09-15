@@ -78,7 +78,12 @@ impl PriceHistoryBackfillUseCase {
             return Err(PriceHistoryBackfillTask::PriceRefreshBlocked.into());
         }
 
-        let (from, to) = self.held_period(account_id, asset_id).await?;
+        let Some((from, to)) = self.held_period(account_id, asset_id).await? else {
+            return Ok(PriceHistoryBackfillOutcome {
+                written: 0,
+                already_priced: 0,
+            });
+        };
         let symbol = derive_yahoo_symbol_with_exchange(&asset.reference, asset.exchange.as_ref())
             .ok_or(PriceHistoryBackfillTask::TickerNotResolved)?;
         let closes = self.fetch_closes(&symbol, from, to).await?;
@@ -93,13 +98,15 @@ impl PriceHistoryBackfillUseCase {
     }
 
     /// The held period (MKT-191): from the account's earliest transaction on the
-    /// asset through today while the holding is active, otherwise through its
-    /// latest transaction — never past today.
+    /// asset through yesterday while the holding is active, otherwise through its
+    /// latest transaction — never past yesterday, since today's price belongs to the
+    /// fetch tasks. `None` when the period would start after yesterday (a holding
+    /// opened today), or when today has no previous date.
     async fn held_period(
         &self,
         account_id: &str,
         asset_id: &str,
-    ) -> Result<(NaiveDate, NaiveDate), PriceHistoryBackfillError> {
+    ) -> Result<Option<(NaiveDate, NaiveDate)>, PriceHistoryBackfillError> {
         let transactions = self
             .account_service
             .get_all_transactions_for_account(account_id)
@@ -122,9 +129,15 @@ impl PriceHistoryBackfillUseCase {
             .get_holding_by_account_asset(account_id, asset_id)
             .await?
             .is_some_and(|holding| holding.quantity > 0);
-        let today = (self.today)();
-        let end = if active { today } else { latest.min(today) };
-        Ok((earliest.min(end), end))
+        let Some(yesterday) = (self.today)().pred_opt() else {
+            return Ok(None);
+        };
+        let end = if active {
+            yesterday
+        } else {
+            latest.min(yesterday)
+        };
+        Ok((earliest <= end).then_some((earliest, end)))
     }
 
     /// Requests the daily closes of `[from, to]` window by window (MKT-193) and
@@ -510,13 +523,13 @@ mod tests {
     }
 
     // MKT-191 — an active holding is backfilled from its earliest transaction
-    // through today.
+    // through yesterday, never today.
     #[tokio::test]
-    async fn backfill_of_an_active_holding_runs_from_its_first_transaction_through_today() {
+    async fn backfill_of_an_active_holding_runs_from_its_first_transaction_through_yesterday() {
         let mut price_provider = MockPriceProvider::new();
         price_provider
             .expect_fetch_daily_closes()
-            .withf(|symbol, from, to| symbol == "AI" && from == "2024-02-01" && to == "2024-06-30")
+            .withf(|symbol, from, to| symbol == "AI" && from == "2024-02-01" && to == "2024-06-29")
             .times(1)
             .returning(|_, _, _| Ok(vec![close("2024-02-02")]));
         let mut asset_service = asset_service_serving(make_asset("AI", false, false));
@@ -574,6 +587,66 @@ mod tests {
         .unwrap();
 
         assert_eq!(outcome, filled(1));
+    }
+
+    // MKT-191 — a closed holding whose latest transaction is today still ends
+    // yesterday.
+    #[tokio::test]
+    async fn backfill_of_a_holding_closed_today_ends_yesterday() {
+        let mut price_provider = MockPriceProvider::new();
+        price_provider
+            .expect_fetch_daily_closes()
+            .withf(|_, from, to| from == "2024-06-10" && to == "2024-06-29")
+            .times(1)
+            .returning(|_, _, _| Ok(vec![close("2024-06-11")]));
+        let mut asset_service = asset_service_serving(make_asset("AI", false, false));
+        asset_service
+            .expect_record_missing_daily_closes()
+            .returning(|_, _| Ok(filled(1)));
+
+        let outcome = make_use_case(
+            account_holding(
+                vec![
+                    make_transaction(ASSET, "2024-06-10"),
+                    make_transaction(ASSET, "2024-06-30"),
+                ],
+                0,
+            ),
+            asset_service,
+            price_provider,
+        )
+        .backfill(ACCOUNT, ASSET)
+        .await
+        .unwrap();
+
+        assert_eq!(outcome, filled(1));
+    }
+
+    // MKT-191/194 — a holding opened today has an empty held period: nothing is
+    // requested or recorded, and both counts are zero.
+    #[tokio::test]
+    async fn backfill_of_a_holding_opened_today_requests_nothing() {
+        let mut price_provider = MockPriceProvider::new();
+        price_provider.expect_fetch_daily_closes().times(0);
+        let mut asset_service = asset_service_serving(make_asset("AI", false, false));
+        asset_service.expect_record_missing_daily_closes().times(0);
+
+        let outcome = make_use_case(
+            account_holding(vec![make_transaction(ASSET, "2024-06-30")], 1_000_000),
+            asset_service,
+            price_provider,
+        )
+        .backfill(ACCOUNT, ASSET)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            outcome,
+            PriceHistoryBackfillOutcome {
+                written: 0,
+                already_priced: 0
+            }
+        );
     }
 
     // MKT-192/193 — the asset service receives only the closes inside the held

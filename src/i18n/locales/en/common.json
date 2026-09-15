@@ -576,7 +576,7 @@
     "backfill": {
       "action": "Fill missing price history",
       "success": "{{written}} prices added · {{already_priced}} days already had one",
-      "nothing_missing": "Nothing to fill: the provider has no price for the days still without one",
+      "nothing_missing": "No missing price to fill",
       "error": {
         "AssetNeverHeld": "This account never held this asset",
         "PriceRefreshBlocked": "Automatic price updates are locked for this asset",
