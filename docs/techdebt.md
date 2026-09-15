@@ -143,16 +143,6 @@ Remove an entry once it has been resolved.
 - User value: The reset message would not fire for a stick that merely took the same drive letter.
 - Done when: A sync run can tell a reset of its own portfolio from another portfolio's folder — by something other than the header's content — and reports `FolderHoldsOtherPortfolio` for the latter.
 
-## 2026-09-12 — TD-011 — Event subscriptions compare against untyped strings
-
-- Found by: reviewer-arch (T2, `.review/reviewer-arch-2026-09-12-02.md`)
-- Where: `subscribeToEvents` in src/features/account_details/gateway.ts, src/features/currency/gateway.ts and three sibling gateways
-- Context: branch `chore/next-2026-09` @ `6e211b2`
-- Severity: 🔵
-- Observation: Every gateway's `subscribeToEvents(callback: (type: string) => void)` widens the generated `Event["type"]` discriminant to `string` before the hooks compare it, so a mistyped event name in a hook (`"HoldingNoteUpdate"`) compiles and silently never matches. The union that would catch it already exists in `src/bindings.ts`.
-- User value: None — a view that stops refreshing after a typo would be caught by tests, not by the compiler.
-- Done when: the gateways pass the callback `Event["type"]` and every hook's comparison is checked against the generated union.
-
 ## 2026-09-12 — TD-012 — Ubiquitous-language Domain Events table lags the event enum
 
 - Found by: reviewer-arch (T2)

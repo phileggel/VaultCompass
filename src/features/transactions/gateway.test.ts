@@ -1,10 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
   AccountError,
   AssetError,
   BuyHoldingDTO,
   CorrectTransactionDTO,
+  Event,
   SellHoldingDTO,
   Transaction,
 } from "@/bindings";
@@ -12,6 +13,15 @@ import type {
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const mockInvoke = vi.mocked(invoke);
 const { transactionGateway } = await import("./gateway");
+
+describe("transactionGateway — subscribeToEvents (TD-011)", () => {
+  it("passes the callback the generated event discriminant, not a bare string", () => {
+    expectTypeOf(transactionGateway.subscribeToEvents)
+      .parameter(0)
+      .parameter(0)
+      .toEqualTypeOf<Event["type"]>();
+  });
+});
 
 const makeTx = (): Transaction => ({
   id: "tx-1",

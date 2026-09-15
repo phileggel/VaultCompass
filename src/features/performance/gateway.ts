@@ -2,6 +2,7 @@ import type {
   AccountDetailsResponse,
   AccountError,
   AccountPerformanceResponse,
+  Event,
   Result,
 } from "@/bindings";
 import { commands, events } from "@/bindings";
@@ -21,7 +22,7 @@ export const accountPerformanceGateway = {
     return commands.getAccountDetails(accountId, null);
   },
 
-  async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
+  async subscribeToEvents(callback: (type: Event["type"]) => void): Promise<() => void> {
     return events.event.listen((event) => {
       callback(event.payload.type);
     });
@@ -44,7 +45,7 @@ export const globalPerformanceGateway = {
     return commands.getAccountDetails(accountId, null);
   },
 
-  async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
+  async subscribeToEvents(callback: (type: Event["type"]) => void): Promise<() => void> {
     return events.event.listen((event) => {
       callback(event.payload.type);
     });

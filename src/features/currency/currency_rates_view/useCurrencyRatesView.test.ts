@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CurrencyPairSummary, CurrencyRate } from "@/bindings";
+import type { CurrencyPairSummary, CurrencyRate, Event } from "@/bindings";
 import * as gateway from "../gateway";
 import { useCurrencyRatesView } from "./useCurrencyRatesView";
 
@@ -22,7 +22,7 @@ const RATE: CurrencyRate = {
 };
 
 describe("useCurrencyRatesView", () => {
-  let eventCallback: ((type: string) => void) | undefined;
+  let eventCallback: ((type: Event["type"]) => void) | undefined;
   const unlisten = vi.fn();
 
   beforeEach(() => {

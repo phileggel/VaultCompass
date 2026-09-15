@@ -8,6 +8,7 @@ import type {
   DepositDTO,
   DividendDTO,
   DividendError,
+  Event,
   FeeSchedule,
   FetchAccountAssetPricesError,
   FreeSharesDTO,
@@ -180,7 +181,7 @@ export const accountDetailsGateway = {
     return commands.backfillHoldingPriceHistory(accountId, assetId);
   },
 
-  async subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
+  async subscribeToEvents(callback: (type: Event["type"]) => void): Promise<() => void> {
     return events.event.listen((event) => {
       callback(event.payload.type);
     });

@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
   AccountDetailsResponse,
   AccountError,
   AccountPerformanceResponse,
+  Event,
   HoldingDetail,
   PerformancePeriod,
 } from "@/bindings";
@@ -13,7 +14,20 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const mockInvoke = vi.mocked(invoke);
 
 // Import after mock is registered so bindings.ts picks up the mock
-const { accountPerformanceGateway } = await import("./gateway");
+const { accountPerformanceGateway, globalPerformanceGateway } = await import("./gateway");
+
+describe("performance gateways — subscribeToEvents (TD-011)", () => {
+  it("passes the callback the generated event discriminant, not a bare string", () => {
+    expectTypeOf(accountPerformanceGateway.subscribeToEvents)
+      .parameter(0)
+      .parameter(0)
+      .toEqualTypeOf<Event["type"]>();
+    expectTypeOf(globalPerformanceGateway.subscribeToEvents)
+      .parameter(0)
+      .parameter(0)
+      .toEqualTypeOf<Event["type"]>();
+  });
+});
 
 // PRF-070–074 — bridge term defaults (the gateway passes these through untouched).
 const BRIDGE_DEFAULTS = {

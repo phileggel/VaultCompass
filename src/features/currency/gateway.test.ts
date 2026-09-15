@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CurrencyPair, CurrencyPairSummary, CurrencyRate } from "@/bindings";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import type { CurrencyPair, CurrencyPairSummary, CurrencyRate, Event } from "@/bindings";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -8,6 +8,15 @@ const mockInvoke = vi.mocked(invoke);
 
 // Import after mock is registered so bindings.ts picks up the mock
 const { currencyGateway } = await import("./gateway");
+
+describe("currencyGateway — subscribeToEvents (TD-011)", () => {
+  it("passes the callback the generated event discriminant, not a bare string", () => {
+    expectTypeOf(currencyGateway.subscribeToEvents)
+      .parameter(0)
+      .parameter(0)
+      .toEqualTypeOf<Event["type"]>();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // declareCurrencyPair

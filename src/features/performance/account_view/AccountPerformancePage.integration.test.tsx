@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AccountDetailsResponse,
   AccountPerformanceResponse,
+  Event,
   HoldingDetail,
   PerformancePeriod,
 } from "@/bindings";
@@ -544,9 +545,9 @@ describe("AccountPerformancePage", () => {
 
   // PRF-060 — an emitted TransactionUpdated event triggers a re-fetch
   it("re-fetches when a TransactionUpdated event is received (PRF-060)", async () => {
-    let capturedCallback: ((type: string) => void) | null = null;
+    let capturedCallback: ((type: Event["type"]) => void) | null = null;
     vi.mocked(gateway.accountPerformanceGateway.subscribeToEvents).mockImplementation(
-      (cb: (type: string) => void) => {
+      (cb: (type: Event["type"]) => void) => {
         capturedCallback = cb;
         return Promise.resolve(() => {});
       },
@@ -574,9 +575,9 @@ describe("AccountPerformancePage", () => {
   // the view reloads once on AssetPriceFetchCompleted.
   it("skips AssetPriceUpdated during an active fetch, reloads on completion (MKT-181)", async () => {
     const { useAppStore } = await import("@/lib/store");
-    let capturedCallback: ((type: string) => void) | null = null;
+    let capturedCallback: ((type: Event["type"]) => void) | null = null;
     vi.mocked(gateway.accountPerformanceGateway.subscribeToEvents).mockImplementation(
-      (cb: (type: string) => void) => {
+      (cb: (type: Event["type"]) => void) => {
         capturedCallback = cb;
         return Promise.resolve(() => {});
       },

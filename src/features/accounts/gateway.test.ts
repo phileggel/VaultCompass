@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
   Account,
   AccountDeletionSummary,
   AccountError,
   AccountSummary,
   CreateAccountDTO,
+  Event,
   PriceMovementReport,
   UpdateAccountDTO,
 } from "@/bindings";
@@ -322,6 +323,13 @@ describe("accountGateway — fetchAllAssetPrices (MKT-130)", () => {
     captured.current?.({ payload: { type: "AccountUpdated" } });
     expect(callback).toHaveBeenCalledWith("AccountUpdated");
     expect(result).toBe(unlisten);
+  });
+
+  it("subscribeToEvents passes the callback the generated event discriminant, not a bare string (TD-011)", () => {
+    expectTypeOf(accountGateway.subscribeToEvents)
+      .parameter(0)
+      .parameter(0)
+      .toEqualTypeOf<Event["type"]>();
   });
 });
 

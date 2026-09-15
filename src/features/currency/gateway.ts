@@ -4,6 +4,7 @@ import {
   type CurrencyPairSummary,
   type CurrencyRate,
   commands,
+  type Event,
   events,
   type RateHistoryBackfillError,
   type Result,
@@ -74,7 +75,9 @@ export async function backfillCurrencyRateHistory(): Promise<
 }
 
 /** Subscribe to the backend event bus; invokes `callback` with each event's discriminant (FXR-026/037). */
-export async function subscribeToEvents(callback: (type: string) => void): Promise<() => void> {
+export async function subscribeToEvents(
+  callback: (type: Event["type"]) => void,
+): Promise<() => void> {
   return events.event.listen((event) => {
     callback(event.payload.type);
   });

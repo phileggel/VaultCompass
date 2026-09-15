@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
   AccountError,
   DepositDTO,
   DividendDTO,
+  Event,
   FreeSharesDTO,
   OpenHoldingDTO,
   OpenHoldingError,
@@ -17,6 +18,15 @@ const mockInvoke = vi.mocked(invoke);
 
 // Import after mock is registered so bindings.ts picks up the mock
 const { accountDetailsGateway } = await import("./gateway");
+
+describe("accountDetailsGateway — subscribeToEvents (TD-011)", () => {
+  it("passes the callback the generated event discriminant, not a bare string", () => {
+    expectTypeOf(accountDetailsGateway.subscribeToEvents)
+      .parameter(0)
+      .parameter(0)
+      .toEqualTypeOf<Event["type"]>();
+  });
+});
 
 describe("accountDetailsGateway — openHolding", () => {
   beforeEach(() => {
